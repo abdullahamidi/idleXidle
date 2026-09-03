@@ -280,8 +280,8 @@ public static class Tutorial
             + "what is worn.",
 
         TutorialStep.ChooseBuild =>
-            "Press B for BUILD. Pick a slot, then one of your learned skills from the library — "
-            + "skills are learned on the MASTERY tree (E), and stay learned for good.",
+            "Press B for BUILD. Pick a slot, then a skill from the library — a shared skill is unlocked "
+            + "by its road on the MASTERY tree (E), and stays unlocked while you keep that road.",
 
         TutorialStep.Conquer =>
             $"Reach CONQUEST {Checkpoints.ConquestWave} / {Checkpoints.ConquestWave} in the banner over the arena to conquer the region and open the next. "

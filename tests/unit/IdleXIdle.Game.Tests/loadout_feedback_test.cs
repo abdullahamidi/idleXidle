@@ -1,5 +1,6 @@
 using System.Reflection;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Game;
 using Microsoft.Xna.Framework;
@@ -39,7 +40,11 @@ public class LoadoutFeedbackTests
         var mastery = new MasteryTree();
         mastery.SetEarned(9999);
         mastery.RestoreTaken(MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id).ToList());
-        var loadout = PlayerLoadout.Starter();
+        // THE CHAMPION HAS TO BE IN THE CHAIR. The starter loadout carries that champion's own
+        // SIGNATURE now, and a signature answers only to its owner — so a fixture that seats nobody
+        // holds a skill the screen correctly refuses to know, and the tree it opens is null.
+        var champion = CharacterRoster.Get(CharacterRoster.StarterId);
+        var loadout = PlayerLoadout.Starter(champion);
         loadout.SkillCapacity = 4;
         return new LoadoutScreen(null!)
         {
@@ -47,6 +52,7 @@ public class LoadoutFeedbackTests
             Mastery = mastery,
             Tree = new MemoryDustTree(),
             SkillLevels = new SkillProgress(),
+            Character = champion,
         };
     }
 

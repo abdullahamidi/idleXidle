@@ -409,6 +409,27 @@ public sealed class MasteryScreen
     private static Rectangle ResetBtn
         => new(PointsPanel.X, PointsPanel.Bottom + UiMetrics.Gap, PointsPanel.Width, UiMetrics.ButtonHeight);
 
+    /// <summary>
+    /// The band the respec's warning hangs in: under the button that raised it, on the plate's own width.
+    /// </summary>
+    /// <remarks>
+    /// BESIDE THE BUTTON THAT WOULD DO IT, like every other refusal on this screen — not five hundred
+    /// pixels away in the node inspector, which is empty until a node is pinned and would therefore have
+    /// swallowed the warning entirely on the most common path. It is reserved at the FULL slot count so
+    /// the band is provably inside the page at every profile whatever the build holds; the frame drawn
+    /// into it is sized to the names actually listed.
+    /// </remarks>
+    private static Rectangle RespecWarning
+        => new(PointsPanel.X, ResetBtn.Bottom + UiMetrics.Gap, PointsPanel.Width,
+               RespecWarningPad * 2 + UiTypography.Pitch(UiTypography.Secondary)
+               + PlayerLoadout.MaxSkills * UiTypography.Pitch(UiTypography.Body));
+
+    /// <summary>
+    /// The warning plate's inset — the same one the points plate keeps, so the two read as one column and
+    /// the heading clears the frame's top rail rather than being drawn through it.
+    /// </summary>
+    private static int RespecWarningPad => PointsPad;
+
     // ── THE TOP STRIP'S GRID — derived from the rungs it stacks, so a bigger title pushes its rule and
     //    caption down rather than printing through them (UI polish P2). At 100 % these are the house
     //    pattern's own numbers: title at 24, rule at 74, caption at 80, content from 112. ─────────────
@@ -1182,6 +1203,10 @@ public sealed class MasteryScreen
 
         if (ResetBtn.Contains(hit) && Mastery.Spent > 0)
         {
+            // WHAT IT WILL COST, BEFORE IT COSTS IT (BRIEF sec.19). Access follows the allocation now, so
+            // taking every point back takes back every shared skill's road with them, and the composer
+            // would simply stop carrying those slots. The first press names them; the second clears them.
+            //
             // TWO CLICKS, because it un-spends every point in the tree and there is no undo prompt
             // anywhere else in this game. The respec itself stays free and instant — that is the
             // load-bearing difference between this tree and the permanent one — so the guard is
@@ -1191,14 +1216,34 @@ public sealed class MasteryScreen
             // dry click every ordinary button gets, and the only motion is the one flash on the figure
             // that changed. No bloom on the twenty nodes it emptied: a respec is a correction, not a
             // reward, and twenty simultaneous celebrations would read as a fault.
-            if (!_resetArmed) { _resetArmed = true; Say("PRESS AGAIN TO TAKE EVERY POINT BACK.", null, "sfx_click"); return; }
+            if (!_resetArmed)
+            {
+                _resetArmed = true;
+                var losing = RespecWouldUnequip();
+                Say(losing.Count == 0
+                        ? "PRESS AGAIN TO TAKE EVERY POINT BACK."
+                        : $"PRESS AGAIN TO TAKE EVERY POINT BACK — {Names(losing)} WILL BE UNEQUIPPED.",
+                    null, "sfx_click");
+                return;
+            }
             _resetArmed = false;
             Mastery.Respec();
-            Say("ALL MASTERY POINTS RETURNED.", null, "sfx_click");
+            // AND NOW THE SLOTS MATCH THE RULES AGAIN. A respec is never blocked by an equipped skill
+            // (sec.19); it warns, commits, and then empties exactly the slots it made unusable. The
+            // skills' LEVELS are not touched by any of this — SkillProgress is keyed by skill id and has
+            // never heard of mastery (LAW 4).
+            var cleared = LoadoutRepair.Repair(Loadout, Mastery.AvailableSkills(), Character);
+            Say(cleared.Count == 0
+                    ? "ALL MASTERY POINTS RETURNED."
+                    : $"ALL MASTERY POINTS RETURNED. {Names(cleared)} LEFT YOUR SLOTS — EVERY LEVEL IS KEPT.",
+                null, "sfx_click");
             UiMotion.Flash(PointsKey, UiMotion.Transition);
             Dirty = true;
             return;
         }
+        // The warning list is a CARD, not glass: a click on it must not spend a point on whatever node
+        // happens to sit under it. It disarms, like any other click, and stops there.
+        if (_resetArmed && RespecWarning.Contains(hit)) { _resetArmed = false; return; }
         // Any other click on the tree disarms it — but must NOT return, or no node could be taken.
         _resetArmed = false;
 
@@ -1232,6 +1277,50 @@ public sealed class MasteryScreen
         }
 
         // Skills, Vows and keystone sockets are all LoadoutScreen's now.
+    }
+
+    /// <summary>
+    /// Which EQUIPPED skills a respec would leave without a mastery node, in slot order.
+    /// </summary>
+    /// <remarks>
+    /// Derived, never assumed. It builds the tree a respec actually leaves behind — nothing taken but
+    /// START — and asks that tree what it teaches, so this answer cannot drift from what
+    /// <see cref="MasteryTree.Respec"/> does. The champion's own signature is exempt from mastery
+    /// (BRIEF sec.18) and so is never in this list, which is exactly what
+    /// <see cref="LoadoutRepair"/> checks first.
+    /// </remarks>
+    private IReadOnlyList<SkillDef> RespecWouldUnequip()
+    {
+        var after = new MasteryTree();
+        after.RestoreTaken(Array.Empty<string>());
+        return LoadoutRepair.UnusableSkills(Loadout, after.AvailableSkills(), Character);
+    }
+
+    /// <summary>A list of skill names as a sentence reads them: A, B AND C.</summary>
+    private static string Names(IReadOnlyList<SkillDef> defs)
+    {
+        var words = defs.Select(d => d.Name.ToUpperInvariant()).ToList();
+        return words.Count switch
+        {
+            0 => "",
+            1 => words[0],
+            _ => string.Join(", ", words.Take(words.Count - 1)) + " AND " + words[^1],
+        };
+    }
+
+    /// <summary>DEV: arm the respec, so the capture rig can photograph the warning it raises.</summary>
+    /// <remarks>
+    /// A state no capture mode can pose is a state nobody has looked at. The warning only exists between
+    /// two presses of one button and a capture never clicks, so without this dial the one screen in the
+    /// game that tells the player what a decision will cost could never be checked against the reflow
+    /// contract at 125 % or 150 %.
+    /// </remarks>
+    public void DevArmRespec()
+    {
+        if (Mastery.Spent <= 0) return;
+        _resetArmed = true;
+        var losing = RespecWouldUnequip();
+        if (losing.Count > 0) Say($"PRESS AGAIN TO TAKE EVERY POINT BACK — {Names(losing)} WILL BE UNEQUIPPED.", null, null);
     }
 
     /// <summary>
@@ -1551,6 +1640,25 @@ public sealed class MasteryScreen
 
         if (Mastery.Spent > 0)
             Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
+
+        // ── WHAT THE SECOND PRESS WILL COST (BRIEF sec.19). Armed, and only armed: the player has asked
+        //    once, and this is the answer before they ask again. Nothing is blocked by it. ──
+        if (!_resetArmed) return;
+        var losing = RespecWouldUnequip();
+        if (losing.Count == 0) return;
+        var band = RespecWarning;
+        var pad = RespecWarningPad;
+        var box = new Rectangle(band.X, band.Y, band.Width,
+                                pad * 2 + UiTypography.Pitch(UiTypography.Secondary) + losing.Count * UiTypography.Pitch(UiTypography.Body));
+        _ui.PanelQuiet(b, box);
+        var wy = box.Y + pad;
+        _ui.TextBig(b, "THIS RESPEC WILL UNEQUIP", box.X + pad, wy, Ember, UiTypography.Secondary);
+        wy += UiTypography.Pitch(UiTypography.Secondary);
+        foreach (var d in losing)
+        {
+            _ui.TextBig(b, _ui.ShortenBig(d.Name.ToUpperInvariant(), box.Width - pad * 2, UiTypography.Body), box.X + pad, wy, Bone, UiTypography.Body);
+            wy += UiTypography.Pitch(UiTypography.Body);
+        }
     }
 
     private void DrawBranchHeader(SpriteBatch b, Branch br)
@@ -1837,7 +1945,12 @@ public sealed class MasteryScreen
         if (roadDef is not null)
         {
             Line($"TEACHES {roadDef.Name.ToUpperInvariant()} — {roadDef.Line}", Bone, UiTypography.Body, 3);
-            Line(learned ? "LEARNED — FOR GOOD. RESPEC RETURNS THE POINTS, NEVER THE SKILL." : "LEARNING IS PERMANENT: RESPEC RETURNS THE POINTS, NEVER THE SKILL. EQUIP IT ON THE BUILD SCREEN.",
+            // ACCESS FOLLOWS THE ALLOCATION (BRIEF sec.15-16, LAW 3). These two lines used to promise the
+            // opposite — "LEARNED, FOR GOOD; RESPEC RETURNS THE POINTS, NEVER THE SKILL" — which made every
+            // road node free to buy, refund and keep. Giving the node back now closes the skill again. What
+            // it never closes is the WAVES spent on it: those are the skill's own and are always kept.
+            Line(learned ? "UNLOCKED WHILE THIS NODE IS TAKEN. GIVE THE NODE BACK AND THE SKILL LOCKS AGAIN — ITS LEVELS ARE ALWAYS KEPT."
+                         : "TAKING IT UNLOCKS THE SKILL FOR AS LONG AS YOU KEEP THIS NODE. EQUIP IT ON THE BUILD SCREEN.",
                  learned ? Gold : Slate, UiTypography.Secondary, 3);
         }
         if (n.Kind == MasteryKind.Specialisation && n.Style is { } specStyle)
@@ -2198,8 +2311,8 @@ public sealed class MasteryScreen
         // that only muddies the socket, and the frame alone still carries the kind — so it drops out
         // rather than degrading, the same way the labels do.
         // A ROAD NODE WEARS THE SKILL IT TEACHES (UX V2 P1.5) — the twelve most consequential nodes on the
-        // tree used to carry the same branch glyph as a one-point minor. A small gold mark says DISCOVERED:
-        // the skill is learned for good, and the mark survives a respec that takes the points back.
+        // tree used to carry the same branch glyph as a one-point minor. A small gold mark says the skill
+        // is OPEN RIGHT NOW: it reads AvailableSkills, so it goes out the moment the node is given back.
         else if (node.Kind == MasteryKind.SkillRoad && node.GrantsSkillId is { } roadSkill && box.Width >= 20
                  && _ui.Assets.Get($"icon_skill_{roadSkill}") is { } skillGlyph)
         {

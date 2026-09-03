@@ -280,8 +280,8 @@ public static class Onboarding
                 + "More slots open as you go deeper."),
 
             new TourStep(TourTarget.SkillPicker, "YOUR SKILL LIBRARY",
-                "Twelve skills exist, two per style. You learn them on the MASTERY tree, and once "
-                + "learned they are yours for good — pick any learned one for the chosen slot."),
+                "Twelve shared skills are unlocked by roads on the MASTERY tree and lock again if you "
+                + "give a road back. Your levels are kept. Your SIGNATURE needs no road."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
                 "A Vow is a promise on one skill. It pays a lot while the promise is kept, and nothing "
@@ -299,8 +299,8 @@ public static class Onboarding
                 + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
 
             new TourStep(TourTarget.Specialisations, "ONE STYLE",
-                "A specialisation chooses your Style: that Style's skills hit twice as hard, and "
-                + "its road teaches the Style's two skills — learned for good."),
+                "A specialisation chooses your Style: that Style's skills hit twice as hard. One Style "
+                + "per hunter, and TAKE EVERY POINT BACK lets you choose again."),
 
             new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
                 "Rest the pointer on a node to read it here. Points come from reaching a depth you "

@@ -103,6 +103,24 @@ public sealed class PlayerLoadout
     }
 
     /// <summary>
+    /// Empty a slot without taking the slot away. Returns false when there was nothing to empty.
+    /// </summary>
+    /// <remarks>
+    /// The repair verb, and deliberately not <see cref="RemoveSkill"/>. When a respec takes a skill's
+    /// mastery node away, or a champion switch leaves somebody else's signature behind, the SLOT is
+    /// still the player's — they earned it and it is still in their capacity. Removing it would
+    /// renumber every slot after it and read as a punishment; emptying it says only "this one is free
+    /// again". Nothing here touches <see cref="SkillProgress"/>: the waves spent on the skill are its
+    /// own and survive (BRIEF sec.17, sec.19, LAW 4).
+    /// </remarks>
+    public bool ClearSkill(int slot)
+    {
+        if (!InRange(slot) || _skills[slot].SkillId is null) return false;
+        _skills[slot] = _skills[slot] with { SkillId = null, Passive = null };
+        return true;
+    }
+
+    /// <summary>
     /// Move a woven skill to another position in the list. Returns false when nothing moved.
     /// </summary>
     /// <remarks>
@@ -350,16 +368,30 @@ public sealed class PlayerLoadout
     /// nothing on screen can be attributed to anything.
     /// </para>
     /// <para>
-    /// A Body Strike, because it is the most legible thing in the game: one heavy hit, on one target,
-    /// with a visible windup. The other three slots arrive one at a time with their own explanation —
-    /// see <c>Unlocks.SkillSlots</c> for the gates and <c>Unlocks.SkillSlotNote</c> for what each says.
+    /// THE CHAMPION'S OWN SIGNATURE, and it has to be. It was <c>hammer_blow</c> — one of the twelve
+    /// shared skills — which was safe while mastery access was permanent and while a champion's own
+    /// skill was banked account-wide. Under the current rules a shared skill is available only while
+    /// its road is allocated (BRIEF sec.16) and the MASTERY screen does not open until wave 25, so a
+    /// fresh hunter stood in its first twenty-five waves with a locked slot and its bare hands.
+    /// A signature needs no road (sec.18), which is why <c>BuildComposer</c>'s own comment calls it
+    /// "what keeps a fresh champion able to fight" — the starter is where that becomes true.
+    /// </para>
+    /// <para>
+    /// The other three slots arrive one at a time with their own explanation — see
+    /// <c>Unlocks.SkillSlots</c> for the gates and <c>Unlocks.SkillSlotNote</c> for what each says.
     /// No Vow, no keystone — the refusals are for the player to make, not to inherit.
     /// </para>
     /// </remarks>
-    public static PlayerLoadout Starter()
+    /// <param name="character">
+    /// Whose weave this is. Null falls back to the roster's starter champion, for the handful of
+    /// callers that build a loadout before a save has said who is playing.
+    /// </param>
+    public static PlayerLoadout Starter(Character? character = null)
     {
+        var c = character ?? CharacterRoster.Get(CharacterRoster.StarterId);
         var l = new PlayerLoadout();
-        l._skills.Add(new SkillChoice(Source.Body, null, false, "hammer_blow"));
+        l._skills.Add(new SkillChoice(Source.Body, null, false,
+                                      c.SignatureSkillId ?? SkillCatalogue.Shared.First().Id));
         return l;
     }
 

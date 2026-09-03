@@ -124,6 +124,24 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;
 # TRAITS: select a trait (a MemoryDust id) for the dust mode.
 [ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
+# RH_SHOT_RESPEC=1 poses the MASTERY tree with TAKE EVERY POINT BACK already ARMED, so the warning
+# that names the skills the respec would unequip can be photographed. It lives between two presses
+# of one button, and a capture never clicks. buildtree / buildzoom only:
+#
+#   RH_SHOT_RESPEC=1 bash tools/asset-pipeline/capture.sh buildtree build/shots/respec.png
+[ -n "$RH_SHOT_RESPEC" ] && RH_ENV+=(RH_SHOT_RESPEC="$RH_SHOT_RESPEC")
+# RH_SHOT_PICK=<skillId> reads that skill in the BUILD screen's INSPECTOR — the only way to photograph
+# a LOCKED skill's reading and its LOCKED primary button, which no click can reach in a capture.
+# `weave` only. hammer_blow is the pose's locked one:
+#
+#   RH_SHOT_PICK=hammer_blow bash tools/asset-pipeline/capture.sh weave build/shots/locked.png
+[ -n "$RH_SHOT_PICK" ] && RH_ENV+=(RH_SHOT_PICK="$RH_SHOT_PICK")
+# RH_SHOT_SHED=1 makes `rosterswitch` perform a REAL champion switch away from a hunter whose own
+# signature skill is woven, so the notice the game posts when it repairs the loadout is photographed
+# rather than staged:
+#
+#   RH_SHOT_SHED=1 bash tools/asset-pipeline/capture.sh rosterswitch build/shots/shed.png
+[ -n "$RH_SHOT_SHED" ] && RH_ENV+=(RH_SHOT_SHED="$RH_SHOT_SHED")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")

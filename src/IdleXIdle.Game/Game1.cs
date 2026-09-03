@@ -364,7 +364,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool _showForge;
 
     // The player's build (four woven skills + three keystones), the mastery tree it walks, and the editor.
-    private PlayerLoadout _loadout = PlayerLoadout.Starter();
+    private PlayerLoadout _loadout = PlayerLoadout.Starter();   // the roster's starter champion; a load or a new game replaces it
     private MasteryTree _mastery = new();
     private int _deepestEver;   // the deepest wave ever reached — drives mastery points, so it must persist
 
@@ -1165,7 +1165,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Fresh core state. These fields are deliberately not readonly so this method can exist.
         _hunter = new Hunter();
         _world = new World();
-        _loadout = PlayerLoadout.Starter();
+        _loadout = PlayerLoadout.Starter(_characters.Active);
         _mastery = new MasteryTree();
         _dust = new MemoryDustTree();
         _skillProgress = new SkillProgress();
@@ -1801,6 +1801,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _masteryScreen.DevOpenTreeFirstVisit();
                         else _masteryScreen.DevOpenTree();
+                    }
+
+                    // RH_SHOT_RESPEC=1 poses the ARMED respec — the one state on this screen that says
+                    // what a decision will cost before it costs it (BRIEF sec.19). It exists only
+                    // between two presses of one button and a capture never clicks, so without this
+                    // dial nobody could ever look at the warning, at any profile. Two roads walked and
+                    // both their skills woven, so the list it raises has real names in it.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_RESPEC") == "1")
+                    {
+                        _mastery.SetEarned(9999);
+                        _mastery.RestoreTaken(_mastery.Taken.Concat(new[] { "road_hammer", "road_snare" }).ToList());
+                        if (_loadout.IndexOfSkill("snare_jaws") < 0)
+                        {
+                            var extra = _loadout.AddSkill();
+                            if (extra >= 0) _loadout.SetSkill(extra, "snare_jaws");
+                        }
+                        // The three the arming READS. The host wires these in Update, which has not run
+                        // yet — without them DevArmRespec asks a fresh empty tree what it would cost and
+                        // is told "nothing", which is how this pose came back unarmed the first time.
+                        _masteryScreen.Mastery = _mastery;
+                        _masteryScreen.Loadout = _loadout;
+                        _masteryScreen.Character = _characters.Active;
+                        _masteryScreen.DevArmRespec();
                     }
                     // RH_SHOT_NODE=<id> pins a node in the inspector, so a Notable, a Specialisation, a road
                     // node and a locked node can each be photographed read (UX V2 P1.5).
@@ -2516,20 +2539,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "ledger",
                                                "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
                         _dust.Purchase(id);
-                    // THE ROADS THIS FIXTURE'S BUILD NEEDS. Every skill is learned on the mastery tree
-                    // now, so a fixture that walks none of them photographs four empty slots — true,
-                    // and useless as a picture of the screen.
-                    // RestoreTaken, not Take: a road needs its specialisation and a specialisation is
-                    // one per hunter, so walking them honestly would take a career. The fixture is
-                    // posing a champion who HAS walked them.
+                    // THE ROADS THIS FIXTURE'S BUILD NEEDS — AND, DELIBERATELY, THE ONES IT DOES NOT.
+                    // Every shared skill is behind a road now, so a fixture that walks none photographs
+                    // four empty slots. But one that walks ALL TWELVE photographs a library with no
+                    // LOCKED tile in it, and LOCKED is the state BRIEF sec.20 is about: a skill with
+                    // waves spent on it and no node must read LOCKED · LEVEL n, never unlearned. So this
+                    // pose walks four roads and leaves HAMMER's and DRAIN's shut, and spends waves on a
+                    // shut one below — a state the screen must be photographed in, at every profile.
+                    // RestoreTaken, not Take: walking them honestly would take a career.
                     _mastery.SetEarned(9999);
                     _mastery.RestoreTaken(_mastery.Taken
-                        .Concat(MasteryCatalog.Nodes.Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id))
+                        .Concat(new[] { "road_volley", "road_volley_2", "road_field", "road_field_2",
+                                        "road_snare", "road_snare_2", "road_sign" })
                         .ToList());
                     ApplySkillCapacity();
                     // The gradual-unlock gate would hold a fresh fixture at two slots, and two slots
                     // is one active and one passive — not enough to show a build.
                     _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
+
+                    // SLOT 1 IS THE SIGNATURE. It is the one skill on this screen that no road opens and
+                    // no other champion may hold, it now has its own pinned row at the top of the
+                    // library, and a capture that never equips it cannot show either fact (sec.12).
+                    if (_characters.Active.SignatureSkillId is { } sigId) _loadout.SetSkill(0, sigId);
 
                     // FOUR WOVEN SLOTS, AND BOTH KINDS. The fixture used to add ONE skill, which meant
                     // no capture of this screen could ever show a passive row — and three UI changes
@@ -2548,6 +2579,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(slot, src);
                         _loadout.SetSkill(slot, skillId);
                     }
+                    // A SHUT ROAD WITH WAVES BEHIND IT. hammer_blow's road is not walked in this pose, so
+                    // its tile must read LOCKED and still show the level the player keeps (sec.20, LAW 4).
+                    for (var u = 0; u < SkillProgress.UsesForLevel(4); u++) _skillProgress.RecordWave("hammer_blow");
                     _loadoutScreen.DevOpenSkillTree();
                     // ALL FOUR STATES OF A SKILL'S OWN LEVELS, one per slot, so a single shot certifies
                     // the whole ladder. Posing one state at a time is how the reinforcement strip could
@@ -2582,6 +2616,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _loadoutScreen.DevPose(1, parts[0], chain);
                     }
                     else _loadoutScreen.DevPose(1, null);
+
+                    // RH_SHOT_PICK=<skillId> reads that skill in the INSPECTOR, which is the only way to
+                    // photograph a LOCKED skill's reading and its LOCKED button (sec.20). Last, so it wins
+                    // over the slot DevPose above.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_PICK") is { Length: > 0 } pickSkill)
+                        _loadoutScreen.DevPickLibrary(pickSkill);
                 }
 
                 if (sm is "roster" or "rosterlocked")
@@ -2629,8 +2669,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _characters.Refresh(_world.ConqueredIds);
                     _characters.Select("seeker");
                     _roster.DevSelect("seeker");
-                    PostNotice("YOU ARE THE SEEKER",
-                               "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
+
+                    // RH_SHOT_SHED=1 poses the REPAIR a switch performs, rather than a stand-in for it:
+                    // weave the SEEKER's own skill, baseline the switch detector on the SEEKER, then
+                    // become the ANVIL — so the first gameplay frame runs the real RepairForSwitch and
+                    // the notice on screen is the one the game actually posts (BRIEF sec.13).
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_SHED") == "1")
+                    {
+                        if (_characters.Active.SignatureSkillId is { } leaving)
+                        {
+                            var sl = _loadout.AddSkill();
+                            if (sl >= 0) _loadout.SetSkill(sl, leaving);
+                        }
+                        _lastActiveCharacterId = _characters.ActiveId;
+                        _characters.Select("anvil");
+                        _roster.DevSelect("anvil");
+                    }
+                    else
+                        PostNotice("YOU ARE THE SEEKER",
+                                   "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
                 }
 
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
@@ -3035,7 +3092,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showMastery)
         {
             // One lock, read by both doors — the rail tile and the button on the page.
-                        _masteryScreen.Loadout = _loadout;
+            _masteryScreen.Loadout = _loadout;
             _masteryScreen.Mastery = _mastery;
             _masteryScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _masteryScreen.Level = _hunter.HunterLevel;
@@ -3443,14 +3500,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>Has the player actually changed their weave, rather than keeping what they were given?</summary>
     /// <remarks>
-    /// Compared against <see cref="PlayerLoadout.Starter"/>'s single Body Strike rather than a stored
-    /// flag, so it needs no save migration and is honest on every existing save.
+    /// Compared against <see cref="PlayerLoadout.Starter"/>'s single slot rather than a stored flag,
+    /// so it needs no save migration and is honest on every existing save.
     /// </remarks>
     private bool BuildDiffersFromStarter()
     {
         var skills = _loadout.Skills;
         if (skills.Count != 1) return true;
-        return skills[0].SkillId != "hammer_blow" || skills[0].Source != Source.Body || skills[0].VowId is not null;
+        // The starter is the champion's OWN signature now, not a fixed shared skill, so the comparison
+        // has to ask the active champion what it was given rather than name one skill.
+        return skills[0].SkillId != _characters.Active.SignatureSkillId
+               || skills[0].Source != Source.Body || skills[0].VowId is not null;
     }
 
     /// <summary>Pick the looping music bed for the current screen. No-op until the music_* WAVs exist.</summary>
@@ -3776,16 +3836,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>
-    /// Take off every worn piece the new champion's class cannot wear, tell the player where it went,
-    /// and save — the switch and the shed must land in the same file.
+    /// Everything a champion switch owes the player: take off every worn piece the new champion's class
+    /// cannot wear, empty every slot holding the old champion's own skill, say what happened, and save —
+    /// the switch and the repair must land in the same file.
     /// </summary>
     /// <remarks>
-    /// The pieces are never removed from the bag: a worn item is a bag item the doll points at, so
-    /// <c>Unequip</c> alone puts it back in the grid, dimmed and locked, where the hover card names
-    /// who can wear it. The toast rides the same channel as a locked rail tile — one line, top of the
+    /// Nothing is destroyed by either half. The pieces are never removed from the bag: a worn item is a
+    /// bag item the doll points at, so <c>Unequip</c> alone puts it back in the grid, dimmed and locked,
+    /// where the hover card names who can wear it. The unwoven skill keeps every wave spent on it —
+    /// <c>SkillProgress</c> is keyed by skill id and is not touched here (LAW 4) — and the slot itself
+    /// stays, empty and ready. The toast rides the same channel as a locked rail tile — top of the
     /// screen, gone in a few seconds — because it is a notice, not a lesson.
     /// </remarks>
-    private void ShedUnwearable()
+    private void RepairForSwitch()
     {
         var who = _characters.Active;
         var shed = new List<string>();
@@ -3795,12 +3858,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _hunter.Unequip(slot);
             shed.Add(ItemNaming.TypeWord(worn));
         }
-        if (shed.Count == 0) return;
 
-        var words = shed.Count == 1 ? shed[0] : string.Join(", ", shed.Take(shed.Count - 1)) + " AND " + shed[^1];
-        _lockedMsg = shed.Count == 1
-            ? $"{who.Name} CANNOT WEAR YOUR {words} — IT IS BACK IN YOUR BAG"
-            : $"{who.Name} CANNOT WEAR YOUR {words} — THEY ARE BACK IN YOUR BAG";
+        // AND THE BUILD IS REPAIRED IN THE SAME BREATH. One loadout follows the player across every
+        // switch, so the champion just left behind leaves their own SIGNATURE in a slot — a slot the
+        // composer refuses (BuildComposer: "a signature that belongs to somebody else is refused here")
+        // and which would therefore sit filled and dead. Only foreign signatures go: a shared skill the
+        // current mastery allocation has locked keeps its slot and reads LOCKED on the BUILD screen,
+        // because a switch must not quietly finish what a respec started (BRIEF sec.13, sec.20, LAW 1).
+        var unwoven = LoadoutRepair.ShedForeignSignatures(_loadout, who);
+        if (shed.Count == 0 && unwoven.Count == 0) return;
+
+        var lines = new List<string>();
+        if (shed.Count > 0)
+        {
+            var words = shed.Count == 1 ? shed[0] : string.Join(", ", shed.Take(shed.Count - 1)) + " AND " + shed[^1];
+            lines.Add(shed.Count == 1
+                ? $"{who.Name} CANNOT WEAR YOUR {words} — IT IS BACK IN YOUR BAG"
+                : $"{who.Name} CANNOT WEAR YOUR {words} — THEY ARE BACK IN YOUR BAG");
+        }
+        if (unwoven.Count > 0)
+        {
+            var names = unwoven.Select(d => d.Name.ToUpperInvariant()).ToList();
+            var said = names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " AND " + names[^1];
+            lines.Add(names.Count == 1
+                ? $"{said} BELONGS TO ANOTHER HUNTER — ITS SLOT IS EMPTY, AND EVERY LEVEL ON IT IS KEPT"
+                : $"{said} BELONG TO ANOTHER HUNTER — THEIR SLOTS ARE EMPTY, AND EVERY LEVEL ON THEM IS KEPT");
+        }
+        _lockedMsg = string.Join("  ·  ", lines);
         _lockedTimer = 4.5f;
         Save();
     }
@@ -3812,12 +3896,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var fade = MathF.Min(1f, _lockedTimer / 0.5f);
         var w = LockedToastWidth;
-        var h = UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(17) * 2;   // one line, padded
+        // TWO LINES WHEN TWO THINGS HAPPENED. A switch can shed gear AND unweave a signature in the same
+        // instant, and a box built for exactly one line answered that by cutting the second fact off
+        // mid-word. It still draws as one line whenever one line is what there is.
+        var wrapped = _ui.WrapBig(_lockedMsg, w - UiMetrics.Space(40), UiTypography.OverlayBody).Take(2).ToList();
+        var h = wrapped.Count * UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(17) * 2 - (UiTypography.Pitch(UiTypography.OverlayBody) - UiTypography.OverlayBody);
         var box = new Rectangle(UiKit.PageCenterX - w / 2, LockedToastTop, w, h);
         _ui.Fill(_batch, box, new Color(0x18, 0x10, 0x24) * (0.92f * fade));
         _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 3), NavGem * fade);
-        _ui.TextCenterBig(_batch, _ui.ShortenBig(_lockedMsg, w - UiMetrics.Space(40), UiTypography.OverlayBody), box.Center.X,
-                          box.Y + (h - UiTypography.OverlayBody) / 2, Color.White * fade, UiTypography.OverlayBody);
+        var ly = box.Y + UiMetrics.Space(17);
+        foreach (var line in wrapped)
+        {
+            _ui.TextCenterBig(_batch, line, box.Center.X, ly, Color.White * fade, UiTypography.OverlayBody);
+            ly += UiTypography.Pitch(UiTypography.OverlayBody);
+        }
     }
 
     /// <summary>The locked-tile toast's width and where it hangs — a readable line under the pills. Page geometry.</summary>
@@ -4317,11 +4409,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         _rosterBaselined = true;
 
-        // A CHAMPION SWITCH SHEDS WHAT THE NEW ONE CANNOT WEAR. The roster's promise is that switching
-        // costs nothing, and it still costs nothing — the pieces go back to the bag, not away — but a
-        // WARDEN's helm on a RANGER would be a class rule the fight quietly ignored, and the wear
-        // rule has to hold on the doll as well as at the bag.
-        if (_lastActiveCharacterId is { } wasId && wasId != _characters.ActiveId) ShedUnwearable();
+        // A CHAMPION SWITCH SHEDS WHAT THE NEW ONE CANNOT WEAR — AND WHAT THEY CANNOT USE. The roster's
+        // promise is that switching costs nothing, and it still costs nothing: the pieces go back to the
+        // bag, not away, and an unwoven signature keeps every level it earned. But a WARDEN's helm on a
+        // RANGER would be a class rule the fight quietly ignored, and the SEEKER's own skill left in a
+        // slot after you became the ANVIL is a slot the composer refuses and the player cannot use.
+        if (_lastActiveCharacterId is { } wasId && wasId != _characters.ActiveId) RepairForSwitch();
         _lastActiveCharacterId = _characters.ActiveId;
         // Four in five class-locked pieces a chest pays are the active champion's.
         _forge.FavouredClass = _characters.Active.Class;

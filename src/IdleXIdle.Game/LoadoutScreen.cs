@@ -277,6 +277,20 @@ public sealed class LoadoutScreen
     /// <summary>DEV: kept for the fixtures that call it — the skill tree is always on screen now.</summary>
     public void DevOpenSkillTree() { }
 
+    /// <summary>DEV: pick a skill in the LIBRARY, so the inspector reads that skill for a capture.</summary>
+    /// <remarks>
+    /// The reason this exists is the LOCKED reading (BRIEF sec.20). A locked skill's inspector and its
+    /// primary button are reachable only by clicking a library tile, and a capture never clicks — so
+    /// without this dial the one state the section is about could not be photographed at any profile.
+    /// </remarks>
+    public void DevPickLibrary(string skillId)
+    {
+        if (SkillCatalogue.Find(skillId) is not { } def) return;
+        _pick = Pick.Library;
+        _pickSkillId = def.Id;
+        _vowListOpen = false;
+    }
+
     // ── LAYOUT. Three columns to the page. The columns' WIDTHS are page shares and do not move with the
     // profile; everything inside a column is a density size read from UiMetrics (brief §7–§11) and laid out
     // from the height that is there — a column that no longer fits scrolls (§9, §18), it never overprints. ──
@@ -423,12 +437,40 @@ public sealed class LoadoutScreen
     /// <summary>The style label's column: ~80 px of ink at 100 % and the rest is the gap to the tiles, so it grows at the spacing rate and the tiles keep their width.</summary>
     private static int LibStyleW => UiMetrics.Space(118);
     private static int LibTileGap => UiMetrics.Space(12);
+
+    /// <summary>
+    /// This champion's own skill — the one no other champion may ever weave. Null when no champion is
+    /// set (the tests and the first frames of a load), and then the library is the twelve shared alone.
+    /// </summary>
+    private SkillDef? Signature => Character?.SignatureSkillId is { } id ? SkillCatalogue.Find(id) : null;
+
+    /// <summary>
+    /// The room the SIGNATURE block takes above the six style rows: its own row, plus the rule that
+    /// separates it from them. Zero when there is no signature to pin, so the twelve sit where they
+    /// always did.
+    /// </summary>
+    /// <remarks>
+    /// One more <see cref="LibRowPitch"/> and one spacing token — the same arithmetic the six rows are
+    /// built from, so the block reflows with them at 125 % and 150 % instead of needing its own numbers.
+    /// </remarks>
+    private int SigBlockH => Signature is null ? 0 : LibRowPitch + UiMetrics.Space(12);
+
+    /// <summary>
+    /// The signature's tile: one row at the top of the library, across BOTH tile columns.
+    /// </summary>
+    /// <remarks>
+    /// Full width on purpose (BRIEF sec.12: "do not hide it among twelve shared Skills without
+    /// distinction"). A single tile in the left column would read as half of a style's pair, which is
+    /// the one thing this row must not read as — it belongs to nobody's style and to one champion.
+    /// </remarks>
+    private Rectangle SigTile => new(SkillsX + LibStyleW, LibTop, LibW - LibStyleW, LibTileH);
+
     private Rectangle LibTile(int style, int which)
     {
         var w = (LibW - LibStyleW - LibTileGap) / 2;
-        return new(SkillsX + LibStyleW + which * (w + LibTileGap), LibTop + style * LibRowPitch, w, LibTileH);
+        return new(SkillsX + LibStyleW + which * (w + LibTileGap), LibTop + SigBlockH + style * LibRowPitch, w, LibTileH);
     }
-    private int TreeTop => LibTop + StyleCount * LibRowPitch + UiMetrics.Space(22);
+    private int TreeTop => LibTop + SigBlockH + StyleCount * LibRowPitch + UiMetrics.Space(22);
     private static int TreeIcon => UiMetrics.Control(48);
     private int RailY => TreeTop + TreeIcon + UiMetrics.Space(10);
     private static int VarCardH => UiMetrics.Control(96);
@@ -453,7 +495,7 @@ public sealed class LoadoutScreen
     /// <summary>How tall the skills column's content is at this profile, and so whether — and how far — it scrolls.</summary>
     private void LayoutSkills()
     {
-        var height = UiMetrics.Space(6) + StyleCount * LibRowPitch + UiMetrics.Space(22);
+        var height = UiMetrics.Space(6) + SigBlockH + StyleCount * LibRowPitch + UiMetrics.Space(22);
         if (TreeDef is { } def)
         {
             var reinforcements = 0;
@@ -702,6 +744,13 @@ public sealed class LoadoutScreen
 
         // ── THE SKILLS COLUMN: tiles, the fork, the chips — all select. ─────────────────────────────
         var skillsRegion = SkillsRegion;
+        // THE SIGNATURE'S OWN TILE, first, because it sits above the twelve. Only ever THIS champion's:
+        // Signature reads the active character, so another champion's signature has no cell to click.
+        if (Signature is { } sigPick && In(SigTile, skillsRegion).Contains(hit))
+        {
+            _pick = Pick.Library; _pickSkillId = sigPick.Id; _vowListOpen = false; _msg = "";
+            return;
+        }
         for (var st = 0; st < StyleCount; st++)
             for (var w = 0; w < 2; w++)
             {
@@ -812,7 +861,17 @@ public sealed class LoadoutScreen
             case Pick.Library:
             {
                 if (SkillCatalogue.Find(_pickSkillId) is not { } def) return ("", false, "");
-                if (!known.Contains(def.Id)) return ($"LEARN ON {StyleName(def.Style)}'S ROAD", false, $"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE.");
+                // LOCKED, NOT UNLEARNED (BRIEF sec.20, LAW 4). The button says the state and the level the
+                // player keeps; the refusal beside it names the one thing that would open it again. Neither
+                // may say a word that implies the waves spent on this skill have gone anywhere.
+                if (!known.Contains(def.Id))
+                {
+                    var kept = SkillLevels.LevelOf(def.Id);
+                    return (kept > 0 ? $"LOCKED  ·  LEVEL {kept} KEPT" : "LOCKED", false,
+                            kept > 0
+                                ? $"TAKE {StyleName(def.Style)}'S ROAD ON THE MASTERY TREE TO UNLOCK IT. YOUR LEVEL {kept} IS WAITING."
+                                : $"TAKE {StyleName(def.Style)}'S ROAD ON THE MASTERY TREE TO UNLOCK IT.");
+                }
                 if (_slot >= skills.Count) return ("EQUIP", false, "PICK A SLOT ON THE LEFT FIRST.");
                 if (skills[_slot].SkillId == def.Id) return ($"EQUIPPED IN SLOT {_slot + 1}", false, "");
                 // LAW 13: one slot per skill. The button says WHERE it already is, in words, rather than
@@ -1187,7 +1246,11 @@ public sealed class LoadoutScreen
         var known = KnownSkills();
         var skills = Loadout.Skills;
         _ui.TextBig(b, "SKILLS", SkillsX, SkillsHeadY, Slate, UiTypography.Secondary);
-        var learnedHead = $"LEARNED {known.Count(id => SkillCatalogue.Find(id) is not null)} / 12  ·  LEARN MORE ON THE MASTERY TREE";
+        // THE TWELVE, AND ONLY THE TWELVE. The signature is not one of them — counting it printed 13 / 12 —
+        // and the word is UNLOCKED rather than LEARNED, because access follows the current mastery
+        // allocation now and a skill can go back to LOCKED (BRIEF sec.16, sec.20, LAW 3).
+        var openShared = SkillCatalogue.Shared.Count(d => known.Contains(d.Id));
+        var learnedHead = $"{openShared} / 12 SHARED SKILLS UNLOCKED  ·  MORE ON THE MASTERY TREE";
         // Shortened against the room LEFT of it, so a bigger profile trims the sentence instead of printing it
         // through the word SKILLS.
         var headRoom = SkillsW - _ui.MeasureBig("SKILLS", UiTypography.Secondary) - UiMetrics.Space(24);
@@ -1222,38 +1285,98 @@ public sealed class LoadoutScreen
             widestName = Math.Max(widestName, Math.Max(_ui.MeasureBig(SkillCatalogue.ActiveOf((Style)st).Name, UiTypography.Body),
                                                        _ui.MeasureBig(SkillCatalogue.PassiveOf((Style)st).Name, UiTypography.Body)));
         var longBadge = LibTile(0, 0).Width - nameLeft - _ui.MeasureBig("EQUIPPED · SLOT 5", UiTypography.Caption) - UiMetrics.Space(16) >= widestName;
+        // THE SECOND LINE OF A LOCKED TILE, decided the same way and for the same reason. A skill the
+        // hunter cannot weave right now says LOCKED and — where waves have been spent on it — the LEVEL it
+        // keeps, which is the whole of BRIEF sec.20. Where the narrow tile cannot hold ACTIVE and both, the
+        // kind is what goes: the inspector still says it, and no word may imply the levels are gone (LAW 4).
+        var subRoom = LibTile(0, 0).Width - nameLeft - lockEdge - edgePad * 2;
+        var widestLock = 0;
+        for (var st = 0; st < StyleCount; st++)
+            foreach (var d in new[] { SkillCatalogue.ActiveOf((Style)st), SkillCatalogue.PassiveOf((Style)st) })
+                if (!known.Contains(d.Id)) widestLock = Math.Max(widestLock, _ui.MeasureBig(LockLine(d, full: true), UiTypography.Caption));
+        var longLock = widestLock <= subRoom;
+
+        // One tile, wherever it sits: the signature's own row and the twelve are the same object drawn twice,
+        // so a change to the tile cannot land on one and miss the other.
+        void Tile(Rectangle tile, SkillDef def)
+        {
+            var shown = In(tile, region);
+            var have = known.Contains(def.Id);
+            var isEquipped = equipped.Contains(def.Id);
+            var on = _pick == Pick.Library && _pickSkillId == def.Id;
+            var over = shown.Contains(hit);
+            Cell(b, tile, TileBg, on, over);
+            Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
+            var ico = new Rectangle(tile.X + edgePad, tile.Y + edgePad, icoEdge, icoEdge);
+            if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
+            var badge = isEquipped ? (longBadge ? $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}" : $"SLOT {Loadout.IndexOfSkill(def.Id) + 1}") : "";
+            var tail = isEquipped ? _ui.MeasureBig(badge, UiTypography.Caption) + edgePad : !have ? lockEdge + edgePad : 0;
+            var nameX = tile.X + nameLeft;
+            var nameY = tile.Y + UiMetrics.Space(6);
+            _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Right - edgePad - tail - nameX, UiTypography.Body), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
+            var sub = have ? (def.TakesABeat ? "ACTIVE" : "PASSIVE") : LockLine(def, longLock);
+            // The kept LEVEL is the one thing on a locked tile the player must not miss, so those tiles —
+            // and only those — carry the warning ink. A library of ten quiet locks stays quiet.
+            var subInk = have || SkillLevels.LevelOf(def.Id) <= 0 ? Slate : Ember;
+            _ui.TextBig(b, _ui.ShortenBig(sub, tile.Right - edgePad - (isEquipped ? tail : lockEdge + edgePad) - nameX, UiTypography.Caption),
+                        nameX, nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), subInk, UiTypography.Caption);
+            if (!have) _ui.Icon(b, "ui_slot_locked", new Rectangle(tile.Right - edgePad - lockEdge, tile.Y + (tile.Height - lockEdge) / 2, lockEdge, lockEdge), Slate);
+            else if (isEquipped) _ui.TextRightBig(b, badge, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
+            Tip(shown, hit, have ? $"{def.Name} — {def.Line}" : LockTip(def));
+        }
+
+        // ── THE SIGNATURE, PINNED ABOVE THE TWELVE (BRIEF sec.12). It is this champion's alone, it needs
+        //    no mastery node, and no other champion's signature has a cell here to be picked from. ──
+        if (Signature is { } sig)
+        {
+            var sigLabelY = LibTop + UiMetrics.Space(14);
+            _ui.TextBig(b, "SIGNATURE", SkillsX, sigLabelY, Gold, UiTypography.Body);
+            if (Character is { } who)
+                _ui.TextBig(b, _ui.ShortenBig(who.Name.ToUpperInvariant(), LibStyleW - UiMetrics.Space(10), UiTypography.Caption),
+                            SkillsX, sigLabelY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Gold, UiTypography.Caption);
+            Tile(SigTile, sig);
+            // The rule that says the twelve below are a different kind of thing: shared, and behind a road.
+            _ui.Fill(b, new Rectangle(SkillsX, LibTop + LibRowPitch + UiMetrics.Space(4), LibW, 1), Dim);
+        }
+
         for (var st = 0; st < StyleCount; st++)
         {
             var style = (Style)st;
-            var rowY = LibTop + st * LibRowPitch;
+            var rowY = LibTop + SigBlockH + st * LibRowPitch;
             var yours = ChosenStyle == style;
             var labelY = rowY + UiMetrics.Space(14);
             _ui.TextBig(b, StyleName(style), SkillsX, labelY, yours ? Gold : Slate, UiTypography.Body);
             if (yours) _ui.TextBig(b, "YOURS", SkillsX, labelY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Gold, UiTypography.Caption);
             for (var w = 0; w < 2; w++)
-            {
-                var def = w == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
-                var tile = LibTile(st, w);
-                var shown = In(tile, region);
-                var have = known.Contains(def.Id);
-                var isEquipped = equipped.Contains(def.Id);
-                var on = _pick == Pick.Library && _pickSkillId == def.Id;
-                var over = shown.Contains(hit);
-                Cell(b, tile, TileBg, on, over);
-                Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
-                var ico = new Rectangle(tile.X + edgePad, tile.Y + edgePad, icoEdge, icoEdge);
-                if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
-                var badge = isEquipped ? (longBadge ? $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}" : $"SLOT {Loadout.IndexOfSkill(def.Id) + 1}") : "";
-                var tail = isEquipped ? _ui.MeasureBig(badge, UiTypography.Caption) + edgePad : !have ? lockEdge + edgePad : 0;
-                var nameX = tile.X + nameLeft;
-                var nameY = tile.Y + UiMetrics.Space(6);
-                _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Right - edgePad - tail - nameX, UiTypography.Body), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
-                _ui.TextBig(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", nameX, nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Slate, UiTypography.Caption);
-                if (!have) _ui.Icon(b, "ui_slot_locked", new Rectangle(tile.Right - edgePad - lockEdge, tile.Y + (tile.Height - lockEdge) / 2, lockEdge, lockEdge), Slate);
-                else if (isEquipped) _ui.TextRightBig(b, badge, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
-                Tip(shown, hit, have ? $"{def.Name} — {def.Line}" : $"{def.Name} — learned on {StyleName(style)}'s road, on the MASTERY tree.");
-            }
+                Tile(LibTile(st, w), w == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style));
         }
+    }
+
+    /// <summary>
+    /// A locked tile's second line: LOCKED, and the level the player keeps while it is locked.
+    /// </summary>
+    /// <remarks>
+    /// BRIEF sec.20 and LAW 4. Access follows the current mastery allocation and comes and goes with it;
+    /// the waves spent on a skill never do. So a skill with experience and no node must never read as
+    /// unlearned — it reads LOCKED, and it says the level that is waiting for it.
+    /// The <paramref name="full"/> form carries the ACTIVE / PASSIVE kind as well; the narrow one drops it.
+    /// </remarks>
+    private string LockLine(SkillDef def, bool full)
+    {
+        var kind = def.TakesABeat ? "ACTIVE" : "PASSIVE";
+        var level = SkillLevels.LevelOf(def.Id);
+        if (level <= 0) return full ? $"{kind} · LOCKED" : "LOCKED";
+        return full ? $"{kind} · LOCKED · LEVEL {level}" : $"LOCKED · LEVEL {level}";
+    }
+
+    /// <summary>The hover line for a locked tile — what it is, what is kept, and what would open it.</summary>
+    private string LockTip(SkillDef def)
+    {
+        var road = $"Take {StyleName(def.Style)}'s road on the MASTERY tree to unlock it.";
+        var level = SkillLevels.LevelOf(def.Id);
+        return level > 0
+            ? $"{def.Name} — LOCKED. Your level {level} is kept while it is locked. {road}"
+            : $"{def.Name} — LOCKED. {road}";
     }
 
     /// <summary>THE SKILL TREE of the selected slot's skill — drawn as the fork it is.</summary>
@@ -1383,7 +1506,7 @@ public sealed class LoadoutScreen
         _changeVowShown = false;
         _respecShown = false;
 
-        void Head(string s) { _ui.TextBig(b, s, x, y, Ins(Slate), UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+        void Head(string s, Color? c = null) { _ui.TextBig(b, s, x, y, Ins(c ?? Slate), UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
         void Line(string s, Color c, int px = 0, int maxLines = 3)
         {
             if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
@@ -1478,7 +1601,7 @@ public sealed class LoadoutScreen
             {
                 Head(_slot < skills.Count ? $"SLOT {_slot + 1}" : "NOTHING SELECTED");
                 _ui.TextBig(b, "EMPTY", x, y, Ins(UiInk.Empty), UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
-                Line("Pick a skill from the library and press EQUIP. A skill is learned on the MASTERY tree; once learned it is yours for good.", Slate);
+                Line("Pick a skill from the library and press EQUIP. A shared skill is unlocked by its road on the MASTERY tree, and stays unlocked while that road is taken. Your own SIGNATURE skill needs no road — it is always yours.", Slate);
                 return;
             }
 
@@ -1522,12 +1645,19 @@ public sealed class LoadoutScreen
             }
 
             // A skill: from a slot, or from the library.
-            Head($"SKILL · {StyleName(def.Style)} · {(def.TakesABeat ? "ACTIVE" : "PASSIVE")}{(slotOf >= 0 ? $" · SLOT {slotOf + 1}" : "")}");
+            var ownSignature = def.OwnerCharacterId is not null;
+            Head($"{(ownSignature ? "SIGNATURE" : "SKILL")} · {StyleName(def.Style)} · {(def.TakesABeat ? "ACTIVE" : "PASSIVE")}{(slotOf >= 0 ? $" · SLOT {slotOf + 1}" : "")}",
+                 ownSignature ? Gold : null);
             var ico = new Rectangle(x, y, TreeIcon, TreeIcon);
             _ui.Icon(b, $"icon_skill_{def.Id}", ico, Ins(have ? Gold : Slate));
             _ui.TextBig(b, _ui.ShortenBig(def.Name.ToUpperInvariant(), x + w - ico.Right - UiMetrics.Space(12), UiTypography.Headline), ico.Right + UiMetrics.Space(12), y + UiMetrics.Space(8), Ins(Bone), UiTypography.Headline);
             y += TreeIcon + UiMetrics.Space(8);
-            Line(def.Line, Bone); Gap(); Rule();
+            Line(def.Line, Bone);
+            // EXCLUSIVE, AND SAID SO (BRIEF sec.11-12, LAW 1). A signature is the one skill on this screen
+            // that no road opens and no other champion may ever hold.
+            if (ownSignature && Character is { } owner)
+                Line($"ONLY {owner.Name.ToUpperInvariant()} CAN USE THIS SKILL — IT NEEDS NO MASTERY ROAD", Gold, UiTypography.Secondary, 2);
+            Gap(); Rule();
             Head("WHAT IT DOES");
             if (chosen is null)
             {
@@ -1542,10 +1672,26 @@ public sealed class LoadoutScreen
             Gap(); Rule();
             if (!have)
             {
+                // LOCKED, WITH THE LEVEL IT KEEPS (BRIEF sec.20). The state comes first because it is the
+                // thing that changed — a skill the player has spent waves on has not become a stranger.
+                // ONE SHORT LINE. The refusal over the button says what would unlock it and that the level
+                // is waiting, and the button says it again; a third, longer telling of the same fact only
+                // pushed YOU NEED FIRST off the bottom of this column at 150 %.
+                Head("CURRENT STATE");
+                Line(level > 0 ? $"LOCKED · LEVEL {level} IS KEPT" : "LOCKED · NO LEVELS YET",
+                     level > 0 ? Gold : Slate);
+                Gap();
                 Head("YOU NEED FIRST");
                 var lockEdge = UiMetrics.Control(20);
                 _ui.Icon(b, "ui_slot_locked", new Rectangle(x, y + 2, lockEdge, lockEdge), Ins(Bone));
-                _ui.TextBig(b, _ui.ShortenBig($"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE", w - lockEdge - UiMetrics.Space(8), UiTypography.Body), x + lockEdge + UiMetrics.Space(8), y, Ins(Bone), UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body);
+                // WRAPPED, NOT TRIMMED. At 125 % this column cuts the line at "…ON THE MASTERY TR…", and a
+                // reason that stops mid-word has not said why (brief §29). It is the only sentence here.
+                var needX = x + lockEdge + UiMetrics.Space(8);
+                foreach (var l in _ui.WrapBig($"TAKE {StyleName(def.Style)}'S ROAD ON THE MASTERY TREE", w - lockEdge - UiMetrics.Space(8), UiTypography.Body).Take(2))
+                {
+                    _ui.TextBig(b, l, needX, y, Ins(Bone), UiTypography.Body);
+                    y += UiTypography.Pitch(UiTypography.Body);
+                }
             }
             else
             {
