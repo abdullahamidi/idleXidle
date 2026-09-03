@@ -18,9 +18,8 @@ namespace IdleXIdle.Game;
 /// <remarks>
 /// <para>
 /// Two questions, in this order. <i>Who should I play?</i> is answered by the two facts that actually
-/// separate two hunters — the STARTING SKILL they hand you, latched permanently into your skill set
-/// the moment you play them, and the INNATE power that is always on — neither of which this screen
-/// showed at all before UX V2 P2.2.
+/// separate two hunters — the SIGNATURE SKILL that belongs to them and to nobody else, and the INNATE
+/// power that is always on — neither of which this screen showed at all before UX V2 P2.2.
 /// </para>
 /// <para>
 /// <i>What do I lose by switching?</i> is answered BESIDE THE BUTTON rather than in a banner over the
@@ -312,7 +311,13 @@ public sealed class RosterScreen
     };
 
     // The state block's fixed lines, named once so the block is MEASURED with the words it draws.
-    private const string FreeLine = "SWITCHING IS FREE. YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY.";
+    //
+    // THE PROMISE HAD TO NARROW. It said "YOUR SKILLS ... STAY", which was true while every champion's
+    // own skill was banked account-wide the moment you played them. A signature belongs to one
+    // champion now (BRIEF sec.9), so switching genuinely changes which techniques you can weave -
+    // that is the point of the system - and the line has to say so rather than promise otherwise.
+    // What DOES stay is every skill's experience: access is temporary, experience is permanent.
+    private const string FreeLine = "SWITCHING IS FREE. GEAR, TRAITS AND THE WARREN STAY, AND NO SKILL EVER LOSES ITS LEVELS.";
     private const string PickAnotherLine = "PICK ANOTHER CARD TO READ A DIFFERENT HUNTER.";
     private const string JoinsLine = "THIS HUNTER JOINS YOU THE MOMENT IT IS DONE.";
 
@@ -740,12 +745,15 @@ public sealed class RosterScreen
         if (blurbLines > 0)
             y = DrawWrapped(b, c.Blurb, left, y, width, Slate, UiTypography.Body, blurbLines) + UiMetrics.Space(10);
 
-        // 4 STARTING SKILL — the fact that most separates two hunters, and the screen never showed it.
-        //   It is latched permanently into your skill set the moment you play them.
+        // 4 SIGNATURE SKILL — the fact that most separates two hunters (BRIEF sec.11).
+        //
+        //   It said STARTING SKILL and, on the right, ALREADY KNOWN — because the skill was one of the
+        //   twelve shared ones and playing this champion banked it account-wide for ever. Both halves
+        //   were true and both are now wrong: the skill is this champion's alone, no other champion
+        //   can ever weave it, and unlocking them does not add it to anybody's library.
         Rule();
-        _ui.TextBig(b, "STARTING SKILL", left, y, Slate, UiTypography.Secondary);
-        if (skill is not null && Mastery?.AvailableSkills().Contains(skill.Id) == true)
-            _ui.TextRightBig(b, "ALREADY KNOWN", right, y, Met, UiTypography.Secondary);
+        _ui.TextBig(b, "SIGNATURE SKILL", left, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"ONLY {c.Name}", right, y, Gold, UiTypography.Secondary);
         y += headH;
         if (skill is null)
         {
