@@ -13,7 +13,33 @@
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
 #        rosterswitch warrenready warrenfresh
-#        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport
+#        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
+#
+# THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
+# screenshot can judge on its own, and two of the three states below could not be posed at all before:
+#
+# `vfxdebug` is `fightshield` PLUS the contract's debug view — every figure's VISIBLE bounds, every
+#   live effect's frame and content rectangles, its anchor point, and its native-scale ratio, coloured
+#   green inside the §73 budget and red over it. The standing barrier is the acceptance case, so the
+#   mode that photographs the contract is the mode that raises one. F8 toggles the same view live
+#   under RH_DEV=1. It is off in every other mode and in every shipped build.
+#
+# RH_SHOT_HUNTER=<character id> poses ANY fight fixture on a different champion (seeker, magpie,
+#   quiver, oathbound, anvil, chorus, metronome, thornwall, tower, unbroken). Every effect is measured
+#   against the hunter's VISIBLE silhouette, and those run from 162 px wide (THE OATHBOUND) to 373
+#   (QUIVER) while all ten draw within four pixels of the same HEIGHT — so one hunter's capture proves
+#   nothing about anything measured against a width. §71 names SEEKER and MAGPIE; they differ by 13 %,
+#   and the pair that can actually fail is OATHBOUND against QUIVER:
+#
+#     RH_SHOT_HUNTER=quiver bash tools/asset-pipeline/capture.sh fightshield build/shots/quiver.png
+#
+# RH_VFX_DUMP=1 and RH_VFX_BUDGET=1 print the numbers instead of the picture — the dump is one line
+#   per effect as it resolves, the budget is every profile against every strip it can wear, measured
+#   from the real textures. This script sends the game's stdout to /dev/null, so those two go through
+#   tools/asset-pipeline/vfx_dump.sh, which keeps it:
+#
+#     RH_VFX_DUMP=1 bash tools/asset-pipeline/vfx_dump.sh vfxdebug build/shots/vfx.png
+#
 # The fight poses (UI polish §21 / §108): `fight` is the STANDARD (two actives, two passives, several
 # creatures); `fightshield` a FULL wave-start shield; `fightshieldbroken` a bite heavy enough to empty
 # it — the split bite and SHIELD BROKEN in one instant; `fightstatus` the UNDYING / CHARGE chips;

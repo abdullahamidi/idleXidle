@@ -36,10 +36,34 @@ stage reading as one drawing:
 | Champion | 430 px (ChampBox) | character size **128** | 512 | ~3.4 px/px |
 | Normal enemy | 440 px × archetype scale (0.58 swarm … 1.12 bruiser) | character **128** / image **192–256** | 512 | ~3.4 |
 | Boss | 540 px body | character **160** | 512 | ~3.4 |
-| Effect | played at scale 1–3 | pixen **256** | 512 | — |
+| Effect | a RATIO of the figure — see below | pixen **256** | 512 | — |
 
-Every strip is **8 square 512-px frames in one row** (`*_strip8_512.png`); the renderer derives the
-frame count from `width / height`. Bosses moved from `_strip8_1024` to the same 512 contract.
+Every strip is **8 square 512-px frames in one row** (`*_strip8_512.png`). Character and enemy strips
+are sliced by `width / height`; **effect strips declare their frame count** in the VFX profile table
+(`src/IdleXIdle.Game/Vfx/VfxProfiles.cs`), so a regenerated effect at another aspect fails loudly
+instead of being sliced wrong in silence. Bosses moved from `_strip8_1024` to the same 512 contract.
+
+### Effects are sized by RATIO, and the art must fill its frame
+
+**Updated 2026-09-03, with the VFX placement contract.** "Played at scale 1–3" is dead: an effect no
+longer carries a display multiplier at all. It carries a fraction of its SUBJECT's visible size, and
+the renderer derives the frame from that and from how much of the frame the art actually fills
+(`src/IdleXIdle.Game/Vfx/VfxContract.cs`). The bands: a shield barrier 1.10–1.20× the hunter's
+visible height, an ordinary impact 0.25–0.40× the target's, an execute 0.50–0.70×, a body aura
+1.0–1.2×.
+
+Two consequences for anyone GENERATING an effect:
+
+1. **Padding is not free.** The renderer draws the whole frame, so a strip whose art fills half its
+   frame needs a frame twice as large to show the same picture — and that size is reported as a ratio
+   against the strip's authored 512. Above **1.25×** the renderer refuses to magnify any further and
+   the effect is flagged; below **0.75×** the strip is simply bigger than it is ever drawn. Measured:
+   `fx_shield`'s dome fills **0.492** of its frame, which is why it cannot reach the barrier band and
+   has been re-ordered; `fx_shield_break` fills **0.922**, and that is the shape to match. Measure any
+   new strip with `tools/asset-pipeline/fx_bounds.py`.
+2. **Author the art at the SHAPE the effect is.** A ground ring wants a wide, short strip; every trap
+   strip in the tree is a near-square burst, so the ring anchors as a burst standing on the floor
+   rather than as an ellipse lying on it.
 
 ## 3. Clips
 
@@ -212,8 +236,17 @@ Per Form, played on the enemy row unless noted, tinted by the casting skill's **
 | `fx_projectile` | a bolt streaking left→right into a small burst | enemy |
 | `fx_aura` | an expanding ring pulse | champion |
 | `fx_trap` | a ground burst of shards erupting upward | enemy |
-| `fx_mark` | a sigil that flashes and locks | enemy |
+| `fx_mark` | a sigil that flashes and locks | over the enemy's head |
 | `fx_transformation` | an upward surge of light | champion |
+| `fx_press` | the weight that sits on the front enemy — PRESS's field | champion (held) |
+| `fx_weep` | a falling column, left by a kill — WEEP's rain | over the enemy's head |
+| `fx_wilt` | the withering that drains the wave — WILT's field | champion (held) |
+
+The last three were on disk and loaded for months and DREW NOTHING: their keys had no entry in
+`AssetLibrary.Aliases`, the resolver returned null, and `VfxPlayer` skips a missing texture in
+silence. PRESS and WILT are two of the four Field skills, and a Field's art is what the champion's
+held field wears — so a build running either had no field effect at all. Any new effect key belongs
+in that alias table and in `VfxProfiles`, which is what `tools/check_asset_keys.py` now reads.
 
 UI flourishes generated the same way: `fx_bind_chain` — a ring of heavy gold links with inward
 spikes, drawn wide and contracting — plays over a skill's Source medallion on the BUILD screen when a
@@ -221,7 +254,13 @@ Vow is bound to it. It is an asset rather than drawn primitives on purpose (play
 "kendin bir kutucuk veya buton oluşturup görsel olarak onu kullanıyorsun").
 
 Combat beats: `fx_hit` (spark), `fx_weakhit` (puff), `fx_crit` (starburst), `fx_death` (ash plume),
-`fx_heal` (rising motes), `fx_shield` (dome flash), `fx_levelup` (column of light).
+`fx_heal` (rising motes), `fx_shield` (dome flash), `fx_shield_break` (the dome bursting into shards).
+
+`fx_levelup` (a column of light) is generated, on disk, and **played by nothing**. Its alias was
+removed 2026-09-03 so it stops claiming a consumer it does not have. The level-up moment it was made
+for is chrome (a skill level, a region conquered) rather than an arena beat, and the effect layer
+only knows how to place things against arena figures — so wiring it needs a second placement context,
+which is a decision for the desk, not a number to turn. Until then it is a flagged orphan, not art.
 
 ## 6. Generation recipe (what the agents ran)
 
