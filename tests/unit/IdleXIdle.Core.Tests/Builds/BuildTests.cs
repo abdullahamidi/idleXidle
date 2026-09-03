@@ -229,22 +229,28 @@ public class BuildTests
         Assert.Empty(new Build().Triggers(new Hunter()));
     }
 
-    // ── THE FIFTH WEAVE ───────────────────────────────────────────────────────────────────────────
+    // ── THE FIFTH WEAVE, AND ITS REMOVAL ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_a_build_weaves_up_to_its_own_capacity_not_the_types_floor()
+    public void test_a_build_weaves_up_to_its_own_capacity_and_never_past_four()
     {
-        // FIFTH WEAVE is a three-point node on the trait spine. It was bought, saved, resolved to 5 and
-        // written into the loadout's capacity by a host line whose own comment reads "without this the
-        // fifth weave is bought and never granted" — and then clamped back to 4 one call later by
-        // Math.Min against a const. Bought, carried, displayed, discarded: this codebase's signature
-        // failure. The test drives the END of the chain, which is the only place it was ever visible.
+        // CHANGED 2026-09-03, because the capability changed. This test used to pin the OPPOSITE rule —
+        // that a capacity of 5 really weaves five — because FIFTH WEAVE was a trait-spine node that was
+        // bought, saved, resolved to 5 and then clamped back to 4 by a Math.Min against a const, which
+        // is this codebase's signature failure.
+        //
+        // The fifth slot is REMOVED now rather than granted: at five slots the active/passive split
+        // gives THREE action-taking skills, which is the beat demand the slot rework existed to bring
+        // down. So a stale capacity of 5 must be ANSWERED with four rather than honoured, and this test
+        // pins the clamp that answers it — in the same place the old bug was visible.
         var build = new Build { SlotCapacity = 5 };
-        for (var i = 0; i < 5; i++)
-            Assert.True(build.Equip(Skill(i)), $"slot {i} was refused at a capacity of 5");
+        Assert.Equal(Build.SkillSlots, build.SlotCapacity);
 
-        Assert.Equal(5, build.Skills.Count);
-        Assert.False(build.Equip(Skill(5)), "capacity 5 must still refuse a sixth");
+        for (var i = 0; i < 4; i++)
+            Assert.True(build.Equip(Skill(i)), $"slot {i} was refused at a capacity of 4");
+
+        Assert.Equal(4, build.Skills.Count);
+        Assert.False(build.Equip(Skill(4)), "four slots must refuse a fifth");
     }
 
     [Fact]

@@ -252,6 +252,24 @@ public sealed class LoadoutScreen
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
     public MemoryDustTree Tree { get; set; } = new();
+
+    /// <summary>
+    /// The keystones the WORLD has taught this account — set by the host every frame.
+    /// </summary>
+    /// <remarks>
+    /// The screen used to read the trait tree directly. Keystones come from conquest, region mastery
+    /// and the corruption now, so the menu is a fact about the world and the screen is handed it.
+    /// </remarks>
+    public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
+
+    /// <summary>The Vows the account has found, by keeping a rule once without them.</summary>
+    public IReadOnlyList<Vow> KnownVows { get; set; } = Array.Empty<Vow>();
+
+    /// <summary>What the world says about the next keystone socket, or "" when all three are open.</summary>
+    public string NextSocketNote { get; set; } = "";
+
+    /// <summary>What the world says about the next Vow, or "" at the last one.</summary>
+    public string NextVowNote { get; set; } = "";
     /// <summary>What each skill has earned by being used, and where the player spends it.</summary>
     public SkillProgress SkillLevels { get; set; } = new();
     public Hunter? Hunter { get; set; }
@@ -366,7 +384,7 @@ public sealed class LoadoutScreen
         for (var i = 0; i < skills.Count; i++) (i < kinds.Count && kinds[i] ? passives : actives).Add(i);
         var activeCap = Math.Max(Build.ActiveSlotsFor(cap), actives.Count);
         var passiveCap = Math.Max(Build.PassiveSlotsFor(cap), passives.Count);
-        var learned = DustEffects.LearnedKeystones(Tree).Count;
+        var learned = DiscoveredKeystones.Count;
         var region = ListRegion;
 
         // Measure at rest with the keystones paged; if that does not fit, the column scrolls and lists them all.
@@ -577,11 +595,11 @@ public sealed class LoadoutScreen
     // ── MODEL READS ─────────────────────────────────────────────────────────────────────────────────────
     private static string SourceName(Source s) => s.ToString().ToUpperInvariant();
     private static string StyleName(Style s) => s.ToString().ToUpperInvariant();
-    private IReadOnlyList<Vow> Known => DustEffects.KnownVows(Tree);
+    private IReadOnlyList<Vow> Known => KnownVows;
 
     /// <summary>The live build, described to the Vow layer — the same struct the simulation judges against.</summary>
     private BuildContext Context =>
-        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : BuildContext.Empty;
+        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), h) : BuildContext.Empty;
 
     /// <summary>Every skill this hunter can equip: the roads walked, plus what it was born with.</summary>
     private IReadOnlySet<string> KnownSkills()
@@ -598,7 +616,7 @@ public sealed class LoadoutScreen
     private bool SlotFilled(int slot) => SlotDef(slot) is { } d && KnownSkills().Contains(d.Id);
 
     private float Dps(PlayerLoadout loadout, Hunter hunter)
-        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels), hunter).Dps;
+        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), hunter).Dps;
 
     /// <summary>What a Vow demands, in one line the player can check against their own build.</summary>
     private static string DemandText(Vow v) => v.Demand switch
@@ -624,7 +642,7 @@ public sealed class LoadoutScreen
                 var styles = Loadout.EquippedDefs().Select(d => StyleName(d.Style)).Distinct().ToList();
                 return styles.Count == 0 ? "NO SKILLS" : $"{styles.Count} STYLE{(styles.Count == 1 ? "" : "S")}: {string.Join(", ", styles)}";
             case VowDemand.SingleSource:
-                var sources = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
+                var sources = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
                 return sources.Count == 0 ? "NO SKILLS" : $"{sources.Count} SOURCE{(sources.Count == 1 ? "" : "S")}: {string.Join(", ", sources)}";
             case VowDemand.EverySlotFilled: return $"{ctx.SkillsWoven} OF {ctx.SkillSlots} SLOTS FILLED";
             case VowDemand.NoCritInvestment: return $"CRITICAL {ctx.CritPercent:0.#}% (BASE {ctx.BaseCritPercent:0.#}%)";
@@ -676,7 +694,7 @@ public sealed class LoadoutScreen
         {
             if (LoadoutPanel.Contains(hit))
             {
-                if (_keystonePaged) _keystoneScroll = UiKit.Scrolled(_keystoneScroll, wheel, KeystoneRows, DustEffects.LearnedKeystones(Tree).Count);
+                if (_keystonePaged) _keystoneScroll = UiKit.Scrolled(_keystoneScroll, wheel, KeystoneRows, DiscoveredKeystones.Count);
                 else _loadScroll = Math.Clamp(_loadScroll - wheel * ScrollStep, 0, _loadOverflow);
             }
             else if (SkillsPanel.Contains(hit)) _skillsScroll = Math.Clamp(_skillsScroll - wheel * ScrollStep, 0, _skillsOverflow);
@@ -734,7 +752,7 @@ public sealed class LoadoutScreen
             }
             return;
         }
-        var learned = DustEffects.LearnedKeystones(Tree);
+        var learned = DiscoveredKeystones;
         foreach (var (index, chip) in _chips)
         {
             if (index >= learned.Count || !In(chip, list).Contains(hit)) continue;
@@ -904,7 +922,7 @@ public sealed class LoadoutScreen
             {
                 if (Loadout.HasKeystone(_pickKeystoneId)) return ("UNSOCKET", true, "");
                 if (Loadout.KeystoneIds.Count >= Loadout.KeystoneCapacity)
-                    return ("SOCKET", false, $"ONLY {Loadout.KeystoneCapacity} SOCKET{(Loadout.KeystoneCapacity == 1 ? "" : "S")} — MORE ON THE TRAITS SCREEN.");
+                    return ("SOCKET", false, $"ONLY {Loadout.KeystoneCapacity} SOCKET{(Loadout.KeystoneCapacity == 1 ? "" : "S")}. {NextSocketNote}.");
                 return ("SOCKET", true, "");
             }
             default:
@@ -965,7 +983,7 @@ public sealed class LoadoutScreen
                 break;
             }
             case Pick.Keystone:
-                if (Loadout.ToggleKeystone(_pickKeystoneId, DustEffects.LearnedKeystones(Tree))) { Dirty = true; _buildRev++; _msg = ""; }
+                if (Loadout.ToggleKeystone(_pickKeystoneId, DiscoveredKeystones)) { Dirty = true; _buildRev++; _msg = ""; }
                 break;
             default:
                 Loadout.RemoveSkill(_slot);
@@ -1154,12 +1172,12 @@ public sealed class LoadoutScreen
 
         // ── KEYSTONES: chips; click selects, the inspector sockets. Part of the same list, so at a profile
         // where the rows alone fill the column they scroll into view instead of being dropped. ────────
-        var learned = DustEffects.LearnedKeystones(Tree);
+        var learned = DiscoveredKeystones;
         var head = _keystoneHead;
         _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Slate, UiTypography.Secondary);
         var paged = _keystonePaged && learned.Count > KeystoneRows
             ? $"  ·  {_keystoneScroll + 1}-{Math.Min(learned.Count, _keystoneScroll + KeystoneRows)} OF {learned.Count}" : "";
-        _ui.TextRightBig(b, learned.Count == 0 ? "LEARN THEM ON THE TRAITS SCREEN" : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} SOCKETS" + paged,
+        _ui.TextRightBig(b, learned.Count == 0 ? "CONQUER A REGION TO FIND YOUR FIRST KEYSTONE" : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} SOCKETS" + paged,
                          head.Right, head.Y, Slate, UiTypography.Secondary);
         foreach (var (idx, chip) in _chips)
         {
@@ -1169,7 +1187,7 @@ public sealed class LoadoutScreen
             if (idx >= learned.Count)
             {
                 _ui.Plate(b, chip);
-                _ui.TextBig(b, learned.Count == 0 && idx == 0 ? "NO KEYSTONES LEARNED YET" : "EMPTY SOCKET", chip.X + UiMetrics.Space(16), textY, UiInk.Empty, UiTypography.Body);
+                _ui.TextBig(b, learned.Count == 0 && idx == 0 ? "NO KEYSTONES YET — THE WORLD TEACHES THEM" : "EMPTY SOCKET", chip.X + UiMetrics.Space(16), textY, UiInk.Empty, UiTypography.Body);
                 continue;
             }
             var k = learned[idx];
@@ -1588,13 +1606,14 @@ public sealed class LoadoutScreen
 
             if (_pick == Pick.Keystone)
             {
-                var k = DustEffects.LearnedKeystones(Tree).FirstOrDefault(ks => ks.Id == _pickKeystoneId);
+                var k = DiscoveredKeystones.FirstOrDefault(ks => ks.Id == _pickKeystoneId);
                 if (k is null) { _pick = Pick.Slot; return; }
                 Head("KEYSTONE");
                 _ui.TextBig(b, k.Name.ToUpperInvariant(), x, y, Ins(Loadout.HasKeystone(k.Id) ? Gold : Bone), UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
                 Head("WHAT IT DOES"); Line(k.Blurb, Bone, UiTypography.Body, 6); Gap();
                 Head("CURRENT STATE"); Line(Loadout.HasKeystone(k.Id) ? "IN USE" : "NOT IN USE", Bone);
-                Line($"SOCKETS {Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} — MORE ON THE TRAITS SCREEN", Slate, UiTypography.Secondary);
+                Line($"SOCKETS {Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}"
+                     + (NextSocketNote.Length > 0 ? $" — {NextSocketNote}" : ""), Slate, UiTypography.Secondary);
                 return;
             }
             if (def is null || (_pick == Pick.Slot && !known.Contains(def.Id)))
@@ -1721,7 +1740,9 @@ public sealed class LoadoutScreen
                     Head("VOW");
                     if (vow is null)
                     {
-                        Line(Known.Count == 0 ? "NO VOW ON THIS SLOT — VOWS ARE LEARNED ON THE TRAITS SCREEN" : "NO VOW ON THIS SLOT", Slate);
+                        Line(Known.Count == 0
+                            ? "NO VOW SWORN — A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT"
+                            : "NO VOW ON THIS SLOT", Slate);
                     }
                     else
                     {

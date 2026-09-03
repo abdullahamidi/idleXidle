@@ -284,8 +284,8 @@ public static class Onboarding
                 + "give a road back. Your levels are kept. Your SIGNATURE needs no road."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
-                "A Vow is a promise on one skill. It pays a lot while the promise is kept, and nothing "
-                + "when it is not. Keystones are rules learned on the TRAITS screen."),
+                "A Vow is a promise about your build. It pays a lot while it is kept and nothing when "
+                + "it is not. Keystones are rules the world gives you for conquering it."),
 
             new TourStep(TourTarget.MasteryTile, "THE MASTERY TREE",
                 "The MASTERY tile on the rail opens a tree of small rules that change how your skills "

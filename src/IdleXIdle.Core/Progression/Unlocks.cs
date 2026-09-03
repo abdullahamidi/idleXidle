@@ -232,8 +232,10 @@ public static class Unlocks
     /// <para>
     /// So the champion starts with ONE skill, and each new slot arrives on its own, with its own line of
     /// explanation, at a moment when the player has already seen the last one fire. Four slots is where
-    /// the gate stops — beyond that the trait tree takes over, which is the existing rule and a real
-    /// reward rather than a starting condition.
+    /// it STOPS, and four is the whole ladder: the trait tree used to sell a fifth, and it no longer
+    /// does. A build is two skills that take an action and two that do not, and the fifth slot bought a
+    /// THIRD action-taking skill — which pushed the demand on the champion's own swing back toward the
+    /// number the slot rework existed to bring down.
     /// </para>
     /// </remarks>
     public static int SkillSlots(UnlockFacts f)
@@ -244,6 +246,80 @@ public static class Unlocks
         if (f.RegionsConquered >= 1) slots++;
         return slots;
     }
+
+    // ── Build vocabulary: what the world hands you, and how much of it you may wear at once ─────
+    //
+    // Two capacities used to be sold on the trait tree — a second and a third keystone socket. Paying
+    // for structural capacity is not an interesting choice (a player who spends a point on A BASIC
+    // SOCKET has expressed nothing), so both moved here, into the file whose law is "derived, never
+    // stored" and whose every fact only ever grows. Vow capacity is new: it was never a number at all,
+    // only a side effect of how many skill slots a build happened to own.
+
+    /// <summary>Conquests before a second keystone socket opens. Halfway across the world.</summary>
+    public static int SecondSocketConquests { get; } = Encounters.Regions.All.Count / 2;   // 3
+
+    /// <summary>Depth before the third keystone socket opens — four times the conquest line.</summary>
+    public const int ThirdSocketWave = Encounters.Checkpoints.ConquestWave * 4;            // 80
+
+    /// <summary>Conquests before a second vow may be sworn.</summary>
+    public const int SecondVowConquests = 2;
+
+    /// <summary>Conquests before a third vow may be sworn.</summary>
+    public const int ThirdVowConquests = 4;
+
+    /// <summary>
+    /// How many keystone sockets are open. NONE until the world has taught you a keystone.
+    /// </summary>
+    /// <remarks>
+    /// Socket one arrives on the same event as the first keystone — the first conquest — so the BUILD
+    /// screen never shows an empty socket with nothing that could fill it, nor a keystone with nowhere
+    /// to put it. Socket two waits until halfway across the world, which is the first moment there is a
+    /// real second choice to make. Socket three is bought with DEPTH rather than breadth, so a player
+    /// who has only walked the map wide still has two, and each of the game's two axes pays for one.
+    /// </remarks>
+    public static int KeystoneSockets(UnlockFacts f)
+    {
+        var sockets = 0;
+        if (f.RegionsConquered >= 1) sockets++;
+        if (f.RegionsConquered >= SecondSocketConquests) sockets++;
+        if (f.DeepestWave >= ThirdSocketWave) sockets++;
+        return sockets;   // never above Build.KeystoneSlots, which is 3
+    }
+
+    /// <summary>How many different vows the hunter may swear at once. One with the BUILD screen.</summary>
+    /// <remarks>
+    /// A vow is a promise about the BUILD, so how many promises you may make is a build-level number
+    /// rather than a side effect of the skill-slot count. It arrives with the BUILD screen itself — the
+    /// same wave-5 gate that opens the workbench a vow is sworn on — and grows on conquests two and
+    /// four, interleaved with the keystone sockets above so that every conquest hands the build exactly
+    /// one new thing.
+    /// </remarks>
+    public static int VowCapacity(UnlockFacts f)
+    {
+        if (f.DeepestWave < 5) return 0;
+        var cap = 1;
+        if (f.RegionsConquered >= SecondVowConquests) cap++;
+        if (f.RegionsConquered >= ThirdVowConquests) cap++;
+        return cap;
+    }
+
+    /// <summary>What the player must do for their next keystone socket, or "" when all three are open.</summary>
+    public static string NextSocketNote(UnlockFacts f) => KeystoneSockets(f) switch
+    {
+        0 => "CONQUER A REGION TO OPEN YOUR FIRST KEYSTONE SOCKET",
+        1 => $"CONQUER {SecondSocketConquests} REGIONS FOR A SECOND SOCKET",
+        2 => $"REACH WAVE {ThirdSocketWave} FOR A THIRD SOCKET",
+        _ => "",
+    };
+
+    /// <summary>What the player must do to be allowed one more vow, or "" at the last one.</summary>
+    public static string NextVowNote(UnlockFacts f) => VowCapacity(f) switch
+    {
+        0 => "REACH WAVE 5 TO SWEAR YOUR FIRST VOW",
+        1 => $"CONQUER {SecondVowConquests} REGIONS TO SWEAR A SECOND VOW",
+        2 => $"CONQUER {ThirdVowConquests} REGIONS TO SWEAR A THIRD VOW",
+        _ => "",
+    };
 
     /// <summary>What opening a new skill slot should say, for the slot just gained.</summary>
     /// <remarks>

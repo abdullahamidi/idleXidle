@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -24,6 +24,12 @@ public sealed record SaveGame
     // 3 = SkillId becomes a woven skill's persisted identity (2026-08-31). Source/Form are still
     // written as a legacy echo for now; an older build reading a v3 file must refuse it as
     // FromNewerVersion rather than mis-resolve the build, which is what this bump buys.
+    // 4 = keystones and Vows leave the trait tree (2026-09-03). Keystone knowledge, Vow knowledge and
+    // keystone-socket capacity get fields of their own, seeded ONCE on the first v4 load from the old
+    // MemoryDustUnlocks list (see LegacyTraitTree), and the fifth skill slot is removed so a five-row
+    // build is unwoven to four on the way in. THE BUMP IS WHAT MAKES THAT SAFE: SaveStore's
+    // SnapshotBeforeUpgrade guard is `if (fileVersion >= CurrentVersion) return null;`, so without a
+    // bump no pre-change copy is taken and the ten-second autosave overwrites the only original.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -152,8 +158,46 @@ public sealed record SaveGame
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 
-    /// <summary>Which learned keystones are socketed. Ids into the keystone catalog.</summary>
+    /// <summary>Which discovered keystones are socketed. Ids into the keystone catalog.</summary>
+    /// <remarks>
+    /// Doubles as the FLOOR on <see cref="KeystoneSocketsEarned"/> at load: whatever a returning player
+    /// was wearing, they keep wearing, whatever the derived rule would have said.
+    /// </remarks>
     public List<string> SocketedKeystoneIds { get; init; } = new();
+
+    /// <summary>
+    /// Keystones this account has discovered. Additive (2026-09-03) — absent means a save that predates
+    /// the field, and the world plus <see cref="MemoryDustUnlocks"/> re-derive it on that load.
+    /// </summary>
+    /// <remarks>
+    /// A stored LATCH, unioned each frame with what the world derives — never the only source. Keystone
+    /// knowledge now comes from conquest and region mastery, both of which only ever grow, so the stored
+    /// half exists purely to carry a legacy grant across and can never take anything away.
+    /// </remarks>
+    public List<string> DiscoveredKeystoneIds { get; init; } = new();
+
+    /// <summary>
+    /// Vows this account has found, by keeping a rule once without the Vow sworn. Additive (2026-09-03).
+    /// </summary>
+    /// <remarks>
+    /// Vow knowledge had NO field before: it was derived from the trait tree's study nodes, and that
+    /// producer is going away. A discovery is an event, so it has to be latched — the same shape as
+    /// QuestsDone and UnlockedCharacters. Unknown ids are dropped on read.
+    /// </remarks>
+    public List<string> DiscoveredVowIds { get; init; } = new();
+
+    /// <summary>
+    /// The high-water mark of keystone socket capacity. Additive (2026-09-03); 0 means never computed.
+    /// </summary>
+    /// <remarks>
+    /// Sockets are otherwise derived from world progression, and this file's law is "derived, never
+    /// stored". The exception is deliberate and narrow: a save could hold the old SECOND SOCKET node on
+    /// a single conquest, and pure derivation would take that socket away — which is a capability
+    /// removed by a refactor, and the one thing this migration is not allowed to do. It is a capacity
+    /// latch of the same species as HighestMasteryAwarded, monotone by construction (it is only ever
+    /// written as a maximum), not an activity gate.
+    /// </remarks>
+    public int KeystoneSocketsEarned { get; init; }
 
     /// <summary>
     /// What each skill has earned by being used, and what the player spent it on.
@@ -772,12 +816,31 @@ public static class SaveSystem
         }
     }
 
-    public static void RestoreWarren(SaveGame save, Warren warren)
+    /// <param name="legacy">
+    /// What the old trait tree had already bought. AUTO-SELL and AUTO-MERGE are Warren facility levels
+    /// now, so a save that paid for them on the tree is floored up to the level that grants them here.
+    /// </param>
+    /// <remarks>
+    /// The floor is safe by construction: <c>Warren.Restore</c> calls <c>SetLevel</c>, which mints no
+    /// XP (only <c>Upgrade</c> does), so nothing can level the Warren sideways; <c>IsUnlocked</c>
+    /// grandfathers any facility past level 1 open under any ramp, so a migrated SCAVENGER RUNS is
+    /// reachable even for a player with one conquest; and the depth cap only gates further UPGRADES, so
+    /// a migrated level above it simply cannot be raised until depth catches up — never lowered.
+    /// </remarks>
+    public static void RestoreWarren(SaveGame save, Warren warren, LegacyTraitGrants? legacy = null)
     {
         ArgumentNullException.ThrowIfNull(warren);
         var levels = new Dictionary<FacilityKind, int>();
         foreach (var (name, lvl) in save.WarrenFacilities)
             if (Enum.TryParse<FacilityKind>(name, out var kind)) levels[kind] = lvl;
+
+        if (legacy is { } g)
+        {
+            levels[FacilityKind.ScavengerRuns] =
+                Math.Max(levels.GetValueOrDefault(FacilityKind.ScavengerRuns, 1), g.ScavengerRunsLevel);
+            levels[FacilityKind.HoardVaults] =
+                Math.Max(levels.GetValueOrDefault(FacilityKind.HoardVaults, 1), g.HoardVaultsLevel);
+        }
         warren.Restore(save.WarrenLevel, save.WarrenXp, levels);
     }
 

@@ -91,9 +91,19 @@ public static class BuildComposer
         return passive;
     }
 
+    /// <param name="discoveredKeystones">
+    /// The keystones the WORLD has taught this account — conquest, region mastery, the corruption. Null
+    /// falls back to the trait tree's own keystone nodes, which is the transitional path while the tree
+    /// still stands; the host always passes the real list.
+    /// </param>
+    /// <param name="knownVows">
+    /// The Vows the account has FOUND, by keeping a rule once without them. Null falls back to the tree.
+    /// </param>
     public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
                                 IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity,
-                                SkillProgress? progress = null)
+                                SkillProgress? progress = null,
+                                IReadOnlyList<Keystone>? discoveredKeystones = null,
+                                IReadOnlyList<Vow>? knownVows = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -126,7 +136,10 @@ public static class BuildComposer
             PassiveCapacity = Build.PassiveSlotsFor(slotCapacity),
         };
 
-        var learned = DustEffects.LearnedKeystones(tree);
+        // WHAT THE WORLD HAS TAUGHT, not what a menu was bought. A keystone the account has not
+        // discovered composes as nothing — the same gate the Vow below has, for the same reason: a
+        // share code or a stale save must never socket a doctrine the player has not earned.
+        var learned = discoveredKeystones ?? DustEffects.LearnedKeystones(tree);
         foreach (var id in keystoneIds)
             if (learned.FirstOrDefault(k => k.Id == id) is { } k)
                 build.Take(k);
@@ -145,11 +158,13 @@ public static class BuildComposer
         for (var i = 0; i < picks.Count; i++)
         {
             var s = picks[i];
-            // THE VOW GATE (P7). The trait tree TEACHES vows (vow_study_*, 11 spine points), and
-            // until now only the weave MENU read that — a save could arrive wearing any VowId and
-            // the sim paid it, so the chain gated what was offered, never what was worn. An
-            // untaught vow composes as NO vow: the skill stays, the unpaid promise does not.
-            var vow = DustEffects.KnowsVow(tree, s.VowId) ? Vows.ById(s.VowId) : null;
+            // THE VOW GATE. A Vow is FOUND by keeping its rule once without it, and until this gate
+            // existed only the weave MENU read that — a save could arrive wearing any VowId and the
+            // sim paid it, so the account gated what was offered, never what was worn. An unfound vow
+            // composes as NO vow: the skill stays, the unpaid promise does not.
+            var vow = knownVows is null
+                ? DustEffects.KnowsVow(tree, s.VowId) ? Vows.ById(s.VowId) : null
+                : knownVows.FirstOrDefault(v => v.Id == s.VowId);
             // THE ID IS THE IDENTITY — an id-less pick is an EMPTY SLOT and composes nothing.
             // (Form-era picks stopped reaching this loop at P3-final: PlayerLoadout.Restore pins
             // every legacy row to its SkillId through LegacySkillForm before anything composes.)

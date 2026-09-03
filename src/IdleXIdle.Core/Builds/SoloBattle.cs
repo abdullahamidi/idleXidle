@@ -577,6 +577,16 @@ public static class SoloBattle
         // is judged against the same one. See DescribeBuild.
         var weaveCtx = DescribeBuild(build, hunter);
 
+        // AND SO IS WHAT THE VOWS PAY. A Vow is a promise about the BUILD, not a property of a slot:
+        // its bonus used to be read per skill, from that skill's own Vow, which meant four DIFFERENT
+        // Vows paid exactly what one Vow repeated on four slots paid — while charging four prices and
+        // demanding four restrictions hold at once. The bonuses of every KEPT Vow are added together
+        // here, once, under one ceiling, and every skill of every tick reads the same number.
+        var vowFactor = Vows.CombinedFactor(build.Vows, weaveCtx, shape.VowPowerMultiplier);
+        // Is at least one sworn Vow actually being KEPT? The affinity buy-back's question — and it
+        // used to ask only whether a slot CARRIED a Vow, so a broken promise bought power anyway.
+        var vowKept = Vows.AnyKept(build.Vows, weaveCtx);
+
         // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
         // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
         var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
@@ -649,7 +659,7 @@ public static class SoloBattle
         // TITHE counts DISTINCT Vows, the same way the FRAGILITY price does. A Vow is sworn, not
         // equipped: weaving one Vow onto all four skills is one promise kept, not four, and paying it
         // four times would make the tithe strongest on the build that committed least.
-        var swornVows = tithe > 0f ? DistinctVows(build.Skills).Count() : 0;
+        var swornVows = tithe > 0f ? build.Vows.Count : 0;
 
         // CRIT × FOCUS, folded to a deterministic expected-value factor on SKILL damage (chance × extra),
         // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
@@ -672,7 +682,7 @@ public static class SoloBattle
         // The asymmetry made both static-cost Vows strictly negative to swear, which is what the balance
         // sweep found: FRAGILITY -1 depth, RECKLESS OFFERING -1 depth, while every demand Vow paid.
         var fragilityMult = 1f;
-        foreach (var v in DistinctVows(skills))
+        foreach (var v in build.Vows)
             if (v.DamageTakenIncrease > 0f) fragilityMult *= 1f + v.DamageTakenIncrease;
 
         // TARGETING is "first alive in spawn order", deliberately, and overkill is discarded.
@@ -1382,7 +1392,7 @@ public static class SoloBattle
                         champ.ReadyAt[k] = absAt + arm;
 
                         var shot = SkillCatalogue.PoweredBase(kd, resonance)
-                                   * VowFactor(ks, weaveCtx, shape)
+                                   * vowFactor
                                    * (castOnce.Add(k) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier)
                                    * kd.DamageMultiplier;
                         events.Add(new BattleEvent(BattleEventKind.Skill, k, 0, atMs));
@@ -1809,7 +1819,7 @@ public static class SoloBattle
                     // buys cadence for the slow, never free damage, and RADIANCE still buys full
                     // ticks faster because its acceleration touches the SCHEDULE, not this line.
                     var aura = SkillCatalogue.PoweredBase(def, resonance)
-                               * VowFactor(sk, weaveCtx, shape)
+                               * vowFactor
                                * (def.IntervalMs > 0 ? def.IntervalMs / 1000f : 1f)
                                * def.DamageMultiplier;   // MIRE/SILT
                     // A FIELD MAY IGNORE DEFENCE TOO. The cast path has always passed this argument
@@ -2005,7 +2015,7 @@ public static class SoloBattle
                     {
                         raw = SkillCatalogue.PoweredBase(sk.Def, resonance);
                     }
-                    raw *= VowFactor(sk, weaveCtx, shape);
+                    raw *= vowFactor;
 
                     // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
                     raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
@@ -2037,7 +2047,7 @@ public static class SoloBattle
                     // build's affinity (restriction buys power — the rule the Vows were born from).
                     // Applied as a RATIO over Amp's base affinity factor, so it composes with every
                     // later multiplication and can never double-apply.
-                    if (build.Affinity is { } sworn && sk.Vow is not null)
+                    if (build.Affinity is { } sworn && vowKept)
                         raw *= StyleAffinity.Factor(sworn, sk.Def.Style, vowSworn: true)
                                / StyleAffinity.Factor(sworn, sk.Def.Style);
 
@@ -2272,10 +2282,10 @@ public static class SoloBattle
                         if (woven.Def is { Kind: not SkillKind.Reaction, Effect: not SkillEffect.Amplify, BasePower: > 0f })
                         {
                             var wovenRaw = SkillCatalogue.PoweredBase(woven.Def, resonance)
-                                           * VowFactor(woven, weaveCtx, shape)
+                                           * vowFactor
                                            * WeaverEchoFraction;
                             // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
-                            if (build.Affinity is { } wovenAff && woven.Vow is not null)
+                            if (build.Affinity is { } wovenAff && vowKept)
                                 wovenRaw *= StyleAffinity.Factor(wovenAff, woven.Def.Style, vowSworn: true)
                                             / StyleAffinity.Factor(wovenAff, woven.Def.Style);
                             events.Add(new BattleEvent(BattleEventKind.Skill, wovenIdx, 0, ms));
@@ -2623,7 +2633,7 @@ public static class SoloBattle
                     var trapRaw = reflect > 0f
                         ? basis * reflect
                         : stops ? 0f : SkillCatalogue.PoweredBase(sk.Def, resonance);
-                    trapRaw *= VowFactor(sk, weaveCtx, shape)
+                    trapRaw *= vowFactor
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
 
@@ -2770,7 +2780,7 @@ public static class SoloBattle
     {
         ArgumentNullException.ThrowIfNull(build);
         var mult = 1f;
-        foreach (var v in DistinctVows(build.Skills))
+        foreach (var v in build.Vows)
             if (v is { Kind: VowKind.StaticCost, StaticCostMagnitude: > 0f, DamageTakenIncrease: 0f })
                 mult *= 1f - v.StaticCostMagnitude;
 
@@ -2782,40 +2792,12 @@ public static class SoloBattle
         return MathF.Max(0.05f, mult);
     }
 
-    /// <summary>Every Vow the build has sworn, counted once however many skills carry it.</summary>
-    /// <remarks>
-    /// The single place that decides what "wearing a Vow twice" means, so the two price sites cannot
-    /// answer it differently. It means nothing: a Vow is a promise about the build, and a promise made
-    /// on four skills is one promise. Keyed on Id rather than the record, because two catalogue entries
-    /// could in principle be value-equal and still be different Vows.
-    /// </remarks>
-    private static IEnumerable<Vow> DistinctVows(IEnumerable<EquippedSkill> skills)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var sk in skills)
-            if (sk.Vow is { } v && seen.Add(v.Id))
-                yield return v;
-    }
-
-    /// <summary>A skill's Vow multiplier, if the BUILD meets its demand.</summary>
-    /// <remarks>
-    /// The context is a property of the build, not of the moment, so it is built once per wave and every
-    /// skill is judged against the same one. A Vow that read the fight — below 40% health, against a
-    /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
-    /// decision they made at the workbench and can see the consequences of in the report.
-    /// </remarks>
-    private static float VowFactor(EquippedSkill sk, BuildContext ctx, SkillShape shape)
-    {
-        if (sk.Vow is not { } vow) return 1f;
-        if (!Vows.IsActive(vow, ctx)) return 1f;
-
-        // THE BONUS is scaled, not the factor. A Vow worth x1.90 pays +0.90; TWICE SWORN at 1.4 makes
-        // that +1.26. Scaling the whole factor would pay out on a build with no Vow sworn at all, which
-        // would make a Vow-specialist passive into a flat damage bonus that happens to be named after
-        // Vows — and would pay most to the player who ignored the system it is about.
-        var bonus = Vows.Multiplier(vow) - 1f;
-        return 1f + bonus * MathF.Max(0f, shape.VowPowerMultiplier);
-    }
+    // DistinctVows and VowFactor USED TO LIVE HERE. Both asked their question of a SKILL SLOT:
+    // DistinctVows walked the slots to fold four copies of one Vow back into one, and VowFactor read
+    // whichever Vow the slot happened to carry. A Vow is a promise about the build, so the list is
+    // now Build.Vows and the payout is Vows.CombinedFactor, which sums what every KEPT Vow pays under
+    // one ceiling. That is also what makes vow capacity a real number a milestone can grant, instead
+    // of an accident of how many skill slots the build owned.
 
     /// <summary>Describe a build to the Vow layer.</summary>
     public static BuildContext DescribeBuild(Build build, Economy.Hunter hunter)
@@ -2850,6 +2832,13 @@ public static class SoloBattle
             SkillRate: mods.SkillRate * build.Shape.SkillRate,
             Defence: hunter.Defense,
             KeystonesWorn: build.Keystones.Count,
-            WornSlots: worn);
+            WornSlots: worn,
+            // THE TWO CONDUCT FACTS, and their only readers are the two static-cost Vows' proofs.
+            // FRAGILITY asks "was something already making you take more damage" — three mastery
+            // greaters raise this and nothing else does. RECKLESS OFFERING asks "had a doctrine
+            // already cost you maximum health" — and it reads the KEYSTONE contribution alone, so
+            // training more health can never mask it.
+            DamageTakenMultiplier: build.Shape.DamageTaken,
+            KeystoneHealthMultiplier: BuildMods.Sum(build.Keystones.Select(k => k.Mods)).Health);
     }
 }

@@ -146,10 +146,28 @@ public class WeavingTests
     [Fact]
     public void test_a_demand_does_not_depend_on_how_the_fight_goes()
     {
+        // UPDATED 2026-09-03. The RULE is unchanged — a context field must be something the player SET
+        // at the workbench, never something a wave did — but the test's proxy for it was a substring
+        // ban, and Vow discovery added two build-shape fields whose names contain banned words:
+        //
+        //   DamageTakenMultiplier    = build.Shape.DamageTaken, raised only by mastery greaters
+        //   KeystoneHealthMultiplier = the health multiplier the SOCKETED KEYSTONES contribute
+        //
+        // Both are decisions taken before the descent, not readings taken during it, and each has
+        // exactly one reader: the conduct proof of one of the two static-cost Vows, which have no
+        // demand to keep and would otherwise have needed a fake one invented for them.
+        //
+        // They are named here rather than the ban being loosened, so a future field called
+        // ChampionHealth or DamageDealt still fails this test — the exception is a list, not a hole.
+        var allowed = new[] { "DamageTakenMultiplier", "KeystoneHealthMultiplier" };
         var fields = typeof(BuildContext).GetProperties().Select(p => p.Name).ToList();
 
+        foreach (var name in allowed)
+            Assert.Contains(name, fields);   // the exception must not outlive the field it is for
+
+        var judged = fields.Where(f => !allowed.Contains(f)).ToList();
         foreach (var banned in new[] { "Health", "Elapsed", "Boss", "Wave", "Damage" })
-            Assert.DoesNotContain(fields, f => f.Contains(banned, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(judged, f => f.Contains(banned, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

@@ -24,7 +24,7 @@ namespace IdleXIdle.Core.Builds;
 /// a budget says so — because they contradict each other.
 /// </para>
 /// </remarks>
-public static class Keystones
+public static partial class Keystones
 {
     public static IReadOnlyList<Keystone> Catalog { get; } = new List<Keystone>
     {

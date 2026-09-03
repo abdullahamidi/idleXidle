@@ -1072,6 +1072,14 @@ public sealed class WarrenScreen
         Line($"BEFORE WARREN BONUSES: +{Ab(f.BaseOutputPerMin)} → +{Ab(f.NextLevelOutput)}", Slate, UiTypography.Secondary, 2);
         Line(SinkLine(f.Info.Produces), Bone, UiTypography.Body, 2);
         Line($"MILESTONE AT LEVEL {f.NextMilestoneLevel} — A PERMANENT STEP UP IN OUTPUT", Bone, UiTypography.Body, 2);
+        // AUTOMATION, WHICH IS THE OTHER THING A LEVEL BUYS. Auto-sell and auto-merge used to be trait
+        // purchases; they belong to the Warren, which already owns the account's idle layer. The card
+        // states what this facility already does for you, and what its next automation level will do.
+        if (WarrenAutomation.ActiveNoteFor(Warren, f.Kind) is { Length: > 0 } doing)
+            Line(doing, Bone, UiTypography.Body, 2);
+        for (var lvl = f.Level + 1; lvl <= f.Level + 1; lvl++)
+            if (WarrenAutomation.NoteFor(Warren, f.Kind, lvl) is { Length: > 0 } next)
+                Line($"AT LEVEL {lvl}: {next}", Bone, UiTypography.Body, 2);
         Gap();
         Rule();
 

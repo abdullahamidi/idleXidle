@@ -105,16 +105,17 @@ public class SkillSlotKindTests
     [Fact]
     public void test_an_unset_capacity_is_the_whole_budget()
     {
-        // Today's behaviour, preserved exactly: until stage 2b sets the per-kind caps, a build's
-        // budget is undivided. A fifth slot sold by the trait spine must not be clamped off by a
-        // per-kind cap frozen at the old constant.
-        // Five DIFFERENT actives: a build holds a skill once (LAW 13), so the budget is filled with
-        // five of the six styles' actives rather than five copies of one.
-        var b = new Build { SlotCapacity = 5 };
-        var actives = new[] { "hammer_blow", "snare_repay", "sign_call", "volley_spray", "field_pulse" };
-        for (var i = 0; i < 5; i++)
-            Assert.True(b.Equip(TestBuilds.Skill(actives[i])), $"slot {i + 1} of 5 was refused");
-        Assert.Equal(5, b.Skills.Count);
+        // With no per-kind cap set, a build's budget is undivided and the whole of it is spendable on
+        // one kind. UPDATED 2026-09-03: it used to ask for FIVE, because the trait spine sold a fifth
+        // slot and a per-kind cap frozen at the old constant would have clamped it off. The fifth slot
+        // is removed, so the whole budget is four — the rule under test is unchanged, only its size.
+        // Four DIFFERENT actives: a build holds a skill once (LAW 13), so the budget is filled with
+        // four of the six styles' actives rather than four copies of one.
+        var b = new Build { SlotCapacity = Build.SkillSlots };
+        var actives = new[] { "hammer_blow", "snare_repay", "sign_call", "volley_spray" };
+        for (var i = 0; i < actives.Length; i++)
+            Assert.True(b.Equip(TestBuilds.Skill(actives[i])), $"slot {i + 1} of 4 was refused");
+        Assert.Equal(4, b.Skills.Count);
     }
 
     [Fact]

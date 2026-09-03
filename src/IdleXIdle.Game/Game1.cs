@@ -456,6 +456,42 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private SkillProgress _skillProgress = new();
     private int _highestMasteryAwarded;
 
+    // ── WHAT THE WORLD HAS TAUGHT AND WHAT THE HUNTER HAS PROVED ─────────────────────────────────
+    //
+    // Both of these used to come out of the trait tree, and only out of the trait tree: nineteen
+    // keystone nodes and five study nodes were the sole producers of the whole keystone and Vow
+    // catalogues. Keystones come from the world now (conquest, region mastery, the corruption) and
+    // Vows come from keeping a rule once without them. Both sets are accumulated here, never reduced,
+    // and both are written to the save so a legacy grant survives.
+
+    /// <summary>Keystone ids this account knows. Unioned each frame with what the world derives.</summary>
+    private readonly HashSet<string> _discoveredKeystones = new(StringComparer.Ordinal);
+
+    /// <summary>Vow ids this account has found. Grows at the end of a descent, and never shrinks.</summary>
+    private readonly HashSet<string> _discoveredVows = new(StringComparer.Ordinal);
+
+    /// <summary>The socket-capacity high-water mark: derived, legacy grant and worn count, maxed.</summary>
+    private int _keystoneSocketsEarned;
+
+    /// <summary>The keystone list handed to the composer and the BUILD screen, rebuilt when the set moves.</summary>
+    private IReadOnlyList<Keystone> _keystoneMenu = Array.Empty<Keystone>();
+
+    /// <summary>The Vow list handed to the composer and the workbench, rebuilt when the set moves.</summary>
+    private IReadOnlyList<Vow> _vowMenu = Array.Empty<Vow>();
+
+    /// <summary>True until the first grant pass has run, so a deep save reveals in one plate, not eleven.</summary>
+    private bool _grantsBaselined;
+
+    /// <summary>
+    /// The skill a five-slot save lost on the way in, PARKED until the screens exist to say so.
+    /// </summary>
+    /// <remarks>
+    /// The load runs from Initialize and every screen is built in LoadContent, so a toast posted here
+    /// would be posted into a queue nothing is draining yet. Same reason as the run log and the tree
+    /// camera two dozen lines below.
+    /// </remarks>
+    private string? _fifthSkillDropped;
+
 
 
 
@@ -782,8 +818,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
         //
         // So the restore floor is the save's OWN skill count: whatever a player had, they keep. The
         // gate is applied per-frame afterwards, by which point the facts are real.
-        _loadout.SkillCapacity = Math.Max(save.WovenSkills.Count, DustEffects.SkillSlots(_dust));
-        _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
+        // WHAT THE OLD TRAIT TREE HAD ALREADY BOUGHT, read ONCE, before anything can be written back.
+        // Frozen table, floors and unions only, so running it on every load forever grants nothing a
+        // first pass did not (that idempotence is what makes it testable rather than a one-shot).
+        var legacy = LegacyTraitTree.Read(save.MemoryDustUnlocks);
+        foreach (var id in save.DiscoveredKeystoneIds) _discoveredKeystones.Add(id);
+        foreach (var id in legacy.Keystones) _discoveredKeystones.Add(id);
+        foreach (var id in save.DiscoveredVowIds) _discoveredVows.Add(id);
+        foreach (var id in legacy.Vows) _discoveredVows.Add(id);
+
+        // THE FIFTH SKILL SLOT IS GONE, and this is where a five-row build loses its last row. Capacity
+        // is clamped to four by the loadout itself; the floor is still the save's own count so a
+        // one-slot or two-slot player is not handed four (the gate below cannot be asked yet — see the
+        // note above). The dropped skill keeps every level it earned: SkillProgress is keyed by skill
+        // id, not by slot, so it can be woven again in place of another at any time.
+        if (save.WovenSkills.Count > PlayerLoadout.MaxSkills)
+            _fifthSkillDropped = SkillCatalogue.Find(save.WovenSkills[^1].SkillId ?? "")?.Name ?? "A SKILL";
+        _loadout.SkillCapacity = Math.Max(1, save.WovenSkills.Count);
+        // SOCKETS, floored the same way and for the same reason. The unlock facts are all zero at this
+        // point in the load — conquest is not restored until RestoreWorld, far below — so asking the
+        // derived rule HERE would see a player with no conquests, answer zero, and PlayerLoadout.Restore
+        // would truncate every existing player's worn keystones away. They would never see them again,
+        // because the save written back would agree. So: the save's own latch, its legacy grant, and
+        // what it was actually WEARING, whichever is largest.
+        _keystoneSocketsEarned = Math.Max(
+            Math.Max(save.KeystoneSocketsEarned, legacy.KeystoneSockets),
+            save.SocketedKeystoneIds.Count);
+        _loadout.KeystoneCapacity = _keystoneSocketsEarned;
         _highestMasteryAwarded = save.HighestMasteryAwarded;
 
         // The woven build. Only overwrite the Starter when the save actually carries one — a pre-solo
@@ -797,9 +858,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // restored slot silently wearing it would be invisible too: the weave screen lists only
         // KNOWN vows, so nothing on any screen could explain the missing pay. Dropped on the way
         // in, like every other id the account does not know.
+        RebuildBuildMenus();
         for (var i = 0; i < _loadout.Skills.Count; i++)
-            if (_loadout.Skills[i].VowId is { } vid && !DustEffects.KnowsVow(_dust, vid))
-                _loadout.SetVow(i, null, DustEffects.KnownVows(_dust));
+            if (_loadout.Skills[i].VowId is { } vid && _vowMenu.All(v => v.Id != vid))
+                _loadout.SetVow(i, null, _vowMenu);
         _skillProgress.Restore(save.SkillProgress.Select(
             r => (r.SkillId, r.Uses, r.Variation, (IReadOnlyList<string>)r.Reinforcements)));
 
@@ -823,7 +885,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // The Warren facility economy — levels/XP restored before the offline tick below so its production
         // is computed against the real facility levels, not a fresh level-1 base.
-        SaveSystem.RestoreWarren(save, _warren);
+        SaveSystem.RestoreWarren(save, _warren, legacy);
         // PARKED, not applied. This method runs from Initialize(); every screen — _expedition included —
         // is constructed in LoadContent(), which has not run yet, so reaching through _expedition here
         // dereferences null and takes the whole game down before the window opens.
@@ -940,7 +1002,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             var (obh, obd) = EnemyBaselineFor(_activeRegion);
             offline = OfflineHunt.Simulate(
-                _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress),
+                ComposeBuild(),
                 _hunter, credited, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
                 seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
             champOffline = offline.Gleam;
@@ -1051,6 +1113,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     SkillId = s.SkillId, Source = s.Source, VowId = s.VowId, Passive = s.Passive,
                 }).ToList(),
             SocketedKeystoneIds = _loadout.KeystoneIds.ToList(),
+            // WHAT THE WORLD HAS TAUGHT, AND WHAT THE HUNTER HAS PROVED. Keystone knowledge is
+            // re-derived from conquest and region mastery on every load and UNIONED with this, so the
+            // field can only ever carry something forward — a legacy trait-tree grant, most of all.
+            // Vow knowledge has nowhere else to live: a discovery is an event, so it must be latched.
+            DiscoveredKeystoneIds = _discoveredKeystones.OrderBy(s => s, StringComparer.Ordinal).ToList(),
+            DiscoveredVowIds = _discoveredVows.OrderBy(s => s, StringComparer.Ordinal).ToList(),
+            KeystoneSocketsEarned = _keystoneSocketsEarned,
             SkillProgress = _skillProgress.ToSave()
                 .Select(r => new SavedSkillProgress
                 {
@@ -1735,7 +1804,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         SellValue = 80, ItemLevel = 8,
                     });
                     _forge.AddLoot(seed);
-                    TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress));
+                    TellForgeTheBuild(ComposeBuild());
                     _forge.DevFocus("dev_siphon");   // the SIPHON charm — poses the longest combo line on the bench
                     // Stock every tier so the reforge/refine buttons pose live, not greyed.
                     _hunter.AddMaterials(500);   // SCRAP
@@ -2098,7 +2167,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         const double away = 6 * 3600 + 42 * 60;
                         var (obh, obd) = EnemyBaselineFor(_activeRegion);
-                        var offline = OfflineHunt.Simulate(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress),
+                        var offline = OfflineHunt.Simulate(ComposeBuild(),
                             _hunter, away, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd, seed: 42);
                         _warren.ConqueredRegions = _world.ConqueredIds.Count;
                         var warrenOpen = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts());
@@ -3325,6 +3394,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.Loadout = _loadout;
             _loadoutScreen.Mastery = _mastery;
             _loadoutScreen.Tree = _dust;
+            // WHAT THE WORLD HAS TAUGHT AND WHAT THE HUNTER HAS PROVED. The workbench used to read the
+            // trait tree for both; both are facts about the account now, and the host owns them.
+            _loadoutScreen.DiscoveredKeystones = _keystoneMenu;
+            _loadoutScreen.KnownVows = _vowMenu;
+            _loadoutScreen.NextSocketNote = Unlocks.NextSocketNote(GuideUnlockFacts());
+            _loadoutScreen.NextVowNote = Unlocks.NextVowNote(GuideUnlockFacts());
             _loadoutScreen.SkillLevels = _skillProgress;
             _loadoutScreen.Hunter = _hunter;
             _loadoutScreen.Character = _characters.Active;
@@ -3403,7 +3478,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             // Keep the Forge told which Forms the build runs, so it can flag live combos here too (not
             // only when arrived at from the fight).
-            TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress));
+            TellForgeTheBuild(ComposeBuild());
             // The keyboard is LOCKED while any host modal owns the frame — without this, the S that
             // dismissed an unlock panel also SOLD the focused (rarest-first!) bag item behind it, and
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
@@ -3565,10 +3640,186 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void ApplySkillCapacity()
     {
-        var gate = Unlocks.SkillSlots(GuideUnlockFacts());
-        var fromTree = DustEffects.SkillSlots(_dust);
-        var capacity = gate >= Build.SkillSlots ? fromTree : gate;
-        _loadout.SkillCapacity = Math.Max(capacity, _loadout.Skills.Count);
+        // PROGRESSION ALONE, capped at four. This used to hand over to the trait tree at the top of the
+        // ladder, which is where the fifth slot came from; the fifth slot is removed (it bought a THIRD
+        // action-taking skill, the number the slot rework existed to reduce) and nothing sells slots but
+        // depth and conquest now.
+        _loadout.SkillCapacity = Math.Max(Unlocks.SkillSlots(GuideUnlockFacts()), _loadout.Skills.Count);
+    }
+
+    /// <summary>
+    /// Everything the WORLD has taught the account: keystones, keystone sockets, Vow capacity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every fact behind these only ever grows — a region conquered is never un-conquered, region
+    /// mastery points are only added to, the corruption's PEAK never falls, and deepest-ever wave is a
+    /// running maximum. That is what stops a reveal from firing twice, which is the invariant the
+    /// unlock layer carries a scar from. The sets here are unioned and the capacity is maxed, so this
+    /// method cannot take anything away even if a fact somehow moved backwards.
+    /// </para>
+    /// <para>
+    /// It runs every frame rather than on the conquest event alone, because there are four producers
+    /// (conquest, two mastery rungs and the corruption) and three of them happen quietly mid-farm.
+    /// </para>
+    /// </remarks>
+    private void ApplyWorldGrants()
+    {
+        var facts = GuideUnlockFacts();
+
+        // THE ONE VOW THAT IS GIVEN. Without it a player could reach the end of the game without ever
+        // learning that Vows exist, since every other one has to be proved by keeping its rule first.
+        // It arrives with the BUILD screen, on the gate that already opens the workbench it is sworn on.
+        if (Unlocks.IsOpen(Activity.Build, facts))
+            foreach (var granted in Vows.Granted)
+                if (_discoveredVows.Add(granted.Id) && _grantsBaselined)
+                    PostVowReveal(granted, offered: true);
+
+        // KEYSTONES. TRANSITIONAL: the trait tree still stands this phase and its keystone nodes are
+        // still buyable, so what it has taught is unioned in as well. That term goes when the tree does.
+        var found = Keystones.DiscoveredBy(_world, DustEffects.LearnedKeystones(_dust).Select(k => k.Id));
+        var fresh = new List<Keystone>();
+        foreach (var k in found)
+            if (_discoveredKeystones.Add(k.Id)) fresh.Add(k);
+
+        // SOCKETS. Derived from the world, floored by what was already earned or already worn, so a
+        // returning player can never be handed fewer sockets than the keystones they are wearing.
+        _keystoneSocketsEarned = Math.Max(
+            Math.Max(_keystoneSocketsEarned, Unlocks.KeystoneSockets(facts)),
+            _loadout.KeystoneIds.Count);
+        _loadout.KeystoneCapacity = _keystoneSocketsEarned;
+        _loadout.VowCapacity = Math.Max(_loadout.VowCapacity, Unlocks.VowCapacity(facts));
+
+        if (fresh.Count > 0) RebuildBuildMenus();
+
+        // THE FIRST PASS ON A DEEP SAVE derives eleven keystones at once, and eleven ceremonies in one
+        // second is the failure mode of a ceremony. One line instead, and the ordinary one-at-a-time
+        // reveal from there.
+        if (!_grantsBaselined)
+        {
+            _grantsBaselined = true;
+            if (_fifthSkillDropped is { } lost)
+            {
+                _fifthSkillDropped = null;
+                PostNotice("THE FIFTH SKILL SLOT IS GONE",
+                    $"{lost.ToUpperInvariant()} WAS TAKEN OUT OF YOUR BUILD. IT KEEPS ITS LEVEL — "
+                    + "PUT IT BACK ANY TIME IN PLACE OF ANOTHER SKILL.");
+            }
+            return;
+        }
+        if (fresh.Count == 0) return;
+
+        // A MASTERY RUNG HAPPENS MID-FARM, with the player very possibly not watching, so it is never
+        // modal: the same two-line notice every other quiet reward uses. A CONQUEST already has its own
+        // panel on the map, and the reveal is written into it at the conquest site instead.
+        foreach (var k in fresh)
+        {
+            if (Keystones.SourceOf(k.Id) is not { } src || src.Rung == WorldRung.Conquest) continue;
+            PostNotice($"NEW KEYSTONE — {k.Name}", $"{RungReached(src)} {k.Blurb}");
+        }
+    }
+
+    /// <summary>"VERDANT HOLLOW IS PARTLY MASTERED." — the sentence a mastery-rung reveal opens with.</summary>
+    private static string RungReached(KeystoneSource src)
+    {
+        if (src.Rung == WorldRung.Corruption) return "THE CORRUPTION HAS DEEPENED.";
+        if (src.RegionId is not { } id || Regions.Find(id) is not { } def) return "";
+        return $"{def.Name} IS {Keystones.RungName(src.Rung)}.";
+    }
+
+    /// <summary>The reveal a found Vow gets: what you did, then one line about it.</summary>
+    private void PostVowReveal(Vow vow, bool offered = false)
+        => PostNotice(offered ? $"A VOW IS OFFERED TO YOU — {vow.Name}"
+                              : $"A VOW HAS REVEALED ITSELF — {vow.Name}",
+                      vow.ProofLine);
+
+    /// <summary>
+    /// Rebuild the keystone and Vow lists every consumer reads — the composer, the workbench, the sim.
+    /// </summary>
+    /// <remarks>
+    /// Catalogue order, not discovery order, so neither list ever reshuffles itself under the player.
+    /// </remarks>
+    private void RebuildBuildMenus()
+    {
+        _keystoneMenu = Keystones.Catalog.Where(k => _discoveredKeystones.Contains(k.Id)).ToList();
+        _vowMenu = Vows.Catalog.Where(v => _discoveredVows.Contains(v.Id)).ToList();
+    }
+
+    /// <summary>The build the fight runs, composed against what the world has actually taught.</summary>
+    private Build ComposeBuild()
+        => _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress, _keystoneMenu, _vowMenu);
+
+    /// <summary>Whichever auto-sell floor keeps the least. Null means "keep everything".</summary>
+    private static Rarity? MorePermissive(Rarity? a, Rarity? b)
+        => a is null ? b : b is null ? a : (Rarity)Math.Max((int)a.Value, (int)b.Value);
+
+    /// <summary>
+    /// What the account OWNED on the descent just finished — the temptation half of a Vow's proof.
+    /// </summary>
+    /// <remarks>
+    /// Everything an item could tempt you with is counted in the BAG and on the BODY together. A player
+    /// told they own nothing while a critical-chance ring sits in their inventory would rightly read
+    /// that as a bug, and "you had it in your hand" is the sentence the proof is making.
+    /// </remarks>
+    private VowTemptationFacts VowTemptations()
+    {
+        var owned = _forge.Inventory
+            .Concat(Enum.GetValues<GearSlot>().Select(_hunter.Worn).OfType<ItemInstance>())
+            .ToList();
+
+        bool Carries(AffixStat stat) => owned.Any(i => ItemAffixes.Of(i).Any(a => a.Stat == stat));
+        bool Has(GearSlot slot) => owned.Any(i => Gear.SlotFor(i.BaseType) == slot);
+
+        // EVERY WOVEN SOURCE CHOSEN — proof that the single Source was a decision, not a default. A
+        // skill with a chosen variation is a skill the player opened and picked something on.
+        var woven = _loadout.Skills.Where(s => s.SkillId is not null).ToList();
+        var chosen = woven.Count > 0 && woven.All(s =>
+            SkillCatalogue.Find(s.SkillId!) is { } def && _skillProgress.VariationOf(def) is not null);
+
+        // STYLES IN REACH — how many styles this champion could weave RIGHT NOW. Carrying one style
+        // when only one is reachable is not a restriction, it is the catalogue.
+        var reach = _mastery.AvailableSkills().ToHashSet(StringComparer.Ordinal);
+        if (_characters.Active.SignatureSkillId is { } own) reach.Add(own);
+        var styles = reach.Select(SkillCatalogue.Find).OfType<SkillDef>()
+                          .Select(d => d.Style).Distinct().Count();
+
+        return new VowTemptationFacts(
+            OwnsCritItem: Carries(AffixStat.Crit),
+            OwnsSkillRateItem: Carries(AffixStat.SkillRate),
+            OwnsDefenceItem: Carries(AffixStat.Defense),
+            OwnsDamageItem: Carries(AffixStat.Damage),
+            OwnsHealthItem: Carries(AffixStat.Health),
+            OwnsHaulItem: Carries(AffixStat.Haul),
+            OwnsBoots: Has(GearSlot.Boots),
+            OwnsGloves: Has(GearSlot.Gloves),
+            OwnsHelm: Has(GearSlot.Helm),
+            OwnsRing: Has(GearSlot.Ring),
+            OwnsCharm: Has(GearSlot.Charm),
+            EveryWovenSourceChosen: chosen,
+            StylesInReach: styles,
+            KeystonesKnown: _discoveredKeystones.Count);
+    }
+
+    /// <summary>
+    /// Reveal every Vow this descent proved: its rule held for enough cleared waves, and it was unsworn.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here is a roll, a drop or a missable event, and there is no one-time window: a Vow that
+    /// was not proved this run can be proved on any later one, in any region, for as long as the game
+    /// runs. That is the whole difference between a discovery and a lottery.
+    /// </remarks>
+    private void RevealProvedVows()
+    {
+        var found = Vows.Revealed(
+            _expedition.LastRunVowProof, _loadout.SwornVows, _discoveredVows, VowTemptations());
+        if (found.Count == 0) return;
+
+        foreach (var vow in found)
+        {
+            _discoveredVows.Add(vow.Id);
+            PostVowReveal(vow);
+        }
+        RebuildBuildMenus();
     }
 
     /// <summary>The facts the unlock gates read, all of them already carried by the save.</summary>
@@ -4305,6 +4556,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _expedition.ShowScreenFlash = _showScreenFlash;
         _expedition.Loadout = _loadout;               // the player's build, handed over live…
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
+        // …and by what the WORLD has taught: the fight must socket exactly what the workbench
+        // shows, so both read the same two lists.
+        _expedition.DiscoveredKeystones = _keystoneMenu;
+        _expedition.KnownVows = _vowMenu;
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         // THE CHECKPOINT, if it is still valid and the Dust is there. Validated every frame rather
@@ -4359,12 +4614,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         };
         // A chest's rolled loot honours the same Dust filters a boss drop did — auto-sell floor and the
         // tireless-forge auto-merge — now applied at OPEN, since that is where a chest's items land.
-        _forge.AutoSellFloor = DustEffects.AutoSellAtOrBelow(_dust);
+        // AUTO-SELL IS THE WARREN'S JOB NOW — SCAVENGER RUNS level 2 sells Commons, level 4 Uncommons.
+        // (TRANSITIONAL: the trait tree still stands this phase and its two filter nodes are still
+        // buyable, so the more permissive of the two answers wins. That term goes when the tree does.)
+        _forge.AutoSellFloor = MorePermissive(
+            WarrenAutomation.AutoSellAtOrBelow(_warren), DustEffects.AutoSellAtOrBelow(_dust));
 
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
         // The build is made ONCE and used twice — the Forge's combo line needs the same object.
-        var wornBuild = _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress);
+        var wornBuild = ComposeBuild();
         _forge.RarityBonus = wornBuild.Resolve(_hunter).Rarity;
         TellForgeTheBuild(wornBuild);
 
@@ -4428,13 +4687,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _gear.Character = _characters.Active;
         _masteryScreen.Character = _characters.Active;
 
-        // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
-        // bought and never granted — the shape of the failure this codebase keeps repeating.
-        _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
+        // WHAT THE WORLD HAS TAUGHT reaches the loadout — keystones, sockets, Vow capacity. Without
+        // this the sockets are earned and never granted, which is the shape of the failure this
+        // codebase keeps repeating.
+        ApplyWorldGrants();
         ApplySkillCapacity();
         // (A slot the player just earned is not announced here, or anywhere: the BUILD tile derives its
         // NEW mark from the slot count and the explained list every frame — see Onboarding.IsNew.)
-        _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
+        // AND WHAT THE WORLD HAS TAUGHT, so an unpaired combo enchantment can name the region that
+        // teaches its partner instead of naming a keystone the player has no route to.
+        _forge.DiscoveredKeystones = _keystoneMenu;
+        // AUTO-MERGE TOO — HOARD VAULTS level 2. (Same transitional OR as auto-sell above.)
+        _forge.AutoMergeOnOpen = WarrenAutomation.AutoMergeOnChestOpen(_warren)
+                                 || DustEffects.AutoMergeAfterRuns(_dust);
         // Every region is a rung up the ladder for the champion, not just a new element — see
         // EnemyBaselineFor, which is also what the offline simulation fights against.
         var (ebh, ebd) = _shotEnemyBaseline ?? EnemyBaselineFor(_activeRegion);
@@ -4536,6 +4801,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // demand tested against the same BuildContext. That matters — a Vow SWORN and a Vow KEPT are
             // different things, and the quest is about the second.
             if (VowWasKept()) _runsWithVowKept++;
+            // AND THE SAME FRAME IS WHERE A VOW REVEALS ITSELF. Four lines below the one that already
+            // asks the same question of the same context — because "did this build keep that rule?" is
+            // one question, and whether the Vow was SWORN is what separates the two answers.
+            RevealProvedVows();
             Save();
         }
 
@@ -4553,6 +4822,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // has to tell the player to go and open the screen it is already standing on.
                 ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} IS OPEN."
                 : "THE WORLD IS YOURS.";
+            // AND THE REGION TEACHES YOU ITS DOCTRINE. A conquest is the fast axis of the world and the
+            // spine every player walks, so it carries the six keystones the rest of the game depends on
+            // — two weapon enchantments are dead without ECHO or BLOODLUST, and both are conquest
+            // rewards. The BLURB is not optional: a player who has never owned a keystone learns
+            // nothing from the word BLOODLUST on its own.
+            if (Keystones.Sources.FirstOrDefault(s =>
+                    s.RegionId == _activeRegion && s.Rung == WorldRung.Conquest) is { } taught
+                && Keystones.ById(taught.KeystoneId) is { } gift)
+            {
+                _discoveredKeystones.Add(gift.Id);
+                RebuildBuildMenus();
+                _conquerMsg += $"\n\nNEW KEYSTONE DISCOVERED\n{gift.Name}\n{gift.Blurb}";
+                // On the FIRST conquest only, because the socket arrives on the same event — the build
+                // screen is never showing a keystone with nowhere to put it.
+                if (_world.ConqueredIds.Count == 1)
+                    _conquerMsg += "\nA KEYSTONE SOCKET OPENS. WEAR IT ON THE BUILD SCREEN.";
+            }
             Save();
         }
     }
@@ -6934,7 +7220,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// character exists to reward.
     /// </remarks>
     private bool VowWasKept()
-        => Career.VowWasKept(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress), _hunter);
+        => Career.VowWasKept(ComposeBuild(), _hunter);
 
     // The arithmetic (and its tuning history) is Career's, in Core, since P5.
     private int TraitPointsEarned() => Career.TraitPointsEarned(_world);

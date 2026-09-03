@@ -88,7 +88,7 @@ public enum VowDemand
     /// </remarks>
     SlotLeftBare,
 
-    /// <summary>No keystone socketed. Refuses the trait tree's whole payoff.</summary>
+    /// <summary>No keystone socketed. Refuses every doctrine the world has handed over.</summary>
     NoKeystone,
 }
 
@@ -98,6 +98,113 @@ public enum VowDemand
 /// the host maps this to the real slot when it builds the context. Only the slots worth refusing are here.
 /// </remarks>
 public enum BareSlot { None, Boots, Gloves, Helm, Ring, Charm }
+
+/// <summary>How a Vow is found.</summary>
+/// <remarks>
+/// A Vow used to be BOUGHT: five nodes on the trait tree taught all thirteen between them, so the
+/// whole system was invisible to a player who spent their points elsewhere. Now a Vow reveals itself
+/// when the player has already kept its rule without it — which is the only discovery rule that
+/// teaches the thing it unlocks.
+/// </remarks>
+public enum VowProof
+{
+    /// <summary>Handed over with the BUILD screen, so the system is discoverable at all.</summary>
+    Granted,
+
+    /// <summary>Proved by keeping its own demand for a run, with the Vow unsworn.</summary>
+    Demand,
+
+    /// <summary>
+    /// Proved by CONDUCT — you had already accepted the cost this Vow charges, from somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// The two static-cost Vows have no demand to keep: you cannot voluntarily take 12.5% more damage
+    /// or give up 15% of your health pool — there is no dial for it, and <see cref="VowDemand.None"/>
+    /// says so, since a static Vow's demand is always met. Rather than invent a fake restriction they
+    /// ask for the honest version of the same sentence: you had already agreed to be hurt, and now the
+    /// game offers to pay you for it. Both are still intentional build choices — a mastery greater, a
+    /// socketed keystone — both deterministic and both reversible.
+    /// </remarks>
+    Conduct,
+}
+
+/// <summary>
+/// What the account had to OWN for a kept rule to count as a restriction.
+/// </summary>
+/// <remarks>
+/// This clause is what makes a discovery a restriction rather than a starting condition. A brand-new
+/// hunter has one slot, one skill, one Source, no crit training, no defence, no keystone and no gear —
+/// which satisfies ten of the eleven demands on wave one. You cannot obey a rule you were never able
+/// to break, so a proof only counts once the player owned the thing they refused.
+/// </remarks>
+public enum VowTemptation
+{
+    /// <summary>Nothing to own. Used only where the demand cannot be met by accident.</summary>
+    None,
+
+    /// <summary>You own an item carrying the very stat you refused. See <see cref="Vow.TemptationAffix"/>.</summary>
+    AnAffixInHand,
+
+    /// <summary>You own an item for the gear slot you left empty.</summary>
+    GearForTheBareSlot,
+
+    /// <summary>Your mastery reaches skills of two or more styles, and you carried one style anyway.</summary>
+    TwoStylesInReach,
+
+    /// <summary>Every woven skill has a chosen variation, so its Source was a decision and not a default.</summary>
+    EveryWovenSourceChosen,
+
+    /// <summary>The world has already given you at least one keystone.</summary>
+    AKeystoneKnown,
+}
+
+/// <summary>
+/// What the account owned on the run being judged — the temptation half of a Vow's proof.
+/// </summary>
+/// <remarks>
+/// Read ONCE, at the end of a descent, beside the build that ran it. Every field defaults to false or
+/// zero, which is a brand-new account, so a caller naming only what it means gets the safe answer for
+/// everything else rather than a compile error pushing it toward numbers it does not mean.
+/// </remarks>
+public readonly record struct VowTemptationFacts(
+    bool OwnsCritItem = false,
+    bool OwnsSkillRateItem = false,
+    bool OwnsDefenceItem = false,
+    bool OwnsDamageItem = false,
+    bool OwnsHealthItem = false,
+    bool OwnsHaulItem = false,
+    bool OwnsBoots = false,
+    bool OwnsGloves = false,
+    bool OwnsHelm = false,
+    bool OwnsRing = false,
+    bool OwnsCharm = false,
+    bool EveryWovenSourceChosen = false,
+    int StylesInReach = 0,
+    int KeystonesKnown = 0)
+{
+    /// <summary>Does the account own an item carrying this stat?</summary>
+    public bool OwnsAffix(Economy.AffixStat stat) => stat switch
+    {
+        Economy.AffixStat.Crit => OwnsCritItem,
+        Economy.AffixStat.SkillRate => OwnsSkillRateItem,
+        Economy.AffixStat.Defense => OwnsDefenceItem,
+        Economy.AffixStat.Damage => OwnsDamageItem,
+        Economy.AffixStat.Health => OwnsHealthItem,
+        Economy.AffixStat.Haul => OwnsHaulItem,
+        _ => false,
+    };
+
+    /// <summary>Does the account own a piece for this slot?</summary>
+    public bool OwnsGearFor(BareSlot slot) => slot switch
+    {
+        BareSlot.Boots => OwnsBoots,
+        BareSlot.Gloves => OwnsGloves,
+        BareSlot.Helm => OwnsHelm,
+        BareSlot.Ring => OwnsRing,
+        BareSlot.Charm => OwnsCharm,
+        _ => false,
+    };
+}
 
 public sealed record Vow
 {
@@ -149,6 +256,41 @@ public sealed record Vow
     public float DamageTakenIncrease { get; init; }
 
     public required string Description { get; init; }
+
+    // ── Discovery. How this Vow reveals itself. ──────────────────────────────────────────────────
+
+    /// <summary>How the player finds this Vow. See <see cref="VowProof"/>.</summary>
+    public VowProof Proof { get; init; } = VowProof.Demand;
+
+    /// <summary>
+    /// How many CLEARED waves of one descent the rule must hold for. Zero for a granted Vow.
+    /// </summary>
+    /// <remarks>
+    /// Cleared waves, never depth: a checkpoint sets the wave number from a purchase, so a player could
+    /// buy a start at wave 40, die on 41, and claim a twenty-wave proof having fought nothing. It also
+    /// scales with <see cref="Severity"/>, on the same logic the catalogue is priced by — a heavier
+    /// restriction asks for a longer proof.
+    /// </remarks>
+    public int ProofWaves { get; init; }
+
+    /// <summary>What the account had to own for the kept rule to count as a refusal.</summary>
+    public VowTemptation Temptation { get; init; } = VowTemptation.None;
+
+    /// <summary>For <see cref="VowTemptation.AnAffixInHand"/>: the stat the player owned and refused.</summary>
+    public Economy.AffixStat? TemptationAffix { get; init; }
+
+    /// <summary>
+    /// The one plain past-tense sentence the reveal shows: what the player actually did.
+    /// </summary>
+    /// <remarks>
+    /// This is the ONLY place a discovery rule is ever stated in the game, and it is stated after the
+    /// fact. That is how hidden conditions and a discoverable system coexist: the player never reads a
+    /// checklist, but every reveal teaches the grammar and lets them guess at the next one.
+    /// </remarks>
+    public string ProofLine { get; init; } = "";
+
+    /// <summary>One sentence of flavour, shown under the reveal.</summary>
+    public string RevealLine { get; init; } = "";
 }
 
 /// <summary>The Vow pricing curve's knobs — carved out of the retired WeavingTuning.</summary>
@@ -170,6 +312,28 @@ public sealed record VowTuning
     /// multipliers inside the demand band that x2.20 tops.
     /// </remarks>
     public float StaticCostConversionRate { get; init; } = 8.0f;
+
+    /// <summary>
+    /// The most bonus a build may hold across every Vow it has sworn, added together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Vow's bonus used to ride a SKILL SLOT, and each skill took exactly one Vow's multiplier — so
+    /// four different Vows paid the same per-skill bonus as one Vow repeated on all four slots, while
+    /// charging four prices and demanding four restrictions hold at once. The rational play was to
+    /// satisfy the single harshest restriction you could and bind that one Vow everywhere, which made
+    /// BIND TO SLOT a decision with one correct answer, told four times.
+    /// </para>
+    /// <para>
+    /// So a Vow is a promise about the BUILD, capacity is a real number, and the bonuses of the Vows
+    /// sworn are SUMMED under this ceiling. 1.35 sits just above the single best Vow in the catalogue
+    /// (+1.20), so a second and third Vow are worth swearing and cannot run away: three maximal Vows
+    /// plus every Vow-power multiplier in the game land on one bounded number a sweep can print. The
+    /// clamp is applied BEFORE <c>SkillShape.VowPowerMultiplier</c>, so mastery and THE OATHBOUND still
+    /// pay for their investment.
+    /// </para>
+    /// </remarks>
+    public float CombinedBonusCeiling { get; init; } = 1.35f;
 
     public static VowTuning Default { get; } = new();
 }
@@ -194,7 +358,14 @@ public readonly record struct BuildContext(
     float SkillRate,
     int Defence,
     int KeystonesWorn,
-    IReadOnlySet<BareSlot> WornSlots)
+    IReadOnlySet<BareSlot> WornSlots,
+    // What the build already does to damage taken. Above 1 means something in it is hurting you —
+    // read by VOW OF FRAGILITY's conduct proof, and by nothing else.
+    float DamageTakenMultiplier = 1f,
+    // The health multiplier the SOCKETED KEYSTONES alone contribute. Below 1 means a doctrine already
+    // cost you maximum health — read by RECKLESS OFFERING's conduct proof, and by nothing else. The
+    // keystone contribution alone, so training can never mask it.
+    float KeystoneHealthMultiplier = 1f)
 {
     /// <summary>A build that satisfies nothing — the safe default for a caller with no build to hand.</summary>
     public static BuildContext Empty { get; } =
@@ -259,6 +430,11 @@ public static class Vows
             Demand = VowDemand.SingleStyle, Severity = 0.75f,
             Short = "ONE STYLE ONLY",
             Description = "EVERY SKILL YOU CARRY MUST BE THE SAME STYLE. GO DEEP, NOT WIDE.",
+            Proof = VowProof.Demand, ProofWaves = 15,
+            Temptation = VowTemptation.TwoStylesInReach,
+            ProofLine = "YOU CLEARED 15 WAVES CARRYING ONE STYLE OF SKILL ONLY, AND LEFT SLOTS EMPTY "
+                        + "RATHER THAN FILL THEM WITH ANYTHING ELSE.",
+            RevealLine = "YOU WENT DEEP WHERE THE ROAD WAS NARROW.",
         },
         new()
         {
@@ -266,6 +442,11 @@ public static class Vows
             Demand = VowDemand.SingleSource, Severity = 0.6f,
             Short = "ONE SOURCE ONLY",
             Description = "EVERY SKILL MUST USE ONE SOURCE. NO PICKING WHAT THE ENEMY IS WEAK TO.",
+            Proof = VowProof.Demand, ProofWaves = 12,
+            Temptation = VowTemptation.EveryWovenSourceChosen,
+            ProofLine = "YOU CLEARED 12 WAVES WITH EVERY SKILL DRAWING ONE SOURCE, AND YOU CHOSE EACH "
+                        + "OF THOSE SOURCES YOURSELF.",
+            RevealLine = "YOU SPOKE IN ONE VOICE LONG BEFORE ANYONE WAS LISTENING.",
         },
         new()
         {
@@ -275,6 +456,14 @@ public static class Vows
             Demand = VowDemand.EverySlotFilled, Severity = 0.2f,
             Short = "NO EMPTY SLOT",
             Description = "EVERY SKILL SLOT YOU OWN MUST BE FILLED. NOTHING HELD BACK.",
+            // THE ONE VOW THAT IS SIMPLY GIVEN. Its own severity is why: most builds already meet
+            // it, so it costs almost nothing to keep and teaches the whole grammar in one card —
+            // fill your slots and be paid, break the rule and be paid nothing. Without it a player
+            // could reach the end of the game without ever learning that Vows exist.
+            Proof = VowProof.Granted,
+            ProofLine = "FILL EVERY SKILL SLOT YOU OWN AND EVERY SKILL HITS 30% HARDER. LEAVE ONE "
+                        + "EMPTY AND THE VOW PAYS NOTHING.",
+            RevealLine = "THE FIRST PROMISE IS THE EASY ONE. THAT IS WHY IT IS FIRST.",
         },
 
         // ── STAT SHAPE. These read the character sheet, so they pull against the STATS screen's
@@ -285,6 +474,11 @@ public static class Vows
             Demand = VowDemand.NoCritInvestment, Severity = 0.55f,
             Short = "NO CRITICAL BONUS",
             Description = "YOUR CRITICAL CHANCE MUST BE UNTOUCHED. NO LUCKY HITS, ONLY SURE ONES.",
+            Proof = VowProof.Demand, ProofWaves = 12,
+            Temptation = VowTemptation.AnAffixInHand, TemptationAffix = Economy.AffixStat.Crit,
+            ProofLine = "YOU CLEARED 12 WAVES WITH YOUR CRITICAL CHANCE UNTOUCHED, THOUGH YOU OWNED "
+                        + "GEAR THAT WOULD HAVE RAISED IT.",
+            RevealLine = "NO LUCKY HITS. ONLY SURE ONES.",
         },
         new()
         {
@@ -292,6 +486,11 @@ public static class Vows
             Demand = VowDemand.CadenceAtOrBelow, Threshold = 1.0f, Severity = 0.5f,
             Short = "SKILL RATE MAX 1.00x",
             Description = "YOUR SKILLS MAY NOT BE SPED UP AT ALL. SLOW HANDS, HEAVY BLOWS.",
+            Proof = VowProof.Demand, ProofWaves = 10,
+            Temptation = VowTemptation.AnAffixInHand, TemptationAffix = Economy.AffixStat.SkillRate,
+            ProofLine = "YOU CLEARED 10 WAVES AT SKILL RATE 1.00x, THOUGH YOU OWNED GEAR THAT WOULD "
+                        + "HAVE MADE YOUR SKILLS COME BACK SOONER.",
+            RevealLine = "SLOW HANDS. HEAVY BLOWS.",
         },
         new()
         {
@@ -299,6 +498,11 @@ public static class Vows
             Demand = VowDemand.CadenceAtOrAbove, Threshold = 1.4f, Severity = 0.5f,
             Short = "SKILL RATE MIN 1.40x",
             Description = "YOUR SKILLS MUST BE SPED UP BY 40% OR MORE. NEVER STILL.",
+            // NO TEMPTATION CLAUSE: a skill rate of 1.40x cannot be reached by accident. It is
+            // itself the proof that the player went and built for it.
+            Proof = VowProof.Demand, ProofWaves = 10, Temptation = VowTemptation.None,
+            ProofLine = "YOU CLEARED 10 WAVES WITH YOUR SKILLS SPED UP BY 40% OR MORE.",
+            RevealLine = "YOU NEVER STOOD STILL LONG ENOUGH TO BE FOUND.",
         },
         new()
         {
@@ -306,13 +510,25 @@ public static class Vows
             Demand = VowDemand.NoDefence, Severity = 0.7f,
             Short = "NO DEFENCE AT ALL",
             Description = "NO DEFENCE FROM TRAINING OR GEAR. NOTHING BETWEEN YOU AND THE WAVE.",
+            Proof = VowProof.Demand, ProofWaves = 15,
+            Temptation = VowTemptation.AnAffixInHand, TemptationAffix = Economy.AffixStat.Defense,
+            ProofLine = "YOU CLEARED 15 WAVES WITH NO DEFENCE AT ALL, THOUGH YOU OWNED GEAR THAT "
+                        + "WOULD HAVE GIVEN YOU SOME.",
+            RevealLine = "NOTHING BETWEEN YOU AND THE WAVE, AND THE WAVE NOTICED.",
         },
         new()
         {
             Id = "vow_unbound", Name = "VOW OF THE UNBOUND", Kind = VowKind.Demand,
             Demand = VowDemand.NoKeystone, Severity = 0.8f,
             Short = "NO KEYSTONE IN USE",
-            Description = "YOU MAY WEAR NO KEYSTONE. YOU GIVE UP THE TRAIT TREE'S PRIZE.",
+            // The old line read "YOU GIVE UP THE TRAIT TREE'S PRIZE." Keystones come from the world
+            // now, not from a tree, so the sentence had to name what the player is actually refusing.
+            Description = "YOU MAY WEAR NO KEYSTONE. THE WORLD'S DOCTRINES ARE NOT FOR YOU.",
+            Proof = VowProof.Demand, ProofWaves = 20,
+            Temptation = VowTemptation.AKeystoneKnown,
+            ProofLine = "YOU CLEARED 20 WAVES WITH NO KEYSTONE SOCKETED, THOUGH THE WORLD HAD "
+                        + "ALREADY GIVEN YOU ONE.",
+            RevealLine = "YOU WERE HANDED A DOCTRINE, AND YOU SET IT DOWN.",
         },
 
         // ── SACRIFICE. A bare slot costs its stats AND its enchantment AND its affixes, all of which
@@ -323,6 +539,10 @@ public static class Vows
             Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Boots, Severity = 0.65f,
             Short = "NO BOOTS",
             Description = "YOU MAY WEAR NO BOOTS. WALK THE DEPTHS ON YOUR OWN FEET.",
+            Proof = VowProof.Demand, ProofWaves = 15,
+            Temptation = VowTemptation.GearForTheBareSlot,
+            ProofLine = "YOU CLEARED 15 WAVES WITH NO BOOTS, THOUGH YOU OWNED A PAIR.",
+            RevealLine = "YOU WALKED THE DEPTHS ON YOUR OWN FEET.",
         },
         new()
         {
@@ -330,6 +550,10 @@ public static class Vows
             Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Gloves, Severity = 0.65f,
             Short = "NO GLOVES",
             Description = "YOU MAY WEAR NO GLOVES. NOTHING BETWEEN YOUR HANDS AND THE WORK.",
+            Proof = VowProof.Demand, ProofWaves = 15,
+            Temptation = VowTemptation.GearForTheBareSlot,
+            ProofLine = "YOU CLEARED 15 WAVES WITH NO GLOVES, THOUGH YOU OWNED A PAIR.",
+            RevealLine = "NOTHING BETWEEN YOUR HANDS AND THE WORK.",
         },
         new()
         {
@@ -337,6 +561,10 @@ public static class Vows
             Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Helm, Severity = 0.7f,
             Short = "NO HELM",
             Description = "YOU MAY WEAR NO HELM. LOOK THE DEPTHS IN THE FACE.",
+            Proof = VowProof.Demand, ProofWaves = 15,
+            Temptation = VowTemptation.GearForTheBareSlot,
+            ProofLine = "YOU CLEARED 15 WAVES WITH NO HELM, THOUGH YOU OWNED ONE.",
+            RevealLine = "YOU LOOKED THE DEPTHS IN THE FACE.",
         },
 
         // ── STATIC COST. Always on, always paying — the entire distinction from a demand. ────────
@@ -347,6 +575,12 @@ public static class Vows
             DamageTakenIncrease = 0.125f,   // +12.5% damage taken, applied AFTER mitigation
             Short = "ALWAYS: TAKES +12.5%",
             Description = "ALWAYS ON. YOU TAKE 12.5% MORE DAMAGE.",
+            // CONDUCT, not a demand: you cannot volunteer to take more damage, so the proof is that
+            // you had already accepted that cost from somewhere else. Three mastery greaters raise
+            // damage taken, and every one of them is a deliberate purchase.
+            Proof = VowProof.Conduct, ProofWaves = 15, Temptation = VowTemptation.None,
+            ProofLine = "YOU CLEARED 15 WAVES CARRYING SOMETHING THAT ALREADY MADE YOU TAKE MORE DAMAGE.",
+            RevealLine = "YOU HAD AGREED TO BLEED. NOW YOU WILL BE PAID FOR IT.",
         },
         new()
         {
@@ -354,6 +588,12 @@ public static class Vows
             StaticCostMagnitude = 0.15f,    // -15% max health == -15% eHP, linearly
             Short = "ALWAYS: -15% MAX HEALTH",
             Description = "ALWAYS ON. YOU LOSE 15% OF YOUR MAXIMUM HEALTH.",
+            // CONDUCT: you ran a descent with a keystone that had already cost you maximum health —
+            // GLASS CANNON, BLOODLUST or DYNAMO. The keystone contribution alone is read, so training
+            // more health can never mask it.
+            Proof = VowProof.Conduct, ProofWaves = 15, Temptation = VowTemptation.AKeystoneKnown,
+            ProofLine = "YOU CLEARED 15 WAVES WITH A KEYSTONE THAT ALREADY COST YOU MAXIMUM HEALTH.",
+            RevealLine = "YOU GAVE PART OF YOURSELF AWAY, AND CAME BACK ANYWAY.",
         },
     };
 
@@ -385,4 +625,147 @@ public static class Vows
             _ => false,
         };
     }
+
+    // ── DISCOVERY — proof before reward ───────────────────────────────────────────────────────────
+    //
+    //     A vow reveals itself when a descent ends in which its restriction held, for enough cleared
+    //     waves, on a build that had something to break it with — and the vow was not sworn.
+    //
+    // Four clauses, one function, one call site. Nothing here is a roll, a drop or a missable event:
+    // every clause is a build property or an owned-item test, so a vow can be proved again at any
+    // point in the career, in any region, for as long as the game runs.
+
+    /// <summary>The Vow the BUILD screen hands over, so the system is discoverable at all.</summary>
+    public static IReadOnlyList<Vow> Granted { get; } =
+        Catalog.Where(v => v.Proof == VowProof.Granted).ToList();
+
+    /// <summary>Every Vow that has to be proved.</summary>
+    public static IReadOnlyList<Vow> Discoverable { get; } =
+        Catalog.Where(v => v.Proof != VowProof.Granted).ToList();
+
+    /// <summary>
+    /// Did the player own the thing this Vow's restriction refuses?
+    /// </summary>
+    /// <remarks>
+    /// Without this clause, ten of the eleven demand Vows unlock on a brand-new hunter's first descent:
+    /// one slot, one skill, one Source, no crit, no defence, no keystones and no gear satisfies almost
+    /// the whole catalogue by simply not having anything yet.
+    /// </remarks>
+    public static bool WasTempted(Vow vow, VowTemptationFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(vow);
+
+        return vow.Temptation switch
+        {
+            VowTemptation.None => true,
+            VowTemptation.AnAffixInHand => vow.TemptationAffix is { } stat && facts.OwnsAffix(stat),
+            VowTemptation.GearForTheBareSlot => facts.OwnsGearFor(vow.Bare),
+            VowTemptation.TwoStylesInReach => facts.StylesInReach >= 2,
+            VowTemptation.EveryWovenSourceChosen => facts.EveryWovenSourceChosen,
+            VowTemptation.AKeystoneKnown => facts.KeystonesKnown >= 1,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Did this build keep the rule this Vow is about, this wave?
+    /// </summary>
+    /// <remarks>
+    /// A demand Vow asks <see cref="IsActive"/>, which is exactly the question the fight already asks
+    /// of a sworn one — the discovery machine for eleven of the thirteen was already written. The two
+    /// static-cost Vows have no demand to keep, so they ask the conduct question instead.
+    /// </remarks>
+    public static bool RuleHeld(Vow? vow, BuildContext ctx)
+    {
+        if (vow is null) return false;
+
+        return vow.Proof switch
+        {
+            VowProof.Granted => false,
+            // FRAGILITY: something in the build was already making you take more damage.
+            // RECKLESS OFFERING: a socketed keystone had already cost you maximum health.
+            VowProof.Conduct => vow.Id == "vow_reckless_offering"
+                ? ctx.KeystoneHealthMultiplier < 0.999f
+                : ctx.DamageTakenMultiplier > 1.001f,
+            _ => IsActive(vow, ctx),
+        };
+    }
+
+    /// <summary>
+    /// Which Vows a finished descent reveals: the rule held long enough, unsworn, with something to break.
+    /// </summary>
+    /// <param name="proofWaves">Cleared waves per Vow id, counted during the descent.</param>
+    /// <param name="sworn">The Vows the build actually swore — those prove nothing.</param>
+    /// <param name="known">What the account already knows; already-known Vows are never re-revealed.</param>
+    /// <param name="facts">What the account owned, for the temptation clause.</param>
+    public static IReadOnlyList<Vow> Revealed(
+        IReadOnlyDictionary<string, int> proofWaves,
+        IEnumerable<string> sworn,
+        IEnumerable<string> known,
+        VowTemptationFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(proofWaves);
+        ArgumentNullException.ThrowIfNull(sworn);
+        ArgumentNullException.ThrowIfNull(known);
+
+        var swornIds = sworn.ToHashSet(StringComparer.Ordinal);
+        var knownIds = known.ToHashSet(StringComparer.Ordinal);
+        var found = new List<Vow>();
+
+        foreach (var vow in Discoverable)
+        {
+            if (knownIds.Contains(vow.Id)) continue;          // nobody discovers the same thing twice
+            if (swornIds.Contains(vow.Id)) continue;          // a Vow you wore proves nothing
+            if (!WasTempted(vow, facts)) continue;            // you must have owned what you refused
+            if (proofWaves.GetValueOrDefault(vow.Id) < vow.ProofWaves) continue;
+            found.Add(vow);
+        }
+        return found;
+    }
+
+    // ── CAPACITY — a Vow is a promise about the BUILD ─────────────────────────────────────────────
+
+    /// <summary>
+    /// What every sworn Vow pays this build together, as a multiplier on a skill's damage.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The BONUSES are summed and then clamped, never the factors multiplied: two Vows worth x1.90 and
+    /// x1.75 pay +0.90 and +0.75, which is +1.65 before the ceiling, not x3.32. A Vow whose demand is
+    /// BROKEN pays nothing at all and is simply skipped — a promise you did not keep is not a promise.
+    /// </para>
+    /// <para>
+    /// The clamp sits BEFORE the Vow-power multiplier, so mastery's PLEDGE and ZEALOT and THE
+    /// OATHBOUND's own passive still pay for the investment they cost, and the strongest possible Vow
+    /// build in the game is one bounded number rather than a stack nobody can measure.
+    /// </para>
+    /// </remarks>
+    public static float CombinedFactor(
+        IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null)
+    {
+        if (sworn is null) return 1f;
+        tuning ??= VowTuning.Default;
+
+        var bonus = 0f;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var vow in sworn)
+        {
+            // ONCE PER VOW, however many slots carry it. A Vow is sworn, not equipped.
+            if (vow is null || !seen.Add(vow.Id)) continue;
+            if (!IsActive(vow, ctx)) continue;
+            bonus += Multiplier(vow, tuning) - 1f;
+        }
+        if (bonus <= 0f) return 1f;
+
+        return 1f + MathF.Min(tuning.CombinedBonusCeiling, bonus) * MathF.Max(0f, vowPowerMultiplier);
+    }
+
+    /// <summary>Is at least one of these Vows sworn AND kept? The affinity buy-back's question.</summary>
+    /// <remarks>
+    /// Restriction buys power — so a BROKEN Vow must buy nothing. The old per-skill test asked only
+    /// whether a slot carried a Vow at all, which paid an off-discipline skill's affinity back for
+    /// merely CLAIMING a restriction the build was not keeping.
+    /// </remarks>
+    public static bool AnyKept(IEnumerable<Vow?>? sworn, BuildContext ctx)
+        => sworn is not null && sworn.Any(v => v is not null && IsActive(v, ctx));
 }
