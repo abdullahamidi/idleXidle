@@ -63,7 +63,8 @@ public static class WarrenAutomation
         if (kind == FacilityKind.ScavengerRuns && level == t.AutoSellCommonLevel)
             return "YOUR RUNNERS WILL SELL COMMON ITEMS FOR YOU WHEN A CHEST IS OPENED.";
         if (kind == FacilityKind.ScavengerRuns && level == t.AutoSellUncommonLevel)
-            return "YOUR RUNNERS WILL SELL UNCOMMON ITEMS TOO. RARE AND BETTER ARE ALWAYS KEPT.";
+            return "YOUR RUNNERS WILL SELL UNCOMMON ITEMS WHEN A CHEST IS OPENED TOO. "
+                   + "RARE AND BETTER ARE ALWAYS KEPT.";
         if (kind == FacilityKind.HoardVaults && level == t.AutoMergeLevel)
             return "THE VAULT WILL STACK YOUR SPARE ITEMS INTO BETTER ONES WHEN A CHEST IS OPENED.";
         return "";

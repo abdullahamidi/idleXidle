@@ -181,7 +181,9 @@ public static class Unlocks
         Activity.Training => "Clear your first wave",
         Activity.Gear => "Find your first item",
         Activity.Vault => "Earn a chest from a boss",
-        Activity.Forge => "Earn a chest from a boss",
+        // BOTH CLAUSES, because the gate has two. It opens on a chest ever held OR two items owned,
+        // and naming only the chest sent a player who already had the Forge open looking for a boss.
+        Activity.Forge => "Earn a chest, or find two items",
         Activity.Build => "Reach wave 5",
         Activity.Mastery => "Reach wave 25",
         // Open from the start, like the Hunt — nothing to require, so nothing to say. A price line on

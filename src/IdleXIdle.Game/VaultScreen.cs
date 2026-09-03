@@ -816,11 +816,12 @@ public sealed class VaultScreen
         {
             var n = stacks.Where(s => ChestDossiers.For(s.Sample).GuaranteedFloor <= floor).Sum(s => s.Count);
             if (n > 0)
-                clauses.Add($"AUTO-SELL {floor.ToString().ToUpperInvariant()} DROPS IS ON — {n} OF THESE "
-                            + (n == 1 ? "CHESTS CAN GIVE GEAR THAT IS SOLD THE MOMENT IT DROPS."
-                                      : "CHESTS CAN GIVE GEAR THAT IS SOLD THE MOMENT IT DROPS."));
+                // NAMED BY ITS OWNER. Auto-sell is a Warren facility level now, not a trait purchase,
+                // and it fires when a chest is OPENED — which is what the sentence says.
+                clauses.Add($"YOUR SCAVENGER RUNS SELL {floor.ToString().ToUpperInvariant()} ITEMS — {n} OF THESE "
+                            + "CHESTS CAN GIVE GEAR THAT IS SOLD FOR YOU WHEN THE CHEST IS OPENED.");
         }
-        if (AutoMergeOnOpen) clauses.Add("AUTO-MERGE SPARE ITEMS IS ON.");
+        if (AutoMergeOnOpen) clauses.Add("YOUR HOARD VAULTS MERGE YOUR SPARE ITEMS WHEN A CHEST IS OPENED.");
         if (clauses.Count > 0)
             _ui.TextBig(b, _ui.ShortenBig(string.Join("   ·   ", clauses), ContentW - UiMetrics.Control(460),
                                           UiTypography.Secondary),
