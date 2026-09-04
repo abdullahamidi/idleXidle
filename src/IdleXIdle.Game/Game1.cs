@@ -4534,11 +4534,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // A LOAD IS A CHECK. Every rule is re-checked here as well as after a cleared wave, which is
         // what makes a threshold crossed while the player was not looking impossible to miss.
+        //
+        // THE DISCOVERY ALWAYS HAPPENS; ONLY THE REVEAL IS HELD BACK UNDER THE CAPTURE RIG. Every
+        // fixture in the rig is an established save, so the six account-fed rules fire on frame one
+        // and the plate landed across the middle of EVERY fight, build and gear capture in the
+        // project. A pose is something a capture asks for (RH_SHOT_WAKE), not something that leaks
+        // into other people's baselines.
+        // RH_SHOT_WAKE poses the plate itself, so the rig never needs the organic one.
+        var revealing = ShotMode is null;
         if (_traitsFirstCheckOwed)
         {
             _traitsFirstCheckOwed = false;
             _traitWatch.Recheck();
-            var woke = _traitWatch.TakeAwakened();
+            var woke = revealing ? _traitWatch.TakeAwakened() : Array.Empty<string>();
             if (woke.Count == 1 && TraitCatalogue.Find(woke[0]) is { } only)
                 PostAwakening("A TRAIT HAS AWAKENED", only.Name, only.Flavour.ToUpperInvariant());
             else if (woke.Count > 1)
@@ -4550,7 +4558,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         foreach (var id in _traitWatch.TakeAwakened())
-            if (TraitCatalogue.Find(id) is { } def0)
+            if (revealing && TraitCatalogue.Find(id) is { } def0)
                 PostAwakening("A TRAIT HAS AWAKENED", def0.Name, def0.Flavour.ToUpperInvariant());
     }
 
