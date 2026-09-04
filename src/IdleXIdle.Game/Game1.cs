@@ -2421,7 +2421,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     //
                     // RH_SHOT_CONQUEST=<region id> poses a LATER conquest's line. `still_archive` is
                     // the longest headline the world can produce, and is what the one-line contract
-                    // has to hold at UI SCALE 150.
+                    // has to hold at UI SCALE 150. Every region but the LAST: posing a conquest
+                    // conquers every region up to it, so `pale_choir` leaves the world whole and the
+                    // corruption ladder takes the strip — the very fact that moved the reveal to a
+                    // notice. That capture shows the ladder, which is the real screen for it.
                     var fell = Environment.GetEnvironmentVariable("RH_SHOT_CONQUEST")?.Trim() is { Length: > 0 } cq
                                && Regions.Find(cq) is not null ? cq : VerdantHollow.RegionId;
                     foreach (var r in Regions.All)

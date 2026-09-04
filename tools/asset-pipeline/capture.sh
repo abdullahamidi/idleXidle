@@ -229,6 +229,12 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #
 #   RH_SHOT_CONQUEST=still_archive RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh world out.png
 #
+# EVERY REGION BUT THE LAST. Posing a conquest conquers every region up to it, so `pale_choir` leaves
+# the world whole — and a whole world gives the strip to the corruption LADDER, which is exactly why
+# the reveal is a notice and not a line here. The capture then shows the ladder and no headline; that
+# is the real screen, not a broken dial, and `keystonenotice` is where the last conquest's news is
+# photographed.
+#
 # RH_SHOT_KEYSTONE=<keystone id> poses `keystonenotice` on a chosen keystone's reveal. With none the
 # fixture asks the catalogue which reveal is LONGEST and poses that, so the pose follows the copy
 # rather than naming a keystone that may stop being the worst case. `echo` is the shortest — the

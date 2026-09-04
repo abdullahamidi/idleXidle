@@ -52,11 +52,28 @@ public sealed class MapScreen
     /// <summary>The player's Memory Dust, for the checkpoint chips' affordability.</summary>
     public int DustOwned { get; set; }
     /// <summary>The world's latest news, for the strip inside the chart. One line — see <see cref="StripLine"/>.</summary>
-    public string Message { get; set; } = "";
+    /// <remarks>
+    /// FLATTENED ON THE WAY IN, not on the way out. The host assigns this every frame while the map is
+    /// open and the layout reads <see cref="HasWorldStrip"/> several times per frame on top of the draw,
+    /// so flattening in the getter would split and re-join a string half a dozen times a frame for a
+    /// value that changes on a conquest. It is done once, here, and only when the text actually changes.
+    /// </remarks>
+    public string Message
+    {
+        get => _message;
+        set
+        {
+            if (string.Equals(value, _message, StringComparison.Ordinal)) return;
+            _message = value ?? "";
+            _stripLine = OneLine(_message);
+        }
+    }
+    private string _message = "";
+    private string _stripLine = "";
     public bool DevMapDebug { get; set; }
 
     /// <summary>What the strip will actually draw: the message, flattened to the one line it is allowed.</summary>
-    public string StripLine => OneLine(Message);
+    public string StripLine => _stripLine;
 
     /// <summary>
     /// THE STRIP IS ONE LINE. Whatever a caller hands it is flattened to one before it is drawn.
