@@ -2886,7 +2886,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // overlays, and they sat one key away from F1 (help) and F10 (settings), live in normal play —
         // a playtester could trip either and reasonably conclude the game was broken.
         if (DevKeysEnabled && Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (DevKeysEnabled && Pressed(Keys.F8)) _expedition.DevVfxDebug = !_expedition.DevVfxDebug;   // dev: the VFX placement contract's bounds/anchor/ratio overlay (brief §70)
+        // F9, NOT F8. F8 already cycles the UI SCALE two lines below — the design for this phase said
+        // "F8 is free" and the code says otherwise, so one press would have toggled the overlay AND
+        // stepped the density profile, which reads as the overlay breaking the layout it is measuring.
+        if (DevKeysEnabled && Pressed(Keys.F9)) _expedition.DevVfxDebug = !_expedition.DevVfxDebug;   // dev: the VFX placement contract's bounds/anchor/ratio overlay (brief §70)
         if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _traits.DevDustDebug = !_traits.DevDustDebug; }   // dev layout overlays
         if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;

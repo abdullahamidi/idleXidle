@@ -626,9 +626,10 @@ public sealed class HuntScreen
     /// DEV ONLY — the VFX placement contract's debug view (brief §70). Never true in a shipped build.
     /// </summary>
     /// <remarks>
-    /// Three doors, none of them open to a player: F8 under <c>RH_DEV=1</c> (beside F6's boss and F7's
+    /// Three doors, none of them open to a player: F9 under <c>RH_DEV=1</c> (beside F6's boss and F7's
     /// layout overlays), <c>RH_SHOT_MODE=vfxdebug</c> for the capture rig, and <c>RH_VFX_DUMP=1</c> for
-    /// the text version, which is the one that actually gets read.
+    /// the text version, which is the one that actually gets read. F9 rather than F8 because F8 already
+    /// steps the UI SCALE.
     /// </remarks>
     public bool DevVfxDebug { get; set; }
 
@@ -650,7 +651,12 @@ public sealed class HuntScreen
     /// </para>
     /// <para>
     /// <c>gain</c> and <c>absorb</c> re-arm their one-shot from <see cref="UpdateFight"/> every frame, so
-    /// the bar's rim / notch stands at full when the frame is saved. <c>break</c> lets the real
+    /// the bar's rim / notch stands at full when the frame is saved. They also fire the matching
+    /// BARRIER effect once, slowed to <see cref="PosedFxFps"/> so it is still on its first, brightest
+    /// frame at the shutter — the standing barrier rests at 0.16 alpha and the flare is the only moment
+    /// it is legible, which the brief's §106 asks to be shown on two different hunters. Posing only the
+    /// bar left that to the replay: the same fixture caught the flare on THE MAGPIE and missed it on
+    /// THE SEEKER. <c>break</c> lets the real
     /// <see cref="BattleEventKind.ShieldBroken"/> fire and then jumps the burst to the middle of its own
     /// eight frames (see <see cref="PlayShieldBreak"/>), which is the widest moment of the shatter.
     /// It also forces the bar on, so the pose works on any fight mode. Nothing here runs without the
@@ -1262,6 +1268,7 @@ public sealed class HuntScreen
             _actors.Clear();
             _callouts.Clear();      // the pose shows THIS instant, not the second before it
             _vfx.Clear();
+            _shieldFxPosed = false; // ...so a posed shield flare is re-fired after the rebuild wiped it
             _hitFlash.Clear();
             _playheadMs = seek;
             foreach (var crossed in _replay.Advance(seek))
@@ -1533,6 +1540,17 @@ public sealed class HuntScreen
             _shieldSeen = true;   // the bar has to exist for the pose to sit on it
             if (ShotShieldFx == "gain") UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
             else if (ShotShieldFx == "absorb") UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
+            // ...AND THE EFFECT, not only the bar. §106 asks to see the barrier surrounding two
+            // different hunters, and the standing barrier rests at 0.16 alpha — the moment it is
+            // legible at all is the flare. Posing only the bar left that moment to luck: the same
+            // fixture caught the flare on THE MAGPIE and missed it on THE SEEKER, because the replay
+            // fires the grant wherever it fires it. A state no dial can pose has never been looked at.
+            if (!_shieldFxPosed && ShotShieldFx is "gain" or "absorb")
+            {
+                _shieldFxPosed = true;
+                _vfx.Play(ShotShieldFx == "gain" ? VfxProfiles.ShieldGain : VfxProfiles.ShieldAbsorb,
+                          FxFor("shield"), VfxSubject.Champion, Steel, fps: PosedFxFps);
+            }
         }
 
         if (!_replay.Finished) return;
@@ -1699,7 +1717,7 @@ public sealed class HuntScreen
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
-        if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F8)
+        if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F9)
         // LAST, over every panel on the screen: a hover tip is an answer to the mouse, and nothing drawn
         // for a cursor that is somewhere else may cover it (see DrawLogButton).
         if (_logTipAt is { } tipAt)
@@ -2315,11 +2333,11 @@ public sealed class HuntScreen
     }
 
     /// <summary>
-    /// FIXTURE / DEV ONLY (F8, or <c>RH_SHOT_MODE=vfxdebug</c>): draw the VFX contract's own arithmetic.
+    /// FIXTURE / DEV ONLY (F9, or <c>RH_SHOT_MODE=vfxdebug</c>): draw the VFX contract's own arithmetic.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The brief's §70. Off in normal play — nothing writes <see cref="DevVfxDebug"/> but the F8 key
+    /// The brief's §70. Off in normal play — nothing writes <see cref="DevVfxDebug"/> but the F9 key
     /// under <c>RH_DEV=1</c> and the capture rig's own mode — and drawn in the UNCLIPPED HUD pass, after
     /// the arena and before the hover tip, so it is never scissored and never covers a tooltip.
     /// </para>
@@ -2351,21 +2369,13 @@ public sealed class HuntScreen
                           + $" {vb.Rect.Width}x{vb.Rect.Height}");
         }
 
-        // THE READING BLOCK sits on the empty floor above the skill strip, on its own plate. It was
-        // under the stage header first, where the host's own WELCOME BACK toast — drawn after every
-        // screen — landed straight across it. A dev overlay obeys the same rule as any other panel:
-        // nothing may cover it and it may cover nothing.
-        var pitch = UiTypography.Pitch(UiTypography.Caption);
-        var lines = _vfx.DebugItems.Count + 3;   // the sizes line, every effect, the budget verdict
-        var plate = new Rectangle(ArenaRect.X + UiMetrics.Space(6), 0,
-                                  UiMetrics.Control(760), pitch * lines + UiMetrics.Space(10));
-        plate.Y = SkillStrip.Y - UiMetrics.Space(8) - plate.Height;
-        _ui.Fill(b, plate, new Color(0x08, 0x06, 0x0A) * 0.86f);
-        var textX = plate.X + UiMetrics.Space(6);
-        var y = plate.Y + UiMetrics.Space(5);
-        _ui.TextBig(b, string.Join("  ·  ", sizes), textX, y, UiKit.Vellum, UiTypography.Caption);
-        y += pitch;
-
+        // EVERY EFFECT'S MARKS, and its reading line built at the same time. The line carries the
+        // AUTHORED numbers beside the pixels they produced — §70 asks the view to show the normalized
+        // offset, and the gold line from the anchor to the content centre only shows that there IS one;
+        // it cannot say it is 0.42 of a width. The profile is looked up by id rather than carried on
+        // the item, because the table IS the source and a second copy of a number can disagree with itself.
+        var green = new Color(0x48, 0xD0, 0x48);
+        var read = new List<(string Text, Color Tint)> { (string.Join("  ·  ", sizes), UiKit.Vellum) };
         var over = 0;
         foreach (var fx in _vfx.DebugItems)
         {
@@ -2375,22 +2385,46 @@ public sealed class HuntScreen
             _ui.Fill(b, new Rectangle(fx.Anchor.X - 9, fx.Anchor.Y - 1, 18, 2), Gold);
             _ui.Fill(b, new Rectangle(fx.Anchor.X - 1, fx.Anchor.Y - 9, 2, 18), Gold);
             _ui.Fill(b, LineRect(fx.Anchor, fx.Content.Center), Gold * 0.6f);
-            var ratioColour = fx.NativeRatio > VfxBudget.Max ? Ember
-                            : fx.NativeRatio < VfxBudget.Min ? Gold
-                            : new Color(0x48, 0xD0, 0x48);
-            if (fx.OverBudget) over++;
             _ui.TextBig(b, $"{fx.Id} · {fx.Layer}{(fx.Held ? " · held" : "")}",
                         fx.Content.X, fx.Content.Y - UiTypography.Pitch(UiTypography.Caption),
                         tint, UiTypography.Caption);
-            _ui.TextBig(b, $"{fx.Id}  {fx.Key}  {fx.Subject}  {fx.Content.Width}x{fx.Content.Height}"
-                           + $"  ratio {fx.NativeRatio:0.00}{(fx.OverBudget ? "  OVER BUDGET" : "")}",
-                        textX, y, ratioColour, UiTypography.Caption);
-            y += UiTypography.Pitch(UiTypography.Caption);
+            if (fx.OverBudget) over++;
+            var authored = VfxProfiles.Get(fx.Id);
+            var basis = authored.Basis == VfxBasis.SubjectHeight ? "h" : "w";
+            read.Add(($"{fx.Id}  {fx.Key}  {fx.Subject}  {fx.Content.Width}x{fx.Content.Height}"
+                      + $"  {authored.Anchor}  x{authored.RelativeScale:0.00}{basis}"
+                      + $"  off {authored.OffsetX:+0.00;-0.00;0.00}w {authored.OffsetY:+0.00;-0.00;0.00}h"
+                      + $"  ratio {fx.NativeRatio:0.00}{(fx.OverBudget ? "  OVER BUDGET" : "")}",
+                      fx.NativeRatio > VfxBudget.Max ? Ember : fx.NativeRatio < VfxBudget.Min ? Gold : green));
         }
-        _ui.TextBig(b, over > 0
-                ? $"{over} EFFECT{(over == 1 ? "" : "S")} OVER THE ASSET SCALE BUDGET — REGENERATE, DO NOT MAGNIFY"
-                : "EVERY LIVE EFFECT IS INSIDE THE ASSET SCALE BUDGET",
-            textX, y, over > 0 ? Ember : new Color(0x48, 0xD0, 0x48), UiTypography.Caption);
+        read.Add((over > 0
+                     ? $"{over} EFFECT{(over == 1 ? "" : "S")} OVER THE ASSET SCALE BUDGET — REGENERATE, DO NOT MAGNIFY"
+                     : "EVERY LIVE EFFECT IS INSIDE THE ASSET SCALE BUDGET",
+                  over > 0 ? Ember : green));
+
+        // THE READING BLOCK sits on the empty floor above the skill strip, on its own plate. It was
+        // under the stage header first, where the host's own WELCOME BACK toast — drawn after every
+        // screen — landed straight across it. A dev overlay obeys the same rule as any other panel:
+        // nothing may cover it and it may cover nothing.
+        //
+        // The plate is MEASURED, not a constant width. Its longest line grew when the authored anchor,
+        // scale and offset joined it, and a fixed width is a width that is wrong at one density profile
+        // out of three — the same mistake the whole contract is about, one layer up. It is still capped
+        // at the arena's right edge, so it can never reach the idle panel.
+        var pitch = UiTypography.Pitch(UiTypography.Caption);
+        var pad = UiMetrics.Space(6);
+        var widest = read.Max(l => _ui.MeasureBig(l.Text, UiTypography.Caption));
+        var plate = new Rectangle(ArenaRect.X + pad, 0,
+                                  Math.Min(widest + pad * 2, ArenaRect.Width - pad * 2),
+                                  pitch * read.Count + UiMetrics.Space(10));
+        plate.Y = SkillStrip.Y - UiMetrics.Space(8) - plate.Height;
+        _ui.Fill(b, plate, new Color(0x08, 0x06, 0x0A) * 0.86f);
+        var y = plate.Y + UiMetrics.Space(5);
+        foreach (var (text, tint) in read)
+        {
+            _ui.TextBig(b, text, plate.X + pad, y, tint, UiTypography.Caption);
+            y += pitch;
+        }
     }
 
     /// <summary>
@@ -3461,6 +3495,20 @@ public sealed class HuntScreen
     private bool ShieldStripShown => _shieldSeen && _replay is not null;
 
     private bool _shieldSeen;
+
+    /// <summary>FIXTURE ONLY: the posed shield flare has been fired, so it is not re-fired every tick.</summary>
+    private bool _shieldFxPosed;
+
+    /// <summary>
+    /// FIXTURE ONLY: the frame rate a posed shield flare is played at.
+    /// </summary>
+    /// <remarks>
+    /// Eight frames at half a frame a second is sixteen seconds of clip, so the shutter — which opens
+    /// about a second into the wave — always finds the burst on its first frame at full brightness,
+    /// whatever the replay was doing. It is a shutter speed, not a gameplay value; nothing reads it
+    /// without <c>RH_SHOT_SHIELDFX</c>.
+    /// </remarks>
+    private const float PosedFxFps = 0.5f;
 
     /// <summary>
     /// The motion keys for the shield bar's two one-shots: a rim on a grant, a notch on an absorb.

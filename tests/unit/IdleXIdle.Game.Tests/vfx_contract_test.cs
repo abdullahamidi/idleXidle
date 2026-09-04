@@ -70,15 +70,42 @@ public class VfxContractTests
     {
         // The house failure mode is a dial nothing reads. A profile in the table that no code plays is
         // exactly that, one layer up: authored data describing an effect the game never draws.
-        var src = HuntScreenSource();
+        //
+        // A profile is REACHED one of exactly two ways, and both are checked here rather than assumed.
+        // Either the screen names it outright (VfxProfiles.ShieldBarrier), or a skill in the catalogue
+        // routes to it through ForSkill — which the screen calls once, for every cast. An earlier draft
+        // of this test accepted "the file mentions ForSkill somewhere" as proof for ANY profile, which
+        // made it pass for a profile nothing could ever reach.
+        var src = Code(HuntScreenSource());
+        var byCast = SkillCatalogue.All.Select(VfxProfiles.ForSkill).Select(p => p.Id).ToHashSet();
         foreach (var p in VfxProfiles.All)
         {
             var member = string.Concat(p.Id.Split('.', '_')
                 .Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
-            Assert.True(src.Contains($"VfxProfiles.{member}", StringComparison.Ordinal)
-                        || src.Contains("VfxProfiles.ForSkill", StringComparison.Ordinal),
+            var named = src.Contains($"VfxProfiles.{member}", StringComparison.Ordinal);
+            Assert.True(named || byCast.Contains(p.Id),
                         $"{p.Id} is in the table and nothing plays it");
         }
+        // ...and the cast route really is wired: the screen resolves a skill's profile rather than
+        // switching on its clip key by hand, which is the switch this contract deleted.
+        Assert.Contains("VfxProfiles.ForSkill", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void test_the_debug_views_dev_key_is_not_already_bound_to_something_else()
+    {
+        // THE DESIGN SAID "F8 IS FREE" AND THE CODE SAID OTHERWISE. F8 has stepped the UI SCALE since
+        // the density-profile work, so binding the overlay there toggled the view and changed the
+        // layout it exists to measure, in one press. A dev key is only a door if it opens one thing.
+        var src = Code(Source("src", "IdleXIdle.Game", "Game1.cs"));
+        var bindings = System.Text.RegularExpressions.Regex
+            .Matches(src, @"Pressed\(Keys\.(F\d+)\)")
+            .Select(m => m.Groups[1].Value)
+            .ToList();
+        var vfxLine = src.Split('\n').Single(l => l.Contains("DevVfxDebug = !", StringComparison.Ordinal));
+        var key = System.Text.RegularExpressions.Regex.Match(vfxLine, @"Keys\.(F\d+)").Groups[1].Value;
+        Assert.NotEqual("", key);
+        Assert.Equal(1, bindings.Count(k => k == key));
     }
 
     [Fact]
