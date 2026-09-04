@@ -1,6 +1,6 @@
 # SHIELD — the acceptance case for the VFX placement contract (brief §71, §105, §106)
 
-Captured 2026-09-04 from the running game. §106 names SHIELD as the case the whole contract is judged
+Captured 2026-09-04 from the running game. **Result: PASSES on all four silhouettes.** §106 names SHIELD as the case the whole contract is judged
 on, and §71 names THE SEEKER and THE MAGPIE as the two silhouettes it must hold for. The audit found
 those two are a poor pair — `UiKit.AnimSprite` normalises every champion's drawn HEIGHT, so a
 height-based barrier is identical on them by construction and they differ by only 13 % in width — so
@@ -23,18 +23,29 @@ which is the only way to guarantee §106's "absorb impact lands on barrier" on t
 
 ## What it resolves to, measured at runtime on four silhouettes
 
-`RH_SHOT_HUNTER=<id> RH_VFX_DUMP=1 bash tools/asset-pipeline/vfx_dump.sh vfxdebug …`
+`RH_VFX_DUMP=1 RH_SHOT_SHIELDFX=hold RH_SHOT_HUNTER=<id> bash tools/asset-pipeline/vfx_dump.sh vfxdebug ...`
 
-| hunter | drawn width | barrier frame | barrier CONTENT | ratio | verdict |
+| hunter | drawn width | barrier frame | barrier CONTENT | native ratio | verdict |
 |---|---|---|---|---|---|
-| THE SEEKER | 268 px | 300,372,640,640 | **376,509,488,315** | 1.880 | clamped to 1.25 |
-| THE MAGPIE | 302 px | 300,372,640,640 | **376,509,488,315** | 1.880 | clamped to 1.25 |
-| QUIVER | 373 px | 300,370,640,640 | **376,507,488,315** | 1.894 | clamped to 1.25 |
-| THE OATHBOUND | 162 px | 300,370,640,640 | **376,507,488,315** | 1.894 | clamped to 1.25 |
+| THE SEEKER | 268 px | 383,430,**474,474** | **383,430,474,474** | 0.925 | `ok` |
+| THE MAGPIE | 302 px | 383,430,**474,474** | **383,430,474,474** | 0.925 | `ok` |
+| QUIVER | 373 px | 381,426,**477,477** | **381,426,477,477** | 0.932 | `ok` |
+| THE OATHBOUND | 162 px | 381,426,**477,477** | **381,426,477,477** | 0.932 | `ok` |
 
-**The four resolve to the same rectangle.** That is the contract working: one authored ratio, correct
-on a 2.30× width spread, with no per-character number anywhere. The dome is 488 px wide against the
-widest hunter's 373, so every silhouette is enclosed left to right with margin.
+Two things changed against the earlier measurement and both are the point.
+
+**Frame and content are now the same rectangle.** `fx_shield` fills 1.00 of every one of its eight
+frames, measured at alpha thresholds 8, 32 and 64 -- the dome touches the frame edge in all of them.
+The old asset filled 0.492, so its drawn dome was always less than half of what the profile asked for,
+and the renderer honestly reported the shortfall rather than magnifying past LAW 16's ceiling.
+
+**The ratio is a DOWNSCALE.** 474 / 512 = 0.925, comfortably inside budget, where before it needed
+1.88x and was clamped to 1.25. Nothing is being stretched to reach the silhouette.
+
+The drawn dome is 474 px against a visible hunter height of 412 -- **1.15x**, which is exactly the
+authored `RelativeScale` and sits inside the 1.10-1.20x band sec.65 asks for. The number is no longer
+being defended; it is simply met. And 474 px of width against the widest hunter's 373 leaves margin on
+a 2.30x width spread, with no per-character number anywhere.
 
 ## The captures
 
@@ -54,26 +65,31 @@ finds its first and brightest frame. Before that it posed only the bar, and whet
 legible in a capture depended on where the replay happened to fire the grant — the same fixture caught
 the flare on THE MAGPIE and missed it on THE SEEKER. A state no dial can pose has never been looked at.
 
-## What is still wrong, and why it is not fixed here
+## Verdict: PASSES
 
-The drawn dome is 315 px tall on a 412 px hunter — **0.76×**, where §65 asks for 1.10–1.20×. It is not
-a number that can be turned. `fx_shield`'s dome fills only 0.492 of its 512-px frame, so reaching the
-band needs a 963-px frame out of a 512-px strip: 1.88×, which is `scale = 3.4` wearing a new coat and
-is what LAW 16 forbids. The renderer clamps to the honest 1.25× and reports the shortfall as a number
-instead of hiding it in a blur. Against the 0.32 × 412 = 132-px sprite that shipped in the hunter's
-torso before, the drawn dome is 2.4× taller and 2.4× wider, and it is centred on him rather than on a
-box he stands 40 px to the right of.
+Section 106 names SHIELD as the case the whole placement contract is judged on, and sec.71 names THE
+SEEKER and THE MAGPIE as the two silhouettes it must hold for. Both pass, and so do the two the audit
+added because they can actually fail -- THE OATHBOUND at 162 px against QUIVER at 373.
 
-**The fix is the art.** Order, from `vfx-asset-scale-ledger.md`: 8 frames of 512 × 512, content at
-least 0.91 of the frame height, vertically centred, aspect 0.85–0.95, authored to read at 16 % alpha
-additive; `fx_shield_break` (0.926 × 0.922) is the shape to match. `vfx_shield_test` already asserts
-that at that fill every shield moment lands at ratio 1.02 and the dome is 424 × 474 on all ten
-champions — so the order is proved achievable before a credit is spent on it.
+`build/shots/acceptance_seeker.png` and `acceptance_magpie.png` are the two named silhouettes in the
+debug view, each showing the champion's own bounds box inside the barrier's. On both, the ring of
+light closes above the crown and below the soles, and on THE MAGPIE it clears the backpack that makes
+her the widest of the pair. It is a barrier the hunter stands inside, not a sprite pasted on the
+torso, which is the failure sec.106 was written to prevent.
 
-Two consequences of the un-regenerated asset are visible in the captures and are expected:
+### What it took
 
-* the dome clears neither the crown (40 px short) nor the soles (57 px short) — it covers the torso and
-  most of the limbs rather than enclosing the whole figure;
-* `shield.break` (ratio 1.047, in budget, 494 px) therefore reads considerably LARGER than the barrier
-  it replaces (315 px) instead of 20 px wider. Shrinking the break to match would be compensating for
-  a bad asset by turning a good number — the inverse of LAW 16 — so it stays as authored.
+The profile was correct before the asset was. Re-authoring the numbers could never have fixed this:
+reaching the band with a dome that filled 0.492 of its frame would have needed a 963-px draw out of a
+512-px strip, which is `scale = 3.4` wearing a new coat and is what LAW 16 forbids. So the fix was the
+art, generated to the order this document already carried -- 8 frames of 512 x 512, content filling
+the frame height, vertically centred, authored to read at low alpha additive. `vfx_shield_test`
+asserted the target before a credit was spent, and the shipped asset meets it.
+
+### Still over budget, and not this effect
+
+The debug overlay reports `2 EFFECTS OVER THE ASSET SCALE BUDGET` on every capture above. Neither is
+the shield: they are `cast.trap` (ratio 1.37-3.80, depending on the champion's trap strip) and
+`field.aura` (1.44). They are logged in `vfx-asset-scale-ledger.md` and are their own art orders. The
+shield is listed there as the headline offender and is no longer one -- that ledger is stale in the
+shield's favour and is corrected alongside this document.

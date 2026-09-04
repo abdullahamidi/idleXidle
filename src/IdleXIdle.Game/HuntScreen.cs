@@ -690,9 +690,30 @@ public sealed class HuntScreen
     /// </code>
     /// </para>
     /// </remarks>
-    private static readonly string? ShotShieldFx =
-        Environment.GetEnvironmentVariable("RH_SHOT_SHIELDFX")?.Trim().ToLowerInvariant() is { Length: > 0 } v
-            ? v : null;
+    private static readonly string? ShotShieldFx = ReadShieldFxDial();
+
+    /// <summary>
+    /// A FIXTURE DIAL THAT CANNOT HONOUR ITS VALUE MUST SAY SO.
+    /// </summary>
+    /// <remarks>
+    /// This used to accept any string and quietly match none of them, so a typo produced a capture
+    /// that looked entirely plausible and posed nothing — the shot was of the DEFAULT moment, and
+    /// whoever read it believed they had photographed the state they asked for. That is the failure
+    /// this project has already paid for twice: a bench that cannot pose a condition manufactures a
+    /// verdict. A misconfigured fixture aborts instead.
+    /// </remarks>
+    private static string? ReadShieldFxDial()
+    {
+        if (Environment.GetEnvironmentVariable("RH_SHOT_SHIELDFX")?.Trim().ToLowerInvariant() is not { Length: > 0 } v)
+            return null;
+        string[] known = { "gain", "absorb", "break" };
+        if (Array.IndexOf(known, v) < 0)
+            throw new InvalidOperationException(
+                $"RH_SHOT_SHIELDFX='{v}' is not a shield moment this fixture can pose. " +
+                $"Use one of: {string.Join(", ", known)}. (The held barrier needs no dial — it is drawn " +
+                "whenever the hunter has shield.)");
+        return v;
+    }
 
     // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.

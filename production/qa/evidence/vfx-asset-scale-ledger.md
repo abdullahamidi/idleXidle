@@ -22,13 +22,13 @@ the brief's §73 / LAW 16 question computed rather than argued:
 Subjects, measured from the shipped art at the 100 % density profile:
 `subjects  champion 268x412  swarm 209x244  boss 497x521  row 627x244`
 
-## OVER — 11 entries. Every one is an art order, not a number to turn.
+## OVER — 7 entries. Every one is an art order, not a number to turn.
+
+> **2026-09-04: the four `fx_shield` entries left this list.** The asset was regenerated to
+> the order below and now fills 1.00 of every frame, so the barrier draws at ratio 0.925-0.932
+> — a downscale, in budget, on all ten champions. They are listed under OK.
 
 ```
-shield.barrier  fx_shield  champion  visible 733x474  frame 963  native 512  ratio 1.880  Over
-shield.gain  fx_shield  champion  visible 733x474  frame 963  native 512  ratio 1.880  Over
-shield.absorb  fx_shield  champion  visible 733x474  frame 963  native 512  ratio 1.880  Over
-shield.undying  fx_shield  champion  visible 733x474  frame 963  native 512  ratio 1.880  Over
 cast.trap  fx_seeker_trap_strip8_512  row  visible 502x483  frame 713  native 512  ratio 1.393  Over
 cast.trap  fx_oathbound_trap_strip8_512  row  visible 502x347  frame 649  native 512  ratio 1.267  Over
 cast.trap  fx_magpie_trap_strip8_512  row  visible 502x289  frame 1976  native 512  ratio 3.858  Over
@@ -38,14 +38,16 @@ field.aura  fx_press  champion  visible 639x453  frame 737  native 512  ratio 1.
 field.aura  fx_mark  champion  visible 469x453  frame 817  native 512  ratio 1.596  Over
 ```
 
-**`fx_shield` is the headline.** Its dome fills 0.492 of its frame and sits 46 % down it, so a shield
-that reaches the brief's 1.10–1.20× band would need a 963-px frame out of a 512-px strip — 1.88×,
-which is `scale = 3.4` wearing a new coat. The renderer draws the honest 1.25× instead: a 488 × 315
-dome, 0.76× the hunter, against the 0.32 × 412 = 132-px sprite in his torso that shipped before.
-**Order**: 8 frames of 512, content at least 0.91 of the frame height, vertically centred (content
-centre Y within 0.49–0.51), content aspect 0.85–0.95, authored to read at 16 % alpha additive.
-`fx_shield_break` already fills 0.926 × 0.922 — it is the shape to match. At that fill every shield
-moment lands at ratio 1.02 and the dome is 424 × 474 on all ten champions (`vfx_shield_test`).
+**`fx_shield` WAS the headline — the order was filled.** Its dome filled 0.492 of its frame and sat
+46 % down it, so a shield reaching the brief's 1.10–1.20× band needed a 963-px frame out of a 512-px
+strip — 1.88×, which is `scale = 3.4` wearing a new coat. The renderer drew the honest 1.25× instead:
+a 488 × 315 dome, 0.76× the hunter. **Order placed**: 8 frames of 512, content at least 0.91 of the
+frame height, vertically centred, content aspect 0.85–0.95, authored to read at 16 % alpha additive,
+with `fx_shield_break` (0.926 × 0.922) as the shape to match. **Delivered 2026-09-04**: the shipped
+strip fills 1.00 of all eight frames at alpha thresholds 8, 32 and 64. Measured on the running game,
+the barrier resolves to 474 × 474 on THE SEEKER and THE MAGPIE and 477 × 477 on QUIVER and THE
+OATHBOUND — ratio 0.925 and 0.932, `ok`, and 1.15× the hunter's 412-px visible height, which is the
+authored relative scale met exactly. Evidence: `vfx-shield-acceptance.md`.
 
 **`fx_mark` and `fx_press` as HELD FIELDS.** A sigil is not a field: `fx_mark` fills 0.555 of its
 frame, `fx_press` 0.615. BRAND and PRESS wear them because a Field skill's own FxKey chooses the
@@ -136,6 +138,10 @@ heal.column  fx_heal  champion  visible 352x391  frame 401  native 512  ratio 0.
 death.champion  fx_death  champion  visible 350x330  frame 421  native 512  ratio 0.822  Ok
 death.creature  fx_death  boss  visible 387x365  frame 466  native 512  ratio 0.909  Ok
 shield.break  fx_shield_break  champion  visible 496x494  frame 536  native 512  ratio 1.047  Ok
+shield.barrier  fx_shield  champion  visible 474x474  frame 474  native 512  ratio 0.925  Ok
+shield.gain  fx_shield  champion  visible 474x474  frame 474  native 512  ratio 0.925  Ok
+shield.absorb  fx_shield  champion  visible 474x474  frame 474  native 512  ratio 0.925  Ok
+shield.undying  fx_shield  champion  visible 474x474  frame 474  native 512  ratio 0.925  Ok
 cast.projectile  fx_seeker_projectile_strip8_512  champion  visible 416x115  frame 428  native 512  ratio 0.836  Ok
 cast.aura  fx_aura  champion  visible 245x433  frame 532  native 512  ratio 1.040  Ok
 cast.trap  fx_trap  row  visible 502x431  frame 512  native 512  ratio 0.999  Ok

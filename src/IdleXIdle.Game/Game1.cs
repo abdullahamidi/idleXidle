@@ -1852,10 +1852,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 //
                 // Restore is the roster's own entry point; it unlocks the champion being restored, so
                 // the fixture can pose one the save has not earned without a second unlock path.
-                if (Environment.GetEnvironmentVariable("RH_SHOT_HUNTER")?.Trim() is { Length: > 0 } shotHunter
-                    && CharacterRoster.Find(shotHunter) is { } posed)
+                //
+                // An id the roster does not know ABORTS. It used to fall through the `&&` and leave the
+                // default champion in the chair, so a typo produced a perfectly plausible screenshot of
+                // the wrong hunter — and a cross-silhouette proof that had photographed one silhouette
+                // twice. A fixture that cannot pose what it was asked for must not return an image.
+                if (Environment.GetEnvironmentVariable("RH_SHOT_HUNTER")?.Trim() is { Length: > 0 } shotHunter)
+                {
+                    var posed = CharacterRoster.Find(shotHunter)
+                        ?? throw new InvalidOperationException(
+                            $"RH_SHOT_HUNTER='{shotHunter}' is not a character id. Known: " +
+                            string.Join(", ", CharacterRoster.All.Select(c => c.Id)) + ".");
                     _characters.Restore(posed.Id, _characters.SaveQuests(),
                                         _characters.SaveUnlocked().Append(posed.Id));
+                }
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
                 // they pose nothing beyond skipping the title.)
                 // lootforge: seed the Forge with a spread of loot so it can be screenshotted with content
@@ -2425,8 +2435,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // conquers every region up to it, so `pale_choir` leaves the world whole and the
                     // corruption ladder takes the strip — the very fact that moved the reveal to a
                     // notice. That capture shows the ladder, which is the real screen for it.
-                    var fell = Environment.GetEnvironmentVariable("RH_SHOT_CONQUEST")?.Trim() is { Length: > 0 } cq
-                               && Regions.Find(cq) is not null ? cq : VerdantHollow.RegionId;
+                    // An unknown region id ABORTS rather than quietly posing VERDANT HOLLOW: this dial
+                    // exists to photograph the LONGEST headline, and a typo silently posing the shortest
+                    // would return a passing picture of the case nobody asked about.
+                    var fell = VerdantHollow.RegionId;
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_CONQUEST")?.Trim() is { Length: > 0 } cq)
+                        fell = Regions.Find(cq) is not null ? cq
+                             : throw new InvalidOperationException(
+                                 $"RH_SHOT_CONQUEST='{cq}' is not a region id. Known: " +
+                                 string.Join(", ", Regions.All.Select(r => r.Id)) + ".");
                     foreach (var r in Regions.All)
                     {
                         _world.Conquer(r.Id);
@@ -2838,6 +2855,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         foreach (var r in v.Reinforcements) _skillProgress.TakeReinforcement(rd, r.Name);
                     }
 
+                    // RH_SHOT_SWORN=<vowId>[,<vowId>...] SWEARS vows and leaves the list CLOSED, which
+                    // is the only way to photograph the BUILD screen's vow READING. RH_SHOT_POSE below
+                    // opens the swear list, and with no dial at all nothing is sworn — so the block that
+                    // reports what is holding this hunter, the one surface where the build-level vow
+                    // model is stated to the player, could not be posed by any mode. That is the state
+                    // this project has been wrong about every time it could not photograph one.
+                    //
+                    // Vows are stored on slots because that is where a player swears them; the READING
+                    // is of the whole build, so more than one id here is the case worth looking at.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_SWORN")?.Trim() is { Length: > 0 } swornSpec)
+                    {
+                        // The world grants vow capacity, and this fixture conquers regions above; without
+                        // this the dial would be refused by a capacity of 1 that the pose does not have.
+                        ApplyWorldGrants();
+                        var known = Vows.Catalog.ToList();
+                        var want = swornSpec.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        for (var i = 0; i < want.Length; i++)
+                        {
+                            if (Vows.ById(want[i]) is null)
+                                throw new InvalidOperationException(
+                                    $"RH_SHOT_SWORN='{want[i]}' is not a vow id. Known: "
+                                    + string.Join(", ", known.Select(v => v.Id)) + ".");
+                            if (i >= _loadout.Skills.Count)
+                                throw new InvalidOperationException(
+                                    $"RH_SHOT_SWORN names {want.Length} vows and this pose has only "
+                                    + $"{_loadout.Skills.Count} slots to record them on.");
+                            if (!_loadout.SetVow(i, want[i], known))
+                                throw new InvalidOperationException(
+                                    $"RH_SHOT_SWORN='{want[i]}' was refused — vow capacity is "
+                                    + $"{_loadout.VowCapacity}, and {i + 1} were asked for.");
+                        }
+                    }
+
                     // RH_SHOT_POSE=<vowId>[,<0..1>] opens a seal's BIND row and, with the second
                     // number, holds the bind chain part-played so the flourish can be photographed.
                     var wp = Environment.GetEnvironmentVariable("RH_SHOT_POSE");
@@ -2953,7 +3003,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         "t_certain_hand", "t_settling_weight", "t_homeground", "t_single_note",
                         "t_answering_wall", "t_lingering_mark",
                     };
-                    foreach (var traitId in posedTraits)
+                    // A PINNED TRAIT MUST BE ONE THE FIXTURE HAS AWAKENED, or the inspector reads
+                    // nothing and the capture returns the screen's idle "PICK A CHARACTERISTIC" — a
+                    // photograph of the default state wearing the filename of the state that was
+                    // asked for. That is how both re-authored vow traits went unlooked-at: they are
+                    // not among the eleven above, so RH_SHOT_TRAIT named them and posed nothing.
+                    // Now the pinned one joins the awakened set, and an id no trait answers to aborts.
+                    var pinnedId = Environment.GetEnvironmentVariable("RH_SHOT_TRAIT")?.Trim();
+                    var toDiscover = posedTraits.ToList();
+                    if (pinnedId is { Length: > 0 } && !string.Equals(pinnedId, "unknown", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (TraitCatalogue.Find(pinnedId) is null)
+                            throw new InvalidOperationException(
+                                $"RH_SHOT_TRAIT='{pinnedId}' is not a trait id. Known: "
+                                + string.Join(", ", TraitCatalogue.All.Select(t => t.Id)) + ".");
+                        if (!toDiscover.Contains(pinnedId)) toDiscover.Add(pinnedId);
+                    }
+                    foreach (var traitId in toDiscover)
                         _traitLedger.Discover(traitId, new TraitFirst(_characters.ActiveId, _activeRegion, 41));
                     foreach (var traitId in new[] { "t_scar_tissue", "t_last_word", "t_last_breath" })
                         _traitLedger.Equip(_characters.ActiveId, traitId);
@@ -2964,11 +3030,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // the most in it: the sentence, where it first awakened, and TAKE IT OFF rather
                     // than WEAR IT. RH_SHOT_TRAIT=<id> reads another; RH_SHOT_TRAIT=unknown poses the
                     // `???` reading, which no click in a capture could ever reach.
-                    var pinned = Environment.GetEnvironmentVariable("RH_SHOT_TRAIT");
-                    if (string.Equals(pinned, "unknown", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(pinnedId, "unknown", StringComparison.OrdinalIgnoreCase))
                         _traitScreen.DevSelectUnknown(_traitLedger);
                     else
-                        _traitScreen.DevSelect(pinned is { Length: > 0 } ? pinned : "t_last_word");
+                        _traitScreen.DevSelect(pinnedId is { Length: > 0 } ? pinnedId : "t_last_word");
 
                     // THE AWAKENING PLATE (§32). RH_SHOT_WAKE=one poses one trait's reveal;
                     // RH_SHOT_WAKE=many poses the combined plate an established save gets on its

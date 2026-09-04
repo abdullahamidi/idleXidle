@@ -657,6 +657,13 @@ The BUILD screen's vow list shows discovered vows exactly as it does today (`Sho
 
 ### The finding: today's "capacity" is not a capacity, and the dominant play is degenerate
 
+> **RESOLVED 2026-09-04 — the argument below was accepted and shipped.** Everything in this
+> section describes the model as it stood BEFORE the refactor, and is kept because the reasoning
+> is why the code looks the way it does now. It is not a description of current behaviour. A vow
+> is validated once against the whole build, pays once however many rows record it, and capacity
+> is `Unlocks.VowCapacity`, granted by world progression. See `design/gdd/vows.md`, which is the
+> authority on what ships.
+
 A vow rides a skill slot: `EquippedSkill(SkillDef, Source, Vow?)` (`Build.cs:217`), `SkillChoice(Source, string? VowId, …)` (`PlayerLoadout.cs:40`), `SavedSkill.VowId` (`SaveGame.cs:327`). `AUDIT` §1d: *"There is no Vow capacity constant anywhere."* The cap is `PlayerLoadout.SkillCapacity`.
 
 But trace how the sim actually pays and charges:

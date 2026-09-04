@@ -1772,16 +1772,29 @@ public sealed class LoadoutScreen
             }
             _respecShown = slotOf >= 0 && have && SkillLevels.SpentOn(def.Id) > 0;
 
-            // THE VOW — the validator block, on the slot's own skill.
+            // THE VOWS — the validator block, and it asks the BUILD, not this row.
+            //
+            // It used to read `skills[slotOf].VowId` and judge that one vow, which was honest while a
+            // vow hung on a skill slot. A vow is a promise about the WHOLE BUILD now: it is validated
+            // once against the build, it pays once however many rows carry it, and how many you may
+            // hold is a number the world grants rather than a count of your skill slots. A slot is
+            // still where a vow is STORED — that is the save shape, and it is where a player swears
+            // one — but the block below reports the build's promises, all of them, judged together.
             if (_pick == Pick.Slot && slotOf >= 0 && have)
             {
                 Gap(); Rule();
-                var vow = Vows.ById(skills[slotOf].VowId);
+                // The COMPOSED build's own list, not the loadout's ids: it is deduplicated exactly as the
+                // simulation deduplicates it, and it includes a vow the build did not swear but is paid
+                // for anyway — THE KEPT WORD's loan. Reading the raw ids would under-report that loan,
+                // and the screen would disagree with the fight about what is holding this hunter.
+                var live = Live();
+                var sworn = live.Build.Vows;
+                var lentId = live.Build.BorrowedVow?.Id;
                 if (_vowListOpen) { DrawVowList(b, hit, ref y, region); }
                 else
                 {
-                    Head("VOW");
-                    if (vow is null)
+                    Head(sworn.Count > 1 ? "YOUR VOWS" : "YOUR VOW");
+                    if (sworn.Count == 0)
                     {
                         Line(Known.Count == 0
                             ? "NO VOW SWORN — A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT"
@@ -1789,13 +1802,26 @@ public sealed class LoadoutScreen
                     }
                     else
                     {
-                        var live = Vows.IsActive(vow, ctx);
-                        _ui.TextBig(b, vow.Name.ToUpperInvariant(), x, y, Ins(live ? Gold : Bone), UiTypography.Body);
-                        _ui.TextRightBig(b, $"x{Vows.Multiplier(vow):0.00}", x + w, y, Ins(live ? Gold : Slate), UiTypography.Body);
-                        y += UiTypography.Pitch(UiTypography.Body);
-                        Pair("DEMAND", DemandText(vow));
-                        Pair("YOUR BUILD", YourBuildText(vow, ctx));
-                        Line(live ? "HOLDS — THE VOW PAYS" : $"BROKEN — IT PAYS NOTHING UNTIL {DemandText(vow)}", live ? Met : Ember, UiTypography.Body, 2);
+                        foreach (var v in sworn)
+                        {
+                            var holds = Vows.IsActive(v, ctx);
+                            var lent = v.Id == lentId;
+                            _ui.TextBig(b, v.Name.ToUpperInvariant() + (lent ? " — LENT" : ""), x, y,
+                                        Ins(holds ? Gold : Bone), UiTypography.Body);
+                            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", x + w, y, Ins(holds ? Gold : Slate), UiTypography.Body);
+                            y += UiTypography.Pitch(UiTypography.Body);
+                            Pair("DEMAND", DemandText(v));
+                            Pair("YOUR BUILD", YourBuildText(v, ctx));
+                            Line(holds ? "HOLDS — IT PAYS" : $"BROKEN — IT PAYS NOTHING UNTIL {DemandText(v)}",
+                                 holds ? Met : Ember, UiTypography.Body, 2);
+                            // A vow the hunter never swore is paid for anyway, and a player who cannot see
+                            // WHY a promise they did not make is holding them has been handed a mystery.
+                            if (lent) Line("YOU DID NOT SWEAR THIS — A TRAIT HOLDS YOU TO IT", Slate, UiTypography.Caption);
+                        }
+                        // WHAT THEY PAY TOGETHER — one number, because that is how the fight bills them:
+                        // every kept vow's bonus summed under one ceiling, and a broken one adds nothing.
+                        if (sworn.Count > 1)
+                            Pair("TOGETHER", $"x{Vows.CombinedFactor(sworn, ctx):0.00} ON EVERY SKILL");
                     }
                     if (Known.Count > 0)
                     {
@@ -1805,7 +1831,7 @@ public sealed class LoadoutScreen
                         var overBtn = In(btn, region).Contains(hit);
                         Cell(b, btn, Quiet, false, overBtn);
                         Outline(b, btn, Ins(overBtn ? Bone : Dim), 1);
-                        _ui.TextCenterBig(b, vow is null ? "SWEAR A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
+                        _ui.TextCenterBig(b, sworn.Count == 0 ? "SWEAR A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
                         y = btn.Bottom + UiMetrics.Space(8);
                     }
                 }
