@@ -20,6 +20,9 @@ Output is one line per strip:
 
     fx_shield  frame 512  L 0.123 T 0.215 R 0.123 B 0.293   content 0.754w x 0.492h  centre 0.500,0.461
 
+(that line is the RETIRED fx_shield hemisphere, kept because it shows every field doing
+something; the strip on disk today is a ring filling its frame and reads L/T/R/B 0.000.)
+
 Slow on purpose (a pure-Python PNG decode of a 4096x512 image), so this is a MEASURING tool,
 not a gate. tools/check_all.sh does not run it.
 """

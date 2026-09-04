@@ -672,10 +672,10 @@ public sealed class HuntScreen
     /// <c>gain</c> and <c>absorb</c> re-arm their one-shot from <see cref="UpdateFight"/> every frame, so
     /// the bar's rim / notch stands at full when the frame is saved. They also fire the matching
     /// BARRIER effect once, slowed to <see cref="PosedFxFps"/> so it is still on its first, brightest
-    /// frame at the shutter — the standing barrier rests at 0.16 alpha and the flare is the only moment
-    /// it is legible, which the brief's §106 asks to be shown on two different hunters. Posing only the
-    /// bar left that to the replay: the same fixture caught the flare on THE MAGPIE and missed it on
-    /// THE SEEKER. <c>break</c> lets the real
+    /// frame at the shutter — the standing barrier breathes between 0.40 and 0.60 alpha (raised with
+    /// the art, 2026-09-04) and the flare is still its brightest moment, which the brief's §106 asks to
+    /// be shown on two different hunters. Posing only the bar left that to the replay: the same fixture
+    /// caught the flare on THE MAGPIE and missed it on THE SEEKER. <c>break</c> lets the real
     /// <see cref="BattleEventKind.ShieldBroken"/> fire and then jumps the burst to the middle of its own
     /// eight frames (see <see cref="PlayShieldBreak"/>), which is the widest moment of the shatter.
     /// It also forces the bar on, so the pose works on any fight mode. Nothing here runs without the
@@ -1578,8 +1578,8 @@ public sealed class HuntScreen
             if (ShotShieldFx == "gain") UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
             else if (ShotShieldFx == "absorb") UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
             // ...AND THE EFFECT, not only the bar. §106 asks to see the barrier surrounding two
-            // different hunters, and the standing barrier rests at 0.16 alpha — the moment it is
-            // legible at all is the flare. Posing only the bar left that moment to luck: the same
+            // different hunters, and the standing barrier breathes between 0.40 and 0.60 alpha — its
+            // brightest moment is still the flare. Posing only the bar left that to luck: the same
             // fixture caught the flare on THE MAGPIE and missed it on THE SEEKER, because the replay
             // fires the grant wherever it fires it. A state no dial can pose has never been looked at.
             if (!_shieldFxPosed && ShotShieldFx is "gain" or "absorb")

@@ -109,9 +109,12 @@ public class VfxPlacementTests
     [Fact]
     public void test_relative_scale_measures_the_content_not_the_frame()
     {
-        // THE DEFECT THIS CONTRACT EXISTS FOR. fx_shield's dome fills 0.492 of its 512-px frame, so
-        // "scale 2.6" drew a 270-px frame holding a 132-px picture — 0.32x a 412-px champion, where the
-        // brief asks for 1.10–1.20x. Sizing by the frame is sizing by the padding.
+        // THE DEFECT THIS CONTRACT EXISTS FOR. fx_shield's dome USED to fill 0.492 of its 512-px frame
+        // (the strip was regenerated 2026-09-04 and fills 1.000 now), so "scale 2.6" drew a 270-px frame
+        // holding a 132-px picture — 0.32x a 412-px champion, where the brief asks for 1.10–1.20x.
+        // Sizing by the frame is sizing by the padding, whatever art is in it — which is why the case
+        // is posed here with a synthetic half-filled box rather than with whatever fx_shield measures
+        // today.
         var padded = VfxResolver.Resolve(Profile(), Figure, HalfFilled, Native, Native);
         var full = VfxResolver.Resolve(Profile(), Figure, ContentBox.Full, Native, Native);
 

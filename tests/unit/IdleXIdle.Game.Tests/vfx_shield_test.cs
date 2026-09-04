@@ -232,9 +232,11 @@ public class VfxShieldTests
         // THE WHOLE OF LAW 16 IN ONE ASSERTION, kept live against the art it was written about. To
         // reach §65's band with the hemisphere the renderer would have had to blow a 512-px frame up to
         // 963 — `scale = 3.4` with a new name. It refused, drew the honest smaller dome, and the ratio
-        // said why. That refusal is the branch this fixture exists to keep exercised: every strip the
-        // game ships is inside the budget now, so without a named over-budget shape the clamp would be
-        // code no test has ever run.
+        // said why. That refusal is the branch this fixture exists to keep exercised: no SHIELD strip
+        // the game ships is over the budget any more, so without a named over-budget shape nothing in
+        // this file would run the clamp. (The arena still clamps two OTHER strips every frame — fx_press
+        // at ratio 1.44 and fx_seeker_trap at 1.37, measured by RH_VFX_DUMP — but those are open art
+        // orders in the ledger, not a shape a shield test may pin.)
         var honest = Barrier("seeker", RetiredDome);
         Assert.Equal(VfxBudget.Verdict.Over, VfxBudget.Of(honest.NativeRatio));
         Assert.InRange(honest.NativeRatio, 1.87f, 1.89f);
