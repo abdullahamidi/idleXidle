@@ -14,6 +14,7 @@ using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
 
@@ -713,6 +714,16 @@ public sealed class HuntScreen
     public TutorialStep? Guide { get; set; }
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
+    /// <summary>
+    /// The account's trait ledger, or null. Set by the host, handed to each descent it starts.
+    /// </summary>
+    /// <remarks>
+    /// The screen never writes it — <c>TraitDiscovery</c> is the only writer of a discovered set —
+    /// and never reads a trait's rule. All it does is pass it to the run and re-check the rules at
+    /// the one moment failure means something.
+    /// </remarks>
+    public TraitWatch? TraitWatch { get; set; }
+
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MemoryDustTree Tree { get; set; } = new();
     public MasteryTree Mastery { get; set; } = new();
@@ -889,6 +900,10 @@ public sealed class HuntScreen
         _descent.RegionId = RegionId;
         _descent.EnemyBias = EnemyBias;
         _descent.Progress = Progress;
+        // The ledger the run's cleared waves feed. Refreshed with WHERE and WHO before the first
+        // push, so a first awakening is stamped with the region and champion it happened to.
+        _descent.TraitWatch = TraitWatch;
+        if (TraitWatch is { } watch) { watch.RegionId = RegionId; watch.CharacterId = Character.Id; }
         _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, StartWave);
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
@@ -1573,6 +1588,20 @@ public sealed class HuntScreen
             // the champion regroups onto a fresh expedition and the counter is empty.
             LastRunVowProof = _run.VowProofWaves.ToDictionary(kv => kv.Key, kv => kv.Value);
             LogDirty = true;
+
+            // AND THE RUN'S END IS THE ONE MOMENT FAILURE CAN TEACH. WHAT KILLED YOU reads the log
+            // that was just written — three consecutive deaths in one region against one kind of
+            // creature — so the account facts are refreshed by the host and every rule re-checked
+            // here, after Log.Add and never before it. Nothing is added to a counter: a lost run
+            // teaches nothing on its way out, which is the rule skill experience already follows.
+            if (TraitWatch is { } watchFell)
+            {
+                watchFell.Account = watchFell.Account with
+                {
+                    WallStreak = TraitDiscovery.WallStreakOf(Log.Entries).Streak,
+                };
+                watchFell.Recheck(_fellWave);
+            }
 
             _fellWave = Math.Max(1, _replayWave);
             _fellReport = Log.Newest;   // the report the fall plate names (MAIN LIMIT — …)

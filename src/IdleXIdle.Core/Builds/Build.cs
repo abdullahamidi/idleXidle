@@ -404,9 +404,33 @@ public sealed class Build
             var list = new List<Vow>();
             foreach (var sk in _skills)
                 if (sk.Vow is { } v && seen.Add(v.Id)) list.Add(v);
+            if (BorrowedVow is { } lent && seen.Add(lent.Id)) list.Add(lent);
             return list;
         }
     }
+
+    /// <summary>
+    /// A vow this build did not swear and is paid for anyway — THE KEPT WORD's loan.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It joins <see cref="Vows"/>, so every consumer bills and pays it exactly like a sworn one: the
+    /// combined factor, the fragility, the health price, TITHE. A trait that needed its own parallel
+    /// path through four price sites would be four chances for them to disagree.
+    /// </para>
+    /// <para>
+    /// The trait was authored against the older model, where a vow hung on a SKILL SLOT and "a skill
+    /// with no vow borrows one" named a real thing. A vow is a promise about the BUILD now, so the
+    /// loan is a build-level fact and <c>BuildComposer</c> decides it once, at compose time, where the
+    /// vows the account has actually FOUND are in scope. The fight never asks.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// Settable, like <see cref="Equip"/> beside it: a build is assembled by whoever is composing it,
+    /// and the liveness suite composes builds by hand precisely so it can pose one state against
+    /// another. <c>BuildComposer</c> is the only production writer.
+    /// </remarks>
+    public Vow? BorrowedVow { get; set; }
 
     /// <summary>
     /// Equip a skill. Returns false when the slots are full — a bounded budget is the point — or when

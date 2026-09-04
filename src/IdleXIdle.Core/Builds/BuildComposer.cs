@@ -99,11 +99,18 @@ public static class BuildComposer
     /// <param name="knownVows">
     /// The Vows the account has FOUND, by keeping a rule once without them. Null falls back to the tree.
     /// </param>
+    /// <param name="traitShape">
+    /// What the three traits this champion wears contribute, already resolved against the world by
+    /// <c>TraitEffects.Compose</c>. Null (or <see cref="SkillShape.None"/>) composes a build
+    /// byte-identical to one from before traits existed, which is what makes the liveness suite's
+    /// with-and-without comparison mean anything.
+    /// </param>
     public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
                                 IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity,
                                 SkillProgress? progress = null,
                                 IReadOnlyList<Keystone>? discoveredKeystones = null,
-                                IReadOnlyList<Vow>? knownVows = null)
+                                IReadOnlyList<Vow>? knownVows = null,
+                                SkillShape? traitShape = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -122,8 +129,14 @@ public static class BuildComposer
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
-            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
-                                       DustEffects.TreeShape(tree)),
+            // ...AND THE TRAITS. Folded in exactly like a set rung or the character's aptitude: one
+            // more shape through the one fold, so the fight gains no branch and nothing here has to
+            // know what a trait is. Four of the twenty-six are conditional on the world and were
+            // already resolved to plain dials before this call.
+            Shape = SkillShape.Combine(
+                SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
+                                   DustEffects.TreeShape(tree)),
+                traitShape ?? SkillShape.None),
             SlotCapacity = slotCapacity,
             // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is
             // divided: two actives and two passives at four slots, unlocked active-passive-active-
@@ -196,6 +209,28 @@ public static class BuildComposer
 
             // The chosen variation owns the element; the woven element is the fallback before it.
             build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
+        }
+
+        // THE KEPT WORD — a build that has sworn NOTHING borrows the weakest promise it has found.
+        //
+        // Decided here, once, because this is the only place that can see both halves: what the
+        // account has DISCOVERED (knownVows) and what the build has actually SWORN. The trait was
+        // authored when a vow hung on a skill slot, so "a skill with no vow borrows one" was a real
+        // sentence; a vow is a promise about the whole build now, and the build-level equivalent of
+        // an unsworn slot is a build that swore nothing at all. That also makes it a real decision
+        // rather than a free rider: taking the trait pays only if you leave every vow unsworn.
+        //
+        // The weakest, so it is a floor and never a way to reach the strongest promise for free, and
+        // only one whose demand this build is actually meeting - lending a promise you are already
+        // breaking would pay for nothing. It joins Build.Vows, so the combined factor, the fragility
+        // bill, the health price and TITHE all bill it exactly like a sworn one.
+        if (traitShape?.Traits.UnswornBorrowsWeakestVow == true && build.Vows.Count == 0
+            && (knownVows ?? DustEffects.KnownVows(tree)) is { Count: > 0 } found)
+        {
+            Vow? lent = null;
+            foreach (var v in found)
+                if (lent is null || Vows.Multiplier(v) < Vows.Multiplier(lent)) lent = v;
+            build.BorrowedVow = lent;
         }
         return build;
     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
+using IdleXIdle.Core.Traits;
 
 namespace IdleXIdle.Core.Builds;
 
@@ -407,6 +408,24 @@ public sealed record SkillShape
     /// <summary>Multiplier on maximum health, applied at champion mint.</summary>
     public float MaxHealth { get; init; } = 1f;
 
+    /// <summary>
+    /// THE TRAITS a champion is wearing, as one typed group rather than thirty more fields here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This record was already about ninety fields, and <c>SkillCatalogue.cs</c> records the same
+    /// answer for <c>SkillRules</c>: past the width where a reader stops reading, a related group gets
+    /// a nested record instead of another column. Every read site in <see cref="SoloBattle"/> says
+    /// <c>shape.Traits.X</c>, and <see cref="Combine"/> keeps it in step in one line.
+    /// </para>
+    /// <para>
+    /// <see cref="TraitRules.None"/> is neutral on every dial, so a champion wearing no trait
+    /// composes exactly as a build from before traits existed. The rule this whole record obeys
+    /// applies inside it too: a trait dial that stops being read must be deleted with its trait.
+    /// </para>
+    /// </remarks>
+    public TraitRules Traits { get; init; } = TraitRules.None;
+
     /// <summary>Targets this SKILL reaches, after the shape's general and per-style additions.</summary>
     public int TargetsFor(SkillDef def) => TargetsFor(def, def.Targets);
 
@@ -538,6 +557,10 @@ public sealed record SkillShape
             BetweenWaveRegen = a.BetweenWaveRegen + b.BetweenWaveRegen,
             FullHealBetweenWaves = a.FullHealBetweenWaves || b.FullHealBetweenWaves,
             MaxHealth = a.MaxHealth * b.MaxHealth,
+
+            // THE TRAITS, folded by their own rule. One line here and one record there, which is the
+            // whole cost of keeping thirty dials out of this one's field list.
+            Traits = TraitRules.Combine(a.Traits, b.Traits),
         };
     }
 

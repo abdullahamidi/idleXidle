@@ -7,6 +7,7 @@ using IdleXIdle.Core.Combat;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Traits;
 
 namespace IdleXIdle.Core.Builds;
 
@@ -160,6 +161,23 @@ public sealed class SoloExpedition
     /// everything the moment it banked. Null in the tests that only measure a fight.
     /// </remarks>
     public SkillProgress? Progress { get; init; }
+
+    /// <summary>
+    /// The account's trait ledger, fed by every CLEARED wave, or null when nothing is watching.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Injected for the same reason <see cref="Progress"/> is: an expedition is minted per run and a
+    /// discovered trait outlives every one. Null in a probe or a bench, which is why the balance
+    /// suites are entirely unaffected by traits existing.
+    /// </para>
+    /// <para>
+    /// <b>Only a cleared wave feeds it</b> — the rule skill experience already follows: a run that
+    /// dies teaches nothing on its way out. WHAT KILLED YOU is the deliberate exception and is
+    /// evaluated at run END by the host, from the saved run log.
+    /// </para>
+    /// </remarks>
+    public TraitWatch? TraitWatch { get; init; }
 
     public int Wave { get; private set; }
     public bool Over { get; private set; }
@@ -422,6 +440,14 @@ public sealed class SoloExpedition
             foreach (var sk in _build.Skills)
                 prog.RecordWave(sk.Def.Id);
 
+        // ── AND THE TRAITS LEARN FROM IT TOO, on the same terms and for the same reason: a cleared
+        //    wave taught something and a lost one did not. The facts are built HERE rather than in
+        //    the fight because half of them are build facts the wave's metrics do not carry — how
+        //    much of the pool the champion was standing in, what its critical chance is, how many
+        //    elements it carries — and the fight must not learn about the account to answer them.
+        if (TraitWatch is { } watch)
+            watch.WaveCleared(TraitFactsFor(metrics), next);
+
         // ── BETWEEN WAVES. game-flow.md §3.3 makes "health does not regenerate between waves" a rule of
         //    the game — it is what turns a descent into one continuous fight rather than a series of
         //    independent ones. RECOVERY and ENDLESS are the only two things in the game that buy an
@@ -473,6 +499,63 @@ public sealed class SoloExpedition
     /// place. Every other term in the wave payout is a multiplier on this.
     /// </remarks>
     public const float GleamPerWaveCoefficient = 3f;
+
+    /// <summary>
+    /// Everything one cleared wave contributes to the trait ledger: the wave's own measurements, plus
+    /// the build facts the measurements cannot carry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Nothing here reads a roll.</b> Creature count and archetype are rolled by the band, so no
+    /// rule may read either; every fact below is either the champion's own build, a measurement of
+    /// what the champion DID, or a deterministic property of the weave. That is BRIEF §30 satisfied
+    /// by construction rather than by inspection.
+    /// </para>
+    /// <para>
+    /// Built once per cleared wave. <c>DescribeBuild</c> walks four skills and is the same call the
+    /// vow layer already makes every wave, so this adds one of them and no allocation the fight did
+    /// not already make.
+    /// </para>
+    /// </remarks>
+    private TraitWaveFacts TraitFactsFor(WaveMetrics m)
+    {
+        var ctx = SoloBattle.DescribeBuild(_build, _hunter);
+        var shape = _build.Shape;
+
+        var wide = false;
+        var broken = false;
+        var seenVows = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < _build.Skills.Count; i++)
+        {
+            var sk = _build.Skills[i];
+            // A WIDE wave is one this build could have reached three creatures with — a property of
+            // the weave, not of how many creatures the band happened to roll.
+            if (shape.TargetsFor(sk.Def) >= TraitDiscovery.WideTargets) wide = true;
+            // A promise sworn and not kept. Counted once per VOW, like every other vow price: a vow
+            // woven onto four skills is one promise broken, not four.
+            if (sk.Vow is { } vow && seenVows.Add(vow.Id) && !Vows.IsActive(vow, ctx)) broken = true;
+        }
+
+        return new TraitWaveFacts(
+            ChampionMaxHealth: _champion.MaxHealth,
+            HeavyHits: m.HeavyHits,
+            Overkill: m.Overkill,
+            ShieldGained: m.ShieldGained,
+            ShieldBreaks: m.ShieldBreaks,
+            ShieldAbsorbed: m.ShieldAbsorbed,
+            Healed: m.Healed,
+            ReflectedDamage: m.ReflectedDamage,
+            LowestHealthFraction: m.LowestHealthFraction,
+            HealthLost: m.HealthLost,
+            CreaturesKilled: m.CreaturesKilled,
+            MarkCasts: m.MarkCasts,
+            CarriedWideSkill: wide,
+            CritPercent: ctx.CritPercent,
+            OneElement: _build.Skills.Count > 0
+                        && _build.Skills.All(s => s.Source == _build.Skills[0].Source),
+            DistinctElements: ctx.DistinctSources,
+            VowSwornAndBroken: broken);
+    }
 
     private Haul HaulForWave(int wave, WaveBonus bonus)
     {

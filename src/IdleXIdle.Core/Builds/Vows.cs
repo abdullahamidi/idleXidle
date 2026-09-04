@@ -740,8 +740,16 @@ public static class Vows
     /// build in the game is one bounded number rather than a stack nobody can measure.
     /// </para>
     /// </remarks>
+    /// <param name="brokenShare">
+    /// THE PRICE PAID — the share of its bonus a vow whose demand is NOT being met still pays. Zero
+    /// everywhere except when that trait is worn, which is the ordinary rule: a broken promise buys
+    /// nothing. The trait was authored against a per-slot vow model and reached the fight through a
+    /// method that model's replacement deleted; this is the one place a vow's bonus is decided now,
+    /// so it is the one place the trait can live.
+    /// </param>
     public static float CombinedFactor(
-        IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null)
+        IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null,
+        float brokenShare = 0f)
     {
         if (sworn is null) return 1f;
         tuning ??= VowTuning.Default;
@@ -752,8 +760,9 @@ public static class Vows
         {
             // ONCE PER VOW, however many slots carry it. A Vow is sworn, not equipped.
             if (vow is null || !seen.Add(vow.Id)) continue;
-            if (!IsActive(vow, ctx)) continue;
-            bonus += Multiplier(vow, tuning) - 1f;
+            var share = IsActive(vow, ctx) ? 1f : MathF.Max(0f, brokenShare);
+            if (share <= 0f) continue;
+            bonus += (Multiplier(vow, tuning) - 1f) * share;
         }
         if (bonus <= 0f) return 1f;
 

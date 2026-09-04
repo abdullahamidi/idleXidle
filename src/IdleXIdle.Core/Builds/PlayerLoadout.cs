@@ -52,7 +52,43 @@ public sealed class PlayerLoadout
     /// </summary>
     public string Signature =>
         string.Join(";", _skills.Select(s => $"{s.SkillId ?? "-"}:{s.Source}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
-        + $"|{SkillCapacity}|{KeystoneCapacity}|{VowCapacity}";
+        + $"|{SkillCapacity}|{KeystoneCapacity}|{VowCapacity}|{TraitStamp}";
+
+    /// <summary>
+    /// The shape the three traits this champion wears contribute, or <see cref="SkillShape.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One seam, not a dozen.</b> <see cref="ToBuild"/> has a dozen callers — the fight, the damage
+    /// bench, the training page, the gear readout — and every one of them must see the same build, or
+    /// a screen starts telling the player numbers the sim does not run. That has happened twice here
+    /// already (the mastery tree, then the character's aptitude), and the note on <see cref="ToBuild"/>
+    /// records both. Threading a trait argument through those call sites is the same mistake a third
+    /// time, so it is a property the host sets once instead.
+    /// </para>
+    /// <para>
+    /// It is per CHARACTER and per REGION — the loadout is already repaired on a champion switch, and
+    /// four of the twenty-six traits read the world — so the host recomputes it from
+    /// <c>TraitEffects.Compose</c> rather than caching it. Left at
+    /// <see cref="SkillShape.None"/>, nothing about the build changes at all.
+    /// </para>
+    /// </remarks>
+    public SkillShape TraitShape { get; set; } = SkillShape.None;
+
+    /// <summary>
+    /// What the traits contribute, as one short token, so <see cref="Signature"/> notices a swap.
+    /// </summary>
+    /// <remarks>
+    /// The hunt re-composes the fight's build when the signature changes. Without this a player who
+    /// swapped a trait mid-run would go on fighting with the old three until they also touched a
+    /// skill — a change made and not applied, which is this project's named failure mode in a
+    /// different coat.
+    /// </remarks>
+    private string TraitStamp => ReferenceEquals(TraitShape, SkillShape.None)
+        ? "-"
+        : TraitShape.Traits.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture)
+          + (TraitShape.FreeOpeningCast ? "+" : "");
+
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
     /// <summary>The skill slots a build may ever hold. The CEILING as well as the floor.</summary>
@@ -345,7 +381,7 @@ public sealed class PlayerLoadout
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
             _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.VowId, s.Passive, s.SkillId)),
-            _keystoneIds, SkillCapacity, progress, discoveredKeystones, knownVows);
+            _keystoneIds, SkillCapacity, progress, discoveredKeystones, knownVows, TraitShape);
     }
 
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────
