@@ -90,6 +90,297 @@ public sealed class UiKit
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
+    private readonly System.Collections.Generic.Dictionary<Texture2D, FrameSpec> _frameSpecs = new();
+
+    // ── FRAME SPECS: where a frame's ornaments are, measured off the art, so the slicer never stretches one ──
+
+    /// <summary>
+    /// Where a frame texture keeps its ornaments: the corner flourish's extent from each edge, and the
+    /// centre ornament's span along the top/bottom edge and along the left/right edge.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THE OLD NINE-SLICE CUT A FIXED 40 PX CORNER AND STRETCHED EVERYTHING ELSE.</b> Measured off the
+    /// art (<c>tools/measure_frames.py</c>), the corner scrollwork on the panel frames runs 55–90 px, and
+    /// the medium, square and small frames carry a gem or a crest in the middle of every edge. Both landed
+    /// in the stretched edge band: the tail of every corner curl was smeared along the rail, and every
+    /// mid-edge gem was pulled into a streak as long as the panel — the EQUIPPED panel's side gems at 100 %
+    /// were 4.5× their own height. That is the "çerçeve kötü görünüyor" of the release polish pass, and it
+    /// is not the art's fault: the art was never stretched, the slice was.
+    /// </para>
+    /// <para>
+    /// A spec is measured ONCE per texture, from its pixels, on first use — so a regenerated frame with a
+    /// different flourish measures itself and needs no table edited. <see cref="Measure"/> is the
+    /// algorithm; <c>RH_UI_FRAMES=1</c> prints every spec as it is measured, which is how a new frame is
+    /// checked against its picture.
+    /// </para>
+    /// </remarks>
+    /// <param name="CornerX">How far the corner flourish reaches in from the left/right edge, in texture px.</param>
+    /// <param name="CornerY">How far it reaches in from the top/bottom edge. Equal to the texture's height for a STRIP (a bar, a button) — one band, no vertical slicing.</param>
+    /// <param name="TopOrnX0">The centre ornament on the top/bottom edge: its first column, or equal to <paramref name="TopOrnX1"/> when there is none.</param>
+    /// <param name="TopOrnX1">One past its last column.</param>
+    /// <param name="SideOrnY0">The centre ornament on the left/right edge: its first row, or equal to <paramref name="SideOrnY1"/> when there is none.</param>
+    /// <param name="SideOrnY1">One past its last row.</param>
+    public readonly record struct FrameSpec(int CornerX, int CornerY, int TopOrnX0, int TopOrnX1, int SideOrnY0, int SideOrnY1)
+    {
+        /// <summary>There is an ornament in the middle of the top and bottom edges.</summary>
+        public bool HasTopOrnament => TopOrnX1 > TopOrnX0;
+
+        /// <summary>There is an ornament in the middle of the left and right edges.</summary>
+        public bool HasSideOrnament => SideOrnY1 > SideOrnY0;
+
+        /// <summary>The plain fallback for art the measurement cannot read: a 40 px corner and no ornaments.</summary>
+        public static FrameSpec Plain(int w, int h)
+            => new(Math.Min(PanelCorner, w / 2 - 1), Math.Min(PanelCorner, h / 2 - 1), w / 2, w / 2, h / 2, h / 2);
+    }
+
+    /// <summary>Set <c>RH_UI_FRAMES=1</c> to print every frame spec as it is measured.</summary>
+    private static readonly bool DumpFrameSpecs =
+        Environment.GetEnvironmentVariable("RH_UI_FRAMES") is { Length: > 0 } fv && fv != "0";
+
+    /// <summary>This texture's <see cref="FrameSpec"/>, measured on first use and cached.</summary>
+    public FrameSpec FrameSpecOf(Texture2D tex)
+    {
+        if (_frameSpecs.TryGetValue(tex, out var had)) return had;
+        var spec = Measure(tex);
+        _frameSpecs[tex] = spec;
+        if (DumpFrameSpecs)
+            Console.Out.WriteLine($"frame\tkey={Assets.KeyOf(tex) ?? "(unkeyed)"}\t{tex.Width}x{tex.Height}\tcorner={spec.CornerX}x{spec.CornerY}"
+                                  + $"\ttop=[{spec.TopOrnX0},{spec.TopOrnX1})\tside=[{spec.SideOrnY0},{spec.SideOrnY1})");
+        return spec;
+    }
+
+    /// <summary>
+    /// Measure a frame's ornaments from its pixels.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Along each edge, every column (or row) of the edge band is a profile of (alpha, luma) pixels. The
+    /// PLAIN RAIL is the profile most columns share — found as the medoid of a sample, so a frame whose
+    /// ornaments cover half its width still elects a plain column, because the plain ones agree with each
+    /// other and the ornamental ones agree with nothing. A column is plain when few of its pixels differ
+    /// from the rail by more than a texture's own grain (the rails are painted stone, so this is a count
+    /// of pixels past a luma threshold, not a mean difference — a mean would let a small gem hide in a
+    /// tall band, and a strict match would call every stone column an ornament).
+    /// </para>
+    /// <para>
+    /// The CORNER is where the first run of plain columns begins, from either side (the larger of the two,
+    /// so an asymmetric flourish is never cut). The CENTRE ORNAMENT is the widest non-plain span between
+    /// the corners, ignored when it is under three pixels (grain). A texture the scan cannot read — no
+    /// plain run at all — gets <see cref="FrameSpec.Plain"/>, which is the old 40 px behaviour, so the
+    /// worst case is the frame we shipped for a year, never a torn one.
+    /// </para>
+    /// </remarks>
+    private static FrameSpec Measure(Texture2D tex)
+    {
+        int w = tex.Width, h = tex.Height;
+        if (w < 8 || h < 8) return FrameSpec.Plain(w, h);
+        var data = new Color[w * h];
+        tex.GetData(data);
+
+        // The band a scan reads: a quarter of the other dimension, never under 12 px. A texture at least
+        // twice as wide as it is tall (a bar, a button, a tab), or too short to hold two bands and a
+        // middle, is a STRIP — one band the whole height, no vertical slicing, and it scales with the
+        // destination's height so its end scrollwork keeps its proportion at every control height.
+        var bandY = Math.Clamp(h / 4, 12, h);
+        var strip = w >= 2 * h || h <= bandY * 2 + 8;
+        var (cx, ox0, ox1) = MeasureAxis(data, w, h, bandY, horizontal: true);
+        if (cx < 0) return FrameSpec.Plain(w, h);
+        if (strip) return new FrameSpec(cx, h, ox0, ox1, h / 2, h / 2);
+        var bandX = Math.Clamp(w / 4, 12, w);
+        var (cy, oy0, oy1) = MeasureAxis(data, w, h, bandX, horizontal: false);
+        if (cy < 0) return FrameSpec.Plain(w, h);
+        return new FrameSpec(cx, cy, ox0, ox1, oy0, oy1);
+    }
+
+    /// <summary>One axis of <see cref="Measure"/>: (corner extent, ornament start, ornament end), or corner -1 when unreadable.</summary>
+    private static (int Corner, int Orn0, int Orn1) MeasureAxis(Color[] data, int w, int h, int band, bool horizontal)
+    {
+        var n = horizontal ? w : h;
+        // Profiles, smoothed over the neighbouring column on each side so painted grain does not vote.
+        var alpha = new int[n, band];
+        var luma = new int[n, band];
+        for (var i = 0; i < n; i++)
+            for (var k = 0; k < band; k++)
+            {
+                int a = 0, l = 0, c = 0;
+                for (var d = -1; d <= 1; d++)
+                {
+                    var j = i + d;
+                    if (j < 0 || j >= n) continue;
+                    var p = horizontal ? data[k * w + j] : data[j * w + k];
+                    a += p.A; l += (p.R * 3 + p.G * 6 + p.B) / 10; c++;
+                }
+                alpha[i, k] = a / c; luma[i, k] = l / c;
+            }
+
+        int Differ(int i, int j)
+        {
+            var count = 0;
+            for (var k = 0; k < band; k++)
+                if (Math.Abs(luma[i, k] - luma[j, k]) > 48 || Math.Abs(alpha[i, k] - alpha[j, k]) > 64) count++;
+            return count;
+        }
+
+        // The medoid of a stride sample elects the rail.
+        var stride = Math.Max(1, n / 64);
+        int refIdx = 0, refScore = int.MaxValue;
+        for (var i = 0; i < n; i += stride)
+        {
+            var score = 0;
+            for (var j = 0; j < n; j += stride) score += Differ(i, j);
+            if (score < refScore) { refScore = score; refIdx = i; }
+        }
+        var limit = Math.Max(2, (int)MathF.Round(band * 0.10f));
+        var plain = new bool[n];
+        for (var i = 0; i < n; i++) plain[i] = Differ(i, refIdx) <= limit;
+
+        int CornerFrom(bool left)
+        {
+            var run = 0;
+            for (var step = 0; step < n; step++)
+            {
+                var i = left ? step : n - 1 - step;
+                run = plain[i] ? run + 1 : 0;
+                if (run >= 4) return step - 3;
+            }
+            return n;
+        }
+        var corner = Math.Max(CornerFrom(true), CornerFrom(false));
+        if (corner >= n / 2 - 2) return (-1, n / 2, n / 2);
+
+        int best = 0, o0 = n / 2, o1 = n / 2;
+        for (var i = corner; i < n - corner;)
+        {
+            if (plain[i]) { i++; continue; }
+            var j = i;
+            while (j < n - corner && !plain[j]) j++;
+            if (j - i > best) { best = j - i; o0 = i; o1 = j; }
+            i = j;
+        }
+        if (best < 3) { o0 = o1 = n / 2; }
+        return (corner, o0, o1);
+    }
+
+    /// <summary>
+    /// Draw a frame into <paramref name="r"/> so that NOTHING ORNAMENTAL IS STRETCHED: corners and centre
+    /// ornaments at their own scale, only the plain rails and the interior stretched to fill.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A grid, not a nine-slice: up to five cuts on each axis — corner · rail · ornament · rail · corner —
+    /// so a frame with a gem on every edge draws as 25 pieces and a plain one as 9. The two rails on an
+    /// edge share the room left after the corners and the ornament, in proportion to their source widths,
+    /// so the ornament stays where the artist put it. A STRIP (a bar, a button: <see cref="FrameSpec.CornerY"/>
+    /// equal to its height) has one row and scales with the destination's HEIGHT, which is what keeps a
+    /// button's end scrollwork in proportion at every control height.
+    /// </para>
+    /// <para>
+    /// A rectangle too small for its corners and ornament at native scale shrinks them together, in
+    /// proportion, rather than letting the pieces overlap — a settings row 54 px tall wears a proportionally
+    /// finer frame, never a torn one. The ledger records the corner's magnification, as it always has.
+    /// </para>
+    /// </remarks>
+    public void SliceFrame(SpriteBatch b, Texture2D tex, Rectangle r, Color tint)
+    {
+        var spec = FrameSpecOf(tex);
+        int w = tex.Width, h = tex.Height;
+        var strip = spec.CornerY >= h;
+        int ornW = spec.HasTopOrnament ? spec.TopOrnX1 - spec.TopOrnX0 : 0;
+        int ornH = !strip && spec.HasSideOrnament ? spec.SideOrnY1 - spec.SideOrnY0 : 0;
+
+        // The scale the ornaments draw at: native (1:1 on the canvas at this counter-scale), a strip's
+        // height ratio, and never more than the rectangle can hold.
+        var s = strip ? r.Height / (float)h : 1f / Scale;
+        var needW = 2 * spec.CornerX + ornW;
+        var needH = strip ? h : 2 * spec.CornerY + ornH;
+        if (needW > 0) s = MathF.Min(s, r.Width / (float)needW);
+        if (needH > 0) s = MathF.Min(s, r.Height / (float)needH);
+        if (s <= 0f) { b.Draw(tex, r, tint); return; }
+
+        // Column cuts, source and destination.
+        var sx = spec.HasTopOrnament
+            ? new[] { 0, spec.CornerX, spec.TopOrnX0, spec.TopOrnX1, w - spec.CornerX, w }
+            : new[] { 0, spec.CornerX, w - spec.CornerX, w };
+        var dx = Cuts(sx, r.X, r.Width, s);
+        int[] sy, dy;
+        if (strip)
+        {
+            sy = new[] { 0, h };
+            dy = new[] { r.Y, r.Bottom };
+        }
+        else
+        {
+            sy = spec.HasSideOrnament
+                ? new[] { 0, spec.CornerY, spec.SideOrnY0, spec.SideOrnY1, h - spec.CornerY, h }
+                : new[] { 0, spec.CornerY, h - spec.CornerY, h };
+            dy = Cuts(sy, r.Y, r.Height, s);
+        }
+
+        UiRasterLedger.Note(Assets.KeyOf(tex) ?? "(unkeyed)", spec.CornerX, strip ? h : spec.CornerY,
+                            dx[1] - dx[0], dy[1] - dy[0], "UiKit.SliceFrame corner");
+
+        for (var j = 0; j + 1 < sy.Length; j++)
+            for (var i = 0; i + 1 < sx.Length; i++)
+            {
+                int sw = sx[i + 1] - sx[i], sh = sy[j + 1] - sy[j];
+                int dw = dx[i + 1] - dx[i], dh = dy[j + 1] - dy[j];
+                if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) continue;
+                b.Draw(tex, new Rectangle(dx[i], dy[j], dw, dh), new Rectangle(sx[i], sy[j], sw, sh), tint);
+            }
+    }
+
+    /// <summary>
+    /// Destination cuts for one axis: fixed pieces (corners, the ornament) at <paramref name="s"/> times
+    /// their source size, the plain rails sharing what is left in proportion to their source widths.
+    /// </summary>
+    /// <remarks>
+    /// The cuts are the ODD-indexed pieces' edges: piece 0 is a corner, piece 1 a rail, piece 2 the
+    /// ornament (or the far corner when there is none), and so on. Integer arithmetic on purpose — a cut
+    /// that lands on a half pixel is a seam that shows under LinearClamp.
+    /// </remarks>
+    private static int[] Cuts(int[] src, int origin, int length, float s)
+    {
+        var pieces = src.Length - 1;
+        var fixedTotal = 0;
+        var railSrc = 0;
+        var fixedDst = new int[pieces];
+        for (var i = 0; i < pieces; i++)
+        {
+            var sw = src[i + 1] - src[i];
+            // Piece 1 and piece pieces-2 are the rails on a 4- or 6-cut axis; on a 2-cut axis (a strip's
+            // single row) there is only the one piece, which fills.
+            var rail = pieces >= 3 && (i == 1 || i == pieces - 2);
+            if (pieces == 1) { fixedDst[i] = length; continue; }
+            if (rail) { railSrc += sw; continue; }
+            fixedDst[i] = Math.Max(0, (int)MathF.Round(sw * s));
+            fixedTotal += fixedDst[i];
+        }
+        var railDst = Math.Max(0, length - fixedTotal);
+        var cuts = new int[src.Length];
+        cuts[0] = origin;
+        var railSpent = 0;
+        var railSeen = 0;
+        for (var i = 0; i < pieces; i++)
+        {
+            var sw = src[i + 1] - src[i];
+            var rail = pieces >= 3 && (i == 1 || i == pieces - 2);
+            int dw;
+            if (pieces == 1) dw = length;
+            else if (rail)
+            {
+                railSeen += sw;
+                // The last rail takes the remainder, so rounding never opens a one-pixel gap.
+                var upTo = railSrc > 0 ? (int)MathF.Round(railDst * (railSeen / (float)railSrc)) : railDst;
+                dw = upTo - railSpent;
+                railSpent = upTo;
+            }
+            else dw = fixedDst[i];
+            cuts[i + 1] = cuts[i] + dw;
+        }
+        cuts[^1] = origin + length;   // the far edge is the rectangle's edge, whatever rounding did
+        return cuts;
+    }
 
     public UiKit(GraphicsDevice device, PixelFont font, AssetLibrary assets)
     {
@@ -846,54 +1137,69 @@ public sealed class UiKit
     /// </remarks>
     public const float RasterCeiling = 1.25f;
 
+    /// <summary>
+    /// The frame slicer every panel goes through. The corner size argument is HISTORY: the corner is
+    /// measured off the art now (<see cref="FrameSpecOf"/>), and the slice stretches only plain rails.
+    /// </summary>
     private void NineSlice(SpriteBatch b, Texture2D tex, Rectangle r, int srcCornerMax, Color tint)
-    {
-        var scale = Scale;
-        var srcC = Math.Min(srcCornerMax, Math.Min(tex.Width, tex.Height) / 2 - 1);
-        var dstC = Math.Max(2, Math.Min(srcC / scale, Math.Min(r.Width, r.Height) / 2));
-        srcC = Math.Min(dstC * scale, Math.Min(tex.Width, tex.Height) / 2 - 1);
-        var midSrcW = tex.Width - 2 * srcC;
-        var midSrcH = tex.Height - 2 * srcC;
-        var innerW = r.Width - 2 * dstC;
-        var innerH = r.Height - 2 * dstC;
+        => SliceFrame(b, tex, r, tint);
 
-        void S(int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh)
-        {
-            if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) return;
-            b.Draw(tex, new Rectangle(dx, dy, dw, dh), new Rectangle(sx, sy, sw, sh), tint);
-        }
+    // ── Bars ──────────────────────────────────────────────────────────────────────────────────────
+    //
+    // THE PROGRESS BAR CONTRACT (release polish, 2026-09-05). Two bars, and only two:
+    //
+    //   BarArt(r, pct, type)     the ORNATE bar — the package_01 frame (health / boss / shield / progress
+    //                            / xp) through SliceFrame, so its caps and centre scroll are drawn in
+    //                            proportion to the bar's height and only the plain stone stretches. For
+    //                            bars 22 px and taller: a life pool, a boss, a conquest, a Warren level.
+    //   Bar(x, y, w, h, pct, c)  the SLIM bar — a crisp procedural strip in the caller's colour, drawn
+    //                            from rectangles at integer pixels. For every thin bar: a gate's progress,
+    //                            a training rank, a quest count. It has no raster at all, so it cannot be
+    //                            stretched, blurred or magnified at any UI SCALE.
+    //
+    // Bar used to draw the whole 256x64 ui_bar_frame into a 16 px strip — a 4x squash of scrollwork into
+    // three rows of mush — which is the "stretched, low quality" progress bar the ROSTER's character
+    // gates wore. Below 22 px the ornate art cannot read; above it the slim bar looks bare. One threshold,
+    // in UiTypography's own terms, and a caller that wants the ornate bar names its type.
 
-        UiRasterLedger.Note(Assets.KeyOf(tex) ?? "(unkeyed)", srcC, srcC, dstC, dstC, "UiKit.NineSlice corner");
-        S(0, 0, srcC, srcC, r.X, r.Y, dstC, dstC);
-        S(tex.Width - srcC, 0, srcC, srcC, r.Right - dstC, r.Y, dstC, dstC);
-        S(0, tex.Height - srcC, srcC, srcC, r.X, r.Bottom - dstC, dstC, dstC);
-        S(tex.Width - srcC, tex.Height - srcC, srcC, srcC, r.Right - dstC, r.Bottom - dstC, dstC, dstC);
-        S(srcC, 0, midSrcW, srcC, r.X + dstC, r.Y, innerW, dstC);
-        S(srcC, tex.Height - srcC, midSrcW, srcC, r.X + dstC, r.Bottom - dstC, innerW, dstC);
-        S(0, srcC, srcC, midSrcH, r.X, r.Y + dstC, dstC, innerH);
-        S(tex.Width - srcC, srcC, srcC, midSrcH, r.Right - dstC, r.Y + dstC, dstC, innerH);
-        S(srcC, srcC, midSrcW, midSrcH, r.X + dstC, r.Y + dstC, innerW, innerH);
-    }
+    /// <summary>The tallest a bar may be and still be drawn SLIM; from here up, use <see cref="BarArt"/>.</summary>
+    public const int SlimBarMax = 21;
 
-    // ── Bars (ui_bar_frame + ui_bar_fill, tinted) ───────────────────────────────────────────────
+    /// <summary>The slim bar's frame ink — a dark bronze, the quiet frame's own, so it belongs to the family without claiming attention.</summary>
+    private static readonly Color SlimBarEdge = new(0x5A, 0x4A, 0x36);
+
+    /// <summary>The slim bar's well — the depleted part.</summary>
+    private static readonly Color SlimBarWell = new(0x12, 0x0C, 0x14);
+
+    /// <summary>
+    /// The SLIM bar: a dark well with a one-pixel bronze frame (corner pixels knocked out, so it reads as
+    /// a rounded strip at native density), and the fill in <paramref name="color"/> with a one-pixel
+    /// highlight along its top and a one-pixel shade along its bottom, so it has the same lit-from-above
+    /// bevel the ornate fills carry. Every edge is an integer rectangle — nothing is sampled.
+    /// </summary>
     public void Bar(SpriteBatch b, int x, int y, int w, int h, float pct, Color color)
     {
         pct = Math.Clamp(pct, 0f, 1f);
-        var frame = Assets.Get("ui_bar_frame");
-        var fill = Assets.Get("ui_bar_fill");
-
-        if (frame is null || fill is null)
+        if (w < 4 || h < 3) return;
+        var r = new Rectangle(x, y, w, h);
+        Fill(b, r, SlimBarWell);
+        // The frame: four one-pixel lines, each stopping one pixel short of the corner.
+        Fill(b, new Rectangle(x + 1, y, w - 2, 1), SlimBarEdge);
+        Fill(b, new Rectangle(x + 1, r.Bottom - 1, w - 2, 1), SlimBarEdge);
+        Fill(b, new Rectangle(x, y + 1, 1, h - 2), SlimBarEdge);
+        Fill(b, new Rectangle(r.Right - 1, y + 1, 1, h - 2), SlimBarEdge);
+        if (pct <= 0f) return;
+        var inner = new Rectangle(x + 2, y + 2, w - 4, h - 4);
+        if (inner.Width <= 0 || inner.Height <= 0) { Fill(b, new Rectangle(x + 1, y + 1, Math.Max(1, (int)((w - 2) * pct)), h - 2), color); return; }
+        var fw = Math.Max(1, (int)MathF.Round(inner.Width * pct));
+        Fill(b, new Rectangle(inner.X, inner.Y, fw, inner.Height), color);
+        if (inner.Height >= 4)
         {
-            Fill(b, new Rectangle(x, y, w, h), Color.Lerp(VoidInk, Dim, 0.6f));
-            if (pct > 0f) Fill(b, new Rectangle(x, y, (int)(w * pct), h), color);
-            return;
+            Fill(b, new Rectangle(inner.X, inner.Y, fw, 1), Color.Lerp(color, Color.White, 0.38f));
+            Fill(b, new Rectangle(inner.X, inner.Bottom - 1, fw, 1), Color.Lerp(color, Color.Black, 0.35f));
         }
-
-        UiRasterLedger.Note("ui_bar_frame", frame.Width, frame.Height, w, h, "UiKit.Bar");
-        b.Draw(frame, new Rectangle(x, y, w, h), Color.White);
-        var inset = 2;
-        var fw = (int)((w - inset * 2) * pct);
-        if (fw > 0) b.Draw(fill, new Rectangle(x + inset, y + inset, fw, h - inset * 2), color);
+        // The leading edge: one brighter column, so a bar that is filling can be seen to move.
+        if (fw >= 3 && pct < 1f) Fill(b, new Rectangle(inner.X + fw - 1, inner.Y, 1, inner.Height), Color.Lerp(color, Color.White, 0.55f));
     }
 
     // ── Currency pill ───────────────────────────────────────────────────────────────────────────
@@ -911,11 +1217,12 @@ public sealed class UiKit
         var w = 24 + icon + 12 + valW + (labW > 0 ? 16 + labW : 0) + 24;
         var r = new Rectangle(right - w, y, w, h);
 
-        // Ornate capsule from package_01 (guide), not a flat fill.
-        // Whole-texture stretch ON PURPOSE: the 256-px square frame's corner ornaments are ~50 px, so a
-        // 9-slice into a 60-px capsule cuts them into the edge bands and smears them across the text
-        // (tried 2026-08-23; reverted). The uniform squash reads as a capsule; the slice did not.
-        if (Assets.Get("ui_panel_small") is { } cap) b.Draw(cap, r, Color.White);
+        // Ornate capsule from package_01 (guide), not a flat fill. Through the measured slicer: the small
+        // frame's corners and mid-edge gems shrink TOGETHER to fit the capsule's height (SliceFrame scales
+        // its fixed pieces to the rectangle), so the capsule wears a finer copy of the frame rather than a
+        // 0.47 × 0.23 squash of it. The 2026-08-23 nine-slice that smeared the corners cut them at a fixed
+        // 40 px; the measured one cuts at the ornament's own edge, which is what that attempt lacked.
+        if (Assets.Get("ui_panel_small") is { } cap) SliceFrame(b, cap, r, Color.White);
         else
         {
             Fill(b, r, new Color(0x1A, 0x16, 0x26));
@@ -978,15 +1285,12 @@ public sealed class UiKit
         // only under the lit one, inside the frame's own inset so no ornament is covered.
         if (key == "ui_button_primary") Fill(b, ButtonFace(r), Ink);
         var tex = Assets.Get(key);
-        // Whole-image stretch for a button near the art's own aspect; a WIDE button is 3-sliced so its
-        // ornamented ends keep their shape and only the plain middle stretches (playtest 2026-08-26:
-        // "the button frame is stretched and looks cheap" — the 420 px reset button, the 400 px settings
-        // pair). The end caps are the art's ornament, scaled with the button's height.
-        if (tex is not null)
-        {
-            if (r.Width > r.Height * tex.Width / tex.Height * 1.15f) HSliceScaled(b, tex, r, ButtonCapSrcPx, Color.White);
-            else b.Draw(tex, r, Color.White);
-        }
+        // Every button is sliced (playtest 2026-08-26: "the button frame is stretched and looks cheap" —
+        // the 420 px reset button, the 400 px settings pair). The end scrollwork AND the centre ornament
+        // are measured off the art and drawn in proportion to the button's height; only the plain runs
+        // between them stretch. A button near the art's own aspect used to be stretched whole, which
+        // squashed its scrollwork a little on every 52 px button; the slice costs nothing at that size.
+        if (tex is not null) SliceFrame(b, tex, r, Color.White);
         else { Fill(b, r, hover ? Slate : PanelBg); Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim); }
         if (lift > 0f) Fill(b, ButtonFace(r), Color.White * (0.07f * lift));
         if (pressed) Fill(b, ButtonFace(r), Color.Black * 0.18f);
@@ -1073,7 +1377,7 @@ public sealed class UiKit
     {
         Fill(b, new Rectangle(r.X + 6, r.Y + 5, r.Width - 12, r.Height - 10), well ?? Ink);
         var key = enabled && lit ? "ui_button_primary" : "ui_button_secondary";
-        if (Assets.Get(key) is { } tex) HSliceScaled(b, tex, r, ButtonCapSrcPx, enabled ? Color.White : FieldOff);
+        if (Assets.Get(key) is { } tex) SliceFrame(b, tex, r, enabled ? Color.White : FieldOff);
         else
         {
             Fill(b, r, PanelBg);
@@ -1084,50 +1388,9 @@ public sealed class UiKit
     /// <summary>The multiply tint that takes the gold out of a field's frame when it is inert.</summary>
     private static readonly Color FieldOff = new(0x5C, 0x56, 0x62);
 
-    // The 256×64 bar frames: corner ornaments in the first/last 32 source px, the centre ornament between
-    // x 94 and 162, plain stone border between; the window starts 14 px in. Measured on ui_bar_boss_frame.
-    private const int BarCapSrcPx = 32;   // ui-size-ok: source pixels in the bar frame art, not type
-    private const int BarOrnamentSrcX0 = 94;
-    private const int BarOrnamentSrcX1 = 162;
+    // The 256×64 bar frames: the fill window starts 14 source px in from each end, behind the corner
+    // scrollwork. The caps and the centre ornament themselves are measured off each frame (FrameSpecOf).
     private const int BarWindowInsetSrcPx = 14;   // ui-size-ok: source pixels in the bar frame art
-
-    /// <summary>
-    /// Five-piece horizontal slice for art with ornaments at BOTH ends AND in the middle: the caps and the
-    /// centre piece are scaled with the height and keep their proportions; the two plain runs between them
-    /// stretch to fill. For the bar frames, whose centre scroll a 3-slice would still smear.
-    /// </summary>
-    private static void HSliceOrnament(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, int ornX0, int ornX1, Color tint)
-    {
-        var scale = r.Height / (float)t.Height;
-        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * scale));
-        var ornW = Math.Max(2, (int)MathF.Round((ornX1 - ornX0) * scale));
-        if (dstCap * 2 + ornW >= r.Width) { b.Draw(t, r, tint); return; }   // too narrow to slice: stretch
-        var ornX = r.X + (r.Width - ornW) / 2;
-        // caps
-        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
-        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
-        // plain runs
-        b.Draw(t, new Rectangle(r.X + dstCap, r.Y, ornX - (r.X + dstCap), r.Height), new Rectangle(srcCap, 0, ornX0 - srcCap, t.Height), tint);
-        b.Draw(t, new Rectangle(ornX + ornW, r.Y, r.Right - dstCap - (ornX + ornW), r.Height), new Rectangle(ornX1, 0, t.Width - srcCap - ornX1, t.Height), tint);
-        // the centre ornament, true to scale
-        b.Draw(t, new Rectangle(ornX, r.Y, ornW, r.Height), new Rectangle(ornX0, 0, ornX1 - ornX0, t.Height), tint);
-    }
-
-    /// <summary>
-    /// Horizontal 3-slice with the caps SCALED to the destination height: <paramref name="srcCap"/> source
-    /// pixels at each end become srcCap × (r.Height ÷ t.Height) destination pixels, so the ornament keeps
-    /// its own proportions at any button height; only the middle stretches.
-    /// </summary>
-    private static void HSliceScaled(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, Color tint)
-    {
-        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * r.Height / (float)t.Height));
-        dstCap = Math.Min(dstCap, r.Width / 2);
-        var midSrc = t.Width - 2 * srcCap;
-        var midDst = r.Width - 2 * dstCap;
-        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
-        if (midDst > 0) b.Draw(t, new Rectangle(r.X + dstCap, r.Y, midDst, r.Height), new Rectangle(srcCap, 0, midSrc, t.Height), tint);
-        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
-    }
 
     /// <summary>
     /// THE close button — one icon (icon_close, a gold × in a round medallion) for every panel, strip
@@ -1165,16 +1428,6 @@ public sealed class UiKit
             TextCenterBig(b, "×", r.Center.X, r.Y + r.Height / 2 - 12, hot ? Color.White : Vellum, UiTypography.Headline);
         }
         return clicked && hot;
-    }
-
-    /// <summary>Horizontal 3-slice: fixed <paramref name="cap"/>-wide ends, stretched middle.</summary>
-    private void HSlice(SpriteBatch b, Texture2D t, Rectangle r, int cap, Color tint)
-    {
-        var midSrc = t.Width - 2 * cap;
-        var midDst = r.Width - 2 * cap;
-        b.Draw(t, new Rectangle(r.X, r.Y, cap, r.Height), new Rectangle(0, 0, cap, t.Height), tint);
-        if (midDst > 0) b.Draw(t, new Rectangle(r.X + cap, r.Y, midDst, r.Height), new Rectangle(cap, 0, midSrc, t.Height), tint);
-        b.Draw(t, new Rectangle(r.Right - cap, r.Y, cap, r.Height), new Rectangle(t.Width - cap, 0, cap, t.Height), tint);
     }
 
     /// <summary>True if the mouse clicked inside a rectangle — for clickable list rows and slots.</summary>
@@ -1360,18 +1613,17 @@ public sealed class UiKit
         // An opaque TRACK first. The frame art's window is not opaque everywhere, and on the enemy
         // nameplate — the one bar that floats over the scene rather than sitting on a panel — the
         // forest showed through the depleted section, so a half-dead enemy read as a bar with a hole.
-        // A WIDE bar (the boss's, 600 px from 256 px of art) is drawn in five pieces so its corner and
-        // centre ornaments keep their shape and only the plain stone between them stretches — whole-image
-        // stretching smeared the scrollwork 2.3x (playtest 2026-08-26: "the boss bar's frame is stretched
-        // and looks cheap"). The window's inset then follows the scaled art, not a percentage of the width.
+        // EVERY bar is sliced (SliceFrame): the corner and centre ornaments are measured off each frame
+        // and drawn in proportion to the bar's height, and only the plain stone between them stretches —
+        // whole-image stretching smeared the boss bar's scrollwork 2.3x (playtest 2026-08-26: "the boss
+        // bar's frame is stretched and looks cheap"), and the 120 px hunter bar it left un-sliced was
+        // squashed 2.1x one way and 2.5x the other. The window's inset follows the scaled art.
         var scale = r.Height / (float)frame.Height;
-        var wide = r.Width > r.Height * frame.Width / frame.Height * 1.15f;
-        var insetX = wide ? Math.Max(2, (int)MathF.Round(BarWindowInsetSrcPx * scale)) : Math.Max(2, r.Width * 7 / 100);
+        var insetX = Math.Max(2, (int)MathF.Round(BarWindowInsetSrcPx * scale));
         var win = new Rectangle(r.X + insetX, r.Y + Math.Max(2, r.Height * 30 / 100),
                                 r.Width - insetX * 2, Math.Max(1, r.Height * 42 / 100));
         Fill(b, win, new Color(0x12, 0x0C, 0x10));
-        if (wide) HSliceOrnament(b, frame, r, BarCapSrcPx, BarOrnamentSrcX0, BarOrnamentSrcX1, Color.White);
-        else b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
+        SliceFrame(b, frame, r, Color.White);   // ornate frame + its (opaque) dark window
         if (pct > 0f && Assets.Get($"ui_bar_{type}_fill") is { } fill && fill.Width > 0)
         {
             var fw = Math.Max(1, (int)(win.Width * pct));

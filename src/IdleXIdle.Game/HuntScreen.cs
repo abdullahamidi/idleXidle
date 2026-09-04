@@ -618,7 +618,7 @@ public sealed class HuntScreen
         TourTarget.Enemies => new[] { new Rectangle(940, EnemyBox.Y, 680, EnemyBox.Height + 10), Inflated(StageHeader, 10) },
         TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
-        TourTarget.Skills => new[] { Inflated(SkillStrip, 10) },
+        TourTarget.Skills => new[] { Inflated(s_dockRect, 10) },
         // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
         // rail's height depends on how many errands are up, and a new game now holds the welcome chest,
         // so the fixed 268 px measured for an empty rail sliced the filter row in half on every first
@@ -1058,7 +1058,11 @@ public sealed class HuntScreen
     /// <remarks>Called same-frame as the boss-down banner, so "CHEST DROPPED!" replaces "BOSS DOWN!" cleanly.</remarks>
     public void FlashChest()
     {
-        _bannerText = "BOSS DOWN — CHEST DROPPED!  (F — FORGE)";
+        // THE VAULT, not the Forge. Chests moved to the VAULT screen when it was carved off the Forge, and
+        // this line kept sending players to the FORGE tab to open one (release polish 2026-09-05). No key
+        // hint either: the doors name no keys in their labels — the tour and the help sheet teach the
+        // keys (UX guide §14) — and the right column's OPEN VAULT door is the click this line points at.
+        _bannerText = "BOSS DOWN — A CHEST IS WAITING IN THE VAULT";
         _bannerTimer = 2.4f;
     }
 
@@ -1069,7 +1073,7 @@ public sealed class HuntScreen
     /// </remarks>
     public void FlashCharter(string name)
     {
-        _bannerText = $"{name} FOUND  —  SPEND IT IN THE FORGE (F)";
+        _bannerText = $"{name} FOUND  —  SPEND IT IN THE FORGE";
         _bannerTimer = 3.0f;
     }
 
@@ -3749,63 +3753,92 @@ public sealed class HuntScreen
     /// <summary>What the strip knows about one skill's timing this frame, read off the resolved wave.</summary>
     private readonly record struct SkillTiming(float Ready, float Swept, int RingSteps, float Telegraph, float Flash, int NextMs);
 
-    /// <summary>The ACTIVE / PASSIVE strip — the fight's own skills, grouped by whether they take a beat.</summary>
+    /// <summary>The dock as it was last drawn — its content's own extent — for the tour's light.</summary>
+    private static Rectangle s_dockRect = SkillStrip;
+
+    /// <summary>A slot's width in the dock: room for the medallion and a Headline name beside it. 236 at 100 %.</summary>
+    private static int DockSlotW => UiMetrics.Control(236);
+
+    /// <summary>
+    /// The ACTIVE / PASSIVE dock — the fight's own skills, grouped by whether they take a beat.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>NO PLATE, AND NO EMPTIES (release polish 2026-09-05).</b> The dock used to be a 1000×164 dark
+    /// plate across the foot of the arena with a slot drawn for every unlocked capacity, so a new hunter
+    /// with one skill fought under a huge dark rectangle holding one medallion and three EMPTY SLOT
+    /// notes — "sonradan yapıştırılmış koyu panel". The skills are drawn straight on the scene now, as
+    /// wide as they are and centred where the strip was, and an empty slot is not drawn at all: the
+    /// BUILD screen's hint and the rail's NEW mark already say a slot is waiting, and the fight is not
+    /// where a slot is filled.
+    /// </para>
+    /// <para>
+    /// What keeps the words legible over a lit floor is a SOFT SHADOW under the group — a stack of
+    /// faint fills feathering out over a few pixels — and a one-pixel dark shadow under every glyph
+    /// (<see cref="ShadowText"/>). Neither has an edge to read as a panel.
+    /// </para>
+    /// </remarks>
     private void DrawSkillDock(SpriteBatch b)
     {
         // THE FIGHT'S OWN SKILLS — the same list every event's Slot indexes; the slot index is kept through
         // the grouping because the replay is asked by it.
         var skills = _waveSkills;
-        var cap = Math.Max(1, Loadout.SkillCapacity);
-        var activeCap = Build.ActiveSlotsFor(cap);
-        var passiveCap = Build.PassiveSlotsFor(cap);
         var actives = new List<int>();
         var passives = new List<int>();
         for (var i = 0; i < skills.Count; i++) (skills[i].Def.TakesABeat ? actives : passives).Add(i);
-        // A skill the build placed past a group's capacity still shows — the fight runs it; the strip never lies.
-        activeCap = Math.Max(activeCap, actives.Count);
-        passiveCap = Math.Max(passiveCap, passives.Count);
+        if (actives.Count + passives.Count == 0) { s_dockRect = new Rectangle(SkillStrip.X, SkillStrip.Y, 0, 0); return; }
 
         var strip = SkillStrip;
-        _ui.Plate(b, strip);
-        var groupGap = passiveCap > 0 ? StripGroupGap : 0;
-        var gaps = Math.Max(0, activeCap - 1) + Math.Max(0, passiveCap - 1);
-        var slotW = (strip.Width - StripPad * 2 - groupGap - gaps * SlotGap) / Math.Max(1, activeCap + passiveCap);
+        var slotW = DockSlotW;
+        var groupGap = actives.Count > 0 && passives.Count > 0 ? StripGroupGap : 0;
+        var gaps = Math.Max(0, actives.Count - 1) + Math.Max(0, passives.Count - 1);
+        var width = (actives.Count + passives.Count) * slotW + gaps * SlotGap + groupGap;
+        var x0 = SkillStripCentreX - width / 2;
         var y = strip.Y + UiMetrics.Space(8);
         var slotY = y + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
+        var dock = new Rectangle(x0, strip.Y, width, strip.Height);
+        s_dockRect = dock;
 
-        var x = strip.X + StripPad;
-        x = DrawSkillGroup(b, "ACTIVE", x, y, slotY, slotW, activeCap, actives);
-        if (passiveCap > 0)
+        // The soft shadow: six fills, each a few pixels wider than the last and each faint, so the centre
+        // is dimmed by about a third and the edge fades to nothing over 24 px.
+        var feather = UiMetrics.Space(4);
+        for (var i = 6; i >= 1; i--)
         {
-            var ruleInset = UiMetrics.Space(12);
-            _ui.Fill(b, new Rectangle(x + groupGap / 2, strip.Y + ruleInset, 1, strip.Height - ruleInset * 2), UiInk.Rule);
-            DrawSkillGroup(b, "PASSIVE", x + groupGap, y, slotY, slotW, passiveCap, passives);
+            var band = new Rectangle(dock.X - i * feather, dock.Y - i * feather / 2, dock.Width + 2 * i * feather, dock.Height + i * feather);
+            _ui.Fill(b, band, UiKit.Ink * 0.07f);
         }
+
+        var x = x0;
+        if (actives.Count > 0)
+        {
+            x = DrawSkillGroup(b, "ACTIVE", x, y, slotY, slotW, actives);
+            if (passives.Count > 0)
+            {
+                var ruleInset = UiMetrics.Space(12);
+                _ui.Fill(b, new Rectangle(x + groupGap / 2, strip.Y + ruleInset, 1, strip.Height - ruleInset * 2), UiInk.Rule * 0.8f);
+                x += groupGap;
+            }
+        }
+        if (passives.Count > 0) DrawSkillGroup(b, "PASSIVE", x, y, slotY, slotW, passives);
     }
 
-    /// <summary>One group of the strip: its caption, its slots, and the empties up to its capacity. Returns the x after it.</summary>
-    private int DrawSkillGroup(SpriteBatch b, string caption, int x, int captionY, int slotY, int slotW, int capacity, List<int> members)
+    /// <summary>One group of the dock: its caption and its skills. Returns the x after the last slot.</summary>
+    private int DrawSkillGroup(SpriteBatch b, string caption, int x, int captionY, int slotY, int slotW, List<int> members)
     {
-        _ui.TextBig(b, caption, x + UiMetrics.Space(4), captionY, Slate, UiTypography.Secondary);
-        for (var k = 0; k < capacity; k++)
+        ShadowText(b, caption, x + UiMetrics.Space(4), captionY, Slate, UiTypography.Secondary);
+        foreach (var i in members)
         {
-            var slot = new Rectangle(x, slotY, slotW, SlotH);
-            if (k < members.Count) DrawSkillSlot(b, slot, members[k]);
-            else DrawEmptySkillSlot(b, slot);
+            DrawSkillSlot(b, new Rectangle(x, slotY, slotW, SlotH), i);
             x += slotW + SlotGap;
         }
         return x - SlotGap;
     }
 
-    /// <summary>An empty slot: the hex at half strength and where more slots come from. Shape, not tone, says "empty".</summary>
-    private void DrawEmptySkillSlot(SpriteBatch b, Rectangle slot)
+    /// <summary>Text over the scene: a one-pixel dark shadow under the glyphs, then the glyphs. Legible on any floor, no plate.</summary>
+    private void ShadowText(SpriteBatch b, string text, int x, int y, Color ink, int px)
     {
-        var box = MedallionBox(slot);
-        if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White * 0.5f);
-        var tx = box.Right + UiMetrics.Space(14);
-        var ty = slot.Y + UiMetrics.Space(24);
-        _ui.TextBig(b, "EMPTY SLOT", tx, ty, UiInk.Empty, UiTypography.Body);
-        _ui.TextBig(b, "MORE SLOTS AS YOU GO DEEPER", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
+        _ui.TextBig(b, text, x + 1, y + 2, UiKit.Ink * 0.85f, px);
+        _ui.TextBig(b, text, x, y, ink, px);
     }
 
     /// <summary>Where a slot's medallion sits: inset from the slot's left, centred on its height.</summary>
@@ -3848,19 +3881,20 @@ public sealed class HuntScreen
         }
 
         // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
+        // Shadowed, because they stand on the scene now rather than on a plate.
         var tx = box.Right + UiMetrics.Space(14);
         var room = slot.Right - UiMetrics.Space(8) - tx;
         var nameY = slot.Y + UiMetrics.Space(16);
-        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), tx, nameY, Bone, UiTypography.Headline);
+        ShadowText(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), tx, nameY, Bone, UiTypography.Headline);
         var word = ReadinessWord(def, t);
         var ty = nameY + UiTypography.Pitch(UiTypography.Headline);
         var source = s.Source.ToString().ToUpperInvariant();
         var wordW = _ui.MeasureBig(word, UiTypography.Body);
-        _ui.TextBig(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
+        ShadowText(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
         if (wordW + _ui.MeasureBig(" · " + source, UiTypography.Body) <= room)
         {
-            _ui.TextBig(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
-            _ui.TextBig(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
+            ShadowText(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
+            ShadowText(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
         }
         // The Source glyph in the corner — the third cue beside the colour and the word.
         if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } sg2)

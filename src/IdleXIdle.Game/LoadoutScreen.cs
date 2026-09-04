@@ -261,6 +261,23 @@ public sealed class LoadoutScreen
     /// </remarks>
     public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
 
+    /// <summary>
+    /// Every shared skill the account has EVER reached — the host's discovery latch. A shared skill outside
+    /// it is drawn as <c>???</c>: no name, no glyph, no line (release polish 2026-09-05, "gizem ve keşif").
+    /// </summary>
+    public IReadOnlySet<string> DiscoveredSkills { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// May this skill be NAMED on this screen? Its own signature always; a shared skill once it has been
+    /// reached on the tree, or once the hunter has spent a wave on it (a used skill is never a stranger).
+    /// </summary>
+    private bool Seen(SkillDef def)
+        => def.OwnerCharacterId is not null || KnownSkills().Contains(def.Id)
+           || DiscoveredSkills.Contains(def.Id) || SkillLevels.UsesOf(def.Id) > 0;
+
+    /// <summary>The ink of a thing not yet discovered — the TRAITS screen's own unknown ink, so the two screens agree.</summary>
+    private static readonly Color Unknown = new(0x6A, 0x64, 0x80);
+
     /// <summary>The Vows the account has found, by keeping a rule once without them.</summary>
     public IReadOnlyList<Vow> KnownVows { get; set; } = Array.Empty<Vow>();
 
@@ -549,9 +566,55 @@ public sealed class LoadoutScreen
     /// <summary>The body's width — the content column less the scrollbar's lane while it scrolls. Wrapping follows, and the two states cannot flip-flop: text in the narrower column is never shorter.</summary>
     private int InsBodyW => InsW - (_insOverflow > 0 ? ScrollLane : 0);
     private Rectangle ChangeVowBtn(int y) => new(InsX, y, InsBodyW, UiMetrics.ButtonHeightSmall);
-    private static int VowRowH => UiMetrics.Control(46);
+    /// <summary>A vow row's height: room for its seal beside two lines. 64 at 100 % (46 before the seals).</summary>
+    private static int VowRowH => UiMetrics.Control(64);
     private static int VowRowPitch => VowRowH + UiMetrics.Space(4);
     private Rectangle VowListRow(int i, int top) => new(InsX, top + i * VowRowPitch, InsBodyW, VowRowH);
+
+    // ── VOW SEALS (release polish 2026-09-05). A vow used to be a line of text in a list of lines of text;
+    //    it is a SEAL now — the sigil the world stamped on the promise — with its state drawn on it. ────
+
+    /// <summary>The asset key of a vow's seal: <c>icon_vow_singular</c> for <c>vow_singular</c>. Ten medallions were generated for the pass; a vow without one draws a diamond.</summary>
+    private static string SealKey(Vow v) => "icon_" + v.Id;
+
+    /// <summary>
+    /// A vow's seal in a box: the gold medallion when the vow HOLDS, dimmed and CRACKED when it is broken —
+    /// two ember strokes across the face — so the state is a picture before it is a word.
+    /// </summary>
+    private void VowSeal(SpriteBatch b, Vow v, Rectangle box, bool live, float alpha = 1f)
+    {
+        var tint = (live ? Color.White : new Color(0x8A, 0x84, 0x96)) * alpha;
+        if (!_ui.Icon(b, SealKey(v), box, tint))
+            _ui.Diamond(b, new Rectangle(box.X + box.Width / 6, box.Y + box.Height / 6, box.Width * 2 / 3, box.Height * 2 / 3), (live ? Gold : Slate) * alpha);
+        if (live) return;
+        // THE CRACK: a broken seal is a seal with a crack through it — one long stroke, one short.
+        var c = box.Center.ToVector2();
+        var r = box.Width * 0.36f;
+        var thick = Math.Max(2f, box.Width / 32f);
+        _ui.LineSeg(b, c + new Vector2(-r * 0.55f, -r), c + new Vector2(r * 0.15f, r * 0.05f), thick, Ember * alpha);
+        _ui.LineSeg(b, c + new Vector2(r * 0.15f, r * 0.05f), c + new Vector2(-r * 0.2f, r), thick, Ember * alpha);
+    }
+
+    /// <summary>The seal of NO VOW: a dark empty medallion — the unknown seal, faint — where a promise could go.</summary>
+    private void EmptySeal(SpriteBatch b, Rectangle box, float alpha = 1f)
+    {
+        if (!_ui.Icon(b, "icon_unknown_seal", box, Color.White * (0.55f * alpha)))
+            _ui.Diamond(b, new Rectangle(box.X + box.Width / 6, box.Y + box.Height / 6, box.Width * 2 / 3, box.Height * 2 / 3), Dim * alpha);
+    }
+
+    /// <summary>
+    /// A vow's RISK as four pips from its own <see cref="Vow.Severity"/> — the Core's measure of how much
+    /// the demand costs a build — so a heavier promise reads heavier before its multiplier is read.
+    /// </summary>
+    private void RiskPips(SpriteBatch b, Vow v, int x, int y, int pip, Color on, Color off)
+    {
+        var lit = Math.Clamp((int)MathF.Ceiling(v.Severity * 4f - 0.01f), 1, 4);
+        for (var i = 0; i < 4; i++)
+            _ui.Diamond(b, new Rectangle(x + i * (pip + UiMetrics.Space(3)), y, pip, pip), i < lit ? on : off);
+    }
+
+    /// <summary>The width of four risk pips at this pip size, for laying a label beside them.</summary>
+    private static int RiskPipsWidth(int pip) => pip * 4 + UiMetrics.Space(3) * 3;
 
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
     internal Rectangle[] Spotlights(TourTarget target) => target switch
@@ -898,6 +961,8 @@ public sealed class LoadoutScreen
                 // LOCKED, NOT UNLEARNED (BRIEF sec.20, LAW 4). The button says the state and the level the
                 // player keeps; the refusal beside it names the one thing that would open it again. Neither
                 // may say a word that implies the waves spent on this skill have gone anywhere.
+                if (!known.Contains(def.Id) && !Seen(def))
+                    return ("UNDISCOVERED", false, $"TAKE {StyleName(def.Style)}'S ROAD ON THE MASTERY TREE TO REVEAL IT.");
                 if (!known.Contains(def.Id))
                 {
                     var kept = SkillLevels.LevelOf(def.Id);
@@ -1127,19 +1192,36 @@ public sealed class LoadoutScreen
             }
             _ui.Icon(b, $"icon_skill_{def.Id}", gbox, col);
 
-            // Line 1: NAME, and the vow pill at the right.
+            // Line 1: NAME, and the vow's SEAL at the right — the medallion, then a chip with the state.
+            // The seal carries the identity (its name is the hover), the chip carries the verdict.
             var vow = Vows.ById(s.VowId);
             var pillW = 0;
             if (vow is not null)
             {
                 var live = Vows.IsActive(vow, ctx);
-                var pill = $"{vow.Short.ToUpperInvariant()} {(live ? "OK" : "BROKEN")}";
-                pillW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2;
-                var pr = new Rectangle(right - pillW, row.Y + pad, pillW, UiTypography.Caption + UiTypography.ChipPadY * 2);
-                _ui.Fill(b, pr, (live ? Gold : Ember) * 0.16f);
-                Outline(b, pr, live ? Gold : Ember, 1);
-                _ui.TextBig(b, pill, pr.X + UiTypography.ChipPadX, pr.Y + UiTypography.ChipPadY, live ? Gold : Ember, UiTypography.Caption);
-                Tip(In(pr, region), hit, live ? $"{vow.Name.ToUpperInvariant()} holds — x{Vows.Multiplier(vow):0.00}." : $"{vow.Name.ToUpperInvariant()} is broken: {DemandText(vow)} — it pays nothing until it holds.");
+                var sealEdge = UiTypography.Caption + UiTypography.ChipPadY * 2 + UiMetrics.Space(6);
+                // THE NAME KEEPS ITS ROOM. The chip says the most the row can afford: HOLDS x1.30, then
+                // HOLDS alone, then nothing — the seal's tint and crack already say the state, and at
+                // 150 % a full chip shortened HARD HANDS to "H…" (fix3_weave_vowcomplete_150.png).
+                var nameNeed = _ui.MeasureBig(def.Name, UiTypography.Headline) + UiMetrics.Space(12);
+                var roomForChip = right - tx - nameNeed - sealEdge - UiMetrics.Space(6);
+                var pill = live ? $"HOLDS  x{Vows.Multiplier(vow):0.00}" : "BROKEN";
+                var chipW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2;
+                if (chipW > roomForChip && live) { pill = "HOLDS"; chipW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2; }
+                if (chipW > roomForChip) { pill = ""; chipW = 0; }
+                pillW = sealEdge + (chipW > 0 ? UiMetrics.Space(6) + chipW : 0);
+                var sealBox = new Rectangle(right - pillW, row.Y + pad - UiMetrics.Space(3), sealEdge, sealEdge);
+                VowSeal(b, vow, sealBox, live);
+                var hot = sealBox;
+                if (chipW > 0)
+                {
+                    var pr = new Rectangle(sealBox.Right + UiMetrics.Space(6), row.Y + pad, chipW, UiTypography.Caption + UiTypography.ChipPadY * 2);
+                    _ui.Fill(b, pr, (live ? Gold : Ember) * 0.16f);
+                    Outline(b, pr, live ? Gold : Ember, 1);
+                    _ui.TextBig(b, pill, pr.X + UiTypography.ChipPadX, pr.Y + UiTypography.ChipPadY, live ? Gold : Ember, UiTypography.Caption);
+                    hot = Rectangle.Union(sealBox, pr);
+                }
+                Tip(In(hot, region), hit, live ? $"{vow.Name.ToUpperInvariant()} holds — {DemandText(vow)} — every skill x{Vows.Multiplier(vow):0.00}." : $"{vow.Name.ToUpperInvariant()} is broken: {DemandText(vow)} — it pays nothing until it holds.");
             }
             _ui.TextBig(b, _ui.ShortenBig(def.Name, right - pillW - pad - tx, UiTypography.Headline), tx, line1, on ? Gold : Bone, UiTypography.Headline);
             // Line 2: STYLE · LEVEL · the style factor.
@@ -1358,6 +1440,18 @@ public sealed class LoadoutScreen
             Cell(b, tile, TileBg, on, over);
             Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
             var ico = new Rectangle(tile.X + edgePad, tile.Y + edgePad, icoEdge, icoEdge);
+            if (!have && !Seen(def))
+            {
+                // AN UNDISCOVERED SKILL IS A SEAL AND A QUESTION, and nothing else — no name, no glyph, no
+                // kind, no level, no lock (a lock says "you know what this is"). The same reading the
+                // TRAITS screen gives an unknown characteristic, so the two libraries agree on what a
+                // secret looks like. The tile stays clickable: the inspector says how a skill is revealed.
+                if (!_ui.Icon(b, "icon_unknown_seal", ico, Color.White * (over ? 1f : 0.85f))) _ui.Diamond(b, ico, Unknown * 0.6f);
+                _ui.TextBig(b, "???", tile.X + nameLeft, tile.Y + UiMetrics.Space(6), Unknown, UiTypography.Body);
+                _ui.TextBig(b, "UNDISCOVERED", tile.X + nameLeft, tile.Y + UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Unknown * 0.8f, UiTypography.Caption);
+                Tip(shown, hit, "An undiscovered skill. A road on the MASTERY tree reveals it.");
+                return;
+            }
             if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
             var badge = isEquipped ? (longBadge ? $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}" : $"SLOT {Loadout.IndexOfSkill(def.Id) + 1}") : "";
             var tail = isEquipped ? _ui.MeasureBig(badge, UiTypography.Caption) + edgePad : !have ? lockEdge + edgePad : 0;
@@ -1707,6 +1801,21 @@ public sealed class LoadoutScreen
 
             // A skill: from a slot, or from the library.
             var ownSignature = def.OwnerCharacterId is not null;
+            if (!have && !Seen(def))
+            {
+                // THE UNKNOWN READING — a position in the library, not a skill. Nothing here reads the
+                // definition beyond its Style, which the row it sits in already says.
+                Head($"SKILL · {StyleName(def.Style)}");
+                var seal = new Rectangle(x, y, TreeIcon, TreeIcon);
+                if (!_ui.Icon(b, "icon_unknown_seal", seal, Ins(Color.White))) _ui.Diamond(b, seal, Ins(Unknown * 0.6f));
+                _ui.TextBig(b, "???", seal.Right + UiMetrics.Space(12), y + UiMetrics.Space(8), Ins(Unknown), UiTypography.Headline);
+                y += TreeIcon + UiMetrics.Space(8);
+                Line("SOMETHING REMAINS UNDISCOVERED.", Slate);
+                Gap(); Rule();
+                Head("HOW IT IS REVEALED");
+                Line($"TAKE {StyleName(def.Style)}'S ROAD ON THE MASTERY TREE. THE SKILL SHOWS ITS NAME THE MOMENT THE ROAD IS YOURS, AND KEEPS IT AFTER.", Bone, UiTypography.Body, 3);
+                return;
+            }
             Head($"{(ownSignature ? "SIGNATURE" : "SKILL")} · {StyleName(def.Style)} · {(def.TakesABeat ? "ACTIVE" : "PASSIVE")}{(slotOf >= 0 ? $" · SLOT {slotOf + 1}" : "")}",
                  ownSignature ? Gold : null);
             var ico = new Rectangle(x, y, TreeIcon, TreeIcon);
@@ -1795,9 +1904,22 @@ public sealed class LoadoutScreen
                     Head(sworn.Count > 1 ? "YOUR VOWS" : "YOUR VOW");
                     if (sworn.Count == 0)
                     {
-                        Line(Known.Count == 0
-                            ? "NO VOW SWORN — A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT"
-                            : "NO VOW SWORN", Slate);
+                        // THE EMPTY SEAL: a dark medallion where a promise could go, and the one line that
+                        // says how a promise is found. A card, like a sworn one, so the block keeps its
+                        // shape whether or not a vow is in it.
+                        var card = new Rectangle(x, y, w, UiMetrics.Control(64) + UiMetrics.Space(20));
+                        _ui.Plate(b, card, Ins(Dim), _insAlpha);
+                        var sealBox = new Rectangle(card.X + UiMetrics.Space(14), card.Y + UiMetrics.Space(10), UiMetrics.Control(64), UiMetrics.Control(64));
+                        EmptySeal(b, sealBox, _insAlpha);
+                        var tx0 = sealBox.Right + UiMetrics.Space(14);
+                        _ui.TextBig(b, "NO VOW SWORN", tx0, card.Y + UiMetrics.Space(14), Ins(UiInk.Empty), UiTypography.Headline);
+                        var hint = Known.Count == 0 ? "A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT" : "A PROMISE KEPT IS PAID ON EVERY SKILL";
+                        foreach (var l in _ui.WrapBig(hint, card.Right - UiMetrics.Space(12) - tx0, UiTypography.Caption).Take(2))
+                        {
+                            _ui.TextBig(b, l, tx0, card.Y + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Headline), Ins(Slate), UiTypography.Caption);
+                            break;
+                        }
+                        y = card.Bottom + UiMetrics.Space(8);
                     }
                     else
                     {
@@ -1805,17 +1927,55 @@ public sealed class LoadoutScreen
                         {
                             var holds = Vows.IsActive(v, ctx);
                             var lent = v.Id == lentId;
-                            _ui.TextBig(b, v.Name.ToUpperInvariant() + (lent ? " — LENT" : ""), x, y,
-                                        Ins(holds ? Gold : Bone), UiTypography.Body);
-                            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", x + w, y, Ins(holds ? Gold : Slate), UiTypography.Body);
-                            y += UiTypography.Pitch(UiTypography.Body);
-                            Pair("DEMAND", DemandText(v));
-                            Pair("YOUR BUILD", YourBuildText(v, ctx));
-                            Line(holds ? "HOLDS — IT PAYS" : $"BROKEN — IT PAYS NOTHING UNTIL {DemandText(v)}",
-                                 holds ? Met : Ember, UiTypography.Body, 2);
+                            var accent = holds ? Met : Ember;
+                            // THE SEAL CARD. Left: the medallion, cracked when broken. Right: the name, the
+                            // reward, the risk, then ASKS / YOUR BUILD as two labelled lines, and the verdict
+                            // as a ribbon along the card's foot. Everything on it is a Core fact.
+                            var sealEdge = UiMetrics.Control(64);
+                            var pad = UiMetrics.Space(12);
+                            var tx0 = x + pad + sealEdge + UiMetrics.Space(14);
+                            var tw = x + w - pad - tx0;
+                            var verdict = holds ? "HOLDS — IT PAYS" : $"BROKEN — PAYS NOTHING UNTIL {DemandText(v)}";
+                            var verdictLines = _ui.WrapBig(verdict, w - pad * 2, UiTypography.Secondary).Take(2).ToList();
+                            var lentLines = lent ? _ui.WrapBig("YOU DID NOT SWEAR THIS — A TRAIT HOLDS YOU TO IT", w - pad * 2, UiTypography.Caption).Take(2).ToList() : new List<string>();
+                            var bodyH = UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Secondary) * 2 + UiMetrics.Space(6);
+                            var ribbonH = UiMetrics.Space(8) + verdictLines.Count * UiTypography.Pitch(UiTypography.Secondary) + lentLines.Count * UiTypography.Pitch(UiTypography.Caption) + UiMetrics.Space(6);
+                            var card = new Rectangle(x, y, w, UiMetrics.Space(10) + Math.Max(sealEdge, bodyH) + UiMetrics.Space(10) + ribbonH);
+                            _ui.Plate(b, card, Ins(accent), _insAlpha);
+                            Outline(b, card, Ins(accent * 0.55f), 1);
+                            var sealBox = new Rectangle(x + pad, card.Y + UiMetrics.Space(10), sealEdge, sealEdge);
+                            VowSeal(b, v, sealBox, holds, _insAlpha);
+
+                            var ly = card.Y + UiMetrics.Space(10);
+                            var mult = $"x{Vows.Multiplier(v):0.00}";
+                            var multW = _ui.MeasureBig(mult, UiTypography.Headline);
+                            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), tw - multW - UiMetrics.Space(10), UiTypography.Headline), tx0, ly, Ins(holds ? Gold : Bone), UiTypography.Headline);
+                            _ui.TextRightBig(b, mult, x + w - pad, ly, Ins(holds ? Gold : Slate), UiTypography.Headline);
+                            ly += UiTypography.Pitch(UiTypography.Headline);
+                            // ASKS · YOUR BUILD — the two lines a player checks a promise against.
+                            var labelW = Math.Max(_ui.MeasureBig("ASKS", UiTypography.Caption), _ui.MeasureBig("YOUR BUILD", UiTypography.Caption)) + UiMetrics.Space(10);
+                            _ui.TextBig(b, "ASKS", tx0, ly + 2, Ins(Slate), UiTypography.Caption);
+                            _ui.TextBig(b, _ui.ShortenBig(DemandText(v), tw - labelW, UiTypography.Secondary), tx0 + labelW, ly, Ins(Bone), UiTypography.Secondary);
+                            ly += UiTypography.Pitch(UiTypography.Secondary);
+                            _ui.TextBig(b, "YOUR BUILD", tx0, ly + 2, Ins(Slate), UiTypography.Caption);
+                            _ui.TextBig(b, _ui.ShortenBig(YourBuildText(v, ctx), tw - labelW, UiTypography.Secondary), tx0 + labelW, ly, Ins(holds ? Met : Ember), UiTypography.Secondary);
+                            ly += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
+                            // RISK pips under the seal's column, right-aligned beside the reward they buy.
+                            var pip = UiMetrics.Control(8);
+                            _ui.TextRightBig(b, "RISK", x + w - pad - RiskPipsWidth(pip) - UiMetrics.Space(6), ly - 1, Ins(Slate), UiTypography.Caption);
+                            RiskPips(b, v, x + w - pad - RiskPipsWidth(pip), ly + 1, pip, Ins(holds ? Gold : Ember), Ins(Dim));
+
+                            // THE RIBBON: the verdict along the foot, on the accent.
+                            var ribbon = new Rectangle(card.X + 5, card.Bottom - ribbonH, card.Width - 6, ribbonH);
+                            _ui.Fill(b, ribbon, Ins(accent) * 0.12f);
+                            _ui.Fill(b, new Rectangle(ribbon.X, ribbon.Y, ribbon.Width, 1), Ins(accent) * 0.5f);
+                            var ry = ribbon.Y + UiMetrics.Space(6);
+                            foreach (var l in verdictLines) { _ui.TextBig(b, l, x + pad, ry, Ins(accent), UiTypography.Secondary); ry += UiTypography.Pitch(UiTypography.Secondary); }
                             // A vow the hunter never swore is paid for anyway, and a player who cannot see
                             // WHY a promise they did not make is holding them has been handed a mystery.
-                            if (lent) Line("YOU DID NOT SWEAR THIS — A TRAIT HOLDS YOU TO IT", Slate, UiTypography.Caption);
+                            foreach (var l in lentLines) { _ui.TextBig(b, l, x + pad, ry, Ins(Slate), UiTypography.Caption); ry += UiTypography.Pitch(UiTypography.Caption); }
+                            Tip(In(card, region), hit, v.Description);
+                            y = card.Bottom + UiMetrics.Space(8);
                         }
                         // WHAT THEY PAY TOGETHER — one number, because that is how the fight bills them:
                         // every kept vow's bonus summed under one ceiling, and a broken one adds nothing.
@@ -1889,22 +2049,28 @@ public sealed class LoadoutScreen
         y += UiMetrics.Space(4);
         _vowListTop = y;
         var pad = UiMetrics.Space(12);
-        // The right column — the multiplier over HOLDS / BROKEN — is measured, so the vow's name gets every
-        // pixel the row can give it before it is shortened.
-        var tail = Math.Max(_ui.MeasureBig("x0.00", UiTypography.Body), _ui.MeasureBig("BROKEN", UiTypography.Caption)) + pad * 2 + UiMetrics.Space(8);
+        // EVERY ROW IS A SEAL (release polish 2026-09-05): the medallion at the left, cracked where the
+        // build would break it today; the name and what it asks beside it; the reward and the verdict at
+        // the right. The right column is measured, so the vow's name gets every pixel the row can give it.
+        var sealEdge = VowRowH - UiMetrics.Space(12);
+        var textX = pad + sealEdge + UiMetrics.Space(10);
+        var tail = Math.Max(_ui.MeasureBig("x0.00", UiTypography.Body), _ui.MeasureBig("BROKEN", UiTypography.Caption)) + pad + UiMetrics.Space(8);
         for (var r = 0; r <= known.Count; r++)
         {
             var idx = r - 1;   // row 0 is NO VOW
             var row = VowListRow(r, _vowListTop);
             var shown = In(row, region);
             var over = shown.Contains(hit);
-            var nameY = row.Y + UiMetrics.Space(4);
-            var subY = nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6);
+            var nameY = row.Y + UiMetrics.Space(8);
+            var subY = nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(4);
+            var sealBox = new Rectangle(row.X + pad, row.Y + (row.Height - sealEdge) / 2, sealEdge, sealEdge);
             if (idx < 0)
             {
                 Cell(b, row, Quiet, sworn is null, over);
                 Outline(b, row, Ins(sworn is null ? Gold : over ? Slate : Dim), sworn is null ? 2 : 1);
-                _ui.TextBig(b, "NO VOW", row.X + pad, row.Y + (row.Height - UiTypography.Body) / 2, Ins(sworn is null ? Gold : Bone), UiTypography.Body);
+                EmptySeal(b, sealBox, _insAlpha);
+                _ui.TextBig(b, "NO VOW", row.X + textX, nameY, Ins(sworn is null ? Gold : Bone), UiTypography.Body);
+                _ui.TextBig(b, _ui.ShortenBig("NO PROMISE, NO REWARD", row.Width - textX - pad, UiTypography.Caption), row.X + textX, subY, Ins(Slate), UiTypography.Caption);
                 continue;
             }
             var v = known[idx];
@@ -1915,11 +2081,13 @@ public sealed class LoadoutScreen
             var barred = !on && !Loadout.VowFitsCapacity(_slot, v.Id);
             Cell(b, row, Quiet, on, over);
             Outline(b, row, Ins(on ? Gold : over ? Slate : Dim), on ? 2 : 1);
-            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - tail, UiTypography.Body), row.X + pad, nameY, Ins(on ? Gold : barred ? Dim : Bone), UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig(DemandText(v), row.Width - tail, UiTypography.Caption), row.X + pad, subY, Ins(Slate), UiTypography.Caption);
+            VowSeal(b, v, sealBox, live, barred ? 0.45f * _insAlpha : _insAlpha);
+            var nameRoom = row.Width - textX - tail;
+            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), nameRoom, UiTypography.Body), row.X + textX, nameY, Ins(on ? Gold : barred ? Dim : Bone), UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig("ASKS  " + DemandText(v), nameRoom, UiTypography.Caption), row.X + textX, subY, Ins(barred ? Dim : Slate), UiTypography.Caption);
             _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - pad, nameY, Ins(live ? Gold : Slate), UiTypography.Body);
             _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - pad, subY, Ins(live ? Met : Ember), UiTypography.Caption);
-            Tip(shown, hit, v.Description);
+            Tip(shown, hit, barred ? $"{v.Description} YOU MAY HOLD {Loadout.VowCapacity} VOW{(Loadout.VowCapacity == 1 ? "" : "S")} AT ONCE." : v.Description);
         }
         y = _vowListTop + (known.Count + 1) * VowRowPitch - UiMetrics.Space(4);
         _changeVowY = y + UiMetrics.Space(4);

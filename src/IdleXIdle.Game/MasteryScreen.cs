@@ -1054,7 +1054,11 @@ public sealed class MasteryScreen
     {
         TourTarget.MasteryTree => new[] { TreeView },
         TourTarget.Specialisations => new[] { InspectorPanel },
-        TourTarget.NodeCard => new[] { InspectorPanel, ResetBtn },
+        // POINTS, AND TAKING THEM BACK lights the POINTS plate and its button as ONE hole. It lit the
+        // button alone, which sat in a box just under the plate the card was talking about — read as a
+        // light that had slipped below the thing it meant (release polish 2026-09-05: "point kutucuğu
+        // point'in altını gösteriyor"). The card is placed beside the first hole, so the plate goes first.
+        TourTarget.NodeCard => new[] { Rectangle.Union(PointsPanel, ResetBtn), InspectorPanel },
         _ => Array.Empty<Rectangle>(),
     };
 

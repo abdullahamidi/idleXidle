@@ -520,6 +520,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Vow ids this account has found. Grows at the end of a descent, and never shrinks.</summary>
     private readonly HashSet<string> _discoveredVows = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Every SHARED skill the account has ever had access to — the discovery latch behind the BUILD
+    /// library's <c>???</c> tiles (release polish 2026-09-05).
+    /// </summary>
+    /// <remarks>
+    /// Access follows the CURRENT mastery allocation (BRIEF sec.15-17) and a skill can go back to LOCKED;
+    /// this set never shrinks, so a skill the player has seen once keeps its name while it is locked, and
+    /// a skill they have never reached shows as a question. Persisted in <c>SaveGame.LearnedSkills</c>,
+    /// which was written-never-read since the access rework and is exactly this latch by another name.
+    /// </remarks>
+    private readonly HashSet<string> _discoveredSkills = new(StringComparer.Ordinal);
+
+    /// <summary>The discovery latch, brought up to date with what the tree reaches right now.</summary>
+    private IReadOnlySet<string> DiscoveredSkillsNow()
+    {
+        foreach (var id in _mastery.AvailableSkills()) _discoveredSkills.Add(id);
+        return _discoveredSkills;
+    }
+
     /// <summary>The socket-capacity high-water mark: derived, legacy grant and worn count, maxed.</summary>
     private int _keystoneSocketsEarned;
 
@@ -922,11 +941,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
-        // save.LearnedSkills IS NO LONGER READ. It was the permanent-discovery latch (D7): a skill
-        // taught by a road stayed usable after the points moved on. Access now follows the CURRENT
-        // allocation (BRIEF sec.15-17), so the taken set above is the whole of it. The field is still
-        // WRITTEN for one version, so a player who rolls back to the previous build does not lose
-        // their skills on the way — see Save().
+        // save.LearnedSkills IS THE DISCOVERY LATCH, read again (release polish 2026-09-05). It stopped
+        // granting ACCESS when access started following the current allocation (BRIEF sec.15-17) and was
+        // written-never-read for a version; the BUILD library's ??? tiles need exactly what it records —
+        // which shared skills this account has ever reached. Seeded from the current tree and from any
+        // skill with waves on it too, so a save from before the latch was kept shows nothing as unknown
+        // that the player has plainly used.
+        _discoveredSkills.Clear();
+        foreach (var id in save.LearnedSkills) _discoveredSkills.Add(id);
+        foreach (var row in save.SkillProgress) if (row.Uses > 0) _discoveredSkills.Add(row.SkillId);
+        DiscoveredSkillsNow();
         // A SET ANNOUNCED IS ANNOUNCED FOR GOOD — but the screen that remembers it does not exist yet.
         // This runs from Initialize and GearScreen is built in LoadContent, which needs a GraphicsDevice,
         // so the list is PARKED here and handed over the moment the screen is there, exactly like the
@@ -955,6 +979,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The banked unlocked set rides in too; a save from before it was banked is seeded from the
         // gates that were true when it was written (LegacyUnlocks), so no champion is taken back.
         SaveSystem.RestoreCharacters(save, _characters);
+        // THE SIGNATURE IS EQUIPPED FOR THE PLAYER (release polish 2026-09-05): a save whose build has
+        // room but not the active champion's own skill gets it here, into an empty slot only. The
+        // switch repair does the same on every switch (RepairForSwitch); the fresh-game path already
+        // starts with it (PlayerLoadout.Starter).
+        LoadoutRepair.EnsureSignature(_loadout, _characters.Active);
         _runsWithVowKept = save.RunsWithVowKept;
         // THE TRAIT ACCOUNT. A plain object with no device, like CharacterState above and unlike the
         // screens below, so it is safe to restore here in Initialize. Unknown ids and unknown counter
@@ -1196,10 +1225,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
-            // WRITTEN, NEVER READ — a courtesy to the previous build for one version. Access is
-            // recomputed from MasteryTaken now; this list is what the OLD build would need to find
-            // if a player rolled back, so it keeps being written and stops being believed.
-            LearnedSkills = _mastery.AvailableSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
+            // THE DISCOVERY LATCH: every shared skill this account has ever reached (see
+            // _discoveredSkills). Access itself is recomputed from MasteryTaken; this only decides which
+            // tiles the BUILD library may name.
+            LearnedSkills = DiscoveredSkillsNow().OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // Which five-piece sets have already had their one announcement (see the GEAR block).
             CompletedSets = _gear.CompletedSets.OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
@@ -1315,6 +1344,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _hunter = new Hunter();
         _world = new World();
         _loadout = PlayerLoadout.Starter(_characters.Active);
+        _discoveredSkills.Clear();   // a new game has reached nothing yet
         _mastery = new MasteryTree();
         _dust = new MemoryDustWallet();
         _skillProgress = new SkillProgress();
@@ -3641,6 +3671,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // WHAT THE WORLD HAS TAUGHT AND WHAT THE HUNTER HAS PROVED. The workbench used to read the
             // trait tree for both; both are facts about the account now, and the host owns them.
             _loadoutScreen.DiscoveredKeystones = _keystoneMenu;
+            _loadoutScreen.DiscoveredSkills = DiscoveredSkillsNow();
             _loadoutScreen.KnownVows = _vowMenu;
             _loadoutScreen.NextSocketNote = Unlocks.NextSocketNote(GuideUnlockFacts());
             _loadoutScreen.NextVowNote = Unlocks.NextVowNote(GuideUnlockFacts());
@@ -4412,7 +4443,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // current mastery allocation has locked keeps its slot and reads LOCKED on the BUILD screen,
         // because a switch must not quietly finish what a respec started (BRIEF sec.13, sec.20, LAW 1).
         var unwoven = LoadoutRepair.ShedForeignSignatures(_loadout, who);
-        if (shed.Count == 0 && unwoven.Count == 0) return;
+        // AND THE NEW CHAMPION'S OWN SIGNATURE GOES IN (release polish 2026-09-05) — into the slot the
+        // old one just left, or any empty slot; never over a shared skill the player chose. The toast
+        // says so, so the switch reads as an exchange rather than a loss.
+        var placed = LoadoutRepair.EnsureSignature(_loadout, who);
+        var placedName = placed >= 0 && who.SignatureSkillId is { } ps && SkillCatalogue.Find(ps) is { } pd ? pd.Name.ToUpperInvariant() : null;
+        if (shed.Count == 0 && unwoven.Count == 0 && placedName is null) return;
 
         var lines = new List<string>();
         if (shed.Count > 0)
@@ -4427,9 +4463,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var names = unwoven.Select(d => d.Name.ToUpperInvariant()).ToList();
             var said = names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " AND " + names[^1];
             lines.Add(names.Count == 1
-                ? $"{said} BELONGS TO ANOTHER HUNTER — ITS SLOT IS EMPTY, AND EVERY LEVEL ON IT IS KEPT"
+                ? (placedName is not null
+                    ? $"{said} STAYS WITH ITS OWN HUNTER — {placedName} TAKES ITS SLOT, AND EVERY LEVEL IS KEPT"
+                    : $"{said} BELONGS TO ANOTHER HUNTER — ITS SLOT IS EMPTY, AND EVERY LEVEL ON IT IS KEPT")
                 : $"{said} BELONG TO ANOTHER HUNTER — THEIR SLOTS ARE EMPTY, AND EVERY LEVEL ON THEM IS KEPT");
         }
+        else if (placedName is not null)
+            lines.Add($"{placedName} — {who.Name.ToUpperInvariant()}'S OWN SKILL — IS EQUIPPED");
         _lockedMsg = string.Join("  ·  ", lines);
         _lockedTimer = 4.5f;
         Save();
@@ -7886,8 +7926,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             if (on)
             {
-                if (_assets.Get("ui_tab_active") is { } tab) _batch.Draw(tab, r, Color.White);
-                else if (_assets.Get("ui_button_primary") is { } bp) _batch.Draw(bp, r, Color.White);
+                // Sliced, not stretched: the tab art is 256×96 and the tile is 180×98, so a whole-image
+                // draw squashed its end scrollwork 0.7× one way and 1.02× the other (release polish).
+                if (_assets.Get("ui_tab_active") is { } tab) _ui.SliceFrame(_batch, tab, r, Color.White);
+                else if (_assets.Get("ui_button_primary") is { } bp) _ui.SliceFrame(_batch, bp, r, Color.White);
                 else _ui.Fill(_batch, r, new Color(0x3A, 0x28, 0x54));
                 _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.18f);   // purple interior tint
             }

@@ -102,6 +102,44 @@ public static class LoadoutRepair
     }
 
     /// <summary>
+    /// Put this champion's own SIGNATURE into the loadout if it is not already there, and return the
+    /// slot it went into, or -1 when it was already woven, there is no room, or there is no champion.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THE SIGNATURE IS EQUIPPED FOR THE PLAYER (release polish 2026-09-05).</b> A champion switch
+    /// used to leave the new champion's own skill in the library and the slot the old signature had held
+    /// EMPTY, on the reasoning that the player chooses what fills it. Playtest: the switch read as
+    /// losing a skill, and a new champion stood in its first waves with its birth skill unequipped. The
+    /// signature is the champion's identity — it needs no road, no other champion may hold it, and a
+    /// build without it is a build the roster card did not describe — so it is placed, not offered.
+    /// </para>
+    /// <para>
+    /// Placed where it costs nothing: the first EMPTY slot, else a new slot if capacity allows, and if
+    /// the loadout is full of shared skills the player chose, it is NOT placed — the player's full build
+    /// is not overwritten. The caller (the host's switch repair) empties the previous champion's
+    /// signature first, so the common case is that the signature takes exactly the slot the old one
+    /// left. Ownership is checked the composer's way; a character whose id is not the signature's
+    /// owner is never handed it.
+    /// </para>
+    /// </remarks>
+    public static int EnsureSignature(PlayerLoadout loadout, Character? character)
+    {
+        ArgumentNullException.ThrowIfNull(loadout);
+        if (character?.SignatureSkillId is not { } sigId) return -1;
+        if (SkillCatalogue.Find(sigId) is not { } def || def.OwnerCharacterId != character.Id) return -1;
+        if (loadout.HasSkill(sigId)) return -1;
+
+        for (var i = 0; i < loadout.Skills.Count; i++)
+            if (loadout.Skills[i].SkillId is null && loadout.SetSkill(i, sigId)) return i;
+
+        var added = loadout.AddSkill();
+        if (added >= 0 && loadout.SetSkill(added, sigId)) return added;
+        if (added >= 0) loadout.RemoveSkill(added);   // never leave a slot we opened and could not fill
+        return -1;
+    }
+
+    /// <summary>
     /// Empty every slot the given access and champion would refuse, and return what was emptied.
     /// </summary>
     /// <remarks>

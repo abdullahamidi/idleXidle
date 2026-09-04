@@ -578,7 +578,7 @@ public sealed class TrainingScreen
     private static int NameCol => IconCol + IconArt + UiMetrics.Gap;             // 54 at 100 %
     private static int RowButtonH => UiMetrics.Control(44);
     private static int RowGap => UiMetrics.Space(4);                             // the plate's pitch minus its height
-    private static int RankBarH => UiMetrics.Control(6);
+    private static int RankBarH => UiMetrics.Control(8);
 
     /// <summary>The comfortable pitch — 56 at 100 %; the derived pitch never exceeds it.</summary>
     private static int RowPitchMax => UiMetrics.Control(56);
@@ -744,10 +744,10 @@ public sealed class TrainingScreen
         var rankShown = playing ? TrainFeedback.Mix(_fx.RankFrom, rank, _fx.Progress) : rank;
         _ui.TextBig(b, $"{rank} / {hunter.StatRankCap}", row.X + RankCol, row.Y + UiMetrics.Space(4),
                     Tint(Slate, glow), UiTypography.Secondary);
+        // The house SLIM bar (UiKit.Bar — the progress bar contract), not a hand-drawn pair of fills, so
+        // a rank bar and a roster gate's bar are the same control at every profile.
         var barY = row.Bottom - UiMetrics.Space(14);
-        _ui.Fill(b, new Rectangle(row.X + RankCol, barY, RankBarW, RankBarH), Dim);
-        _ui.Fill(b, new Rectangle(row.X + RankCol, barY,
-                                  (int)MathF.Round(RankBarW * (rankShown / hunter.StatRankCap)), RankBarH), Tint(Bone, glow));
+        _ui.Bar(b, row.X + RankCol, barY, RankBarW, RankBarH, rankShown / hunter.StatRankCap, Tint(Bone, glow));
 
         // NOW → AFTER, at Headline, because this is the decision. When the two format the same — at
         // the cap, or a gain too small to show — the arrow is dropped: a "96 → 96" promises a change
