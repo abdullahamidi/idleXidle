@@ -57,13 +57,18 @@ Two consequences for anyone GENERATING an effect:
 1. **Padding is not free.** The renderer draws the whole frame, so a strip whose art fills half its
    frame needs a frame twice as large to show the same picture — and that size is reported as a ratio
    against the strip's authored 512. Above **1.25×** the renderer refuses to magnify any further and
-   the effect is flagged; below **0.75×** the strip is simply bigger than it is ever drawn. Measured:
-   `fx_shield`'s dome fills **0.492** of its frame, which is why it cannot reach the barrier band and
-   has been re-ordered; `fx_shield_break` fills **0.922**, and that is the shape to match. Measure any
-   new strip with `tools/asset-pipeline/fx_bounds.py`.
+   the effect is flagged; below **0.75×** the strip is simply bigger than it is ever drawn. The worked
+   case: `fx_shield` used to fill **0.492** of its frame, so the barrier could not reach the 1.10–1.20×
+   band at any honest size — the renderer clamped it and drew a 315-px dome across a 412-px hunter. It
+   was **regenerated 2026-09-04** and now fills **1.000**, so the same authored 1.15 draws 474 px at
+   **0.93×** native. `fx_shield_break` fills **0.922**. Measure any new strip with
+   `tools/asset-pipeline/fx_bounds.py`.
 2. **Author the art at the SHAPE the effect is.** A ground ring wants a wide, short strip; every trap
    strip in the tree is a near-square burst, so the ring anchors as a burst standing on the floor
-   rather than as an ellipse lying on it.
+   rather than as an ellipse lying on it. The same rule cost the shield a whole pass: a barrier is a
+   thing that ENCLOSES a standing figure, and the strip drawn for it was a squat hemisphere sitting in
+   the middle of a frame that was 46 % empty below it. No placement number can turn a half-dome into a
+   shell. When an effect must surround its subject, the art must be a closed shape filling its frame.
 
 ## 3. Clips
 
@@ -254,7 +259,8 @@ Vow is bound to it. It is an asset rather than drawn primitives on purpose (play
 "kendin bir kutucuk veya buton oluşturup görsel olarak onu kullanıyorsun").
 
 Combat beats: `fx_hit` (spark), `fx_weakhit` (puff), `fx_crit` (starburst), `fx_death` (ash plume),
-`fx_heal` (rising motes), `fx_shield` (dome flash), `fx_shield_break` (the dome bursting into shards).
+`fx_heal` (rising motes), `fx_shield` (a closed ring of light, held around the hunter for as long as
+the shield stands), `fx_shield_break` (that shell bursting into shards).
 
 `fx_levelup` (a column of light) is generated, on disk, and **played by nothing**. Its alias was
 removed 2026-09-03 so it stops claiming a consumer it does not have. The level-up moment it was made
@@ -278,6 +284,22 @@ which is a decision for the desk, not a number to turn. Until then it is a flagg
 * Assembly — `tools/asset-pipeline/v2/clip.py` (fetch → union-bbox strip → gate → sheet). The
   union bounding box across frames keeps the motion AND keeps the feet on one row, which is what
   `UiKit.AnimSprite` assumes when it measures a single bottom pad for the whole clip.
+* A HELD effect needs a LOOP, and the generator does not give you one by asking. "Pulses" and
+  "ripples once" both came back with a frame that fades to nothing — measured, frame 5 of 8 was empty —
+  which on a held effect is a barrier that blinks off once a second. Two things fixed it: pin the
+  ending (`animate_image(first_frame_url=X, last_frame_url=X, …)`, so the clip interpolates back to
+  where it started) and describe motion that CANNOT vanish ("the whole ring rotates slowly clockwise,
+  staying complete and equally bright in every frame"). Check it with a per-frame fill measurement
+  before filing, not by watching it.
+* `fx_shield`, regenerated 2026-09-04 (the shell that must surround the hunter):
+  `create_image_pixen(256², no_background, view="side", direction="west")` job
+  `4200157a-9a34-4006-919b-c33ebbbe711c` — "a solid white ring of light: one big round circle band,
+  thick and bright, the middle of the circle completely EMPTY, the ring reaching almost to all four
+  edges of the picture" — then `animate_image` job `4ed34cb6-2e05-4c20-a42c-0227194d327d` (first and
+  last frame pinned to that still), then
+  `clip.py job --job … --out assets/art/VFX/shield/fx_shield_strip8_512.png --effect` and
+  `rhart.py whiten`. Filling the frame is the whole point: a ring inscribed in the square means the
+  content box IS the drawn diameter, so 1.15 × the hunter's height is 1.15 × the hunter's height.
 
 ## 7. Quality gate (`rhart.py gate`)
 

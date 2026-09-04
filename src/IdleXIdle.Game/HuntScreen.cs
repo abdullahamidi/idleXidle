@@ -1551,9 +1551,9 @@ public sealed class HuntScreen
                     // BREAKING IS LOUD, because from the next bite the player is paying in health — the
                     // loudest beat in the fight that is not a boss falling (§63's priority ladder puts
                     // Shield Break at the top with Break / Stun / Execute). It gets the REWARD length
-                    // and its own art: fx_shield_break, a cracked dome bursting into shards, generated
-                    // for exactly this moment because fx_shield is a dome that flashes IN and settles —
-                    // a gain played backwards is not a break.
+                    // and its own art: fx_shield_break, a cracked shell bursting into shards, generated
+                    // for exactly this moment because fx_shield is the barrier STANDING — a shell that
+                    // is asked for every frame it exists. A held loop played backwards is not a break.
                     //
                     // The cue was sfx_champ_down at 0.30 — the champion's DEATH sample, quietened, for
                     // an event that is not a death. sfx_shield_break is the crack the §86 vocabulary
@@ -4251,9 +4251,20 @@ public sealed class HuntScreen
     /// both the smaller change and the better picture.
     /// </para>
     /// <para>
-    /// Restrained on purpose. It sits at about a third of the aura's size so it hugs the figure rather
-    /// than standing off it, its alpha rests low enough to read through, and it breathes slowly: SHIELD
-    /// is a STATE, and a state that flashes is indistinguishable from an event.
+    /// IT SURROUNDS THE HUNTER, and that is the acceptance clause (§106). The size is
+    /// <see cref="VfxProfiles.ShieldBarrier"/>'s 1.15 × his VISIBLE height, so the same number encloses
+    /// THE OATHBOUND's 162-px silhouette and QUIVER's 373-px one: measured in the arena it is a 474-px
+    /// circle around a 412-px figure, clearing the crown by 39 px and the soles by 23. What made that
+    /// possible was not a bigger multiplier — the strip is drawn at 0.93 of its own native size, inside
+    /// the §73 budget — it was the ART. The old <c>fx_shield</c> was a squat hemisphere filling
+    /// 0.762 × 0.492 of its frame, so the largest honest picture it could ever show was 315 px of dome
+    /// across a hunter's ribs, and reaching the band with it would have meant magnifying a 512-px frame
+    /// to 963 (LAW 16). It is a closed ring now.
+    /// </para>
+    /// <para>
+    /// It breathes slowly and never flashes: SHIELD is a STATE, and a state that flashes is
+    /// indistinguishable from an event. The gain, the absorb and UNDYING flare on the SAME rectangle,
+    /// so a blow always lands on the barrier rather than beside it.
     /// </para>
     /// </remarks>
     private void HoldShieldBarrier()
@@ -4292,9 +4303,17 @@ public sealed class HuntScreen
     }
 
     /// <summary>How present the barrier is while nothing is happening to it.</summary>
-    private const float ShieldShellRest = 0.16f;
+    /// <remarks>
+    /// RAISED WITH THE ART (2026-09-04). 0.16 was calibrated against the old strip, which was a solid
+    /// grey dome filling a fifth of its frame — a shape that reads at almost any alpha because it is a
+    /// mass. The barrier is a THIN BRIGHT RING now, about eleven drawn pixels of band around a 474-px
+    /// circle, and a line that thin at 0.16 additive is a smudge on the floor rather than a shell: the
+    /// first capture on the new art showed a barrier that surrounded the hunter correctly and could not
+    /// be seen doing it. Brightness belongs to the art it is lighting, so it moved when the art did.
+    /// </remarks>
+    private const float ShieldShellRest = 0.40f;
     /// <summary>...and how far the slow breath carries it above that.</summary>
-    private const float ShieldShellSwing = 0.14f;
+    private const float ShieldShellSwing = 0.20f;
 
     // THE THREE SIZE DIALS THAT USED TO LIVE HERE ARE GONE — AuraScale 6.4, ShieldShellScale 2.6 and
     // the break's scale 4, each a multiple of a 104-px "base unit" that no longer exists. A size in

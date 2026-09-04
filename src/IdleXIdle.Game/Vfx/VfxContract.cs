@@ -135,9 +135,12 @@ public readonly record struct VisualBounds(Rectangle Rect, int Facing)
 /// <summary>A strip frame's transparent margins as fractions of the FRAME, union across all frames.</summary>
 /// <remarks>
 /// Measured by <c>UiKit.Content(key)</c> from the same cached alpha scans the draw path already uses.
-/// It matters because <c>VfxPlayer</c> draws the WHOLE padded frame: <c>fx_shield</c>'s dome fills
-/// 0.762 x 0.492 of its 512-px frame, so a "270 px" shield is a 132-px picture. Relative scale
-/// measures the CONTENT; the frame size is derived from it.
+/// It matters because <c>VfxPlayer</c> draws the WHOLE padded frame. The case that named the type:
+/// <c>fx_shield</c> was a hemisphere filling 0.762 x 0.492 of its 512-px frame, so a "270 px" shield
+/// was a 132-px picture, and no multiplier could have fixed it — asking for the barrier's real size
+/// meant a 963-px frame, which is LAW 16's forbidden magnification. The strip was regenerated
+/// (2026-09-04) as a closed ring filling its whole frame and the same authored 1.15 now draws 474 px
+/// at 0.93 of native. Relative scale measures the CONTENT; the frame size is derived from it.
 /// </remarks>
 public readonly record struct ContentBox(float Left, float Top, float Right, float Bottom)
 {
