@@ -254,6 +254,29 @@ public class VfxContractTests
         Assert.DoesNotContain("_vfx.Clear()", beginWave[..(end > 0 ? end : beginWave.Length)]);
     }
 
+    [Fact]
+    public void test_the_debug_view_is_given_the_unclamped_ratio_because_the_clamped_one_diagnoses_nothing()
+    {
+        // The renderer draws every over-budget effect at exactly VfxBudget.Max, so the ratio ON the
+        // drawn placement is 1.25 for all of them — inside the band, by construction. A debug view fed
+        // that number printed "ratio 1.25 OVER BUDGET": a figure contradicting its own verdict, with
+        // the red branch of its colour rule unreachable. The honest, unclamped ratio is what the dump
+        // prints and what the asset order is written from, so it is what the picture must print too.
+        var figure = new VisualBounds(new Microsoft.Xna.Framework.Rectangle(0, 0, 200, 400), 1);
+        var quarter = new ContentBox(0.375f, 0.375f, 0.375f, 0.375f);
+        var profile = new VfxProfile("test", "fx_strike", VfxSubjectKind.Champion, VfxAnchor.Center, 0.5f);
+
+        var clamped = VfxResolver.Resolve(profile, figure, quarter, 512, 512, clampToBudget: true);
+        Assert.Equal(VfxBudget.Verdict.Ok, VfxBudget.Of(clamped.NativeRatio));   // it cannot tell
+        var honest = VfxResolver.Resolve(profile, figure, quarter, 512, 512);
+        Assert.Equal(VfxBudget.Verdict.Over, VfxBudget.Of(honest.NativeRatio));  // this can
+
+        var player = Code(Source("src", "IdleXIdle.Game", "VfxPlayer.cs"));
+        var row = player.Split('\n').Single(l => l.Contains("a.Placement.Anchor + drift", StringComparison.Ordinal));
+        Assert.Contains("a.HonestRatio", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("a.Placement.NativeRatio", row, StringComparison.Ordinal);
+    }
+
     // ── §112: nothing generated sits in the tree unreached ───────────────────────────────────────
 
     [Fact]

@@ -123,10 +123,13 @@ public readonly record struct VfxSubject(VfxSubjectKind Kind, int Slot)
 /// </remarks>
 public readonly record struct VisualBounds(Rectangle Rect, int Facing)
 {
+    /// <summary>The figure's visible middle. The one reading anything outside the resolver wants.</summary>
+    /// <remarks>
+    /// CenterY, Top and Bottom were written beside this and nothing read them — the resolver takes its
+    /// anchors off <see cref="Rect"/> directly. A convenience nobody calls is the dial-with-no-consumer
+    /// this project keeps finding, so they are gone; add one back with the site that needs it.
+    /// </remarks>
     public int CenterX => Rect.Center.X;
-    public int CenterY => Rect.Center.Y;
-    public int Top => Rect.Top;
-    public int Bottom => Rect.Bottom;
 }
 
 /// <summary>A strip frame's transparent margins as fractions of the FRAME, union across all frames.</summary>

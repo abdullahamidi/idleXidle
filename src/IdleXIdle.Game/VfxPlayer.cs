@@ -56,6 +56,17 @@ public sealed class VfxPlayer
         public bool Resolved;
         public bool OverBudget;
 
+        /// <summary>
+        /// The ratio the placement would have had if the budget had not clamped it.
+        /// </summary>
+        /// <remarks>
+        /// The DRAWN ratio is useless as a diagnosis: it is 1.25 for every over-budget effect by
+        /// construction, so a debug view reading it printed "ratio 1.25 OVER BUDGET" — a number
+        /// inside the band next to a verdict saying it is not, and its red branch could never fire.
+        /// This is the number the dump prints and the asset order is written from.
+        /// </remarks>
+        public float HonestRatio;
+
         /// <summary>The content centre it starts at, and the one it eases toward. Equal unless it travels.</summary>
         public Point From, To;
 
@@ -178,6 +189,11 @@ public sealed class VfxPlayer
         Environment.GetEnvironmentVariable("RH_VFX_DUMP") is "1" or "true";
 
     /// <summary>What the debug view draws: every live effect as it actually resolved.</summary>
+    /// <remarks>
+    /// <paramref name="NativeRatio"/> is the UNCLAMPED ratio — the size the design asked for against
+    /// the size the strip was drawn at. The clamped one is 1.25 for every over-budget effect and so
+    /// diagnoses nothing; this is the number the dump prints and the art order is written from.
+    /// </remarks>
     public readonly record struct DebugItem(string Id, string Key, VfxSubject Subject, VfxLayer Layer,
                                             Rectangle Frame, Rectangle Content, Point Anchor,
                                             float NativeRatio, bool Held, bool OverBudget);
@@ -365,7 +381,7 @@ public sealed class VfxPlayer
             var content = a.Placement.Content;
             content.Offset(drift);
             _debug.Add(new DebugItem(a.Profile.Id, a.Key, a.Subject, a.Profile.Layer, dest, content,
-                                     a.Placement.Anchor + drift, a.Placement.NativeRatio, a.Loop, a.OverBudget));
+                                     a.Placement.Anchor + drift, a.HonestRatio, a.Loop, a.OverBudget));
         }
         if (!opened) return;
         b.End();
@@ -387,6 +403,7 @@ public sealed class VfxPlayer
         // giant runtime multiplier quietly making a 512-px strip 963 px tall (LAW 16).
         var honest = VfxResolver.Resolve(a.Profile, s, content, a.FrameW, a.FrameH);
         a.Placement = VfxResolver.Resolve(a.Profile, s, content, a.FrameW, a.FrameH, clampToBudget: true);
+        a.HonestRatio = honest.NativeRatio;
         a.OverBudget = VfxBudget.Of(honest.NativeRatio) == VfxBudget.Verdict.Over;
 
         var centre = a.Placement.Content.Center;
