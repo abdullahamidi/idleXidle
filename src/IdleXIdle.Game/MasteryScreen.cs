@@ -996,7 +996,7 @@ public sealed class MasteryScreen
     {
         var w = SpecWidthBase - UiTypography.PanelPadX * 2;
         return _ui.WrapBig($"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR STYLES HIT SOFTER —", w, UiTypography.Body)
-                  .Concat(_ui.WrapBig("A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER.", w, UiTypography.Body))
+                  .Concat(_ui.WrapBig("A VOW YOU ARE KEEPING PULLS EVERY FAR STYLE ONE RING CLOSER.", w, UiTypography.Body))
                   .ToList();
     }
 

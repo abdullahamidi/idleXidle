@@ -51,8 +51,8 @@ namespace IdleXIdle.Core.Traits;
 /// <param name="PowerPerDeadCap">SETTLING WEIGHT — and its ceiling.</param>
 /// <param name="LastEnemyBonus">LAST WORD — how much harder the last living creature in a wave is hit.</param>
 /// <param name="AmplifyWindowPerEnemyMs">THE LINGERING MARK — how much longer a cast amplify window holds for each creature still alive when it opens.</param>
-/// <param name="UnswornBorrowsWeakestVow">THE KEPT WORD — a skill carrying no vow borrows the weakest vow the build has sworn and kept.</param>
-/// <param name="BrokenVowShare">THE PRICE PAID — the share of its bonus a vow still pays when its demand is not met.</param>
+/// <param name="UnswornBuildBorrowsWeakestVow">THE KEPT WORD — a build that has sworn no vow at all is held by the weakest vow the account has found, and paid by it.</param>
+/// <param name="VowPayPerExtraKeptVow">THE WEIGHT OF VOWS — how much more every vow pays for each vow past the first whose rule the build is keeping.</param>
 /// <param name="OneSourceRepeatsFirstCast">THE SINGLE NOTE — with every woven skill on one source, the wave's first cast lands twice.</param>
 /// <param name="AllMatchupsStrongAtSources">MANY TONGUES — the number of distinct sources at which every matchup counts as strong.</param>
 /// <param name="MatchedSuitSource">THE MATCHED SUIT — the element of the five-piece set being worn, resolved at composition time.</param>
@@ -85,8 +85,8 @@ public sealed record TraitRules(
     float PowerPerDeadCap = 0f,
     float LastEnemyBonus = 0f,
     int AmplifyWindowPerEnemyMs = 0,
-    bool UnswornBorrowsWeakestVow = false,
-    float BrokenVowShare = 0f,
+    bool UnswornBuildBorrowsWeakestVow = false,
+    float VowPayPerExtraKeptVow = 0f,
     bool OneSourceRepeatsFirstCast = false,
     int AllMatchupsStrongAtSources = 0,
     Source? MatchedSuitSource = null,
@@ -141,8 +141,8 @@ public sealed record TraitRules(
             PowerPerDeadCap: MathF.Max(a.PowerPerDeadCap, b.PowerPerDeadCap),
             LastEnemyBonus: a.LastEnemyBonus + b.LastEnemyBonus,
             AmplifyWindowPerEnemyMs: a.AmplifyWindowPerEnemyMs + b.AmplifyWindowPerEnemyMs,
-            UnswornBorrowsWeakestVow: a.UnswornBorrowsWeakestVow || b.UnswornBorrowsWeakestVow,
-            BrokenVowShare: MathF.Max(a.BrokenVowShare, b.BrokenVowShare),
+            UnswornBuildBorrowsWeakestVow: a.UnswornBuildBorrowsWeakestVow || b.UnswornBuildBorrowsWeakestVow,
+            VowPayPerExtraKeptVow: a.VowPayPerExtraKeptVow + b.VowPayPerExtraKeptVow,
             OneSourceRepeatsFirstCast: a.OneSourceRepeatsFirstCast || b.OneSourceRepeatsFirstCast,
             AllMatchupsStrongAtSources: Kinder(a.AllMatchupsStrongAtSources, b.AllMatchupsStrongAtSources),
             MatchedSuitSource: a.MatchedSuitSource ?? b.MatchedSuitSource,

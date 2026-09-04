@@ -523,17 +523,11 @@ public sealed class SoloExpedition
         var shape = _build.Shape;
 
         var wide = false;
-        var broken = false;
-        var seenVows = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < _build.Skills.Count; i++)
         {
-            var sk = _build.Skills[i];
             // A WIDE wave is one this build could have reached three creatures with — a property of
             // the weave, not of how many creatures the band happened to roll.
-            if (shape.TargetsFor(sk.Def) >= TraitDiscovery.WideTargets) wide = true;
-            // A promise sworn and not kept. Counted once per VOW, like every other vow price: a vow
-            // woven onto four skills is one promise broken, not four.
-            if (sk.Vow is { } vow && seenVows.Add(vow.Id) && !Vows.IsActive(vow, ctx)) broken = true;
+            if (shape.TargetsFor(_build.Skills[i].Def) >= TraitDiscovery.WideTargets) wide = true;
         }
 
         return new TraitWaveFacts(
@@ -554,7 +548,9 @@ public sealed class SoloExpedition
             OneElement: _build.Skills.Count > 0
                         && _build.Skills.All(s => s.Source == _build.Skills[0].Source),
             DistinctElements: ctx.DistinctSources,
-            VowSwornAndBroken: broken);
+            // The promises this build is KEEPING, asked of the whole build and counted once per vow —
+            // the same call the fight makes when it decides what those promises pay.
+            VowsKept: Vows.KeptCount(_build.Vows, ctx));
     }
 
     private Haul HaulForWave(int wave, WaveBonus bonus)

@@ -217,7 +217,7 @@ public sealed class PlayerLoadout
         _skills[slot] = _skills[slot] with { Source = Cycle(_skills[slot].Source, dir) };
     }
 
-    /// <summary>Cycle the Vow through the studied ones plus "no vow". Only studied Vows are offerable.</summary>
+    /// <summary>Cycle through the Vows the account has FOUND plus "no vow". Only found Vows are offerable.</summary>
     public void CycleVow(int slot, int dir, IReadOnlyList<Vow> knownVows)
     {
         ArgumentNullException.ThrowIfNull(knownVows);
@@ -285,15 +285,15 @@ public sealed class PlayerLoadout
     public bool HasSkill(string skillId) => IndexOfSkill(skillId) >= 0;
 
     /// <summary>
-    /// Swear a Vow on a slot, or clear it with null. Refuses a Vow the account has not found, and
-    /// refuses one more different Vow than <see cref="VowCapacity"/> allows.
+    /// Swear a Vow, recorded at the slot the player swore it at, or clear it with null. Refuses a Vow
+    /// the account has not found, and refuses one more different Vow than <see cref="VowCapacity"/> allows.
     /// </summary>
     /// <remarks>
     /// Neither guard is defensive padding. A Vow is FOUND by keeping its rule once without it, so a
     /// screen that could set one the account never proved would hand over the reward the proof is for.
     /// And capacity is a real bound the world grants — swearing past it has to be refused below the UI
-    /// or the number is decoration. Binding a Vow the build ALREADY carries is always allowed: that is
-    /// the same promise on a second slot, not a second promise.
+    /// or the number is decoration. Swearing a Vow the build ALREADY carries is always allowed: it is
+    /// one promise written down twice, not a second promise.
     /// </remarks>
     public bool SetVow(int slot, string? vowId, IReadOnlyList<Vow> knownVows)
     {
@@ -305,7 +305,7 @@ public sealed class PlayerLoadout
         return true;
     }
 
-    /// <summary>Would putting this Vow on this slot leave the build inside <see cref="VowCapacity"/>?</summary>
+    /// <summary>Would swearing this Vow leave the BUILD inside <see cref="VowCapacity"/>? Distinct promises are counted, never rows.</summary>
     /// <remarks>Public so the workbench can grey the choice rather than let the player click into a refusal.</remarks>
     public bool VowFitsCapacity(int slot, string? vowId)
     {

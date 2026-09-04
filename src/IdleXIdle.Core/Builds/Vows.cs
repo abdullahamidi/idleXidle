@@ -740,16 +740,8 @@ public static class Vows
     /// build in the game is one bounded number rather than a stack nobody can measure.
     /// </para>
     /// </remarks>
-    /// <param name="brokenShare">
-    /// THE PRICE PAID — the share of its bonus a vow whose demand is NOT being met still pays. Zero
-    /// everywhere except when that trait is worn, which is the ordinary rule: a broken promise buys
-    /// nothing. The trait was authored against a per-slot vow model and reached the fight through a
-    /// method that model's replacement deleted; this is the one place a vow's bonus is decided now,
-    /// so it is the one place the trait can live.
-    /// </param>
     public static float CombinedFactor(
-        IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null,
-        float brokenShare = 0f)
+        IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null)
     {
         if (sworn is null) return 1f;
         tuning ??= VowTuning.Default;
@@ -760,21 +752,45 @@ public static class Vows
         {
             // ONCE PER VOW, however many slots carry it. A Vow is sworn, not equipped.
             if (vow is null || !seen.Add(vow.Id)) continue;
-            var share = IsActive(vow, ctx) ? 1f : MathF.Max(0f, brokenShare);
-            if (share <= 0f) continue;
-            bonus += (Multiplier(vow, tuning) - 1f) * share;
+            // A promise you are not keeping pays NOTHING. Restriction buys power, so a restriction
+            // you are not accepting buys none of it — there is no partial credit anywhere in here.
+            if (!IsActive(vow, ctx)) continue;
+            bonus += Multiplier(vow, tuning) - 1f;
         }
         if (bonus <= 0f) return 1f;
 
         return 1f + MathF.Min(tuning.CombinedBonusCeiling, bonus) * MathF.Max(0f, vowPowerMultiplier);
     }
 
+    /// <summary>
+    /// How many DIFFERENT Vows this build is sworn to and actually keeping.
+    /// </summary>
+    /// <remarks>
+    /// The count THE WEIGHT OF VOWS is paid on, and the same count the trait's discovery rule is fed
+    /// from at the end of a cleared wave — one question, asked one way, so what earns the trait and
+    /// what the trait pays for cannot drift apart. Distinct, because a promise made twice is one
+    /// promise; kept, because restriction buys power and a broken restriction buys none of it.
+    /// </remarks>
+    public static int KeptCount(IEnumerable<Vow?>? sworn, BuildContext ctx)
+    {
+        if (sworn is null) return 0;
+
+        var kept = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var vow in sworn)
+        {
+            if (vow is null || !seen.Add(vow.Id)) continue;
+            if (IsActive(vow, ctx)) kept++;
+        }
+        return kept;
+    }
+
     /// <summary>Is at least one of these Vows sworn AND kept? The affinity buy-back's question.</summary>
     /// <remarks>
-    /// Restriction buys power — so a BROKEN Vow must buy nothing. The old per-skill test asked only
-    /// whether a slot carried a Vow at all, which paid an off-discipline skill's affinity back for
+    /// Restriction buys power — so a BROKEN Vow must buy nothing. The buy-back used to ask only
+    /// whether a Vow had been NAMED at all, which paid an off-discipline skill's affinity back for
     /// merely CLAIMING a restriction the build was not keeping.
     /// </remarks>
     public static bool AnyKept(IEnumerable<Vow?>? sworn, BuildContext ctx)
-        => sworn is not null && sworn.Any(v => v is not null && IsActive(v, ctx));
+        => KeptCount(sworn, ctx) > 0;
 }

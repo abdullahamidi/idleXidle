@@ -25,7 +25,7 @@ public class AffinityVowBuybackTest
             {
                 // Arrange
                 var plain = StyleAffinity.Factor(affinity, skill);
-                var sworn = StyleAffinity.Factor(affinity, skill, vowSworn: true);
+                var sworn = StyleAffinity.Factor(affinity, skill, vowKept: true);
 
                 if (skill == affinity)
                 {

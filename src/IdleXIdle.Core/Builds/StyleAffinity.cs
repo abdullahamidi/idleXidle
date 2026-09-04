@@ -26,15 +26,19 @@ public static class StyleAffinity
         => FactorAtDistance(SkillCatalogue.RingDistance(affinity, skill));
 
     /// <summary>
-    /// The factor WITH the buy-back: a SWORN VOW on the skill pulls it one ring toward the
-    /// discipline. Straight from the system this game was born from — a restriction is how you wield
-    /// what your affinity does not give you. The native style gains nothing (you already own it) and
-    /// an unsworn skill pays the full distance.
+    /// The factor WITH the buy-back: while the build is KEEPING a vow, every off-discipline skill is
+    /// pulled one ring toward the discipline. Straight from the system this game was born from — a
+    /// restriction is how you wield what your affinity does not give you.
     /// </summary>
-    public static float Factor(Style affinity, Style skill, bool vowSworn)
+    /// <remarks>
+    /// A vow is a promise about the whole BUILD, so the question is asked of the build once
+    /// (<see cref="Vows.AnyKept"/>) and answered the same way for every skill in it. The native style
+    /// gains nothing — you already own it — and a build keeping no promise pays the full distance.
+    /// </remarks>
+    public static float Factor(Style affinity, Style skill, bool vowKept)
     {
         var dist = SkillCatalogue.RingDistance(affinity, skill);
-        if (vowSworn && dist > 0) dist -= 1;
+        if (vowKept && dist > 0) dist -= 1;
         return FactorAtDistance(dist);
     }
 

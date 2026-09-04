@@ -109,8 +109,8 @@ public enum TraitCounter
     CreaturesKilled,
     /// <summary>Marks cast — every Amplify skill, counted where its window opens.</summary>
     MarkCasts,
-    /// <summary>Waves fought with a vow sworn whose demand was not met.</summary>
-    BrokenVowWaves,
+    /// <summary>Waves cleared while keeping two or more vows at once.</summary>
+    ManyVowWaves,
     /// <summary>Waves cleared with every woven skill on one element.</summary>
     PureWaves,
     /// <summary>Waves cleared carrying four or more distinct elements.</summary>
@@ -350,21 +350,31 @@ public static class TraitCatalogue
             Fixed(new TraitRules(AmplifyWindowPerEnemyMs: 1_000))),
 
         // ── VOWS ─────────────────────────────────────────────────────────────────────────────────
+        //
+        // A vow is a promise about the WHOLE BUILD: sworn once, judged once against everything the
+        // hunter is carrying, and paid once. Both traits here are written to that, and both pay only
+        // for a promise being KEPT — which is the law the entire vow system rests on.
         new("t_kept_word", "THE KEPT WORD",
-            "A skill with no vow on it borrows the weakest vow you have sworn and kept.",
-            "A promise kept covers more than it was made about.",
+            "If you have sworn no vows, the weakest vow you have found still holds you, and still pays.",
+            "You kept your word so long that a promise holds you without being spoken.",
             TraitTag.Vows,
-            // Keeping your word awakens your word covering more of you.
+            // Keeping your word, descent after descent, awakens a word that keeps you when you have
+            // given none. It pays only a hunter who has sworn nothing at all, so it is a real decision
+            // about the build rather than a free rider on a promise already made.
             At(TraitCounter.RunsWithVowKept, 8),
-            Fixed(new TraitRules(UnswornBorrowsWeakestVow: true))),
+            Fixed(new TraitRules(UnswornBuildBorrowsWeakestVow: true))),
 
-        new("t_price_paid", "THE PRICE PAID",
-            "A vow whose demand you have broken still pays half of its bonus.",
-            "You paid for it. Some of it is still yours.",
+        new("t_weight_of_vows", "THE WEIGHT OF VOWS",
+            "Each vow you are keeping after the first makes all of your vows pay 20% more.",
+            "One promise is a rule. Three are a life.",
             TraitTag.Vows,
-            // Living through a promise you could not keep awakens partial credit for it.
-            At(TraitCounter.BrokenVowWaves, 20),
-            Fixed(new TraitRules(BrokenVowShare: 0.5f))),
+            // Carrying more than one promise at once awakens the reward for carrying them. A vow whose
+            // rule the build is breaking counts for nothing here and pays nothing anywhere else, so
+            // this can only be earned — and only ever paid — by promises actually kept. It needs the
+            // vow capacity a milestone grants before it can be earned at all, which is the point: it
+            // is the trait that makes the second and third promise worth the restriction they cost.
+            At(TraitCounter.ManyVowWaves, 40),
+            Fixed(new TraitRules(VowPayPerExtraKeptVow: 0.20f))),
 
         // ── ELEMENTS ─────────────────────────────────────────────────────────────────────────────
         new("t_single_note", "THE SINGLE NOTE",

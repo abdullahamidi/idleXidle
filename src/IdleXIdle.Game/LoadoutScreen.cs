@@ -16,7 +16,7 @@ namespace IdleXIdle.Game;
 
 /// <summary>
 /// BUILD: what your hunter carries into the fight — the skills in their slots, each skill's own variation
-/// and reinforcements, the keystones, and the Vow bound to a slot — edited as master-detail.
+/// and reinforcements, the keystones, and the Vows the build has sworn — edited as master-detail.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -597,9 +597,23 @@ public sealed class LoadoutScreen
     private static string StyleName(Style s) => s.ToString().ToUpperInvariant();
     private IReadOnlyList<Vow> Known => KnownVows;
 
+    /// <summary>
+    /// The live build and the context the Vow layer judges it in, composed once, together.
+    /// </summary>
+    /// <remarks>
+    /// The BUILD is wanted as well as the context because a Vow is a promise about the whole build:
+    /// what it pays, and whether the affinity buy-back applies at all, are questions about the build's
+    /// sworn promises taken together — never about one row. Composed the same way the fight composes
+    /// it, so what this screen prints is what the descent will do.
+    /// </remarks>
+    private (Build Build, BuildContext Ctx) Live()
+    {
+        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
+        return (build, Hunter is { } h ? SoloBattle.DescribeBuild(build, h) : BuildContext.Empty);
+    }
+
     /// <summary>The live build, described to the Vow layer — the same struct the simulation judges against.</summary>
-    private BuildContext Context =>
-        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), h) : BuildContext.Empty;
+    private BuildContext Context => Live().Ctx;
 
     /// <summary>Every skill this hunter can equip: the roads walked, plus what it was born with.</summary>
     private IReadOnlySet<string> KnownSkills()
@@ -807,7 +821,7 @@ public sealed class LoadoutScreen
                 if (_slot >= skills.Count) { _msg = "PICK A SLOT FIRST."; return; }
                 if (idx < 0)
                 {
-                    if (Loadout.SetVow(_slot, null, known)) { Dirty = true; _buildRev++; _msg = "NO VOW ON THIS SLOT."; }
+                    if (Loadout.SetVow(_slot, null, known)) { Dirty = true; _buildRev++; _msg = "NO VOW SWORN."; }
                 }
                 else
                 {
@@ -816,11 +830,11 @@ public sealed class LoadoutScreen
                     if (Loadout.SetVow(_slot, already ? null : v.Id, known))
                     {
                         Dirty = true; _buildRev++;
-                        if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
-                        else { _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}."; UiMotion.Flash(BindKey(_slot), UiMotion.Reward); Sound?.Play("sfx_bind", 0.55f); }
+                        if (already) _msg = $"{v.Name.ToUpperInvariant()} — NO LONGER SWORN.";
+                        else { _msg = $"{v.Name.ToUpperInvariant()} SWORN."; UiMotion.Flash(BindKey(_slot), UiMotion.Reward); Sound?.Play("sfx_bind", 0.55f); }
                     }
                     else _msg = Loadout.VowFitsCapacity(_slot, v.Id)
-                        ? "THIS SLOT CANNOT TAKE THAT VOW."
+                        ? "THAT VOW CANNOT BE SWORN RIGHT NOW."
                         : $"YOU MAY HOLD {Loadout.VowCapacity} VOW{(Loadout.VowCapacity == 1 ? "" : "S")} AT ONCE. "
                           + (NextVowNote.Length > 0 ? NextVowNote + "." : "");
                 }
@@ -1049,7 +1063,12 @@ public sealed class LoadoutScreen
         _ui.TextCenterBig(b, "YOUR LOADOUT", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
 
         var skills = Loadout.Skills;
-        var ctx = Context;
+        var (model, ctx) = Live();
+        // THE BUY-BACK IS A FACT ABOUT THE BUILD. The fight pulls every off-discipline skill one ring
+        // closer while the build is keeping at least one promise (SoloBattle, Vows.AnyKept), so the
+        // rows have to ask the same question — asking each row about its own vow printed a number the
+        // descent would not use.
+        var vowKept = Vows.AnyKept(model.Vows, ctx);
         var known = KnownSkills();
         var region = ListRegion;
         var scrolling = _loadOverflow > 0;
@@ -1129,7 +1148,7 @@ public sealed class LoadoutScreen
             var line2Text = $"{StyleName(def.Style)} · LV {level}";
             if (ChosenStyle is { } dd)
             {
-                var f = StyleAffinity.Factor(dd, def.Style, vowSworn: s.VowId is not null);
+                var f = StyleAffinity.Factor(dd, def.Style, vowKept);
                 line2Text += f >= 1.99f ? " · x2.0 YOURS" : $" · x{f:0.0#}";
             }
             _ui.TextBig(b, line2Text, tx, line2, Slate, UiTypography.Secondary);
@@ -1533,7 +1552,8 @@ public sealed class LoadoutScreen
         var y = InsBodyTop - scroll;
         var known = KnownSkills();
         var skills = Loadout.Skills;
-        var ctx = Context;
+        var (model, ctx) = Live();
+        var vowKept = Vows.AnyKept(model.Vows, ctx);   // see DrawLoadout: the buy-back is build-wide
         _changeVowY = 0;
         _changeVowShown = false;
         _respecShown = false;
@@ -1741,7 +1761,7 @@ public sealed class LoadoutScreen
                 Line(level >= SkillProgress.MaxLevel ? $"LEVEL {level} · MAX" : $"LEVEL {level} · {SkillLevels.UsesOf(def.Id)}/{SkillProgress.UsesForLevel(level + 1)} WAVES TO THE NEXT{(free > 0 ? $" · +{free} TO SPEND" : "")}", free > 0 ? Gold : Bone);
                 if (ChosenStyle is { } dd)
                 {
-                    var f = StyleAffinity.Factor(dd, def.Style, vowSworn: slotOf >= 0 && skills[slotOf].VowId is not null);
+                    var f = StyleAffinity.Factor(dd, def.Style, vowKept);
                     Line(f >= 1.99f ? $"YOUR STYLE IS {StyleName(dd)} — THIS SKILL HITS x2.0" : $"YOUR STYLE IS {StyleName(dd)} — THIS {StyleName(def.Style)} SKILL HITS x{f:0.0#}", f >= 1.99f ? Gold : Slate, UiTypography.Secondary, 2);
                 }
                 else Line("NO STYLE CHOSEN YET — A SPECIALISATION NODE ON THE MASTERY TREE CHOOSES ONE.", Slate, UiTypography.Secondary, 2);
@@ -1765,7 +1785,7 @@ public sealed class LoadoutScreen
                     {
                         Line(Known.Count == 0
                             ? "NO VOW SWORN — A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT"
-                            : "NO VOW ON THIS SLOT", Slate);
+                            : "NO VOW SWORN", Slate);
                     }
                     else
                     {
@@ -1785,7 +1805,7 @@ public sealed class LoadoutScreen
                         var overBtn = In(btn, region).Contains(hit);
                         Cell(b, btn, Quiet, false, overBtn);
                         Outline(b, btn, Ins(overBtn ? Bone : Dim), 1);
-                        _ui.TextCenterBig(b, vow is null ? "BIND A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
+                        _ui.TextCenterBig(b, vow is null ? "SWEAR A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
                         y = btn.Bottom + UiMetrics.Space(8);
                     }
                 }
@@ -1816,7 +1836,7 @@ public sealed class LoadoutScreen
         }
     }
 
-    /// <summary>The known vows, in place of the sections below the validator: click one to bind it to the selected slot. Every known vow is a row — the body scrolls, so the list no longer pages.</summary>
+    /// <summary>The known vows, in place of the sections below the validator: click one to swear it. Every known vow is a row — the body scrolls, so the list no longer pages.</summary>
     private void DrawVowList(SpriteBatch b, Point hit, ref int y, Rectangle region)
     {
         var known = Known;
@@ -1824,10 +1844,11 @@ public sealed class LoadoutScreen
         var skills = Loadout.Skills;
         var sworn = _slot < skills.Count ? skills[_slot].VowId : null;
         var w = InsBodyW;
-        _ui.TextBig(b, $"SWEAR A VOW — SLOT {_slot + 1}", InsX, y, Ins(Slate), UiTypography.Secondary);
+        _ui.TextBig(b, "SWEAR A VOW", InsX, y, Ins(Slate), UiTypography.Secondary);
         // HOW MANY DIFFERENT PROMISES THIS HUNTER MAY HOLD. A Vow is a promise about the build, so the
-        // bound number is the count of DIFFERENT vows, not of slots carrying one — and the world grants
-        // it. A capacity the player is refused by and never shown is a rule they cannot learn.
+        // number shown counts DIFFERENT vows the build has sworn, however many rows happen to record
+        // them — and the world grants the capacity. A capacity the player is refused by and never
+        // shown is a rule they cannot learn.
         _ui.TextRightBig(b, $"{Loadout.SwornVows.Count} / {Loadout.VowCapacity} VOWS SWORN",
                          InsX + w, y, Ins(Slate), UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary);
@@ -1914,7 +1935,7 @@ public sealed class LoadoutScreen
         }
     }
 
-    /// <summary>A chain closing on the slot's skill glyph — the flourish a bound Vow plays over its row.</summary>
+    /// <summary>A chain closing on a skill glyph — the flourish a newly sworn Vow plays over the row it was sworn at.</summary>
     private void DrawBindChain(SpriteBatch b, Rectangle row, float t)
     {
         t = Math.Clamp(t, 0f, 1f);
