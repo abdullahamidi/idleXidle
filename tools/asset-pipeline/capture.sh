@@ -8,7 +8,7 @@
 # the render loop verifiable from here instead of guessed at — every layout claim
 # should be checked against this, not against the offscreen compositor.
 #
-# Modes: fight boss expedition forge build character stats warren map dust world
+# Modes: fight boss expedition forge build character stats warren map traits dust dusttree world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
@@ -88,8 +88,28 @@
 #
 #   RH_SHOT_REDUCED=1 bash tools/asset-pipeline/capture.sh fight build/shots/fight_reduced.png
 #
-# `dust` takes the same third argument for the TRAIT tree's camera (its home zoom
-# is about 0.55, fitting the whole tree; 1.2 frames one road with its art readable).
+# `traits` (alias: `dust`) is the TRAITS screen — three worn characteristics, the collection, and the
+# undiscovered as `???`. Its fixture awakens eleven of the twenty-six and wears three, because an
+# empty account shows none of the four things the screen is for. RH_SHOT_TRAIT picks what the
+# inspector is reading:
+#
+#   RH_SHOT_TRAIT=t_scar_tissue bash tools/asset-pipeline/capture.sh traits build/shots/t.png
+#   RH_SHOT_TRAIT=unknown       bash tools/asset-pipeline/capture.sh traits build/shots/unknown.png
+#
+# `unknown` poses the `???` reading — the inspector for a characteristic that has not awakened. It is
+# only reachable by clicking a tile and a capture never clicks, so without this dial that state could
+# never have been looked at.
+#
+# RH_SHOT_WAKE poses the AWAKENING PLATE over the same screen — `one` for a single trait's reveal,
+# `many` for the combined plate an established save gets on its first load. The reveal fires once, in
+# a moment nobody can schedule, so this is the only way its three rungs are ever photographed:
+#
+#   RH_SHOT_WAKE=one RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh traits build/shots/wake.png
+#
+# `dusttree` is the OLD Memory tree, which is no longer the trait system but is still the only
+# producer of the keystones and the vows until those move. It takes the third argument for the tree's
+# camera (its home zoom is about 0.55, fitting the whole tree; 1.2 frames one road with its art
+# readable); `traitlit` and `traitterm` pose that tree's purchase flourish and are unchanged.
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"
@@ -122,8 +142,12 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;
-# TRAITS: select a trait (a MemoryDust id) for the dust mode.
+# THE OLD TREE: select a node (a MemoryDust id) for the dusttree / traitlit modes.
 [ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
+# TRAITS: what the inspector is reading — a trait id, or `unknown` for the `???` reading. `traits` only.
+[ -n "$RH_SHOT_TRAIT" ] && RH_ENV+=(RH_SHOT_TRAIT="$RH_SHOT_TRAIT")
+# TRAITS: pose the awakening plate — `one` or `many`. `traits` only.
+[ -n "$RH_SHOT_WAKE" ] && RH_ENV+=(RH_SHOT_WAKE="$RH_SHOT_WAKE")
 # RH_SHOT_RESPEC=1 poses the MASTERY tree with TAKE EVERY POINT BACK already ARMED, so the warning
 # that names the skills the respec would unequip can be photographed. It lives between two presses
 # of one button, and a capture never clicks. buildtree / buildzoom only:

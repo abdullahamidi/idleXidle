@@ -2778,11 +2778,62 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal" or "dusttree")
                 {
                     _showTraits = true;
-                    // THE OLD MEMORY TREE, only under its own mode. `dust` poses the TRAITS screen
-                    // now; `dusttree` is what still photographs the tree, which stays reachable until
-                    // P5 has moved the keystones and the vows off it.
-                    _showDustTree = sm is "dusttree" or "traitterm" or "traitterminal";
+                    // THE OLD MEMORY TREE, only under its own modes. `dust` poses the TRAITS screen
+                    // now; `dusttree` — and the two flourish poses, which are the TREE's animation and
+                    // have no counterpart on the new screen — are what still photograph it. It stays
+                    // reachable until P5 has moved the keystones and the vows off it.
+                    _showDustTree = sm is "dusttree" or "traitlit" or "traitterm" or "traitterminal";
                     _dust.AddDust(77_605);   // Dust still shows in the top pills; it no longer buys traits
+
+                    // ── THE TRAITS FIXTURE (BRIEF §109). Eleven awakened out of twenty-six, three of
+                    //    them worn, and the rest reading `???` — which is the ONLY state that shows
+                    //    all four things the screen is for at once: whose three these are, what has
+                    //    awakened, what has not, and one of them read in the inspector.
+                    //
+                    //    An empty account was the alternative, and it is the trap the old tree
+                    //    fixture fell into for a whole rebuild: the screen was reviewed on a
+                    //    screenshot of its own empty state. Discovery is account-wide, so seeding the
+                    //    ledger directly is what a mid-career save actually looks like — nothing here
+                    //    is a state the game cannot reach.
+                    var posed = new[]
+                    {
+                        "t_scar_tissue", "t_last_word", "t_deep_cut", "t_spill", "t_last_breath",
+                        "t_certain_hand", "t_settling_weight", "t_homeground", "t_single_note",
+                        "t_answering_wall", "t_lingering_mark",
+                    };
+                    foreach (var traitId in posed)
+                        _traitLedger.Discover(traitId, new TraitFirst(_characters.ActiveId, _activeRegion, 41));
+                    foreach (var traitId in new[] { "t_scar_tissue", "t_last_word", "t_last_breath" })
+                        _traitLedger.Equip(_characters.ActiveId, traitId);
+                    // The reveal has already happened for these — the rig must not fire eleven
+                    // awakening toasts across the shot it is about to take.
+                    _traitsFirstCheckOwed = false;
+                    // WHAT THE INSPECTOR IS READING. Worn by default, because that is the reading with
+                    // the most in it: the sentence, where it first awakened, and TAKE IT OFF rather
+                    // than WEAR IT. RH_SHOT_TRAIT=<id> reads another; RH_SHOT_TRAIT=unknown poses the
+                    // `???` reading, which no click in a capture could ever reach.
+                    var pinned = Environment.GetEnvironmentVariable("RH_SHOT_TRAIT");
+                    if (string.Equals(pinned, "unknown", StringComparison.OrdinalIgnoreCase))
+                        _traitScreen.DevSelectUnknown(_traitLedger);
+                    else
+                        _traitScreen.DevSelect(pinned is { Length: > 0 } ? pinned : "t_last_word");
+
+                    // THE AWAKENING PLATE (§32). RH_SHOT_WAKE=one poses one trait's reveal;
+                    // RH_SHOT_WAKE=many poses the combined plate an established save gets on its
+                    // first load. It fires once, in a moment nobody can schedule, so without this
+                    // dial the reveal's own layout — three rungs at UI SCALE 150 — would never have
+                    // been looked at, which is how every wrong state in this project has been found.
+                    switch (Environment.GetEnvironmentVariable("RH_SHOT_WAKE"))
+                    {
+                        case "one" when TraitCatalogue.Find("t_scar_tissue") is { } woken:
+                            PostAwakening("A TRAIT HAS AWAKENED", woken.Name, woken.Flavour.ToUpperInvariant());
+                            break;
+                        case "many":
+                            PostAwakening("6 TRAITS HAVE AWAKENED",
+                                          "WHAT YOU HAVE LIVED THROUGH CHANGED YOU",
+                                          "READ THEM ON THE TRAITS SCREEN");
+                            break;
+                    }
 
                     // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
                     // "might_1", "might_2", "grit_1", "grit_2", "tempo_1" and "blood_1" — none of which
@@ -3699,6 +3750,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// once, and six ceremonies in one second is the failure mode §32 warns about as loudly as it
     /// asks for the ceremony — so that case posts ONE combined plate instead (see RefreshTraits).
     /// </remarks>
+    /// <remarks>
+    /// The flavour arrives UPPERCASED by its callers, because the inspector uppercases the same
+    /// string and two surfaces showing one line in two cases is a defect you only see side by side —
+    /// which is what the RH_SHOT_WAKE capture is for.
+    /// </remarks>
     private void PostAwakening(string kicker, string name, string flavour)
         => _noticeQueue.Enqueue(new Notice(kicker, name, flavour, Awakening: true));
 
@@ -4484,7 +4540,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _traitWatch.Recheck();
             var woke = _traitWatch.TakeAwakened();
             if (woke.Count == 1 && TraitCatalogue.Find(woke[0]) is { } only)
-                PostAwakening("A TRAIT HAS AWAKENED", only.Name, only.Flavour);
+                PostAwakening("A TRAIT HAS AWAKENED", only.Name, only.Flavour.ToUpperInvariant());
             else if (woke.Count > 1)
                 // ONE PLATE, NOT SIX. The names are in the collection the plate points at; saying six
                 // of them here would be the achievement list §90 forbids, in a toast.
@@ -4495,7 +4551,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         foreach (var id in _traitWatch.TakeAwakened())
             if (TraitCatalogue.Find(id) is { } def0)
-                PostAwakening("A TRAIT HAS AWAKENED", def0.Name, def0.Flavour);
+                PostAwakening("A TRAIT HAS AWAKENED", def0.Name, def0.Flavour.ToUpperInvariant());
     }
 
     private void UpdateExpedition(GameTime gameTime)

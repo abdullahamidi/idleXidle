@@ -73,6 +73,24 @@ public sealed class TraitCollectionScreen
     /// <summary>Pin the inspector on a trait — the capture rig's one dial for this screen.</summary>
     public void DevSelect(string id) => _selected = id;
 
+    /// <summary>
+    /// Pin the inspector on an UNDISCOVERED tile, so the `???` reading can be photographed.
+    /// </summary>
+    /// <remarks>
+    /// A state no dial can pose has never been looked at, and this is one of them: the unknown
+    /// reading is only reachable by clicking a tile, and a capture never clicks. It takes the first
+    /// undiscovered position in catalogue order, and a position is all it takes — the unknown branch
+    /// of the inspector is handed an index and never an id, which is what makes LAW 8 structural
+    /// rather than a promise.
+    /// </remarks>
+    /// <param name="ledger">The account, to find the first tile that has not awakened.</param>
+    public void DevSelectUnknown(TraitLedger ledger)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        for (var i = 0; i < TraitCatalogue.All.Count; i++)
+            if (!ledger.Has(TraitCatalogue.All[i].Id)) { _selected = UnknownKey(i); return; }
+    }
+
     /// <summary>What the host asks for when a tour card wants to light a region of this screen.</summary>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
@@ -89,8 +107,21 @@ public sealed class TraitCollectionScreen
     /// <summary>Where the screen's name sits — the same 24 every screen in the game uses.</summary>
     private const int ScreenTitleTop = 24;
 
-    /// <summary>Where the panels start: under the name, its rule and its subtitle.</summary>
-    private const int PanelTop = 150;
+    /// <summary>The gold rule under the screen's name, and how thick it is.</summary>
+    private static int RuleY => ScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
+
+    private static int RuleH => UiMetrics.Control(3);
+
+    /// <summary>
+    /// Where the panels start: under the name, its rule and its subtitle — DERIVED, not a constant.
+    /// </summary>
+    /// <remarks>
+    /// It was 150, which is a promise about one font at one UI SCALE. The screen title and the caption
+    /// both grow at 125 and 150 % while a constant does not, so the panels would have climbed into the
+    /// caption exactly where nobody had looked.
+    /// </remarks>
+    private static int PanelTop =>
+        RuleY + RuleH + UiMetrics.Space(7) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(16);
 
     private static int Gap => UiMetrics.Gap;
 
@@ -131,9 +162,21 @@ public sealed class TraitCollectionScreen
         return new Rectangle(x + i * (WornSide + Gap), strip.Y, WornSide, WornSide);
     }
 
+    /// <summary>
+    /// The foot of the worn strip INCLUDING the names under the slots, which are drawn below it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="WornStrip"/> is only as tall as the squares, so anything measuring from its bottom
+    /// is measuring from above the names. At UI SCALE 150 that put the collection's caption inside the
+    /// band the worn names occupy — they missed each other only because one is centred over the slots
+    /// and the other is hard left, which is not a layout, it is luck.
+    /// </remarks>
+    private static int WornBlockBottom =>
+        WornStrip.Bottom + UiMetrics.Space(4) + UiTypography.Pitch(UiTypography.Caption);
+
     /// <summary>The caption over the collection, and the rule it hangs under.</summary>
     private static int CollectionCaptionY =>
-        WornStrip.Bottom + UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.Secondary);
+        WornBlockBottom + UiMetrics.Space(12) + UiTypography.Pitch(UiTypography.SectionLabel);
 
     /// <summary>Everything the grid of sigils may use.</summary>
     private static Rectangle CollectionArea
@@ -161,12 +204,41 @@ public sealed class TraitCollectionScreen
     private static (int Cols, int Rows, int CellW, int CellH) Grid(int count)
     {
         var area = CollectionArea;
-        var minCell = UiMetrics.Control(112);
-        var cols = Math.Clamp(area.Width / Math.Max(1, minCell), 4, 9);
-        cols = Math.Min(cols, Math.Max(1, count));
-        var rows = Math.Max(1, (count + cols - 1) / cols);
-        return (cols, rows, area.Width / cols, area.Height / rows);
+        count = Math.Max(1, count);
+
+        // SOLVED BY TRYING EVERY COLUMN COUNT AND KEEPING THE BEST TILE. The first version derived
+        // the columns from the WIDTH alone (area.Width / Control(112)), which is exactly backwards:
+        // at UI SCALE 150 that gives FEWER columns, so MORE rows, while the caption under each tile
+        // is half again as tall — the rows overlapped and the last one fell through the panel's foot.
+        // Photographed at 150 %, which is the only way that was ever going to be found.
+        //
+        // Width and height pull opposite ways here (more columns is narrower cells but fewer rows),
+        // so there is no formula to derive it from one axis. Twenty-six candidates is nothing.
+        var best = 0;
+        var bestSide = int.MinValue;
+        for (var cols = 4; cols <= 9 && cols <= count; cols++)
+        {
+            var rows = (count + cols - 1) / cols;
+            var side = Math.Min(area.Width / cols - Gap, area.Height / rows - CaptionBlock);
+            // Ties go to FEWER columns, which is the larger cell — strictly greater keeps the first.
+            if (side <= bestSide) continue;
+            bestSide = side;
+            best = cols;
+        }
+        if (best == 0) best = Math.Min(9, count);
+
+        var chosenRows = Math.Max(1, (count + best - 1) / best);
+        return (best, chosenRows, area.Width / best, area.Height / chosenRows);
     }
+
+    /// <summary>
+    /// What a cell must keep under its tile: the trait's name, the WORN line, and a breath.
+    /// </summary>
+    /// <remarks>
+    /// Named because <see cref="Grid"/> and <see cref="Tile"/> must reserve the SAME height. They did
+    /// not, and the row's names landed on the next row's sigils at UI SCALE 150.
+    /// </remarks>
+    private static int CaptionBlock => UiTypography.Pitch(UiTypography.Caption) * 2 + UiMetrics.Space(6);
 
     /// <summary>The cell one entry of the collection occupies.</summary>
     private static Rectangle Cell(int index, int count)
@@ -179,9 +251,10 @@ public sealed class TraitCollectionScreen
     /// <summary>The square inside a cell the sigil is drawn in — the rest of the cell is its name.</summary>
     private static Rectangle Tile(Rectangle cell)
     {
-        var caption = UiTypography.Pitch(UiTypography.Caption) * 2;
-        var side = Math.Max(UiMetrics.Control(28),
-                            Math.Min(cell.Width - Gap, cell.Height - caption - UiMetrics.Space(6)));
+        // NO FLOOR. A Math.Max floor here is what made the rows overlap: the grid was told the tile
+        // would fit and the tile then drew larger than the cell it was given. The grid now chooses
+        // the columns that make the tile big enough, so this simply honours the cell it is handed.
+        var side = Math.Max(1, Math.Min(cell.Width - Gap, cell.Height - CaptionBlock));
         return new Rectangle(cell.X + (cell.Width - side) / 2, cell.Y, side, side);
     }
 
@@ -219,12 +292,17 @@ public sealed class TraitCollectionScreen
 
         _ui.TextCenterBig(b, "TRAITS", UiKit.PageCenterX, ScreenTitleTop, Gold,
                           UiTypography.ScreenTitle, TextFace.Display);
-        var ruleY = ScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
-        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, ruleY, 480, 3), Gold * 0.5f);
         // NO TALLY. "17 of 26" is the achievement menu §90 forbids in as many words; what the screen
         // says instead is what traits ARE and how they arrive.
-        _ui.TextCenterBig(b, "CHARACTERISTICS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH",
-                          UiKit.PageCenterX, ruleY + UiMetrics.Space(6), Slate, UiTypography.Secondary);
+        const string caption = "CHARACTERISTICS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH";
+        // THE RULE IS AS WIDE AS THE SENTENCE UNDER IT, measured rather than guessed: a literal width
+        // is a promise about a font at one UI SCALE, and at 125 and 150 the caption grows past it
+        // while the rule does not. Measured, the two agree at every scale.
+        var ruleW = _ui.MeasureBig(caption, UiTypography.Secondary) + UiMetrics.Space(24);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - ruleW / 2, RuleY, ruleW, RuleH), Gold * 0.5f);
+        // Clear of the rule by a real gap: the tall letters touched it at UI SCALE 100.
+        _ui.TextCenterBig(b, caption, UiKit.PageCenterX, RuleY + RuleH + UiMetrics.Space(7),
+                          Slate, UiTypography.Secondary);
 
         var board = Board;
         var inspector = Inspector;
