@@ -387,13 +387,14 @@ public sealed class Build
     public IReadOnlyList<Keystone> Keystones => _keystones;
 
     /// <summary>
-    /// The Vows this build has sworn — each one ONCE, however many slots happen to carry it.
+    /// The Vows this build has sworn — each one ONCE, however many times it was named.
     /// </summary>
     /// <remarks>
-    /// A Vow is a promise about the BUILD, and a promise made twice is one promise. It is still STORED
-    /// on a skill slot — that is the save shape, and the workbench is where a player swears one — but
-    /// nothing downstream counts it twice: the bonus, the fragility bill, the health price and the
-    /// TITHE enchantment all read this list. Vow CAPACITY (<c>Unlocks.VowCapacity</c>) counts exactly
+    /// A Vow is a promise about the BUILD, and a promise made twice is one promise. The workbench
+    /// records it against the skill the hunter swore it at — that is the save shape — but nothing
+    /// downstream counts it twice and nothing judges it a skill at a time: the bonus, the fragility
+    /// bill, the health price and the TITHE enchantment all read this list, and every one of them is
+    /// answered against the whole build. Vow CAPACITY (<c>Unlocks.VowCapacity</c>) counts exactly
     /// these, which is what makes it a number a milestone can grant.
     /// </remarks>
     public IReadOnlyList<Vow> Vows
@@ -419,10 +420,9 @@ public sealed class Build
     /// path through four price sites would be four chances for them to disagree.
     /// </para>
     /// <para>
-    /// The trait was authored against the older model, where a vow hung on a SKILL SLOT and "a skill
-    /// with no vow borrows one" named a real thing. A vow is a promise about the BUILD now, so the
-    /// loan is a build-level fact and <c>BuildComposer</c> decides it once, at compose time, where the
-    /// vows the account has actually FOUND are in scope. The fight never asks.
+    /// A vow is a promise about the BUILD, so the loan is a build-level fact: <c>BuildComposer</c>
+    /// decides it once, at compose time, where both halves of the question are in scope — the vows
+    /// the account has FOUND, and whether the hunter has sworn any. The fight never asks.
     /// </para>
     /// </remarks>
     /// <remarks>

@@ -5,6 +5,7 @@ using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Traits;
 using Xunit;
@@ -568,93 +569,127 @@ public class trait_liveness_test
 
     // ── VOWS ──────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>THE KEPT WORD — a build that has sworn nothing borrows the weakest vow it has found.</summary>
+    /// <summary>THE KEPT WORD — a build that has sworn nothing is held by the weakest vow it has found.</summary>
     /// <remarks>
-    /// THE RULE CHANGED UNDER THIS TRAIT, and the test changed with it. It was authored while a vow
-    /// hung on a SKILL SLOT, so "a skill with no vow borrows one" named a real thing and this test
-    /// posed one sworn slot beside one unsworn slot. A vow is a promise about the BUILD now — which
-    /// is what lets vow capacity be a number a milestone grants instead of an accident of how many
-    /// skill slots a hunter owns — and under that model no slot has, or lacks, a vow of its own.
+    /// A vow is a promise about the whole BUILD, so the trait asks a question about the whole build:
+    /// have you sworn ANY? A hunter who has sworn none is held by the weakest promise the account has
+    /// found — its rule and its price as well as its reward — and one who has sworn even one is not
+    /// lent anything. That is what makes it a decision rather than a free rider, and it is why the
+    /// loan is decided in <c>BuildComposer</c>: that is the only place that can see both what the
+    /// account has FOUND and what the build has actually SWORN. The fight never asks.
     ///
-    /// The build-level equivalent of an unsworn slot is a build that swore NOTHING, so that is the
-    /// rule, and it is a better one: the trait pays only a hunter who leaves every vow unsworn, which
-    /// is a decision rather than a free rider on someone else's promise. The loan is decided once at
-    /// compose time (<c>BuildComposer</c>, the only place that can see both what the account has
-    /// found and what the build has sworn) and joins <c>Build.Vows</c>, so the combined factor, the
-    /// fragility bill, the health price and TITHE all bill it exactly like a sworn one.
+    /// So this test has two halves. The composer half proves the RULE — who is lent to, and what. The
+    /// fight half proves the LOAN REACHES THE FIGHT, which is the liveness the suite exists for.
     /// </remarks>
     [Fact]
-    public void test_the_kept_word_lends_the_weakest_found_vow_to_a_build_that_swore_nothing()
+    public void test_the_kept_word_holds_a_build_that_swore_nothing_to_the_weakest_vow_it_has_found()
     {
+        // ── THE RULE, through the composer's own door ─────────────────────────────────────────────
+        Build Composed(string? sworn, SkillShape traitShape)
+        {
+            var l = new PlayerLoadout { SkillCapacity = 2, VowCapacity = 1, TraitShape = traitShape };
+            var first = l.AddSkill();
+            l.SetSkill(first, "hammer_blow");
+            var second = l.AddSkill();
+            l.SetSkill(second, "volley_spray");
+            if (sworn is not null) Assert.True(l.SetVow(first, sworn, Vows.Catalog));
+            return l.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null,
+                             knownVows: Vows.Catalog);
+        }
+
+        var weakest = Vows.Catalog.OrderBy(v => Vows.Multiplier(v)).First();
+
+        var lent = Composed(sworn: null, Trait("t_kept_word"));
+        Assert.Equal(weakest.Id, lent.BorrowedVow?.Id);
+        Assert.Equal(new[] { weakest.Id }, lent.Vows.Select(v => v.Id));
+
+        // A hunter who HAS sworn something is lent nothing — the trait pays for going without.
+        var swore = Composed(sworn: "vow_singular", Trait("t_kept_word"));
+        Assert.Null(swore.BorrowedVow);
+        Assert.Equal(new[] { "vow_singular" }, swore.Vows.Select(v => v.Id));
+
+        // And without the trait, a build that swore nothing is held by nothing.
+        Assert.Null(Composed(sworn: null, SkillShape.None).BorrowedVow);
+        Assert.Empty(Composed(sworn: null, SkillShape.None).Vows);
+
+        // ── AND THE LOAN REACHES THE FIGHT ────────────────────────────────────────────────────────
         var complete = Vows.ById("vow_complete");
         Assert.NotNull(complete);
 
-        // A build that has sworn NOTHING. The loan is what the composer would have lent it.
-        Build Woven(SkillShape shape, bool lent)
+        Build Woven(SkillShape shape, bool held)
         {
             var b = new Build { Shape = shape, SlotCapacity = 2 };
             b.Equip(TestBuilds.Skill("hammer_blow", Source.Spirit));
             b.Equip(TestBuilds.Skill("volley_spray", Source.Spirit));
-            if (lent) b.BorrowedVow = complete;
+            if (held) b.BorrowedVow = complete;
             return b;
         }
 
-        WaveMetrics Go(SkillShape shape, bool lent)
+        WaveMetrics Go(SkillShape shape, bool held)
         {
             var m = new WaveMetrics();
-            SoloBattle.ResolveWave(Champ(), Woven(shape, lent), new Hunter(), Wave(3, 700_000f, 20f),
+            SoloBattle.ResolveWave(Champ(), Woven(shape, held), new Hunter(), Wave(3, 700_000f, 20f),
                                    900, NoSwing, new Random(11), metrics: m);
             return m;
         }
 
-        Up(Go(SkillShape.None, lent: false).DeliveredDamage,
-           Go(Trait("t_kept_word"), lent: true).DeliveredDamage,
+        Up(Go(SkillShape.None, held: false).DeliveredDamage,
+           Go(Trait("t_kept_word"), held: true).DeliveredDamage,
            0.01f, "THE KEPT WORD", "damage delivered");
 
-        // NEGATIVE CONTROL: the trait without a loan changes nothing — the dial is the borrowed vow,
-        // not the trait's presence, so a build the composer declined to lend to fights identically.
-        Same(Go(SkillShape.None, lent: false).DeliveredDamage,
-             Go(Trait("t_kept_word"), lent: false).DeliveredDamage,
+        // NEGATIVE CONTROL: the dial IS the vow the composer lent, not the trait's presence. A build
+        // the composer declined to lend to fights exactly as it did before.
+        Same(Go(SkillShape.None, held: false).DeliveredDamage,
+             Go(Trait("t_kept_word"), held: false).DeliveredDamage,
              "THE KEPT WORD", "damage with nothing lent");
     }
 
-    /// <summary>THE PRICE PAID — a vow whose demand is broken still pays half.</summary>
+    /// <summary>THE WEIGHT OF VOWS — every promise kept past the first makes all of them pay more.</summary>
+    /// <remarks>
+    /// The trait the vow layer is shaped for: capacity is a real number a milestone grants, the
+    /// combined factor sums what every KEPT vow pays under one ceiling, and this is the one thing in
+    /// the game that buys past that ceiling — for a hunter willing to hold two restrictions at once
+    /// and actually meet both. It scales what the VOWS pay rather than damage, so the two negative
+    /// controls below are the whole design: one promise pays nothing extra, and a promise the build
+    /// is breaking is not a promise kept.
+    /// </remarks>
     [Fact]
-    public void test_the_price_paid_pays_half_of_a_broken_vow()
+    public void test_the_weight_of_vows_pays_a_build_keeping_more_than_one_promise()
     {
-        // VOW OF THE SINGULAR demands one style; the build carries two, so the demand is broken and
-        // the vow pays nothing at all without the trait.
+        // Two demands a bare hunter with two HAMMER skills meets at once: one style, and no boots.
         var singular = Vows.ById("vow_singular");
+        var barefoot = Vows.ById("vow_barefoot");
         Assert.NotNull(singular);
+        Assert.NotNull(barefoot);
 
-        WaveMetrics Go(SkillShape shape)
+        WaveMetrics Go(SkillShape shape, string second, Vow? secondVow)
         {
             var m = new WaveMetrics();
             var b = new Build { Shape = shape, SlotCapacity = 2 };
             b.Equip(TestBuilds.Skill("hammer_blow", Source.Spirit, singular));
-            b.Equip(TestBuilds.Skill("volley_spray", Source.Spirit, singular));
+            b.Equip(TestBuilds.Skill(second, Source.Spirit, secondVow));
             SoloBattle.ResolveWave(Champ(), b, new Hunter(), Wave(3, 700_000f, 20f),
                                    900, NoSwing, new Random(11), metrics: m);
             return m;
         }
 
-        var plain = Go(SkillShape.None);
-        var paid = Go(Trait("t_price_paid"));
-        Up(plain.DeliveredDamage, paid.DeliveredDamage, 0.05f, "THE PRICE PAID", "damage delivered");
+        // TWO PROMISES, BOTH KEPT. Two HAMMER skills keep VOW OF THE SINGULAR; a hunter wearing no
+        // gear at all keeps VOW OF THE BAREFOOT.
+        Up(Go(SkillShape.None, "hammer_press", barefoot).DeliveredDamage,
+           Go(Trait("t_weight_of_vows"), "hammer_press", barefoot).DeliveredDamage,
+           0.05f, "THE WEIGHT OF VOWS", "damage delivered");
 
-        // NEGATIVE CONTROL: a vow whose demand IS met already pays in full, so the trait adds nothing.
-        WaveMetrics Kept(SkillShape shape)
-        {
-            var m = new WaveMetrics();
-            var b = new Build { Shape = shape, SlotCapacity = 2 };
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Spirit, singular));
-            b.Equip(TestBuilds.Skill("hammer_press", Source.Spirit, singular));
-            SoloBattle.ResolveWave(Champ(), b, new Hunter(), Wave(3, 700_000f, 20f),
-                                   900, NoSwing, new Random(11), metrics: m);
-            return m;
-        }
-        Same(Kept(SkillShape.None).DeliveredDamage, Kept(Trait("t_price_paid")).DeliveredDamage,
-             "THE PRICE PAID", "damage with the vow's demand met");
+        // NEGATIVE CONTROL 1: ONE promise, kept. There is no vow past the first, so nothing changes.
+        Same(Go(SkillShape.None, "hammer_press", null).DeliveredDamage,
+             Go(Trait("t_weight_of_vows"), "hammer_press", null).DeliveredDamage,
+             "THE WEIGHT OF VOWS", "damage from a build keeping one promise");
+
+        // NEGATIVE CONTROL 2, AND THE ONE THE DESIGN TURNS ON: two promises sworn, one BROKEN. A
+        // VOLLEY skill beside a HAMMER skill breaks VOW OF THE SINGULAR, so only THE BAREFOOT is
+        // being kept — and a trait that paid for promises merely MADE would fire here.
+        Same(Go(SkillShape.None, "volley_spray", barefoot).DeliveredDamage,
+             Go(Trait("t_weight_of_vows"), "volley_spray", barefoot).DeliveredDamage,
+             "THE WEIGHT OF VOWS", "damage from a build breaking one of its two promises");
     }
 
     // ── ELEMENTS ──────────────────────────────────────────────────────────────────────────────────
@@ -882,7 +917,7 @@ public class trait_liveness_test
             "t_deep_cut", "t_spill", "t_carrion_weight", "t_spreading_fire", "t_certain_hand",
             "t_opened_vein", "t_scar_tissue", "t_standing_plate", "t_answering_wall", "t_last_breath",
             "t_thin_line", "t_practised_flesh", "t_given_hand", "t_mirror", "t_settling_weight",
-            "t_last_word", "t_lingering_mark", "t_kept_word", "t_price_paid", "t_single_note",
+            "t_last_word", "t_lingering_mark", "t_kept_word", "t_weight_of_vows", "t_single_note",
             "t_many_tongues", "t_matched_suit", "t_homeground", "t_studied_place", "t_what_killed_you",
             "t_unbroken_thread",
         };

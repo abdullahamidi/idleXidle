@@ -39,7 +39,7 @@ public readonly record struct TraitWaveFacts(
     float CritPercent,
     bool OneElement,
     int DistinctElements,
-    bool VowSwornAndBroken);
+    int VowsKept);
 
 /// <summary>
 /// The six facts the ACCOUNT already keeps, which six traits read directly.
@@ -103,6 +103,14 @@ public static class TraitDiscovery
     /// <summary>The number of distinct elements at which a wave counts as a motley one.</summary>
     public const int MotleyElements = 4;
 
+    /// <summary>How many promises must be kept at once for a wave to count towards THE WEIGHT OF VOWS.</summary>
+    /// <remarks>
+    /// Two, which is exactly what the trait pays for: the first vow past the first. It cannot be
+    /// reached before a milestone has granted the capacity to swear a second (<c>Unlocks.VowCapacity</c>),
+    /// which is the intent — the trait belongs to a hunter who has room for more than one promise.
+    /// </remarks>
+    public const int ManyVows = 2;
+
     /// <summary>
     /// Fold one cleared wave into the accumulators, then re-check every rule.
     /// </summary>
@@ -133,10 +141,10 @@ public static class TraitDiscovery
         if (wave.CritPercent >= HighCritPercent) ledger.Add(TraitCounter.HighCritWaves, 1);
         if (wave.OneElement) ledger.Add(TraitCounter.PureWaves, 1);
         if (wave.DistinctElements >= MotleyElements) ledger.Add(TraitCounter.MotleyWaves, 1);
-        // THE ONE COUNTER A WAVE FEEDS WHETHER IT IS CLEARED OR NOT would be this one — but it is fed
-        // here like the rest, because a build that swore a promise it cannot keep goes on being that
-        // build. Fought, not survived, is the sentence the trait is for.
-        if (wave.VowSwornAndBroken) ledger.Add(TraitCounter.BrokenVowWaves, 1);
+        // KEPT, not merely sworn, and counted the same way the fight counts them — one promise per
+        // vow, however many times it was named, and only while its rule holds. What earns THE WEIGHT
+        // OF VOWS is therefore the very thing it later pays for.
+        if (wave.VowsKept >= ManyVows) ledger.Add(TraitCounter.ManyVowWaves, 1);
 
         return Evaluate(ledger, account, first);
     }

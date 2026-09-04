@@ -691,18 +691,23 @@ public static class SoloBattle
         // is judged against the same one. See DescribeBuild.
         var weaveCtx = DescribeBuild(build, hunter);
 
-        // AND SO IS WHAT THE VOWS PAY. A Vow is a promise about the BUILD, not a property of a slot:
-        // its bonus used to be read per skill, from that skill's own Vow, which meant four DIFFERENT
-        // Vows paid exactly what one Vow repeated on four slots paid — while charging four prices and
-        // demanding four restrictions hold at once. The bonuses of every KEPT Vow are added together
-        // here, once, under one ceiling, and every skill of every tick reads the same number.
-        // THE PRICE PAID rides here: it is the one dial that changes what a BROKEN vow is worth, and
-        // this is the one place a vow's worth is decided.
-        var vowFactor = Vows.CombinedFactor(build.Vows, weaveCtx, shape.VowPowerMultiplier,
-                                            brokenShare: traits.BrokenVowShare);
-        // Is at least one sworn Vow actually being KEPT? The affinity buy-back's question — and it
-        // used to ask only whether a slot CARRIED a Vow, so a broken promise bought power anyway.
-        var vowKept = Vows.AnyKept(build.Vows, weaveCtx);
+        // AND SO IS WHAT THE VOWS PAY. A Vow is a promise about the whole BUILD: it is sworn once,
+        // judged once against everything the hunter is carrying, and paid once. The bonuses of every
+        // KEPT Vow are added together here, under one ceiling, and every skill of every tick reads
+        // the same number. A Vow the build is breaking pays nothing at all.
+        var vowFactor = Vows.CombinedFactor(build.Vows, weaveCtx, shape.VowPowerMultiplier);
+        // How many different promises this build is keeping. One count, two readers: the affinity
+        // buy-back only wants to know whether there is at least one, and THE WEIGHT OF VOWS is paid
+        // on every one past the first.
+        var vowsKept = Vows.KeptCount(build.Vows, weaveCtx);
+        var vowKept = vowsKept > 0;
+        // THE WEIGHT OF VOWS — its ONE read site, and it scales what the Vows PAY rather than the
+        // damage, so a build whose promises are all broken gets nothing from it however many it made.
+        // Deliberately outside the combined ceiling: that ceiling is what stops a stack of Vows from
+        // running away on its own, and this trait — one of three a champion may wear — is the single
+        // thing in the game that buys past it.
+        if (traits.VowPayPerExtraKeptVow > 0f && vowsKept > 1)
+            vowFactor = 1f + (vowFactor - 1f) * (1f + traits.VowPayPerExtraKeptVow * (vowsKept - 1));
 
         // ── THE TRAITS' WAVE-LOCAL STATE. Five locals for twenty-six traits, every one reset by the
         //    wave boundary exactly like SUNDER's armour strip, and every one read in one place. ─────
@@ -803,14 +808,15 @@ public static class SoloBattle
         // paid as extra damage taken — the product across every worn Vow that names a damage-taken price.
         // (RECKLESS OFFERING's price is health, charged once at champion mint via VowHealthMultiplier, so it
         // is deliberately NOT billed here — doing both would bill the same effective-HP twice.) The Vow's
-        // BENEFIT is applied per-skill in VowFactor; this is the other half, which the solo model had lost
-        // when the squad engine that used to charge it was retired.
-        // ONCE PER VOW, not once per skill wearing it. A Vow is sworn, not equipped: FRAGILITY's card
-        // says "+12.5% damage taken" and a build that wove it onto four skills was charged 1.125^4 =
-        // +60%, because the price compounded per skill while the BENEFIT did not — a skill's Vow bonus
-        // is a multiplier on that skill, so four skills at x1.33 is still x1.33 of damage, never x1.33^4.
-        // The asymmetry made both static-cost Vows strictly negative to swear, which is what the balance
-        // sweep found: FRAGILITY -1 depth, RECKLESS OFFERING -1 depth, while every demand Vow paid.
+        // BENEFIT is decided once for the whole build, above (Vows.CombinedFactor); this is the other
+        // half of the same promise, which the solo model had lost when the squad engine that used to
+        // charge it was retired.
+        // ONCE PER VOW, because a Vow is sworn, not equipped: FRAGILITY's card says "+12.5% damage
+        // taken", and a build that named it on four skills was charged 1.125^4 = +60% — the price
+        // compounded for every skill that named it while the benefit never did. The asymmetry made
+        // both static-cost Vows strictly negative to swear, which is what the balance sweep found:
+        // FRAGILITY -1 depth, RECKLESS OFFERING -1 depth, while every demand Vow paid. build.Vows is
+        // the deduplicated list, so the price and the payment cannot answer it differently.
         var fragilityMult = 1f;
         foreach (var v in build.Vows)
             if (v.DamageTakenIncrease > 0f) fragilityMult *= 1f + v.DamageTakenIncrease;
@@ -2336,12 +2342,13 @@ public static class SoloBattle
                         raw *= 1f + shape.ShadeActiveBonus;
                     }
 
-                    // THE NEN BUY-BACK: a sworn Vow pulls an off-discipline skill one ring toward the
-                    // build's affinity (restriction buys power — the rule the Vows were born from).
+                    // THE NEN BUY-BACK: while the build is KEEPING a Vow, an off-discipline skill is
+                    // pulled one ring toward the build's affinity (restriction buys power — the rule
+                    // the Vows were born from). One question about the build, one answer for them all.
                     // Applied as a RATIO over Amp's base affinity factor, so it composes with every
                     // later multiplication and can never double-apply.
                     if (build.Affinity is { } sworn && vowKept)
-                        raw *= StyleAffinity.Factor(sworn, sk.Def.Style, vowSworn: true)
+                        raw *= StyleAffinity.Factor(sworn, sk.Def.Style, vowKept: true)
                                / StyleAffinity.Factor(sworn, sk.Def.Style);
 
                     // SPIRIT'S SIGNATURE, consumed: a Spirit cast primes the NEXT cast of any other
@@ -2594,7 +2601,7 @@ public static class SoloBattle
                                            * WeaverEchoFraction;
                             // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
                             if (build.Affinity is { } wovenAff && vowKept)
-                                wovenRaw *= StyleAffinity.Factor(wovenAff, woven.Def.Style, vowSworn: true)
+                                wovenRaw *= StyleAffinity.Factor(wovenAff, woven.Def.Style, vowKept: true)
                                             / StyleAffinity.Factor(wovenAff, woven.Def.Style);
                             events.Add(new BattleEvent(BattleEventKind.Skill, wovenIdx, 0, ms));
                             dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Def),
@@ -3173,12 +3180,10 @@ public static class SoloBattle
         return MathF.Max(0.05f, mult);
     }
 
-    // DistinctVows and VowFactor USED TO LIVE HERE. Both asked their question of a SKILL SLOT:
-    // DistinctVows walked the slots to fold four copies of one Vow back into one, and VowFactor read
-    // whichever Vow the slot happened to carry. A Vow is a promise about the build, so the list is
-    // now Build.Vows and the payout is Vows.CombinedFactor, which sums what every KEPT Vow pays under
-    // one ceiling. That is also what makes vow capacity a real number a milestone can grant, instead
-    // of an accident of how many skill slots the build owned.
+    // THE VOW ARITHMETIC LIVES IN Vows NOW. The deduplicated list is Build.Vows and the payout is
+    // Vows.CombinedFactor, which sums what every KEPT Vow pays under one ceiling — one question about
+    // the build, asked once, and answered the same way for every skill of every tick. That is also
+    // what makes vow capacity a real number a milestone can grant.
 
     /// <summary>Describe a build to the Vow layer.</summary>
     public static BuildContext DescribeBuild(Build build, Economy.Hunter hunter)

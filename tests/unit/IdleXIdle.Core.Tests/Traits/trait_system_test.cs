@@ -54,7 +54,7 @@ public class trait_system_test
         CritPercent: 60f,
         OneElement: true,
         DistinctElements: 4,
-        VowSwornAndBroken: true);
+        VowsKept: 2);
 
     // ── DETERMINISTIC, AND NEVER A LOTTERY (§29, §30, LAW 8) ──────────────────────────────────────
 

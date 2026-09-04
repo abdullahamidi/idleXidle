@@ -211,20 +211,18 @@ public static class BuildComposer
             build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
         }
 
-        // THE KEPT WORD — a build that has sworn NOTHING borrows the weakest promise it has found.
+        // THE KEPT WORD — a build that has sworn NOTHING is held by the weakest promise it has found.
         //
         // Decided here, once, because this is the only place that can see both halves: what the
-        // account has DISCOVERED (knownVows) and what the build has actually SWORN. The trait was
-        // authored when a vow hung on a skill slot, so "a skill with no vow borrows one" was a real
-        // sentence; a vow is a promise about the whole build now, and the build-level equivalent of
-        // an unsworn slot is a build that swore nothing at all. That also makes it a real decision
-        // rather than a free rider: taking the trait pays only if you leave every vow unsworn.
+        // account has FOUND (knownVows) and what the build has actually SWORN. It pays a hunter who
+        // swears nothing at all, which is a real decision about the build — the trait is worth one of
+        // three characteristic slots only if you are willing to go without a promise of your own.
         //
-        // The weakest, so it is a floor and never a way to reach the strongest promise for free, and
-        // only one whose demand this build is actually meeting - lending a promise you are already
-        // breaking would pay for nothing. It joins Build.Vows, so the combined factor, the fragility
-        // bill, the health price and TITHE all bill it exactly like a sworn one.
-        if (traitShape?.Traits.UnswornBorrowsWeakestVow == true && build.Vows.Count == 0
+        // The WEAKEST, so it is a floor and never a way to reach the strongest promise for free. It
+        // joins Build.Vows, so everything that reads a sworn promise reads this one identically: the
+        // combined factor pays it only while its rule holds, and the fragility bill, the health price
+        // and TITHE charge it exactly as if the hunter had sworn it out loud.
+        if (traitShape?.Traits.UnswornBuildBorrowsWeakestVow == true && build.Vows.Count == 0
             && (knownVows ?? DustEffects.KnownVows(tree)) is { Count: > 0 } found)
         {
             Vow? lent = null;

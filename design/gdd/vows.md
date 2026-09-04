@@ -10,13 +10,20 @@
 
 ## 1. Overview
 
-A Vow is a restriction the player accepts on one woven skill in exchange for a large
-damage multiplier on it. Every Vow states a **demand the build must meet** — one
-Form only, no crit training, no boots — and pays nothing at all if the build breaks
-it. Two older Vows instead pay a **static cost** every wave and are always active.
+A Vow is a restriction the player accepts in exchange for a large damage multiplier
+on everything the build does. Every Vow states a **demand the build must meet** —
+one Style only, no crit training, no boots — and pays nothing at all if the build
+breaks it. Two older Vows instead pay a **static cost** every wave and are always
+active.
 
-A Vow is bound per skill slot, learned from the trait tree's spine, and can be
-changed freely at the workbench like anything else in the Skill Tree layer.
+**A Vow is a promise about the WHOLE BUILD.** It is sworn once, judged once against
+everything the hunter is carrying, and paid once, however many times it is named.
+How many different Vows may be sworn at a time is its own number — vow capacity —
+granted by world progression (`Unlocks.VowCapacity`), never by the skill-slot count.
+The workbench records a Vow against the skill it was sworn at, because that is where
+the player swears it, but nothing in the game judges or pays a Vow a skill at a time.
+Vows are found by keeping their rule without them (§3.5) and can be changed freely at
+the workbench.
 
 ---
 
@@ -53,7 +60,7 @@ A demand is checked once per wave against a description of the build. It is:
 
 | Family | Reads | Examples |
 |---|---|---|
-| **Build shape** | The woven skills | one Form, one Source, every weave filled |
+| **Build shape** | The woven skills | one Style, one Source, every weave filled |
 | **Stat shape** | The character sheet | no crit training, cadence ≤ 1.00×, cadence ≥ 1.40×, no defence, no keystone |
 | **Sacrifice** | The worn gear | a named slot left bare — boots, gloves, helm |
 
@@ -69,12 +76,12 @@ the same argument the tree is already having:
 
 | Vow | Argues against |
 |---|---|
-| THE SINGULAR (one Form) | SPREAD — its whole case is breadth |
+| THE SINGULAR (one Style) | SPREAD — its whole case is breadth |
 | THE BLUNT EDGE (no crit) | TEMPO — the FOCUS road specifically |
 | THE DELIBERATE (cadence ≤ 1.00×) | TEMPO — every rate node |
 | THE FRANTIC (cadence ≥ 1.40×) | WEIGHT — HEAVY HAND and DELIBERATE cut rate |
 | THE UNGUARDED (no defence) | ENDURE |
-| THE UNBOUND (no keystone) | The whole Trait Tree's payoff |
+| THE UNBOUND (no keystone) | Every doctrine the world has handed over |
 
 ### 3.4 Static-cost Vows
 
@@ -84,30 +91,28 @@ They exist as the floor of the system — something a player with no build ident
 at all can still take — and their price is charged in effective HP so it is
 invariant across every build.
 
-**A Vow is charged once, however many skills carry it.** Both prices used to compound
-per skill wearing the Vow, so a four-skill weave paid `1.125^4` (+60% damage taken)
-against a card that said +12.5%, and `0.85^4` (−48% health) against a card that said
-−15%. The benefit never compounded that way — a Vow multiplies each skill it is woven
-into, so four skills at x1.45 is still x1.45 of damage — and the asymmetry made both
-static-cost Vows strictly negative to swear: measured at −1 depth each, the only two
-Vows in the game that cost more than they paid. Swearing is a promise about the build,
-and a promise made on four skills is one promise. `SoloBattle.DistinctVows` is the one
-place that decides this, so the two price sites cannot answer it differently.
+**A Vow is charged once, and paid once.** Both prices used to compound for every skill
+that named the Vow, so a four-skill weave paid `1.125^4` (+60% damage taken) against a
+card that said +12.5%, and `0.85^4` (−48% health) against a card that said −15%, while
+the benefit never compounded at all — which made both static-cost Vows strictly
+negative to swear, measured at −1 depth each. Swearing is a promise about the build,
+and a promise made twice is one promise: `Build.Vows` is the deduplicated list every
+price site and `Vows.CombinedFactor` read, so they cannot answer it differently.
 
-### 3.5 Learning Vows
+### 3.5 Finding Vows, and how many may be sworn
 
-The Trait Tree spine teaches them, gentlest first:
+**Proof before reward.** One Vow is simply given with the BUILD screen, so the system
+is discoverable at all. Every other Vow reveals itself when a descent ends in which
+its rule held, for enough cleared waves, on a build that owned something to break it
+with — and the Vow was not sworn. Nothing here is a roll, a drop or a missable event
+(`Vows.Revealed`).
 
-| Node | Teaches |
-|---|---|
-| FIRST VOW | COMPLETION, THE DELIBERATE |
-| SECOND VOW | THE PURE, THE FRANTIC |
-| THIRD VOW | THE SINGULAR, THE BLUNT EDGE |
-| BINDING VOWS | THE BAREFOOT, THE OPEN HAND, THE BARE SKULL |
-| SACRIFICIAL VOWS | FRAGILITY, RECKLESS OFFERING, THE UNGUARDED, THE UNBOUND |
-
-The gear-slot sacrifices are unreachable from the study chain alone — BINDING VOWS
-is a separate purchase, so "I gave up a slot" is a choice made twice.
+**Capacity is its own number.** How many different Vows may be sworn at once is
+granted by world progression — the BUILD screen itself, then the second and fourth
+region conquest (`Unlocks.VowCapacity`) — and has nothing to do with how many skill
+slots the hunter owns. What every sworn Vow pays is summed under one ceiling
+(`VowTuning.CombinedBonusCeiling`), which sits just above the best single Vow, so a
+second promise is worth swearing and a stack of them cannot run away.
 
 ---
 
@@ -154,7 +159,7 @@ that stat and a Vow that can be made free is not a Vow.
 - **Cadence thresholds** compare against the *resolved* skill rate, which includes
   the Skill Tree's shape — so taking QUICK HANDS can silently break THE DELIBERATE.
   This is intended: it is the tree and the Vow having the argument out loud.
-- **A build with no skills** satisfies SINGLE FORM and SINGLE SOURCE trivially, and
+- **A build with no skills** satisfies SINGLE STYLE and SINGLE SOURCE trivially, and
   has nothing to apply the multiplier to. Harmless.
 - **Breaking a Vow mid-session** costs nothing beyond the lost multiplier. There is
   no punishment state; the Vow simply stops paying.
@@ -164,12 +169,13 @@ that stat and a Vow that can be made free is not a Vow.
 ## 6. Dependencies
 
 - **Quests** (`quests.md`) — THE FIRST VOW is completed by finishing a descent with a Vow's
-  demand still MET, judged by the same `Weaving.IsActive` the simulation uses.
+  demand still MET, judged by the same `Vows.IsActive` the simulation uses.
 
-- `Weaving` — the Vow catalogue, severity pricing, and `IsActive`.
-- `SoloBattle.DescribeBuild` — builds the `WeaveContext` from the Build and Hunter.
-- `MemoryDustTree` spine — teaches them.
+- `Vows` — the catalogue, severity pricing, `IsActive`, `Revealed` and `CombinedFactor`.
+- `SoloBattle.DescribeBuild` — builds the `BuildContext` from the Build and Hunter.
+- `Unlocks.VowCapacity` — how many may be sworn at once, granted by world progression.
 - `MasteryCatalog` — every demand is authored against one of its four branches.
+- `TraitCatalogue` — THE KEPT WORD and THE WEIGHT OF VOWS both read this layer.
 
 ---
 
@@ -181,7 +187,9 @@ that stat and a Vow that can be made free is not a Vow.
 | `Threshold` | `Weaving.Catalog` | Cadence demands' cut-off |
 | `Bare` | `Weaving.Catalog` | Which slot a sacrifice Vow forbids |
 | `StaticCostMagnitude` | `Weaving.Catalog` | Effective-HP price of a static Vow |
-| Which node teaches which | `DustEffects.VowGrants` | Learning order |
+| `ProofWaves` per Vow | `Vows.Catalog` | How long its rule must hold to reveal it |
+| `CombinedBonusCeiling` | `VowTuning` | The most every sworn Vow may pay together |
+| Capacity milestones | `Unlocks.VowCapacity` | How many Vows may be sworn at once |
 
 ---
 
@@ -198,5 +206,9 @@ that stat and a Vow that can be made free is not a Vow.
 5. A harsher Vow always pays more than a gentler one.
    *(`test_a_harsher_vow_is_worth_more_power`)*
 6. No static Vow dominates another. *(`test_no_static_vow_dominates_another`)*
-7. Every Vow in the catalogue is teachable by some trait-tree node.
-   *(`test_the_whole_tree_teaches_every_vow_in_the_catalog`)*
+7. Every Vow is either given outright or provable by keeping its rule unsworn.
+   *(`test_every_vow_is_findable_and_exactly_one_is_simply_given`)*
+8. The same Vow named on every skill is one promise, and a second Vow adds its own
+   bonus under the shared ceiling.
+   *(`test_the_same_vow_on_every_slot_is_one_promise`,
+   `test_a_second_vow_adds_its_bonus_rather_than_nothing`)*
