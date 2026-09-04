@@ -107,8 +107,8 @@ public enum TraitCounter
     HighCritWaves,
     /// <summary>Creatures killed.</summary>
     CreaturesKilled,
-    /// <summary>SIGN skills cast.</summary>
-    SignCasts,
+    /// <summary>Marks cast — every Amplify skill, counted where its window opens.</summary>
+    MarkCasts,
     /// <summary>Waves fought with a vow sworn whose demand was not met.</summary>
     BrokenVowWaves,
     /// <summary>Waves cleared with every woven skill on one element.</summary>
@@ -342,8 +342,11 @@ public static class TraitCatalogue
             "A mark you cast holds one second longer for every enemy alive when it opens.",
             "A mark drawn before a crowd is slow to fade.",
             TraitTag.Marks,
-            // Keeping a mark up awakens a mark that keeps itself up.
-            At(TraitCounter.SignCasts, 200),
+            // Keeping a mark up awakens a mark that keeps itself up. Counted off WaveMetrics.MarkCasts
+            // and NOT off StyleActivations[Sign]: that ledger is written inside LandSpread, so only a
+            // cast that deals something reaches it, and every SIGN skill in the catalogue is an
+            // Amplify that deals nothing — the rule would have been unsatisfiable by any build.
+            At(TraitCounter.MarkCasts, 200),
             Fixed(new TraitRules(AmplifyWindowPerEnemyMs: 1_000))),
 
         // ── VOWS ─────────────────────────────────────────────────────────────────────────────────

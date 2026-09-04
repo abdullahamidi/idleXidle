@@ -504,7 +504,7 @@ public sealed class SoloExpedition
             LowestHealthFraction: m.LowestHealthFraction,
             HealthLost: m.HealthLost,
             CreaturesKilled: m.CreaturesKilled,
-            SignCasts: m.StyleActivations.GetValueOrDefault(Style.Sign),
+            MarkCasts: m.MarkCasts,
             CarriedWideSkill: wide,
             CritPercent: ctx.CritPercent,
             OneElement: _build.Skills.Count > 0

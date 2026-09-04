@@ -324,6 +324,18 @@ public sealed class WaveMetrics
     /// question.
     /// </remarks>
     public float LowestHealthFraction { get; set; } = 1f;
+
+    /// <summary>
+    /// Marks cast — every skill whose effect is an Amplify, counted where the window opens.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="StyleActivations"/> cannot answer this. It is written inside <c>LandSpread</c>, so
+    /// only a cast that DEALS something is counted, and every SIGN skill in the catalogue is an
+    /// Amplify that deals nothing: <c>StyleActivations[Style.Sign]</c> is zero for every build that
+    /// has ever run. A discovery rule reading it would have been unreachable — the failure this
+    /// project is named for — and the liveness fixture for THE LINGERING MARK is what found it.
+    /// </remarks>
+    public int MarkCasts { get; set; }
 }
 
 /// <summary>
@@ -2188,6 +2200,12 @@ public static class SoloBattle
                     // carries them as AmplifyPercent/AmplifyMs now, so a variation replaces the
                     // base instead of stacking on a hidden one.
                     var window = sk.Def.AmplifyMs > 0 ? sk.Def.AmplifyMs : 6_000;
+                    // A MARK WAS CAST. Counted HERE and not from StyleActivations, which is written
+                    // inside LandSpread and therefore only by casts that DEAL something: every SIGN
+                    // skill in the catalogue is an Amplify, so StyleActivations[Sign] is always zero
+                    // and a discovery rule reading it could never be satisfied by any build. Found by
+                    // the liveness fixture for THE LINGERING MARK, 2026-09-03.
+                    if (metrics is not null) metrics.MarkCasts++;
                     if (triggers.Contains(BuildTrigger.Linger)) window = window * 9 / 5;
                     window = (int)(window * shape.AmplifyWindowMultiplier);   // MARK MASTERY
                     // THE LINGERING MARK — a mark drawn before a crowd is slow to fade. Read at the

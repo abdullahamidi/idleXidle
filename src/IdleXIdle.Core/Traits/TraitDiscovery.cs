@@ -34,7 +34,7 @@ public readonly record struct TraitWaveFacts(
     float LowestHealthFraction,
     int HealthLost,
     int CreaturesKilled,
-    int SignCasts,
+    int MarkCasts,
     bool CarriedWideSkill,
     float CritPercent,
     bool OneElement,
@@ -125,7 +125,7 @@ public static class TraitDiscovery
         ledger.Add(TraitCounter.HealedPools, wave.Healed / pool);
         ledger.Add(TraitCounter.ReflectedPools, wave.ReflectedDamage / pool);
         ledger.Add(TraitCounter.CreaturesKilled, wave.CreaturesKilled);
-        ledger.Add(TraitCounter.SignCasts, wave.SignCasts);
+        ledger.Add(TraitCounter.MarkCasts, wave.MarkCasts);
 
         if (wave.LowestHealthFraction <= BrinkShare) ledger.Add(TraitCounter.BrinkWaves, 1);
         if (wave.HealthLost <= 0) ledger.Add(TraitCounter.UntouchedWaves, 1);
