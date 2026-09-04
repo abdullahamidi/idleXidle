@@ -390,8 +390,10 @@ public sealed class TraitCollectionScreen
             if (known)
             {
                 Sigil(b, tile, def.Id, isWorn ? Gold : Bone, lit: true);
-                var label = isWorn ? def.Name : def.Name;
-                _ui.TextCenterBig(b, _ui.ShortenBig(label, cell.Width - UiMetrics.Space(6), UiTypography.Caption),
+                // The name reads the same worn or not — only its INK changes, and the WORN rung below
+                // says the rest. (It was written as a ternary with both arms identical, which reads as
+                // an unfinished intention rather than a decision.)
+                _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, cell.Width - UiMetrics.Space(6), UiTypography.Caption),
                                   cell.Center.X, tile.Bottom + UiMetrics.Space(4),
                                   isWorn ? Gold : Bone, UiTypography.Caption);
                 if (isWorn)
