@@ -51,8 +51,74 @@ public sealed class MapScreen
     public int ConquerWaves { get; set; } = Checkpoints.ConquestWave;
     /// <summary>The player's Memory Dust, for the checkpoint chips' affordability.</summary>
     public int DustOwned { get; set; }
-    public string Message { get; set; } = "";
+    /// <summary>The world's latest news, for the strip inside the chart. One line — see <see cref="StripLine"/>.</summary>
+    /// <remarks>
+    /// FLATTENED ON THE WAY IN, not on the way out. The host assigns this every frame while the map is
+    /// open and the layout reads <see cref="HasWorldStrip"/> several times per frame on top of the draw,
+    /// so flattening in the getter would split and re-join a string half a dozen times a frame for a
+    /// value that changes on a conquest. It is done once, here, and only when the text actually changes.
+    /// </remarks>
+    public string Message
+    {
+        get => _message;
+        set
+        {
+            if (string.Equals(value, _message, StringComparison.Ordinal)) return;
+            _message = value ?? "";
+            _stripLine = OneLine(_message);
+        }
+    }
+    private string _message = "";
+    private string _stripLine = "";
     public bool DevMapDebug { get; set; }
+
+    /// <summary>What the strip will actually draw: the message, flattened to the one line it is allowed.</summary>
+    public string StripLine => _stripLine;
+
+    /// <summary>
+    /// THE STRIP IS ONE LINE. Whatever a caller hands it is flattened to one before it is drawn.
+    /// </summary>
+    /// <remarks>
+    /// The plate's height is a constant (<see cref="StripH"/>: one small button, with a breath above and
+    /// below), so a message carrying a newline does not grow it — the extra lines are simply drawn below
+    /// its foot, across the region cards. That is exactly what a conquest keystone reveal did: four lines
+    /// of doctrine written into a one-line plate. The reveal belongs in the notice toast, whose height IS
+    /// summed from the rungs it draws and whose body wraps; the strip carries the compact headline. This
+    /// guard is what makes that a contract rather than a convention — no future caller can spill out of
+    /// the plate, whatever it writes.
+    /// </remarks>
+    public static string OneLine(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return "";
+        // Line breaks only — the double space between the strip's two sentences is the copy's own
+        // separator and is kept, so a message that was already one line comes back untouched.
+        var parts = message.Split('\n', '\r', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Join("  ", parts);
+    }
+
+    /// <summary>The strip's line after a conquest: what fell, and the keystone it taught, by name.</summary>
+    /// <remarks>
+    /// <para>
+    /// The copy lives WITH the plate that has to hold it. ONE LINE at every UI SCALE — the plate is one
+    /// small button tall and does not grow — so the line is written short enough to be read whole rather
+    /// than long enough to be ellipsised. The keystone appears as a HEADLINE only; what it DOES is the
+    /// notice toast's job, whose body wraps and whose plate grows to fit it. The two are posted together,
+    /// so the player gets the name here and the sentence there.
+    /// </para>
+    /// <para>
+    /// THE KEYSTONE, NOT THE NEXT REGION. Carrying both ran to eighty characters, and at UI SCALE 150 the
+    /// plate holds about seventy-five — so the keystone's own NAME was the part that fell off the end,
+    /// which is the one thing this line exists to say. "… IS OPEN" is not lost: the map's hint banner says
+    /// A NEW REGION IS AVAILABLE — NAME from live state, on this screen, directly above this plate, and
+    /// the region's own card reads AVAILABLE and pulses. The strip says what nothing else on the map says.
+    /// </para>
+    /// </remarks>
+    public static string ConquestHeadline(string regionId, RegionDefinition? opened, Keystone? taught)
+    {
+        var fell = Regions.Find(regionId)?.Name ?? "";
+        if (taught is not null) return $"{fell} CONQUERED!  NEW KEYSTONE — {taught.Name}.";
+        return opened is not null ? $"{fell} CONQUERED!  {opened.Name} IS OPEN." : "THE WORLD IS YOURS.";
+    }
 
     // ── Host-consumed requests ──────────────────────────────────────────────────────────────────
     private string? _enterRequest;
@@ -204,7 +270,7 @@ public sealed class MapScreen
     /// A conditional block must not reserve a hole — that is the fault this pass took out of the inspector,
     /// and reserving one here would put it straight back at the top of the chart.
     /// </remarks>
-    private bool HasWorldStrip => World is not null && (World.AllConquered || Message.Length > 0);
+    private bool HasWorldStrip => World is not null && (World.AllConquered || StripLine.Length > 0);
 
     /// <summary>The band the six nodes and their label rows live in — under the world strip, above the frame.</summary>
     private Rectangle NodeField
@@ -742,6 +808,13 @@ public sealed class MapScreen
     /// on the WORLD, not a fact about the region you have selected, and it put a second and third button
     /// on a panel that is allowed one (standard law 2). The conquest message was worse off still: it was
     /// drawn under the panels, in the canvas's dead band, wider than the chart.
+    /// <para>
+    /// IT IS ONE LINE, EITHER WAY. The plate's height is a constant, so the news branch draws
+    /// <see cref="StripLine"/> — the message flattened by <see cref="OneLine"/> — and never the raw
+    /// message. And note what the CONQUERED branch means for the other one: once every region is yours
+    /// the ladder owns this row for good, so a message posted from then on is never seen. Anything the
+    /// player has to read after the last conquest belongs in the notice toast, not here.
+    /// </para>
     /// </remarks>
     private void DrawWorldStrip(SpriteBatch b, Point hit, bool clicked)
     {
@@ -771,10 +844,10 @@ public sealed class MapScreen
             if (_ui.Button(b, ease, "SHALLOWER", hit, clicked, World.CanEaseCorruption)) _easeRequest = true;
             if (_ui.Button(b, deep, "DEEPER", hit, clicked, World.CanDeepenCorruption)) _deepenRequest = true;
         }
-        else if (Message.Length > 0)
+        else if (StripLine is { Length: > 0 } news)
         {
             _ui.Plate(b, r, Gold);
-            _ui.TextCenterBig(b, _ui.ShortenBig(Message, r.Width - UiMetrics.Space(24) * 2, body), r.Center.X, r.Y + (r.Height - body) / 2, Gold, body);
+            _ui.TextCenterBig(b, _ui.ShortenBig(news, r.Width - UiMetrics.Space(24) * 2, body), r.Center.X, r.Y + (r.Height - body) / 2, Gold, body);
         }
     }
 

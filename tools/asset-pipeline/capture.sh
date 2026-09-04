@@ -111,12 +111,15 @@
 # Every fixture that restores a conquered world lands on that frame, so the toast is suppressed
 # under the rig everywhere else; without that it covered the screen in every capture.
 #
-# `keystonenotice` poses the LONGEST notice toast the game can post - CAPACITOR's keystone reveal,
-# which is its blurb plus the sentence naming the rung that taught it, 164 characters. The toast
-# body used to be a single ellipsised line, so every reveal longer than about eighty characters was
-# cut in half, and no capture mode had ever posted a long one to show it. The fixture builds the
-# string through the same helper the live reveal calls, so it is the real sentence at its real
-# length rather than a stand-in.
+# `keystonenotice` poses the LONGEST notice toast the game can post - today CAPACITOR's keystone
+# reveal, which is its blurb plus the sentence naming the rung that taught it, 164 characters. The
+# fixture ASKS the catalogue which is longest rather than naming one, and builds the string through
+# the same helper the live reveal calls, so it is the real sentence at its real length rather than a
+# stand-in. Every keystone reveal is a notice: a conquest one too, since the map strip is one line
+# and, once the world is conquered, is not drawn at all.
+#
+# `world` is the map with a conquest's news in the strip - the compact headline, keystone named,
+# built by the same helper the live conquest calls. RH_SHOT_CONQUEST picks which conquest.
 #
 # `weavefresh` is the BUILD screen of an account the world has taught NOTHING: no keystone, no
 # socket, one Vow (the one that is simply given), one skill slot. Every line of "you have not
@@ -221,12 +224,34 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #
 #   RH_SHOT_PICK=hammer_blow bash tools/asset-pipeline/capture.sh weave build/shots/locked.png
 [ -n "$RH_SHOT_PICK" ] && RH_ENV+=(RH_SHOT_PICK="$RH_SHOT_PICK")
+# RH_SHOT_CONQUEST=<region id> poses `world`'s map strip on a LATER conquest's line. The strip is one
+# line and does not grow, so the line that has to fit it is the longest the world can produce:
+#
+#   RH_SHOT_CONQUEST=still_archive RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh world out.png
+#
+# EVERY REGION BUT THE LAST. Posing a conquest conquers every region up to it, so `pale_choir` leaves
+# the world whole — and a whole world gives the strip to the corruption LADDER, which is exactly why
+# the reveal is a notice and not a line here. The capture then shows the ladder and no headline; that
+# is the real screen, not a broken dial, and `keystonenotice` is where the last conquest's news is
+# photographed.
+#
+# RH_SHOT_KEYSTONE=<keystone id> poses `keystonenotice` on a chosen keystone's reveal. With none the
+# fixture asks the catalogue which reveal is LONGEST and poses that, so the pose follows the copy
+# rather than naming a keystone that may stop being the worst case. `echo` is the shortest — the
+# first conquest's — and is how the one-line body is photographed:
+#
+#   RH_SHOT_KEYSTONE=echo bash tools/asset-pipeline/capture.sh keystonenotice out.png
+#
 # RH_SHOT_SHED=1 makes `rosterswitch` perform a REAL champion switch away from a hunter whose own
 # signature skill is woven, so the notice the game posts when it repairs the loadout is photographed
 # rather than staged:
 #
 #   RH_SHOT_SHED=1 bash tools/asset-pipeline/capture.sh rosterswitch build/shots/shed.png
 [ -n "$RH_SHOT_SHED" ] && RH_ENV+=(RH_SHOT_SHED="$RH_SHOT_SHED")
+# THE MAP STRIP: which conquest's line it is carrying. `world` only.
+[ -n "$RH_SHOT_CONQUEST" ] && RH_ENV+=(RH_SHOT_CONQUEST="$RH_SHOT_CONQUEST")
+# THE NOTICE TOAST: which keystone's reveal it is showing. `keystonenotice` only; the longest by default.
+[ -n "$RH_SHOT_KEYSTONE" ] && RH_ENV+=(RH_SHOT_KEYSTONE="$RH_SHOT_KEYSTONE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")

@@ -2381,8 +2381,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sm == "conquered")
                 {
                     // Whole world conquered — show the map with the DEEPEN THE CORRUPTION button live.
+                    // No message is set: a conquered world gives the strip to the corruption LADDER, so
+                    // the line this fixture used to write was never drawn. (Nor was the live one — the
+                    // sixth conquest's own news lands on the same frame the ladder takes the strip.
+                    // That is why the keystone reveal is a notice now and not a line in here.)
                     foreach (var r in Regions.All) _world.Conquer(r.Id);
-                    _conquerMsg = "THE WORLD IS YOURS.  GO DEEPER INTO THE CORRUPTION ON THE MAP FOR MORE.";
                     _showWorld = true;
                 }
                 if (sm is "corrupted" or "corruptedboss")
@@ -2409,9 +2412,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 if (sm == "world")
                 {
-                    // Show a mid-progression map: home conquered, Cinderworks unlocked.
-                    _world.Conquer(VerdantHollow.RegionId);
-                    _conquerMsg = "VERDANT HOLLOW CONQUERED!  CINDERWORKS IS OPEN.";
+                    // A mid-progression map — home conquered, Cinderworks unlocked — with the strip
+                    // carrying the line a REAL conquest writes: the news and the keystone's compact
+                    // headline, built by the same helper the live conquest calls, so what is
+                    // photographed is the real string and not a stand-in for it. Until this fixture
+                    // the reveal had no capture mode at all, and the four lines it used to write into
+                    // a one-line plate spilled across the region cards unphotographed.
+                    //
+                    // RH_SHOT_CONQUEST=<region id> poses a LATER conquest's line. `still_archive` is
+                    // the longest headline the world can produce, and is what the one-line contract
+                    // has to hold at UI SCALE 150. Every region but the LAST: posing a conquest
+                    // conquers every region up to it, so `pale_choir` leaves the world whole and the
+                    // corruption ladder takes the strip — the very fact that moved the reveal to a
+                    // notice. That capture shows the ladder, which is the real screen for it.
+                    var fell = Environment.GetEnvironmentVariable("RH_SHOT_CONQUEST")?.Trim() is { Length: > 0 } cq
+                               && Regions.Find(cq) is not null ? cq : VerdantHollow.RegionId;
+                    foreach (var r in Regions.All)
+                    {
+                        _world.Conquer(r.Id);
+                        if (r.Id == fell) break;
+                    }
+                    var gift = Keystones.Sources.FirstOrDefault(
+                                   s => s.RegionId == fell && s.Rung == WorldRung.Conquest) is { } taught
+                               ? Keystones.ById(taught.KeystoneId) : null;
+                    _conquerMsg = MapScreen.ConquestHeadline(fell, Regions.Next(fell), gift);
                     _showWorld = true;
                 }
                 // mapdeep: the same world, but the region you are in was conquered and held deep — the only
@@ -2711,18 +2735,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSkill(0, freshSig);
                     }
                 }
-                // `keystonenotice` — the LONGEST reveal the game can post. A keystone found on a
-                // mastery rung is announced with what it DOES, not just its name, and CAPACITOR's
-                // sentence is 164 characters: its blurb plus the line naming the rung that taught it.
-                // One body line silently cut that in half for as long as the toast has existed, and
-                // nothing could photograph it, because no capture mode had ever posted a long one.
-                // It is built here through the SAME helper the live reveal calls, so what is
-                // photographed is the real string at its real length, not a stand-in for it.
+                // `keystonenotice` — the LONGEST reveal the game can post. A keystone is announced with
+                // what it DOES, not just its name, and CAPACITOR's sentence is 164 characters: its blurb
+                // plus the line naming the rung that taught it. One body line silently cut that in half
+                // for as long as the toast has existed, and nothing could photograph it, because no
+                // capture mode had ever posted a long one. It is built here through the SAME helper the
+                // live reveal calls, so what is photographed is the real string at its real length.
+                //
+                // MEASURED, NOT NAMED: the pose asks the catalogue which reveal is longest, so it stays
+                // the worst case as keystones are added or their copy is rewritten. RH_SHOT_KEYSTONE=<id>
+                // poses a specific one instead — `echo` is the shortest, the first conquest's reveal.
                 if (sm == "keystonenotice")
                 {
                     _showLoadout = true;
-                    if (Keystones.ById("capacitor") is { } cap && Keystones.SourceOf("capacitor") is { } capSrc)
-                        PostNotice($"NEW KEYSTONE — {cap.Name}", $"{RungReached(capSrc)} {cap.Blurb}");
+                    var shown = Environment.GetEnvironmentVariable("RH_SHOT_KEYSTONE")?.Trim() is { Length: > 0 } kid
+                                ? Keystones.ById(kid) : LongestKeystoneReveal();
+                    if (shown is not null) PostKeystoneReveal(shown);
                 }
                 if (sm == "weave")
                 {
@@ -3931,14 +3959,45 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (fresh.Count == 0) return;
 
         // A MASTERY RUNG HAPPENS MID-FARM, with the player very possibly not watching, so it is never
-        // modal: the same two-line notice every other quiet reward uses. A CONQUEST already has its own
-        // panel on the map, and the reveal is written into it at the conquest site instead.
+        // modal: the same wrapping notice every keystone reveal uses. A CONQUEST posts its own, at the
+        // conquest site, so the socket line can follow it in the right order — so it is skipped here.
         foreach (var k in fresh)
         {
-            if (Keystones.SourceOf(k.Id) is not { } src || src.Rung == WorldRung.Conquest) continue;
-            PostNotice($"NEW KEYSTONE — {k.Name}", $"{RungReached(src)} {k.Blurb}");
+            if (Keystones.SourceOf(k.Id) is { Rung: WorldRung.Conquest }) continue;
+            PostKeystoneReveal(k);
         }
     }
+
+    /// <summary>The reveal a found keystone gets: its name, then the rung that taught it and what it does.</summary>
+    /// <remarks>
+    /// ONE HELPER FOR ALL FOUR PRODUCERS — conquest, the two mastery rungs and the corruption — so the
+    /// sentence a keystone arrives with is written once and every one of them is the same shape.
+    /// <para>
+    /// It is a NOTICE and not the map's strip, and that is the whole point. A keystone has to say what it
+    /// DOES — the word CAPACITOR alone teaches nobody anything — and the longest of those sentences is 164
+    /// characters. The notice is the one presentation in the game that can hold it: its body WRAPS and its
+    /// plate grows to the rungs it draws. The map strip is a fixed-height single line, and after the sixth
+    /// conquest it is not drawn at all (the corruption ladder takes it), so a reveal written into it was
+    /// four lines across the region cards for five conquests and invisible on the sixth.
+    /// </para>
+    /// </remarks>
+    private void PostKeystoneReveal(Keystone k)
+    {
+        var where = Keystones.SourceOf(k.Id) is { } src ? RungReached(src) : "";
+        PostNotice($"NEW KEYSTONE — {k.Name}", where.Length > 0 ? $"{where} {k.Blurb}" : k.Blurb);
+    }
+
+    /// <summary>Whichever keystone's reveal is the longest sentence in the catalogue. Capture rig only.</summary>
+    /// <remarks>
+    /// The toast's wrap is a ceiling, and a ceiling is only ever proved by the worst case. Asked of the
+    /// catalogue rather than named in the fixture, so it follows the copy: today it is CAPACITOR at 164
+    /// characters, and it stays the right answer when a keystone is added or a blurb is rewritten.
+    /// </remarks>
+    private static Keystone? LongestKeystoneReveal()
+        => Keystones.Catalog
+            .OrderByDescending(k => (Keystones.SourceOf(k.Id) is { } s ? RungReached(s).Length + 1 : 0) + k.Blurb.Length)
+            .ThenBy(k => k.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>"VERDANT HOLLOW IS PARTLY MASTERED." — the sentence a mastery-rung reveal opens with.</summary>
     private static string RungReached(KeystoneSource src)
@@ -5197,27 +5256,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var unlocked = _world.Conquer(_activeRegion);
             _dust.AddDust(CorruptionScaling.ConquestDust(_world.CorruptionTier));
             _sound.PlayFirst(1f, "sfx_conquer", "sfx_levelup");
-            _conquerMsg = unlocked is not null
-                // The message shows ON the map now, in its own strip inside the chart — so it no longer
-                // has to tell the player to go and open the screen it is already standing on.
-                ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} IS OPEN."
-                : "THE WORLD IS YOURS.";
             // AND THE REGION TEACHES YOU ITS DOCTRINE. A conquest is the fast axis of the world and the
             // spine every player walks, so it carries the six keystones the rest of the game depends on
             // — two weapon enchantments are dead without ECHO or BLOODLUST, and both are conquest
             // rewards. The BLURB is not optional: a player who has never owned a keystone learns
-            // nothing from the word BLOODLUST on its own.
-            if (Keystones.Sources.FirstOrDefault(s =>
-                    s.RegionId == _activeRegion && s.Rung == WorldRung.Conquest) is { } taught
-                && Keystones.ById(taught.KeystoneId) is { } gift)
+            // nothing from the word BLOODLUST on its own — but it is 164 characters at its longest and
+            // it goes where a long sentence can be READ, which is the notice toast. See
+            // PostKeystoneReveal. The strip gets the compact headline and stays the one line it is.
+            var gift = Keystones.Sources.FirstOrDefault(s =>
+                           s.RegionId == _activeRegion && s.Rung == WorldRung.Conquest) is { } taught
+                       ? Keystones.ById(taught.KeystoneId) : null;
+            _conquerMsg = MapScreen.ConquestHeadline(_activeRegion, unlocked, gift);
+            if (gift is not null)
             {
                 _discoveredKeystones.Add(gift.Id);
                 RebuildBuildMenus();
-                _conquerMsg += $"\n\nNEW KEYSTONE DISCOVERED\n{gift.Name}\n{gift.Blurb}";
+                PostKeystoneReveal(gift);
                 // On the FIRST conquest only, because the socket arrives on the same event — the build
-                // screen is never showing a keystone with nowhere to put it.
+                // screen is never showing a keystone with nowhere to put it. Its own toast, queued
+                // behind the reveal, so the two are read in the order they happened.
                 if (_world.ConqueredIds.Count == 1)
-                    _conquerMsg += "\nA KEYSTONE SOCKET OPENS. WEAR IT ON THE BUILD SCREEN.";
+                    PostNotice("A KEYSTONE SOCKET OPENS",
+                               "GO TO THE BUILD SCREEN TO WEAR YOUR NEW KEYSTONE.");
             }
             Save();
         }
@@ -7303,6 +7363,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!_world.CanEaseCorruption) return;
         var tier = _world.EaseCorruption();
         _sound.PlayFirst(0.8f, "sfx_click");
+        // FOUND, NOT FIXED — a line that cannot be read. Easing needs a corruption to ease and
+        // deepening needs the whole world conquered, and once the world is conquered the strip belongs
+        // to the corruption LADDER for good, so this message and DeepenCorruption's two are written to a
+        // row that is already showing something else. Left as they are, deliberately: the toast is the
+        // other place they could go, and on this screen it hangs directly over the strip and the
+        // SHALLOWER / DEEPER buttons the player is pressing. The ladder row does say the new tier and
+        // its blurb, so what is actually lost is the note about the dust. Owner: the corruption.
         _conquerMsg = $"THE CORRUPTION EASES — {CorruptionLook.Label(tier)}.";
         Save();
     }
@@ -7318,6 +7385,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // cycle (review, 2026-08-23). The trait point for the tier keys off the peak too (TraitPointsEarned).
         var firstTime = tier > peakBefore;
         if (firstTime) _dust.AddDust(CorruptionScaling.DeepeningDustAward(tier));
+        // Also never read — see EaseCorruption. The strip is the corruption ladder itself by here.
         _conquerMsg = firstTime
             ? $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. HARDER ENEMIES, MORE DUST."
             : $"THE CORRUPTION DEEPENS AGAIN — {CorruptionLook.Label(tier)}. (YOU ALREADY GOT THE DUST FOR THIS TIER.)";
