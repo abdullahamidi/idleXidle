@@ -192,6 +192,27 @@ public sealed class SoloExpedition
     /// <summary>The outcome of the most recent wave — what the report calls the run's ending.</summary>
     public WaveOutcome LastOutcome { get; private set; } = WaveOutcome.Cleared;
 
+    /// <summary>
+    /// For each Vow, how many waves of THIS descent were cleared with its rule held and the Vow unsworn.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Vow's condition is a property of the build, so an end-of-descent check would need no counter at
+    /// all — except that the build can CHANGE mid-descent (see <see cref="ReplaceBuild"/>). A player
+    /// could clear fourteen waves on a four-skill, four-source, fully-armoured build, drop to one skill
+    /// in the breath before wave fifteen, die, and have the end-of-run context report one Source, one
+    /// Style, no defence and three bare slots — six Vows proved by a build that never fought.
+    /// </para>
+    /// <para>
+    /// So the proof is counted per CLEARED wave, as the descent happens. The wave that killed you does
+    /// not count, and a checkpoint start cannot buy proof it never fought for. Never persisted, never
+    /// crosses a run: this is the only new state the whole Vow-discovery rule needs.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, int> VowProofWaves => _vowProofWaves;
+
+    private readonly Dictionary<string, int> _vowProofWaves = new(StringComparer.Ordinal);
+
 
     /// <summary>
     /// Swap the build the NEXT waves are resolved with, keeping everything else about the run — the
@@ -257,6 +278,28 @@ public sealed class SoloExpedition
         var fraction = _champion.Health / (float)_champion.MaxHealth;
         _champion.MaxHealth = pool;
         _champion.Health = _champion.Alive ? Math.Clamp((int)MathF.Round(pool * fraction), 1, pool) : 0;
+    }
+
+    /// <summary>
+    /// Credit one cleared wave to every Vow whose rule this build kept without swearing it.
+    /// </summary>
+    /// <remarks>
+    /// One <c>DescribeBuild</c> per cleared wave — the same context the fight itself builds once per
+    /// wave for exactly the same reason. Vow discovery reads the BUILD; trait discovery reads the wave's
+    /// metrics. That is the line between the two systems, and it is why they can never answer the same
+    /// question twice.
+    /// </remarks>
+    private void CountVowProof()
+    {
+        var ctx = SoloBattle.DescribeBuild(_build, _hunter);
+        var sworn = _build.Vows;
+
+        foreach (var vow in Vows.Discoverable)
+        {
+            if (sworn.Any(v => v.Id == vow.Id)) continue;   // a Vow you wore proves nothing
+            if (!Vows.RuleHeld(vow, ctx)) continue;
+            _vowProofWaves[vow.Id] = _vowProofWaves.GetValueOrDefault(vow.Id) + 1;
+        }
     }
 
     public WaveOutcome PushWave()
@@ -344,6 +387,7 @@ public sealed class SoloExpedition
             entrenched: affixes.Contains(Affix.Entrenched),
             legionSplits: affixes.Contains(Affix.Legion));
         Recorder.Record(next, metrics);
+        if (outcome == WaveOutcome.Cleared) CountVowProof();
 
         // The ledger WARDED reads next wave: this wave's top style by damage, ties toward more casts,
         // then style order. A wave in which no skill landed wards nothing.

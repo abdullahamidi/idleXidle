@@ -243,19 +243,17 @@ public sealed class Build
     /// carries everything and the Form axis collapses — the same way an unbounded gear budget collapsed
     /// "which item" into "the biggest number".
     ///
-    /// This is the FLOOR, not the rule. The trait spine sells a fifth (<c>weave_5</c>); see
-    /// <see cref="SlotCapacity"/>, which is what <see cref="Weave"/> actually enforces.
+    /// This is also the CEILING. It was once only a floor: the trait tree sold a fifth slot
+    /// (<c>weave_5</c>), and that slot bought a THIRD ACTIVE — <c>ActiveSlotsFor(5)</c> is 3 — which
+    /// pushed beat demand back toward the number the slot rework existed to bring down. The fifth slot
+    /// is removed, and it is the one capability this refactor deliberately takes away.
     /// </remarks>
     public const int SkillSlots = 4;
 
-    /// <summary>How many skills THIS build may weave — four, or five once the spine has sold the fifth.</summary>
+    /// <summary>How many skills THIS build may weave. Never more than <see cref="SkillSlots"/>.</summary>
     /// <remarks>
-    /// An instance value rather than the const above, because the const was the whole bug. FIFTH WEAVE
-    /// is a three-point node on the trait spine; <c>DustEffects.SkillSlots</c> returned 5 for a player
-    /// who owned it, the host wrote that into <c>PlayerLoadout.SkillCapacity</c>, and then <c>AddSkill</c>
-    /// took <c>Math.Min(MaxSkills, SkillCapacity)</c> against a hard 4 and threw it away. The node was
-    /// bought, persisted, resolved, displayed — and clamped off at the last step, which is this
-    /// codebase's signature failure wearing a different hat.
+    /// An instance value rather than the const above, because a champion EARNS its slots one at a time
+    /// and a build must be able to report one, two or three of them honestly.
     ///
     /// <b>The floor is WHAT IS ALREADY WOVEN, not <see cref="SkillSlots"/>.</b> It used to be the
     /// constant 4, on the reasoning that a build handed a smaller capacity would silently unweave skills
@@ -273,7 +271,10 @@ public sealed class Build
     public int SlotCapacity
     {
         get => Math.Max(_slotCapacity, _skills.Count);
-        set => _slotCapacity = Math.Max(1, value);
+        // CLAMPED AT FOUR, both ends. A build is two skills that take an action and two that do not;
+        // there is no longer anything in the game that sells a fifth, and a stale save that asks for
+        // one is answered with four rather than quietly re-opening a slot that has been removed.
+        set => _slotCapacity = Math.Clamp(value, 1, SkillSlots);
     }
 
     private int _slotCapacity = SkillSlots;
@@ -386,6 +387,28 @@ public sealed class Build
     public IReadOnlyList<Keystone> Keystones => _keystones;
 
     /// <summary>
+    /// The Vows this build has sworn — each one ONCE, however many slots happen to carry it.
+    /// </summary>
+    /// <remarks>
+    /// A Vow is a promise about the BUILD, and a promise made twice is one promise. It is still STORED
+    /// on a skill slot — that is the save shape, and the workbench is where a player swears one — but
+    /// nothing downstream counts it twice: the bonus, the fragility bill, the health price and the
+    /// TITHE enchantment all read this list. Vow CAPACITY (<c>Unlocks.VowCapacity</c>) counts exactly
+    /// these, which is what makes it a number a milestone can grant.
+    /// </remarks>
+    public IReadOnlyList<Vow> Vows
+    {
+        get
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var list = new List<Vow>();
+            foreach (var sk in _skills)
+                if (sk.Vow is { } v && seen.Add(v.Id)) list.Add(v);
+            return list;
+        }
+    }
+
+    /// <summary>
     /// Equip a skill. Returns false when the slots are full — a bounded budget is the point — or when
     /// the same skill is already equipped (LAW 13: one slot per skill; <see cref="Unequip"/> removes by
     /// id and has always assumed it).
@@ -418,18 +441,19 @@ public sealed class Build
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Three, and this number is the only thing keeping the passive tree honest.</b> The Dust tree is
-    /// COMPLETABLE by design — a player can buy every node and see the horizon. That is a promise worth
-    /// keeping, but it collides head-on with keystones: if owning a keystone meant wearing it, then a
-    /// finished tree would wear all ten, and since the catalog is built from opposed pairs they would
-    /// very nearly cancel. Every completed build would arrive at the same mediocre generalist, and
-    /// <c>test_every_keystone_costs_something</c> would be guarding a door with no wall around it.
+    /// <b>Three, and this number is the only thing keeping the keystone catalogue honest.</b> The world
+    /// teaches all NINETEEN — one for taking a region, one for knowing it, one for mastering it, and one
+    /// past the end of the world — so a player who walks the whole map ends up knowing every doctrine in
+    /// the game. If knowing one meant wearing it they would wear all nineteen, and since the catalogue is
+    /// built from opposed pairs they would very nearly cancel: every finished build would arrive at the
+    /// same mediocre generalist, and <c>test_every_keystone_costs_something</c> would be guarding a door
+    /// with no wall around it.
     /// </para>
     /// <para>
-    /// So the tree TEACHES and the build CHOOSES — the split this codebase already uses for Vows, where
-    /// <c>vow_study_1</c> buys knowledge of Patience and each ability still picks its own Vow. Dust buys
-    /// access; the refusal happens here, permanently, every time the player looks at three sockets and
-    /// ten keystones.
+    /// So the WORLD teaches and the BUILD chooses — the split this codebase also uses for Vows. Conquest
+    /// buys knowledge; the refusal happens here, permanently, every time the player looks at three
+    /// sockets and nineteen keystones. The sockets themselves are earned from the world too
+    /// (<c>Unlocks.KeystoneSockets</c>), never bought with a choice-currency.
     /// </para>
     /// </remarks>
     public const int KeystoneSlots = 3;

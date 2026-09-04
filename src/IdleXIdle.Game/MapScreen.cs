@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Combat;
 using IdleXIdle.Core.Encounters;
@@ -1042,6 +1043,28 @@ public sealed class MapScreen
                 Line($"REACH WAVE {ConquerWaves} TO CONQUER THIS REGION", Slate, body, 2);
             }
         }
+        Rule();
+        // ── WHAT THIS REGION TEACHES. Three keystones per region — one for taking it, one for knowing
+        //    it, one for mastering it — and this strip is what makes the map the place a player goes to
+        //    ask "what else can my build become". A rung already reached is ticked; one still ahead
+        //    names its keystone anyway, because the Forge already names the region when an enchantment
+        //    is waiting on a keystone, and the two screens cannot be allowed to disagree. ──
+        var teaches = Keystones.Sources.Where(s => s.RegionId == def.Id).ToList();
+        if (teaches.Count > 0)
+        {
+            Section("WHAT THIS REGION TEACHES");
+            foreach (var src in teaches)
+            {
+                if (Keystones.ById(src.KeystoneId) is not { } k) continue;
+                var reached = Keystones.IsReached(src, World);
+                if (!Item(bodyPitch, out var t)) continue;
+                if (reached) DrawCheck(b, new Rectangle(x, t + UiMetrics.Space(2), CheckW, CheckH), Met);
+                _ui.TextBig(b, _ui.ShortenBig($"{Keystones.RungAsk(src.Rung)}: {k.Name}",
+                                              w - CheckW - wordGap, body),
+                            x + CheckW + wordGap, t, reached ? Met : Bone, body);
+            }
+        }
+
         return shown;
 
         // START AT WAVE — the checkpoint chips of a conquered region (Checkpoints): 0 and every ten waves

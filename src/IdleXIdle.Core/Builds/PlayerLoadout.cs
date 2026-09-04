@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -52,33 +52,66 @@ public sealed class PlayerLoadout
     /// </summary>
     public string Signature =>
         string.Join(";", _skills.Select(s => $"{s.SkillId ?? "-"}:{s.Source}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
-        + $"|{SkillCapacity}|{KeystoneCapacity}";
+        + $"|{SkillCapacity}|{KeystoneCapacity}|{VowCapacity}";
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
-    /// <summary>The skill slots every character starts with. The FLOOR, not the rule — see <see cref="SkillCapacity"/>.</summary>
+    /// <summary>The skill slots a build may ever hold. The CEILING as well as the floor.</summary>
     /// <remarks>
-    /// This const used to be the rule, and that was the bug. <c>AddSkill</c> took
-    /// <c>Math.Min(MaxSkills, SkillCapacity)</c>, so FIFTH WEAVE — three points on the trait spine —
-    /// was bought, saved, resolved to 5, written into the capacity by a host line whose own comment
-    /// reads "without this the fifth weave is bought and never granted", and then clamped straight back
-    /// to 4 one call later. Nothing reads it as a ceiling any more.
+    /// It was briefly only a floor, while the trait tree sold a fifth slot. That slot bought a THIRD
+    /// action-taking skill — <c>Build.ActiveSlotsFor(5)</c> is 3 — which is the number the slot rework
+    /// existed to bring down, so it is gone: the one capability this refactor deliberately removes.
+    /// Four is the whole ladder again, and progression alone hands it out (<c>Unlocks.SkillSlots</c>).
     /// </remarks>
-    public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of Forms
-    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the tree teaches fifteen, you wear three
+    public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of skills
+    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the world teaches nineteen, you wear three
 
     /// <summary>
-    /// How many skill slots and keystone sockets the character currently HAS, set by the host from the
-    /// trait tree's spine. The consts above are the hard ceiling; these are what is unlocked.
+    /// How many skill slots and keystone sockets the character currently HAS, set by the host from
+    /// world progression. The consts above are the hard ceiling; these are what is unlocked.
     /// </summary>
     /// <remarks>
     /// Host-set rather than resolved here, like every other cross-system value the loadout reads, and
     /// defaulted to the ceiling so a caller that never sets them (a test, a bench) behaves as before.
-    /// A socket the player has not bought is the scarce thing the AVARICE and RUIN paths compete over —
-    /// with three free sockets, learning a keystone was the only decision and wearing it was automatic.
+    /// A socket is the scarce thing: the world teaches all nineteen keystones for free, so if wearing
+    /// one were free too, every finished build would wear every doctrine and the opposed pairs would
+    /// very nearly cancel.
     /// </remarks>
-    public int SkillCapacity { get; set; } = MaxSkills;
+    public int SkillCapacity
+    {
+        get => _skillCapacity;
+        // CLAMPED. A save written while the trait tree still sold a fifth slot asks for five here; it
+        // is answered with four, and the load path unweaves the fifth row and says so in a toast.
+        set => _skillCapacity = Math.Clamp(value, 1, MaxSkills);
+    }
+
+    private int _skillCapacity = MaxSkills;
 
     public int KeystoneCapacity { get; set; } = MaxKeystones;
+
+    /// <summary>
+    /// How many DIFFERENT Vows this hunter may swear at once. Set by the host from world progression.
+    /// </summary>
+    /// <remarks>
+    /// Vow capacity used to be no number at all. A Vow rode a skill slot, so "how many Vows" was
+    /// whatever the skill-slot count happened to be — impossible for a milestone to grant, and coupled
+    /// to a ceiling that belongs to a different system. It also made the workbench ask a question with
+    /// one correct answer, four times over: each skill took exactly one Vow's bonus, so four DIFFERENT
+    /// Vows paid exactly what one repeated Vow paid while charging four prices and demanding four
+    /// restrictions hold at once. The build's Vow bonuses are summed under one ceiling now, and this is
+    /// the real bound.
+    /// <para>
+    /// <b>The host ASSIGNS this every frame from <c>Unlocks.VowCapacity</c>; it is not a Math.Max.</b>
+    /// It used to default to the ceiling (3) and only ever be raised, which meant it started at the
+    /// ceiling, could never come down, and the milestone that was supposed to grant it never moved a
+    /// thing — a dial with no live consumer, tested on its own and wired to nothing. One is the honest
+    /// floor: it is what the BUILD screen opens with, and at one Vow the numbers are exactly today's.
+    /// </para>
+    /// </remarks>
+    public int VowCapacity { get; set; } = 1;
+
+    /// <summary>The distinct Vows this loadout has sworn — the list <see cref="VowCapacity"/> bounds.</summary>
+    public IReadOnlyList<string> SwornVows =>
+        _skills.Select(s => s.VowId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
 
     // ── Skill editing ───────────────────────────────────────────────────────────────────────────
 
@@ -154,9 +187,11 @@ public sealed class PlayerLoadout
         ArgumentNullException.ThrowIfNull(knownVows);
         if (!InRange(slot)) return;
 
-        // The options are: no vow, then each known vow, in order. Cycle across that list.
+        // The options are: no vow, then each known vow, in order — minus any that would take the build
+        // past its Vow capacity, so the cycle-and-confirm path can never land on a refusal.
         var ids = new List<string?> { null };
-        ids.AddRange(knownVows.Select(v => (string?)v.Id));
+        ids.AddRange(knownVows.Select(v => (string?)v.Id)
+                              .Where(id => VowFitsCapacity(slot, id) || id == _skills[slot].VowId));
 
         var cur = ids.IndexOf(_skills[slot].VowId);
         if (cur < 0) cur = 0;
@@ -214,27 +249,46 @@ public sealed class PlayerLoadout
     public bool HasSkill(string skillId) => IndexOfSkill(skillId) >= 0;
 
     /// <summary>
-    /// Swear a Vow on a slot, or clear it with null. Refuses a Vow that has not been studied.
+    /// Swear a Vow on a slot, or clear it with null. Refuses a Vow the account has not found, and
+    /// refuses one more different Vow than <see cref="VowCapacity"/> allows.
     /// </summary>
     /// <remarks>
-    /// The guard is not defensive padding: a Vow is a permanent-feeling commitment bought from the
-    /// trait tree, and a screen that could set one the player never learned would be granting the
-    /// trait tree's reward for free.
+    /// Neither guard is defensive padding. A Vow is FOUND by keeping its rule once without it, so a
+    /// screen that could set one the account never proved would hand over the reward the proof is for.
+    /// And capacity is a real bound the world grants — swearing past it has to be refused below the UI
+    /// or the number is decoration. Binding a Vow the build ALREADY carries is always allowed: that is
+    /// the same promise on a second slot, not a second promise.
     /// </remarks>
     public bool SetVow(int slot, string? vowId, IReadOnlyList<Vow> knownVows)
     {
         ArgumentNullException.ThrowIfNull(knownVows);
         if (!InRange(slot)) return false;
         if (vowId is not null && knownVows.All(v => v.Id != vowId)) return false;
+        if (!VowFitsCapacity(slot, vowId)) return false;
         _skills[slot] = _skills[slot] with { VowId = vowId };
         return true;
+    }
+
+    /// <summary>Would putting this Vow on this slot leave the build inside <see cref="VowCapacity"/>?</summary>
+    /// <remarks>Public so the workbench can grey the choice rather than let the player click into a refusal.</remarks>
+    public bool VowFitsCapacity(int slot, string? vowId)
+    {
+        if (vowId is null) return true;
+
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < _skills.Count; i++)
+        {
+            var id = i == slot ? vowId : _skills[i].VowId;
+            if (id is not null) distinct.Add(id);
+        }
+        return distinct.Count <= Math.Max(1, VowCapacity);
     }
 
     // ── Keystone sockets ──────────────────────────────────────────────────────────────────────────
 
     public bool HasKeystone(string id) => _keystoneIds.Contains(id);
 
-    /// <summary>Socket or unsocket a keystone the tree has taught. Bounded by <see cref="MaxKeystones"/>.</summary>
+    /// <summary>Socket or unsocket a keystone the world has taught. Bounded by <see cref="MaxKeystones"/>.</summary>
     public bool ToggleKeystone(string id, IReadOnlyList<Keystone> learned)
     {
         ArgumentNullException.ThrowIfNull(learned);
@@ -268,8 +322,17 @@ public sealed class PlayerLoadout
     /// indistinguishable from a deliberate null at the call site, so the omission is no longer offered:
     /// callers that mean "no character" now have to say so.
     /// </remarks>
+    /// <param name="discoveredKeystones">
+    /// What the WORLD has taught this account. Null falls back to the trait tree's own keystone nodes,
+    /// which is the transitional path while the tree still stands; the host always passes the real list.
+    /// </param>
+    /// <param name="knownVows">
+    /// What the account has FOUND, by keeping a rule once without its Vow. Null falls back to the tree.
+    /// </param>
     public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character,
-                         SkillProgress? progress = null)
+                         SkillProgress? progress = null,
+                         IReadOnlyList<Keystone>? discoveredKeystones = null,
+                         IReadOnlyList<Vow>? knownVows = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -282,7 +345,7 @@ public sealed class PlayerLoadout
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
             _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.VowId, s.Passive, s.SkillId)),
-            _keystoneIds, SkillCapacity, progress);
+            _keystoneIds, SkillCapacity, progress, discoveredKeystones, knownVows);
     }
 
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────

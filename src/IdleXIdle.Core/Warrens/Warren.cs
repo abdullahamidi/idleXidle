@@ -100,6 +100,23 @@ public sealed record WarrenTuning
     /// <summary>Output multiplier added per milestone crossed (e.g. +15% at L5, +30% at L10, ...).</summary>
     public float MilestoneBonusPerTier { get; init; } = 0.15f;
 
+    // -- Automation. What a facility does for you as well as what it produces. ---------------------
+    //
+    // These three used to be trait-tree purchases. Automation is the Warren's job: it already owns the
+    // account's idle layer, it already has a currency and an upgrade ladder, and it already persists
+    // every facility level, so moving them here needed no new save field at all. The levels sit BELOW
+    // the first production milestone (5) on purpose, so the ladder reads as two separate legible
+    // rewards: level 2 and level 4 change what the game does for you, level 5 changes how much it makes.
+
+    /// <summary>SCAVENGER RUNS at this level sells Common drops for you when a chest is opened.</summary>
+    public int AutoSellCommonLevel { get; init; } = 2;
+
+    /// <summary>SCAVENGER RUNS at this level sells Uncommon drops too. Rare and better are always kept.</summary>
+    public int AutoSellUncommonLevel { get; init; } = 4;
+
+    /// <summary>HOARD VAULTS at this level merges your spare items when a chest is opened.</summary>
+    public int AutoMergeLevel { get; init; } = 2;
+
     public static WarrenTuning Default { get; } = new();
 }
 
@@ -187,6 +204,9 @@ public sealed class Warren
 
     /// <summary>Regions conquered - set by the host; drives <see cref="ConquestBonus"/> and the unlock ramp.</summary>
     public int ConqueredRegions { get; set; }
+
+    /// <summary>The balance numbers this Warren runs on. Read by <see cref="WarrenAutomation"/>.</summary>
+    public WarrenTuning Tuning => _t;
 
     public int Level { get; private set; } = 1;
     public int Xp { get; private set; }

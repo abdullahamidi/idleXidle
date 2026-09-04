@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -479,6 +479,24 @@ public sealed class HuntScreen
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
     public int Deepest => _descent.Deepest;
 
+    /// <summary>The keystones the world has taught this account — set by the host.</summary>
+    public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
+
+    /// <summary>The Vows the account has found — set by the host.</summary>
+    public IReadOnlyList<Vow> KnownVows { get; set; } = Array.Empty<Vow>();
+
+    /// <summary>
+    /// What the descent that just ended proved, per Vow: cleared waves with the rule held and unsworn.
+    /// </summary>
+    /// <remarks>
+    /// Snapshotted on the frame the run ends, beside the report, because the champion regroups a few
+    /// seconds later and mints a fresh expedition with an empty counter. The host reads it on the same
+    /// frame it reads <see cref="LogDirty"/> — the one frame a finished descent can still be asked
+    /// anything at all.
+    /// </remarks>
+    public IReadOnlyDictionary<string, int> LastRunVowProof { get; private set; }
+        = new Dictionary<string, int>();
+
     private readonly List<Callout> _callouts = new();
 
     /// <summary>Batch indices whose damage has been summed into an earlier blow's number (§21).</summary>
@@ -821,12 +839,16 @@ public sealed class HuntScreen
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
     private string _buildStamp = "";
     private string BuildStamp()
-        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}|{Progress?.Signature}";
+        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}|{Progress?.Signature}"
+           // A keystone discovered mid-descent (a conquest happens at the end of one, but region
+           // mastery lands mid-farm) must reach the fight at the next wave boundary like everything
+           // else. Without these two the build would keep composing against the old menu.
+           + $"|{DiscoveredKeystones.Count}|{KnownVows.Count}";
 
     /// <summary>Compose the build and refresh what the screen caches off it (the CHARGE pill).</summary>
     private Build ComposeBuild(Hunter hunter)
     {
-        var build = Loadout.ToBuild(Tree, Mastery, Character, Progress);
+        var build = Loadout.ToBuild(Tree, Mastery, Character, Progress, DiscoveredKeystones, KnownVows);
         _buildStamp = BuildStamp();
         // The CHARGE pill only exists when the pool does.
         var trig = build.Triggers(hunter);
@@ -1547,6 +1569,9 @@ public sealed class HuntScreen
             // could be read; what the player sees now is the short fallen banner (the HunterDown
             // overlay), which names the wave and points at the log (L), where the report keeps.
             Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat));   // kept and saved — see the Log property
+            // WHAT THIS DESCENT PROVED. Taken here for the same reason the report is: one frame later
+            // the champion regroups onto a fresh expedition and the counter is empty.
+            LastRunVowProof = _run.VowProofWaves.ToDictionary(kv => kv.Key, kv => kv.Value);
             LogDirty = true;
 
             _fellWave = Math.Max(1, _replayWave);
@@ -3371,7 +3396,7 @@ public sealed class HuntScreen
         var tx = box.Right + UiMetrics.Space(14);
         var ty = slot.Y + UiMetrics.Space(24);
         _ui.TextBig(b, "EMPTY SLOT", tx, ty, UiInk.Empty, UiTypography.Body);
-        _ui.TextBig(b, "MORE SLOTS — TRAITS", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
+        _ui.TextBig(b, "MORE SLOTS AS YOU GO DEEPER", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
     }
 
     /// <summary>Where a slot's medallion sits: inset from the slot's left, centred on its height.</summary>

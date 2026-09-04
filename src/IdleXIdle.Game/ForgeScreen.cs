@@ -1064,6 +1064,15 @@ public sealed class ForgeScreen
     /// </summary>
     public Rarity? AutoSellFloor { get; set; }
 
+    /// <summary>
+    /// The keystones the world has taught this account — set by the host.
+    /// </summary>
+    /// <remarks>
+    /// Read by one line: an unpaired combo enchantment whose partner keystone has not been found yet
+    /// names the region that teaches it, instead of naming a keystone the player has no way to reach.
+    /// </remarks>
+    public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
+
     // ── The SELL / SALVAGE confirmation ──────────────────────────────────────────────────────────
     // Research pass (Diablo 3/4, Last Epoch, WoW): routine disposal gets ONE dialog with a suppression
     // checkbox committed by the confirming click; the EQUIPPED case is categorically different and can
@@ -2520,8 +2529,17 @@ public sealed class ForgeScreen
             if (ench.Needs is { } needs)
             {
                 var met = needs.MetBy(ActiveDefs, ActiveTriggers, SwornVows);
+                // AND IF THE PARTNER IS A KEYSTONE THE PLAYER HAS NOT FOUND, SAY WHERE IT IS. The old
+                // line was honest and useless: it named BLOODLUST and nothing anywhere told the player
+                // where BLOODLUST was. Now that the world teaches keystones, a dead card points at a
+                // region instead of at a menu.
+                var missing = needs.Keystone is { } trig && Keystones.GrantingTrigger(trig) is { } partner
+                              && DiscoveredKeystones.All(k => k.Id != partner.Id)
+                    ? Keystones.WhereToFind(partner.Id) : "";
                 Band(met ? "WORKS WITH YOUR BUILD RIGHT NOW."
-                         : $"NEEDS {needs.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.",
+                         : missing.Length > 0
+                             ? $"NEEDS {needs.Label.ToUpperInvariant()} — {missing}"
+                             : $"NEEDS {needs.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.",
                      met ? Met : Slate);
             }
         }

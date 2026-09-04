@@ -43,16 +43,17 @@ public class AffinityVowBuybackTest
     }
 
     [Fact]
-    public void test_affinity_buyback_reaches_the_fight_for_a_sworn_opposite_skill()
+    public void test_affinity_buyback_reaches_the_fight_for_a_kept_vow_and_not_for_a_broken_one()
     {
-        // Arrange: two identical single-skill builds at an off-discipline CASTING skill; one carries
-        // a Vow whose demand is UNMET on this build (so VowFactor adds nothing and the only delta is
-        // the buy-back), one carries none. The (affinity, caster) pair is MEASURED off the catalogue
-        // rather than assumed — the first draft assumed Strike's far ring held a caster, and it held
-        // only a passive, an on-bite Trap and a damageless Mark, so the buy-back path never ran and
-        // the test proved exactly the dormant-wiring it exists to catch. The same trap still exists
-        // in Style terms: a style's roster holds amplify SIGNs, Fields, on-bite Reactions and the
-        // banked-bite REPAY (BasePower 0), none of which would exercise the cast-path buy-back.
+        // RENAMED AND RE-POINTED 2026-09-03, because the rule it drove was wrong. It used to swear a
+        // vow whose demand was deliberately UNMET, so that the vow's own damage bonus paid nothing and
+        // the only delta left was the buy-back. That isolation was clean and the premise was not: the
+        // buy-back asked whether the slot CARRIED a vow and never whether the build KEPT it, so merely
+        // CLAIMING a restriction bought an off-discipline skill a whole affinity ring. Restriction is
+        // meant to buy power; a broken promise must buy nothing.
+        //
+        // The isolation is kept, differently: VowPowerMultiplier is zeroed, so a KEPT vow pays no
+        // damage bonus at all and the buy-back is again the only delta.
         var (affinity, caster) = Enum.GetValues<Style>()
             .SelectMany(a => SkillCatalogue.All.Select(d => (a, d)))
             .First(p => p.d.Kind == SkillKind.Active
@@ -60,14 +61,22 @@ public class AffinityVowBuybackTest
                         && p.d.BasePower > 0f
                         && StyleAffinity.Factor(p.a, p.d.Style) < 1f);
 
-        Build Casting(Vow? vow)
+        // ONE skill in a ONE-slot build meets VOW OF COMPLETION; the same skill in a four-slot build
+        // breaks it. Same vow, same build, same seed — only the promise's standing differs.
+        Build Casting(Vow? vow, int slots)
         {
-            var b = new Build { Affinity = affinity };
+            var b = new Build
+            {
+                Affinity = affinity,
+                SlotCapacity = slots,
+                // The vow's PAYOUT is switched off so the buy-back is the only thing left to measure.
+                Shape = new SkillShape { VowPowerMultiplier = 0f },
+            };
             b.Equip(new EquippedSkill(caster, Source.Nature, vow));
             return b;
         }
 
-        var unmeetable = Vows.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EverySlotFilled);
+        var completion = Vows.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EverySlotFilled);
 
         static float Damage(Build build)
         {
@@ -83,12 +92,16 @@ public class AffinityVowBuybackTest
             return metrics.DeliveredDamage;
         }
 
-        // Act + Assert: with the same seed, the sworn build's off-discipline caster delivers more.
-        if (unmeetable is null) return;   // catalogue changed shape; the unit test above still pins the rule
-        var swornDamage = Damage(Casting(unmeetable));
-        var plainDamage = Damage(Casting(null));
+        if (completion is null) return;   // catalogue changed shape; the unit test above still pins the rule
+        var keptDamage = Damage(Casting(completion, slots: 1));
+        var brokenDamage = Damage(Casting(completion, slots: 4));
+        var plainDamage = Damage(Casting(null, slots: 1));
 
-        Assert.True(swornDamage > plainDamage * 1.10f,
-            $"sworn {swornDamage} vs plain {plainDamage} — the buy-back never reached the sim");
+        // The buy-back is not dormant: a KEPT vow really does pull the off-discipline caster a ring in.
+        Assert.True(keptDamage > plainDamage * 1.10f,
+            $"kept {keptDamage} vs plain {plainDamage} — the buy-back never reached the sim");
+
+        // And a BROKEN one buys nothing at all — the same damage as swearing nothing.
+        Assert.Equal(plainDamage, brokenDamage);
     }
 }
