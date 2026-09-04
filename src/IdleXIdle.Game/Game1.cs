@@ -1749,8 +1749,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
-                or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti"
-                or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "fightstatus" or "fightshieldbroken" or "fightmulti"
+                or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "keystonenotice"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec")
             {
@@ -1938,6 +1939,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _gear.Mastery = _mastery;
                     _gear.SkillLevels = _skillProgress;
                     _gear.Tree = _dust;
+                    _gear.DiscoveredKeystones = _keystoneMenu;
+                    _gear.KnownVows = _vowMenu;
                     // Seed gear so the bag and the three worn slots pose with content, gleam so the train
                     // buttons are live, and a few trained ranks so the values aren't all at base.
                     var rar = new[] { Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
@@ -1998,6 +2001,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _training.Loadout = _loadout;
                     _training.Mastery = _mastery;
                     _training.Tree = _dust;
+                    _training.DiscoveredKeystones = _keystoneMenu;
+                    _training.KnownVows = _vowMenu;
                     _training.Character = _characters.Active;
                     _training.SkillLevels = _skillProgress;
                     // RH_SHOT_SELECT poses the inspector against a chosen row.
@@ -2026,7 +2031,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog"
-                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti")
+                    or "fightstatus" or "fightshieldbroken" or "fightmulti")
                 {
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
@@ -2043,7 +2048,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // exactly that reason. One skill also cannot show the thing the rework is for: two
                     // actives leaving the plain swing most of its beats.
                     if (sm is "fight" or "fightswing" or "fightflash" or "fightshield"
-                        or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti")
+                        or "fightstatus" or "fightshieldbroken" or "fightmulti")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
                         // The roads, or every skill but the champion's own is refused and the fixture
@@ -2071,15 +2076,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // THE THREE OWED FIGHT FIXTURES (UX V2 REPORT §4, UI polish §21 / §108), plus the
                     // shield pose combat-v2 §36 owed. Each poses a state no capture could show before.
                     //
-                    // `fightfive` — the FIVE-slot strip: FIFTH WEAVE owned on the trait tree (the host
-                    // derives the capacity from it every frame), a third active in the fifth slot.
-                    if (sm == "fightfive")
-                    {
-                        _dust.Restore(_dust.MemoryDust, _dust.OwnedIds.Concat(new[] { "weave_5" }));
-                        _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 5);
-                        var fifth = _loadout.AddSkill();
-                        if (fifth >= 0) { _loadout.SetSource(fifth, Source.Spirit); _loadout.SetSkill(fifth, "sign_call"); }
-                    }
+                    // `fightfive` USED TO LIVE HERE — the five-slot strip, posed by buying FIFTH WEAVE
+                    // on the trait tree. The fifth slot is removed (a build is two skills that take an
+                    // action and two that do not), so the state it photographed no longer exists and the
+                    // fixture went with it rather than posing something the game cannot produce.
                     // `fightstatus` — the hunter card's status chips: UNDYING READY and CHARGE n/10 need
                     // the keystones that grant them LEARNED (their trait nodes owned) and SOCKETED (two
                     // sockets: socket_2). Nothing else on the screen changes, so the chips are the
@@ -2255,7 +2255,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fight` (and the shield / multi-hit poses) with RH_SHOT_T: seconds into the wave to
                     // pose (capture.sh's third argument), so the bars can be photographed after the fight
                     // has moved them — and a bite or a burst caught at its instant.
-                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus" or "fightfive"
+                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus"
                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
@@ -2590,24 +2590,57 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     });
                 }
 
+                // `weavefresh` — the BUILD screen of an account the world has taught NOTHING: no
+                // keystone, no socket, one Vow (the one that is simply given), one skill slot. Every
+                // line of "you have not found any of this yet" copy lives only in this state, and until
+                // this fixture existed no capture could reach it — the `weave` pose conquers the whole
+                // world on its first frame. A state no dial can pose has never been looked at.
+                if (sm == "weavefresh")
+                {
+                    _showLoadout = true;
+                    _deepestEver = 6;                       // the BUILD screen's own gate, and no further
+                    _mastery.SetEarned(3);
+                    _mastery.RestoreTaken(new[] { "road_volley", "road_volley_2" });
+                    if (_characters.Active.SignatureSkillId is { } freshSig)
+                    {
+                        if (_loadout.Skills.Count == 0) _loadout.AddSkill();
+                        _loadout.SetSkill(0, freshSig);
+                    }
+                }
+                // `keystonenotice` — the LONGEST reveal the game can post. A keystone found on a
+                // mastery rung is announced with what it DOES, not just its name, and CAPACITOR's
+                // sentence is 164 characters: its blurb plus the line naming the rung that taught it.
+                // One body line silently cut that in half for as long as the toast has existed, and
+                // nothing could photograph it, because no capture mode had ever posted a long one.
+                // It is built here through the SAME helper the live reveal calls, so what is
+                // photographed is the real string at its real length, not a stand-in for it.
+                if (sm == "keystonenotice")
+                {
+                    _showLoadout = true;
+                    if (Keystones.ById("capacitor") is { } cap && Keystones.SourceOf("capacitor") is { } capSrc)
+                        PostNotice($"NEW KEYSTONE — {cap.Name}", $"{RungReached(capSrc)} {cap.Blurb}");
+                }
                 if (sm == "weave")
                 {
                     _showLoadout = true;
                     _dust.SetEarned(22);
-                    // weave_5 is in the fixture ON PURPOSE: the fifth slot is the one that was bought
-                    // and silently discarded for the whole of development, and a capture that poses four
-                    // slots is a capture that would not have caught it.
-                    // Four keystones LEARNED against three visible chips, so the shot poses the case the
-                    // list was silently unable to show: a player who walked a road past its third node
-                    // could never see the fourth, let alone choose it over the first three.
+                    // DEEP AS WELL AS WIDE. The third keystone socket is bought with depth (wave 80) and
+                    // vow capacity with conquests, so a fixture that conquers the world without ever
+                    // saying how deep it went poses a hunter the game cannot produce.
+                    _deepestEver = Math.Max(_deepestEver, Unlocks.ThirdSocketWave + 20);
+                    // A WHOLE WORLD CONQUERED, which is what teaches the keystones now: six conquest
+                    // doctrines plus WEAVER from the corruption, against three sockets. That is the case
+                    // the chip list was silently unable to show — more keystones than visible chips —
+                    // and it is also the ordinary late-career state rather than a bought fixture.
                     _world.RestoreConquered(Regions.All.Select(r => r.Id));
                     _world.RestoreCorruption(16);
-                    // The head of all FOUR roads, which is what a spread-out 22-point career looks like —
-                    // and four learned keystones against three visible chips, which is the case the list
-                    // was silently unable to show.
-                    foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "ledger",
-                                               "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
-                        _dust.Purchase(id);
+                    // AND THE VOWS THE ACCOUNT HAS PROVED. A Vow is found by keeping its rule once
+                    // without it, so the fixture states the account's knowledge directly rather than
+                    // buying it: three found, which is a real mid-career collection and enough rows to
+                    // photograph the capacity bound greying the third.
+                    foreach (var id in new[] { "vow_complete", "vow_singular", "vow_unguarded" })
+                        _discoveredVows.Add(id);
+                    RebuildBuildMenus();
                     // THE ROADS THIS FIXTURE'S BUILD NEEDS — AND, DELIBERATELY, THE ONES IT DOES NOT.
                     // Every shared skill is behind a road now, so a fixture that walks none photographs
                     // four empty slots. But one that walks ALL TWELVE photographs a library with no
@@ -3179,6 +3212,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _gear.Loadout = _loadout;
             _gear.Mastery = _mastery;
             _gear.Tree = _dust;
+            _gear.DiscoveredKeystones = _keystoneMenu;
+            _gear.KnownVows = _vowMenu;
             _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
             PlayCue(_gear.ConsumeCue());
 
@@ -3357,6 +3392,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _training.Loadout = _loadout;
             _training.Mastery = _mastery;
             _training.Tree = _dust;
+            _training.DiscoveredKeystones = _keystoneMenu;
+            _training.KnownVows = _vowMenu;
             _training.Character = _characters.Active;
             // (HighestWave / ChestsOpened / MasteryPoints are gone with the PROGRESS panel — they
             //  are the Map's, the Vault's and the Mastery tree's numbers, and none of them moves
@@ -3688,7 +3725,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Math.Max(_keystoneSocketsEarned, Unlocks.KeystoneSockets(facts)),
             _loadout.KeystoneIds.Count);
         _loadout.KeystoneCapacity = _keystoneSocketsEarned;
-        _loadout.VowCapacity = Math.Max(_loadout.VowCapacity, Unlocks.VowCapacity(facts));
+        // ASSIGNED, NOT RAISED. The facts behind it only ever grow, so this only ever grows in play —
+        // and a Math.Max here would let the type's own default stand in for the world's answer, which
+        // is exactly how this milestone came to grant nothing at all.
+        _loadout.VowCapacity = Unlocks.VowCapacity(facts);
 
         if (fresh.Count > 0) RebuildBuildMenus();
 
@@ -3698,6 +3738,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (!_grantsBaselined)
         {
             _grantsBaselined = true;
+            // A RETURNING PLAYER IS TOLD, ONCE. Their keystones moved house — off the trait tree and
+            // onto the world — and arriving in silence would give them no reason to go and look. A
+            // new game finds nothing on this frame, so the line is only ever seen by a save that
+            // already had some.
+            if (fresh.Count > 0 && (!CaptureRig || ShotMode == "conquered"))
+                PostNotice(
+                    fresh.Count == 1
+                        ? "THE WORLD HAS TAUGHT YOU A KEYSTONE"
+                        : $"THE WORLD HAS TAUGHT YOU {fresh.Count} KEYSTONES",
+                    (fresh.Count == 1 ? "IT IS " : "THEY ARE ")
+                    + "ON THE BUILD SCREEN, READY TO WEAR. YOU FIND MORE BY CONQUERING "
+                    + "AND MASTERING REGIONS.");
             if (_fifthSkillDropped is { } lost)
             {
                 _fifthSkillDropped = null;
@@ -4321,18 +4373,41 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         var parts = _notice.Split('\n');
         var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
-        // Two lines: the pad, a title line, a body line, a breath — the height follows the rungs.
+        // THE BODY WRAPS, and the plate's height follows it: the pad, a title line, as many body
+        // lines as the text needs, a breath. It used to be ONE body line with an ellipsis, which was
+        // fine while every notice was a short sentence — and then keystone reveals arrived, which have
+        // to say what the keystone DOES, because the word IRONCLAD on its own teaches nobody
+        // anything. The longest of those is 133 characters, and one line cut it in half.
         var pad = UiMetrics.Space(22);
-        var h = pad + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(12);
+        var room = NoticeToastWidth - UiMetrics.Space(90);
+        var body = parts.Length > 1 && parts[1].Length > 0
+            ? _ui.WrapBig(parts[1], room, UiTypography.OverlayBody).Take(NoticeBodyLines).ToList()
+            : new List<string>();
+        var h = pad + UiTypography.Pitch(UiTypography.OverlayTitle)
+                    + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body.Count)
+                    + UiMetrics.Space(12);
         var r = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, h);
         _ui.PanelQuiet(_batch, r, fade);   // a toast is not a modal — the quiet frame (UiKit.PanelQuiet)
-        var room = r.Width - UiMetrics.Space(90);
         _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], room, UiTypography.OverlayTitle),
                           r.Center.X, r.Y + pad, NavGold * fade, UiTypography.OverlayTitle);
-        if (parts.Length > 1)
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[1], room, UiTypography.OverlayBody),
-                              r.Center.X, r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle), Bone * fade, UiTypography.OverlayBody);
+        var bodyY = r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle);
+        foreach (var line in body)
+        {
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(line, room, UiTypography.OverlayBody),
+                              r.Center.X, bodyY, Bone * fade, UiTypography.OverlayBody);
+            bodyY += UiTypography.Pitch(UiTypography.OverlayBody);
+        }
     }
+
+    /// <summary>How many wrapped body lines a notice may grow to before it is cut.</summary>
+    /// <remarks>
+    /// Four holds every string the game posts at every UI SCALE. The longest is CAPACITOR's keystone
+    /// reveal at 164 characters — its blurb, plus the sentence naming the rung that taught it — which
+    /// wraps to three lines at SCALE 100 and to four at 150, where the type is larger and the plate is
+    /// not. This is a ceiling for a rare case rather than a target: a toast that needs more than four
+    /// lines is a copy problem, not a layout one, and `keystonenotice` is the mode that shows it.
+    /// </remarks>
+    private const int NoticeBodyLines = 4;
 
     /// <summary>The notice toast's width — a readable two-line plate, centred. Page geometry.</summary>
     private const int NoticeToastWidth = 800;
@@ -6989,7 +7064,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ($"{_loadout.SkillCapacity}", "SKILL SLOTS — EACH HOLDS ONE SKILL"),
             ("", "A SKILL IS A STYLE, A VARIATION AND ITS REINFORCEMENTS"),
             ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS — EACH KEYSTONE COSTS SOMETHING"),
-            ("", "TRAITS (P) SELL MORE SLOTS AND MORE SOCKETS"),
+            ("", "SLOTS AND SOCKETS OPEN AS YOU GO DEEPER AND CONQUER"),
             ("", "ONE ACTION AT A TIME — TEMPO DECIDES HOW OFTEN"),
             ("", "MIGHT IS YOUR BASIC ATTACK, RESONANCE IS YOUR SKILLS"),
             ("", "A SKILL'S SOURCE IS ITS ELEMENT, NOT THE REGION'S"),

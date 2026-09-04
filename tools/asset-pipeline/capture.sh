@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Capture a real screenshot of the game, headless.
 #
 #   bash tools/asset-pipeline/capture.sh [mode] [outfile]
@@ -12,12 +12,14 @@
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
-#        rosterswitch warrenready warrenfresh
-#        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport
+#        rosterswitch warrenready warrenfresh weavefresh keystonenotice
+#        fightshield fightshieldbroken fightstatus fightmulti fightreport
 # The fight poses (UI polish §21 / §108): `fight` is the STANDARD (two actives, two passives, several
 # creatures); `fightshield` a FULL wave-start shield; `fightshieldbroken` a bite heavy enough to empty
 # it — the split bite and SHIELD BROKEN in one instant; `fightstatus` the UNDYING / CHARGE chips;
-# `fightfive` the five-slot strip; `fightmulti` VOLLEY's CLUSTER folding five arrows into one "-N ×5".
+# `fightmulti` VOLLEY's CLUSTER folding five arrows into one "-N ×5". (`fightfive` posed the FIVE-slot
+# strip and is gone with the fifth slot itself - a build is two skills that take an action and two
+# that do not, and a fixture posing a state the game cannot produce certifies nothing.)
 # All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument). `fightreport` takes
 # RH_SHOT_LIMIT=armour|reach|sustain to pose the log's diagnostic for that limit.
 # `fightshieldbroken` and `fightmulti` aim the shutter at an EVENT (the first SHIELD BROKEN, SPRAY's
@@ -61,6 +63,29 @@
 # fixture its plain capture uses, so the light falls on real content:
 #
 #   bash tools/asset-pipeline/capture.sh tour shot_tour_stats_1.png Stats 1
+#
+# The MAP's region card carries WHAT THIS REGION TEACHES - the three keystones a region hands over,
+# one for taking it, one for knowing it, one for mastering it. It is the LAST section on the card, so
+# at UI SCALE 150 it is below the fold: pose it with RH_SHOT_SCROLL=12 (the card scrolls by item, and
+# RH_SHOT_SCROLL is that item offset). RH_SHOT_SCROLL=8 poses it with only its first rung in view,
+# which is what the card looks like on arrival.
+#
+# `conquered` is also the one mode that poses the MIGRATION notice - the single frame on which a
+# returning player is told that their keystones have moved off the trait tree and onto the world.
+# Every fixture that restores a conquered world lands on that frame, so the toast is suppressed
+# under the rig everywhere else; without that it covered the screen in every capture.
+#
+# `keystonenotice` poses the LONGEST notice toast the game can post - CAPACITOR's keystone reveal,
+# which is its blurb plus the sentence naming the rung that taught it, 164 characters. The toast
+# body used to be a single ellipsised line, so every reveal longer than about eighty characters was
+# cut in half, and no capture mode had ever posted a long one to show it. The fixture builds the
+# string through the same helper the live reveal calls, so it is the real sentence at its real
+# length rather than a stand-in.
+#
+# `weavefresh` is the BUILD screen of an account the world has taught NOTHING: no keystone, no
+# socket, one Vow (the one that is simply given), one skill slot. Every line of "you have not
+# found any of this yet" copy lives only in that state, and `weave` conquers the whole world on
+# its first frame, so nothing could photograph it before this fixture existed.
 #
 # `vaultfirst` poses a NEW GAME's vault — the one welcome gift SeedNewGame parks —
 # which is the state the Vault's tour describes. `gemtour` poses the first-gem lesson:

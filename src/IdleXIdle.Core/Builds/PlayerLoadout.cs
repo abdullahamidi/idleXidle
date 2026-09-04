@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -98,9 +98,16 @@ public sealed class PlayerLoadout
     /// one correct answer, four times over: each skill took exactly one Vow's bonus, so four DIFFERENT
     /// Vows paid exactly what one repeated Vow paid while charging four prices and demanding four
     /// restrictions hold at once. The build's Vow bonuses are summed under one ceiling now, and this is
-    /// the real bound. Defaulted to the ceiling so a bench or a test behaves as before.
+    /// the real bound.
+    /// <para>
+    /// <b>The host ASSIGNS this every frame from <c>Unlocks.VowCapacity</c>; it is not a Math.Max.</b>
+    /// It used to default to the ceiling (3) and only ever be raised, which meant it started at the
+    /// ceiling, could never come down, and the milestone that was supposed to grant it never moved a
+    /// thing — a dial with no live consumer, tested on its own and wired to nothing. One is the honest
+    /// floor: it is what the BUILD screen opens with, and at one Vow the numbers are exactly today's.
+    /// </para>
     /// </remarks>
-    public int VowCapacity { get; set; } = MaxKeystones;
+    public int VowCapacity { get; set; } = 1;
 
     /// <summary>The distinct Vows this loadout has sworn — the list <see cref="VowCapacity"/> bounds.</summary>
     public IReadOnlyList<string> SwornVows =>

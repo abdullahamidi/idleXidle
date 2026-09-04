@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
@@ -175,6 +175,31 @@ public class VowCapacityTest
         l.VowCapacity = 2;
         Assert.True(l.SetVow(2, "vow_unguarded", known));
         Assert.Equal(2, l.SwornVows.Count);
+    }
+
+    [Fact]
+    public void test_a_loadout_starts_at_one_vow_not_at_the_ceiling()
+    {
+        // THE REGRESSION THIS FILE MISSED ONCE. Every other test here SETS VowCapacity before asserting
+        // on it, so the number the type starts at was never looked at — and it was 3, the ceiling. The
+        // host raised it with a Math.Max against Unlocks.VowCapacity, so it began at the ceiling and
+        // could never come down: a brand-new account could swear three Vows on its first frame and the
+        // milestone below granted nothing it did not already have. The two halves were each correct and
+        // the wire between them was dead, which is this project's signature bug.
+        //
+        // One is the floor because one is what the BUILD screen opens with, and at one Vow the sim's
+        // numbers are exactly what they were before capacity existed at all.
+        Assert.Equal(1, new PlayerLoadout().VowCapacity);
+
+        // And the floor really does bind: a second DIFFERENT vow is refused until the world grants it.
+        var l = new PlayerLoadout();
+        for (var i = 0; i < 2; i++) { l.AddSkill(); l.SetSkill(i, "hammer_blow"); }
+        Assert.True(l.SetVow(0, "vow_singular", Vows.Catalog));
+        Assert.False(l.SetVow(1, "vow_unguarded", Vows.Catalog));
+
+        // The milestone is the only thing that lifts it, and it starts below the ceiling.
+        Assert.Equal(1, Unlocks.VowCapacity(new UnlockFacts(DeepestWave: 40)));
+        Assert.Equal(new PlayerLoadout().VowCapacity, Unlocks.VowCapacity(new UnlockFacts(DeepestWave: 5)));
     }
 
     [Fact]

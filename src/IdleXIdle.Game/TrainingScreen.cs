@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -54,6 +54,17 @@ public sealed class TrainingScreen
     public MasteryTree Mastery { get; set; } = null!;
     public PlayerLoadout Loadout { get; set; } = null!;
     public MemoryDustTree Tree { get; set; } = null!;
+
+    /// <summary>The keystones the world has taught this account - set by the host.</summary>
+    /// <remarks>
+    /// This screen resolves ONE build and every stat row reads from it, so it needs the same two
+    /// catalogues the fight does. Keystone and Vow knowledge left the trait tree for the world, and a
+    /// screen still composing from the tree would state a stat line no fight would ever produce.
+    /// </remarks>
+    public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
+
+    /// <summary>The Vows the account has found - set by the host.</summary>
+    public IReadOnlyList<Vow> KnownVows { get; set; } = Array.Empty<Vow>();
 
     /// <summary>
     /// The active character, because this page states the player's numbers and a character is one of
@@ -452,7 +463,7 @@ public sealed class TrainingScreen
 
         // ONE build, resolved ONCE, and every row reads from it — the same composition the fight uses
         // (Build.Resolve folds keystones, worn gear, trained stats and the passive tree together).
-        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels);
+        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 

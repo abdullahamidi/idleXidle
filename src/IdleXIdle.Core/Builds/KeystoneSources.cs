@@ -182,7 +182,24 @@ public static partial class Keystones
     public static Keystone? GrantingTrigger(BuildTrigger trigger)
         => Catalog.FirstOrDefault(k => k.Grants.Contains(trigger));
 
-    /// <summary>The rung's own name, for the map's three-rung strip on a region card.</summary>
+    /// <summary>
+    /// What the player must DO for this rung, as an instruction — "CONQUER IT", "PARTLY MASTER IT".
+    /// </summary>
+    /// <remarks>
+    /// The map's strip pairs it with the keystone that rung teaches. Written as an ask rather than as a
+    /// state ("REND - CONQUERED") because the state form reads as a claim about the keystone itself,
+    /// which is exactly the sentence a second-language reader should not have to unpick.
+    /// </remarks>
+    public static string RungAsk(WorldRung rung) => rung switch
+    {
+        WorldRung.Conquest => "CONQUER IT",
+        WorldRung.PartlyMastered => "PARTLY MASTER IT",
+        WorldRung.FullyMastered => "FULLY MASTER IT",
+        WorldRung.Corruption => "DEEPEN THE CORRUPTION",
+        _ => throw new ArgumentOutOfRangeException(nameof(rung), rung, null),
+    };
+
+    /// <summary>The rung's own name, for the reveal that announces one has been reached.</summary>
     public static string RungName(WorldRung rung) => rung switch
     {
         WorldRung.Conquest => "CONQUERED",

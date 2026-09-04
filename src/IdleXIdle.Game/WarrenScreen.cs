@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -1077,9 +1077,8 @@ public sealed class WarrenScreen
         // states what this facility already does for you, and what its next automation level will do.
         if (WarrenAutomation.ActiveNoteFor(Warren, f.Kind) is { Length: > 0 } doing)
             Line(doing, Bone, UiTypography.Body, 2);
-        for (var lvl = f.Level + 1; lvl <= f.Level + 1; lvl++)
-            if (WarrenAutomation.NoteFor(Warren, f.Kind, lvl) is { Length: > 0 } next)
-                Line($"AT LEVEL {lvl}: {next}", Bone, UiTypography.Body, 2);
+        if (WarrenAutomation.NoteFor(Warren, f.Kind, f.Level + 1) is { Length: > 0 } next)
+            Line($"AT LEVEL {f.Level + 1}: {next}", Bone, UiTypography.Body, 2);
         Gap();
         Rule();
 

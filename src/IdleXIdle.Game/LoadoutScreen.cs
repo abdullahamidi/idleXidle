@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -819,7 +819,10 @@ public sealed class LoadoutScreen
                         if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
                         else { _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}."; UiMotion.Flash(BindKey(_slot), UiMotion.Reward); Sound?.Play("sfx_bind", 0.55f); }
                     }
-                    else _msg = "THIS SLOT CANNOT TAKE THAT VOW.";
+                    else _msg = Loadout.VowFitsCapacity(_slot, v.Id)
+                        ? "THIS SLOT CANNOT TAKE THAT VOW."
+                        : $"YOU MAY HOLD {Loadout.VowCapacity} VOW{(Loadout.VowCapacity == 1 ? "" : "S")} AT ONCE. "
+                          + (NextVowNote.Length > 0 ? NextVowNote + "." : "");
                 }
                 _vowListOpen = false;
                 return;
@@ -1177,7 +1180,14 @@ public sealed class LoadoutScreen
         _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Slate, UiTypography.Secondary);
         var paged = _keystonePaged && learned.Count > KeystoneRows
             ? $"  ·  {_keystoneScroll + 1}-{Math.Min(learned.Count, _keystoneScroll + KeystoneRows)} OF {learned.Count}" : "";
-        _ui.TextRightBig(b, learned.Count == 0 ? "CONQUER A REGION TO FIND YOUR FIRST KEYSTONE" : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} SOCKETS" + paged,
+        // MEASURED AGAINST WHAT THE LABEL LEAVES. Right-aligned text with a left-aligned label beside
+        // it is only safe while the two together fit, and at UI SCALE 150 this sentence ran back
+        // underneath the word KEYSTONES — two strings in the same pixels, which no reader can unpick.
+        var headRoom = head.Width - _ui.MeasureBig("KEYSTONES", UiTypography.Secondary) - UiMetrics.Space(16);
+        var headNote = learned.Count == 0
+            ? "CONQUER A REGION"
+            : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} SOCKETS" + paged;
+        _ui.TextRightBig(b, _ui.ShortenBig(headNote, headRoom, UiTypography.Secondary),
                          head.Right, head.Y, Slate, UiTypography.Secondary);
         foreach (var (idx, chip) in _chips)
         {
@@ -1187,7 +1197,11 @@ public sealed class LoadoutScreen
             if (idx >= learned.Count)
             {
                 _ui.Plate(b, chip);
-                _ui.TextBig(b, learned.Count == 0 && idx == 0 ? "NO KEYSTONES YET — THE WORLD TEACHES THEM" : "EMPTY SOCKET", chip.X + UiMetrics.Space(16), textY, UiInk.Empty, UiTypography.Body);
+                var emptyText = learned.Count == 0 && idx == 0
+                    ? "NO KEYSTONES YET"
+                    : "EMPTY SOCKET";
+                _ui.TextBig(b, _ui.ShortenBig(emptyText, chip.Width - UiMetrics.Space(32), UiTypography.Body),
+                            chip.X + UiMetrics.Space(16), textY, UiInk.Empty, UiTypography.Body);
                 continue;
             }
             var k = learned[idx];
@@ -1614,6 +1628,15 @@ public sealed class LoadoutScreen
                 Head("CURRENT STATE"); Line(Loadout.HasKeystone(k.Id) ? "IN USE" : "NOT IN USE", Bone);
                 Line($"SOCKETS {Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}"
                      + (NextSocketNote.Length > 0 ? $" — {NextSocketNote}" : ""), Slate, UiTypography.Secondary);
+                // HOW MANY ARE STILL OUT THERE. A total, never a checklist — it says that more exist
+                // and nothing about which, where, or how close, which is what keeps finding one a
+                // discovery instead of the next tick of a list.
+                var unfound = Keystones.Catalog.Count - DiscoveredKeystones.Count;
+                if (unfound > 0)
+                    Line(unfound == 1
+                            ? "ONE MORE KEYSTONE IS STILL WAITING IN THE WORLD."
+                            : $"{unfound} MORE KEYSTONES ARE STILL WAITING IN THE WORLD.",
+                         Slate, UiTypography.Secondary);
                 return;
             }
             if (def is null || (_pick == Pick.Slot && !known.Contains(def.Id)))
@@ -1801,9 +1824,23 @@ public sealed class LoadoutScreen
         var skills = Loadout.Skills;
         var sworn = _slot < skills.Count ? skills[_slot].VowId : null;
         var w = InsBodyW;
-        _ui.TextBig(b, $"BIND TO SLOT {_slot + 1}", InsX, y, Ins(Slate), UiTypography.Secondary);
-        _ui.TextRightBig(b, "CLICK ONE", InsX + w, y, Ins(Slate), UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
+        _ui.TextBig(b, $"SWEAR A VOW — SLOT {_slot + 1}", InsX, y, Ins(Slate), UiTypography.Secondary);
+        // HOW MANY DIFFERENT PROMISES THIS HUNTER MAY HOLD. A Vow is a promise about the build, so the
+        // bound number is the count of DIFFERENT vows, not of slots carrying one — and the world grants
+        // it. A capacity the player is refused by and never shown is a rule they cannot learn.
+        _ui.TextRightBig(b, $"{Loadout.SwornVows.Count} / {Loadout.VowCapacity} VOWS SWORN",
+                         InsX + w, y, Ins(Slate), UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        // HOW MANY VOWS EXIST, AND HOW MANY ARE FOUND — a total, not a checklist, and never a
+        // condition: every other Vow is found by keeping its rule once without it, and saying which
+        // rule would be the one thing that turns a discovery back into a shopping list. Folded into
+        // the capacity note's own line so the header costs no extra height at any UI SCALE.
+        var note = $"{known.Count} OF {Vows.Catalog.Count} VOWS FOUND."
+                 + (NextVowNote.Length > 0 ? $"  {NextVowNote}." : "");
+        _ui.TextBig(b, _ui.ShortenBig(note, w, UiTypography.Caption), InsX, y,
+                    Ins(Slate), UiTypography.Caption);
+        y += UiTypography.Pitch(UiTypography.Caption);
+        y += UiMetrics.Space(4);
         _vowListTop = y;
         var pad = UiMetrics.Space(12);
         // The right column — the multiplier over HOLDS / BROKEN — is measured, so the vow's name gets every
@@ -1827,9 +1864,12 @@ public sealed class LoadoutScreen
             var v = known[idx];
             var live = Vows.IsActive(v, ctx);
             var on = v.Id == sworn;
+            // A VOW CAPACITY WILL REFUSE IS DRAWN AS REFUSED, rather than as an option that does
+            // nothing when clicked. Its own row still reads normally, because unswearing is allowed.
+            var barred = !on && !Loadout.VowFitsCapacity(_slot, v.Id);
             Cell(b, row, Quiet, on, over);
             Outline(b, row, Ins(on ? Gold : over ? Slate : Dim), on ? 2 : 1);
-            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - tail, UiTypography.Body), row.X + pad, nameY, Ins(on ? Gold : Bone), UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - tail, UiTypography.Body), row.X + pad, nameY, Ins(on ? Gold : barred ? Dim : Bone), UiTypography.Body);
             _ui.TextBig(b, _ui.ShortenBig(DemandText(v), row.Width - tail, UiTypography.Caption), row.X + pad, subY, Ins(Slate), UiTypography.Caption);
             _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - pad, nameY, Ins(live ? Gold : Slate), UiTypography.Body);
             _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - pad, subY, Ins(live ? Met : Ember), UiTypography.Caption);

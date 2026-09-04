@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -3396,7 +3396,7 @@ public sealed class HuntScreen
         var tx = box.Right + UiMetrics.Space(14);
         var ty = slot.Y + UiMetrics.Space(24);
         _ui.TextBig(b, "EMPTY SLOT", tx, ty, UiInk.Empty, UiTypography.Body);
-        _ui.TextBig(b, "MORE SLOTS — TRAITS", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
+        _ui.TextBig(b, "MORE SLOTS AS YOU GO DEEPER", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
     }
 
     /// <summary>Where a slot's medallion sits: inset from the slot's left, centred on its height.</summary>
