@@ -77,29 +77,35 @@ code actually was before any of this is in `AUDIT.md`.
 14. **UI redesign** — the TRAITS screen: three worn at the top, the collection as a constellation
     board below, `???` for the undiscovered, one reading panel on the right. Photographed at
     `build/shots/trait_t_kept_word.png` and `trait_t_weight_of_vows.png`.
-15. **Removed old tree systems** — **PARTLY. This is the one item the refactor did not finish, and the
-    honest state is below.**
+15. **Removed old tree systems** — **DONE 2026-09-04.** The Memory tree is deleted: the screen, the
+    catalogue, `MemoryDustUnlock`, `TraitRoad`, `UnlockEffect`, purchase, prerequisite validation, node
+    ownership, the Earned/Spent/Available point pool, `DustEffects`, `MemoryDustText`,
+    `TraitTreeLayout`, `TraitRoads`, and the eleven pieces of art that drew it.
 
-    *Gone from the player's reach:* the Memory tree screen is not in the nav and `_showDustTree` is set
-    only by the capture rig, so no player can open it. Nothing on it can be bought in a live game.
+    *What replaced it.* `MemoryDustWallet` — a balance, a faucet, a sink and a restore, and nothing
+    else. Memory Dust is a live economy material (Warren facility upgrades, expedition checkpoints) and
+    keeps its name because that name is still good in front of a player.
 
-    *Gone from the model:* all 19 keystones and all 13 vows left it for the world
-    (`KeystoneSources`, vow discovery), both keystone sockets and the vow capacity left it for
-    `Unlocks`, and its two loot filters left it for the Warren. `LegacyTraitTree.Read` converts an old
-    save's node list into those grants as FLOORS and UNIONS — safe to run on every load forever, which
-    is what makes it testable rather than one-shot — and `SaveSystem.RestoreWarren` applies the Warren
-    half.
+    *What was preserved, because it is capability.* Keystone access and socket capacity, Vow access,
+    and both automations as Warren facility levels — converted once at load by `LegacyTraitTree` and
+    applied by `SaveSystem.RestoreWarren`. Skill-slot capacity, Vow capacity and Forge access were
+    already owned by `Unlocks`, the Warren and the Forge's own rule.
 
-    *Still there:* **12 nodes still carry `Mods`** — live passive stat power read by
-    `DustEffects.TreeMods` inside `BuildComposer` — plus `efficient_forge` (+15 % dismantle return)
-    and `recall_1..4` (+5 % mastery rate each). No legacy grant covers these three, so deleting the
-    tree today would quietly take power away from every returning player who bought them.
+    *What was deliberately discarded, and this is the ruling that unblocked the deletion:* **preserve
+    progression and capabilities, not obsolete balance modifiers.** The twelve attribute minors
+    (HARDER HITS I–III, MORE HEALTH I–III, MORE LOOT / RARER FINDS / MORE AND RARER LOOT, FASTER
+    SKILLS I–III) are gone, with no `LegacyBuildMods` and no grandfathered hidden bonus: those
+    dimensions are owned now by Training and Gear (raw numbers), Mastery (specialisation) and Traits
+    (behaviour). `recall_1..4` is gone — mastery already EARNED survives, the future speed multiplier
+    does not. `efficient_forge` is gone — salvage is the base rate for everyone, and if it reads low it
+    is tuned in the base. `artifice_vows` is gone for the same reason.
 
-    *Why it stopped here:* converting a legacy stat purchase into the new vocabulary is a DESIGN
-    decision, not an implementation detail — there is no 1:1 sink for it, and inventing one
-    unilaterally is how a refactor grows a system nobody asked for. The two transitional
-    `MorePermissive` ORs in `Game1` say in their own comments that they go when the tree does.
-    See item 47.
+    *Isolation.* `LegacyTraitTree` is the only thing in the game that knows an old node id. The save
+    still deserialises `MemoryDustUnlocks` so the ids survive long enough to be read, and
+    `SaveGame.Capture` writes an empty list — one more save drops them for good.
+
+    *The TRAITS gate moved with the currency.* It was `TraitPointsEarned >= 1` — a screen gated on
+    having something to SPEND, where nothing is spent. It is `TraitsDiscovered >= 1` now.
 
 ## Vows
 
@@ -271,16 +277,16 @@ code actually was before any of this is in `AUDIT.md`.
     size. Under `build/shots/`.
 46. **Build** — 0 errors, 0 warnings across the solution; all eleven gates green (`tools/check_all.sh`);
     boot green, reads and writes and reads back what it wrote (`tools/check_boot.sh`).
-47. **Remaining balance and design debt** — three things, named rather than left to be discovered:
+47. **Remaining balance and design debt** — two, down from three:
 
-    1. **The 12 stat nodes on the dormant tree** (item 15). They need a design call on what a legacy
-       stat purchase becomes in the new vocabulary before the tree can be deleted. Until then the tree
-       is a legacy-power carrier that no player can reach or add to, and `efficient_forge` and
-       `recall_1..4` ride along with it.
-    2. **The mastery point economy was tuned against the OLD access rule**, where a road bought once
+    1. **The mastery point economy was tuned against the OLD access rule**, where a road bought once
        was kept for ever. Under the new rule a career's ~66 points buy about twelve roads at six for
        the first of a style and five for its second, which is the intended shape — but it has not been
        played.
-    3. **`cast.trap` and `field.aura` are over the VFX asset-scale budget** (ratios 1.37-3.80 and 1.44).
-       They are art orders in `vfx-asset-scale-ledger.md`, not numbers to turn, and are unrelated to
-       the shield.
+    2. **`cast.trap` and `field.aura` are over the VFX asset-scale budget** (ratios 1.37–3.80 and
+       1.44). They are art orders in `vfx-asset-scale-ledger.md`, not numbers to turn.
+
+    **Closed:** the twelve dormant stat nodes. The design call was made — retire them rather than
+    migrate them — and item 15 records what that cost and preserved. **Worth benchmarking:** salvage
+    yield, now that `efficient_forge`'s +15 % is gone for the accounts that had it. If it reads low,
+    tune `ForgeTuning.DismantleReturnRate` for everyone.

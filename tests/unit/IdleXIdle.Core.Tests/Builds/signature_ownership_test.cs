@@ -84,7 +84,7 @@ public class SignatureOwnershipTest
     {
         var seeker = CharacterRoster.Get("seeker");
         var build = OneSlot(seeker.SignatureSkillId!)
-            .ToBuild(new MemoryDustTree(), new MasteryTree(), seeker);
+            .ToBuild(new MasteryTree(), seeker);
 
         Assert.Equal(seeker.SignatureSkillId, Assert.Single(build.Skills).Def.Id);
     }
@@ -97,7 +97,7 @@ public class SignatureOwnershipTest
 
         // The same loadout, the same tree, a different champion in the chair.
         var build = OneSlot(seeker.SignatureSkillId!)
-            .ToBuild(new MemoryDustTree(), new MasteryTree(), magpie);
+            .ToBuild(new MasteryTree(), magpie);
 
         Assert.Empty(build.Skills);
     }
@@ -119,7 +119,7 @@ public class SignatureOwnershipTest
         Assert.DoesNotContain(seeker.SignatureSkillId, everything.AvailableSkills());
 
         var build = OneSlot(seeker.SignatureSkillId!)
-            .ToBuild(new MemoryDustTree(), everything, CharacterRoster.Get("magpie"));
+            .ToBuild(everything, CharacterRoster.Get("magpie"));
         Assert.Empty(build.Skills);
     }
 
@@ -129,7 +129,7 @@ public class SignatureOwnershipTest
         // sec.18: the owner may weave it on a tree with nothing taken at all.
         var anvil = CharacterRoster.Get("anvil");
         var build = OneSlot(anvil.SignatureSkillId!)
-            .ToBuild(new MemoryDustTree(), new MasteryTree(), anvil);
+            .ToBuild(new MasteryTree(), anvil);
 
         Assert.Single(build.Skills);
     }

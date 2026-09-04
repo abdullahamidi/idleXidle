@@ -145,7 +145,6 @@ public sealed class GearScreen
 
     public PlayerLoadout Loadout { get; set; } = null!;
     public MasteryTree Mastery { get; set; } = null!;
-    public MemoryDustTree Tree { get; set; } = null!;
 
     /// <summary>The keystones the world has taught this account - set by the host.</summary>
     /// <remarks>
@@ -653,7 +652,7 @@ public sealed class GearScreen
     private readonly Dictionary<string, float> _dpsCache = new();
     private float WeaponDps(Hunter hunter, ItemInstance? weapon)
     {
-        if (Loadout is null || Mastery is null || Tree is null)
+        if (Loadout is null || Mastery is null)
             return weapon is null ? 0f : hunter.PowerContribution(weapon);
         var others = string.Join(",", AllSlots.Where(sl => sl != GearSlot.Weapon).Select(sl => hunter.Worn(sl)?.InstanceId ?? "-"));
         var skills = string.Join(",", Loadout.Skills.Select(sk => $"{sk.Source}:{sk.SkillId}:{sk.VowId}"));
@@ -661,7 +660,7 @@ public sealed class GearScreen
         // THE KEY MUST MOVE WHEN THE BUILD DOES. Keystone and Vow knowledge come from the world now,
         // so the tree's owned ids no longer change when the player earns one - a key built from them
         // alone would serve a stale damage number for the rest of the session.
-        var trees = $"{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}"
+        var trees = $"{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}"
                   + $"|{DiscoveredKeystones.Count}|{KnownVows.Count}";
         var key = $"{weapon?.InstanceId ?? "-"}|{weapon?.ItemLevel}|{others}|{skills}|{keystones}|{trees}|{hunter.PowerRating}|{Character.Id}";
         if (_dpsCache.TryGetValue(key, out var cached)) return cached;
@@ -669,7 +668,7 @@ public sealed class GearScreen
         var was = hunter.Worn(GearSlot.Weapon);
         if (weapon is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(weapon);
         float dps;
-        try { dps = DamageBench.Measure(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), hunter).Dps; }
+        try { dps = DamageBench.Measure(Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), hunter).Dps; }
         finally { if (was is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(was); }
         if (_dpsCache.Count > 512) _dpsCache.Clear();
         _dpsCache[key] = dps;

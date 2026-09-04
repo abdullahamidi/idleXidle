@@ -45,7 +45,7 @@ public class KillReactionDispatchTests
 
     private static Build Woven(Character? character, params string[] ids)
         => BuildComposer.Compose(
-            new MemoryDustTree(), EveryRoadWalked(), character,
+            EveryRoadWalked(), character,
             skills: ids.Select(id => new BuildComposer.SkillPick(Source.Body, null, SkillId: id)).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: new SkillProgress());
 

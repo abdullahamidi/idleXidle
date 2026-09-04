@@ -10,7 +10,7 @@ namespace IdleXIdle.Core.Tests.Progression;
 public class onboarding_hints_test
 {
     private static readonly HintFacts Everything = new(
-        NewRegionName: "Cinderworks", TraitPointsFree: 1, MasteryPointsFree: 4, EmptySkillSlots: 1,
+        NewRegionName: "Cinderworks", MasteryPointsFree: 4, EmptySkillSlots: 1,
         NewChampionName: "The Anvil", ChestsWaiting: 2, TrainableStat: "Might", TrainableCost: 108,
         AffordableUpgradeName: "Nursery");
 
@@ -62,7 +62,7 @@ public class onboarding_hints_test
     {
         // Everything open, everything explained: without a rung no tile is NEW.
         var facts = new UnlockFacts(WavesCleared: 999, DeepestWave: 999, ItemsOwned: 99, ChestsEverHeld: 9,
-                                    RegionsConquered: 9, TraitPointsEarned: 99);
+                                    RegionsConquered: 9, TraitsDiscovered: 99);
         // Every tour given, every slot note read, the gem lesson had: nothing but a rung can mark a tile.
         var explained = System.Enum.GetValues<Activity>().Select(Onboarding.ScreenKey)
             .Concat(System.Linq.Enumerable.Range(1, 8).Select(Onboarding.SlotKey)).Append(Onboarding.GemTourKey).ToList();

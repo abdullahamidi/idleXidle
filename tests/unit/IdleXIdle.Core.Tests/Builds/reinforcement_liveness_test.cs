@@ -85,7 +85,7 @@ public class ReinforcementLivenessTests
         // dormant for a reason that has nothing to do with the design. The ownership rule is not
         // weakened: the fixture supplies the champion the rule requires. The shared twelve keep the
         // null character, so no shipped measurement moved.
-        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(),
+        return BuildComposer.Compose(EveryRoadWalked(),
                                      character: CharacterRoster.Find(def.OwnerCharacterId ?? ""),
                                      skills: picks, keystoneIds: Array.Empty<string>(),
                                      slotCapacity: 4, progress: progress);

@@ -593,7 +593,7 @@ public class trait_liveness_test
             var second = l.AddSkill();
             l.SetSkill(second, "volley_spray");
             if (sworn is not null) Assert.True(l.SetVow(first, sworn, Vows.Catalog));
-            return l.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null,
+            return l.ToBuild(Taught.Everything(), character: null,
                              knownVows: Vows.Catalog);
         }
 

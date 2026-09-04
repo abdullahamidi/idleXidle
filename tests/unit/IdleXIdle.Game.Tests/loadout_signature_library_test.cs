@@ -42,7 +42,6 @@ public class LoadoutSignatureLibraryTests
         {
             Loadout = loadout,
             Mastery = mastery,
-            Tree = new MemoryDustTree(),
             SkillLevels = new SkillProgress(),
             Character = who,
         };

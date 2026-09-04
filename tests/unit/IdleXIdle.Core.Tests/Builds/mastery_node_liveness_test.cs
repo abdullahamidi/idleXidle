@@ -88,12 +88,10 @@ public class MasteryNodeLivenessTests
     private static Build Compose(MasteryTree mastery, bool oneSource)
     {
         Source Src(Source mixed) => oneSource ? Source.Body : mixed;
-        // A tree that has STUDIED the sworn vow — the composer refuses untaught ones (P7), and
+        // The sworn vow must be FOUND — the composer refuses one the account has not discovered, and
         // PLEDGE/ZEALOT liveness depends on the vow actually paying.
-        var studied = new MemoryDustTree();
-        studied.Restore(0, new[] { "vow_study_1" });
         return BuildComposer.Compose(
-            studied, mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Src(Source.Body), "vow_complete", SkillId: "hammer_blow"),
@@ -101,7 +99,7 @@ public class MasteryNodeLivenessTests
                 new BuildComposer.SkillPick(Src(Source.Nature), null, SkillId: "field_mire"),
                 new BuildComposer.SkillPick(Src(Source.Shadow), null, SkillId: "snare_jaws"),
             },
-            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
     }
 
     private static (long Dealt, int Kept, int Reached) Fight(Build build, MasteryTree mastery)

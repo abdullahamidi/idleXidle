@@ -51,7 +51,7 @@ public class ShieldTests
     }
 
     private static Build Bare(params BuildComposer.SkillPick[] picks)
-        => BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
+        => BuildComposer.Compose(EveryRoadWalked(), character: null,
                                  skills: picks.ToList(), keystoneIds: Array.Empty<string>(),
                                  slotCapacity: 4, progress: new SkillProgress());
 
@@ -79,7 +79,7 @@ public class ShieldTests
         for (var i = 0; i < SkillProgress.UsesForLevel(SkillProgress.MaxLevel); i++) progress.RecordWave(def.Id);
         Assert.True(progress.ChooseVariation(def, "IRON"));
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), EveryRoadWalked(), character: null,
+            EveryRoadWalked(), character: null,
             skills: new List<BuildComposer.SkillPick> { new(Source.Machine, null, SkillId: def.Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
         build.Shape = SkillShape.Combine(build.Shape, shape);
@@ -242,7 +242,7 @@ public class ShieldTests
         Assert.True(progress.ChooseVariation(drink, "GLUT"));
 
         var picks = new List<BuildComposer.SkillPick> { new(Source.Nature, null, SkillId: drink.Id) };
-        Build Make() => BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
+        Build Make() => BuildComposer.Compose(EveryRoadWalked(), character: null,
                                               skills: picks, keystoneIds: Array.Empty<string>(),
                                               slotCapacity: 4, progress: progress);
 

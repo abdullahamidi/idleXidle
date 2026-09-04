@@ -49,7 +49,7 @@ public class ChampionStartingSkillTests
             // now, and a named skill brings its own slot kind. The tree is BARE, so the only thing
             // that can carry this past the composer's taught-gate is the champion's birthright.
             var build = BuildComposer.Compose(
-                new MemoryDustTree(), new MasteryTree(), c,
+                new MasteryTree(), c,
                 skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: def!.Id) },
                 keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 

@@ -111,7 +111,7 @@ public class SoloExpeditionTests
     }
 
     /// <summary>
-    /// PassiveMods is the exact field the Dust tree feeds (DustEffects.TreeMods). Prove the wrapper reads
+    /// PassiveMods is the character's own passive multiplier. Prove the wrapper reads
     /// it, so the tree -> build -> run chain has no dead link at THIS layer.
     /// </summary>
     [Fact]

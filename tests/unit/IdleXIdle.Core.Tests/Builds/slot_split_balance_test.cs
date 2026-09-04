@@ -72,7 +72,7 @@ public class SlotSplitBalanceTests
         var kinds = LegacySkillForm.SlotKinds(
             forms.Select(f => ((string?)f, (bool?)null, (string?)null)).ToList(), capacity: 4);
         return BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: forms.Select((f, i) => new BuildComposer.SkillPick(
                 Source.Body, null, SkillId: LegacySkillForm.Resolve(f, kinds[i]))).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);

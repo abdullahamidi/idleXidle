@@ -50,7 +50,6 @@ public class LoadoutFeedbackTests
         {
             Loadout = loadout,
             Mastery = mastery,
-            Tree = new MemoryDustTree(),
             SkillLevels = new SkillProgress(),
             Character = champion,
         };

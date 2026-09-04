@@ -250,7 +250,7 @@ public static class LootSystem
     /// An element the loot table never set would be an element no player could ever have — the field
     /// would exist, the Forge would carry it through merges, the matchup would read it, and every
     /// single item in the game would be null. Exactly the orphan shape that made Charm, Focus, Weaving
-    /// and the whole Dust tree do nothing.
+    /// and the whole retired Memory tree did nothing.
     /// </para>
     /// <para>
     /// It comes from the REGION rather than a roll: Cinderworks is a Machine place, so its loot is

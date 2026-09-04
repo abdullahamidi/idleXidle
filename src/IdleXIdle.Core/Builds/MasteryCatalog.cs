@@ -423,7 +423,7 @@ public static class MasteryCatalog
     /// </summary>
     /// <remarks>
     /// This is how the skill tree stops giving away what the trait tree sells. The old tree handed out
-    /// general triggers for free while the Dust tree charged a permanent price for the same ones. Here the
+    /// general triggers for free while the retired Memory tree charged a permanent price for the same ones. Here the
     /// skill tree grants only the six style-combo triggers — each dead weight without its style, so it is a
     /// specialisation rather than a gift — and every general trigger (Echo, Bloodlust, Undying, Venom,
     /// Splinter, Harvest, Desperation, Zeal, NoHealing) belongs to the trait tree alone.

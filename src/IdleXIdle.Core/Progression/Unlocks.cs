@@ -68,7 +68,13 @@ public readonly record struct UnlockFacts(
     int ItemsOwned = 0,
     int ChestsEverHeld = 0,
     int RegionsConquered = 0,
-    int TraitPointsEarned = 0);
+    /// <summary>
+    /// How many characteristics the ACCOUNT has discovered. Replaced <c>TraitPointsEarned</c>, which
+    /// counted a currency the retired Memory tree spent — the TRAITS screen was gated on having
+    /// something to SPEND, on a screen where nothing is spent any more. It opens on having something to
+    /// SEE instead, which is what the screen is for.
+    /// </summary>
+    int TraitsDiscovered = 0);
 
 /// <summary>
 /// Which of the game's activities are open yet, and what each one is for.
@@ -155,8 +161,10 @@ public static class Unlocks
         // screen. It stays what it reads as: the reward for taking a region.
         Activity.Warren => f.RegionsConquered >= 1,
 
-        // The permanent tree only means anything once there are points in it.
-        Activity.Traits => f.TraitPointsEarned >= 1,
+        // A collection screen with an empty collection teaches nothing. It opens on the first
+        // characteristic the account awakens — which is also the moment the reveal fires, so the
+        // screen exists exactly when the player has just been told there is something in it.
+        Activity.Traits => f.TraitsDiscovered >= 1,
 
         // OPEN FROM THE START (playtest nine, item 11 — same reasoning as the Map). A fresh save
         // renders the starter champion plus the locked cast, and every locked card already explains
@@ -190,7 +198,7 @@ public static class Unlocks
         // a door that is never shut would read as a lock that opened early, i.e. as a bug.
         Activity.Map => "",
         Activity.Warren => "Conquer a region",
-        Activity.Traits => "Earn a trait point",
+        Activity.Traits => "Discover a characteristic by how you fight",
         // Open from the start too (it was "Conquer a region" when the gate was; the caption follows
         // the rule — this file has already shipped one caption that drifted from its gate).
         Activity.Roster => "",
@@ -212,7 +220,7 @@ public static class Unlocks
         Activity.Mastery => "THE MASTERY TREE — HOW YOUR SKILLS BEHAVE",
         Activity.Map => "THE MAP — THE WORLD BEYOND",
         Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
-        Activity.Traits => "TRAITS — PERMANENT BONUSES THAT NEVER RESET",
+        Activity.Traits => "TRAITS — CHARACTERISTICS YOU AWAKEN BY LIVING",
         Activity.Roster => "ROSTER — THE OTHER HUNTERS",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would

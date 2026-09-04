@@ -27,24 +27,48 @@ public sealed record LegacyTraitGrants(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>FROZEN, like <c>LegacyUnlocks</c> and <c>LegacySkillForm</c>.</b> These tables are a record of what
-/// the trait tree used to sell on the day it stopped selling it. They must never change again; that is
-/// the entire point of them. Holding their own copies of the two id maps — rather than calling into the
-/// tree — is what lets the tree itself be deleted outright instead of living on forever as migration
-/// scaffolding.
+/// <b>FROZEN, and now the ONLY thing in the game that knows these ids exist.</b> The Memory tree was
+/// deleted outright; these tables are a record of what it sold on the day it stopped selling it, and
+/// they must never change again. Holding their own copies of the two id maps — rather than calling into
+/// the tree — is exactly what let the tree be deleted instead of living on forever as migration
+/// scaffolding. No runtime code outside this file may learn an old node id.
 /// </para>
 /// <para>
-/// Read from <c>save.MemoryDustUnlocks</c>, on every load, before anything can be written back. An id
-/// that is not in these tables is ignored, which is both the forward-compatibility guard and the
-/// behaviour the tree's own restore already had.
+/// Read from <c>save.MemoryDustUnlocks</c> once per load, before anything can be written back, and never
+/// written back: <c>SaveGame.Capture</c> emits an empty list, so one more save drops the ids for good.
+/// An id not in these tables is ignored, which is both the forward-compatibility guard and the behaviour
+/// the tree's own restore already had.
 /// </para>
 /// <para>
-/// <b>What is deliberately NOT here.</b> The fifth skill slot (<c>weave_5</c>) grants nothing: the fifth
-/// slot is removed, and the load path unweaves the fifth row and says so out loud. The three rate nodes
-/// (<c>efficient_forge</c>, <c>recall_1..4</c>, <c>artifice_vows</c>) and the twelve attribute minors
-/// grant nothing either: a rate has no clean equivalent in a system that sells capability, and inventing
-/// one would be exactly the meaningless one-to-one baggage the brief warns against. The two pure gates
-/// (<c>ledger</c>, <c>forge_insight</c>) never did anything at all — nothing in the game ever read them.
+/// <b>THE MIGRATION PRINCIPLE: preserve progression and capabilities, not obsolete balance modifiers.</b>
+/// What a player could DO survives; what a retired balance table happened to multiply does not.
+/// </para>
+/// <para>
+/// <b>Deliberately discarded, by decision and not by oversight:</b>
+/// </para>
+/// <list type="bullet">
+///   <item><b>The twelve attribute minors</b> — HARDER HITS I-III, MORE HEALTH I-III, MORE LOOT,
+///   RARER FINDS, MORE AND RARER LOOT, FASTER SKILLS I-III. They were the retired passive tree's
+///   balance rules, and the dimensions they touched are owned deliberately now by Training and Gear
+///   (raw numbers), Mastery (build specialisation) and Traits (discovered behaviour). Preserving them
+///   would have meant permanent invisible power that no new player could earn and no screen could
+///   explain.</item>
+///   <item><b><c>recall_1..4</c></b> — the +5/10/15/20 % region-mastery speed ladder. Mastery already
+///   EARNED survives untouched, because that is progression; the future multiplier does not, because
+///   pacing belongs in an explicit balance rule rather than in hidden account power.</item>
+///   <item><b><c>efficient_forge</c></b> — SALVAGE PAYS 15 % MORE, a generic economy multiplier and not
+///   a capability. If salvage yield now reads low it is tuned in the BASE economy for everyone, never
+///   reintroduced per-account.</item>
+///   <item><b><c>artifice_vows</c></b> — VOWS PAY 25 % MORE. Same reasoning: a balance modifier.</item>
+///   <item><b><c>weave_5</c></b> — the fifth skill slot is removed, and the load path unweaves the fifth
+///   row, keeps every level it earned, and says so out loud.</item>
+///   <item><b><c>ledger</c>, <c>forge_insight</c></b> — pure gates that never did anything at all.</item>
+/// </list>
+/// <para>
+/// <b>Preserved, because these are capabilities:</b> keystone access and socket capacity, Vow access,
+/// and the two automations (auto-sell, auto-merge) as Warren facility levels. Skill-slot capacity, Vow
+/// capacity and Forge access are preserved by their own new owners (<c>Unlocks</c>, the Warren, the
+/// Forge's own rule) rather than here.
 /// </para>
 /// </remarks>
 public static class LegacyTraitTree

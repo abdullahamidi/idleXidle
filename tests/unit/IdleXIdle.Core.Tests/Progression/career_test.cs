@@ -15,18 +15,6 @@ namespace IdleXIdle.Core.Tests.Progression;
 public class CareerTest
 {
     [Fact]
-    public void test_trait_points_pay_one_per_conquest_from_a_fresh_world()
-    {
-        // Arrange
-        var world = new World();
-
-        // Act/Assert — a fresh account has earned nothing; the first conquest pays one.
-        Assert.Equal(0, Career.TraitPointsEarned(world));
-        world.Conquer(Regions.All[0].Id);
-        Assert.Equal(1, Career.TraitPointsEarned(world));
-    }
-
-    [Fact]
     public void test_deepest_anywhere_is_the_best_of_the_ledger_and_every_region()
     {
         // Arrange — one region holds wave 12; the account ledger remembers 7.

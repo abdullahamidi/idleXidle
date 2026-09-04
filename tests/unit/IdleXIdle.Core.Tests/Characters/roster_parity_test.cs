@@ -168,14 +168,6 @@ public class RosterParityTest
     private static BuildComposer.SkillPick Pick(SkillDef def, Vow? vow) =>
         new(CoreSource.Nature, vow?.Id, Passive: !def.TakesABeat, SkillId: def.Id);
 
-    /// <summary>A tree that has STUDIED the vows these fixtures swear — the composer refuses untaught ones (P7).</summary>
-    private static MemoryDustTree VowStudied()
-    {
-        var t = new MemoryDustTree();
-        t.Restore(0, new[] { "vow_study_1", "vow_study_2" });
-        return t;
-    }
-
     /// <summary>
     /// Compose a build the way the GAME composes one — through <see cref="BuildComposer.Compose"/>.
     /// </summary>
@@ -205,9 +197,13 @@ public class RosterParityTest
         var picks = new List<BuildComposer.SkillPick> { Pick(skill, vow) };
         if (skill.Id != Chassis.Id) picks.Add(Pick(Chassis, vow));
 
+        // EVERY VOW FOUND. The composer refuses a vow the account has not discovered, so a parity
+        // fixture that swears one must say it is known — otherwise every champion measures with no vow
+        // and the comparison is of bare hands. (This used to be a Memory tree with two study nodes
+        // bought; the tree is gone and discovery is the account's own.)
         var build = BuildComposer.Compose(
-            VowStudied(), ChassisTaught(), c ?? Blank(skill),
-            picks, Array.Empty<string>(), slotCapacity: 4);
+            ChassisTaught(), c ?? Blank(skill),
+            picks, Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
 
         // A pick the composer's taught-gate silently refused would measure bare hands and report the
         // number as the skill's. The fixture fails loudly instead.

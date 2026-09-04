@@ -53,7 +53,6 @@ public sealed class TrainingScreen
     // Set by the host each frame (like the other screens).
     public MasteryTree Mastery { get; set; } = null!;
     public PlayerLoadout Loadout { get; set; } = null!;
-    public MemoryDustTree Tree { get; set; } = null!;
 
     /// <summary>The keystones the world has taught this account - set by the host.</summary>
     /// <remarks>
@@ -463,7 +462,7 @@ public sealed class TrainingScreen
 
         // ONE build, resolved ONCE, and every row reads from it — the same composition the fight uses
         // (Build.Resolve folds keystones, worn gear, trained stats and the passive tree together).
-        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
+        var build = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 

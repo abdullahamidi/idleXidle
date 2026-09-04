@@ -89,7 +89,7 @@ public class CombatBalanceTests
         var owner = picks.Select(p => SkillCatalogue.ById(p.SkillId).OwnerCharacterId)
                          .FirstOrDefault(o => o is not null);
         return BuildComposer.Compose(
-            new MemoryDustTree(), EveryRoadWalked(), character: CharacterRoster.Find(owner ?? ""),
+            EveryRoadWalked(), character: CharacterRoster.Find(owner ?? ""),
             skills: picks.Select(p => new BuildComposer.SkillPick(p.Source, null, SkillId: p.SkillId)).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
     }

@@ -41,7 +41,7 @@ public class StarterLoadoutTest
         // The whole point: an empty mastery tree, an empty dust tree, a champion with no history —
         // exactly a first session — must still put a skill into the fight.
         var seeker = CharacterRoster.Get(CharacterRoster.StarterId);
-        var build = PlayerLoadout.Starter(seeker).ToBuild(new MemoryDustTree(), new MasteryTree(), seeker);
+        var build = PlayerLoadout.Starter(seeker).ToBuild(new MasteryTree(), seeker);
 
         Assert.Single(build.Skills);
     }
@@ -53,7 +53,7 @@ public class StarterLoadoutTest
         // fixture, a future starting choice) must not compose to an empty build.
         foreach (var c in CharacterRoster.All)
         {
-            var build = PlayerLoadout.Starter(c).ToBuild(new MemoryDustTree(), new MasteryTree(), c);
+            var build = PlayerLoadout.Starter(c).ToBuild(new MasteryTree(), c);
             Assert.True(build.Skills.Count == 1, $"{c.Name} starts unable to weave anything.");
         }
     }

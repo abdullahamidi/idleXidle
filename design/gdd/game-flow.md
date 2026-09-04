@@ -217,9 +217,11 @@ milestone (every 5 waves) in each region. Only the first time: farming a depth y
 have already reached pays haul but no points. Pushing deeper is the only way to
 earn them.
 
-**Trait points — pay the permanent tree.** Rare and lumpy: region conquest,
-corruption tiers, and mastery goals (§3.9). A player earns a handful across the
-whole game, not a stream.
+**Trait points — REMOVED 2026-09-04 with the Memory tree they paid for.** They were rare and
+lumpy — region conquest, corruption tiers and mastery goals — and they bought a permanent passive
+tree. That tree is deleted, nothing spends the currency, and a currency with no sink is a number
+that means nothing. The progression those terms measured still happens; it simply pays keystones,
+Vow capacity, sockets and skill slots directly (see `Unlocks`) instead of a point pool.
 
 **Part-breaks** pay materials and raise the chest grade of the wave that produced
 them. Whether a build breaks parts at all is a consequence of its damage shape
@@ -316,8 +318,8 @@ ratchets: enemy scaling rises, the loot tier rises, and each band gains a second
 affix stacked on its first. The ladder has FIVE named tiers (STIRRING, RESTLESS, FEVERED,
 RAVENOUS, ABYSSAL — `CorruptionScaling.MaxTier`); from the map it can be climbed DEEPER
 and stepped back SHALLOWER, the world wears each tier (tinted creatures, an epithet on
-the boss, a darker arena), and each tier pays its trait points and its dust ONCE, the
-first time it is reached. Bounded, so that the climb reads as a climb and not a counter
+the boss, a darker arena), and each tier pays its dust ONCE, the first time it is reached (it
+paid trait points too, until those were removed with the Memory tree). Bounded, so that the climb reads as a climb and not a counter
 (playtest 2026-08-23).
 
 **Content unlocks — new shapes, not bigger numbers.** New regions, new creature
@@ -521,8 +523,8 @@ listed doc needs a matching back-reference.
 
 7. Clearing all shipped content leaves both trees between 25% and 45% purchased.
 8. No Warren facility can exceed `floor(deepestDepth / 5)`.
-9. Idle time alone — with zero expeditions — earns zero mastery points and zero
-   trait points, verified over a simulated 24-hour absence.
+9. Idle time alone — with zero expeditions — earns zero mastery points, verified over a
+   simulated 24-hour absence. (It earned zero trait points too, until those were removed.)
 
 **Regressions the audit found, which must not survive**
 
@@ -549,7 +551,8 @@ the waves below it and pays no haul for them. The chosen start is remembered per
 **Memory Dust's job.** A checkpoint start costs `Checkpoints.DustPerWave` (25) × *w* Dust **per
 descent** (wave 30 → 750 Dust). Dust is minted by the Warren while the player is away and is now spent
 buying back walked waves — a repeatable, scaling sink that grows with the content it serves. Its other
-sink is Warren facility upgrades. It buys nothing permanent; trait points do that. If the Dust for the
+sink is Warren facility upgrades — and since the Memory tree was deleted those two sinks are the
+whole of it. It buys nothing permanent. If the Dust for the
 chosen start is not there, the descent starts from the top and the map's chip says so in ember.
 
 **VITALITY is regeneration.** It no longer multiplies the health pool (that is HEALTH's job, plus gear).

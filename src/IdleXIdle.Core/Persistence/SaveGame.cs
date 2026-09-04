@@ -68,6 +68,21 @@ public sealed record SaveGame
     public List<SavedItem> Inventory { get; init; } = new();
 
     public int MemoryDust { get; init; }
+
+    /// <summary>
+    /// LEGACY ONLY. The node ids an old save bought on the retired Memory tree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read exactly once per load, by <see cref="LegacyTraitTree"/>, and NEVER written back — a save
+    /// captured from here on carries an empty list, and one more load drops it for good. Normal runtime
+    /// code does not know these ids exist; the migration layer is the only thing in the game that does.
+    /// </para>
+    /// <para>
+    /// The field itself stays because deserialising an old file must not lose the ids before the
+    /// migration reads them. It is a doorway, not a store.
+    /// </para>
+    /// </remarks>
     public List<string> MemoryDustUnlocks { get; init; } = new();
 
     /// <summary>Worn gear, by item InstanceId. Losing your Legendary on reload is not an option.</summary>
@@ -640,7 +655,7 @@ public static class SaveSystem
     public static SaveGame Capture(
         Hunter hunter,
         IReadOnlyList<ItemInstance> inventory, long nowMs,
-        Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
+        Prestige.MemoryDustWallet? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
         Warren? warren = null)
         => new()
@@ -666,7 +681,11 @@ public static class SaveSystem
             WornBootsId = hunter.Worn(GearSlot.Boots)?.InstanceId,
             WornRingId = hunter.Worn(GearSlot.Ring)?.InstanceId,
             MemoryDust = prestige?.MemoryDust ?? 0,
-            MemoryDustUnlocks = prestige?.OwnedIds.ToList() ?? new List<string>(),
+            // NOT WRITTEN. The retired Memory tree's ownership list is migration input, never output:
+            // LegacyTraitTree reads an old file's ids once at load, keeps the structural capabilities
+            // they stood for, discards the obsolete balance modifiers, and this capture drops them. A
+            // save written from here on has no tree ownership in it at all.
+            MemoryDustUnlocks = new List<string>(),
             HighestMasteryAwarded = highestMasteryAwarded,
             ConqueredRegions = world?.ConqueredIds.ToList() ?? new List<string>(),
             ActiveRegion = activeRegion,

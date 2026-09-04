@@ -57,7 +57,7 @@ GAME = ROOT / "src" / "IdleXIdle.Game"
 CONVERTED = [
     "LoadoutScreen.cs",   # BUILD    — P1.4
     "MasteryScreen.cs",   # MASTERY  — P1.5
-    "TraitsScreen.cs",    # TRAITS   — P1.6
+    "TraitCollectionScreen.cs",  # TRAITS — P1.6 (the old Memory tree screen it replaced is deleted)
     "GearScreen.cs",      # GEAR     — P1.7
     "VaultScreen.cs",     # VAULT    — P1.8
     "ForgeScreen.cs",     # FORGE    — P1.9

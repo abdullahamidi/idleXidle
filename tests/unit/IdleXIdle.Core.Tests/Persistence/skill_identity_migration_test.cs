@@ -154,7 +154,7 @@ public class SkillIdentityMigrationTest
         var loadout = Restored(SaveSystem.Deserialize(json, Now).Save!);
 
         // Act
-        var build = loadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null);
+        var build = loadout.ToBuild(Taught.Everything(), character: null);
 
         // Assert — the resolved def carries the id: the only identity a skill has left (P3-final).
         Assert.Equal(2, build.Skills.Count);

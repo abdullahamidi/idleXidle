@@ -61,7 +61,7 @@ public class LootNodeLivenessTests
 
     private static Build Compose(MasteryTree mastery)
         => BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 // The old Strike/Projectile/Aura/Trap spread by catalogue id: two actives and the

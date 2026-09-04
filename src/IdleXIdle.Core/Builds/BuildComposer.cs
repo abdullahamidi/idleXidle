@@ -9,7 +9,7 @@ using IdleXIdle.Core.Prestige;
 namespace IdleXIdle.Core.Builds;
 
 /// <summary>
-/// Turns the player's choices into the <see cref="Build"/> the sim runs — the Dust tree, the mastery
+/// Turns the player's choices into the <see cref="Build"/> the sim runs — the mastery
 /// tree, the character, the woven skills and the socketed keystones. THE one seam where all of them
 /// meet; <c>PlayerLoadout.ToBuild</c> (Game) only gathers its lists and calls this.
 /// </summary>
@@ -93,11 +93,11 @@ public static class BuildComposer
 
     /// <param name="discoveredKeystones">
     /// The keystones the WORLD has taught this account — conquest, region mastery, the corruption. Null
-    /// falls back to the trait tree's own keystone nodes, which is the transitional path while the tree
-    /// still stands; the host always passes the real list.
+    /// means NONE discovered, so nothing sockets; the host always passes the real list.
     /// </param>
     /// <param name="knownVows">
-    /// The Vows the account has FOUND, by keeping a rule once without them. Null falls back to the tree.
+    /// The Vows the account has FOUND, by keeping a rule once without them. Null means none found, so
+    /// every sworn row composes as NO vow; the host always passes the real list.
     /// </param>
     /// <param name="traitShape">
     /// What the three traits this champion wears contribute, already resolved against the world by
@@ -105,27 +105,33 @@ public static class BuildComposer
     /// byte-identical to one from before traits existed, which is what makes the liveness suite's
     /// with-and-without comparison mean anything.
     /// </param>
-    public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
+    public static Build Compose(MasteryTree mastery, Character? character,
                                 IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity,
                                 SkillProgress? progress = null,
                                 IReadOnlyList<Keystone>? discoveredKeystones = null,
                                 IReadOnlyList<Vow>? knownVows = null,
                                 SkillShape? traitShape = null)
     {
-        ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
         ArgumentNullException.ThrowIfNull(skills);
         ArgumentNullException.ThrowIfNull(keystoneIds);
 
-        // The build's passive numbers are the Dust tree, the Mastery tree AND the character, multiplied
-        // together. Its affinity and its extra triggers come from the Mastery tree plus whatever the
-        // character grants outright. Its SHAPE is the mastery tree's, the character's aptitude, and the
-        // Dust tree's (THE BOUND HAND's vow power). This is the ONE place a character reaches the sim.
+        // The build's passive numbers are the CHARACTER's. Its affinity and its extra triggers come
+        // from the Mastery tree plus whatever the character grants outright. Its SHAPE is the mastery
+        // tree's, the character's aptitude, and its traits'. This is the ONE place a character reaches
+        // the sim.
+        //
+        // The retired passive tree used to multiply into both. It contributed twelve stat nodes through
+        // PassiveMods (HARDER HITS, MORE HEALTH, MORE LOOT, FASTER SKILLS) and a vow-power multiplier
+        // through Shape, and all of it was invisible legacy power: no live game could buy a node, so
+        // only old saves carried it and no screen could explain why two accounts differed. Those
+        // dimensions belong to Training and Gear (raw numbers), Mastery (specialisation) and Traits
+        // (behaviour) now, and the modifiers were deleted rather than migrated.
         var build = new Build
         {
             // The mastery tree contributes SHAPES, never BuildMods — its old Mods() channel
             // returned None unconditionally and died with P6.
-            PassiveMods = DustEffects.TreeMods(tree).Combine(character?.Mods ?? BuildMods.None),
+            PassiveMods = character?.Mods ?? BuildMods.None,
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
@@ -134,8 +140,7 @@ public static class BuildComposer
             // know what a trait is. Four of the twenty-six are conditional on the world and were
             // already resolved to plain dials before this call.
             Shape = SkillShape.Combine(
-                SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
-                                   DustEffects.TreeShape(tree)),
+                SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
                 traitShape ?? SkillShape.None),
             SlotCapacity = slotCapacity,
             // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is
@@ -152,7 +157,7 @@ public static class BuildComposer
         // WHAT THE WORLD HAS TAUGHT, not what a menu was bought. A keystone the account has not
         // discovered composes as nothing — the same gate the Vow below has, for the same reason: a
         // share code or a stale save must never socket a doctrine the player has not earned.
-        var learned = discoveredKeystones ?? DustEffects.LearnedKeystones(tree);
+        var learned = discoveredKeystones ?? Array.Empty<Keystone>();
         foreach (var id in keystoneIds)
             if (learned.FirstOrDefault(k => k.Id == id) is { } k)
                 build.Take(k);
@@ -175,9 +180,7 @@ public static class BuildComposer
             // existed only the weave MENU read that — a save could arrive wearing any VowId and the
             // sim paid it, so the account gated what was offered, never what was worn. An unfound vow
             // composes as NO vow: the skill stays, the unpaid promise does not.
-            var vow = knownVows is null
-                ? DustEffects.KnowsVow(tree, s.VowId) ? Vows.ById(s.VowId) : null
-                : knownVows.FirstOrDefault(v => v.Id == s.VowId);
+            var vow = knownVows?.FirstOrDefault(v => v.Id == s.VowId);
             // THE ID IS THE IDENTITY — an id-less pick is an EMPTY SLOT and composes nothing.
             // (Form-era picks stopped reaching this loop at P3-final: PlayerLoadout.Restore pins
             // every legacy row to its SkillId through LegacySkillForm before anything composes.)
@@ -223,7 +226,7 @@ public static class BuildComposer
         // combined factor pays it only while its rule holds, and the fragility bill, the health price
         // and TITHE charge it exactly as if the hunter had sworn it out loud.
         if (traitShape?.Traits.UnswornBuildBorrowsWeakestVow == true && build.Vows.Count == 0
-            && (knownVows ?? DustEffects.KnownVows(tree)) is { Count: > 0 } found)
+            && knownVows is { Count: > 0 } found)
         {
             Vow? lent = null;
             foreach (var v in found)

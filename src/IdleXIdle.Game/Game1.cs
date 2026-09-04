@@ -432,17 +432,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // pays the Forge's Scrap/Essence instead; an old save's WarrenMasteryPool key is skipped on load.)
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
-    private TraitsScreen _traits = null!;
 
     /// <summary>
     /// THE TRAITS SCREEN (P4): three worn characteristics, the collection, and the unknown.
     /// </summary>
     /// <remarks>
-    /// The nav's TRAITS destination is this screen now. <see cref="_traits"/> — the old Memory tree —
-    /// is still built and is still reachable through the capture rig (RH_SHOT_MODE=dusttree), because
-    /// P5 is moving the keystone and vow producers off it in parallel and it is deleted whole when
-    /// both land. Until then it is the only producer of those two catalogues, which is the one thing
-    /// this phase deliberately leaves standing.
+    /// The nav's TRAITS destination, and the only one: the old Memory tree screen that used to sit
+    /// behind RH_SHOT_MODE=dusttree is deleted, along with the tree it drew.
     /// </remarks>
     private TraitCollectionScreen _traitScreen = null!;
 
@@ -471,16 +467,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool _showTraits;
 
     /// <summary>
-    /// DEV ONLY: draw the OLD Memory tree instead of the TRAITS screen (RH_SHOT_MODE=dusttree).
+    /// MEMORY DUST — the wallet, and only the wallet.
     /// </summary>
     /// <remarks>
-    /// Never set at play. The tree is not the trait system any more (BRIEF §22), but it is still the
-    /// only producer of the nineteen keystones and the thirteen vows until P5 moves both off it, so
-    /// this phase leaves the class standing and photographable rather than deleting a screen whose
-    /// replacement is still being written in another branch.
+    /// The Memory tree this used to be is deleted: it sold twelve passive stat modifiers plus three
+    /// rate multipliers that no live game could buy, so only old saves carried them and no screen could
+    /// explain why two accounts differed. Dust itself stays because the economy spends it — Warren
+    /// facility upgrades and expedition checkpoints — and it keeps its name because that name is still
+    /// good in front of a player.
     /// </remarks>
-    private bool _showDustTree;
-    private MemoryDustTree _dust = new();
+    private MemoryDustWallet _dust = new();
 
     // ── TRAITS (P4). The account's characteristics: what has awakened, what fed it, and which three
     //    each champion wears. Account-wide discovery, per-character loadout (§25, §26). ────────────
@@ -862,7 +858,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         SaveFile.SnapshotBeforeUpgrade(save.Version);
 
         SaveSystem.RestoreHunter(save, _hunter);   // (the Merge→Salvage charter fold lives inside — Core, tested)
-        _dust.Restore(save.MemoryDust, save.MemoryDustUnlocks);
+        _dust.Restore(save.MemoryDust);
 
         // BEFORE the loadout is restored, because Restore truncates to the capacity. Restoring first and
         // deriving after would drop a saved fifth skill on every load and then look correct forever
@@ -1320,7 +1316,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _world = new World();
         _loadout = PlayerLoadout.Starter(_characters.Active);
         _mastery = new MasteryTree();
-        _dust = new MemoryDustTree();
+        _dust = new MemoryDustWallet();
         _skillProgress = new SkillProgress();
         _characters = new CharacterState();
         _warren = new Warren();
@@ -1492,7 +1488,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <remarks>
     /// Split out of <see cref="LoadContent"/> so START A NEW GAME can rebuild the whole screen layer
     /// around a fresh world: several screens capture references at construction (the character sheet
-    /// holds the Forge; the trait screen holds the Dust tree), so replacing the core objects without
+    /// holds the Forge), so replacing the core objects without
     /// replacing the screens would leave half the game serving the abandoned state.
     /// </remarks>
     private void BuildScreens()
@@ -1500,7 +1496,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _forge = new ForgeScreen(_ui);
         _forge.Sound = _sound;   // the reveal's landing ticks, the gem set, the successful upgrade
         _forge.AskBeforeScrap = _askBeforeScrap;
-        _traits = new TraitsScreen(_ui, _dust);
         _traitScreen = new TraitCollectionScreen(_ui);
         _roster = new RosterScreen(_ui);
         _vault = new VaultScreen(_ui);
@@ -1833,7 +1828,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal" or "dusttree"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
@@ -1951,15 +1946,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // caught it — nor would it catch the card row walking off the panel again, which is
                     // what a fixed pitch of 182 did the moment a fifth card existed.
                     //
-                    // The world INPUTS, then the total: trait points are derived from conquests and
-                    // corruption every frame, so a fixture that only calls SetEarned is stamped back to
-                    // zero before it draws. (Conquest does not touch the mastery total above — that
-                    // reads BestDepth/5 per region — so the 24 this fixture means still holds.)
+                    // The world INPUTS. (Conquest does not touch the mastery total above — that reads
+                    // BestDepth/5 per region — so the 24 this fixture means still holds.)
                     _world.RestoreConquered(Regions.All.Select(r => r.Id));
                     _world.RestoreCorruption(16);
-                    _dust.SetEarned(22);
-                    _dust.Purchase("socket_2");   // weave_5 hangs off it on the capacity chain
-                    _dust.Purchase("weave_5");
+                    // (This used to buy socket_2 and weave_5 on the Memory tree. Sockets are derived
+                    // from the conquests just restored above, and the fifth skill slot is removed.)
                     ApplySkillCapacity();
                     // SIX passives, which is the most the panel will list (it Takes 6). Same reasoning as
                     // the fifth skill card above: the passives list is variable-length and the RESONANCE
@@ -2048,7 +2040,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _gear.Loadout = _loadout;
                     _gear.Mastery = _mastery;
                     _gear.SkillLevels = _skillProgress;
-                    _gear.Tree = _dust;
                     _gear.DiscoveredKeystones = _keystoneMenu;
                     _gear.KnownVows = _vowMenu;
                     // Seed gear so the bag and the three worn slots pose with content, gleam so the train
@@ -2110,7 +2101,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _showTraining = true;
                     _training.Loadout = _loadout;
                     _training.Mastery = _mastery;
-                    _training.Tree = _dust;
                     _training.DiscoveredKeystones = _keystoneMenu;
                     _training.KnownVows = _vowMenu;
                     _training.Character = _characters.Active;
@@ -2195,15 +2185,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // action and two that do not), so the state it photographed no longer exists and the
                     // fixture went with it rather than posing something the game cannot produce.
                     // `fightstatus` — the hunter card's status chips: UNDYING READY and CHARGE n/10 need
-                    // the keystones that grant them LEARNED (their trait nodes owned) and SOCKETED (two
-                    // sockets: socket_2). Nothing else on the screen changes, so the chips are the
-                    // difference between this and `fight`.
+                    // the keystones that grant them DISCOVERED and SOCKETED (two sockets). Nothing else
+                    // on the screen changes, so the chips are the difference between this and `fight`.
+                    //
+                    // It used to buy the matching nodes on the Memory tree; the world is the only
+                    // teacher now, so the fixture seeds the account's discovered set directly — which is
+                    // what a save that had conquered for them actually looks like.
                     if (sm == "fightstatus")
                     {
-                        _dust.Restore(_dust.MemoryDust, _dust.OwnedIds.Concat(new[]
-                            { "socket_2", "ks_ironclad", "ks_juggernaut", "ks_undying", "ks_glass_cannon", "ks_rend" }));
+                        foreach (var id in new[] { "ironclad", "juggernaut", "undying", "glass_cannon", "rend" })
+                            _discoveredKeystones.Add(id);
                         _loadout.KeystoneCapacity = 2;
-                        var learned = DustEffects.LearnedKeystones(_dust);
+                        var learned = _keystoneMenu;
                         _loadout.ToggleKeystone("undying", learned);
                         _loadout.ToggleKeystone("rend", learned);
                     }
@@ -2259,7 +2252,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             });
                     }
                     _expedition.Loadout = _loadout;
-                    _expedition.Tree = _dust;
                     _expedition.Mastery = _mastery;
                     // The levels too — the run DevStart composes is the run the capture shows (nothing
                     // restarts it), so a variation chosen above (fightmulti's CLUSTER) has to be in the
@@ -2381,7 +2373,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // (crystal_lich_idle), no ordinary enemies, no welcome/wave overlay. `bossdebug` also shows
                     // the §17 bounds overlay.
                     _expedition.Loadout = _loadout;
-                    _expedition.Tree = _dust;
                     _expedition.Mastery = _mastery;
                     _expedition.EnemySource = Source.Mind;
                     _expedition.DevForceBoss = true;
@@ -2693,11 +2684,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // and the host feed hands them to the vault the way it does in a real save.
                 if (sm == "vaultsell")
                 {
-                    _dust.SetEarned(12);
-                    _dust.Purchase("ledger");
-                    _dust.Purchase("filter_common");
-                    _dust.Purchase("forge_insight");
-                    _dust.Purchase("auto_merge");
+                    // AUTO-SELL AND AUTO-MERGE ARE THE WARREN'S NOW, so the fixture raises the two
+                    // facilities that carry them rather than buying the retired tree's filter nodes:
+                    // SCAVENGER RUNS 2 sells Commons, HOARD VAULTS 2 merges on open.
+                    _warren.Restore(_warren.Level, _warren.Xp, new Dictionary<FacilityKind, int>
+                    {
+                        [FacilityKind.ScavengerRuns] = 2,
+                        [FacilityKind.HoardVaults] = 2,
+                    });
                 }
                 if (sm is "vault" or "vaultfilter" or "vaultsell" or "vaultmany")
                 {
@@ -2772,7 +2766,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sm == "weave")
                 {
                     _showLoadout = true;
-                    _dust.SetEarned(22);
                     // DEEP AS WELL AS WIDE. The third keystone socket is bought with depth (wave 80) and
                     // vow capacity with conquests, so a fixture that conquers the world without ever
                     // saying how deep it went poses a hunter the game cannot produce.
@@ -2974,15 +2967,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                    "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
                 }
 
-                if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal" or "dusttree")
+                if (sm == "dust")
                 {
                     _showTraits = true;
-                    // THE OLD MEMORY TREE, only under its own modes. `dust` poses the TRAITS screen
-                    // now; `dusttree` — and the two flourish poses, which are the TREE's animation and
-                    // have no counterpart on the new screen — are what still photograph it. It stays
-                    // reachable until P5 has moved the keystones and the vows off it.
-                    _showDustTree = sm is "dusttree" or "traitlit" or "traitterm" or "traitterminal";
-                    _dust.AddDust(77_605);   // Dust still shows in the top pills; it no longer buys traits
+                    // `dusttree`, `traitlit` and the two `traitterm` spellings went with the Memory
+                    // tree screen: they posed its constellation and its light-up flourish, and there is
+                    // no counterpart on the new screen because there is nothing to buy.
+                    _dust.AddDust(77_605);   // Dust still shows in the top pills — it is a material now
 
                     // ── THE TRAITS FIXTURE (BRIEF §109). Eleven awakened out of twenty-six, three of
                     //    them worn, and the rest reading `???` — which is the ONLY state that shows
@@ -3052,56 +3043,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             break;
                     }
 
-                    // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
-                    // "might_1", "might_2", "grit_1", "grit_2", "tempo_1" and "blood_1" — none of which
-                    // have existed since the trait tree was rebuilt around the spine and the four roads.
-                    // Every Purchase silently returned false and DevSelect fell back to the cheapest
-                    // node, so for the whole of that rebuild the capture showed an untouched tree with
-                    // zero points: forty-four LOCKED cards and NOT ENOUGH TRAIT POINTS. The screen was
-                    // being reviewed on a screenshot of its own empty state.
-                    // Set the INPUTS, not the total. Both trees derive their points from world progress
-                    // every frame inside UpdateExpedition, which runs before this screen's early return
-                    // — so a fixture that calls SetEarned directly is overwritten one frame later and
-                    // has been posing a career with ZERO points ever since the derivation landed. A
-                    // fully conquered world at corruption 16 is a real, reachable 22.
+                    // A CONQUERED WORLD, which is what teaches the keystones and opens the sockets
+                    // now. The fixture used to buy tree nodes here; the world is the producer, so it
+                    // sets the world and lets the derivation answer.
                     _world.RestoreConquered(Regions.All.Select(r => r.Id));
                     _world.RestoreCorruption(16);
-                    // And once directly, because the derivation does not run until later in this same
-                    // frame — without it the fixture's own Purchase calls see zero available points and
-                    // every one of them silently fails.
-                    _dust.SetEarned(22);
-                    foreach (var id in new[] { "socket_2", "ledger", "vow_study_1", "forge_insight",
-                                               "filter_common", "recall_1", "ks_glass_cannon" })
-                        _dust.Purchase(id);
-                    _traits.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (KEYSTONE — GLASS CANNON) is lit
-                    // RH_SHOT_NODE=<id> selects another trait, so a blocked node or a terminal can be photographed read.
-                    if (Environment.GetEnvironmentVariable("RH_SHOT_NODE") is { } traitPin) _traits.DevSelect(traitPin);
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
-
-                    // The tree is a free camera now. `capture.sh dust out.png 1.2` zooms it to 1.2 on
-                    // the posed node, so "zooming in reveals detail" is a captured fact rather than a
-                    // claim. Only the plain dust mode reads it — traitlit's third argument is a time.
-                    if (sm == "dust"
-                        && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
-                                          System.Globalization.NumberStyles.Float,
-                                          System.Globalization.CultureInfo.InvariantCulture, out var devZoom))
-                        _traits.DevCamera(devZoom, Environment.GetEnvironmentVariable("RH_SHOT_NODE") ?? "ks_bloodlust");
-
-                    // Frozen at 0.30s: past the flash, into the shockwaves, with the name plate risen
-                    // and readable. RH_SHOT_T moves the freeze so the other beats can be checked too.
-                    var poseT = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
-                                               System.Globalization.CultureInfo.InvariantCulture, out var pt)
-                        ? pt : 0.30f;
-                    if (sm == "traitlit") _traits.DevPoseLit(_dust, "ks_bloodlust", poseT);
-                    if (sm is "traitterm" or "traitterminal")
-                    {
-                        // The Ruin road walked to its end — the one purchase in the game that costs
-                        // twelve points and closes off three other roads.
-                        foreach (var id in new[] { "socket_2", "ks_glass_cannon", "ks_bloodlust", "ks_blood_magic" })
-                            _dust.Purchase(id);
-                        _traits.DevPoseLit(_dust, "ks_reaper", poseT);
-                    }
                 }
             }
             else {
@@ -3231,7 +3179,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // "F8 is free" and the code says otherwise, so one press would have toggled the overlay AND
         // stepped the density profile, which reads as the overlay breaking the layout it is measuring.
         if (DevKeysEnabled && Pressed(Keys.F9)) _expedition.DevVfxDebug = !_expedition.DevVfxDebug;   // dev: the VFX placement contract's bounds/anchor/ratio overlay (brief §70)
-        if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _traits.DevDustDebug = !_traits.DevDustDebug; }   // dev layout overlays
+        if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; }   // dev layout overlays
         if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
@@ -3461,7 +3409,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _masteryScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _masteryScreen.Level = _hunter.HunterLevel;
             _masteryScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked,
-                                _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
+                                _mouse.LeftButton == ButtonState.Pressed, MouseWheel, MouseRightClicked);
             if (_masteryScreen.Dirty) { _masteryScreen.ClearDirty(); Save(); }
             PlayCue(_masteryScreen.ConsumeCue());   // a node taken, a style sealed, a point handed back, a refusal
 
@@ -3473,7 +3421,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _gear.Loadout = _loadout;
             _gear.Mastery = _mastery;
-            _gear.Tree = _dust;
             _gear.DiscoveredKeystones = _keystoneMenu;
             _gear.KnownVows = _vowMenu;
             _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
@@ -3653,7 +3600,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _training.Loadout = _loadout;
             _training.Mastery = _mastery;
-            _training.Tree = _dust;
             _training.DiscoveredKeystones = _keystoneMenu;
             _training.KnownVows = _vowMenu;
             _training.Character = _characters.Active;
@@ -3692,7 +3638,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _loadoutScreen.Loadout = _loadout;
             _loadoutScreen.Mastery = _mastery;
-            _loadoutScreen.Tree = _dust;
             // WHAT THE WORLD HAS TAUGHT AND WHAT THE HUNTER HAS PROVED. The workbench used to read the
             // trait tree for both; both are facts about the account now, and the host owns them.
             _loadoutScreen.DiscoveredKeystones = _keystoneMenu;
@@ -3739,19 +3684,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // board of tiles and one reading panel, with no camera to drive and no held drag. Its cue
             // and its Dirty flag are read at the foot of its Draw call. This block stays so the
             // screen still swallows the frame's hotkeys.
-            //
-            // The OLD Memory tree keeps its own update, and it only runs under the capture rig — see
-            // _showDustTree. P5 deletes it whole.
-            if (_showDustTree)
-            {
-                _traits.Update(ScreenKeys, PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
-                                 MouseWheel, _dust, dt);
-                if (_traits.ConsumeCue() is { } cue)
-                {
-                    _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
-                    if (cue is "sfx_trait_lit" or "sfx_trait_terminal") Save();
-                }
-            }
             Latch(gameTime);
             return;
         }
@@ -3976,7 +3908,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // KEYSTONES. TRANSITIONAL: the trait tree still stands this phase and its keystone nodes are
         // still buyable, so what it has taught is unioned in as well. That term goes when the tree does.
-        var found = Keystones.DiscoveredBy(_world, DustEffects.LearnedKeystones(_dust).Select(k => k.Id));
+        // THE WORLD IS THE ONLY TEACHER NOW. This used to union in what the Memory tree had taught;
+        // an old save's keystone nodes are converted to discoveries once, at load, by LegacyTraitTree.
+        var found = Keystones.DiscoveredBy(_world, Array.Empty<string>());
         var fresh = new List<Keystone>();
         foreach (var k in found)
             if (_discoveredKeystones.Add(k.Id)) fresh.Add(k);
@@ -4092,7 +4026,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>The build the fight runs, composed against what the world has actually taught.</summary>
     private Build ComposeBuild()
-        => _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress, _keystoneMenu, _vowMenu);
+        => _loadout.ToBuild(_mastery, _characters.Active, _skillProgress, _keystoneMenu, _vowMenu);
 
     /// <summary>Whichever auto-sell floor keeps the least. Null means "keep everything".</summary>
     private static Rarity? MorePermissive(Rarity? a, Rarity? b)
@@ -4179,7 +4113,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // — which is what stops the Vault re-announcing itself every time the pile refills from empty.
         ChestsEverHeld: (_forge?.ChestsOpened ?? 0) + (_forge?.UnopenedChests.Count ?? 0),
         RegionsConquered: _world.ConqueredIds.Count,
-        TraitPointsEarned: _dust.Earned);
+        TraitsDiscovered: _traitLedger.DiscoveredCount);
 
 
     /// <summary>
@@ -4383,7 +4317,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         return new HintFacts(
             NewRegionName: newRegion,
-            TraitPointsFree: _dust.Available,
             MasteryPointsFree: _mastery.Available,
             EmptySkillSlots: Math.Max(0, Unlocks.SkillSlots(GuideUnlockFacts()) - _loadout.Skills.Count),
             NewChampionName: _rosterNews ? _rosterNewName : null,
@@ -5059,7 +4992,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _expedition.ShowHitEffects = _showHitEffects;
         _expedition.ShowScreenFlash = _showScreenFlash;
         _expedition.Loadout = _loadout;               // the player's build, handed over live…
-        _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         // …and by what the WORLD has taught: the fight must socket exactly what the workbench
         // shows, so both read the same two lists.
         _expedition.DiscoveredKeystones = _keystoneMenu;
@@ -5114,15 +5046,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _forge.Tuning = ForgeTuning.Default with
         {
-            DismantleReturnRate = DustEffects.DismantleRate(_dust, ForgeTuning.Default.DismantleReturnRate),
+            // BASE RATE, FOR EVERYONE. The retired tree's `efficient_forge` multiplied this by 1.15 for
+            // whoever had bought it — a per-account economy multiplier nobody else could earn. If salvage
+            // reads low it is tuned here, in the base, rather than reintroduced as hidden legacy power.
+            DismantleReturnRate = ForgeTuning.Default.DismantleReturnRate,
         };
         // A chest's rolled loot honours the same Dust filters a boss drop did — auto-sell floor and the
         // tireless-forge auto-merge — now applied at OPEN, since that is where a chest's items land.
-        // AUTO-SELL IS THE WARREN'S JOB NOW — SCAVENGER RUNS level 2 sells Commons, level 4 Uncommons.
-        // (TRANSITIONAL: the trait tree still stands this phase and its two filter nodes are still
-        // buyable, so the more permissive of the two answers wins. That term goes when the tree does.)
-        _forge.AutoSellFloor = MorePermissive(
-            WarrenAutomation.AutoSellAtOrBelow(_warren), DustEffects.AutoSellAtOrBelow(_dust));
+        // AUTO-SELL IS THE WARREN'S JOB — SCAVENGER RUNS level 2 sells Commons, level 4 Uncommons. An
+        // old save's filter nodes are converted to that facility's level once, at load, by
+        // LegacyTraitTree, so a returning player keeps the automation without the tree existing.
+        _forge.AutoSellFloor = WarrenAutomation.AutoSellAtOrBelow(_warren);
 
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
@@ -5201,9 +5135,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // AND WHAT THE WORLD HAS TAUGHT, so an unpaired combo enchantment can name the region that
         // teaches its partner instead of naming a keystone the player has no route to.
         _forge.DiscoveredKeystones = _keystoneMenu;
-        // AUTO-MERGE TOO — HOARD VAULTS level 2. (Same transitional OR as auto-sell above.)
-        _forge.AutoMergeOnOpen = WarrenAutomation.AutoMergeOnChestOpen(_warren)
-                                 || DustEffects.AutoMergeAfterRuns(_dust);
+        // AUTO-MERGE — HOARD VAULTS level 2, and only that. An old save's `auto_merge` node is converted
+        // to that facility level once, at load, by LegacyTraitTree.
+        _forge.AutoMergeOnOpen = WarrenAutomation.AutoMergeOnChestOpen(_warren);
         // Every region is a rung up the ladder for the champion, not just a new element — see
         // EnemyBaselineFor, which is also what the offline simulation fights against.
         var (ebh, ebd) = _shotEnemyBaseline ?? EnemyBaselineFor(_activeRegion);
@@ -5244,7 +5178,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _expedition.FlashSpoil(Material.Core);
             }
             // The tree's FASTER REGION MASTERY nodes ride in here — the one place mastery grows.
-            _region.RecordActiveKill(DustEffects.MasteryRate(_dust));
+            // RATE 1, FOR EVERYONE. `recall_1..4` gave +5 % each to whoever bought them; mastery already
+            // EARNED is progression and survives, but a permanent hidden speed multiplier is not.
+            _region.RecordActiveKill(1f);
 
             // MATERIALS FROM MONSTERS — a small trickle every wave, and deeper waves pay in BETTER STUFF
             // rather than more of the same. The steady drip; chests and dismantling are still the bulk.
@@ -5279,9 +5215,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _deepestEver = Math.Max(_deepestEver, _expedition.Deepest);
 
-        // BOTH TREES' POINTS ARE DERIVED FROM PROGRESS, every frame, so they can never double-count
-        // across a reload — nothing is persisted but which nodes were taken. See SkillPointsEarned and
-        // TraitPointsEarned for what each one reads.
+        // MASTERY POINTS ARE DERIVED FROM PROGRESS, every frame, so they can never double-count across
+        // a reload — nothing is persisted but which nodes were taken. See SkillPointsEarned. (The
+        // Memory tree's trait points were the other half of this and are deleted with it.)
         //
         // SKILL POINTS COME FROM DEPTH, AND ONLY FROM DEPTH.
         //
@@ -5313,7 +5249,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         _mastery.SetEarned(SkillPointsEarned());
-        _dust.SetEarned(TraitPointsEarned());
 
         // Conquest: the deepest the champion has held this region. Fires once, unlocks the next region.
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
@@ -5798,7 +5733,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // present blit, driven by manual combat, and sat at a permanent zero from the pivot onward
         // because nothing owned it; this asks the active screen instead, so the kick exists only while
         // something is actually asking for it.
-        var kick = (_showTraits ? _traits.Shake : Vector2.Zero) + ScreenSettle;
+        var kick = ScreenSettle;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             null, null, null, OverlayTransform(kick));
     }
@@ -5886,17 +5821,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         else if (_showWorld) DrawWorld();
         else if (_showTraits)
         {
-            if (_showDustTree) _traits.Draw(_batch, _dust, PageCursor, MouseClicked);
-            else
-            {
-                _traitScreen.Draw(_batch, _traitLedger, _characters.ActiveId,
-                                  _characters.Active?.Name ?? "YOUR HUNTER", PageCursor, MouseClicked);
-                PlayCue(_traitScreen.ConsumeCue(), 0.9f);
-                // WEARING A TRAIT IS A SAVE. It is per-character state and the only place it lives is
-                // the file; the ten-second autosave would get there eventually, and "eventually" is
-                // how a crash costs someone their build.
-                if (_traitScreen.Dirty) Save();
-            }
+            _traitScreen.Draw(_batch, _traitLedger, _characters.ActiveId,
+                              _characters.Active?.Name ?? "YOUR HUNTER", PageCursor, MouseClicked);
+            PlayCue(_traitScreen.ConsumeCue(), 0.9f);
+            // WEARING A TRAIT IS A SAVE. It is per-character state and the only place it lives is
+            // the file; the ten-second autosave would get there eventually, and "eventually" is
+            // how a crash costs someone their build.
+            if (_traitScreen.Dirty) Save();
         }
         else if (_showRoster)
         {
@@ -5913,7 +5844,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             PlayCue(_loadoutScreen.ConsumeCue());   // the refusal LAW 13 already says in words
         }
         else if (_showWarren) DrawWarren();
-        else if (_showMastery) _masteryScreen.Draw(_batch, PageCursor, _dust);
+        else if (_showMastery) _masteryScreen.Draw(_batch, PageCursor);
         else if (_showGear) _gear.Draw(_batch, PageCursor, _hunter);
         else if (_showTraining)
         {
@@ -7450,7 +7381,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var tier = _world.DeepenCorruption();
         _sound.PlayFirst(1f, "sfx_deepen", "sfx_conquer", "sfx_levelup");
         // The award is for REACHING a tier, paid once: SHALLOWER then DEEPER used to mint it again on every
-        // cycle (review, 2026-08-23). The trait point for the tier keys off the peak too (TraitPointsEarned).
+        // cycle (review, 2026-08-23).
         var firstTime = tier > peakBefore;
         if (firstTime) _dust.AddDust(CorruptionScaling.DeepeningDustAward(tier));
         // Also never read — see EaseCorruption. The strip is the corruption ladder itself by here.
@@ -7718,18 +7649,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>
-    /// Trait points: conquests, corruption tiers, and region-mastery goals.
-    /// </summary>
-    /// <remarks>
-    /// NOT Memory Dust, which the Warren mints tick by tick while the game is closed. A permanent tree
-    /// bought with an idle currency is a permanent tree bought by WAITING, and worse than the same
-    /// failure in the skill tree, because these choices can never be taken back. Every term here is
-    /// something that only happens because somebody descended.
-    ///
-    /// At full current content: 6 conquests + ~10 corruption tiers + 18 mastery goals = ~34 against a
-    /// tree costing about 150 — roughly a quarter, and two of the four terminals out of reach.
-    /// </remarks>
-    /// <summary>
     /// The world as the quest layer is allowed to see it: flat, pure, rebuilt every frame.
     /// </summary>
     /// <remarks>
@@ -7752,7 +7671,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         => Career.VowWasKept(ComposeBuild(), _hunter);
 
     // The arithmetic (and its tuning history) is Career's, in Core, since P5.
-    private int TraitPointsEarned() => Career.TraitPointsEarned(_world);
 
     /// <summary>The deepest wave held in any region — what the Warren's ceiling is derived from.</summary>
     private int DeepestAnywhere() => Career.DeepestAnywhere(_world, _deepestEver);

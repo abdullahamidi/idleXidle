@@ -228,12 +228,12 @@ public class VowDiscoveryTest
         var pick = new[] { new BuildComposer.SkillPick(Source.Body, "vow_singular", null, "hammer_blow") };
         var mastery = Taught.Everything();
 
-        var unknown = BuildComposer.Compose(new Core.Prestige.MemoryDustTree(), mastery, null, pick,
+        var unknown = BuildComposer.Compose(mastery, null, pick,
             Array.Empty<string>(), 4, null, Array.Empty<Keystone>(), Array.Empty<Vow>());
         Assert.Null(unknown.Skills[0].Vow);
         Assert.Empty(unknown.Vows);
 
-        var known = BuildComposer.Compose(new Core.Prestige.MemoryDustTree(), mastery, null, pick,
+        var known = BuildComposer.Compose(mastery, null, pick,
             Array.Empty<string>(), 4, null, Array.Empty<Keystone>(), new[] { Vows.ById("vow_singular")! });
         Assert.Equal("vow_singular", known.Skills[0].Vow!.Id);
     }

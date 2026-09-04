@@ -211,7 +211,7 @@ public class LoadoutRepairTest
         var l = Woven("hammer_blow", "snare_jaws", Seeker.SignatureSkillId!, Anvil.SignatureSkillId!);
         LoadoutRepair.Repair(l, tree.AvailableSkills(), Seeker);
 
-        var composed = l.ToBuild(new MemoryDustTree(), tree, Seeker).Skills.Select(s => s.Def.Id).ToList();
+        var composed = l.ToBuild(tree, Seeker).Skills.Select(s => s.Def.Id).ToList();
         var kept = l.Skills.Where(s => s.SkillId is not null).Select(s => s.SkillId!).ToList();
 
         Assert.Equal(kept, composed);

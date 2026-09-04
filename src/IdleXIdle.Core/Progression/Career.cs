@@ -16,7 +16,7 @@ namespace IdleXIdle.Core.Progression;
 /// <para>
 /// Extracted from <c>Game1</c> (P5, 2026-08-31 — audit critique G2). These rules lived as private
 /// methods on a 5,000-line MonoGame class, which made every career fact untestable and every
-/// consumer (quests, trait points, the Warren's ceiling) a coupling to the host. They are DERIVED,
+/// consumer (quests, the Warren's ceiling) a coupling to the host. They are DERIVED,
 /// not banked — recomputed from world state each time — so they can never double-count across a
 /// reload; the two latched exceptions (<c>RunsWithVowKept</c>, the account's deepest-ever wave)
 /// are events the host persists and passes in.
@@ -42,23 +42,6 @@ public static class Career
             RunsWithVowKept: runsWithVowKept,
             BossesFelled: bossesFelled,
             WavesBySkill: wavesBySkill);
-    }
-
-    /// <summary>
-    /// Trait points earned: one per conquest, two per corruption tier REACHED (the peak, so
-    /// SHALLOWER never costs a point), plus each region's mastery level.
-    /// </summary>
-    /// <remarks>
-    /// Two per tier because one left every road's end unaffordable — with the ladder capped at
-    /// five, 6 + 5 + 18 = 29 against a cheapest terminal path of 31. 6 + 10 + 18 = 34 is the
-    /// budget the tree was built around (MemoryDustTests: one terminal reachable, two never).
-    /// </remarks>
-    public static int TraitPointsEarned(World world)
-    {
-        ArgumentNullException.ThrowIfNull(world);
-        var total = world.ConqueredIds.Count + 2 * world.PeakCorruptionTier;
-        foreach (var def in Regions.All) total += (int)world.RegionFarm(def.Id).MasteryLevel;
-        return total;
     }
 
     /// <summary>

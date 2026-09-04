@@ -133,7 +133,6 @@ public readonly record struct ScreenBanner(string Key, string Title, string Body
 /// Every field is a fact the host already holds; nothing here is telemetry.
 /// </summary>
 /// <param name="NewRegionName">A region that is open, not conquered, and never hunted — or null.</param>
-/// <param name="TraitPointsFree">Trait points earned and not spent.</param>
 /// <param name="MasteryPointsFree">Mastery points earned and not spent.</param>
 /// <param name="EmptySkillSlots">Open skill slots with nothing equipped.</param>
 /// <param name="NewChampionName">A champion who joined and has not been looked at on the roster — or null.</param>
@@ -143,7 +142,6 @@ public readonly record struct ScreenBanner(string Key, string Title, string Body
 /// <param name="AffordableUpgradeName">The first Warren facility whose next level is affordable — or null.</param>
 public readonly record struct HintFacts(
     string? NewRegionName = null,
-    int TraitPointsFree = 0,
     int MasteryPointsFree = 0,
     int EmptySkillSlots = 0,
     string? NewChampionName = null,
@@ -592,8 +590,8 @@ public static class Onboarding
     {
         Activity.Map when f.NewRegionName is { Length: > 0 } r =>
             new ScreenHint($"Hint:Map:{r}", $"A NEW REGION IS AVAILABLE — {r.ToUpperInvariant()}"),
-        // NOTHING IS SPENT ON THIS SCREEN ANY MORE (P4, LAW 5), so there is no "you have N to spend"
-        // hint to give. TraitPointsFree stays on the facts for the OLD tree screen, which P5 deletes.
+        // NOTHING IS SPENT ON THE TRAITS SCREEN, so there is no "you have N to spend" hint to give.
+        // TraitPointsFree was kept on these facts for the old Memory tree screen; both are deleted.
         Activity.Mastery when f.MasteryPointsFree > 0 =>
             new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
         Activity.Build when f.EmptySkillSlots > 0 =>

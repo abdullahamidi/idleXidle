@@ -528,19 +528,18 @@ public sealed class Build
     }
 
     /// <summary>
-    /// What the bought passive-tree attribute nodes are worth. Set by whoever owns the Dust tree.
+    /// The CHARACTER's own passive multipliers.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A plain property rather than a <c>Resolve(hunter, tree)</c> parameter, because Core's build layer
-    /// has no business knowing what a <c>MemoryDustTree</c> is — the dependency points one way, from
-    /// Prestige into Builds, and this keeps it there.
+    /// This used to carry the retired Memory tree's twelve attribute nodes as well, combined with the
+    /// character's. The tree is deleted and those modifiers went with it — raw numbers are Training and
+    /// Gear's, specialisation is Mastery's, behaviour is Traits'. What is left is the champion's own,
+    /// which is authored on the roster and visible on its card.
     /// </para>
     /// <para>
-    /// Fed by <c>DustEffects.TreeMods</c>. Left at <see cref="BuildMods.None"/> it changes nothing, which
-    /// is the correct reading for a character who has bought no nodes — and, less comfortably, also the
-    /// reading for a wire someone forgot to connect. <c>test_the_passive_tree_reaches_the_fight</c> is
-    /// what tells those two apart.
+    /// Left at <see cref="BuildMods.None"/> it changes nothing, which is the correct reading for a
+    /// character with no passive of its own.
     /// </para>
     /// </remarks>
     public BuildMods PassiveMods { get; set; } = BuildMods.None;

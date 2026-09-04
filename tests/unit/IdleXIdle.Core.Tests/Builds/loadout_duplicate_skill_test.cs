@@ -212,7 +212,7 @@ public class LoadoutDuplicateSkillTests
     public void test_compose_never_equips_the_same_skill_twice_even_when_handed_two_picks()
     {
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Source.Body, null, SkillId: Blow),
@@ -231,7 +231,7 @@ public class LoadoutDuplicateSkillTests
         // Arrange — the composer is handed a duplicate pick; the run must still count one use per wave.
         var progress = new SkillProgress();
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Source.Body, null, SkillId: Blow),

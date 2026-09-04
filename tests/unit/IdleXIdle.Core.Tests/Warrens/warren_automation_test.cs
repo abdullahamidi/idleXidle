@@ -135,7 +135,7 @@ public class WarrenAutomationTest
         Assert.Equal(3, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12)));
         Assert.Equal(4, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12, RegionsConquered: 1)));
 
-        var everything = new UnlockFacts(DeepestWave: 9_999, RegionsConquered: 99, TraitPointsEarned: 999);
+        var everything = new UnlockFacts(DeepestWave: 9_999, RegionsConquered: 99, TraitsDiscovered: 999);
         Assert.Equal(Build.SkillSlots, Unlocks.SkillSlots(everything));
     }
 
@@ -147,7 +147,7 @@ public class WarrenAutomationTest
         Assert.False(Unlocks.IsOpen(Activity.Forge, new UnlockFacts()));
         Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ChestsEverHeld: 1)));
         Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 2)));
-        Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 2, TraitPointsEarned: 0)));
+        Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 2, TraitsDiscovered: 0)));
 
         // AND ITS CAPTION NAMES BOTH CLAUSES. It used to name only the chest.
         var caption = Unlocks.Requirement(Activity.Forge);

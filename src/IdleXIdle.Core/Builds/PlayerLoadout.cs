@@ -16,13 +16,7 @@ namespace IdleXIdle.Core.Builds;
 /// <para>
 /// This is the editable, persistable half of a build: which Forms the player wove, which Source and Vow
 /// each carries, and which keystones they socketed. <see cref="ToBuild"/> turns those choices into the
-/// pure <see cref="Build"/> the sim runs, folding in the Dust tree's passive nodes.
-/// </para>
-/// <para>
-/// It lives in the GAME layer, not Core.Builds, precisely because assembling it needs the
-/// <see cref="MemoryDustTree"/> — for the tree's <see cref="DustEffects.TreeMods"/> and the keystones it
-/// has taught. Core.Builds deliberately knows nothing about Prestige, so the tree→build wiring belongs
-/// here, on the Prestige side of that one-way dependency.
+/// pure <see cref="Build"/> the sim runs.
 /// </para>
 /// </remarks>
 public sealed class PlayerLoadout
@@ -365,12 +359,11 @@ public sealed class PlayerLoadout
     /// <param name="knownVows">
     /// What the account has FOUND, by keeping a rule once without its Vow. Null falls back to the tree.
     /// </param>
-    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character,
+    public Build ToBuild(MasteryTree mastery, Character? character,
                          SkillProgress? progress = null,
                          IReadOnlyList<Keystone>? discoveredKeystones = null,
                          IReadOnlyList<Vow>? knownVows = null)
     {
-        ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
 
         // The capacity travels WITH the build, because the sim asks about it: VOW OF COMPLETION wants
@@ -379,7 +372,7 @@ public sealed class PlayerLoadout
 
         // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
         // only gathers the loadout's lists.
-        return BuildComposer.Compose(tree, mastery, character,
+        return BuildComposer.Compose(mastery, character,
             _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.VowId, s.Passive, s.SkillId)),
             _keystoneIds, SkillCapacity, progress, discoveredKeystones, knownVows, TraitShape);
     }

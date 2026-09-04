@@ -37,7 +37,7 @@ public class BreakBadgeTests
     {
         var mastery = Taught.Everything();
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow"),
@@ -84,7 +84,7 @@ public class BreakBadgeTests
         // The negative half: without PRESS there is no badge, so an empty sky is not a bug.
         var mastery = Taught.Everything();
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 

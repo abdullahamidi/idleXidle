@@ -40,7 +40,7 @@ public static partial class Keystones
     /// <remarks>
     /// <para>
     /// <b>The world teaches the build.</b> Every keystone used to be a node on the trait tree, bought
-    /// with trait points — and a full career earned 34 of them against a tree that cost 226, so a player
+    /// with the retired Memory tree's trait points — a full career earned 34 against a tree that cost 226, so a player
     /// could finish the game having never learned ECHO, which left the REVERB enchantment permanently
     /// dead for them with nothing on any screen able to fix it. Here they are free, they are not a
     /// choice, and all nineteen are reachable: what stays scarce is the SOCKET, which is the correct

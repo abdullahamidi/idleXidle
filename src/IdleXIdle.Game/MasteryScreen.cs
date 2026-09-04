@@ -333,7 +333,6 @@ public sealed class MasteryScreen
 
     /// <summary>The character being played — host-fed, for the summary portrait.</summary>
     public Character? Character { get; set; }
-    public MemoryDustTree Tree { get; set; } = new();
     public int Power { get; set; }   // host-set: PowerRating (the Build screen has no Hunter reference)
     public int Level { get; set; }
     public bool Dirty { get; private set; }
@@ -1060,13 +1059,12 @@ public sealed class MasteryScreen
     };
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
-    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, MemoryDustTree tree)
-        => Update(keys, prev, mouse, clicked, false, 0, tree);
+    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked)
+        => Update(keys, prev, mouse, clicked, false, 0);
 
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked,
-                       bool held, int wheel, MemoryDustTree tree, bool rightClicked = false)
+                       bool held, int wheel, bool rightClicked = false)
     {
-        Tree = tree;
         mouse = Cursor(mouse);
 
         // THE BREATH is sampled here, so Draw reads a number and not a clock — and under Reduced
@@ -1411,16 +1409,15 @@ public sealed class MasteryScreen
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
-    public void Draw(SpriteBatch b, Point mouse, MemoryDustTree tree)
+    public void Draw(SpriteBatch b, Point mouse)
     {
-        Tree = tree;
         _hoverNodeId = null;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         // The SAME posed cursor Update works with, or a capture would hit-test one point and draw another.
         var hit = Cursor(mouse);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
-        DrawEditor(b, hit, tree);
+        DrawEditor(b, hit);
         if (DevBuildDebug) DrawDebug(b);
     }
 
@@ -1443,7 +1440,7 @@ public sealed class MasteryScreen
         => _ui.TextBig(b, $"nav MASTERY  tree  zoom {_zoom:0.00}  pan {_pan.X:0},{_pan.Y:0}", 60, HeaderBottom, Gold, UiTypography.Secondary);
 
     // ── Edit sub-view (the existing tree + skill sidebar). ──
-    private void DrawEditor(SpriteBatch b, Point hit, MemoryDustTree tree)
+    private void DrawEditor(SpriteBatch b, Point hit)
     {
         _ui.Scrim(b, 0.6f);
         var aff = Mastery.Affinity();

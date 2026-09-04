@@ -44,7 +44,7 @@ public class MasteryRespecRepairTests
 
     private static void Press(MasteryScreen s)
         => s.Update(default(KeyboardState), default(KeyboardState), ResetBtn.Center, clicked: true,
-                    held: false, wheel: 0, tree: new MemoryDustTree());
+                    held: false, wheel: 0);
 
     /// <summary>A hunter two roads deep, wearing both their skills and their own signature.</summary>
     private static (MasteryScreen Screen, PlayerLoadout Loadout, SkillProgress Progress) Posed()
@@ -207,7 +207,7 @@ public class MasteryRespecRepairTests
         var spent = s.Mastery.Spent;
 
         s.Update(default(KeyboardState), default(KeyboardState), band.Center, clicked: true,
-                 held: false, wheel: 0, tree: new MemoryDustTree());
+                 held: false, wheel: 0);
 
         Assert.False(Armed(s));
         Assert.Equal(spent, s.Mastery.Spent);

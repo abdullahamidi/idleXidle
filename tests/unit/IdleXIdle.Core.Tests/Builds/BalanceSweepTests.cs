@@ -494,25 +494,6 @@ public class BalanceSweepTests
     }
 
     [Fact]
-    public void test_the_four_trait_roads_are_worth_comparable_amounts()
-    {
-        // Roads are bought with the same points and two of them are unaffordable together, so the
-        // choice is only real if they are worth roughly the same.
-        var tree = new MemoryDustTree();
-        var costs = Enum.GetValues<TraitRoad>()
-            .Where(r => r != TraitRoad.Spine)
-            .ToDictionary(r => r, r => tree.All.Where(u => u.Road == r).Sum(u => u.Cost));
-
-        foreach (var (road, cost) in costs) _out.WriteLine($"{road,-9} {cost} pts");
-
-        var min = costs.Values.Min();
-        var max = costs.Values.Max();
-        Assert.True(max - min <= 2,
-                    $"the roads cost {min}..{max} points — a road that costs more must be worth more, "
-                    + "and nothing in the design says which one is meant to be dearer");
-    }
-
-    [Fact]
     public void test_the_crit_formula_counts_the_masterys_own_crit_nodes()
     {
         // The STATS screen used to sum the trained stat and the gear affixes and stop, so every crit

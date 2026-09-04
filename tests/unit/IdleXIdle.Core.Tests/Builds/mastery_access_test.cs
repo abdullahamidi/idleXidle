@@ -124,13 +124,13 @@ public class MasteryAccessTest
         loadout.SetSkill(loadout.AddSkill(), "hammer_blow");
         loadout.SetSource(0, Source.Body);
 
-        Assert.Single(loadout.ToBuild(new MemoryDustTree(), t, character: null).Skills);
+        Assert.Single(loadout.ToBuild(t, character: null).Skills);
 
         t.Respec();
 
         // The slot keeps its choice — the player's loadout is not silently rewritten by a respec —
         // but the FIGHT carries only what mastery currently allows.
-        Assert.Empty(loadout.ToBuild(new MemoryDustTree(), t, character: null).Skills);
+        Assert.Empty(loadout.ToBuild(t, character: null).Skills);
     }
 
     // ── The reason D11 had to happen (see the class remarks) ─────────────────────────────────────

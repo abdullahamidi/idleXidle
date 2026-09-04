@@ -52,9 +52,9 @@ public class UnlocksTest
             ("first wave cleared",    new UnlockFacts(WavesCleared: 1, DeepestWave: 1)),
             ("first item found",      new UnlockFacts(WavesCleared: 3, DeepestWave: 3, ItemsOwned: 1)),
             ("first chest earned",    new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1)),
-            ("wave 12",               new UnlockFacts(WavesCleared: 20, DeepestWave: 12, ItemsOwned: 3, ChestsEverHeld: 1, TraitPointsEarned: 2)),
-            ("first region taken",    new UnlockFacts(WavesCleared: 40, DeepestWave: 20, ItemsOwned: 5, ChestsEverHeld: 2, RegionsConquered: 1, TraitPointsEarned: 4)),
-            ("second region taken",   new UnlockFacts(WavesCleared: 90, DeepestWave: 30, ItemsOwned: 9, ChestsEverHeld: 3, RegionsConquered: 2, TraitPointsEarned: 6)),
+            ("wave 12",               new UnlockFacts(WavesCleared: 20, DeepestWave: 12, ItemsOwned: 3, ChestsEverHeld: 1, TraitsDiscovered: 2)),
+            ("first region taken",    new UnlockFacts(WavesCleared: 40, DeepestWave: 20, ItemsOwned: 5, ChestsEverHeld: 2, RegionsConquered: 1, TraitsDiscovered: 4)),
+            ("second region taken",   new UnlockFacts(WavesCleared: 90, DeepestWave: 30, ItemsOwned: 9, ChestsEverHeld: 3, RegionsConquered: 2, TraitsDiscovered: 6)),
         };
 
         UnlockFacts? previous = null;
@@ -95,7 +95,7 @@ public class UnlocksTest
                 ItemsOwned = facts.ItemsOwned + rng.Next(0, 2),
                 ChestsEverHeld = facts.ChestsEverHeld + rng.Next(0, 2),
                 RegionsConquered = facts.RegionsConquered + (rng.Next(0, 40) == 0 ? 1 : 0),
-                TraitPointsEarned = facts.TraitPointsEarned + rng.Next(0, 2),
+                TraitsDiscovered = facts.TraitsDiscovered + rng.Next(0, 2),
             };
 
             var openNow = Unlocks.Open(facts).ToHashSet();
@@ -144,7 +144,7 @@ public class UnlocksTest
         // And the gate really does stop at four — past that the trait tree is the source, which is an
         // existing reward rather than a starting condition.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
         Assert.Equal(4, Unlocks.SkillSlots(everything));
     }
 

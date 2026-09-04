@@ -309,7 +309,7 @@ public class OnboardingTest
         // Every other screen's whole first explanation is its tour. A banner elsewhere would be the
         // "too crowded and too small" paragraph coming back.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
         foreach (var screen in Enum.GetValues<Activity>().Where(a => a != Activity.Build))
             Assert.Null(Onboarding.BannerFor(screen, everything, Array.Empty<string>()));
     }

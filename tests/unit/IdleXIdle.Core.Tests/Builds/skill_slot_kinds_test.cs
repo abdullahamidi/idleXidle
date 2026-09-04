@@ -187,7 +187,7 @@ public class ComposedSlotSplitTests
         => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(int slots, params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
+        => BuildComposer.Compose(Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: slots);
 
     [Theory]
@@ -226,7 +226,7 @@ public class ComposedSlotSplitTests
     public void test_a_skill_the_tree_has_not_taught_cannot_be_chosen()
     {
         Build With(MasteryTree mastery) => BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 P("hammer_blow"),
@@ -351,7 +351,7 @@ public class SwingShareTests
         // The two-and-two loadout — the same shape the restore migration hands an old four-caster
         // save (BLOW, SPRAY, and the overflow landed on BRAND and WILT).
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { P("hammer_blow"), P("volley_spray"),
                             P("sign_brand"), P("drain_wilt") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -372,7 +372,7 @@ public class SwingShareTests
         // The other half of the promise. Moving two skills into passive slots must not silence them —
         // if it did, the swing would come back only because half the build stopped working.
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { P("hammer_blow"), P("volley_spray"),
                             P("field_mire"), P("snare_jaws") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -410,7 +410,7 @@ public class PassiveEffectTests
         => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
+        => BuildComposer.Compose(Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
     /// <summary>Total damage the champion put out in one wave, summed from the event stream.</summary>

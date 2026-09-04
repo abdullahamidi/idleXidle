@@ -151,8 +151,8 @@ public class VowCapacityTest
     {
         // Capacity used to be an accident of the skill-slot count, which the trait tree sold a piece
         // of. Trait points reach none of these three now.
-        var rich = new UnlockFacts(DeepestWave: 40, RegionsConquered: 5, TraitPointsEarned: 99);
-        var poor = rich with { TraitPointsEarned = 0 };
+        var rich = new UnlockFacts(DeepestWave: 40, RegionsConquered: 5, TraitsDiscovered: 99);
+        var poor = rich with { TraitsDiscovered = 0 };
 
         Assert.Equal(Unlocks.VowCapacity(rich), Unlocks.VowCapacity(poor));
         Assert.Equal(Unlocks.KeystoneSockets(rich), Unlocks.KeystoneSockets(poor));

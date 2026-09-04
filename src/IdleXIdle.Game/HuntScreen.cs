@@ -768,7 +768,6 @@ public sealed class HuntScreen
     public TraitWatch? TraitWatch { get; set; }
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
-    public MemoryDustTree Tree { get; set; } = new();
     public MasteryTree Mastery { get; set; } = new();
     public Source? EnemySource { get; set; }
     /// <summary>The active region id — picks the boss creature (boss_&lt;region&gt;) on boss waves. Set by the host.</summary>
@@ -903,7 +902,7 @@ public sealed class HuntScreen
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
     private string _buildStamp = "";
     private string BuildStamp()
-        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}|{Progress?.Signature}"
+        => $"{Loadout.Signature}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}|{Progress?.Signature}"
            // A keystone discovered mid-descent (a conquest happens at the end of one, but region
            // mastery lands mid-farm) must reach the fight at the next wave boundary like everything
            // else. Without these two the build would keep composing against the old menu.
@@ -912,7 +911,7 @@ public sealed class HuntScreen
     /// <summary>Compose the build and refresh what the screen caches off it (the CHARGE pill).</summary>
     private Build ComposeBuild(Hunter hunter)
     {
-        var build = Loadout.ToBuild(Tree, Mastery, Character, Progress, DiscoveredKeystones, KnownVows);
+        var build = Loadout.ToBuild(Mastery, Character, Progress, DiscoveredKeystones, KnownVows);
         _buildStamp = BuildStamp();
         // The CHARGE pill only exists when the pool does.
         var trig = build.Triggers(hunter);

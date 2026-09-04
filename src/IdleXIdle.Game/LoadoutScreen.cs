@@ -251,7 +251,6 @@ public sealed class LoadoutScreen
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
-    public MemoryDustTree Tree { get; set; } = new();
 
     /// <summary>
     /// The keystones the WORLD has taught this account — set by the host every frame.
@@ -608,7 +607,7 @@ public sealed class LoadoutScreen
     /// </remarks>
     private (Build Build, BuildContext Ctx) Live()
     {
-        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
+        var build = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
         return (build, Hunter is { } h ? SoloBattle.DescribeBuild(build, h) : BuildContext.Empty);
     }
 
@@ -630,7 +629,7 @@ public sealed class LoadoutScreen
     private bool SlotFilled(int slot) => SlotDef(slot) is { } d && KnownSkills().Contains(d.Id);
 
     private float Dps(PlayerLoadout loadout, Hunter hunter)
-        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), hunter).Dps;
+        => DamageBench.Measure(loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows), hunter).Dps;
 
     /// <summary>What a Vow demands, in one line the player can check against their own build.</summary>
     private static string DemandText(Vow v) => v.Demand switch
@@ -656,7 +655,7 @@ public sealed class LoadoutScreen
                 var styles = Loadout.EquippedDefs().Select(d => StyleName(d.Style)).Distinct().ToList();
                 return styles.Count == 0 ? "NO SKILLS" : $"{styles.Count} STYLE{(styles.Count == 1 ? "" : "S")}: {string.Join(", ", styles)}";
             case VowDemand.SingleSource:
-                var sources = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
+                var sources = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
                 return sources.Count == 0 ? "NO SKILLS" : $"{sources.Count} SOURCE{(sources.Count == 1 ? "" : "S")}: {string.Join(", ", sources)}";
             case VowDemand.EverySlotFilled: return $"{ctx.SkillsWoven} OF {ctx.SkillSlots} SLOTS FILLED";
             case VowDemand.NoCritInvestment: return $"CRITICAL {ctx.CritPercent:0.#}% (BASE {ctx.BaseCritPercent:0.#}%)";

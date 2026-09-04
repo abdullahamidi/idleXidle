@@ -457,30 +457,33 @@ public class SaveSystemTests
         Assert.Equal(3600.0, SaveSystem.CreditedOfflineSeconds(3600.0)); // a normal absence is untouched
     }
 
-    /// <summary>Memory Dust and its owned unlocks survive a reload — nothing prestige is ever lost.</summary>
+    /// <summary>
+    /// The Dust WALLET survives a reload, and no Memory-tree ownership is written back.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert the opposite half: that the owned node list round-tripped. It does not any
+    /// more, and that is the point — the tree is deleted, its ids are migration INPUT only, and a save
+    /// captured today carries none of them. Dust itself is a live currency (Warren upgrades, expedition
+    /// checkpoints) and must survive untouched.
+    /// </remarks>
     [Fact]
-    public void test_memory_dust_and_unlocks_survive_a_reload()
+    public void test_the_dust_wallet_survives_a_reload_and_no_tree_ownership_is_written()
     {
-        var tree = new IdleXIdle.Core.Prestige.MemoryDustTree();
-        tree.AddDust(200);            // dust, the Warren material — still saved
-        tree.SetEarned(200);          // trait points, which is what the tree actually spends
-        tree.Purchase("recall_1");
-        tree.Purchase("socket_2");
+        var wallet = new IdleXIdle.Core.Prestige.MemoryDustWallet();
+        wallet.AddDust(200);
 
         var save = SaveSystem.Capture(new Hunter(),
-            Array.Empty<ItemInstance>(), Now, tree, highestMasteryAwarded: 2);
+            Array.Empty<ItemInstance>(), Now, wallet, highestMasteryAwarded: 2);
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
 
-        Assert.Equal(tree.MemoryDust, loaded.MemoryDust);
+        Assert.Equal(200, loaded.MemoryDust);
         Assert.Equal(2, loaded.HighestMasteryAwarded);
-        Assert.Contains("recall_1", loaded.MemoryDustUnlocks);
-        Assert.Contains("socket_2", loaded.MemoryDustUnlocks);
+        Assert.Empty(loaded.MemoryDustUnlocks);
 
-        var restored = new IdleXIdle.Core.Prestige.MemoryDustTree();
-        restored.Restore(loaded.MemoryDust, loaded.MemoryDustUnlocks);
-        Assert.True(restored.Owns("recall_1"));
-        Assert.True(restored.Owns("socket_2"));
+        var restored = new IdleXIdle.Core.Prestige.MemoryDustWallet();
+        restored.Restore(loaded.MemoryDust);
+        Assert.Equal(200, restored.MemoryDust);
     }
 
     [Fact]

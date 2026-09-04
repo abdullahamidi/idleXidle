@@ -29,6 +29,44 @@ namespace IdleXIdle.Core.Tests.Persistence;
 /// </remarks>
 public class TraitTreeMigrationTest
 {
+    /// <summary>
+    /// EVERY NODE THE RETIRED MEMORY TREE EVER SOLD — all 51 ids, frozen here on the day the tree was
+    /// deleted.
+    /// </summary>
+    /// <remarks>
+    /// This list used to be <c>MemoryDustTree.Catalog.Select(u =&gt; u.Id)</c>. The tree is gone, and
+    /// reading the catalogue was the last thing keeping it alive, so the ids live here — in the test
+    /// that exists to prove an old save still loads — rather than in production code that would have to
+    /// understand them. Nothing in the running game knows these strings; only
+    /// <see cref="LegacyTraitTree"/> and this file do.
+    /// </remarks>
+    private static readonly string[] EveryLegacyNode =
+    {
+        // The 19 keystone nodes — PRESERVED as keystone discoveries.
+        "ks_glass_cannon", "ks_bloodlust", "ks_blood_magic", "ks_reaper", "ks_rend", "ks_ironclad",
+        "ks_juggernaut", "ks_undying", "ks_titan", "ks_dynamo", "ks_greed", "ks_discerning_eye",
+        "ks_fortune", "ks_hoarder", "ks_lodestone", "ks_echo", "ks_venomancer", "ks_capacitor",
+        "ks_weaver",
+        // The 5 study nodes — PRESERVED as Vow discoveries.
+        "vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice",
+        // Structural capacity — PRESERVED.
+        "socket_2", "socket_3",
+        // The 2 loot filters and auto-merge — PRESERVED as Warren facility levels.
+        "filter_common", "filter_uncommon", "auto_merge",
+        // The 12 attribute minors — DISCARDED. HARDER HITS I-III, MORE HEALTH I-III, MORE LOOT /
+        // RARER FINDS / MORE AND RARER LOOT, FASTER SKILLS I-III.
+        "ruin_edge_1", "ruin_edge_2", "ruin_edge_3",
+        "aegis_skin_1", "aegis_skin_2", "aegis_skin_3",
+        "avarice_purse_1", "avarice_purse_2", "avarice_purse_3",
+        "artifice_hands_1", "artifice_hands_2", "artifice_hands_3",
+        // The rate nodes — DISCARDED.
+        "recall_1", "recall_2", "recall_3", "recall_4", "efficient_forge", "artifice_vows",
+        // The fifth skill slot — DISCARDED, loudly (see the test for it below).
+        "weave_5",
+        // Pure gates that never did anything, and the completion mark.
+        "ledger", "forge_insight", "attunement",
+    };
+
     private static SaveGame V3(params string[] nodes) => new()
     {
         Version = 3,
@@ -66,7 +104,7 @@ public class TraitTreeMigrationTest
         // The nineteen ks_* ids were copied out of the tree on the day it stopped being the producer.
         // If one of them names a keystone the catalogue no longer has, a returning player silently
         // loses it — which is the one thing the migration is not allowed to do.
-        var everything = MemoryDustTree.Catalog.Select(u => u.Id).ToList();
+        var everything = EveryLegacyNode.ToList();
         var g = LegacyTraitTree.Read(everything);
 
         Assert.Equal(19, g.Keystones.Count);
@@ -78,7 +116,7 @@ public class TraitTreeMigrationTest
     [Fact]
     public void test_every_vow_node_maps_to_a_vow_that_exists_and_the_five_teach_all_thirteen()
     {
-        var g = LegacyTraitTree.Read(MemoryDustTree.Catalog.Select(u => u.Id));
+        var g = LegacyTraitTree.Read(EveryLegacyNode);
 
         Assert.Equal(Vows.Catalog.Count, g.Vows.Count);
         foreach (var id in g.Vows)
@@ -224,9 +262,10 @@ public class TraitTreeMigrationTest
     [Fact]
     public void test_the_dust_wallet_survives_the_migration_untouched()
     {
-        // MemoryDustTree is two systems in one class: the trait tree AND the Memory Dust wallet, a live
-        // currency with five faucets and two sinks. Renaming or dropping SaveGame.MemoryDust would zero
-        // every player's Warren currency and expedition checkpoints ten seconds after launch.
+        // MemoryDustTree WAS two systems in one class: the trait tree AND the Memory Dust wallet, a
+        // live currency with five faucets and two sinks. The tree is deleted and the wallet survives as
+        // MemoryDustWallet — dropping SaveGame.MemoryDust with it would have zeroed every player's
+        // Warren currency and expedition checkpoints ten seconds after launch.
         var save = V3("socket_2");
         Assert.Equal(4_242, save.MemoryDust);
 

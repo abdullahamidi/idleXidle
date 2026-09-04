@@ -56,7 +56,7 @@ public class trait_composition_seam_test
     }
 
     private static Build Compose(PlayerLoadout loadout)
-        => loadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null);
+        => loadout.ToBuild(Taught.Everything(), character: null);
 
     [Fact]
     public void test_a_worn_trait_reaches_the_composed_build_the_fight_reads()
