@@ -214,6 +214,25 @@ public sealed class AssetLibrary
     /// <summary>The texture for a key (or its migration alias), or null if absent (caller falls back to shapes).</summary>
     public Texture2D? Get(string key) => Resolve(key);
 
+    /// <summary>
+    /// The key a texture was loaded under, or null if it was not loaded from this library.
+    /// </summary>
+    /// <remarks>
+    /// For the raster ledger (<see cref="UiRasterLedger"/>) only: several UiKit primitives are handed a
+    /// <see cref="Texture2D"/> rather than a key, and a ledger row that cannot name its asset cannot be
+    /// acted on. The reverse lookup is built once, lazily, and only when the dial is on — it is a linear
+    /// walk of the table, which is fine once and would not be fine per draw.
+    /// </remarks>
+    public string? KeyOf(Texture2D? tex)
+    {
+        if (tex is null) return null;
+        _byTexture ??= _textures.GroupBy(kv => kv.Value)
+                                .ToDictionary(g => g.Key, g => g.First().Key);
+        return _byTexture.TryGetValue(tex, out var k) ? k : null;
+    }
+
+    private Dictionary<Texture2D, string>? _byTexture;
+
     public bool Has(string key) => Resolve(key) is not null;
 
     /// <summary>The key a texture's white silhouette is registered under (see <see cref="WhiteMask"/>).</summary>

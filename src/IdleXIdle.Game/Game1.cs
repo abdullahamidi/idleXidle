@@ -6016,6 +6016,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             using var fs = System.IO.File.Create(shotPath);
             _canvas.SaveAsPng(fs, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+            // RH_UI_BUDGET=1: the raster ledger for whatever this shot drew (BRIEF sec.74). Printed
+            // after the frame so it reports the screen that was actually photographed.
+            UiRasterLedger.Dump();
             Exit();
         }
 

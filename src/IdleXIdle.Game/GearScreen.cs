@@ -291,7 +291,7 @@ public sealed class GearScreen
     private static readonly string[] Tabs = { "ALL", "WEAPONS", "ARMOR", "ACCESSORY" };
     /// <summary>A tab's height: a Secondary line with its pad, never under the hit-target minimum (§107).</summary>
     private static int TabH => Math.Max(UiMetrics.HitTargetMinimum, UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(14));
-    private static int TabsTop => InventoryPanel.Y + UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
+    private static int TabsTop => UiKit.CaptionTop(InventoryPanel) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
     /// <summary>
     /// ONE ROW OF FOUR while the widest label fits a quarter of the width; TWO ROWS OF TWO once it does not
     /// (125 % and up — "ACCESSORY" at 24 px is wider than a 98 px tab). A stacked control (§9), not a shorter
@@ -321,8 +321,11 @@ public sealed class GearScreen
     /// <summary>The two footer lines share a row while both fit it; they stack once they do not (150 %).</summary>
     private bool InvFooterStacked
         => _ui.MeasureBig(SortedLabel, UiTypography.Secondary) + _ui.MeasureBig(MoreLabel, UiTypography.Secondary) + UiMetrics.Space(24) > InvW;
+    // ANCHORED TO THE FRAME, NOT TO THE RECTANGLE. The panel wears the house quiet frame now, so its
+    // last usable row is UiKit.ContentBottom, not `Bottom - 16`: measured from the raw edge the stacked
+    // footer at UI SCALE 150 printed RIGHT-CLICK FOR MORE across the frame's own bottom rail.
     private int InvFooterTop
-        => InventoryPanel.Bottom - UiMetrics.Space(16) - UiTypography.Pitch(UiTypography.Secondary) * (InvFooterStacked ? 2 : 1);
+        => UiKit.ContentBottom(InventoryPanel) - UiTypography.Pitch(UiTypography.Secondary) * (InvFooterStacked ? 2 : 1);
     /// <summary>ROWS FROM THE ROOM: as many as fit between the tabs and the footer, never printing over either.</summary>
     private int InvRows => Math.Max(1, (InvFooterTop - UiMetrics.Space(12) - InvTop + InvGap) / (InvCell + InvGap));
     private Rectangle InvCellRect(int i)
@@ -761,8 +764,10 @@ public sealed class GearScreen
 
         // THE HEADER ROW (moved from the LOADOUT column, §61): portrait · name · class line · GEAR POWER · innate.
         var x0 = UiKit.ContentLeft(panel);
-        var x1 = UiKit.ContentRight(panel);
         var hy = HeaderTop;
+        // The header's right column is inside the frame's CORNER band, not beside its side rail, so it
+        // asks for the corner-aware edge. Before this GEAR POWER was drawn under the ornament's curl.
+        var x1 = UiKit.ContentRightAt(panel, hy, PortraitSize);
         var por = new Rectangle(x0, hy, PortraitSize, PortraitSize);
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         // GEAR POWER TICKS (§36): the number the feedback shows runs from the old value to the new over one
@@ -916,10 +921,16 @@ public sealed class GearScreen
     private void DrawInventory(SpriteBatch b, Point hit, Hunter hunter)
     {
         var panel = InventoryPanel;
-        _ui.Plate(b, panel);
-        _ui.TextBig(b, "INVENTORY", InvX, panel.Y + UiMetrics.Space(18), Slate, UiTypography.Secondary);
+        // THE THREE COLUMNS ARE ONE SURFACE (BRIEF's Gear Inventory: "coherent secondary panel", "no
+        // prototype visual mismatch"). EQUIPPED is deliberately the one ORNATE panel and DETAIL wears
+        // the house quiet frame; INVENTORY wore a bare Plate, so the middle of three columns was the
+        // only one with no frame at all — a flat rectangle between two framed neighbours, which reads
+        // as a panel that was never finished rather than as a deliberate quiet one.
+        _ui.PanelQuiet(b, panel);
+        var headY = UiKit.CaptionTop(panel);
+        _ui.TextBig(b, "INVENTORY", InvX, headY, Slate, UiTypography.Secondary);
         var total = Wearable().Count;
-        _ui.TextRightBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InvX + InvW, panel.Y + UiMetrics.Space(18), Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InvX + InvW, headY, Slate, UiTypography.Secondary);
 
         for (var i = 0; i < Tabs.Length; i++)
         {

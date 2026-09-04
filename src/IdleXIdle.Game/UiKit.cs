@@ -125,6 +125,7 @@ public sealed class UiKit
         var srcH = tex.Height - cropY;
         var sc = box.Height / (float)srcH;
         var w = Math.Max(1, (int)(tex.Width * sc));
+        UiRasterLedger.Note(key, tex.Width, srcH, w, box.Height, "UiKit.Sprite");
         b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - box.Height, w, box.Height),
             new Rectangle(0, cropY, tex.Width, srcH), tint);
         return true;
@@ -313,6 +314,7 @@ public sealed class UiKit
         // The pad fraction is of the FULL texture; the visible gap after scaling is that
         // fraction of the drawn height. Shifting down by it plants the sole on box.Bottom.
         var drop = (int)MathF.Round(BottomPadFraction(key) * tex.Height * sc);
+        UiRasterLedger.Note(key, tex.Width, srcH, w, box.Height, "UiKit.SpriteGrounded");
         b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height),
             new Rectangle(0, cropY, tex.Width, srcH), tint,
             0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
@@ -370,13 +372,26 @@ public sealed class UiKit
         var cropX = (int)(fw * Math.Clamp(SidePadFraction(stripKey), 0f, 0.4f));
         var srcW = fw - 2 * cropX;
         var src = new Rectangle(i * fw + cropX, cropY, srcW, srcH);
-        var sc = box.Height / (float)srcH;
+        // THE BOX ASKS; THE ART ANSWERS (BRIEF sec.74). A box that fills whatever room is left over will
+        // happily ask a 398-px figure to be 528 px tall, and the answer used to be yes — the GEAR
+        // paper doll drew the hunter at 1.33x native while the same strip in the fight drew at 1.08.
+        // The rule is that decorative raster may not be arbitrarily enlarged, so the scale is capped at
+        // RasterCeiling and the figure is simply drawn at the largest honest size, still centred and
+        // still grounded. Shrinking a box to fit its art is a layout number; capping the magnification
+        // is the rule, and it holds for every caller rather than for the one that was noticed.
+        var sc = MathF.Min(box.Height / (float)srcH, RasterCeiling);
+        // TRUNCATE, never round: at the ceiling exactly, rounding up puts the drawn height one
+        // pixel PAST the budget and the ledger correctly reports the cap itself as a violation.
+        var drawnH = Math.Max(1, (int)(srcH * sc));
         var w = Math.Max(1, (int)(srcW * sc));
         // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
         var drop = (int)MathF.Round(BottomPadFraction(stripKey) * fw * sc);
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint,
+        UiRasterLedger.Note(stripKey, srcW, srcH, w, drawnH, "UiKit.AnimSprite");
+        // Bottom-anchored: a capped figure keeps its feet where an uncapped one had them, so the cap
+        // never lifts a hunter off the floor its slots and shadow were laid out against.
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH), src, tint,
                0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
     }
@@ -471,6 +486,7 @@ public sealed class UiKit
         var scale = MathF.Min(bounds.Width / (float)t.Width, bounds.Height / (float)t.Height);
         var w = Math.Max(1, (int)MathF.Round(t.Width * scale));
         var h = Math.Max(1, (int)MathF.Round(t.Height * scale));
+        UiRasterLedger.Note(Assets.KeyOf(t) ?? "(unkeyed)", t.Width, t.Height, w, h, "UiKit.SpriteFit");
         b.Draw(t, new Rectangle(bounds.X + (bounds.Width - w) / 2, bounds.Y + (bounds.Height - h) / 2, w, h),
             tint ?? Color.White);
     }
@@ -481,7 +497,11 @@ public sealed class UiKit
     {
         // The shared chrome (batches A/C + title) draws at scale 1 in TRUE 1920×1080 coords, so the full-canvas
         // background must span 1920×1080, not the 480×270 logical grid. All Background callers are chrome now.
-        if (Assets.Get(key) is { } bg) b.Draw(bg, new Rectangle(0, 0, 1920, 1080), tint ?? Color.White);
+        if (Assets.Get(key) is { } bg)
+        {
+            UiRasterLedger.Note(key, bg.Width, bg.Height, 1920, 1080, "UiKit.Background");
+            b.Draw(bg, new Rectangle(0, 0, 1920, 1080), tint ?? Color.White);
+        }
         else Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk);
     }
 
@@ -594,6 +614,60 @@ public sealed class UiKit
     /// screens had each rediscovered it by eye and written a different number; this returns it.
     /// </remarks>
     public static int FrameDrop(Rectangle r) => PanelArtKey(r) == "ui_panel_square" ? UiTypography.SquareFrameDrop : 0;
+
+    /// <summary>
+    /// This panel's right content edge for a row that sits high enough to run into the CORNER.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ContentRight"/> answers for the panel's SIDE RAIL, which is what almost every row
+    /// meets. A row inside the top <see cref="PanelCorner"/> px meets the corner instead, and the corner
+    /// is where the scrollwork is: on the GEAR screen the EQUIPPED header's right-aligned GEAR POWER
+    /// label was drawn under the ornament's curl, so it read "GEAR POWE" with a gold flourish over the R.
+    /// </para>
+    /// <para>
+    /// The panel already picks its art by aspect to keep the SIDE ornament off its content
+    /// (see GearScreen's column widths), which fixed the same class of fault one band lower. This is
+    /// that rule for the top band, in one place rather than in each screen's eye.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// How far down an ornate panel the CORNER scrollwork reaches before the plain side rail takes over,
+    /// and how far in it comes while it does. Measured off a rendered frame, not read off the texture.
+    /// </summary>
+    /// <remarks>
+    /// The texture cannot be read for this directly: a nine-slice puts part of the corner flourish in the
+    /// top EDGE strip, which is stretched, so the ornament's drawn extent is not its source extent. The
+    /// numbers come from scanning a real capture of the EQUIPPED panel for gold, row by row, measuring
+    /// how far in from the frame's outer edge the scrollwork reaches:
+    /// <code>
+    ///   y=150  reaches 94 px in      y=220  reaches 47 px in
+    ///   y=180  reaches 73 px in      y=240  reaches 22 px in   &lt;- the plain rail
+    ///   y=200  reaches 49 px in      y=260  reaches 18 px in
+    /// </code>
+    /// So the flourish occupies the top ~120 px against a side rail of 18, and the header row sits in it.
+    /// The INSET has to beat the panel's ordinary <see cref="PadX"/> to change anything — the first
+    /// attempt used 56, which lost the <c>Math.Max</c> to PadX and moved the label not one pixel. 96 is
+    /// the measured reach plus clearance, confirmed by capture at 100 / 125 / 150.
+    /// <see cref="PanelCorner"/> is the nine-slice's SOURCE corner: a different number for a different
+    /// job, and using it here left the label still under the curl.
+    /// </remarks>
+    public const int OrnamentBand = 120, OrnamentInset = 96;
+
+    public static int ContentRightAt(Rectangle r, int y, int rowHeight = 0)
+        => InOrnamentBand(r, y, rowHeight) ? r.Right - Math.Max(PadX(r), UiMetrics.Space(OrnamentInset))
+                                           : ContentRight(r);
+
+    /// <summary>The mirror of <see cref="ContentRightAt"/> for a left-aligned row in the top band.</summary>
+    public static int ContentLeftAt(Rectangle r, int y, int rowHeight = 0)
+        => InOrnamentBand(r, y, rowHeight) ? r.X + Math.Max(PadX(r), UiMetrics.Space(OrnamentInset))
+                                           : ContentLeft(r);
+
+    /// <summary>Does a row of this height, starting at this y, overlap the panel's corner flourish?</summary>
+    private static bool InOrnamentBand(Rectangle r, int y, int rowHeight)
+        => PanelArtKey(r) is "ui_panel_square" or "ui_panel_vertical"
+           && y < r.Y + UiMetrics.Space(OrnamentBand) + FrameDrop(r)
+           && y + rowHeight > r.Y;
 
     /// <summary>Where this panel's TITLE sits, as an absolute y. See <see cref="UiTypography.PanelTitleTop"/>.</summary>
     public static int TitleTop(Rectangle r) => r.Y + UiTypography.PanelTitleTop + FrameDrop(r);
@@ -762,6 +836,16 @@ public sealed class UiKit
         else Panel(b, r);
     }
 
+    /// <summary>
+    /// The most any raster may be enlarged past its own pixels (BRIEF sec.74, and the same 1.25 the VFX
+    /// asset-scale budget uses, so one habit reads both ledgers).
+    /// </summary>
+    /// <remarks>
+    /// Above this a hand-drawn edge visibly softens under LinearClamp. The rule's teeth are that the
+    /// answer to "it looks small" is a bigger ASSET, never a bigger number — see LAW 16.
+    /// </remarks>
+    public const float RasterCeiling = 1.25f;
+
     private void NineSlice(SpriteBatch b, Texture2D tex, Rectangle r, int srcCornerMax, Color tint)
     {
         var scale = Scale;
@@ -779,6 +863,7 @@ public sealed class UiKit
             b.Draw(tex, new Rectangle(dx, dy, dw, dh), new Rectangle(sx, sy, sw, sh), tint);
         }
 
+        UiRasterLedger.Note(Assets.KeyOf(tex) ?? "(unkeyed)", srcC, srcC, dstC, dstC, "UiKit.NineSlice corner");
         S(0, 0, srcC, srcC, r.X, r.Y, dstC, dstC);
         S(tex.Width - srcC, 0, srcC, srcC, r.Right - dstC, r.Y, dstC, dstC);
         S(0, tex.Height - srcC, srcC, srcC, r.X, r.Bottom - dstC, dstC, dstC);
@@ -804,6 +889,7 @@ public sealed class UiKit
             return;
         }
 
+        UiRasterLedger.Note("ui_bar_frame", frame.Width, frame.Height, w, h, "UiKit.Bar");
         b.Draw(frame, new Rectangle(x, y, w, h), Color.White);
         var inset = 2;
         var fw = (int)((w - inset * 2) * pct);
