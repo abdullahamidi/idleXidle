@@ -5551,7 +5551,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static int PageSubtitleBottom => PageSubtitleTop + UiTypography.Pitch(UiTypography.Secondary);
 
     /// <summary>The page y the screens' first panel starts at — the band above it is the host's.</summary>
-    private const int PageContentTop = 150;
+    private const int PageContentTopBase = 150;
+
+    /// <summary>The page y the screens' first panel starts at — <see cref="UiKit.PageTop"/>, set in <see cref="ApplyUiScale"/>.</summary>
+    private static int PageContentTop => UiKit.PageTop;
 
     /// <summary>A page y in canvas pixels, through the overlay matrix the screens are drawn with.</summary>
     private static int CanvasY(int pageY) => (int)MathF.Round(pageY * OverlayScale);
@@ -7850,6 +7853,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // matrix stays BaseOverlayScale at every step. The first UI SCALE shrank UiKit.Page to 1920/f
         // and every screen laid out for 1080 px overflowed at 150 % (UX V2 REPORT §4).
         UiMetrics.Apply(Display.ResolveUiScale(_uiScalePercent, _present.Width));
+        // WHERE THE PAGE STARTS, at this profile: under the subtitle line and the hint slot's least
+        // line, plus a breath — never above the 150 every screen was laid out for at 100 %. At 100 %
+        // this is 150 exactly (the band holds a 41 px slot); at 150 % it is about 200, which is what
+        // stops the slot landing on the VAULT's toolbar (see UiKit.PageTop).
+        UiKit.PageTop = Math.Max(PageContentTopBase,
+            PageSubtitleBottom + (int)MathF.Ceiling(HintLineMin / OverlayScale) + UiMetrics.Space(6));
     }
 
     /// <summary>Dev (F8 under RH_DEV): step the UI SCALE 100 → 125 → 150 → AUTO → 100 and keep it.</summary>

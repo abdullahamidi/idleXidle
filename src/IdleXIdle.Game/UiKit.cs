@@ -49,6 +49,20 @@ public sealed class UiKit
     /// <summary>The page's horizontal centre — where a screen title sits.</summary>
     public static int PageCenterX => Page.Center.X;
 
+    /// <summary>
+    /// The page y a menu screen's FIRST PANEL starts at — the first row under the chrome's band (title,
+    /// rule, subtitle, the hint slot). 150 at 100 %; lower at 125 and 150 %, where the band is taller.
+    /// </summary>
+    /// <remarks>
+    /// Every page screen wrote the literal 150 (GEAR and ROSTER wrote 120) with the comment "the hint slot
+    /// owns canvas y 86–134". That was true at 100 % only: the hint slot hangs under the subtitle, and at
+    /// 150 % the subtitle ends 40 page px lower and the slot's line is a third taller, so the slot sat
+    /// across the VAULT's toolbar and the MASTERY tree's POINTS plate (release polish 2026-09-05,
+    /// post1_vault_150.png). Set by <c>Game1.ApplyUiScale</c> from the band's own arithmetic; read here
+    /// by every screen's top anchor, so the page starts under the chrome at every profile.
+    /// </remarks>
+    public static int PageTop { get; internal set; } = 150;
+
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
     private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
     private static readonly Color PanelEdge = new(0x39, 0x33, 0x44);

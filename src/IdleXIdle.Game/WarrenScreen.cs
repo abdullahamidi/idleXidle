@@ -333,7 +333,7 @@ public sealed class WarrenScreen
     //    from UiKit.Page and every size from UiMetrics, so a profile reflows the screen instead of
     //    clipping it. The four page anchors below are the only literals: they are where the page's
     //    chrome (the hint slot, the margins) ends, and they do not grow with the type. ────────────
-    private const int Top = 150;            // the hint slot owns canvas y 86-134
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
     private const int BottomMargin = 60;
     private const int LeftMargin = 38;
     private const int RightInset = 40;

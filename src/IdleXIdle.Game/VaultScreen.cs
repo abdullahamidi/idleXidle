@@ -326,7 +326,7 @@ public sealed class VaultScreen
     private static Rectangle Frame => PanelAt(Rows);
 
     /// <summary>Where the panel starts — under the screen's name and its tally, as on every screen.</summary>
-    private const int PanelTop = 150;
+    private static int PanelTop => UiKit.PageTop;   // the first row under the chrome band, at this profile
 
     /// <summary>Where the screen's name sits in the strip above the panel — the same 24 every screen uses.</summary>
     private const int ScreenTitleTop = 24;

@@ -121,7 +121,8 @@ public sealed class TraitCollectionScreen
     /// caption exactly where nobody had looked.
     /// </remarks>
     private static int PanelTop =>
-        RuleY + RuleH + UiMetrics.Space(7) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(16);
+        Math.Max(RuleY + RuleH + UiMetrics.Space(7) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(16),
+                 UiKit.PageTop);   // and never above the page's own top, where the hint slot hangs
 
     private static int Gap => UiMetrics.Gap;
 

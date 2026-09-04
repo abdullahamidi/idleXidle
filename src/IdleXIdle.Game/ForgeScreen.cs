@@ -405,7 +405,7 @@ public sealed class ForgeScreen
     // buttons and the padding — at the rates UiMetrics sets, never a factor written here. The
     // numbers below are the 100 % values; the profile's version is what the property returns.
     // The four page anchors (Top, Gutter, SideMargin, BottomMargin) are page geometry and stay.
-    private const int Top = 150;            // the hint slot owns canvas y 86-134; 150 is the first clear row
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
     private const int Gutter = 22;
     private const int SideMargin = 38;
     private const int BottomMargin = 40;

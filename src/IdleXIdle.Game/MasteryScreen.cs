@@ -443,7 +443,9 @@ public sealed class MasteryScreen
     private static int CaptionTop => RuleTop + UiMetrics.Space(6);
 
     /// <summary>Where the page's content begins: under the caption's line and a breath. 112 at 100 %.</summary>
-    private static int HeaderBottom => CaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
+    // Never above the page's own top (UiKit.PageTop): at 150 % the hint slot reached 40 px into the
+    // POINTS plate when this was the header's foot alone (release polish 2026-09-05).
+    private static int HeaderBottom => Math.Max(CaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8), UiKit.PageTop);
 
     /// <summary>The page's bottom margin under every column — the same inset the other screens keep.</summary>
     private const int PageMarginBottom = 16;

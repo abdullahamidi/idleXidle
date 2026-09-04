@@ -184,7 +184,7 @@ public sealed class TrainingScreen
     //    hand-placed 1920x1080 literal; since the UI polish pass (brief §7–§11) every size that is not
     //    a page anchor comes from UiMetrics, so the density profile grows the type, the rows and the
     //    buttons while the page and its margins stay where they are. ────────────────────────────────
-    private const int Top = 150;          // under the hint slot's band (canvas y 86-134 stays free) — a page anchor
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
     private const int BottomMargin = 60;  // the page's foot — a page anchor
 
     /// <summary>

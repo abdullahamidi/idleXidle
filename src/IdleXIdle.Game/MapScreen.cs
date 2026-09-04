@@ -223,7 +223,7 @@ public sealed class MapScreen
     // Top 150 clears the hint slot's band (canvas y 86..134), which this screen uses: MAP is one of the
     // eight screens Onboarding.HintFor speaks on ("A NEW REGION IS AVAILABLE — CINDERWORKS"). Top and the
     // bottom margin are PAGE anchors — the chrome above and below does not grow with the profile.
-    private const int Top = 150;
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
     private const int BottomMargin = 54;
     private const int TitleY = 24;
     private static int Gutter => UiMetrics.Space(20);

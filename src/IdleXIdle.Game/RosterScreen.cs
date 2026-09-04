@@ -189,7 +189,7 @@ public sealed class RosterScreen
     // The three page anchors below do NOT follow the profile: they say where the two columns sit
     // against the page's edges, and a margin that grew with the type would spend the page's room on
     // air. Everything inside the columns does follow it, through UiMetrics.
-    private const int Top = 120;            // the hint slot owns canvas y 86..134
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile (was 120)
     private const int PageGutter = 24;      // the columns' distance from the page's left and right edges
     private const int PageFoot = 40;        // the columns' distance from the page's bottom edge
     private const int Columns = 5;

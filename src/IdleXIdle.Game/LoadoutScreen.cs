@@ -328,7 +328,7 @@ public sealed class LoadoutScreen
     // ── LAYOUT. Three columns to the page. The columns' WIDTHS are page shares and do not move with the
     // profile; everything inside a column is a density size read from UiMetrics (brief §7–§11) and laid out
     // from the height that is there — a column that no longer fits scrolls (§9, §18), it never overprints. ──
-    private const int Top = 150;          // under the hint slot's band (y 86–134 stays free of controls)
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
     private const int BottomMargin = 60;
     private const int LoadoutPanelW = 520, InspectorPanelW = 496, ColumnGap = 20;
     private static Rectangle LoadoutPanel => new(38, Top, LoadoutPanelW, UiKit.PageBottom(BottomMargin) - Top);

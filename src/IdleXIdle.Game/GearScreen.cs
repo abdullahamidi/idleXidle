@@ -171,7 +171,7 @@ public sealed class GearScreen
     // THE PAGE ANCHORS. Top, Margin and BottomInset are where the columns sit on the 1920×1080 page and do not
     // follow the profile (§8, §11: the top-level layout keeps fitting; what grows is inside it). Everything
     // that is a row, a button, an icon, a pad or a gap below is read from UiMetrics — never a per-screen factor.
-    private const int Top = 120;
+    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile (was 120)
     private const int Margin = 24, BottomInset = 40;
     private static int Gutter => UiMetrics.Space(16);
     // THE EQUIPPED COLUMN IS 42 %, NOT 776 PX, AND THE REASON IS THE FRAME ART: UiKit.Panel picks its texture

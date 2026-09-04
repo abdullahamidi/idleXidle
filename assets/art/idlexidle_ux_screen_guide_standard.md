@@ -84,6 +84,13 @@ Rules:
 - Three PRIMARY surfaces on one screen is zero hierarchy. Count them in the capture.
 - A plate is not a panel: it has no title row and no frame drop. Do not hand-draw plates with `Fill`;
   call `Plate` so the tier is visible in code.
+- **Frames are sliced at the ornament (release polish 2026-09-05).** Every frame texture — panels,
+  buttons, fields, tabs, bars, the currency pill — is drawn through `UiKit.SliceFrame`, which MEASURES
+  each texture's corner flourish and centre ornament off its pixels (`UiKit.FrameSpec`, `Measure`) and
+  stretches only the plain rails. Nothing ornamental is ever magnified or squashed; a rectangle too
+  small for its ornaments shrinks them together. Never `b.Draw(frameTexture, rect)`. New frame art needs
+  no constant — check it once with `RH_UI_FRAMES=1` (prints every measured spec) against
+  `tools/measure_frames.py`. The ledger (`RH_UI_BUDGET=1`) reports the corner's magnification.
 - Panel padding and header grid are `UiTypography`'s (`PanelTitleTop 22 · PanelCaptionTop 56 ·
   PanelBodyTop 92 · PanelBodyTopBare 62 · ModalTitleTop 44 · PanelPadX 40 · PanelPadNarrow 28 ·
   PanelPadBottom 32`), applied through `UiKit.TitleTop / CaptionTop / BodyTop / ContentLeft /
@@ -157,7 +164,14 @@ Rules:
   grey art with the `Disabled` ink and are always accompanied by the line that says why.
 - Labels are `ButtonText` (= `NavigationLabel`), shrinking only when the label truly does not fit and
   never past `Caption`; they clear the art's end ornament (`UiKit.FieldCapWidth`).
-- Wide buttons are 3-sliced (`HSliceScaled`) so ornamented ends keep their shape.
+- Every button is sliced (`SliceFrame`): its end scrollwork and centre ornament keep their proportion at
+  any width and any control height; only the plain runs stretch.
+- **Progress bars — two, and only two.** `UiKit.BarArt(r, pct, type)` is the ORNATE bar (health · boss ·
+  shield · progress · xp) through the slicer, for bars 22 px and taller. `UiKit.Bar(x, y, w, h, pct, c)`
+  is the SLIM bar — a crisp procedural strip (dark well, one-pixel bronze frame, the fill in the caller's
+  colour with a highlight and a shade line) for every thin bar: a gate's progress, a training rank, a
+  quest count. It has no raster, so it cannot stretch or blur at any UI SCALE. Never hand-draw a bar from
+  two `Fill`s, and never draw a bar frame texture whole.
 - Dropdowns are `UiKit.Field` + `DropdownClosed` (value left, chevron right). Sliders are the settings'
   `SliderRow`. Close icons sit at `UiKit.CloseRect(panel)`; slot/card closes at `HintCloseRect`.
 - Hover = highlight + one-line tip (`UiKit.HoverTip`, flips inside `UiKit.Page`). Click = select (feeds
@@ -228,6 +242,18 @@ the article: VAULT · FORGE · GEAR · TRAINING · BUILD · MASTERY · TRAITS ·
 - Empty state = one line in `Empty` ink saying what would fill this and where it comes from
   (`NO CHESTS — BOSSES DROP THEM, AND GIFTS`). Locked state = the requirement as Primary text with a
   lock glyph, never as a gold promise.
+- **Undiscovered state (release polish 2026-09-05)** = a SEAL and a QUESTION: `icon_unknown_seal`, the
+  name `???` in the unknown ink (`#6A6480`, TRAITS and BUILD share it), the word `UNDISCOVERED`, and
+  nothing else — no glyph, no kind, no level, no lock (a lock says "you know what this is"). The
+  inspector's unknown reading says how it is revealed, never what it is. LOCKED is for a thing the
+  player has already seen (a shared skill whose road was refunded keeps its name and its level);
+  UNDISCOVERED is for a thing they have never reached (`Game1._discoveredSkills`, the
+  `SaveGame.LearnedSkills` latch; `TraitLedger` for traits).
+- **A vow is a seal.** Its medallion (`assets/art/UI/icons/vows/icon_<vowId>.png`) carries its identity;
+  its state is drawn ON it — full gold when it HOLDS, dimmed with an ember crack when BROKEN. The
+  inspector shows a sworn vow as a SEAL CARD (name · reward multiplier · ASKS / YOUR BUILD · RISK pips
+  from `Vow.Severity` · a HOLDS / BROKEN ribbon); the swear list is seal rows; a slot row carries the
+  seal and a state chip that yields its text to the skill's name before the name is shortened.
 
 ---
 
@@ -279,9 +305,10 @@ Allowed roots: `assets/ normalized/ frames_512/ frames_1024/ metadata/ runtime/`
 showcase/ mood_board/ pitchboard/`. `tools/check_asset_keys.py` verifies every hand-typed key resolves.
 
 Rendering modes: `FixedSize` (icons) · `AspectFit` (item icons, portraits — never stretched) ·
-`AspectFillCrop` (backgrounds, region previews) · `NineSlice` (panels, tabs, buttons — corners never
-stretch) · `NativeScale` (actors/VFX with pivot + visible bounds) · `AnimationStrip` (with frame
-metadata) · `PrimitiveSurface` (= the QUIET tier: `Plate`, scrims, rails, dividers, selected rows).
+`AspectFillCrop` (backgrounds, region previews) · `SliceFrame` (panels, tabs, buttons, bars, the pill —
+corners AND centre ornaments never stretch; measured per texture, §2) · `NativeScale` (actors/VFX with
+pivot + visible bounds) · `AnimationStrip` (with frame metadata) · `PrimitiveSurface` (= the QUIET tier:
+`Plate`, the slim `Bar`, scrims, rails, dividers, selected rows).
 
 No BC/DXT on character, creature, glyph or UI-content art. `SamplerState.LinearClamp`, non-integer scale
 allowed. Never `SpriteSortMode.Immediate` outside debugging; never per-entity `Effect` switching.
