@@ -27,6 +27,16 @@ namespace IdleXIdle.Core.Builds;
 /// after that reset. An idle game whose shield accumulated while nothing was happening would make
 /// standing still the strongest defensive play.
 /// </para>
+/// <para>
+/// <b>ONE NAMED EXCEPTION, and it is deliberate: the trait STANDING PLATE</b>
+/// (<c>TraitRules.ShieldCarryFraction</c>, <see cref="Champion.CarryShield"/>) carries HALF of the
+/// shield still held at a wave's end into the next one. The clause above still holds where it
+/// matters: shield only ever enters through <c>GrantShield</c>, that is clamped to
+/// <see cref="CapFor"/> — half the pool — and nothing grants outside a fight, so a shield cannot
+/// accumulate while nothing is happening. Halving the carry rather than keeping it whole is what
+/// keeps the invariant nearly intact; the full-carry version is not the one that shipped. Do not
+/// "fix" the exception away without reading this.
+/// </para>
 /// </remarks>
 public static class ShieldRules
 {
@@ -122,6 +132,22 @@ public sealed class Champion
 
     /// <summary>Wave start: Shield is wave-local and always begins at zero.</summary>
     public void ResetShield() => CurrentShield = 0f;
+
+    /// <summary>
+    /// Wave start with STANDING PLATE worn: keep a SHARE of what was still held, instead of zero.
+    /// </summary>
+    /// <remarks>
+    /// The single, named exception to the wave-local rule stated on <see cref="ShieldRules"/> — read
+    /// that remark before touching this. It is bounded three ways: the trait carries half, the total
+    /// is still clamped to <see cref="MaxShield"/>, and nothing grants shield outside a fight, so the
+    /// idle case the invariant exists to prevent (a shield accumulating while nothing happens) cannot
+    /// occur. A fraction of zero or less is a plain reset.
+    /// </remarks>
+    public void CarryShield(float fraction)
+    {
+        if (fraction <= 0f) { CurrentShield = 0f; return; }
+        CurrentShield = MathF.Min(MaxShield, CurrentShield * MathF.Min(1f, fraction));
+    }
 }
 
 /// <summary>
@@ -243,6 +269,61 @@ public sealed class WaveMetrics
 
     /// <summary>Skill casts by STYLE — WARDED's deterministic tie-break.</summary>
     public Dictionary<Style, int> StyleActivations { get; } = new();
+
+    // ── SEVEN MORE FACTS, ADDED FOR THE TRAIT LEDGER (2026-09-03). Each answers a question none of
+    //    the fields above can, and each is written in exactly one place — ReflectedDamage in two,
+    //    because inside LandOn a reflected hit is indistinguishable from any other unskilled one.
+    //    They are honest additions to the run report as well: it can now say what the shield actually
+    //    did and how close the champion came, neither of which it could say before. ────────────────
+
+    /// <summary>
+    /// Hits worth <see cref="SoloBattle.HeavyHitFraction"/> or more of what they struck.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AverageHitSize"/> is a wave MEAN and a mean destroys this: "how often did I hit
+    /// something hard" is a count. Counted whether or not DEEP CUT is worn — the threshold is a
+    /// constant of the fight, not one of that trait's dials, which is what lets the trait be
+    /// discovered before it is owned.
+    /// </remarks>
+    public int HeavyHits { get; set; }
+
+    /// <summary>Damage wasted past a kill. Nothing else in here records waste.</summary>
+    /// <remarks>
+    /// <see cref="DeliveredDamage"/> counts overkill as delivered, which is exactly the fact a waste
+    /// trait must not read.
+    /// </remarks>
+    public float Overkill { get; set; }
+
+    /// <summary>Shield GRANTED, after the cap clamped it.</summary>
+    /// <remarks>
+    /// <see cref="ShieldAbsorbed"/> is what the shield SPENT. A shield granted and never bitten
+    /// records zero there and its real size here — two different questions about one resource.
+    /// </remarks>
+    public float ShieldGained { get; set; }
+
+    /// <summary>Times the shield reached zero under a bite. The event existed; the count did not.</summary>
+    public int ShieldBreaks { get; set; }
+
+    /// <summary>Health restored INSIDE the fight.</summary>
+    /// <remarks>
+    /// <see cref="HealthLost"/> is gross loss and cannot answer this. Deliberately does NOT count the
+    /// between-wave regain or a full heal between waves: those live in
+    /// <see cref="SoloExpedition"/> and are a regain and a reset, not healing.
+    /// </remarks>
+    public int Healed { get; set; }
+
+    /// <summary>Damage sent back at biters — THORNS and the traps' reflect.</summary>
+    public float ReflectedDamage { get; set; }
+
+    /// <summary>
+    /// The lowest share of the pool the champion stood at during this wave. Starts whole.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HealthLost"/> is a total: a wave that lost 60% in one bite and a wave that lost 60%
+    /// in six are the same number there. "How close did I come" is a minimum, and it is a different
+    /// question.
+    /// </remarks>
+    public float LowestHealthFraction { get; set; } = 1f;
 }
 
 /// <summary>
@@ -505,6 +586,19 @@ public static class SoloBattle
     public const float WeaverEchoFraction = 0.45f;
 
     /// <summary>
+    /// What makes a hit a HEAVY one: a fifth of what it struck.
+    /// </summary>
+    /// <remarks>
+    /// A CONSTANT OF THE FIGHT, not a trait's dial, and that distinction is the whole reason DEEP CUT
+    /// can be discovered before it is owned. The wave counts heavy hits
+    /// (<see cref="WaveMetrics.HeavyHits"/>) on every build; the trait only decides what happens when
+    /// one lands. Were the threshold a dial, an unequipped trait would leave it at zero and every
+    /// stray tick would count as a heavy hit, so the counter would be meaningless on exactly the
+    /// builds that have not discovered it yet.
+    /// </remarks>
+    public const float HeavyHitFraction = 0.20f;
+
+    /// <summary>
     /// Resolve one wave. Terminates on a kill, a death, or the tick ceiling — never hangs.
     /// </summary>
     /// <summary>
@@ -573,9 +667,38 @@ public static class SoloBattle
         // which gear reaches the per-Form multipliers, so a bow really is the archer's weapon.
         var shape = SkillShape.Combine(build.Shape, GearShape.Of(hunter));
 
+        // THE THREE TRAITS THIS CHAMPION IS WEARING, hoisted once so every read site below is one hop
+        // (`traits.X`) rather than two. Neutral on every dial when nothing is worn, so a build without
+        // traits runs the identical arithmetic it ran before they existed. Four of the twenty-six are
+        // conditional on the WORLD — the region, the worn set, the last three descents — and those
+        // were resolved at composition time (TraitEffects.Compose): the fight receives a plain number
+        // and never learns there is a world.
+        var traits = shape.Traits;
+
         // The Vow context is a property of the BUILD, so it is built once and every skill of every tick
         // is judged against the same one. See DescribeBuild.
         var weaveCtx = DescribeBuild(build, hunter);
+
+        // ── THE TRAITS' WAVE-LOCAL STATE. Five locals for twenty-six traits, every one reset by the
+        //    wave boundary exactly like SUNDER's armour strip, and every one read in one place. ─────
+        var traitFirstCritSpent = false;   // THE CERTAIN HAND — one certain hit a wave
+        var traitShieldBroken = false;     // SCAR TISSUE — a break is owed a larger next shield
+        var traitLethalSpared = false;     // THE THIN LINE — one halved killing bite a wave
+        var traitFullGuardSpent = false;   // THE UNBROKEN THREAD — deliberately NOT platingSpent: two
+                                           // preventers that shared one charge would each disable the other
+        var traitBitesTaken = 0;           // THE MIRROR — bites this wave, which `bites[]` cannot answer
+                                           // (that array counts only the bites a TRAP slot armed against)
+        var traitHealCeilingGrown = 0f;    // PRACTISED FLESH — how far the ceiling has been widened
+
+        // THE WEAKEST VOW THIS BUILD HAS SWORN AND KEPT — THE KEPT WORD's loan, computed once. Only a
+        // vow whose demand is MET may be lent: borrowing a promise you are already breaking would pay
+        // a build for nothing, and THE PRICE PAID is the trait that covers a broken one.
+        Vow? traitBorrowedVow = null;
+        if (traits.UnswornBorrowsWeakestVow)
+            foreach (var v in DistinctVows(build.Skills))
+                if (Vows.IsActive(v, weaveCtx)
+                    && (traitBorrowedVow is null || Vows.Multiplier(v) < Vows.Multiplier(traitBorrowedVow)))
+                    traitBorrowedVow = v;
 
         // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
         // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
@@ -746,6 +869,17 @@ public static class SoloBattle
                 weakenPerDead = MathF.Max(weakenPerDead, skills[k].Def.Rule.WeakenPerDeadEnemy);
                 weakenCap = MathF.Max(weakenCap, skills[k].Def.Rule.WeakenPerDeadCap);
             }
+        // THE STUDIED PLACE — the trait says the same sentence REMNANT does, so it is gathered into
+        // the same two wave-locals and read at the same one site in the bite path rather than added
+        // as a second weakening system. Taken as the LARGER of the two, matching the gather's own
+        // rule above: two rules that both answer "the wave gets softer as it empties" must not stack
+        // into a wave that stops mattering. Its depth is one step per region mastered, resolved at
+        // composition time (TraitEffects), so the fight never learns what a region is.
+        if (traits.WeakenPerDeadEnemy > 0f)
+        {
+            weakenPerDead = MathF.Max(weakenPerDead, traits.WeakenPerDeadEnemy);
+            weakenCap = MathF.Max(weakenCap, traits.WeakenPerDeadCap);
+        }
         var ampCountsHits = false; // SIGN/SPEND — is this window counted in hits rather than seconds?
         var steadyAmp = 0f;        // SIGN/STEADY — the swell it has built this wave
         // VOLLEY/TORRENT pays the standing bleed out faster and CARRION makes it linger; both are
@@ -808,12 +942,22 @@ public static class SoloBattle
         for (var k = 0; k < skills.Count; k++)
             healRoomBonus = MathF.Max(healRoomBonus, skills[k].Def.Rule.HealCeilingBonus);
         if (healRoomBonus > 0f) healBudget = (long)MathF.Round(healBudget * (1f + healRoomBonus));
+        // The ceiling PRACTISED FLESH widens, held apart from the running total so each of its steps
+        // is a share of the wave's original ceiling rather than of the one the last step just made —
+        // which would compound instead of adding. A budget of long.MaxValue is the unlimited tuning
+        // (MaxHealFractionPerWave = infinity), and widening infinity is nonsense, so the trait is
+        // simply inert there.
+        var healBudgetBase = healBudget == long.MaxValue ? 0L : healBudget;
         long healedThisWave = 0;
 
         // ── SHIELD IS WAVE-LOCAL. Zero at the start of every wave, before any wave-start effect
         //    grants into it. Without the reset an idle run would accumulate a shield while nothing
         //    was happening, and standing still would be the strongest defensive play in the game.
-        champ.ResetShield();
+        //
+        //    STANDING PLATE is the one named exception, and it carries HALF rather than all — see the
+        //    remark on ShieldRules, which states the invariant and names this trait as its exception.
+        if (traits.ShieldCarryFraction > 0f) champ.CarryShield(traits.ShieldCarryFraction);
+        else champ.ResetShield();
 
         // FOUNDATION — STEADY's swell does not start from nothing. Applied at the wave's start, after
         // the reset that clears everything else, so it is a standing start rather than a carried one.
@@ -835,9 +979,21 @@ public static class SoloBattle
         // ACTUALLY added, and a grant at the ceiling says so instead of lying about its size.
         void GrantShield(float amount, int atMs)
         {
+            // SCAR TISSUE — the body remembers what survives. Read at the ONE funnel every producer
+            // already passes through, so it lifts whichever grant happens to arrive first after the
+            // break rather than one named source of shield. Spent on that grant and not the next.
+            if (traitShieldBroken && traits.ShieldAfterBreakBonus > 0f && amount > 0f)
+            {
+                traitShieldBroken = false;
+                amount *= 1f + traits.ShieldAfterBreakBonus;
+            }
+
             var added = champ.GainShield(amount);
             if (added > 0f)
+            {
+                if (metrics is not null) metrics.ShieldGained += added;
                 events.Add(new BattleEvent(BattleEventKind.ShieldGained, 0, (int)MathF.Round(added), atMs));
+            }
         }
 
         // WAVE-START SHIELD — the MACHINE set's 3p rung and BANKED's CARRIED, granted AFTER the reset
@@ -892,7 +1048,16 @@ public static class SoloBattle
         // bite) — read at every cast and swing, so a bite changes the NEXT cooldown, not the wave's.
         float RateNow() => mods.SkillRate * shape.SkillRate
                            * (1f + shape.CastRampPerCast * castRamp)
-                           * (1f + resonanceRate);   // SPIRIT 4p RESONANCE
+                           * (1f + resonanceRate)    // SPIRIT 4p RESONANCE
+                           // LAST BREATH — nothing is quicker than the thing that is nearly gone.
+                           // Sited here rather than on a cooldown because this method is already
+                           // re-read at every cast and every swing, so the trait comes and goes with
+                           // the champion's health inside one wave instead of being fixed at its start.
+                           // Reads HEALTH, never shield: "how badly hurt am I" is a question about the pool.
+                           * (traits.LowHealthShare > 0f
+                              && champ.Health <= champ.MaxHealth * traits.LowHealthShare
+                                  ? 1f + traits.LowHealthRateBonus
+                                  : 1f);
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -953,7 +1118,13 @@ public static class SoloBattle
                 // CHORD reads every matchup as strong; KEYED deepens a strong one; DISCORD refunds a
                 // weak one. All three turn the SAME number, so a build carrying two of them cannot
                 // stack the same promise twice.
+                // MANY TONGUES joins CHORD on the same line rather than beside it: both say "every
+                // matchup counts as strong", and a build carrying the keystone and the trait must not
+                // be able to claim it twice. Reads the build's own distinct element count, which
+                // DescribeBuild already computes once per wave.
                 var match = shape.AllMatchupsStrong
+                            || (traits.AllMatchupsStrongAtSources > 0
+                                && weaveCtx.DistinctSources >= traits.AllMatchupsStrongAtSources)
                     ? SourceMatchup.Strong
                     : SourceMatchup.Effectiveness(s, target);
                 if (match > 1f) match += (match - 1f) * shape.StrongMatchupBonus;
@@ -1059,11 +1230,36 @@ public static class SoloBattle
                 if (shape.CullBonus > 0f && against.Health < against.MaxHealth * shape.CullThreshold)
                     m *= 1f + shape.CullBonus;
 
+                // WHAT KILLED YOU — what beat you three times changed you. WaveCreature.Archetype is
+                // already read here by SIEGE, so the tag this needs is on hand; which archetype the
+                // grudge is against was decided at composition time from the saved run log, so the
+                // fight never learns there is a log.
+                if (traits.GrudgeBonus > 0f && traits.GrudgeArchetype is { } grudge
+                    && against.Archetype == grudge)
+                    m *= 1f + traits.GrudgeBonus;
             }
 
             // SWARMBANE — the more of them there are, the harder you hit. The mirror of what a Swarm
             // band does to a single-target build.
             if (shape.PerCreatureBonus > 0f) m *= 1f + shape.PerCreatureBonus * alive;
+
+            // SETTLING WEIGHT — the dead make the ground firmer to swing from. Reads the wave-local
+            // `deadThisWave` that GRAVE SONG already reads, so the two clocks stay one quantity, and
+            // is capped so a long wave cannot run away with it.
+            if (traits.PowerPerDeadEnemy > 0f)
+                m *= 1f + MathF.Min(traits.PowerPerDeadCap, traits.PowerPerDeadEnemy * deadThisWave);
+
+            // LAST WORD — the one left standing is the one you have been practising on. `alive` is
+            // already a wave-local, so this is the number the wave itself keeps, not a re-count.
+            if (traits.LastEnemyBonus > 0f && alive == 1) m *= 1f + traits.LastEnemyBonus;
+
+            // THE MATCHED SUIT — what you wear and what you do finally agree. The NARROW reading: a
+            // skill already of the set's element is paid more. Forcing every skill TO that element
+            // would take the player's own choice away and argue with PURE, THE SINGLE NOTE and all
+            // six element signatures at once. The element itself was resolved at composition time.
+            if (traits.MatchedSuitBonus > 0f && traits.MatchedSuitSource is { } suited
+                && skillSource == suited)
+                m *= 1f + traits.MatchedSuitBonus;
 
             // GRAVE SONG — the exact mirror of the line above, read off the wave's DEAD. `alive` plus
             // `deadThisWave` is the number the wave opened with, so the two are opposed clocks on one
@@ -1165,7 +1361,16 @@ public static class SoloBattle
 
             // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
             // call this with fromSkill:false). Applied first, so a crit stings with more poison too.
-            if (fromSkill)
+            // THE CERTAIN HAND — once a wave, the hand does not guess. It is the one hit in the fight
+            // that is NOT an expected value: crit here is a share of every hit (see critFactor), and
+            // "always crits" is the one statement that cannot be written as a share. Sited above the
+            // FOCUS block on purpose, so the certain hit neither banks focus nor spends it.
+            if (fromSkill && traits.FirstHitOfWaveCritMultiplier > 0f && !traitFirstCritSpent)
+            {
+                traitFirstCritSpent = true;
+                dmg *= critMult * traits.FirstHitOfWaveCritMultiplier;
+            }
+            else if (fromSkill)
             {
                 // MIND 4p FOCUS and 5p CERTAINTY. A critical here is an EXPECTED VALUE, not a rolled
                 // event (see critFactor), so "a hit that does not crit" is not a branch — it is a
@@ -1198,6 +1403,12 @@ public static class SoloBattle
             // otherwise armour would shrink the pool AND the bleed and "poison answers armour" would be
             // false twice over.
             if (fromSkill && venomFrac > 0f) poison += dmg * venomFrac;
+
+            // THE OPENED VEIN — the cut you meant to make goes on being made. Paid at the RATE the hit
+            // criticals, for the same reason PERFECT CLAUSE is: crit is an expectation in this sim, so
+            // "critical hits leave the enemy bleeding" is the expectation of one rather than a branch.
+            // Feeds the same standing poison pool everything else does — one pool, not a second one.
+            if (fromSkill && traits.CritToBleed > 0f) poison += dmg * critChance * traits.CritToBleed;
 
             // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
             // it entirely — a bleed tick is small by construction and flat armour would erase it, which
@@ -1237,7 +1448,19 @@ public static class SoloBattle
             {
                 metrics.DeliveredDamage += dmg;
                 metrics.Hits++;
+                // A HEAVY HIT is a fifth of what it struck. Counted on EVERY build, worn trait or not
+                // — see HeavyHitFraction: the threshold is a constant of the fight, so DEEP CUT can be
+                // discovered by a player who does not have it yet.
+                if (dmg >= target.MaxHealth * HeavyHitFraction) metrics.HeavyHits++;
             }
+
+            // DEEP CUT — what is struck hard enough stops closing. Placed beside the MACHINE
+            // signature's own strip, which is the other thing in the game that bends armour on a hit,
+            // and bounded the same way: Defense is settable precisely for a wave-scoped strip, and
+            // creatures are minted per wave so it cannot leak into the next one.
+            if (traits.HeavyHitArmourStrip > 0f && target.Defense > 0f
+                && dmg >= target.MaxHealth * HeavyHitFraction)
+                target.Defense = MathF.Max(0f, target.Defense - traits.HeavyHitArmourStrip);
 
             // Overkill is DISCARDED rather than carried to the next creature. A 110 Trap hit into a
             // 30-health swarm creature wastes 80, and that waste is the whole cost of bringing a
@@ -1382,7 +1605,7 @@ public static class SoloBattle
                         champ.ReadyAt[k] = absAt + arm;
 
                         var shot = SkillCatalogue.PoweredBase(kd, resonance)
-                                   * VowFactor(ks, weaveCtx, shape)
+                                   * VowFactor(ks, weaveCtx, shape, traitBorrowedVow)
                                    * (castOnce.Add(k) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier)
                                    * kd.DamageMultiplier;
                         events.Add(new BattleEvent(BattleEventKind.Skill, k, 0, atMs));
@@ -1413,6 +1636,19 @@ public static class SoloBattle
                 // larger of the two rather than the sum: two rules that both answer "wasted overkill"
                 // should not multiply into a chain that clears a wave from one blow.
                 var spill = -target.Health;
+                if (metrics is not null && spill > 0f) metrics.Overkill += spill;
+
+                // THE SPILL and CARRION WEIGHT — the two traits that read waste. Both pay from the
+                // SAME figure BREAKER's carry reads, so a build carrying all three is paid three
+                // different things for one kill rather than three times for one thing. Neither is a
+                // hit, so neither can chain: the shield goes through the one grant funnel, and the
+                // bleed goes into the standing poison pool that already bleeds out every half second.
+                if (spill > 0f)
+                {
+                    if (traits.OverkillToShield > 0f) GrantShield(spill * traits.OverkillToShield, atMs);
+                    if (traits.OverkillToBleed > 0f) poison += spill * traits.OverkillToBleed;
+                }
+
                 var carry = MathF.Max(shape.OverkillCarry, castCarry);
                 // BODY 5p — an IMPACT is the one basic attack whose waste carries. Everywhere else the
                 // carry is a direct-SKILL rule, which is what keeps a bleed or a thorn from feeding it.
@@ -1431,6 +1667,15 @@ public static class SoloBattle
                          bool ignoresArmour = false, int hitsPerTarget = 1)
         {
             if (targets <= 0) return 0f;
+
+            // SPREADING FIRE — a fire that has reached three has already reached the fourth. Reads the
+            // reach the cast ALREADY has, so it pays a build that committed to spread and does
+            // nothing at all for a single-target one. A Field already reaches everything (its target
+            // count is int.MaxValue), so it is excluded rather than overflowed.
+            if (fromSkill && traits.WideCastExtraTargets > 0 && traits.WideCastAtTargets > 0
+                && targets >= traits.WideCastAtTargets && targets < int.MaxValue / 2)
+                targets += traits.WideCastExtraTargets;
+
             // An AURA tick is not an activation: counting one every 500 ms made the run report's REACH
             // read 4.6 creatures per cast for a build whose casts reach 1.6 (review 2026-08-30).
             if (fromSkill && countsAsActivation && metrics is not null) metrics.Activations++;
@@ -1546,10 +1791,39 @@ public static class SoloBattle
             if (shape.OverhealToShield > 0f && amount > room)
                 GrantShield((amount - room) * shape.OverhealToShield, atMs);
 
+            // THE GIVEN HAND — what you cannot hold, you give away hard. Sited at the exact line
+            // NATURE's OVERGROWTH already reads, and for the same reason: the only honest figure for
+            // "healing you cannot use" is the part the POOL had no room for. Healing the wave's
+            // ceiling refused was never eligible, and paying that out would be a way around the
+            // ceiling rather than a use for the overflow.
+            //
+            // THIS LANDS DAMAGE FROM INSIDE Heal(), which is unusual enough to state plainly.
+            // fromSkill:false and ignoresArmour:true, so it cannot crit, cannot feed VENOM and cannot
+            // re-poison. It CAN empty the wave; every caller's next `if (alive == 0) return Kill(ms)`
+            // catches that, and Kill()'s own heal (HealOnClear) is reached only after this function
+            // has returned — so there is no recursion.
+            if (traits.OverhealToDamage > 0f && amount > room && FirstAlive() is { } spare)
+                LandOn(spare, (amount - room) * traits.OverhealToDamage, atMs,
+                       fromSkill: false, ignoresArmour: true);
+
             if (underCeiling) landed = Math.Min(landed, healBudget - healedThisWave);
             if (landed <= 0) return;
             if (underCeiling) healedThisWave += landed;
             champ.Health = (int)(champ.Health + landed);
+            if (metrics is not null) metrics.Healed += (int)landed;
+
+            // PRACTISED FLESH — flesh that has been mended often mends further. Widens THIS wave's
+            // ceiling, a step per heal, to its own cap. Read after the spend rather than before it, so
+            // the heal that widens the ceiling is not itself paid out of the room it just bought.
+            if (traits.HealCeilingPerHeal > 0f && healBudgetBase > 0L
+                && traitHealCeilingGrown < traits.HealCeilingPerHealCap)
+            {
+                var step = MathF.Min(traits.HealCeilingPerHeal,
+                                     traits.HealCeilingPerHealCap - traitHealCeilingGrown);
+                traitHealCeilingGrown += step;
+                healBudget += (long)MathF.Round(healBudgetBase * step);
+            }
+
             events.Add(new BattleEvent(BattleEventKind.Heal, 0, (int)landed, atMs));
         }
 
@@ -1809,7 +2083,7 @@ public static class SoloBattle
                     // buys cadence for the slow, never free damage, and RADIANCE still buys full
                     // ticks faster because its acceleration touches the SCHEDULE, not this line.
                     var aura = SkillCatalogue.PoweredBase(def, resonance)
-                               * VowFactor(sk, weaveCtx, shape)
+                               * VowFactor(sk, weaveCtx, shape, traitBorrowedVow)
                                * (def.IntervalMs > 0 ? def.IntervalMs / 1000f : 1f)
                                * def.DamageMultiplier;   // MIRE/SILT
                     // A FIELD MAY IGNORE DEFENCE TOO. The cast path has always passed this argument
@@ -1916,6 +2190,12 @@ public static class SoloBattle
                     var window = sk.Def.AmplifyMs > 0 ? sk.Def.AmplifyMs : 6_000;
                     if (triggers.Contains(BuildTrigger.Linger)) window = window * 9 / 5;
                     window = (int)(window * shape.AmplifyWindowMultiplier);   // MARK MASTERY
+                    // THE LINGERING MARK — a mark drawn before a crowd is slow to fade. Read at the
+                    // CAST, once, on the crowd standing when it opens: a window that kept growing as
+                    // the wave filled would be a clock the player cannot reason about. The standing
+                    // field mark (the OATHMARK branch below) keeps its own clock and is deliberately
+                    // untouched, which is what the card's "a mark you cast" says.
+                    if (traits.AmplifyWindowPerEnemyMs > 0) window += traits.AmplifyWindowPerEnemyMs * alive;
 
                     if (sk.Def.AmplifyPerCast > 0f)
                     {
@@ -2005,7 +2285,7 @@ public static class SoloBattle
                     {
                         raw = SkillCatalogue.PoweredBase(sk.Def, resonance);
                     }
-                    raw *= VowFactor(sk, weaveCtx, shape);
+                    raw *= VowFactor(sk, weaveCtx, shape, traitBorrowedVow);
 
                     // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
                     raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
@@ -2232,6 +2512,21 @@ public static class SoloBattle
                         if (alive == 0) return Kill(ms);
                     }
 
+                    // THE SINGLE NOTE — one voice, said twice, is louder than two. Mirrors AFTERIMAGE
+                    // exactly, including `countsAsActivation: false` (the wave took ONE action, and a
+                    // second activation would make the run report's reach a fiction). Reads the
+                    // `oneSource` local the wave already computed and `firstCast`, which the cast
+                    // block above has already decided — so the trait is a second landing of a cast
+                    // that happened rather than a second cast.
+                    if (traits.OneSourceRepeatsFirstCast && oneSource && firstCast && dealt > 0f && alive > 0)
+                    {
+                        dealt += LandSpread(raw, ms, spreadTargets, sk.Source, vdef, abs,
+                                            countsAsActivation: false,
+                                            ignoresArmour: vdef.DefenceIgnore,
+                                            hitsPerTarget: vdef.HitsPerTarget);
+                        if (alive == 0) return Kill(ms);
+                    }
+
                     // TRAIL — the blow leaves the hunter's arm moving: the NEXT basic attack borrows
                     // its rule. One use, armed here and spent by the swing.
                     if (vdef.Rule.TrailNextSwing) trailArmed = true;
@@ -2272,7 +2567,7 @@ public static class SoloBattle
                         if (woven.Def is { Kind: not SkillKind.Reaction, Effect: not SkillEffect.Amplify, BasePower: > 0f })
                         {
                             var wovenRaw = SkillCatalogue.PoweredBase(woven.Def, resonance)
-                                           * VowFactor(woven, weaveCtx, shape)
+                                           * VowFactor(woven, weaveCtx, shape, traitBorrowedVow)
                                            * WeaverEchoFraction;
                             // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
                             if (build.Affinity is { } wovenAff && woven.Vow is not null)
@@ -2505,9 +2800,31 @@ public static class SoloBattle
                     taken = 0f;
                 }
 
+                // THE UNBROKEN THREAD — whole is a thing you can stay. The same composition rule
+                // PLATING obeys (`taken > 0f`: a bite already stopped is not eligible, so the charge
+                // is still there for the next real one), with its OWN spent flag. Sharing platingSpent
+                // would make two preventers cancel each other, which is the exact bug the MACHINE 5p
+                // note above exists to describe.
+                //
+                // Reads HEALTH at full, so it fires on the first bite of each wave and then, once the
+                // champion is hurt, only if something has healed them whole again — which is the
+                // sentence on the card rather than "once a wave".
+                if (traits.PreventFirstBiteAtFullHealth && !traitFullGuardSpent && taken > 0f
+                    && champ.Health >= champ.MaxHealth)
+                {
+                    traitFullGuardSpent = true;
+                    prevented += taken;
+                    taken = 0f;
+                }
+
                 if (metrics is not null) metrics.DamagePrevented += prevented;
 
                 // ── THE SHIELD EATS THE REMAINDER, AND ONLY WHAT GETS PAST IT IS HEALTH DAMAGE. ──
+                //
+                // WAS THE CHAMPION WEARING PLATE WHEN THIS BITE ARRIVED? Captured before the shield
+                // spends itself, because THE ANSWERING WALL is about holding a shield when you are
+                // bitten, and a bite that empties the shield would otherwise read as unshielded.
+                var traitShielded = champ.CurrentShield > 0f;
                 var absorbed = champ.AbsorbWithShield(taken);
                 var healthDamage = taken - absorbed;
                 if (absorbed > 0f)
@@ -2515,7 +2832,14 @@ public static class SoloBattle
                     if (metrics is not null) metrics.ShieldAbsorbed += absorbed;
                     events.Add(new BattleEvent(BattleEventKind.ShieldAbsorbed, 0, (int)MathF.Round(absorbed), ms));
                     if (champ.CurrentShield <= 0f)
+                    {
+                        if (metrics is not null) metrics.ShieldBreaks++;
+                        // SCAR TISSUE is owed its larger next shield. Set beside the event rather than
+                        // inside GrantShield, because a break is a fact about THIS bite and the grant
+                        // that answers it may arrive from any producer, later.
+                        traitShieldBroken = true;
                         events.Add(new BattleEvent(BattleEventKind.ShieldBroken, 0, 0, ms));
+                    }
                 }
 
                 // REPAY banks what the hunter took, per slot, until that slot casts. HEALTH DAMAGE
@@ -2532,8 +2856,31 @@ public static class SoloBattle
                         }
 
                 var healthLost = (int)MathF.Round(healthDamage);
+
+                // THE THIN LINE — there is always one blow you do not take whole. Once a wave, and
+                // sited on the LOSS rather than on the bite so it reads what the champion would
+                // actually have paid after prevention and the shield have both had their say. A bite
+                // the shield ate whole was never lethal and does not spend the charge.
+                if (traits.LethalBiteShare > 0f && !traitLethalSpared
+                    && healthLost > 0 && healthLost >= champ.Health)
+                {
+                    traitLethalSpared = true;
+                    healthLost = (int)MathF.Round(healthLost * traits.LethalBiteShare);
+                }
+
                 champ.Health -= healthLost;
-                if (metrics is not null) metrics.HealthDamage += healthLost;
+                if (metrics is not null)
+                {
+                    metrics.HealthDamage += healthLost;
+                    // HOW CLOSE DID YOU COME. A minimum, not a total — see the field's own remark.
+                    metrics.LowestHealthFraction = MathF.Min(
+                        metrics.LowestHealthFraction,
+                        Math.Max(0, champ.Health) / (float)Math.Max(1, champ.MaxHealth));
+                }
+                // THE MIRROR counts every bite that reached this point, whatever answered it. The
+                // `bites` array beside it counts only the bites a TRAP slot armed against, so it
+                // cannot answer "how many times have I been bitten this wave" for a build with no trap.
+                traitBitesTaken++;
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, healthLost, ms));
 
                 // PAYBACK banks the bite for the next skill; REBOUND turns a share of what LANDED back
@@ -2554,13 +2901,26 @@ public static class SoloBattle
                 // and a thorn that plate could erase would be dormant in the one band it answers.
                 // A dead champion has no thorns: the bite that finished the champion must not also
                 // credit kills and MOMENTUM refunds to a corpse (review 2026-08-25).
-                if (shape.ReflectFraction > 0f && champ.Alive)
+                //
+                // TWO TRAITS JOIN THIS ONE FRACTION rather than adding a second reflect. THE ANSWERING
+                // WALL adds a share while the champion was wearing plate when the bite arrived; THE
+                // MIRROR multiplies whatever the total is by how many bites this wave has already
+                // taught, to its cap. Written as one number so a build carrying THORNS, the wall and
+                // the mirror reflects once, harder — never three times.
+                var traitReflect = shape.ReflectFraction
+                                   + (traitShielded ? traits.ShieldedReflectFraction : 0f);
+                if (traits.ReflectRampPerBite > 0f)
+                    traitReflect *= 1f + MathF.Min(traits.ReflectRampCap,
+                                                   traits.ReflectRampPerBite * Math.Max(0, traitBitesTaken - 1));
+                if (traitReflect > 0f && champ.Alive)
                 {
                     for (var ci = 0; ci < creatures.Count; ci++)
                     {
                         var biter = creatures[ci];
                         if (!biter.Alive) continue;
-                        LandOn(biter, biter.Damage * shape.ReflectFraction, ms, fromSkill: false, ignoresArmour: true);
+                        var sentBack = biter.Damage * traitReflect;
+                        if (metrics is not null) metrics.ReflectedDamage += sentBack;
+                        LandOn(biter, sentBack, ms, fromSkill: false, ignoresArmour: true);
                     }
                     // A wave the thorns finished is a clear — unless this same bite finished the
                     // champion too, in which case the death handling below still has to run.
@@ -2623,7 +2983,7 @@ public static class SoloBattle
                     var trapRaw = reflect > 0f
                         ? basis * reflect
                         : stops ? 0f : SkillCatalogue.PoweredBase(sk.Def, resonance);
-                    trapRaw *= VowFactor(sk, weaveCtx, shape)
+                    trapRaw *= VowFactor(sk, weaveCtx, shape, traitBorrowedVow)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
 
@@ -2633,6 +2993,14 @@ public static class SoloBattle
                     // plain number the card promises.
                     if (sk.Def.Rule.PowerPerBiteAnswered > 0f)
                         trapRaw *= 1f + sk.Def.Rule.PowerPerBiteAnswered * answeredBefore;
+
+                    // THE SECOND PRODUCER OF REFLECTED DAMAGE. A trap that answers with a SHARE OF THE
+                    // BITE is reflecting; one throwing a blow of its own is not, and only the first is
+                    // counted — otherwise the trait that pays for reflecting would be discovered by a
+                    // build that has never reflected anything. Counted here rather than inside LandOn
+                    // because a reflected hit is indistinguishable from any other unskilled hit there,
+                    // and widening the fight's hottest method with a provenance flag costs more.
+                    if (metrics is not null && reflect > 0f) metrics.ReflectedDamage += trapRaw;
 
                     // PLATING (the JAWS reinforcement) — a stopped bite is also armour: half of what it
                     // would have dealt becomes Shield.
@@ -2804,10 +3172,34 @@ public static class SoloBattle
     /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
     /// decision they made at the workbench and can see the consequences of in the report.
     /// </remarks>
-    private static float VowFactor(EquippedSkill sk, BuildContext ctx, SkillShape shape)
+    /// <param name="borrowed">
+    /// THE KEPT WORD's loan: the weakest vow the build has sworn AND kept, or null. A skill with no
+    /// vow of its own borrows it. Computed once per wave by the caller — this method must not go
+    /// looking for it, or every skill of every tick would re-walk the weave.
+    /// </param>
+    private static float VowFactor(EquippedSkill sk, BuildContext ctx, SkillShape shape, Vow? borrowed = null)
     {
-        if (sk.Vow is not { } vow) return 1f;
-        if (!Vows.IsActive(vow, ctx)) return 1f;
+        var traits = shape.Traits;
+
+        // THE KEPT WORD — a promise kept covers more than it was made about. This is the first of the
+        // method's two early returns to become conditional: an unsworn skill is no longer automatically
+        // worth one. The loan is deliberately the WEAKEST vow, so the trait widens a commitment rather
+        // than doubling the best one, and only a KEPT vow may be lent (the caller checks) — borrowing a
+        // promise you are already breaking is what THE PRICE PAID is for.
+        if (sk.Vow is not { } vow)
+        {
+            if (!traits.UnswornBorrowsWeakestVow || borrowed is not { } loan) return 1f;
+            return 1f + (Vows.Multiplier(loan) - 1f) * MathF.Max(0f, shape.VowPowerMultiplier);
+        }
+
+        // THE PRICE PAID — you paid for it, and some of it is still yours. The second early return,
+        // also conditional now: a broken vow pays a SHARE of its bonus instead of nothing. Its price
+        // (FRAGILITY's damage taken, RECKLESS OFFERING's pool) is charged either way, which is what
+        // keeps this a consolation rather than a way to ignore the demand.
+        if (!Vows.IsActive(vow, ctx))
+            return traits.BrokenVowShare > 0f
+                ? 1f + (Vows.Multiplier(vow) - 1f) * MathF.Max(0f, shape.VowPowerMultiplier) * traits.BrokenVowShare
+                : 1f;
 
         // THE BONUS is scaled, not the factor. A Vow worth x1.90 pays +0.90; TWICE SWORN at 1.4 makes
         // that +1.26. Scaling the whole factor would pay out on a build with no Vow sworn at all, which

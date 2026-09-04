@@ -101,11 +101,15 @@ public enum TourTarget
     EnterRegion,
 
     // ── TRAITS ──
-    /// <summary>The trait tree canvas.</summary>
+    /// <summary>The trait tree canvas. Belongs to the OLD tree screen, which P5 deletes with the tree.</summary>
     TraitTree,
-    /// <summary>The TRAIT POINTS TO SPEND readout.</summary>
+    /// <summary>The TRAIT POINTS TO SPEND readout. As above — nothing points a tour at it any more.</summary>
     TraitPoints,
-    /// <summary>The chosen trait's detail column, with LEARN.</summary>
+    /// <summary>The three worn characteristic slots at the top of the TRAITS screen.</summary>
+    TraitSlots,
+    /// <summary>The grid of awakened and undiscovered characteristics.</summary>
+    TraitCollection,
+    /// <summary>The chosen characteristic's reading column, with the one button that wears it.</summary>
     TraitDetail,
 
     // ── ROSTER ──
@@ -371,17 +375,20 @@ public static class Onboarding
 
         Activity.Traits => new[]
         {
-            new TourStep(TourTarget.TraitTree, "ONE SPINE, FOUR ROADS",
-                "Traits are permanent bonuses. One spine everyone grows, and four roads: RUIN hits "
-                + "harder, AEGIS lives longer, ARTIFICE changes skills, AVARICE finds more loot."),
+            // REWRITTEN FOR THE NEW SYSTEM (P4). The three cards used to teach a spine, four roads
+            // and a currency, and every word of that is now false: traits are not bought, there is no
+            // tree, and nothing on the screen costs anything.
+            new TourStep(TourTarget.TraitSlots, "THREE AT A TIME",
+                "A trait is a characteristic your hunter has. Each hunter wears three of them, and "
+                + "changing which three costs nothing at all."),
 
-            new TourStep(TourTarget.TraitPoints, "TRAIT POINTS",
-                "Traits cost TRAIT POINTS. You earn one for each region you conquer, one each time a "
-                + "region's mastery rises a level, and two for each new corruption tier."),
+            new TourStep(TourTarget.TraitCollection, "THEY AWAKEN, THEY ARE NOT BOUGHT",
+                "A trait awakens from what you have done — how you fight, what you survive, where "
+                + "you go. One you have not awakened yet shows only as ???."),
 
-            new TourStep(TourTarget.TraitDetail, "LEARN",
-                "Click a trait to read it here, then press LEARN. Each road ends in a capstone so "
-                + "costly you cannot finish the other three. A trait never resets, not ever."),
+            new TourStep(TourTarget.TraitDetail, "READING ONE",
+                "Click a trait to read what it does, then press WEAR IT. Every hunter you own can "
+                + "wear any trait you have awakened."),
         },
 
         Activity.Roster => new[]
@@ -585,8 +592,8 @@ public static class Onboarding
     {
         Activity.Map when f.NewRegionName is { Length: > 0 } r =>
             new ScreenHint($"Hint:Map:{r}", $"A NEW REGION IS AVAILABLE — {r.ToUpperInvariant()}"),
-        Activity.Traits when f.TraitPointsFree > 0 =>
-            new ScreenHint($"Hint:Traits:{f.TraitPointsFree}", $"YOU HAVE {f.TraitPointsFree} TRAIT POINT{Plural(f.TraitPointsFree)}"),
+        // NOTHING IS SPENT ON THIS SCREEN ANY MORE (P4, LAW 5), so there is no "you have N to spend"
+        // hint to give. TraitPointsFree stays on the facts for the OLD tree screen, which P5 deletes.
         Activity.Mastery when f.MasteryPointsFree > 0 =>
             new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
         Activity.Build when f.EmptySkillSlots > 0 =>

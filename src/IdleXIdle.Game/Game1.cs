@@ -16,6 +16,7 @@ using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Presentation;
 using IdleXIdle.Core.Prestige;
+using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Core.Quests;
 using IdleXIdle.Core.Warrens;
@@ -233,9 +234,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Who joined most recently — the name the ROSTER hint says while <see cref="_rosterNews"/> holds.</summary>
     private string _rosterNewName = "";
 
+    /// <summary>
+    /// One queued toast. Two lines for the ordinary kind; three, styled differently, for an awakening.
+    /// </summary>
+    /// <remarks>
+    /// It was a string with a newline in it, which was enough while every notice had exactly a title
+    /// and a body. A TRAIT AWAKENING is three rungs and the middle one is the loud one — the trait's
+    /// NAME, not the kicker above it — so the payload says which kind it is rather than the drawing
+    /// code guessing from a line count.
+    /// </remarks>
+    private readonly record struct Notice(string Head, string Detail, string? Third = null,
+                                          bool Awakening = false);
+
     /// <summary>Notices waiting their turn — "QUEST COMPLETE", "X JOINS YOU" — shown one at a time.</summary>
-    private readonly Queue<string> _noticeQueue = new();
-    private string _notice = "";
+    private readonly Queue<Notice> _noticeQueue = new();
+    private Notice _notice;
 
     // ── SCREEN AND MODAL MOTION (brief sec. 33, 34) ─────────────────────────────────────────────
     //
@@ -421,6 +434,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
     private TraitsScreen _traits = null!;
 
+    /// <summary>
+    /// THE TRAITS SCREEN (P4): three worn characteristics, the collection, and the unknown.
+    /// </summary>
+    /// <remarks>
+    /// The nav's TRAITS destination is this screen now. <see cref="_traits"/> — the old Memory tree —
+    /// is still built and is still reachable through the capture rig (RH_SHOT_MODE=dusttree), because
+    /// P5 is moving the keystone and vow producers off it in parallel and it is deleted whole when
+    /// both land. Until then it is the only producer of those two catalogues, which is the one thing
+    /// this phase deliberately leaves standing.
+    /// </remarks>
+    private TraitCollectionScreen _traitScreen = null!;
+
     /// <summary>Which characters are yours, and which one you are. Unlocks derive from conquest.</summary>
     private CharacterState _characters = new();
 
@@ -444,7 +469,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private VaultScreen _vault = null!;
     private bool _showVault;
     private bool _showTraits;
+
+    /// <summary>
+    /// DEV ONLY: draw the OLD Memory tree instead of the TRAITS screen (RH_SHOT_MODE=dusttree).
+    /// </summary>
+    /// <remarks>
+    /// Never set at play. The tree is not the trait system any more (BRIEF §22), but it is still the
+    /// only producer of the nineteen keystones and the thirteen vows until P5 moves both off it, so
+    /// this phase leaves the class standing and photographable rather than deleting a screen whose
+    /// replacement is still being written in another branch.
+    /// </remarks>
+    private bool _showDustTree;
     private MemoryDustTree _dust = new();
+
+    // ── TRAITS (P4). The account's characteristics: what has awakened, what fed it, and which three
+    //    each champion wears. Account-wide discovery, per-character loadout (§25, §26). ────────────
+
+    /// <summary>The account's trait ledger. Restored on load, written on save, never rebuilt.</summary>
+    private readonly TraitLedger _traitLedger = new();
+
+    /// <summary>
+    /// What a running descent feeds, and what the reveal is drained from. One instance for the whole
+    /// session — the ledger outlives every run, and so does what it has learned.
+    /// </summary>
+    private readonly TraitWatch _traitWatch;
+
+    /// <summary>
+    /// True until the first load-time trait check has run — which is what makes the six retroactive
+    /// awakenings arrive as ONE plate rather than six ceremonies in one second (PLAN, §32).
+    /// </summary>
+    private bool _traitsFirstCheckOwed = true;
 
     /// <summary>
     /// What each skill has earned by being used. Owned by the game, not the expedition.
@@ -534,6 +588,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
         System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
+        // The trait watch wraps the session's one ledger. Built here rather than in LoadContent
+        // because LoadOrStartFresh runs from Initialize and restores into it — the same rule the
+        // _pending* fields exist for, taken the other way: this is a plain object with no device.
+        _traitWatch = new TraitWatch(_traitLedger);
 
         _graphics = new GraphicsDeviceManager(this)
         {
@@ -839,6 +898,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // gates that were true when it was written (LegacyUnlocks), so no champion is taken back.
         SaveSystem.RestoreCharacters(save, _characters);
         _runsWithVowKept = save.RunsWithVowKept;
+        // THE TRAIT ACCOUNT. A plain object with no device, like CharacterState above and unlike the
+        // screens below, so it is safe to restore here in Initialize. Unknown ids and unknown counter
+        // names are dropped inside Restore, and every loadout is re-clamped to three discovered
+        // traits on the way in — a save is an input like any other.
+        _traitLedger.Restore(
+            save.DiscoveredTraits,
+            save.TraitTally,
+            save.TraitLoadouts.Select(r => (r.CharacterId, (IReadOnlyList<string>)r.TraitIds)),
+            save.TraitProvenance.Select(r =>
+                (r.TraitId, new TraitFirst(r.CharacterId, r.RegionId, r.Wave))));
         // Seeded from chests on a pre-P10 save: every opened chest was a felled boss, so the floor
         // is honest — and a MAGPIE chase already underway keeps most of its steps.
         _bossesFelled = save.BossesFelled > 0 ? save.BossesFelled : save.ChestsOpened;
@@ -1082,6 +1151,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
             BossesFelled = _bossesFelled,
+            // THE TRAIT ACCOUNT — all four fields, in the same commit as the four on SaveGame. A
+            // field added there and forgotten here serialises at its default for ever, and autosave
+            // fires every ten seconds: the ledger would be wiped within one interval of being earned.
+            DiscoveredTraits = _traitLedger.Discovered.ToList(),
+            TraitTally = _traitLedger.SaveTally().ToDictionary(kv => kv.Key, kv => kv.Value),
+            TraitLoadouts = _traitLedger.SaveLoadouts()
+                .Select(r => new SavedTraitLoadout { CharacterId = r.CharacterId, TraitIds = r.TraitIds.ToList() })
+                .ToList(),
+            TraitProvenance = _traitLedger.SaveProvenance()
+                .Select(r => new SavedTraitFirst
+                {
+                    TraitId = r.TraitId, CharacterId = r.First.CharacterId,
+                    RegionId = r.First.RegionId, Wave = r.First.Wave,
+                })
+                .ToList(),
             ChestsOpened = _forge.ChestsOpened,
             FreeSocketUsed = _forge.FreeSocketUsed,
             ChestKeepMinTier = _chestKeepMinTier,
@@ -1209,7 +1293,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _visited.Clear();
         _rosterNews = false;
         _noticeQueue.Clear();
-        _notice = "";
+        _notice = default;
         _noticeTimer = 0f;
         // The click that confirmed the reset may have closed a banner in the same frame, which
         // leaves _swallowInput latched TRUE — and the title screen's keys all read through it. The
@@ -1348,6 +1432,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _forge.Sound = _sound;   // the reveal's landing ticks, the gem set, the successful upgrade
         _forge.AskBeforeScrap = _askBeforeScrap;
         _traits = new TraitsScreen(_ui, _dust);
+        _traitScreen = new TraitCollectionScreen(_ui);
         _roster = new RosterScreen(_ui);
         _vault = new VaultScreen(_ui);
         _loadoutScreen = new LoadoutScreen(_ui);
@@ -1679,7 +1764,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal" or "dusttree"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
@@ -2690,9 +2775,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                    "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
                 }
 
-                if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
+                if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal" or "dusttree")
                 {
                     _showTraits = true;
+                    // THE OLD MEMORY TREE, only under its own mode. `dust` poses the TRAITS screen
+                    // now; `dusttree` is what still photographs the tree, which stays reachable until
+                    // P5 has moved the keystones and the vows off it.
+                    _showDustTree = sm is "dusttree" or "traitterm" or "traitterminal";
                     _dust.AddDust(77_605);   // Dust still shows in the top pills; it no longer buys traits
 
                     // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
@@ -2845,8 +2934,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
         {
             _notice = _noticeQueue.Dequeue();
-            _noticeTimer = NoticeSeconds;
-            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+            // AN AWAKENING HOLDS LONGER, because it has a third line to read and because it is the
+            // rarest thing this toast slot ever says. Still a toast and not a modal: §32 asks for a
+            // meaningful reveal and warns in the same breath against a blocking ceremony.
+            _noticeTimer = _notice.Awakening ? NoticeSeconds * 1.6f : NoticeSeconds;
+            _sound.PlayFirst(0.9f, _notice.Awakening ? "sfx_trait_lit" : "sfx_levelup", "sfx_levelup", "sfx_click");
         }
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
@@ -3361,22 +3453,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (_showTraits)
         {
-            // HELD, as well as clicked: the tree is a free canvas now, and a held button drags it.
-            _traits.Update(ScreenKeys, PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
-                             MouseWheel, _dust, dt);
-            // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
-            // writing to disk immediately. The screen owns neither: it hands back a cue the same way
-            // TrainingScreen hands back a trained stat.
+            // THE NEW TRAITS SCREEN DOES ITS WORK IN Draw, like the Vault and the Forge: it is a
+            // board of tiles and one reading panel, with no camera to drive and no held drag. Its cue
+            // and its Dirty flag are read at the foot of its Draw call. This block stays so the
+            // screen still swallows the frame's hotkeys.
             //
-            // BUT ONLY A PURCHASE IS WORTH A DISK WRITE. The screen speaks more than one cue now — it
-            // asks for a page tick when the camera frames a road, a click on the zoom buttons and a
-            // refusal on a purchase the rules turned down — and none of those changes a single byte of
-            // the save. Saving on any cue at all made panning the tree write the file, so the two
-            // purchase cues are named here and everything else is only a sound.
-            if (_traits.ConsumeCue() is { } cue)
+            // The OLD Memory tree keeps its own update, and it only runs under the capture rig — see
+            // _showDustTree. P5 deletes it whole.
+            if (_showDustTree)
             {
-                _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
-                if (cue is "sfx_trait_lit" or "sfx_trait_terminal") Save();
+                _traits.Update(ScreenKeys, PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
+                                 MouseWheel, _dust, dt);
+                if (_traits.ConsumeCue() is { } cue)
+                {
+                    _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
+                    if (cue is "sfx_trait_lit" or "sfx_trait_terminal") Save();
+                }
             }
             Latch(gameTime);
             return;
@@ -3596,7 +3688,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// replaced, so two events on one frame (a quest finishing is what frees a quest-gated champion)
     /// are both read.
     /// </remarks>
-    private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(head + "\n" + detail);
+    private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(new Notice(head, detail));
+
+    /// <summary>
+    /// A TRAIT HAS AWAKENED — the reveal §32 asks for: meaningful, rare, and never blocking.
+    /// </summary>
+    /// <remarks>
+    /// Queued like any other notice, so two awakenings in one moment are shown one after the other
+    /// rather than on top of each other. An established save's first load can satisfy six rules at
+    /// once, and six ceremonies in one second is the failure mode §32 warns about as loudly as it
+    /// asks for the ceremony — so that case posts ONE combined plate instead (see RefreshTraits).
+    /// </remarks>
+    private void PostAwakening(string kicker, string name, string flavour)
+        => _noticeQueue.Enqueue(new Notice(kicker, name, flavour, Awakening: true));
 
     /// <summary>The activity the screen on top belongs to — what a tour or a slot note would be about.</summary>
     private Activity ScreenActivity() => NavActivity[NavActive()];
@@ -3792,7 +3896,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
         if (_expedition.LogOpen) return null;
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
-        if (_noticeTimer > 0f && _notice.Length > 0) return null;          // so does a notice
+        if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
         if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return null;
         // A rung about another screen is that screen's business (and its tile's NEW mark), not the fight's.
         return Tutorial.Sends(step, GuideFacts()) is null ? step : null;
@@ -4058,7 +4162,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawNoticeToast()
     {
-        if (_noticeTimer <= 0f || _notice.Length == 0) return;
+        if (_noticeTimer <= 0f || _notice.Head.Length == 0) return;
         if (_showTitle || _showHelp || _showSettings || WelcomeUp) return;
         // Never over the SPECIALISATION ceremony: it is the one modal the game stops for, and a quest
         // toast across it covered the panel's own title (seen at UI SCALE 125%).
@@ -4068,18 +4172,42 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_tourActive) return;
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
-        var parts = _notice.Split('\n');
         var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
-        // Two lines: the pad, a title line, a body line, a breath — the height follows the rungs.
+        // The pad, the rungs, a breath — the height FOLLOWS the rungs rather than being a number, so
+        // an awakening's third line cannot fall out of the plate at any UI SCALE.
         var pad = UiMetrics.Space(22);
-        var h = pad + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(12);
+        var rungs = _notice.Awakening
+            ? UiTypography.Pitch(UiTypography.OverlayBody)      // the kicker
+              + UiTypography.Pitch(UiTypography.OverlayTitle)   // the NAME
+              + UiTypography.Pitch(UiTypography.OverlayBody)    // the flavour
+            : UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody);
+        var h = pad + rungs + UiMetrics.Space(12);
         var r = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, h);
         _ui.PanelQuiet(_batch, r, fade);   // a toast is not a modal — the quiet frame (UiKit.PanelQuiet)
         var room = r.Width - UiMetrics.Space(90);
-        _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], room, UiTypography.OverlayTitle),
+
+        if (_notice.Awakening)
+        {
+            // THE MIDDLE RUNG IS THE LOUD ONE. "A TRAIT HAS AWAKENED" is only the kicker; the trait's
+            // own NAME is what the player carries away, so it takes the title size and the gold, and
+            // the flavour sits under it in the body size.
+            var ty = r.Y + pad;
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Head, room, UiTypography.OverlayBody),
+                              r.Center.X, ty, Slate * fade, UiTypography.OverlayBody);
+            ty += UiTypography.Pitch(UiTypography.OverlayBody);
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Detail, room, UiTypography.OverlayTitle),
+                              r.Center.X, ty, NavGold * fade, UiTypography.OverlayTitle);
+            ty += UiTypography.Pitch(UiTypography.OverlayTitle);
+            if (_notice.Third is { } flavour)
+                _ui.TextCenterBig(_batch, _ui.ShortenBig(flavour, room, UiTypography.OverlayBody),
+                                  r.Center.X, ty, Bone * fade, UiTypography.OverlayBody);
+            return;
+        }
+
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Head, room, UiTypography.OverlayTitle),
                           r.Center.X, r.Y + pad, NavGold * fade, UiTypography.OverlayTitle);
-        if (parts.Length > 1)
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[1], room, UiTypography.OverlayBody),
+        if (_notice.Detail.Length > 0)
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Detail, room, UiTypography.OverlayBody),
                               r.Center.X, r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle), Bone * fade, UiTypography.OverlayBody);
     }
 
@@ -4118,7 +4246,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Activity.Forge => ForgeScreen.Spotlights(target),
             Activity.Warren => WarrenScreen.Spotlights(target),
             Activity.Map => _mapScreen.Spotlights(target),
-            Activity.Traits => TraitsScreen.Spotlights(target),
+            Activity.Traits => TraitCollectionScreen.Spotlights(target),
             Activity.Roster => RosterScreen.Spotlights(target),
             _ => Array.Empty<Rectangle>(),
         };
@@ -4289,9 +4417,93 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// nothing is worse than no gate: the next person to need one would have found this and believed it
     /// was already handled. The fight screen's clicks are gated where they are actually read, in Draw.
     /// </remarks>
+    /// <summary>
+    /// THE ONE SEAM THE TRAITS REACH THE GAME THROUGH: compose what the worn three contribute, keep
+    /// the account facts current, and hand the reveals to the toast queue.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Called once a frame from <see cref="UpdateExpedition"/>, which runs on every screen — the same
+    /// place both trees derive their points. Recomputed rather than cached because four of the
+    /// twenty-six traits read the WORLD (the region being walked, the set being worn, the regions
+    /// mastered, the last three descents) and every one of those can change without the Traits screen
+    /// ever being opened. Composing three small records a frame is the same order of work
+    /// <c>ToBuild</c> already does on this line.
+    /// </para>
+    /// <para>
+    /// <b>The first pass is different, once.</b> Six traits read facts an established save already
+    /// carries, so they awaken the moment this build first loads. §32 asks for a meaningful awakening
+    /// and warns against a ceremony every few minutes; six in one second is the failure mode of both,
+    /// so the first pass posts ONE combined plate and every pass after it reveals one at a time.
+    /// </para>
+    /// </remarks>
+    private void RefreshTraits(RegionDefinition region)
+    {
+        // WHAT THE ACCOUNT ALREADY KEEPS. Six rules read these and nothing copies them into the
+        // ledger — they have one home apiece in the save, and a second copy is a second truth.
+        var mastered = 0;
+        foreach (var r in Regions.All)
+            if (_world.RegionFarm(r.Id).MasteryLevel >= MasteryLevel.FullyMastered) mastered++;
+
+        var (streak, wall) = TraitDiscovery.WallStreakOf(_expedition.Log.Entries);
+
+        _traitWatch.Account = new TraitAccount(
+            BossesFelled: _bossesFelled,
+            RunsWithVowKept: _runsWithVowKept,
+            SetsCompleted: _gear?.CompletedSets.Count ?? 0,
+            RegionsConquered: _world.ConqueredIds.Count,
+            RegionsMastered: mastered,
+            WallStreak: streak);
+        _traitWatch.CharacterId = _characters.ActiveId;
+        _traitWatch.RegionId = region.Id;
+
+        // THE FIVE-PIECE SET BEING WORN RIGHT NOW, read live off the hunter rather than off the
+        // "already celebrated" list: THE MATCHED SUIT pays for wearing the set, and the celebration
+        // list only records that a set was once completed.
+        Source? suit = null;
+        foreach (var (element, count) in ElementSets.WornCounts(_hunter))
+            if (count >= ElementSets.Rungs[^1]) { suit = element; break; }
+
+        // WHAT THE FIGHT MUST NEVER LEARN, resolved here into plain dials.
+        var context = new TraitContext(
+            RegionConquered: _world.IsConquered(region.Id),
+            RegionsMastered: mastered,
+            SetElement: suit,
+            LastWallArchetype: streak >= 3 ? wall : null);
+
+        // THE ONE PLACE THE WORN THREE REACH THE BUILD. PlayerLoadout.TraitShape rides into every
+        // ToBuild call there is, so the fight, the damage bench and every readout see one build.
+        _loadout.TraitShape = TraitEffects.Compose(
+            _traitLedger.LoadoutOf(_characters.ActiveId), context);
+
+        // A LOAD IS A CHECK. Every rule is re-checked here as well as after a cleared wave, which is
+        // what makes a threshold crossed while the player was not looking impossible to miss.
+        if (_traitsFirstCheckOwed)
+        {
+            _traitsFirstCheckOwed = false;
+            _traitWatch.Recheck();
+            var woke = _traitWatch.TakeAwakened();
+            if (woke.Count == 1 && TraitCatalogue.Find(woke[0]) is { } only)
+                PostAwakening("A TRAIT HAS AWAKENED", only.Name, only.Flavour);
+            else if (woke.Count > 1)
+                // ONE PLATE, NOT SIX. The names are in the collection the plate points at; saying six
+                // of them here would be the achievement list §90 forbids, in a toast.
+                PostAwakening($"{woke.Count} TRAITS HAVE AWAKENED",
+                              "WHAT YOU HAVE LIVED THROUGH CHANGED YOU",
+                              "READ THEM ON THE TRAITS SCREEN");
+        }
+
+        foreach (var id in _traitWatch.TakeAwakened())
+            if (TraitCatalogue.Find(id) is { } def0)
+                PostAwakening("A TRAIT HAS AWAKENED", def0.Name, def0.Flavour);
+    }
+
     private void UpdateExpedition(GameTime gameTime)
     {
         var def = Regions.Get(_activeRegion);
+        // The traits, before anything composes a build off the loadout this frame.
+        RefreshTraits(def);
+        _expedition.TraitWatch = _traitWatch;
         _expedition.EnemySource = def.Theme;          // the screen keys enemy art + name off the theme
         // The skills bank their levels in the game's own progress, not the screen's or the run's:
         // a run ends and a skill's levels do not.
@@ -5093,7 +5305,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
             PlayCue(_forge.ConsumeCue(), 0.9f);
         }
         else if (_showWorld) DrawWorld();
-        else if (_showTraits) _traits.Draw(_batch, _dust, PageCursor, MouseClicked);
+        else if (_showTraits)
+        {
+            if (_showDustTree) _traits.Draw(_batch, _dust, PageCursor, MouseClicked);
+            else
+            {
+                _traitScreen.Draw(_batch, _traitLedger, _characters.ActiveId,
+                                  _characters.Active?.Name ?? "YOUR HUNTER", PageCursor, MouseClicked);
+                PlayCue(_traitScreen.ConsumeCue(), 0.9f);
+                // WEARING A TRAIT IS A SAVE. It is per-character state and the only place it lives is
+                // the file; the ten-second autosave would get there eventually, and "eventually" is
+                // how a crash costs someone their build.
+                if (_traitScreen.Dirty) Save();
+            }
+        }
         else if (_showRoster)
         {
             _roster.Progress = QuestSnapshot();

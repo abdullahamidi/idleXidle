@@ -18,7 +18,11 @@ public class onboarding_hints_test
     public void test_every_hint_names_the_fact_it_comes_from()
     {
         Assert.Equal("A NEW REGION IS AVAILABLE — CINDERWORKS", Onboarding.HintFor(Activity.Map, Everything)!.Value.Text);
-        Assert.Equal("YOU HAVE 1 TRAIT POINT", Onboarding.HintFor(Activity.Traits, Everything)!.Value.Text);
+        // TRAITS LOST ITS HINT 2026-09-03 (P4, LAW 5): nothing is spent on that screen any more, so
+        // "YOU HAVE 1 TRAIT POINT" is an offer the screen cannot honour. A hint the model cannot back
+        // is a lie (brief §92), which is the same rule GEAR, FORGE and HUNT are silent under below —
+        // so TRAITS joins them rather than getting a replacement hint about discovery it cannot see.
+        Assert.Null(Onboarding.HintFor(Activity.Traits, Everything));
         Assert.Equal("YOU HAVE 4 MASTERY POINTS", Onboarding.HintFor(Activity.Mastery, Everything)!.Value.Text);
         Assert.Equal("AN EMPTY SKILL SLOT — EQUIP A SKILL", Onboarding.HintFor(Activity.Build, Everything)!.Value.Text);
         Assert.Equal("A NEW HUNTER HAS JOINED — THE ANVIL", Onboarding.HintFor(Activity.Roster, Everything)!.Value.Text);

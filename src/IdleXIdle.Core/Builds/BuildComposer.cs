@@ -91,9 +91,15 @@ public static class BuildComposer
         return passive;
     }
 
+    /// <param name="traitShape">
+    /// What the three traits this champion wears contribute, already resolved against the world by
+    /// <c>TraitEffects.Compose</c>. Null (or <see cref="SkillShape.None"/>) composes a build
+    /// byte-identical to one from before traits existed, which is what makes the liveness suite's
+    /// with-and-without comparison mean anything.
+    /// </param>
     public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
                                 IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity,
-                                SkillProgress? progress = null)
+                                SkillProgress? progress = null, SkillShape? traitShape = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -112,8 +118,14 @@ public static class BuildComposer
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
-            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
-                                       DustEffects.TreeShape(tree)),
+            // ...AND THE TRAITS. Folded in exactly like a set rung or the character's aptitude: one
+            // more shape through the one fold, so the fight gains no branch and nothing here has to
+            // know what a trait is. Four of the twenty-six are conditional on the world and were
+            // already resolved to plain dials before this call.
+            Shape = SkillShape.Combine(
+                SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
+                                   DustEffects.TreeShape(tree)),
+                traitShape ?? SkillShape.None),
             SlotCapacity = slotCapacity,
             // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is
             // divided: two actives and two passives at four slots, unlocked active-passive-active-

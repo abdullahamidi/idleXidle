@@ -283,6 +283,58 @@ public sealed record SaveGame
     // WarrenMasteryPool (the closed-loop INSIGHT pool) was retired 2026-08-31 (P12). The key in old
     // saves is skipped on load like any other unknown member; nothing needs migrating — the pool
     // bought only Warren upgrades, which now cost Gleam + Dust.
+
+    // ── TRAITS (2026-09-03). Four ADDITIVE fields, no version bump: an older save carries none of
+    //    them, loads with an empty trait account, and starts discovering honestly — which is exactly
+    //    what §96 asks for ("do not automatically unlock all new Traits because the old tree was
+    //    progressed"). Six traits DO awaken on an established save's first load, because they read
+    //    BossesFelled, RunsWithVowKept, CompletedSets, ConqueredRegions, RegionFarms and RunLog —
+    //    all of which are above this line and all of which every established save already carries.
+    //    That is the explicit mapping §96 allows, and the host announces those six as ONE plate
+    //    rather than six ceremonies in a second.
+    //
+    //    ALL FOUR MUST ALSO BE IN Game1.Save()'s `with` BLOCK. A field added here and forgotten there
+    //    serialises at its default for ever, and autosave fires every ten seconds. ────────────────
+
+    /// <summary>
+    /// Every trait the ACCOUNT has awakened. Account-wide, monotone, never removed (§25, LAW 6).
+    /// </summary>
+    public List<string> DiscoveredTraits { get; init; } = new();
+
+    /// <summary>
+    /// The three traits each champion is wearing — the one piece of per-character state this refactor
+    /// adds (§26, LAW 7).
+    /// </summary>
+    public List<SavedTraitLoadout> TraitLoadouts { get; init; } = new();
+
+    /// <summary>
+    /// The hidden accumulators, keyed by <c>TraitCounter</c> name.
+    /// </summary>
+    /// <remarks>
+    /// ONE dictionary with a closed key set, not sixteen fields — §29's "do not store full combat
+    /// history when a bounded counter is sufficient". A key this build does not know is dropped on
+    /// load rather than carried, so the key set cannot quietly grow an untended member.
+    /// </remarks>
+    public Dictionary<string, double> TraitTally { get; init; } = new();
+
+    /// <summary>Where each trait first awakened — one line of flavour (§33), never a history database.</summary>
+    public List<SavedTraitFirst> TraitProvenance { get; init; } = new();
+}
+
+/// <summary>What one champion is wearing. At most three ids; the ledger re-clamps on the way in.</summary>
+public sealed record SavedTraitLoadout
+{
+    public required string CharacterId { get; init; }
+    public List<string> TraitIds { get; init; } = new();
+}
+
+/// <summary>Who first awakened a trait, where, and how deep. One row per discovered trait.</summary>
+public sealed record SavedTraitFirst
+{
+    public required string TraitId { get; init; }
+    public string CharacterId { get; init; } = "";
+    public string RegionId { get; init; } = "";
+    public int Wave { get; init; }
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>

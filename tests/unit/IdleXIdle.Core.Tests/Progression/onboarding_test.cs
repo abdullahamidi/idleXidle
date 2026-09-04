@@ -147,27 +147,33 @@ public class OnboardingTest
     }
 
     [Fact]
-    public void test_the_traits_tour_states_purpose_sources_roads_and_permanence()
+    public void test_the_traits_tour_says_what_a_trait_is_and_never_offers_to_sell_one()
     {
-        // Playtest, 2026-08-25: the first explanation of traits must say what they are FOR. Three
-        // things a new player has to leave with — what a trait is, where the points come from, and
-        // that nothing resets — and the sources must be the TRUE ones (Game1.TraitPointsEarned:
-        // conquests, corruption tiers, region mastery levels). Memory Dust no longer buys traits, so
-        // the word may not appear. The paragraph that used to hold this is now three cards, read together.
+        // REWRITTEN 2026-09-03 (P4, BRIEF §22-§27). This test used to demand the tour teach a spine,
+        // four roads, a capstone and where TRAIT POINTS come from. Every one of those is now false:
+        // there is no tree, no currency and nothing to buy on this screen (LAW 5). What replaces them
+        // is the three things a new player must leave with — what a trait IS, that it awakens from
+        // what you have done rather than being bought, and that each hunter wears exactly three.
+        // The old assertions are kept below as prohibitions, so the dead vocabulary cannot come back.
         var text = string.Join(" ", Onboarding.TourFor(Activity.Traits).Select(s => s.Body));
-        var headline = Unlocks.Headline(Activity.Traits);
 
-        Assert.Contains("permanent", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("TRAIT POINTS", text);
-        Assert.Contains("conquer", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("corruption", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("mastery", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("four roads", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("capstone", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("never resets", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("characteristic", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("awakens", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("three", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("???", text);
+        // Free and reversible is the whole of §27, and the card has to say it.
+        Assert.Contains("costs nothing", text, StringComparison.OrdinalIgnoreCase);
+        // Account-wide discovery, per-character loadout (§25, §26) — the player is told the second
+        // hunter does not start the collection again.
+        Assert.Contains("Every hunter", text, StringComparison.OrdinalIgnoreCase);
+
+        // THE DEAD VOCABULARY. A trait is not bought, so no card may name a price, a point, a road or
+        // a node — and Memory Dust never bought one even under the tree.
+        Assert.DoesNotContain("TRAIT POINT", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("capstone", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("four roads", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dust", text, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("dust", headline, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("PERMANENT", headline);
+        Assert.DoesNotContain("LEARN", text, StringComparison.Ordinal);
         // The old text named the wrong faucet — "going deeper than you ever have" is the mastery
         // tree's income, not this one's.
         Assert.DoesNotContain("deeper than you ever have", text);
