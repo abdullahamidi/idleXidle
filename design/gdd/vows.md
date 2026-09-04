@@ -140,10 +140,11 @@ the formula.
 
     multiplier = StaticMultiplier(effectiveHpFraction)
 
-All static Vows lie on one line — 3.0 power per 1.0 of effective HP given up — so
-none can dominate another. The cost is always expressed as a fraction of effective
-HP, never of a raw stat, because a stat cost is avoidable by declining to invest in
-that stat and a Vow that can be made free is not a Vow.
+All static Vows lie on one line — `VowTuning.StaticCostConversionRate` power per 1.0
+of effective HP given up, 8.0 today — so none can dominate another. The cost is
+always expressed as a fraction of effective HP, never of a raw stat, because a stat
+cost is avoidable by declining to invest in that stat and a Vow that can be made
+free is not a Vow.
 
 ---
 
@@ -183,10 +184,10 @@ that stat and a Vow that can be made free is not a Vow.
 
 | Knob | Where | Effect |
 |---|---|---|
-| `Severity` per Vow | `Weaving.Catalog` | The multiplier it pays |
-| `Threshold` | `Weaving.Catalog` | Cadence demands' cut-off |
-| `Bare` | `Weaving.Catalog` | Which slot a sacrifice Vow forbids |
-| `StaticCostMagnitude` | `Weaving.Catalog` | Effective-HP price of a static Vow |
+| `Severity` per Vow | `Vows.Catalog` | The multiplier it pays |
+| `Threshold` | `Vows.Catalog` | Cadence demands' cut-off |
+| `Bare` | `Vows.Catalog` | Which slot a sacrifice Vow forbids |
+| `StaticCostMagnitude` | `Vows.Catalog` | Effective-HP price of a static Vow |
 | `ProofWaves` per Vow | `Vows.Catalog` | How long its rule must hold to reveal it |
 | `CombinedBonusCeiling` | `VowTuning` | The most every sworn Vow may pay together |
 | Capacity milestones | `Unlocks.VowCapacity` | How many Vows may be sworn at once |
