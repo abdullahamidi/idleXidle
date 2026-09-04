@@ -66,14 +66,23 @@ public static class VfxProfiles
     public static readonly VfxProfile DeathCreature = new(
         "death.creature", "fx_death", VfxSubjectKind.Creature, VfxAnchor.Center, 0.70f, Fps: 9f, DelaySeconds: 0.45f);
 
-    // ── Shield: one dome, four moments (§106) ─────────────────────────────────────────────────────
+    // ── Shield: one shell, four moments (§106) ────────────────────────────────────────────────────
     //
     //    The four share a geometry on purpose. §106 asks that the absorb "land on the barrier" and the
     //    break be "positioned correctly", and the only way to guarantee that on ten silhouettes is for
-    //    all four to resolve to the same rectangle. A ripple offset onto the dome's flank was
+    //    all four to resolve to the same rectangle. A ripple offset onto the shell's flank was
     //    considered and rejected: the offset is normalised to the CHAMPION's width (162–373 px) while
-    //    the dome is one constant size, so the same number would land somewhere different on every
+    //    the shell is one constant size, so the same number would land somewhere different on every
     //    hunter.
+    //
+    //    1.15 IS THE SIZE THE ART CAN ACTUALLY DRAW. It was not reachable until 2026-09-04: fx_shield
+    //    was a squat hemisphere filling 0.762 x 0.492 of its frame, so the resolver had to ask for a
+    //    963-px frame to show a 474-px picture — ratio 1.88, over the §73 budget, clamped, and the
+    //    barrier came out 315 px tall across a 412-px hunter's ribs. That is the "small effect centred
+    //    on the torso" the brief calls a failure, and the fix was the ASSET, never the number
+    //    (LAW 16). The strip is a closed ring filling its whole frame now and the same 1.15 resolves at
+    //    ratio 0.93 — inside the budget, 474 px across, clearing crown and soles on all ten. The
+    //    measured content boxes both sides of that change are pinned in vfx_shield_test.
 
     public static readonly VfxProfile ShieldBarrier = new(
         "shield.barrier", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f,
@@ -89,7 +98,7 @@ public static class VfxProfiles
         "shield.undying", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 12f, OffsetY: -0.02f);
 
     /// <summary>
-    /// The break bursts 20 px WIDER than the dome it replaces, so it reads as the barrier coming apart
+    /// The break bursts 20 px WIDER than the shell it replaces, so it reads as the barrier coming apart
     /// rather than as a separate picture. Its frame rate follows the motion vocabulary's REWARD band,
     /// exactly as it did before — eight frames across 0.35 s.
     /// </summary>

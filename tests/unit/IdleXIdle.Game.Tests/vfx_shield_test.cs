@@ -17,6 +17,15 @@ namespace IdleXIdle.Game.Tests;
 /// height, spanning 39 % to 71 % down his torso. It was, exactly, a tiny sprite in the torso centre.
 /// </para>
 /// <para>
+/// <b>The placement arithmetic alone did not fix it, and this file is where that shows.</b> Sizing by
+/// the CONTENT rather than the frame took the barrier from 132 px to 315, which is bigger and still
+/// cuts the crown and the soles — the clause fails on 0.76x exactly as it fails on 0.32x. The wall was
+/// the art: a hemisphere filling 0.492 of its frame cannot be enlarged to a whole-body shell without
+/// the magnification LAW 16 forbids. So the strip was regenerated (2026-09-04) as a closed ring filling
+/// its frame, and the same authored 1.15 now draws 474 px at 0.93 of native. Both content boxes are
+/// pinned below: the retired one keeps the clamp under test, the shipped one carries the acceptance.
+/// </para>
+/// <para>
 /// <b>And §71's named pair cannot fail.</b> <c>UiKit.AnimSprite</c> fills the box height with the
 /// cropped figure, so all ten champions draw within four pixels of the same HEIGHT: THE SEEKER is
 /// 412 px and THE MAGPIE is 412 px. A height-based barrier is identical on them by construction. The
@@ -48,11 +57,26 @@ public class VfxShieldTests
         ["quiver"] = new(0.096f, 0.068f, 0.096f, 0.033f),
     };
 
-    /// <summary>The shipped <c>fx_shield</c> strip: its dome fills 0.762 x 0.492 of a 512-px frame.</summary>
-    private static readonly ContentBox ShippedShield = new(0.119f, 0.215f, 0.119f, 0.293f);
+    /// <summary>
+    /// The shipped <c>fx_shield</c> strip as regenerated 2026-09-04: a closed ring filling its frame.
+    /// </summary>
+    /// <remarks>
+    /// Measured from <c>assets/art/VFX/shield/fx_shield_strip8_512.png</c> by
+    /// <c>tools/asset-pipeline/fx_bounds.py</c>: <c>L 0.000 T 0.000 R 0.000 B 0.000 —
+    /// content 1.000w x 1.000h</c>. The ring is inscribed in the square, so its drawn diameter IS the
+    /// content box, which is what lets the barrier be a fraction of the hunter rather than of a margin.
+    /// </remarks>
+    private static readonly ContentBox ShippedShield = new(0f, 0f, 0f, 0f);
 
-    /// <summary>The regeneration order in §8 of the design: content at 0.91 of the frame, centred.</summary>
-    private static readonly ContentBox OrderedShield = new(0.093f, 0.045f, 0.093f, 0.045f);
+    /// <summary>
+    /// The strip that shipped until 2026-09-04 — a hemisphere filling 0.762 x 0.492 of its frame.
+    /// </summary>
+    /// <remarks>
+    /// Kept as a NAMED FIXTURE, not as history for its own sake: it is the only art in the repo that
+    /// exercises the §73 clamp, and a clamp with no test is a branch nobody has run. It is what LAW 16
+    /// looks like as numbers — the shape a regeneration order is written against.
+    /// </remarks>
+    private static readonly ContentBox RetiredDome = new(0.119f, 0.215f, 0.119f, 0.293f);
 
     private const int Native = 512;
 
@@ -73,7 +97,7 @@ public class VfxShieldTests
         Assert.Equal(268, Hunter("seeker").Rect.Width);
         Assert.Equal(302, Hunter("magpie").Rect.Width);
 
-        Assert.Equal(Barrier("seeker", OrderedShield).Content, Barrier("magpie", OrderedShield).Content);
+        Assert.Equal(Barrier("seeker", ShippedShield).Content, Barrier("magpie", ShippedShield).Content);
     }
 
     [Fact]
@@ -90,16 +114,34 @@ public class VfxShieldTests
     public void test_the_barrier_encloses_every_champion_with_room_to_spare()
     {
         // The enclosure clause. It replaces a runtime width-guard dial that would never have fired:
-        // the binding case is QUIVER at 373 px inside a 424-px dome, and a dial that never fires is a
-        // dormant dial. The constraint lives here and in the regeneration order instead.
+        // the binding case is QUIVER at 373 px inside a 474-px shell, and a dial that never fires is a
+        // dormant dial. The constraint lives here and in the art's own framing instead.
         foreach (var id in Champions.Keys)
         {
             var hunter = Hunter(id);
-            var dome = Barrier(id, OrderedShield).Content;
+            var dome = Barrier(id, ShippedShield).Content;
             Assert.True(dome.Width >= hunter.Rect.Width * 1.05f,
                         $"{id}: dome {dome.Width} does not enclose a {hunter.Rect.Width}px silhouette");
             Assert.True(dome.Left <= hunter.Rect.Left && dome.Right >= hunter.Rect.Right,
                         $"{id}: the hunter pokes out of his own shield");
+        }
+    }
+
+    [Fact]
+    public void test_the_barrier_clears_the_crown_and_the_soles_on_every_champion()
+    {
+        // THE CLAUSE THE VERIFIER FAILED THE CONTRACT ON: it is not enough that the barrier be large,
+        // it has to close ABOVE the head and BELOW the feet, or it is a band across the body wearing a
+        // bigger number. Both edges, all ten, with the ±0.02-height lift the profile carries — which is
+        // why the two margins are not equal and both have to be asserted.
+        foreach (var id in Champions.Keys)
+        {
+            var hunter = Hunter(id);
+            var dome = Barrier(id, ShippedShield).Content;
+            Assert.True(dome.Top <= hunter.Rect.Top - 20,
+                        $"{id}: the shell closes {hunter.Rect.Top - dome.Top}px above the crown, which is not clear of it");
+            Assert.True(dome.Bottom >= hunter.Rect.Bottom + 20,
+                        $"{id}: the shell closes {dome.Bottom - hunter.Rect.Bottom}px below the soles, which is not clear of them");
         }
     }
 
@@ -111,7 +153,7 @@ public class VfxShieldTests
         foreach (var id in Champions.Keys)
         {
             var hunter = Hunter(id);
-            var dome = Barrier(id, OrderedShield).Content;
+            var dome = Barrier(id, ShippedShield).Content;
             var ratio = dome.Height / (float)hunter.Rect.Height;
             Assert.InRange(ratio, 1.10f, 1.20f);
             Assert.True(dome.Top < hunter.Rect.Top - 20,
@@ -123,11 +165,11 @@ public class VfxShieldTests
     public void test_the_barrier_is_not_a_tiny_sprite_in_the_torso_centre()
     {
         // The literal §106 clause, and the literal defect: 0.32x the hunter, from 39 % to 71 % down him.
-        // Even against the SHIPPED strip — which the budget forces the renderer to under-draw — the
-        // barrier now covers most of the body rather than a band across the ribs.
+        // Measured against what the renderer ACTUALLY draws — clamp: true is the renderer's own call —
+        // so this cannot be satisfied by a size the budget then refuses to honour.
         var hunter = Hunter("seeker");
         var drawn = Barrier("seeker", ShippedShield, clamp: true).Content;
-        Assert.True(drawn.Height / (float)hunter.Rect.Height > 0.70f);
+        Assert.True(drawn.Height > hunter.Rect.Height, "the shell is taller than the man inside it");
         Assert.True(drawn.Width > hunter.Rect.Width);
         Assert.Equal(hunter.Rect.Center.X, drawn.Center.X);
     }
@@ -140,10 +182,10 @@ public class VfxShieldTests
         // "absorb impact lands on barrier" is only guaranteeable if the absorb IS the barrier's
         // rectangle. A ripple offset onto the dome's flank would be normalised to the CHAMPION's width,
         // which runs 162–373 px, so the same number would land somewhere different on every hunter.
-        var barrier = Barrier("seeker", OrderedShield).Content;
+        var barrier = Barrier("seeker", ShippedShield).Content;
         foreach (var p in new[] { VfxProfiles.ShieldGain, VfxProfiles.ShieldAbsorb, VfxProfiles.ShieldUndying })
         {
-            var moment = VfxResolver.Resolve(p, Hunter("seeker"), OrderedShield, Native, Native).Content;
+            var moment = VfxResolver.Resolve(p, Hunter("seeker"), ShippedShield, Native, Native).Content;
             Assert.Equal(barrier, moment);
         }
     }
@@ -154,7 +196,7 @@ public class VfxShieldTests
         // fx_shield_break's own measured content box — it already fills 0.926 x 0.922 of its frame,
         // which is the shape fx_shield is being ordered to match.
         var breakArt = new ContentBox(0.037f, 0.043f, 0.037f, 0.035f);
-        var barrier = Barrier("seeker", OrderedShield).Content;
+        var barrier = Barrier("seeker", ShippedShield).Content;
         var burst = VfxResolver.Resolve(VfxProfiles.ShieldBreak, Hunter("seeker"), breakArt, Native, Native).Content;
 
         Assert.True(burst.Height > barrier.Height, "the break must read as the barrier coming apart");
@@ -173,7 +215,7 @@ public class VfxShieldTests
         {
             var drawn = new Rectangle(box.X + push, box.Y, box.Width, box.Height);
             var hunter = new VisualBounds(VfxFigure.VisualRect(drawn, Champions["seeker"]), 1);
-            var dome = VfxResolver.Resolve(VfxProfiles.ShieldBarrier, hunter, OrderedShield, Native, Native).Content;
+            var dome = VfxResolver.Resolve(VfxProfiles.ShieldBarrier, hunter, ShippedShield, Native, Native).Content;
             Assert.Equal(hunter.Rect.Center.X, dome.Center.X);
             Assert.Equal(box.Center.X + push, dome.Center.X);
         }
@@ -182,34 +224,53 @@ public class VfxShieldTests
         Assert.Equal(VfxFollow.Pinned, VfxProfiles.ShieldBarrier.Follow);
     }
 
-    // ── LAW 16: the asset is wrong, and the contract says so in a number ──────────────────────────
+    // ── LAW 16: the asset was wrong, and the contract said so in a number ─────────────────────────
 
     [Fact]
-    public void test_the_shipped_shield_strip_is_over_the_asset_scale_budget()
+    public void test_the_retired_dome_was_over_the_budget_and_the_renderer_clamped_it()
     {
-        // THE WHOLE OF LAW 16 IN ONE ASSERTION. To reach §65's band with today's art the renderer would
-        // have to blow a 512-px frame up to 963 — which is `scale = 3.4` with a new name. The asset is
-        // regenerated, not the number, and until it is the renderer draws the honest smaller dome and
-        // the ratio reports why.
-        var honest = Barrier("seeker", ShippedShield);
+        // THE WHOLE OF LAW 16 IN ONE ASSERTION, kept live against the art it was written about. To
+        // reach §65's band with the hemisphere the renderer would have had to blow a 512-px frame up to
+        // 963 — `scale = 3.4` with a new name. It refused, drew the honest smaller dome, and the ratio
+        // said why. That refusal is the branch this fixture exists to keep exercised: no SHIELD strip
+        // the game ships is over the budget any more, so without a named over-budget shape nothing in
+        // this file would run the clamp. (The arena still clamps two OTHER strips every frame — fx_press
+        // at ratio 1.44 and fx_seeker_trap at 1.37, measured by RH_VFX_DUMP — but those are open art
+        // orders in the ledger, not a shape a shield test may pin.)
+        var honest = Barrier("seeker", RetiredDome);
         Assert.Equal(VfxBudget.Verdict.Over, VfxBudget.Of(honest.NativeRatio));
         Assert.InRange(honest.NativeRatio, 1.87f, 1.89f);
 
-        var drawn = Barrier("seeker", ShippedShield, clamp: true);
+        var drawn = Barrier("seeker", RetiredDome, clamp: true);
         Assert.Equal(VfxBudget.Max, drawn.NativeRatio, 3);
+
+        // ...and clamped is not the same as enough. THE DEFECT, as the number it was: 315 px of picture
+        // across a 412-px hunter, cutting his crown and his soles both.
+        var hunter = Hunter("seeker");
+        var clamped = drawn.Content;
+        Assert.True(clamped.Height < hunter.Rect.Height, "the retired dome could not reach the hunter's height");
+        Assert.True(clamped.Top > hunter.Rect.Top, "...so it cut the crown");
+        Assert.True(clamped.Bottom < hunter.Rect.Bottom, "...and it cut the soles");
     }
 
     [Fact]
-    public void test_the_regeneration_order_brings_every_shield_moment_into_budget()
+    public void test_the_shipped_strip_brings_every_shield_moment_inside_the_budget()
     {
-        // The order: 8 frames of 512, content at least 0.91 of the frame height, vertically centred,
-        // aspect 0.85–0.95. These are the ratios that order produces — the evidence that the profile
-        // numbers are achievable rather than aspirational.
+        // The regeneration landed: a closed ring on 8 frames of 512, filling its frame, so the SAME
+        // authored 1.15 draws 474 px at 0.93 of native on every hunter. The evidence that the profile
+        // numbers are achievable rather than aspirational — and that nothing had to be magnified to
+        // get there.
         foreach (var id in Champions.Keys)
         {
-            var ratio = Barrier(id, OrderedShield).NativeRatio;
-            Assert.Equal(VfxBudget.Verdict.Ok, VfxBudget.Of(ratio));
+            var placed = Barrier(id, ShippedShield);
+            Assert.Equal(VfxBudget.Verdict.Ok, VfxBudget.Of(placed.NativeRatio));
+            // Unclamped and clamped agree: the renderer is drawing the size the design asked for.
+            Assert.Equal(placed.Content, Barrier(id, ShippedShield, clamp: true).Content);
         }
+
+        foreach (var p in new[] { VfxProfiles.ShieldGain, VfxProfiles.ShieldAbsorb, VfxProfiles.ShieldUndying })
+            Assert.Equal(VfxBudget.Verdict.Ok,
+                         VfxBudget.Of(VfxResolver.Resolve(p, Hunter("quiver"), ShippedShield, Native, Native).NativeRatio));
     }
 
     // ── §105: the same contract on creature-sized subjects ───────────────────────────────────────

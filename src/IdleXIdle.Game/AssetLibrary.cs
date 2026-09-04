@@ -197,8 +197,8 @@ public sealed class AssetLibrary
         // entry that "gained a consumer" and shrink that list dishonestly. So the open item is
         // exactly this: assets/art/VFX/levelup/fx_levelup_strip8_512.png is orphaned art awaiting a
         // decision at the desk — delete it, or give it the level-up flourish it was generated for.
-        // SHIELD BROKEN (UI polish §70, §95): generated through PixelLab (a cracked dome bursting into
-        // shards) because fx_shield is a dome that flashes in and settles — a gain, not a break.
+        // SHIELD BROKEN (UI polish §70, §95): generated through PixelLab (a cracked shell bursting into
+        // shards) because fx_shield is the barrier STANDING — a held loop, not a break.
         ["fx_shield_break"] = "fx_shield_break_strip8_512",
         // THE SHIELD BAR (UI polish §66, §95). Reused, not generated: ui_bar_mana_* shipped with the bar
         // family (the same ornate gold frame as the health bar, a cold blue fill) and no screen ever

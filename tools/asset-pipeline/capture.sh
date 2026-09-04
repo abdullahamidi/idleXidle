@@ -34,9 +34,9 @@
 #     RH_SHOT_HUNTER=quiver bash tools/asset-pipeline/capture.sh fightshield build/shots/quiver.png
 #
 # RH_SHOT_SHIELDFX=gain|absorb poses the shield BARRIER as well as the bar, slowed so the shutter
-#   always finds its first and brightest frame. The standing barrier rests at 0.16 alpha, so the flare
-#   is the only moment it is legible at all, and §106 asks it to be shown surrounding two different
-#   hunters. Combine with RH_SHOT_HUNTER for the acceptance pair:
+#   always finds its first and brightest frame. The standing barrier breathes between 0.40 and 0.60
+#   alpha, and the flare is still its brightest moment, which §106 asks to be shown surrounding two
+#   different hunters. Combine with RH_SHOT_HUNTER for the acceptance pair:
 #
 #     RH_SHOT_HUNTER=magpie RH_SHOT_SHIELDFX=gain bash tools/asset-pipeline/capture.sh fightshield out.png
 #
