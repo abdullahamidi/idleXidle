@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # Capture a real screenshot of the game, headless.
 #
 #   bash tools/asset-pipeline/capture.sh [mode] [outfile]

@@ -1075,10 +1075,16 @@ public sealed class WarrenScreen
         // AUTOMATION, WHICH IS THE OTHER THING A LEVEL BUYS. Auto-sell and auto-merge used to be trait
         // purchases; they belong to the Warren, which already owns the account's idle layer. The card
         // states what this facility already does for you, and what its next automation level will do.
+        // THE LINE COUNTS ARE THE SENTENCES' OWN, not the two rows every other line here takes. Line()
+        // DROPS the wrapped rows past its max with no ellipsis, so at UI SCALE 150 a two-row cap cut
+        // "SELLS YOUR COMMON AND UNCOMMON ITEMS WHEN A CHEST IS OPENED." to "...WHEN A CHEST IS" — an
+        // unfinished sentence about the one thing this facility now owns. Three rows hold both ACTIVE
+        // notes at 150; the AT LEVEL note carries a "AT LEVEL n: " prefix and the longest of them
+        // (SCAVENGER RUNS at level 4) needs six.
         if (WarrenAutomation.ActiveNoteFor(Warren, f.Kind) is { Length: > 0 } doing)
-            Line(doing, Bone, UiTypography.Body, 2);
+            Line(doing, Bone, UiTypography.Body, 3);
         if (WarrenAutomation.NoteFor(Warren, f.Kind, f.Level + 1) is { Length: > 0 } next)
-            Line($"AT LEVEL {f.Level + 1}: {next}", Bone, UiTypography.Body, 2);
+            Line($"AT LEVEL {f.Level + 1}: {next}", Bone, UiTypography.Body, 6);
         Gap();
         Rule();
 
