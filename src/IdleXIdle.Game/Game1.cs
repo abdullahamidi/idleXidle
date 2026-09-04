@@ -1838,9 +1838,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
-                or "gemtour" or "intro" or "typespec")
+                or "gemtour" or "intro" or "typespec" or "vfxdebug")
             {
                 _showTitle = false;
+                // RH_SHOT_HUNTER=<character id> poses the fixture on a DIFFERENT champion.
+                //
+                // The VFX contract measures every effect against the hunter's VISIBLE silhouette, and
+                // the silhouettes differ enormously: THE OATHBOUND draws 162 px wide and QUIVER 373 px,
+                // a 2.3x spread, while all ten draw within 4 px of the same HEIGHT. So a capture of one
+                // hunter proves nothing about the placement of anything measured against a width —
+                // which is exactly why the brief's §71 asks for two silhouettes and why the audit found
+                // its named pair (THE SEEKER 267, THE MAGPIE 302) differ by only 13 %.
+                //
+                // Restore is the roster's own entry point; it unlocks the champion being restored, so
+                // the fixture can pose one the save has not earned without a second unlock path.
+                if (Environment.GetEnvironmentVariable("RH_SHOT_HUNTER")?.Trim() is { Length: > 0 } shotHunter
+                    && CharacterRoster.Find(shotHunter) is { } posed)
+                    _characters.Restore(posed.Id, _characters.SaveQuests(),
+                                        _characters.SaveUnlocked().Append(posed.Id));
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
                 // they pose nothing beyond skipping the title.)
                 // lootforge: seed the Forge with a spread of loot so it can be screenshotted with content
@@ -2116,8 +2131,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog"
-                    or "fightstatus" or "fightshieldbroken" or "fightmulti")
+                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "vfxdebug")
                 {
+                    // `vfxdebug` is `fightshield` PLUS the VFX contract's own overlay (brief §70): the
+                    // standing barrier is the acceptance case, so the mode that photographs the contract
+                    // has to be the mode that raises one.
+                    if (sm == "vfxdebug") _expedition.DevVfxDebug = true;
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
                     // `fightaura` slots a NATURE AURA beside the starter Strike, so the always-on pulse
@@ -2133,7 +2152,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // exactly that reason. One skill also cannot show the thing the rework is for: two
                     // actives leaving the plain swing most of its beats.
                     if (sm is "fight" or "fightswing" or "fightflash" or "fightshield"
-                        or "fightstatus" or "fightshieldbroken" or "fightmulti")
+                        or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "vfxdebug")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
                         // The roads, or every skill but the champion's own is refused and the fixture
@@ -2203,7 +2222,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield" or "fightshieldbroken")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield" or "fightshieldbroken" or "vfxdebug")
                     {
                         var worn = new[]
                         {
@@ -2217,7 +2236,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // nobody has ever looked at. Five MACHINE pieces open the 3-piece wave-start
                         // shield, so the bar is filled from the wave's first frame rather than depending
                         // on a grant landing in the instant the shutter opens.
-                        var setEl = sm is "fightshield" or "fightshieldbroken" ? Source.Machine : Source.Nature;
+                        var setEl = sm is "fightshield" or "fightshieldbroken" or "vfxdebug" ? Source.Machine : Source.Nature;
                         for (var i = 0; i < worn.Length; i++)
                             _hunter.Equip(new ItemInstance
                             {
@@ -2340,7 +2359,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fight` (and the shield / multi-hit poses) with RH_SHOT_T: seconds into the wave to
                     // pose (capture.sh's third argument), so the bars can be photographed after the fight
                     // has moved them — and a bite or a burst caught at its instant.
-                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus"
+                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus" or "fightfive" or "vfxdebug"
                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
@@ -2897,13 +2916,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     //    screenshot of its own empty state. Discovery is account-wide, so seeding the
                     //    ledger directly is what a mid-career save actually looks like — nothing here
                     //    is a state the game cannot reach.
-                    var posed = new[]
+                    // `posedTraits`, not `posed`: the VFX slice's RH_SHOT_HUNTER dial introduced a
+                    // `posed` champion in an enclosing scope, and two fixtures naming one thing is how
+                    // a fixture quietly poses the wrong state.
+                    var posedTraits = new[]
                     {
                         "t_scar_tissue", "t_last_word", "t_deep_cut", "t_spill", "t_last_breath",
                         "t_certain_hand", "t_settling_weight", "t_homeground", "t_single_note",
                         "t_answering_wall", "t_lingering_mark",
                     };
-                    foreach (var traitId in posed)
+                    foreach (var traitId in posedTraits)
                         _traitLedger.Discover(traitId, new TraitFirst(_characters.ActiveId, _activeRegion, 41));
                     foreach (var traitId in new[] { "t_scar_tissue", "t_last_word", "t_last_breath" })
                         _traitLedger.Equip(_characters.ActiveId, traitId);
@@ -3112,6 +3134,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // overlays, and they sat one key away from F1 (help) and F10 (settings), live in normal play —
         // a playtester could trip either and reasonably conclude the game was broken.
         if (DevKeysEnabled && Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
+        // F9, NOT F8. F8 already cycles the UI SCALE two lines below — the design for this phase said
+        // "F8 is free" and the code says otherwise, so one press would have toggled the overlay AND
+        // stepped the density profile, which reads as the overlay breaking the layout it is measuring.
+        if (DevKeysEnabled && Pressed(Keys.F9)) _expedition.DevVfxDebug = !_expedition.DevVfxDebug;   // dev: the VFX placement contract's bounds/anchor/ratio overlay (brief §70)
         if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _traits.DevDustDebug = !_traits.DevDustDebug; }   // dev layout overlays
         if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;

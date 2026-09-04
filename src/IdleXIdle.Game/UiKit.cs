@@ -190,14 +190,21 @@ public sealed class UiKit
     /// in all eight frames, so the visible figure is pixel-identical and only its rectangle shrinks.
     /// </para>
     /// </remarks>
-    public float SidePadFraction(string key)
+    /// <param name="declaredFrames">
+    /// How many frames the strip HAS, when the caller knows. Zero (the default) infers square frames
+    /// from the height — what every draw caller wants, and what all the shipped art is. The VFX
+    /// placement contract DECLARES its frame count instead of inferring it, because a strip
+    /// regenerated at another aspect would otherwise be mis-sliced in silence.
+    /// </param>
+    public float SidePadFraction(string key, int declaredFrames = 0)
     {
-        if (_sidePadCache.TryGetValue(key, out var cached)) return cached;
+        var cacheKey = declaredFrames > 0 ? $"{key}#{declaredFrames}" : key;
+        if (_sidePadCache.TryGetValue(cacheKey, out var cached)) return cached;
         var frac = 0f;
         if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
         {
-            var fw = t.Height;                       // square frames
-            var frames = Math.Max(1, t.Width / fw);
+            var frames = declaredFrames > 0 ? declaredFrames : Math.Max(1, t.Width / t.Height);
+            var fw = Math.Max(1, t.Width / frames);
             var data = new Color[t.Width * t.Height];
             t.GetData(data);
             var least = fw / 2;                      // the tightest pad found on any frame, either side
@@ -215,10 +222,59 @@ public sealed class UiKit
             }
             frac = Math.Max(0, least - 1) / (float)fw;   // a pixel of slack, so no soft edge is shaved
         }
-        _sidePadCache[key] = frac;
+        _sidePadCache[cacheKey] = frac;
         return frac;
     }
 
+    /// <summary>
+    /// A strip's transparent margins as fractions of one FRAME — the union across every frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one queryable visual-bounds API in the game, and the thing the VFX placement contract is
+    /// built on. The measurement is not new: it is the same three cached alpha scans the draw path has
+    /// always used (<see cref="SidePadFraction"/>, <see cref="TopPadFraction"/>,
+    /// <see cref="BottomPadFraction"/>), which nothing outside <see cref="AnimSprite"/> and
+    /// <see cref="SpriteGrounded"/> could reach. The function shaped like this one — <c>ContentPad</c>,
+    /// which returned a full bounding box — had ZERO consumers and took its left and right edges from
+    /// the first and last frame in TEXTURE coordinates rather than the union in FRAME coordinates, so
+    /// it was wrong for a strip. It is gone; this replaces it.
+    /// </para>
+    /// <para>
+    /// Left and right are equal by construction — that is <see cref="SidePadFraction"/>'s own rule, and
+    /// it is deliberate: cropping each side to its own content would re-centre a figure the artist
+    /// placed off-centre.
+    /// </para>
+    /// <para>
+    /// Missing art measures as <see cref="Vfx.ContentBox.Full"/> rather than throwing, so an effect with
+    /// no strip is placed honestly at its frame size instead of dividing by a zero-height content box.
+    /// </para>
+    /// </remarks>
+    public Vfx.ContentBox Content(string key, int declaredFrames = 0)
+    {
+        if (Assets.Get(key) is null) return Vfx.ContentBox.Full;
+        var side = SidePadFraction(key, declaredFrames);
+        return new Vfx.ContentBox(side, TopPadFraction(key), side, BottomPadFraction(key));
+    }
+
+    /// <summary>
+    /// Empty rows under the lowest opaque pixel, as a fraction of height. Cached per key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mirror of <see cref="TopPadFraction"/>, and the fix for characters that look like they are
+    /// fighting in mid-air. <see cref="Sprite"/> scales the WHOLE texture — padding included — to fill
+    /// the destination box, so a sprite with empty rows under its feet lands its visible sole that many
+    /// pixels ABOVE the box bottom. Callers that must stand something on the floor use
+    /// <see cref="SpriteGrounded"/> or <see cref="AnimSprite"/>, which push the draw down by this
+    /// fraction so the opaque sole meets <c>box.Bottom</c>.
+    /// </para>
+    /// <para>
+    /// ONE function, for a texture or a strip alike. There used to be two — this and a byte-identical
+    /// <c>StripBottomPadFraction</c> — sharing a single cache, so they could never have disagreed and
+    /// one of them was pure duplication waiting to drift.
+    /// </para>
+    /// </remarks>
     public float BottomPadFraction(string key)
     {
         if (_bottomPadCache.TryGetValue(key, out var cached)) return cached;
@@ -319,40 +375,10 @@ public sealed class UiKit
         // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
-        var drop = (int)MathF.Round(StripBottomPadFraction(stripKey) * fw * sc);
+        var drop = (int)MathF.Round(BottomPadFraction(stripKey) * fw * sc);
         b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint,
                0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
-    }
-
-    /// <summary>
-    /// Empty rows under the lowest opaque pixel of an animation strip, as a fraction of FRAME height.
-    /// </summary>
-    /// <remarks>
-    /// Measured across the whole strip, so every frame of a clip shares one ground offset and the figure
-    /// does not bob as it plays. Cached per key — this scans the full texture, which for a boss strip is
-    /// 8192x1024.
-    /// </remarks>
-    public float StripBottomPadFraction(string stripKey)
-    {
-        if (_bottomPadCache.TryGetValue(stripKey, out var cached)) return cached;
-        var frac = 0f;
-        if (Assets.Get(stripKey) is { } t && t is { Width: > 0, Height: > 0 })
-        {
-            var data = new Color[t.Width * t.Height];
-            t.GetData(data);
-            var bottom = -1;
-            for (var y = t.Height - 1; y >= 0; y--)
-            {
-                var opaque = false;
-                for (var x = 0; x < t.Width; x++)
-                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
-                if (opaque) { bottom = y; break; }
-            }
-            frac = bottom < 0 ? 0f : (t.Height - 1 - bottom) / (float)t.Height;
-        }
-        _bottomPadCache[stripKey] = frac;
-        return frac;
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)
@@ -394,44 +420,6 @@ public sealed class UiKit
             }
         tex.SetData(data);
         return tex;
-    }
-
-    private readonly System.Collections.Generic.Dictionary<Texture2D, Vector4> _contentPad = new();
-
-    /// <summary>
-    /// A texture's transparent margins as fractions of its size: (left, top, right, bottom).
-    /// </summary>
-    /// <remarks>
-    /// Generated art arrives on a square canvas with however much empty space the model felt like
-    /// leaving — measured across the ten boot variants that is anywhere from 6% to 18% vertically. Any
-    /// placement expressed against the CANVAS therefore lands somewhere different for every variant,
-    /// which is why a worn boot calibrated on one trait sat halfway up the shin on another. Callers
-    /// that place art by its content are immune to that.
-    /// </remarks>
-    public Vector4 ContentPad(Texture2D t)
-    {
-        if (_contentPad.TryGetValue(t, out var cached)) return cached;
-        var pad = Vector4.Zero;
-        if (t is { Width: > 0, Height: > 0 })
-        {
-            var data = new Color[t.Width * t.Height];
-            t.GetData(data);
-            int l = t.Width, r = 0, top = t.Height, bot = 0;
-            for (var y = 0; y < t.Height; y++)
-                for (var x = 0; x < t.Width; x++)
-                    if (data[y * t.Width + x].A > 8)
-                    {
-                        if (x < l) l = x;
-                        if (x >= r) r = x + 1;
-                        if (y < top) top = y;
-                        if (y >= bot) bot = y + 1;
-                    }
-            if (r > l && bot > top)
-                pad = new Vector4(l / (float)t.Width, top / (float)t.Height,
-                                  (t.Width - r) / (float)t.Width, (t.Height - bot) / (float)t.Height);
-        }
-        _contentPad[t] = pad;
-        return pad;
     }
 
     /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>

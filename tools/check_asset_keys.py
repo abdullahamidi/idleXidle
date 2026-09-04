@@ -29,10 +29,20 @@ GAME = os.path.join(ROOT, "src", "IdleXIdle.Game")
 ART = os.path.join(ROOT, "assets", "art")
 AUDIO = os.path.join(ROOT, "assets", "audio")
 
+# THE FILES A KEY MAY LIVE IN. The Game assembly's own sources, plus the VFX contract's profile
+# table under Vfx/ — every effect key in the game is a literal in that one table by design, which is
+# what makes this gate able to see them at all. Before the contract, six effect spawns passed a key
+# COMPUTED from the skill (FxFor(def)), so `fx_press`, `fx_weep` and `fx_wilt` named art nothing
+# could resolve and this gate could not say so.
+def game_sources() -> list:
+    return sorted(glob.glob(os.path.join(GAME, "*.cs"))
+                  + glob.glob(os.path.join(GAME, "Vfx", "*.cs")))
+
+
 # The call sites that take a key. Anything else that grows one should be added here.
 CALLS = re.compile(
     r'\b(?:Assets\.Get|Assets\.GetFirst|Assets\.Has|Get|GetFirst|Has|SpriteFit|Sprite|'
-    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|PanelNine|Icon|_vfx\.Play)\s*\(\s*([^)]*)')
+    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|PanelNine|Icon)\s*\(\s*([^)]*)')
 # `_vfx.Play` is VfxPlayer.Play — the 2026-08-22 art pass keys every combat effect by name (fx_strike,
 # fx_hit ...) through the alias table, and an effect nothing can find is the house failure mode: it fails
 # soft and the fight simply has no flash where one was promised. Qualified on purpose: a bare `Play`
@@ -74,7 +84,7 @@ def main() -> int:
     alias = aliases()
     missing = {}
 
-    for path in sorted(glob.glob(os.path.join(GAME, "*.cs"))):
+    for path in game_sources():
         text = strip_comments(open(path, encoding="utf-8").read())
         for line_no, line in enumerate(text.split("\n"), 1):
             for call in CALLS.finditer(line):
@@ -89,12 +99,40 @@ def main() -> int:
                     missing.setdefault(key, []).append(
                         f"{os.path.basename(path)}:{line_no}")
 
+    # AND EVERY EFFECT KEY IN THE VFX PLACEMENT CONTRACT'S PROFILE TABLE.
+    #
+    # This is the check that would have caught PRESS, WEEP and WILT. Their art was on disk and
+    # loaded; the alias table had no entry; VfxPlayer returns silently on a null texture; and the
+    # spawn sites passed a key COMPUTED from the skill, so the literal scan above could not see them.
+    # Two of the three were Field skills, whose art drives the champion's held field, so those builds
+    # had no field effect at all and nothing anywhere said so.
+    #
+    # The contract's answer is that every effect key is a literal in ONE file. This reads that file.
+    profiles_cs = os.path.join(GAME, "Vfx", "VfxProfiles.cs")
+    if os.path.exists(profiles_cs):
+        text = strip_comments(open(profiles_cs, encoding="utf-8").read())
+        for line_no, line in enumerate(text.split("\n"), 1):
+            for key in re.findall(r'"(fx_[a-z0-9_]+)"', line):
+                if alias.get(key, key) not in have and key not in have:
+                    missing.setdefault(key, []).append(f"VfxProfiles.cs:{line_no}")
+
+    # AND EVERY EFFECT KEY THE SKILL CATALOGUE NAMES. A skill's FxKey is expanded to `fx_<key>` (or
+    # to the character's own `fx_<id>_<key>_strip8_512` where one was generated), so a catalogue entry
+    # naming art nobody drew is the same silent failure one layer further back.
+    catalogue_cs = os.path.join(ROOT, "src", "IdleXIdle.Core", "Builds", "SkillCatalogue.cs")
+    if os.path.exists(catalogue_cs):
+        text = open(catalogue_cs, encoding="utf-8").read()
+        for fx in sorted(set(re.findall(r'FxKey:\s*"([a-z0-9_]+)"', text))):
+            key = f"fx_{fx}"
+            if alias.get(key, key) not in have and key not in have:
+                missing.setdefault(key, []).append("SkillCatalogue.cs (FxKey)")
+
     # AND THE SOUND CUES AND MUSIC BEDS, which fail exactly the same way: SoundBank no-ops on a
     # name it does not have. Five of the seven cues and ALL SIX music tracks were called for the
     # whole of development and played silence — the looping player was written, wired per screen,
     # given a per-theme arena variant with a fallback, and never given a file.
     wavs = cues()
-    for path in sorted(glob.glob(os.path.join(GAME, "*.cs"))):
+    for path in game_sources():
         text = strip_comments(open(path, encoding="utf-8").read())
         for line_no, line in enumerate(text.split("\n"), 1):
             for call in SOUND_CALL.finditer(line):

@@ -17,6 +17,7 @@ using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
+using IdleXIdle.Game.Vfx;
 
 namespace IdleXIdle.Game;
 
@@ -162,7 +163,8 @@ public sealed class HuntScreen
     // ArenaClip.X + 259 = 445.
     // A PROPERTY, not a static readonly: the ground line follows the profile, and a static readonly is
     // frozen at class load — it would stand on the 100 % floor whatever the setting said.
-    private static Rectangle ChampBox => new(620 - 200, GroundY - 430, 400, 430);
+    /// <summary>Where the hunter stands. PUBLIC because the VFX contract's tests measure against it.</summary>
+    public static Rectangle ChampBox => new(620 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     // 1320 -> 1380 -> 1430. The pack carries the separation the designer asked for, because the champion
@@ -640,6 +642,21 @@ public sealed class HuntScreen
     public bool DevBossDebug { get; set; }
 
     /// <summary>
+    /// DEV ONLY — the VFX placement contract's debug view (brief §70). Never true in a shipped build.
+    /// </summary>
+    /// <remarks>
+    /// Three doors, none of them open to a player: F9 under <c>RH_DEV=1</c> (beside F6's boss and F7's
+    /// layout overlays), <c>RH_SHOT_MODE=vfxdebug</c> for the capture rig, and <c>RH_VFX_DUMP=1</c> for
+    /// the text version, which is the one that actually gets read. F9 rather than F8 because F8 already
+    /// steps the UI SCALE.
+    /// </remarks>
+    public bool DevVfxDebug { get; set; }
+
+    /// <summary><c>RH_VFX_BUDGET=1</c>: print the asset-scale ledger once, from the real textures.</summary>
+    private static readonly bool WriteBudgetLedger =
+        Environment.GetEnvironmentVariable("RH_VFX_BUDGET") is "1" or "true";
+
+    /// <summary>
     /// FIXTURE DIAL — <c>RH_SHOT_SHIELDFX=gain|absorb|break</c>: hold one shield transient at its peak
     /// so the shutter can photograph it.
     /// </summary>
@@ -653,7 +670,12 @@ public sealed class HuntScreen
     /// </para>
     /// <para>
     /// <c>gain</c> and <c>absorb</c> re-arm their one-shot from <see cref="UpdateFight"/> every frame, so
-    /// the bar's rim / notch stands at full when the frame is saved. <c>break</c> lets the real
+    /// the bar's rim / notch stands at full when the frame is saved. They also fire the matching
+    /// BARRIER effect once, slowed to <see cref="PosedFxFps"/> so it is still on its first, brightest
+    /// frame at the shutter — the standing barrier rests at 0.16 alpha and the flare is the only moment
+    /// it is legible, which the brief's §106 asks to be shown on two different hunters. Posing only the
+    /// bar left that to the replay: the same fixture caught the flare on THE MAGPIE and missed it on
+    /// THE SEEKER. <c>break</c> lets the real
     /// <see cref="BattleEventKind.ShieldBroken"/> fire and then jumps the burst to the middle of its own
     /// eight frames (see <see cref="PlayShieldBreak"/>), which is the widest moment of the shatter.
     /// It also forces the bar on, so the pose works on any fight mode. Nothing here runs without the
@@ -750,8 +772,18 @@ public sealed class HuntScreen
     public HuntScreen(UiKit ui)
     {
         _ui = ui;
-        _vfx = new VfxPlayer(ui.Assets);
+        _vfx = new VfxPlayer(ui) { Bounds = _actors };
     }
+
+    /// <summary>
+    /// Where every figure VISIBLY is this frame — the one thing the effects pass resolves against.
+    /// </summary>
+    /// <remarks>
+    /// Filled by <see cref="LayoutActors"/> as the first statement of <see cref="DrawArena"/>, before a
+    /// single figure is drawn, so an effect can never be aimed at last frame's rectangle and can never
+    /// miss a lunge the draw applied after it.
+    /// </remarks>
+    private readonly VfxBoundsRegistry _actors = new();
 
     // ── Reward channel: one entry per cleared wave, drained by the host. The record is Core's
     //    (Expeditions.WaveReward) since P5, and the DESCENT banks a wave the moment the sim clears
@@ -990,7 +1022,7 @@ public sealed class HuntScreen
         _waveEnemyHp = enemyHp;
         _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
         _diedAt.Clear();          // the previous wave's fallen are gone with its replay
-        _creatureRect.Clear();
+        _actors.Clear();
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
         // beat. Without this a wave of five reads as one bar going down, which hides the single most
         // useful fact in a Swarm band: how many of them you actually got through.
@@ -1204,7 +1236,7 @@ public sealed class HuntScreen
             Color = crit ? Gold : skill ? UiKit.Vellum : Bone,
             // Over the creature it struck, not the row's centre: in a swarm the row centre is the gap
             // between two creatures, and a number there names neither of them.
-            X = EnemyPoint(slot, 0f).X,
+            X = CreatureCentreX(slot),
             Y = EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
             Life = crit ? 1.3f : 1f,
             // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
@@ -1270,9 +1302,10 @@ public sealed class HuntScreen
                 new Dictionary<int, int> { [0] = _champ.MaxHealth }, _waveEnemyHp);
             _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
             _diedAt.Clear();
-            _creatureRect.Clear();
+            _actors.Clear();
             _callouts.Clear();      // the pose shows THIS instant, not the second before it
             _vfx.Clear();
+            _shieldFxPosed = false; // ...so a posed shield flare is re-fired after the rebuild wiped it
             _hitFlash.Clear();
             _playheadMs = seek;
             foreach (var crossed in _replay.Advance(seek))
@@ -1408,8 +1441,7 @@ public sealed class HuntScreen
                     if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f) _hitFlash[e.Slot] = 1f;
                     if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
-                        var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
-                        _vfx.Play("fx_weakhit", hx, hy, scale: EnemyScale(e.Slot, 0.6f), fps: 16f, tint: Steel);
+                        PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
                     }
                     break;
                 }
@@ -1418,7 +1450,7 @@ public sealed class HuntScreen
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f, vary: 0.06f);   // same thud pitched down: taking, not giving
-                    _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
+                    PlayFx(VfxProfiles.ImpactBite, VfxSubject.Champion, Ember);
                     break;
                 case BattleEventKind.Skill:
                 {
@@ -1450,18 +1482,20 @@ public sealed class HuntScreen
                 }
                 case BattleEventKind.Heal:
                     if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
-                    // Centred so the effect's FOOT (its ground ring) sits on the ground line: at scale 3 the
-                    // effect is 312 px tall, and centred on the champion's box its ring floated at the waist
-                    // (playtest 2026-08-28: "the heal effect's ground part appears at the character's middle").
-                    _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Bottom - 156, scale: 3, fps: 10f, tint: Verdant);
+                    // The effect's FOOT sits on the ground line. That used to be a hand-tuned "- 156",
+                    // which only held at one size and one strip: the constant is now the STANDING anchor,
+                    // which puts the content's bottom edge on the champion's own visible sole whatever
+                    // the art's padding is (playtest 2026-08-28: "the heal effect's ground part appears
+                    // at the character's middle").
+                    PlayFx(VfxProfiles.HealColumn, VfxSubject.Champion, Verdant);
                     break;
                 case BattleEventKind.Undying:
                     Say("UNDYING", Gold);
-                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
+                    PlayFx(VfxProfiles.ShieldUndying, VfxSubject.Champion, Gold);
                     break;
                 case BattleEventKind.Down:
                     Sound?.Play("sfx_champ_down", 0.62f, vary: 0.03f);
-                    _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
+                    PlayFx(VfxProfiles.DeathChampion, VfxSubject.Champion, Color.White);
                     break;
                 case BattleEventKind.EnemyDown:
                 {
@@ -1473,10 +1507,10 @@ public sealed class HuntScreen
                     // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
                     if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
                     else Sound?.Play("sfx_enemy_down", 0.36f, vary: 0.06f);
-                    var (dx, dy) = EnemyPoint(e.Slot, 0.55f);
                     // A boss falling is the loudest beat in the fight: the starburst AND the plume.
-                    if (_isBossWave) _vfx.Play("fx_crit", dx, dy - 40, scale: EnemyScale(e.Slot, 1.2f), fps: 10f, tint: Gold);
-                    _vfx.Play("fx_death", dx, dy, scale: EnemyScale(e.Slot, 0.9f), fps: 9f, delay: 0.45f);
+                    // The plume's half-second wait is the profile's DelaySeconds now, not the caller's.
+                    if (_isBossWave) PlayFx(VfxProfiles.DeathBossBurst, VfxSubject.Creature(e.Slot), Gold);
+                    PlayFx(VfxProfiles.DeathCreature, VfxSubject.Creature(e.Slot), Color.White);
                     break;
                 }
                 case BattleEventKind.Charge:
@@ -1498,7 +1532,7 @@ public sealed class HuntScreen
                     // grant is a state change, and the run has many of them.
                     UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
                     Sound?.Play("sfx_shield_gain", 0.40f, vary: 0.05f);
-                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 3, fps: 12f, tint: Steel);
+                    PlayFx(VfxProfiles.ShieldGain, VfxSubject.Champion, Steel);
                     break;
 
                 case BattleEventKind.ShieldAbsorbed:
@@ -1510,7 +1544,7 @@ public sealed class HuntScreen
                     _shieldSeen = true;
                     UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
                     Sound?.Play("sfx_shield_hit", 0.26f, vary: 0.07f);
-                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 2, fps: 16f, tint: Steel);
+                    PlayFx(VfxProfiles.ShieldAbsorb, VfxSubject.Champion, Steel);
                     break;
 
                 case BattleEventKind.ShieldBroken:
@@ -1543,6 +1577,17 @@ public sealed class HuntScreen
             _shieldSeen = true;   // the bar has to exist for the pose to sit on it
             if (ShotShieldFx == "gain") UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
             else if (ShotShieldFx == "absorb") UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
+            // ...AND THE EFFECT, not only the bar. §106 asks to see the barrier surrounding two
+            // different hunters, and the standing barrier rests at 0.16 alpha — the moment it is
+            // legible at all is the flare. Posing only the bar left that moment to luck: the same
+            // fixture caught the flare on THE MAGPIE and missed it on THE SEEKER, because the replay
+            // fires the grant wherever it fires it. A state no dial can pose has never been looked at.
+            if (!_shieldFxPosed && ShotShieldFx is "gain" or "absorb")
+            {
+                _shieldFxPosed = true;
+                _vfx.Play(ShotShieldFx == "gain" ? VfxProfiles.ShieldGain : VfxProfiles.ShieldAbsorb,
+                          FxFor("shield"), VfxSubject.Champion, Steel, fps: PosedFxFps);
+            }
         }
 
         if (!_replay.Finished) return;
@@ -1625,47 +1670,38 @@ public sealed class HuntScreen
     /// </remarks>
     private void PlaySkillVfx(SkillDef def, Source source, int? hitSlot = null)
     {
-        var glow = SourceGlow(source);
-        // ON the creature being hit, sized to it: the sim lands single-target Forms on the first living
-        // creature, so that is where the flash goes — a swarm creature gets a small one, a bruiser a big
-        // one, a boss the biggest (EnemyScale). A Trap bursts under the whole row; the champion's own
-        // Forms stay on the champion.
+        // ONE STATEMENT, where there was a six-case switch of hand-placed pixels. The profile says
+        // which figure the cast belongs to and how big it is against that figure; the skill says which
+        // ART it wears (its own per-character strip where one exists, the shared one otherwise).
+        //
+        // The sim lands single-target skills on the first living creature, so that is the creature the
+        // flash goes on; a trap bursts under the whole ROW, and the champion's own shapes stay on him.
+        var profile = VfxProfiles.ForSkill(def);
         var target = hitSlot ?? TargetSlot();
-        var (tx, ty) = EnemyPoint(target, 0.45f);
-        switch (def.ClipKey)
+        var subject = profile.Subject switch
         {
-            case "projectile":
-                // IT CROSSES THE GAP. It used to be played at the midpoint between the two figures and
-                // simply appear there — "projectile efektlerinin gitme animasyonu yok, direkt düşmanın
-                // üstünde çıkıyor" (2026-08-28). The strip itself is authored as an in-place spin, which
-                // is right and stays: only the renderer knows where the champion's hand and the target
-                // are this frame, so the renderer flies it (VfxPlayer's ToX/ToY, eased out).
-                //
-                // From the champion's near shoulder to the creature, and SCALED TO THE GAP it crosses
-                // rather than to the creature it hits — a Swarm creature used to get a 208 px bolt and a
-                // boss a 520 px one for the same flight. 8 fps, not 14: only the strip's first frames
-                // carry the streak, so at 14 fps the bolt was over in 214 ms.
-                _vfx.Play(FxFor(def), ChampBox.Right - 40, ChampBox.Center.Y + 30,
-                          scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow,
-                          toX: tx, toY: ty);
-                break;
-            case "aura":
-                _vfx.Play(FxFor(def), ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
-                break;
-            case "trap":
-                _vfx.Play(FxFor(def), _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
-                break;
-            case "mark":
-                _vfx.Play(FxFor(def), tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
-                break;
-            case "transformation":
-                _vfx.Play(FxFor(def), ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
-                break;
-            default:   // "strike" and any future key: on the creature being hit, sized to it
-                _vfx.Play(FxFor(def), tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
-                break;
-        }
+            VfxSubjectKind.Champion => VfxSubject.Champion,
+            VfxSubjectKind.EnemyRow => VfxSubject.EnemyRow,
+            _ => VfxSubject.Creature(target),
+        };
+        // IT CROSSES THE GAP. A bolt used to be played at the midpoint between the two figures and
+        // simply appear there — "projectile efektlerinin gitme animasyonu yok, direkt düşmanın üstünde
+        // çıkıyor" (2026-08-28). The strip is authored as an in-place spin, which is right and stays:
+        // only the renderer knows where the two figures are this frame, so the renderer flies it.
+        var travel = profile.Travel == VfxTravel.ToTarget ? VfxSubject.Creature(target) : (VfxSubject?)null;
+        PlayFx(profile, subject, SourceGlow(source), FxFor(def), travel);
     }
+
+    /// <summary>
+    /// Fire one effect: a profile, a subject, and the colour of the moment. No pixels, ever.
+    /// </summary>
+    /// <param name="assetKey">
+    /// Overrides the profile's shared art. A skill wears its own character-specific strip where one was
+    /// generated, and the held field wears whatever art the Field skill names.
+    /// </param>
+    private void PlayFx(VfxProfile p, VfxSubject subject, Color tint, string? assetKey = null,
+                        VfxSubject? travelTo = null)
+        => _vfx.Play(p, assetKey ?? p.AssetKey, subject, tint, travelTo);
 
     /// <summary>The additive glow of each Source — see <see cref="PlayFormVfx"/> for why these are not the bible's body hues.</summary>
     private static Color SourceGlow(Source s) => s switch
@@ -1683,7 +1719,7 @@ public sealed class HuntScreen
     public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
     {
         _enemyArt = enemyArt;
-        _vfx.Scale = 1;   // this screen authors at canvas scale 1, so the VFX overlay draws at scale 1 too
+        if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
         // full resolution), so the log button, the utility doors and the fall plate hit-test it as is.
         var hit = mouse;
@@ -1735,6 +1771,7 @@ public sealed class HuntScreen
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
+        if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F9)
         // LAST, over every panel on the screen: a hover tip is an answer to the mouse, and nothing drawn
         // for a cursor that is somewhere else may cover it (see DrawLogButton).
         if (_logTipAt is { } tipAt)
@@ -1745,16 +1782,25 @@ public sealed class HuntScreen
     /// <summary>Arena figures + effects, drawn inside the scissor clip so no actor/VFX/bar/number escapes it.</summary>
     private void DrawArena(SpriteBatch b, HuntOverlay overlay)
     {
+        // EVERY FIGURE IS PLACED BEFORE ANY OF THEM IS DRAWN. The effects pass resolves against what
+        // this publishes, so an effect can never aim at last frame's rectangle (the old creature table
+        // was written here and read from Update) nor miss the lunge the draw applies (every
+        // champion-side effect used the un-pushed box while the champion stood up to 40 px right of it).
+        LayoutActors();
         var attacking = EnemyAttacking;
+
+        // UNDER the figures: the ground ring the pack stands in, and the field behind the body. This
+        // tier did not exist before — one flat effects pass ran after both figures, so §68's layer
+        // vocabulary had nowhere to land and a field could only ever haze the champion it wrapped.
+        _vfx.DrawUnder(b);
+
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
         // Champion (arena left). Name/HP live in the top-left HUD.
-        var push = (int)(_champLunge * 40f);
-        var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        DrawChampion(b, cbox, dead: _mode == Mode.Downed);
+        DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);
 
-        _vfx.Draw(b);
+        _vfx.DrawOver(b);
         DrawCallouts(b);
         // The death flash used to be drawn HERE, inside the arena pass — whose rasterizer scissors
         // everything to ArenaRect, so the "full screen" flash was silently cropped to the arena
@@ -1812,29 +1858,202 @@ public sealed class HuntScreen
     /// <summary>The wave whose replay is on screen (1-based) — see BeginWave; the header and the boss flag read it.</summary>
     private int _replayWave;
 
-    // ── WHERE EACH CREATURE IS, published by the draw for the update (2026-08-23). ─────────────────
-    //    Every enemy-side effect used to spawn at the ROW's centre — right for one creature, 150 px off
-    //    for a swarm of five, and the death plume rose beside the wrong body. The draw now records each
-    //    creature's on-screen rectangle (slot → centre x, top, height) and the effects ask for a point on
-    //    the creature the event names (EnemyDown and Strike carry the slot) or the one the sim is hitting.
-    private readonly Dictionary<int, (int X, int Top, int H)> _creatureRect = new();
+    // ── WHERE EACH FIGURE IS, laid out ONCE per frame before anything is drawn. ──────────────────
+    //
+    //    This replaces a dictionary the DRAW wrote and the UPDATE read, which had two faults the VFX
+    //    contract could not live with. Positions were one frame STALE, because PublishCreature ran
+    //    inside Draw while every effect spawned inside UpdateFight; and there was no entry at all on a
+    //    wave's first frame, where EnemyPoint fell back to an imaginary point 110 px below the row.
+    //    On the champion's side it was worse: he is DRAWN at ChampBox.X + push (up to 40 px right
+    //    during a swing) and every one of his ten effects used the un-pushed box.
+    //
+    //    LayoutActors computes each figure's rectangle as the first statement of DrawArena; the draw
+    //    methods consume what it computed, and the effects pass resolves against the VISUAL bounds it
+    //    published. One source, one frame, no fallback.
+    private readonly Dictionary<int, Rectangle> _creatureBoxes = new();
+    private Rectangle _champDrawBox;
+
     /// <summary>Screen time at which each creature died — the death clip plays from it.</summary>
     private readonly Dictionary<int, float> _diedAt = new();
     private const float DeathFps = 10f;              // 8 frames in 0.8 s
     private const float DeathHoldSeconds = 0.6f;     // the body lies there
     private const float DeathFadeSeconds = 0.45f;    // then fades out
 
-    private void PublishCreature(int slot, Rectangle box) => _creatureRect[slot] = (box.Center.X, box.Y, box.Height);
+    /// <summary>The layout box laid out for creature <paramref name="slot"/> this frame.</summary>
+    private Rectangle CreatureBox(int slot)
+        => _creatureBoxes.TryGetValue(slot, out var r) ? r : EnemyBox;
 
-    /// <summary>A point on creature <paramref name="slot"/>, <paramref name="yFrac"/> of the way down its body;
-    /// the row's old centre point if the slot has not been drawn yet.</summary>
-    private (int X, int Y) EnemyPoint(int slot, float yFrac)
-        => _creatureRect.TryGetValue(slot, out var r) ? (r.X, r.Top + (int)(r.H * yFrac)) : (_rowCentreX, _rowTopY + 110);
+    /// <summary>Where a creature's VISIBLE middle is — the anchor a damage number hangs from.</summary>
+    private int CreatureCentreX(int slot)
+        => _actors.TryBounds(VfxSubject.Creature(slot), out var vb) ? vb.CenterX : _rowCentreX;
 
-    /// <summary>An effect scale sized to the creature it lands on (1..5 of 104 px) — a swarm creature gets a
-    /// small flash, a bruiser a big one, a boss the biggest — instead of one size for every body.</summary>
-    private int EnemyScale(int slot, float mult = 1f)
-        => Math.Clamp((int)MathF.Round((_creatureRect.TryGetValue(slot, out var r) ? r.H : 300f) / 140f * mult), 1, 5);
+    /// <summary>
+    /// The VISIBLE rectangle a figure occupies when its strip is drawn into <paramref name="box"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>UiKit.AnimSprite</c> crops the strip's transparent margin and fills the box HEIGHT with what
+    /// is left, planting the visible sole on <c>box.Bottom</c>. So the drawn figure is shorter than the
+    /// box (by the bottom pad's share) and almost always much narrower — <c>ChampBox</c> claims 400 px
+    /// of width for a hunter who draws 162 px (THE OATHBOUND) to 373 px (QUIVER). Placing an effect
+    /// against the box is how a barrier ended up a third the size of the body it was enclosing.
+    /// </para>
+    /// <para>
+    /// Measured from ONE REFERENCE STRIP — the idle — never from the live clip, and that is
+    /// load-bearing. <c>char_seeker_idle</c> has 132 px of side padding and <c>char_seeker_attack</c>
+    /// has 30, so the same hunter draws 267 px wide standing and far wider swinging: a width-derived
+    /// offset read off the live clip would make every effect jump on every cast. Height is nearly
+    /// clip-invariant (412 against 411), so taking it from the reference too costs nothing.
+    /// </para>
+    /// <para>
+    /// Missing art falls back to the layout box, which is what the draw itself falls back to.
+    /// </para>
+    /// </remarks>
+    private Rectangle VisualRect(Rectangle box, string? referenceStrip)
+        => referenceStrip is null || !_ui.Assets.Has(referenceStrip)
+            ? box
+            : VfxFigure.VisualRect(box, _ui.Content(referenceStrip));
+
+    /// <summary>The champion's idle strip — the reference silhouette every champion-side effect measures.</summary>
+    private string ChampionReferenceStrip => Character.StripKey("idle");
+
+    /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
+    private string? CreatureReferenceStrip
+        => EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
+
+    /// <summary>
+    /// Lay every figure out and publish its visible bounds, before one pixel of the arena is drawn.
+    /// </summary>
+    /// <remarks>
+    /// The rule this enforces: <b>a spawn site names a subject and a profile and never computes a
+    /// pixel.</b> Everything positional lives here, once, and both the figures and their effects read it.
+    /// </remarks>
+    private void LayoutActors()
+    {
+        _creatureBoxes.Clear();
+
+        // The champion, WITH his lunge. The draw used to apply this push and the effects never saw it.
+        var push = (int)(_champLunge * 40f);
+        _champDrawBox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
+        _actors.Publish(VfxSubject.Champion, VisualRect(_champDrawBox, ChampionReferenceStrip), facing: 1);
+
+        var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+        if (_isBossWave) LayoutBoss();
+        else if (comp.Count > 1) LayoutComposition(comp);
+        else LayoutSingleEnemy();
+
+        // The row: the union of the bodies standing in it. A trap ring is a statement about the PACK,
+        // and the pack is nine hundred pixels wide and one creature tall — which is why it is the one
+        // profile measured against a width.
+        var strip = _isBossWave ? BossReferenceStrip : CreatureReferenceStrip;
+        Rectangle? row = null;
+        foreach (var (slot, box) in _creatureBoxes)
+        {
+            var vis = VisualRect(box, strip);
+            _actors.Publish(VfxSubject.Creature(slot), vis, facing: -1);
+            row = row is { } r ? Rectangle.Union(r, vis) : vis;
+        }
+        if (row is { } union) _actors.Publish(VfxSubject.EnemyRow, union, facing: -1);
+    }
+
+    /// <summary>
+    /// The row's geometry for a multi-creature wave — compression, clamp, motion, bob.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ROW COMPRESSES BEFORE IT OVERFLOWS. Spacing was a fixed fraction of the creature width, so a
+    /// wide enough wave made the row wider than the arena — and then the clamp below was handed a
+    /// minimum greater than its maximum, which is not a layout mistake but an ArgumentException:
+    /// "'1028' cannot be greater than 1018", thrown out of Draw, killing the game mid-fight. It only
+    /// appears on a big composition, which is why it survived every screenshot and every short run and
+    /// was found by soaking the fight for five minutes.
+    /// </para>
+    /// <para>
+    /// 0.54, not 0.62. Playtest: "düşmanlar çok yakında geliyor onları biraz daha sağa alabiliriz." The row
+    /// is already pinned as far right as the clamp allows, so the creatures were not too far right —
+    /// the ROW WAS TOO WIDE, and its left end reached back toward the champion.
+    /// </para>
+    /// <para>
+    /// AND THE CLAMP STILL CANNOT INVERT. Compression handles every wave that can be made to fit; the
+    /// floor that keeps the row off the champion is raised only as far as <c>hi</c> allows, so a wave
+    /// too wide to leave the gap simply gets whatever gap there is.
+    /// </para>
+    /// <para>
+    /// THE MOTION IS ADDED AFTER THE CLAMP, and that is the whole fix for a bug that swallowed both the
+    /// slide-in and the lunge on 19 of 20 multi-creature waves: <c>hi</c> already sits below
+    /// <c>EnemyBox.Center.X</c> for essentially every archetype and count, so a clamp applied to the
+    /// moved position saturated and the animation never moved a pixel. Overhang is handled by the arena
+    /// scissor, which is already active for exactly this kind of transient overshoot.
+    /// </para>
+    /// </remarks>
+    private void LayoutComposition(IReadOnlyList<WaveCreature> comp)
+    {
+        var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
+        // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
+        // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
+        var enter = (int)(_enemyEnter * 150f);
+        var lunge = (int)(_enemyLunge * -40f);
+        var w = (int)(EnemyBox.Width * scale);
+        var h = (int)(EnemyBox.Height * scale);
+        var half = w / 2;
+
+        var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
+        var spacing = (int)(w * 0.54f);        // overlap slightly; a row of five must still fit
+        if (comp.Count > 1 && room > 0) spacing = Math.Min(spacing, room / (comp.Count - 1));
+        var wanted = Math.Max(0, spacing) * (comp.Count - 1);
+
+        var lo = ArenaRect.X + half + 20 + wanted / 2;
+        var hi = ArenaRect.Right - half - 20 - wanted / 2;
+        lo = Math.Min(hi, Math.Max(lo, ChampBox.Right + 80 + wanted / 2));
+
+        var resting = lo > hi ? ArenaRect.Center.X : Math.Clamp(EnemyBox.Center.X, lo, hi);
+        var centre = resting + enter + lunge;
+        var left = centre - wanted / 2;
+
+        // WHERE THE ROW ACTUALLY IS, published for the labels. Deliberately NOT the lunge-shifted
+        // centre: a nameplate that slides 40 px every time the row shoves forward reads as jitter.
+        _rowCentreX = resting;
+        _rowTopY = EnemyBox.Bottom - h;
+
+        for (var i = 0; i < comp.Count; i++)
+        {
+            // Back-to-front by index so the row overlaps consistently, and each creature bobs on its own
+            // phase — five sprites bobbing in unison read as one animated object, not as five creatures.
+            var cx = left + spacing * i;
+            var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
+            _creatureBoxes[i] = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
+        }
+    }
+
+    /// <summary>One creature, filling the enemy box, with its slide-in, its lunge and its bob.</summary>
+    private void LayoutSingleEnemy()
+    {
+        var elunge = (int)(_enemyLunge * -40f);
+        var enter = (int)(_enemyEnter * 150f);   // shorter + faded, see LayoutComposition
+        var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
+        var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
+        _creatureBoxes[0] = new Rectangle(ebox.X, ebox.Bottom - ebox.Height + bob, ebox.Width, ebox.Height);
+        _rowCentreX = EnemyBox.Center.X;   // resting, like the composition's
+        _rowTopY = ebox.Bottom - ebox.Height;
+    }
+
+    /// <summary>The boss: a square figure standing on its own anchor, with the same lunge as any creature.</summary>
+    private void LayoutBoss()
+    {
+        var lunge = (int)(_enemyLunge * -40f);
+        _creatureBoxes[0] = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge,
+                                          BossAnchor.Y - BossTargetBodyHeight,
+                                          BossTargetBodyHeight, BossTargetBodyHeight);
+        _rowCentreX = BossAnchor.X;
+        _rowTopY = _creatureBoxes[0].Y;
+    }
+
+    /// <summary>The boss's idle strip, or null when the region has no boss art.</summary>
+    private string? BossReferenceStrip
+        => BossKey is { } k && _ui.Assets.Has($"{k}_idle_strip8_512") ? $"{k}_idle_strip8_512" : null;
+
+    /// <summary>Which boss this wave draws — the dev fixture's, or the region's.</summary>
+    private string? BossKey => DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
 
     /// <summary>The creature the sim is hitting: the first alive one, else the one that died last.</summary>
     private int TargetSlot()
@@ -1902,82 +2121,12 @@ public sealed class HuntScreen
 
     private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)
     {
+        // The geometry is LayoutComposition's — computed before anything drew, so the effects landed on
+        // these exact rectangles rather than on the ones this method used to work out for itself.
         var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
-        // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
-        // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
-        var enter = (int)(_enemyEnter * 150f);
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
-        var lunge = (int)(_enemyLunge * -40f);
-
         var w = (int)(EnemyBox.Width * scale);
         var h = (int)(EnemyBox.Height * scale);
-
-        // Lay the row out INSIDE the arena, clamped by each creature's own half-width. The first version
-        // spread from the enemy box's centre by a fixed span and pushed the last creature past the
-        // arena's scissor edge, so a wave of five showed four and a sliver — which is exactly the fact
-        // the player most needs to read.
-        var half = w / 2;
-
-        // THE ROW COMPRESSES BEFORE IT OVERFLOWS. Spacing was a fixed fraction of the creature width,
-        // so a wide enough wave made the row wider than the arena — and then the clamp below was handed
-        // a minimum greater than its maximum, which is not a layout mistake but an ArgumentException:
-        // "'1028' cannot be greater than 1018", thrown out of Draw, killing the game mid-fight. It only
-        // appears on a big composition, which is why it survived every screenshot and every short run
-        // and was found by soaking the fight for five minutes.
-        var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
-        // 0.54, not 0.62. Playtest: "düşmanlar çok yakında geliyor onları biraz daha sağa alabiliriz."
-        // The row is already pinned as far right as the clamp allows, so the creatures were not too far
-        // right — the ROW WAS TOO WIDE, and its left end reached back toward the champion. At 0.62 a
-        // swarm of four spans 372px, putting its leftmost creature 102px from ChampBox's right edge;
-        // at 0.54 it spans 324 and that gap becomes 150.
-        var spacing = (int)(w * 0.54f);        // overlap slightly; a row of five must still fit
-        if (comp.Count > 1 && room > 0) spacing = Math.Min(spacing, room / (comp.Count - 1));
-        var wanted = Math.Max(0, spacing) * (comp.Count - 1);
-
-        // AND THE CLAMP STILL CANNOT INVERT. Compression handles every wave that can be made to fit;
-        // this handles the one that cannot — a single creature wider than the arena leaves no room at
-        // all, and an overhanging row is a cosmetic problem where a thrown exception is a lost session.
-        var lo = ArenaRect.X + half + 20 + wanted / 2;
-        var hi = ArenaRect.Right - half - 20 - wanted / 2;
-
-        // AND A FLOOR THAT KEEPS THE ROW OFF THE CHAMPION. Raised only as far as `hi` allows, so it can
-        // never invert the clamp — a wave too wide to leave the gap simply gets whatever gap there is,
-        // which is the same graceful degradation the fallback below already provides.
-        lo = Math.Min(hi, Math.Max(lo, ChampBox.Right + 80 + wanted / 2));
-
-        // THE MOTION IS ADDED AFTER THE CLAMP, and that is the whole fix. It used to be clamped WITH the
-        // resting position — `Clamp(EnemyBox.Center.X + enter + lunge, lo, hi)` — and for essentially
-        // every archetype and count the arena can produce, `hi` already sits below EnemyBox.Center.X
-        // (a swarm of four lands hi ~1160 against a centre of 1320). So the clamp saturated and BOTH the
-        // slide-in and the lunge were swallowed whole: the champion shoved right and the enemies never
-        // shoved back, on 19 of 20 multi-creature waves. The animation existed and never moved a pixel.
-        //
-        // Clamping only the RESTING layout keeps the guarantee that matters — a row that fits, and a
-        // clamp that can never invert — while letting the two 40-to-280px offsets do what they were
-        // written to do. Overhang is handled by the arena scissor (see ArenaRasterizer), which is
-        // already active for exactly this kind of transient overshoot.
-        var resting = lo > hi ? ArenaRect.Center.X : Math.Clamp(EnemyBox.Center.X, lo, hi);
-        var centre = resting + enter + lunge;
-        var left = centre - wanted / 2;
-
-        // WHERE THE ROW ACTUALLY IS, published for the labels.
-        //
-        // The nameplate, the health bar and the damage callouts all anchored to the raw EnemyBox — a
-        // 440-tall box centred at 1320 — while the row is clamped into the arena and scaled by its
-        // archetype. A swarm of four occupies the bottom 255px of that box and clamps to x≈1174, so the
-        // bar hung 200px above the creatures and 146px to their right, and the damage numbers stacked
-        // 340px up in bare rock. Every label described something that was not there.
-        //
-        // Deliberately NOT the lunge-shifted centre: a nameplate that slides 40px every time the row
-        // shoves forward reads as jitter. The labels follow the row's RESTING position and its real
-        // height, which is what actually moved.
-        _rowCentreX = resting;
-        _rowTopY = EnemyBox.Bottom - h;
-
-        // THE HIT EFFECTS USE THIS TOO. Every enemy-side VFX played at EnemyBox.Center — 146px right of
-        // where a swarm actually stands — so the spark, the crit burst and the death plume all went off
-        // beside the creatures rather than on them. They are spawned at (_rowCentreX, _rowTopY + 110):
-        // the row's centre, and roughly its upper body rather than its feet.
 
         string? stripKey = null, staticKey = null;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
@@ -1989,12 +2138,7 @@ public sealed class HuntScreen
 
         for (var i = 0; i < comp.Count; i++)
         {
-            // Back-to-front by index so the row overlaps consistently, and each creature bobs on its own
-            // phase — five sprites bobbing in unison read as one animated object, not as five creatures.
-            var cx = left + spacing * i;
-            var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
-            var box = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
-            PublishCreature(i, box);
+            var box = CreatureBox(i);
             // THE HIT LANDS ON SOMEONE: for ~120 ms after a blow the creature is drawn a second time,
             // ADDITIVE and white, over itself — a SpriteBatch tint can only darken a sprite, so the warm
             // tint of the first attempt was invisible on a dark creature (playtest 2026-08-28: "the enemy
@@ -2020,12 +2164,7 @@ public sealed class HuntScreen
             //
             //    Defence break is the first of these because it was the one the playtest could not feel;
             //    slow and attack break belong here too, and the layout leaves room to the right.
-            if (_replay?.CreatureBreaks(i) is > 0 and var stacks)
-            {
-                var badge = new Rectangle(box.Center.X - 40, box.Y - 34, 26, 26);
-                _ui.Icon(b, "icon_effect_break", badge, Ember);
-                _ui.TextBig(b, $"x{stacks}", badge.Right + 2, badge.Y + 5, Ember, UiTypography.Caption);
-            }
+            DrawBreakBadge(b, i, box);
 
             // MEASURED headroom, not a constant. The 2026-08-22 strips fill ~90% of their frame with the
             // figure sat 3.5% up from the floor, so a fixed 8% crop bit the top of the tallest creatures;
@@ -2081,19 +2220,14 @@ public sealed class HuntScreen
             return;
         }
 
-        var elunge = (int)(_enemyLunge * -40f);
-        var enter = (int)(_enemyEnter * 150f);   // shorter + faded, see DrawComposition
+        // The geometry is LayoutSingleEnemy's, computed before anything drew.
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
-        var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
+        var ab = CreatureBox(0);
+        var ebox = new Rectangle(ab.X, EnemyBox.Y, ab.Width, ab.Height);
         _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
-        var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
         const float crop = -1f;   // measured headroom — see DrawComposition
-        var figTop = ebox.Bottom - ebox.Height;
-        var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
-        PublishCreature(0, ab);
-        _rowCentreX = EnemyBox.Center.X;   // the row anchor the effects fall back to — resting, like the composition's
-        _rowTopY = figTop;
+        var figTop = _rowTopY;
         if (_replay is not null && !_replay.CreatureAlive(0))
         {
             var deadKey = EnemySource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
@@ -2122,6 +2256,7 @@ public sealed class HuntScreen
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
         FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop);
+        DrawBreakBadge(b, 0, ab);
 
         // The wind-up telegraph is the attack CLIP itself plus the ember tint blended into the sprite above
         // (playtest 2026-08-23: the old growing red rectangle around the enemy read as "a red box — what is
@@ -2152,23 +2287,18 @@ public sealed class HuntScreen
     /// </remarks>
     private void DrawBoss(SpriteBatch b, bool attacking)
     {
-        var bossKey = DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
+        var bossKey = BossKey;
         _bossName = bossKey is not null ? BossNameFor.GetValueOrDefault(bossKey, "BOSS") : "BOSS";
         // The corruption's epithet on the boss — "FEVERED CRYSTAL LICH" — so the tier is a thing with a
         // name that looks back at you, not a number on another screen.
         var epithet = CorruptionLook.For(CorruptionTier).Epithet;
         if (epithet.Length > 0) _bossName = epithet + " " + _bossName;
 
-        var lunge = (int)(_enemyLunge * -40f);
-        var box = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge, BossAnchor.Y - BossTargetBodyHeight,
-                                BossTargetBodyHeight, BossTargetBodyHeight);
+        var box = CreatureBox(0);   // LayoutBoss's, so the effects and the figure share one rectangle
         _ui.GroundShadow(b, box.Center.X, BossAnchor.Y - 8, (int)(box.Width * 0.62f), 44, 0.6f);
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
-        PublishCreature(0, box);
-        _rowCentreX = BossAnchor.X;
-        _rowTopY = box.Y;
         if (bossKey is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
             && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
         {
@@ -2190,6 +2320,7 @@ public sealed class HuntScreen
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
         // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
         FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
+        DrawBreakBadge(b, 0, box);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
         _bossBodyRect = box;
         _bossFullRect = box;
@@ -2227,6 +2358,221 @@ public sealed class HuntScreen
         _ui.TextBig(b, $"body {_bossBodyRect.Width}x{_bossBodyRect.Height}  frame {_bossFrame}  anchor {BossAnchor.X},{BossAnchor.Y}",
             190, 206, Gold, UiTypography.Secondary);
     }
+
+    /// <summary>
+    /// WHAT IS ON THIS CREATURE — a STATE, drawn for as long as the state lasts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The designer asked for exactly this, 2026-08-30: "düşmanın üstünde olan efektin ikonu ve kaç X
+    /// stack olduğu kalıcı olarak görünse de olur". A rise-and-fade would have been the other option and
+    /// it is the wrong one here: this is an idle game whose whole premise is that the champion fights
+    /// while you are not looking, so a half-second flourish is a flourish nobody sees. A badge that
+    /// stands is still there when the player comes back, which is the only moment that reliably exists.
+    /// </para>
+    /// <para>
+    /// It used to be drawn INSIDE the composition loop, so a lone creature and a boss never got one —
+    /// defence break was invisible on exactly the waves where a single stack matters most. It is
+    /// reconstructed, not remembered: <c>WaveReplay.CreatureBreaks</c> is accumulated state, so a frame
+    /// in which no break event replays still knows the stack is there, and a dev seek rebuilds it
+    /// exactly. That is the shape the brief's §69 asks persistent states to have.
+    /// </para>
+    /// </remarks>
+    private void DrawBreakBadge(SpriteBatch b, int slot, Rectangle box)
+    {
+        if (_replay?.CreatureBreaks(slot) is not ( > 0 and var stacks)) return;
+        var badge = new Rectangle(box.Center.X - 40, box.Y - 34, 26, 26);
+        _ui.Icon(b, "icon_effect_break", badge, Ember);
+        _ui.TextBig(b, $"x{stacks}", badge.Right + 2, badge.Y + 5, Ember, UiTypography.Caption);
+    }
+
+    /// <summary>
+    /// FIXTURE / DEV ONLY (F9, or <c>RH_SHOT_MODE=vfxdebug</c>): draw the VFX contract's own arithmetic.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The brief's §70. Off in normal play — nothing writes <see cref="DevVfxDebug"/> but the F9 key
+    /// under <c>RH_DEV=1</c> and the capture rig's own mode — and drawn in the UNCLIPPED HUD pass, after
+    /// the arena and before the hover tip, so it is never scissored and never covers a tooltip.
+    /// </para>
+    /// <para>
+    /// What it shows, and why each one: the SUBJECT rectangle, because "the box is not the figure" is the
+    /// fact the whole contract turns on; the FRAME rectangle dim beside the CONTENT rectangle bright,
+    /// because seeing those two apart is what makes a padded strip obvious at a glance; the ANCHOR
+    /// point, so <c>Center</c>, <c>Head</c> and <c>Standing</c> can be told apart without reading
+    /// code; and the native RATIO, coloured green inside the §73 budget, amber under it
+    /// and red over it — LAW 16 as a colour.
+    /// </para>
+    /// <para>
+    /// <c>RH_VFX_DUMP=1</c> prints the same numbers as text, which is the artifact that actually gets
+    /// checked. The picture is for judging placement; the dump is for judging size.
+    /// </para>
+    /// </remarks>
+    private void DrawVfxDebugOverlay(SpriteBatch b)
+    {
+        // THE SUBJECTS, in a colour no layer uses, so a figure's bounds can never be mistaken for an
+        // effect's. Their labels are STACKED in the reading block rather than floated over each box:
+        // a swarm's creature rectangles overlap by more than half, so per-box labels wrote over each
+        // other and the row's label over the first creature's.
+        var sizes = new List<string>();
+        foreach (var (subject, vb) in _actors.All.OrderBy(kv => kv.Key.Kind).ThenBy(kv => kv.Key.Slot))
+        {
+            DebugRect(b, vb.Rect, UiKit.Vellum, 1);
+            if (subject.Kind != VfxSubjectKind.Creature || subject.Slot == 0)
+                sizes.Add($"{(subject.Kind == VfxSubjectKind.Creature ? "creature" : subject.ToString().ToLowerInvariant())}"
+                          + $" {vb.Rect.Width}x{vb.Rect.Height}");
+        }
+
+        // EVERY EFFECT'S MARKS, and its reading line built at the same time. The line carries the
+        // AUTHORED numbers beside the pixels they produced — §70 asks the view to show the normalized
+        // offset, and the gold line from the anchor to the content centre only shows that there IS one;
+        // it cannot say it is 0.42 of a width. The profile is looked up by id rather than carried on
+        // the item, because the table IS the source and a second copy of a number can disagree with itself.
+        var green = new Color(0x48, 0xD0, 0x48);
+        var read = new List<(string Text, Color Tint)> { (string.Join("  ·  ", sizes), UiKit.Vellum) };
+        var over = 0;
+        foreach (var fx in _vfx.DebugItems)
+        {
+            var tint = LayerColour(fx.Layer);
+            DebugRect(b, fx.Frame, tint * 0.35f, 1);       // the padded frame — where the strip lands
+            DebugRect(b, fx.Content, tint, 2);             // the picture — what the player sees
+            _ui.Fill(b, new Rectangle(fx.Anchor.X - 9, fx.Anchor.Y - 1, 18, 2), Gold);
+            _ui.Fill(b, new Rectangle(fx.Anchor.X - 1, fx.Anchor.Y - 9, 2, 18), Gold);
+            _ui.Fill(b, LineRect(fx.Anchor, fx.Content.Center), Gold * 0.6f);
+            _ui.TextBig(b, $"{fx.Id} · {fx.Layer}{(fx.Held ? " · held" : "")}",
+                        fx.Content.X, fx.Content.Y - UiTypography.Pitch(UiTypography.Caption),
+                        tint, UiTypography.Caption);
+            if (fx.OverBudget) over++;
+            var authored = VfxProfiles.Get(fx.Id);
+            var basis = authored.Basis == VfxBasis.SubjectHeight ? "h" : "w";
+            read.Add(($"{fx.Id}  {fx.Key}  {fx.Subject}  {fx.Content.Width}x{fx.Content.Height}"
+                      + $"  {authored.Anchor}  x{authored.RelativeScale:0.00}{basis}"
+                      + $"  off {authored.OffsetX:+0.00;-0.00;0.00}w {authored.OffsetY:+0.00;-0.00;0.00}h"
+                      + $"  ratio {fx.NativeRatio:0.00}{(fx.OverBudget ? "  OVER BUDGET" : "")}",
+                      fx.NativeRatio > VfxBudget.Max ? Ember : fx.NativeRatio < VfxBudget.Min ? Gold : green));
+        }
+        read.Add((over > 0
+                     ? $"{over} EFFECT{(over == 1 ? "" : "S")} OVER THE ASSET SCALE BUDGET — REGENERATE, DO NOT MAGNIFY"
+                     : "EVERY LIVE EFFECT IS INSIDE THE ASSET SCALE BUDGET",
+                  over > 0 ? Ember : green));
+
+        // THE READING BLOCK sits on the empty floor above the skill strip, on its own plate. It was
+        // under the stage header first, where the host's own WELCOME BACK toast — drawn after every
+        // screen — landed straight across it. A dev overlay obeys the same rule as any other panel:
+        // nothing may cover it and it may cover nothing.
+        //
+        // The plate is MEASURED, not a constant width. Its longest line grew when the authored anchor,
+        // scale and offset joined it, and a fixed width is a width that is wrong at one density profile
+        // out of three — the same mistake the whole contract is about, one layer up. It is still capped
+        // at the arena's right edge, so it can never reach the idle panel.
+        var pitch = UiTypography.Pitch(UiTypography.Caption);
+        var pad = UiMetrics.Space(6);
+        var widest = read.Max(l => _ui.MeasureBig(l.Text, UiTypography.Caption));
+        var plate = new Rectangle(ArenaRect.X + pad, 0,
+                                  Math.Min(widest + pad * 2, ArenaRect.Width - pad * 2),
+                                  pitch * read.Count + UiMetrics.Space(10));
+        plate.Y = SkillStrip.Y - UiMetrics.Space(8) - plate.Height;
+        _ui.Fill(b, plate, new Color(0x08, 0x06, 0x0A) * 0.86f);
+        var y = plate.Y + UiMetrics.Space(5);
+        foreach (var (text, tint) in read)
+        {
+            _ui.TextBig(b, text, plate.X + pad, y, tint, UiTypography.Caption);
+            y += pitch;
+        }
+    }
+
+    /// <summary>
+    /// <c>RH_VFX_BUDGET=1</c>: print every profile against every asset it can wear, once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The §73 / LAW 16 diagnostic, run where the textures actually are. A unit test cannot do this
+    /// honestly — it would have to carry every strip's measured content box as a hand-typed constant,
+    /// and a fixture that restates the art is a fixture that can drift away from it. This reads the
+    /// real PNGs through the same cached alpha scan the draw path uses, so it cannot disagree with what
+    /// the player sees.
+    /// </para>
+    /// <para>
+    /// Three representative subjects, because a ratio is a property of a profile AND the figure it is
+    /// measured against: the hunter, the smallest creature the arena makes (a swarm body) and the
+    /// largest (a boss). OVER is the verdict that matters — it means the strip would have to be
+    /// magnified past its authored size, which the renderer refuses to do.
+    /// </para>
+    /// </remarks>
+    private void WriteBudgetLedgerOnce()
+    {
+        if (_budgetLedgerWritten) return;
+        _budgetLedgerWritten = true;
+
+        var champ = VisualRect(ChampBox, ChampionReferenceStrip);
+        var swarmBox = new Rectangle(0, 0, (int)(EnemyBox.Width * ArchetypeScale(Archetype.Swarm)),
+                                     (int)(EnemyBox.Height * ArchetypeScale(Archetype.Swarm)));
+        var swarm = VisualRect(swarmBox, CreatureReferenceStrip);
+        var boss = VisualRect(new Rectangle(0, 0, BossTargetBodyHeight, BossTargetBodyHeight), BossReferenceStrip);
+        var row = new Rectangle(0, 0, swarm.Width * 3, swarm.Height);   // a four-creature row, compressed
+
+        Console.WriteLine($"vfx-budget\tsubjects\tchampion {champ.Width}x{champ.Height}"
+                          + $"\tswarm {swarm.Width}x{swarm.Height}\tboss {boss.Width}x{boss.Height}"
+                          + $"\trow {row.Width}x{row.Height}");
+        foreach (var profile in VfxProfiles.All)
+            foreach (var key in AssetKeysFor(profile))
+            {
+                if (_ui.Assets.Get(key) is not { } tex) { Console.WriteLine($"vfx-budget\t{profile.Id}\t{key}\tMISSING"); continue; }
+                var content = _ui.Content(key, profile.Frames);
+                var frameW = Math.Max(1, tex.Width / Math.Max(1, profile.Frames));
+                foreach (var (name, rect) in new (string, Rectangle)[]
+                         {
+                             ("champion", champ), ("swarm", swarm), ("boss", boss), ("row", row),
+                         })
+                {
+                    if (!SubjectApplies(profile, name)) continue;
+                    var placed = VfxResolver.Resolve(profile, new VisualBounds(rect, 1), content, frameW, tex.Height);
+                    Console.WriteLine($"vfx-budget\t{profile.Id}\t{key}\t{name}"
+                                      + $"\tvisible {placed.Content.Width}x{placed.Content.Height}"
+                                      + $"\tframe {placed.Frame.Height}\tnative {tex.Height}"
+                                      + $"\tratio {placed.NativeRatio:0.000}\t{VfxBudget.Of(placed.NativeRatio)}");
+                }
+            }
+    }
+
+    private static bool SubjectApplies(VfxProfile p, string subjectName) => p.Subject switch
+    {
+        VfxSubjectKind.Champion => subjectName == "champion",
+        VfxSubjectKind.EnemyRow => subjectName == "row",
+        _ => subjectName is "swarm" or "boss",
+    };
+
+    /// <summary>Every strip a profile can wear: its shared art, plus each character's own variant.</summary>
+    private IEnumerable<string> AssetKeysFor(VfxProfile p)
+    {
+        yield return p.AssetKey;
+        var bare = p.AssetKey.StartsWith("fx_", StringComparison.Ordinal) ? p.AssetKey[3..] : p.AssetKey;
+        foreach (var c in CharacterRoster.All)
+        {
+            var own = $"fx_{c.Id}_{bare}_strip8_512";
+            if (_ui.Assets.Has(own)) yield return own;
+        }
+        // The held field wears whatever art a Field skill names, which is not the profile's own key.
+        if (p.Id != VfxProfiles.FieldAura.Id) yield break;
+        foreach (var def in SkillCatalogue.All)
+            if (def.Kind == SkillKind.Field) yield return $"fx_{def.FxKey}";
+    }
+
+    private static bool _budgetLedgerWritten;
+
+    /// <summary>The debug view's colour per layer, so the z-model is legible without reading code.</summary>
+    private static Color LayerColour(VfxLayer l) => l switch
+    {
+        VfxLayer.GroundUnder => new Color(0x7F, 0xCB, 0x4A),     // verdant — on the floor
+        VfxLayer.BehindSubject => new Color(0x7C, 0x9A, 0xB0),   // steel — behind the body
+        VfxLayer.Overhead => new Color(0x9B, 0x7B, 0xFF),        // violet — above everything
+        _ => new Color(0xD8, 0xB4, 0x5C),                        // gold — on the body
+    };
+
+    /// <summary>A 2-px rectangle spanning two points, for the anchor-to-content line.</summary>
+    private static Rectangle LineRect(Point a, Point c)
+        => new(Math.Min(a.X, c.X), Math.Min(a.Y, c.Y),
+               Math.Max(2, Math.Abs(c.X - a.X)), Math.Max(2, Math.Abs(c.Y - a.Y)));
 
     private void DebugRect(SpriteBatch b, Rectangle r, Color c, int t)
     {
@@ -3204,6 +3550,20 @@ public sealed class HuntScreen
 
     private bool _shieldSeen;
 
+    /// <summary>FIXTURE ONLY: the posed shield flare has been fired, so it is not re-fired every tick.</summary>
+    private bool _shieldFxPosed;
+
+    /// <summary>
+    /// FIXTURE ONLY: the frame rate a posed shield flare is played at.
+    /// </summary>
+    /// <remarks>
+    /// Eight frames at half a frame a second is sixteen seconds of clip, so the shutter — which opens
+    /// about a second into the wave — always finds the burst on its first frame at full brightness,
+    /// whatever the replay was doing. It is a shutter speed, not a gameplay value; nothing reads it
+    /// without <c>RH_SHOT_SHIELDFX</c>.
+    /// </remarks>
+    private const float PosedFxFps = 0.5f;
+
     /// <summary>
     /// The motion keys for the shield bar's two one-shots: a rim on a grant, a notch on an absorb.
     /// </summary>
@@ -3871,13 +4231,12 @@ public sealed class HuntScreen
         if (_auraColour is not { } colour || _mode == Mode.Downed) return;
         var spike = 1f - Math.Clamp(_auraSincePulse / AuraSpikeSeconds, 0f, 1f);
         var level = AuraRest + (AuraPeak - AuraRest) * spike * spike * spike;
-        // ANCHORED TO THE FEET, not to the box's middle. The scale is the dial the designer turns
-        // ("biraz daha büyüyecek, karakterin çevresine çıkacak") and a centred aura grows equally in
-        // both directions, so every step up buried more of it under the floor. Placing its BOTTOM just
-        // under the soles means the growth goes where it is wanted — up and out around the figure.
-        var h = AuraScale * VfxPlayer.BaseUnitPx;
-        _vfx.Hold(FxFor(_auraFxKey ?? "aura"), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
-                  AuraScale, 10f, colour * level);
+        // IT STANDS ON THE GROUND. The old placement worked the drawn height out for itself and
+        // subtracted half of it — the renderer's own sizing formula, minus its canvas-scale term,
+        // written out a second time in the caller. Measured, that left the field floating from 170 px
+        // above the crown to 42 px ABOVE the soles: it never reached the floor it was standing on.
+        // STANDING is the anchor that says the sentence, at 1.10x the champion's own visible height.
+        _vfx.Hold(VfxProfiles.FieldAura, FxFor(_auraFxKey ?? "aura"), VfxSubject.Champion, colour * level);
     }
 
     /// <summary>
@@ -3907,9 +4266,7 @@ public sealed class HuntScreen
         var breathe = UiMotion.Reduced
             ? ShieldShellRest + ShieldShellSwing * 0.5f
             : ShieldShellRest + ShieldShellSwing * (0.5f + 0.5f * MathF.Sin(_anim * 1.6f));
-        var h = ShieldShellScale * VfxPlayer.BaseUnitPx;
-        _vfx.Hold(FxFor("shield"), ChampBox.Center.X, (int)(ChampBox.Bottom - 40 - h / 2f),
-                  ShieldShellScale, 8f, Steel * breathe);
+        _vfx.Hold(VfxProfiles.ShieldBarrier, FxFor("shield"), VfxSubject.Champion, Steel * breathe);
     }
 
     /// <summary>
@@ -3928,32 +4285,23 @@ public sealed class HuntScreen
     /// </remarks>
     private void PlayShieldBreak()
     {
-        _vfx.Play("fx_shield_break", ChampBox.Center.X, ChampBox.Center.Y - 20,
-                  scale: 4, fps: ShieldBreakFrames / UiMotion.Reward, tint: Color.White);
+        PlayFx(VfxProfiles.ShieldBreak, VfxSubject.Champion, Color.White);
         // FIXTURE ONLY (RH_SHOT_SHIELDFX=break): jump the burst to the middle of its own strip so the
         // shutter photographs the shatter at its widest instead of its first frame. See ShotShieldFx.
-        if (ShotShieldFx == "break") _vfx.Update(UiMotion.Reward * 0.5f);
+        if (ShotShieldFx == "break") _vfx.FixtureAdvance(UiMotion.Reward * 0.5f);
     }
 
-    /// <summary>How many frames the break strip holds — the art is a 8×512 row.</summary>
-    private const float ShieldBreakFrames = 8f;
-
-    /// <summary>The shell's size — about a third of the aura, so it wraps the figure instead of the arena.</summary>
-    private const float ShieldShellScale = 2.6f;
-    /// <summary>How present it is while nothing is happening to it.</summary>
+    /// <summary>How present the barrier is while nothing is happening to it.</summary>
     private const float ShieldShellRest = 0.16f;
     /// <summary>...and how far the slow breath carries it above that.</summary>
     private const float ShieldShellSwing = 0.14f;
 
-    /// <summary>
-    /// How big the field is, as a multiple of the effect layer's 104 px base unit.
-    /// </summary>
-    /// <remarks>
-    /// 6.4 is about 666 px against a 430 px champion box — so it stands well clear of the head and
-    /// shoulders instead of hugging the outline. 4.8 (499 px) only just cleared him and read as a rim
-    /// rather than a field: "biraz daha büyüyecek, karakterin çevresine çıkacak" (2026-08-28).
-    /// </remarks>
-    private const float AuraScale = 6.4f;
+    // THE THREE SIZE DIALS THAT USED TO LIVE HERE ARE GONE — AuraScale 6.4, ShieldShellScale 2.6 and
+    // the break's scale 4, each a multiple of a 104-px "base unit" that no longer exists. A size in
+    // base units cannot be right for two figures at once, and measured they were not right for one:
+    // the field drew 666 px (1.30x its own 512-px art — over the §73 budget) while ending 42 px above
+    // the champion's feet, and the barrier drew a 132-px dome on a 412-px hunter. Both sizes are
+    // RATIOS of the figure now, authored in VfxProfiles beside every other placement number.
 
     /// <summary>What the field looks like when it is only existing.</summary>
     private const float AuraRest = 0.38f;

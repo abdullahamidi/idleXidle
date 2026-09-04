@@ -179,7 +179,24 @@ public sealed class AssetLibrary
         ["fx_hit"] = "fx_hit_strip8_512", ["fx_weakhit"] = "fx_weakhit_strip8_512",
         ["fx_crit"] = "fx_crit_strip8_512", ["fx_death"] = "fx_death_strip8_512",
         ["fx_heal"] = "fx_heal_strip8_512", ["fx_shield"] = "fx_shield_strip8_512",
-        ["fx_levelup"] = "fx_levelup_strip8_512",
+        // THREE SKILLS NAMED ART NOTHING COULD FIND. PRESS, WEEP and WILT carry the FxKeys `press`,
+        // `weep` and `wilt` (SkillCatalogue), the strips have been on disk and loaded the whole time,
+        // and this table had no entry for them — so the resolver returned null and VfxPlayer returned
+        // silently. PRESS and WILT are two of the four Field skills, and a Field's art is what drives
+        // the champion's held field, so a build running either of them had NO field effect at all.
+        // The gate could not see it: tools/check_asset_keys.py reads string LITERALS at call sites and
+        // these keys were computed from the skill. The contract keeps every effect key in one table
+        // (VfxProfiles) so the gate has something to read, and vfx_asset_test walks the rest.
+        ["fx_press"] = "fx_press_strip8_512", ["fx_weep"] = "fx_weep_strip8_512",
+        ["fx_wilt"] = "fx_wilt_strip8_512",
+        // `fx_levelup` was aliased here, the file is on disk, and NOTHING has ever played it — §112's
+        // "every committed generated asset needs a live consumer". The alias is gone.
+        // THE FILE IS STILL THERE, and no gate will say so: check_asset_consumers.py counts any
+        // `fx_*` file as reached, because `fx_` is the literal head of an interpolated key family.
+        // It is NOT in tools/asset_orphans_baseline.txt either — adding it would be recorded as an
+        // entry that "gained a consumer" and shrink that list dishonestly. So the open item is
+        // exactly this: assets/art/VFX/levelup/fx_levelup_strip8_512.png is orphaned art awaiting a
+        // decision at the desk — delete it, or give it the level-up flourish it was generated for.
         // SHIELD BROKEN (UI polish §70, §95): generated through PixelLab (a cracked dome bursting into
         // shards) because fx_shield is a dome that flashes in and settles — a gain, not a break.
         ["fx_shield_break"] = "fx_shield_break_strip8_512",
