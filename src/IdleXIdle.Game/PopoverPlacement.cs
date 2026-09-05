@@ -22,6 +22,12 @@ public enum PopoverSide { Right, Left, Below, Above }
 /// then clamp to the viewport with the margin kept.
 /// </para>
 /// <para>
+/// A side that stands beside the anchor but covers an avoided rectangle SLIDES along the anchor's edge
+/// first (2026-09-06) — up or left, then down or right, to the far side of what it covered, as far as
+/// the viewport allows and while it still shares half its extent with the anchor. The trader's card
+/// beside a tall offer would otherwise cover the BUY under the next offer, and fall to covering its own.
+/// </para>
+/// <para>
 /// The rectangle returned is the rectangle to DRAW and the rectangle to HIT-TEST — a caller never
 /// nudges it afterwards, or the two drift apart.
 /// </para>
@@ -67,6 +73,7 @@ public static class PopoverPlacement
             var beside = !candidate.Intersects(anchor) || Fits(order[i], candidate, anchor);
             var hard = Overlap(candidate, avoid);
             if (beside && hard == 0) return candidate;
+            if (beside && Slide(order[i], candidate, anchor, viewport, avoid, g) is { } slid) return slid;
             var score = hard * 1000L + Overlap(candidate, new[] { anchor });
             if (score < bestScore)
             {
@@ -85,6 +92,37 @@ public static class PopoverPlacement
         PopoverSide.Above => new Rectangle(anchor.Center.X - w / 2, anchor.Y - g - h, w, h),
         _ => new Rectangle(anchor.Center.X - w / 2, anchor.Bottom + g, w, h),
     };
+
+    /// <summary>
+    /// A beside candidate that covers an avoided rectangle, slid along the anchor's edge to the far side
+    /// of what it covered — up/left first, then down/right, avoided rectangles in the caller's order —
+    /// the first slide that is clean, inside the viewport, still on its side and still sharing half its
+    /// extent with the anchor. Null when no slide does.
+    /// </summary>
+    private static Rectangle? Slide(PopoverSide side, Rectangle c, Rectangle anchor, Rectangle viewport,
+                                    IReadOnlyList<Rectangle> avoid, int g)
+    {
+        var alongY = side is PopoverSide.Right or PopoverSide.Left;
+        foreach (var a in avoid)
+        {
+            if (!c.Intersects(a)) continue;
+            var moves = alongY
+                ? new[] { new Rectangle(c.X, a.Y - g - c.Height, c.Width, c.Height), new Rectangle(c.X, a.Bottom + g, c.Width, c.Height) }
+                : new[] { new Rectangle(a.X - g - c.Width, c.Y, c.Width, c.Height), new Rectangle(a.Right + g, c.Y, c.Width, c.Height) };
+            foreach (var moved in moves)
+            {
+                var r = Clamp(moved, viewport, g);
+                if (Overlap(r, avoid) != 0) continue;
+                if (r.Intersects(anchor) && !Fits(side, r, anchor)) continue;
+                var shared = alongY
+                    ? Math.Min(r.Bottom, anchor.Bottom) - Math.Max(r.Y, anchor.Y)
+                    : Math.Min(r.Right, anchor.Right) - Math.Max(r.X, anchor.X);
+                var need = (alongY ? Math.Min(r.Height, anchor.Height) : Math.Min(r.Width, anchor.Width)) / 2;
+                if (shared >= need) return r;
+            }
+        }
+        return null;
+    }
 
     /// <summary>Does a clamped candidate still stand on its side of the anchor, rather than over it?</summary>
     private static bool Fits(PopoverSide side, Rectangle r, Rectangle anchor) => side switch

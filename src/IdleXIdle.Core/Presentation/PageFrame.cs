@@ -53,16 +53,29 @@ public readonly record struct PageFrame(FitRect Present, int CanvasWidth, int Ca
 
     // ── page (an inset menu screen's space) ──────────────────────────────────────────────────────
 
-    /// <summary>A page point's position on the screen: through the overlay matrix, then the present.</summary>
-    public (float X, float Y) PageToScreen(float px, float py)
-        => CanvasToScreen(px * OverlayScale + OverlayLeft, py * OverlayScale);
+    /// <summary>A page point in the canvas's space — the overlay transform, as one function.</summary>
+    public (float X, float Y) PageToCanvas(float px, float py)
+        => (px * OverlayScale + OverlayLeft, py * OverlayScale);
 
-    /// <summary>The page point a screen position points at — a menu screen's cursor, still a float.</summary>
+    /// <summary>A canvas point in page space — the overlay transform's inverse. The capture rig's canvas dial reads this.</summary>
+    public (float X, float Y) CanvasToPage(float cx, float cy)
+    {
+        var o = OverlayScale <= 0f ? 1f : OverlayScale;
+        return ((cx - OverlayLeft) / o, cy / o);
+    }
+
+    /// <summary>A page point on the screen: the overlay transform, then the present fit.</summary>
+    public (float X, float Y) PageToScreen(float px, float py)
+    {
+        var (cx, cy) = PageToCanvas(px, py);
+        return CanvasToScreen(cx, cy);
+    }
+
+    /// <summary>A screen point in page space: the present fit's inverse, then the overlay transform's.</summary>
     public (float X, float Y) ScreenToPage(float sx, float sy)
     {
         var (cx, cy) = ScreenToCanvas(sx, sy);
-        var o = OverlayScale <= 0f ? 1f : OverlayScale;
-        return ((cx - OverlayLeft) / o, cy / o);
+        return CanvasToPage(cx, cy);
     }
 
     /// <summary>

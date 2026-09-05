@@ -135,8 +135,8 @@ public static class ItemTooltip
     public readonly record struct PriceLine(string Material, int Amount, long Held);
 
     /// <summary>How tall the compact card will be — so a caller can place it before drawing.</summary>
-    public static int CompactHeightFor(ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices)
-        => WalkCompact(null, null, item, hunter, prices, null, new Rectangle(0, 0, CompactWidth, 0));
+    public static int CompactHeightFor(UiKit ui, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices)
+        => WalkCompact(ui, null, item, hunter, prices, null, new Rectangle(0, 0, CompactWidth, 0));
 
     /// <summary>Draw the compact card in a rectangle a caller has PLACED (through PopoverPlacement).</summary>
     public static void DrawCompact(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices,
@@ -158,7 +158,10 @@ public static class ItemTooltip
         var innerW = card.Width - PadX * 2;
         var cy = card.Y + PadTop;
         var edge = RarityInk[(int)item.Rarity];
-        var art = UiMetrics.Control(56);
+        // A 48 thumbnail and tight rules (2026-09-06): the tallest offer — four rolls, a built-in, a
+        // prefix, an enchant, two materials and the verdict on its own row — must still end above the
+        // BUY under the next offer at 150 %, or the card cannot stand beside the offer at all.
+        var art = UiMetrics.Control(48);
         var slot = Gear.SlotFor(item.BaseType);
 
         void L(string s, Color c) { if (draw) ui!.Text(b!, s, lx, cy, c); }
@@ -181,25 +184,23 @@ public static class ItemTooltip
         L(grade, Dim);
         cy += LineH + UiMetrics.Space(4);
         if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
-        cy += UiMetrics.Space(10);
+        cy += UiMetrics.Space(6);
 
-        // ITEM POWER and the verdict against what is worn — the same call the full card makes.
+        // ITEM POWER and the verdict against what is worn, ON ONE ROW — the same call the full card
+        // makes (2026-09-06: the compact card is composed for the room beside an offer at 150 %).
         if (hunter is not null && slot is { } s)
         {
             var mine = hunter.PowerContribution(item);
-            L("ITEM POWER", Dim);
-            R($"{mine:N0}", Ink);
-            cy += LineH;
+            L($"ITEM POWER  {mine:N0}", Ink);
             var worn = hunter.Worn(s);
             if (worn is not null && worn.InstanceId != item.InstanceId)
             {
                 var delta = mine - hunter.PowerContribution(worn);
                 var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
                 var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
-                L($"{word} OVER WHAT YOU WEAR", tone);
-                R($"{delta:+#,0;-#,0;0}", tone);
+                R($"{word}  {delta:+#,0;-#,0;0}", tone);
             }
-            else L(worn is null ? "THE SLOT IS EMPTY" : "WORN", worn is null ? Good : Gold);
+            else R(worn is null ? "SLOT EMPTY" : "WORN", worn is null ? Good : Gold);
             cy += LineH + UiMetrics.Space(6);
         }
         else if (GemCraft.IsGem(item))
@@ -226,22 +227,45 @@ public static class ItemTooltip
             R("BUILT IN", Dim);
             cy += LineH;
         }
-        if (GearTraits.TraitOf(item) is { } trait) { L(GearTraits.NameOf(trait), Gold); R("PREFIX", Dim); cy += LineH; }
-        if (Enchantments.Of(item) is { } ench) { L(ench.Name, Violet); R("ENCHANT", Dim); cy += LineH; }
+        // THE PREFIX AND THE ENCHANT SHARE A ROW: "GREEDY · COILED", labelled with the item system's
+        // own words. Two rows said the same two names with a label each.
+        var prefixName = GearTraits.TraitOf(item) is { } trait ? GearTraits.NameOf(trait) : null;
+        var enchantName = Enchantments.Of(item)?.Name;
+        if (prefixName is not null || enchantName is not null)
+        {
+            L(string.Join("  ·  ", new[] { prefixName, enchantName }.Where(n => n is not null)), Gold);
+            R(prefixName is not null && enchantName is not null ? "PREFIX · ENCHANT" : prefixName is not null ? "PREFIX" : "ENCHANT", Dim);
+            cy += LineH;
+        }
         cy += UiMetrics.Space(6);
 
-        // THE PRICE, in the wallet's verdict colour — the one thing the full card never says.
+        // THE PRICE ON ONE ROW, each material in the wallet's verdict colour, the verdict itself at the
+        // right — the one thing the full card never says.
         if (prices.Count > 0)
         {
             if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
-            cy += UiMetrics.Space(10);
-            foreach (var p in prices)
+            cy += UiMetrics.Space(6);
+            var x = lx;
+            var short0 = prices.FirstOrDefault(p => p.Held < p.Amount);
+            var allEnough = prices.All(p => p.Held >= p.Amount);
+            var verdict = allEnough ? "YOU CAN AFFORD IT" : $"YOU HOLD {short0.Held} {short0.Material}";
+            // The verdict shares the price's row only when both fit with a gap between them (measured
+            // in the height pass too, so the placed card is the drawn card); otherwise it takes the next row.
+            var run = string.Join("  ·  ", prices.Select(p => $"{p.Amount} {p.Material}"));
+            var sameRow = ui is null || ui.Measure(run) + UiMetrics.Space(16) + ui.Measure(verdict) <= innerW;
+            for (var i = 0; i < prices.Count; i++)
             {
-                var enough = p.Held >= p.Amount;
-                L($"{p.Amount} {p.Material}", enough ? Ink : Bad);
-                R(enough ? "YOU CAN AFFORD IT" : $"YOU HOLD {p.Held}", enough ? Good : Bad);
-                cy += LineH;
+                var p = prices[i];
+                if (draw)
+                {
+                    if (i > 0) { ui!.Text(b!, "  ·  ", x, cy, Dim); x += ui.Measure("  ·  "); }
+                    ui!.Text(b!, $"{p.Amount} {p.Material}", x, cy, p.Held >= p.Amount ? Ink : Bad);
+                    x += ui.Measure($"{p.Amount} {p.Material}");
+                }
             }
+            if (!sameRow) cy += LineH;
+            R(verdict, allEnough ? Good : Bad);
+            cy += LineH;
         }
 
         return cy - card.Y + PadBottom;

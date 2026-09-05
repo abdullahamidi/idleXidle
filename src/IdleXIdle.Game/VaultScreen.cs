@@ -1384,8 +1384,11 @@ public sealed class VaultScreen
         {
             var prices = WanderingTrader.PriceOf(hoverOffer, TraderTuning.Default)
                 .Select(p => new ItemTooltip.PriceLine(p.Item1.ToString().ToUpperInvariant(), p.Item2, Hunter?.MaterialOf(p.Item1) ?? 0)).ToList();
-            var size = new Point(ItemTooltip.CompactWidth, ItemTooltip.CompactHeightFor(hoverOffer, Hunter, prices));
-            var stall = new Rectangle(panel.X, cardsTop - UiMetrics.Space(24), panel.Width, panel.Bottom - cardsTop + UiMetrics.Space(24));
+            var size = new Point(ItemTooltip.CompactWidth, ItemTooltip.CompactHeightFor(_ui, hoverOffer, Hunter, prices));
+            // The stall the card may stand in runs from the caption's foot (cardsTopOff ends in the
+            // Space(40) of air under it) to the panel's bottom: the title and caption are never covered,
+            // and the air above the offers is room a tall card slides up into to clear the BUYs.
+            var stall = new Rectangle(panel.X, cardsTop - UiMetrics.Space(40), panel.Width, panel.Bottom - cardsTop + UiMetrics.Space(40));
             var placed = PopoverPlacement.Place(hoverCard, size, stall, buyRects,
                                                 new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Above, PopoverSide.Below });
             ItemTooltip.DrawCompact(_ui, b, hoverOffer, Hunter, prices, DrawItem, placed);

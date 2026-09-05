@@ -5779,23 +5779,67 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// RH_SHOT_PAGE_MOUSE=x,y in page space (exact), or RH_SHOT_MOUSE=x,y in the rig's historical
     /// 480×270 unit (×4 = canvas). Parsed once.
     /// </summary>
-    private static readonly (bool Page, float X, float Y)? PosedCursor = ParsePosedCursor();
+    // ── THE POSED CURSOR (the capture rig). Two spaces, named, one transform (PageFrame):
+    //      RH_SHOT_PAGE_MOUSE=x,y     PAGE space — an inset menu screen's own coordinates, what every
+    //                                 menu screen hit-tests (raw; for low-level poses)
+    //      RH_SHOT_CANVAS_MOUSE=x,y   CANVAS space — the logical 1920×1080 game UI, what a capture
+    //                                 shows; converted through PageFrame.CanvasToPage, never by a
+    //                                 second formula
+    //      RH_SHOT_MOUSE=x,y          the rig's historical canvas dial, in the 480×270 art grid
+    //    A value that does not parse, lies outside its space, or names two spaces at once THROWS at
+    //    the first read — a silently defaulted pose photographs the wrong thing and passes.
+    private static (bool Page, float X, float Y)? _posedCursor;
+    private static bool _posedCursorRead;
+
+    private static (bool Page, float X, float Y)? PosedCursor
+    {
+        get
+        {
+            if (!_posedCursorRead) { _posedCursor = ParsePosedCursor(); _posedCursorRead = true; }
+            return _posedCursor;
+        }
+    }
 
     private static (bool Page, float X, float Y)? ParsePosedCursor()
     {
-        if (Environment.GetEnvironmentVariable("RH_SHOT_PAGE_MOUSE") is { } pm && ParsePair(pm, out var px, out var py))
-            return (true, px, py);
-        if (Environment.GetEnvironmentVariable("RH_SHOT_MOUSE") is { } sm && ParsePair(sm, out var mx, out var my))
-            return (false, mx * ArtScale, my * ArtScale);
-        return null;
+        var page = Environment.GetEnvironmentVariable("RH_SHOT_PAGE_MOUSE");
+        var canvas = Environment.GetEnvironmentVariable("RH_SHOT_CANVAS_MOUSE");
+        var legacy = Environment.GetEnvironmentVariable("RH_SHOT_MOUSE");
+        var set = new[] { page, canvas, legacy }.Count(v => !string.IsNullOrEmpty(v));
+        if (set == 0) return null;
+        if (set > 1)
+            throw new InvalidOperationException("RH_SHOT_PAGE_MOUSE, RH_SHOT_CANVAS_MOUSE and RH_SHOT_MOUSE name one cursor in three spaces — set exactly one.");
 
-        static bool ParsePair(string text, out float x, out float y)
+        if (!string.IsNullOrEmpty(page))
         {
-            x = y = 0f;
+            var (x, y) = Pair("RH_SHOT_PAGE_MOUSE", page);
+            // Page space runs a rail's width past the canvas on the left and a little past it elsewhere.
+            if (x < -OverlayLeft / BaseOverlayScale - 1f || x > 1920f / BaseOverlayScale + 1f || y < -1f || y > 1080f / BaseOverlayScale + 1f)
+                throw new InvalidOperationException($"RH_SHOT_PAGE_MOUSE={page} is outside page space (about -200..2143 × 0..1205).");
+            return (true, x, y);
+        }
+        if (!string.IsNullOrEmpty(canvas))
+        {
+            var (x, y) = Pair("RH_SHOT_CANVAS_MOUSE", canvas);
+            if (x < 0f || x > CanvasWidth * ArtScale || y < 0f || y > CanvasHeight * ArtScale)
+                throw new InvalidOperationException($"RH_SHOT_CANVAS_MOUSE={canvas} is outside the {CanvasWidth * ArtScale}×{CanvasHeight * ArtScale} canvas.");
+            return (false, x, y);
+        }
+        {
+            var (x, y) = Pair("RH_SHOT_MOUSE", legacy!);
+            if (x < 0f || x > CanvasWidth || y < 0f || y > CanvasHeight)
+                throw new InvalidOperationException($"RH_SHOT_MOUSE={legacy} is outside the {CanvasWidth}×{CanvasHeight} art grid.");
+            return (false, x * ArtScale, y * ArtScale);
+        }
+
+        static (float X, float Y) Pair(string name, string text)
+        {
             var parts = text.Split(',');
-            return parts.Length == 2
-                && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out x)
-                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out y);
+            if (parts.Length == 2
+                && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x)
+                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var y))
+                return (x, y);
+            throw new InvalidOperationException($"{name}={text} is not x,y.");
         }
     }
 
@@ -5805,15 +5849,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         (float X, float Y) chrome, page;
         if (PosedCursor is { } posed)
         {
+            // Through the frame — the one transform the renderer and the real mouse use — so the two
+            // dials can never disagree with the screen by a formula of their own.
             if (posed.Page)
             {
                 page = (posed.X, posed.Y);
-                chrome = (posed.X * OverlayScale + OverlayLeft, posed.Y * OverlayScale);
+                chrome = _frame.PageToCanvas(posed.X, posed.Y);
             }
             else
             {
                 chrome = (posed.X, posed.Y);
-                page = ((posed.X - OverlayLeft) / OverlayScale, posed.Y / OverlayScale);
+                page = _frame.CanvasToPage(posed.X, posed.Y);
             }
         }
         else

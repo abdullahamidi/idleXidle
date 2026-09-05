@@ -70,6 +70,39 @@ public class popover_placement_test
     }
 
     [Fact]
+    public void test_a_beside_popover_that_covers_an_avoided_rectangle_slides_along_the_anchor_before_it_flips()
+    {
+        // Arrange: the trader — a tall card beside a tall offer would cover the BUY under the NEXT offer.
+        var anchor = new Rectangle(800, 300, 200, 500);
+        var buy = new Rectangle(1012, 700, 200, 60);   // right where RIGHT's foot would land
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, new Point(300, 450), Page, new[] { buy });
+
+        // Assert: still RIGHT, slid up clear of the BUY, still beside the offer.
+        Assert.True(r.X >= anchor.Right, "should still stand to the RIGHT");
+        Assert.True(r.Bottom <= buy.Y, "slid up, clear of the BUY");
+        Assert.True(r.Y < anchor.Bottom && r.Bottom > anchor.Y, "still beside the offer");
+        Assert.False(r.Intersects(buy));
+        Assert.True(Inside(r, Page));
+    }
+
+    [Fact]
+    public void test_a_slide_that_would_leave_the_anchor_flips_instead()
+    {
+        // Arrange: a short anchor; clearing the BUY beside it would leave the popover hanging off a corner.
+        var anchor = new Rectangle(800, 500, 100, 100);
+        var buy = new Rectangle(920, 520, 200, 60);
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, Size, Page, new[] { buy });
+
+        // Assert
+        Assert.True(r.Right <= anchor.X, "flips LEFT rather than slide away from the anchor");
+        Assert.False(r.Intersects(buy));
+    }
+
+    [Fact]
     public void test_multiple_avoided_rectangles_leave_the_one_clean_side()
     {
         var anchor = new Rectangle(800, 500, 100, 100);

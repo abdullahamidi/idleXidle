@@ -9,6 +9,7 @@
 set -u
 . "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
+SHOT_LOG="build/shots/polish/.last_run.log"; export SHOT_LOG
 TAG="${1:?tag}"; shift
 OUTDIR="build/shots/polish"
 mkdir -p "$OUTDIR"
@@ -29,8 +30,11 @@ for spec in "$@"; do
   timeout 90 bash -c '
     . tools/shellenv.sh || exit 1
     RH_ENV=("$@")
-    dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
+    dn run --project src/IdleXIdle.Game --no-build >"$SHOT_LOG" 2>&1
   ' _ "${RH_ENV[@]}"
-  if [ -f "$out" ]; then echo "ok   $out"; else echo "FAIL $out"; fi
+  # A capture that produced no file FAILED — and says why: a posed cursor outside its space, or a
+  # dial that does not parse, throws in the game (Game1.ParsePosedCursor) rather than photographing
+  # a plausible default, and the last lines of its log are the message.
+  if [ -f "$out" ]; then echo "ok   $out"; else echo "FAIL $out"; grep -a -E 'Exception|RH_SHOT' "$SHOT_LOG" | tail -3 | sed 's/^/     /'; fi
 done
 echo "shots done"

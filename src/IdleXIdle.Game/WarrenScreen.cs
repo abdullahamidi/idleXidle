@@ -579,11 +579,14 @@ public sealed class WarrenScreen
     }
 
     private string? _tip;
-    private Point _tipAt;
+    private Rectangle _tipAnchor;
+
+    /// <summary>Every card's visible rectangle this frame — what a tip must keep clear of, bar the card it explains.</summary>
+    private readonly List<Rectangle> _cardsVisible = new(8);
 
     private void Tip(Rectangle r, Point hit, string text)
     {
-        if (r.Contains(hit)) { _tip = text; _tipAt = hit; }
+        if (r.Contains(hit)) { _tip = text; _tipAnchor = r; }
     }
 
     // The away line is built only when the summary it describes changes — this screen redraws sixty
@@ -630,6 +633,7 @@ public sealed class WarrenScreen
         // The cursor arrives in page space (Game1.PageCursor); it is hit-tested as it is.
         var hit = mouse;
         _tip = null;
+        _cardsVisible.Clear();
         // The host applied (or refused) last frame's request between then and now: light what changed
         // BEFORE this frame's clicks can ask for anything else.
         Settle();
@@ -655,7 +659,15 @@ public sealed class WarrenScreen
         DrawSummary(b);
         DrawGrid(b, hit, clicked);
         DrawInspector(b, hit, clicked, wheel);
-        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
+        // THE TIP HANGS ABOVE ITS CARD (2026-09-06), then to a clear side, then below — and never over
+        // another card's figures or the inspector while a placement avoids them (PopoverPlacement).
+        // It used to hang off the pointer and sat on the neighbouring card's production and level.
+        if (_tip is { } tip)
+        {
+            var avoid = _cardsVisible.Where(r => r != _tipAnchor).Append(InspectorPanel).ToList();
+            _ui.HoverTip(b, tip, _tipAnchor, avoid,
+                         new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below }, UiMetrics.Space(8));
+        }
         if (DevWarrenDebug) DrawDebug(b);
     }
 
@@ -904,6 +916,7 @@ public sealed class WarrenScreen
             // click and the tip — a card scrolled under the strip, or under the caption band, answers
             // only in its visible part, and a wholly hidden one not at all (UiKit.VisibleWithin).
             var visible = UiKit.VisibleWithin(card, GridVisible);
+            if (!visible.IsEmpty) _cardsVisible.Add(visible);
             var open = Warren.IsUnlocked(f.Kind);
             // ── THE STANDARD STATES (§25–§29), on a card the kit does not draw for us. HOVER is a thin
             //    luminance lift eased in over ~100 ms, the same one UiKit.Button gets, so a card is
