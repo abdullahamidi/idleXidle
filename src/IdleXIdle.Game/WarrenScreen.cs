@@ -336,7 +336,9 @@ public sealed class WarrenScreen
     //    clipping it. The four page anchors below are the only literals: they are where the page's
     //    chrome (the hint slot, the margins) ends, and they do not grow with the type. ────────────
     private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
-    private const int BottomMargin = 60;
+    // THE FOOT (2026-09-06): the page used to end 60 under the panels — a dead band at every profile.
+    // That band is the FACILITY DETAIL RAIL now; what stays under the rail is a breath.
+    private const int BottomMargin = 12;
     private const int LeftMargin = 38;
     private const int RightInset = 40;
 
@@ -346,6 +348,22 @@ public sealed class WarrenScreen
     private static int CardGap => UiMetrics.Space(18);
     private static int CardPadX => UiMetrics.Space(18);
     private static int ChipHeight => UiMetrics.Control(38);
+
+    // ── THE FACILITY DETAIL RAIL (2026-09-06). A floating tip had no clean room anywhere around a
+    //    card at any profile: the grid is packed, the strip above it is all information, and the page
+    //    ended in a dead band under the panels. That band is the rail. Hover a card and its name, its
+    //    level, its sentence and what the next level pays are said HERE — one line at every profile,
+    //    two only where a profile's type outgrows the width (measured each frame, like the strip) —
+    //    and nothing is ever drawn over a card, the strip or the scroll hint.
+    //    CARD = scan and compare · RAIL = hover explanation · INSPECTOR = the selected facility in full.
+    private static int RailPad => UiMetrics.Space(6);
+    private static int RailGap => UiMetrics.Space(8);          // the grid and the inspector ↔ the rail
+    private int RailHeight => _railLines * UiTypography.Pitch(UiTypography.Body) + RailPad * 2;
+    private static int RailInnerWidth => UiKit.PageRight(RightInset) - LeftMargin - GridPad * 2;
+    private Rectangle DetailRail =>
+        new(LeftMargin, UiKit.PageBottom(BottomMargin) - RailHeight, UiKit.PageRight(RightInset) - LeftMargin, RailHeight);
+    /// <summary>Where the grid and the inspector end: a breath above the rail.</summary>
+    private int PanelsBottom => DetailRail.Y - RailGap;
 
     /// <summary>
     /// What a card must be given to say UPGRADE READY or NEEDS 12.4K GLEAM at the profile's Body: 200
@@ -364,23 +382,15 @@ public sealed class WarrenScreen
         Math.Min(UiMetrics.InspectorWidth(UiKit.Page.Width),
                  UiKit.Page.Width - RightInset - LeftMargin - PanelGap - GridMinWidth);
 
-    private static Rectangle InspectorPanel =>
-        new(UiKit.PageRight(RightInset) - InspectorW, Top, InspectorW, UiKit.PageBottom(BottomMargin) - Top);
+    private Rectangle InspectorPanel =>
+        new(UiKit.PageRight(RightInset) - InspectorW, Top, InspectorW, PanelsBottom - Top);
 
     private Rectangle SummaryStrip =>
         new(LeftMargin, Top, SummaryStripWidth, StripHeight);
 
-    /// <summary>
-    /// THE STRIP'S INFORMATION (2026-09-06): the band its rows occupy, from the caption row to the foot
-    /// of the away line — what a tip must never cover. The breath above and below it is the strip's
-    /// decoration, which a tip may cover before it covers the card it explains.
-    /// </summary>
-    private Rectangle SummaryContent =>
-        new(LeftMargin, Top + StripCaptionY, SummaryStripWidth, StripAwayY + UiTypography.Pitch(UiTypography.Secondary) - StripCaptionY);
-
     private Rectangle GridPanel =>
         new(LeftMargin, Top + StripHeight + StripGap, SummaryStripWidth,
-            UiKit.PageBottom(BottomMargin) - (Top + StripHeight + StripGap));
+            PanelsBottom - (Top + StripHeight + StripGap));
 
     // ── THE STRIP'S RHYTHM. Cell C's stack (a caption, the four figures, their names, the multipliers,
     //    the regions line) is the tallest of the three cells, so it sets the strip's height, and every
@@ -412,7 +422,7 @@ public sealed class WarrenScreen
     }
 
     /// <summary>The strip's width, which no sentence changes — what the sentences are wrapped to.</summary>
-    private static int SummaryStripWidth => InspectorPanel.X - PanelGap - LeftMargin;
+    private static int SummaryStripWidth => UiKit.PageRight(RightInset) - InspectorW - PanelGap - LeftMargin;
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -595,18 +605,130 @@ public sealed class WarrenScreen
         _ui.Fill(b, new Rectangle(r.Right - px, r.Y, px, r.Height), c);
     }
 
-    private string? _tip;
-    private Rectangle _tipAnchor;
-    /// <summary>The hovered card's own figures — the rate, its promise, the chip — which the tip keeps clear of even on that card.</summary>
-    private Rectangle _tipFigures;
+    /// <summary>The card under the pointer this frame — its index in Warren.AllFacilities — or -1.</summary>
+    private int _hover = -1;
 
-    /// <summary>Every card's visible rectangle this frame — what a tip must keep clear of, bar the card it explains.</summary>
-    private readonly List<Rectangle> _cardsVisible = new(8);
-
-    private void Tip(Rectangle r, Point hit, string text, Rectangle figures = default)
+    /// <summary>A card's VISIBLE rectangle takes the hover (clip-aware); the rail then says that card.</summary>
+    private void Hover(Rectangle visible, Point hit, int index)
     {
-        if (r.Contains(hit)) { _tip = text; _tipAnchor = r; _tipFigures = figures; }
+        if (visible.Contains(hit)) _hover = index;
     }
+
+    /// <summary>One run of the rail's line: a text at a rung, in an ink. Words flow; runs keep their order.</summary>
+    private readonly record struct RailRun(string Text, int Px, Color Ink);
+
+    /// <summary>A word the rail has placed: where it starts, on which line.</summary>
+    private readonly record struct RailWord(string Text, int Px, Color Ink, int X, int Line);
+
+    private int _railLines = 1;
+    private const string RailHint = "HOVER A FACILITY FOR DETAILS";
+
+    /// <summary>
+    /// How many lines the rail needs at this profile: the most any facility's runs take at the rail's
+    /// width. Measured every frame, so the rail's height — and with it the panels' foot — never
+    /// depends on which card is hovered: the grid stays where it is under the pointer.
+    /// </summary>
+    private void MeasureRail()
+    {
+        var most = 1;
+        var i = 0;
+        foreach (var _ in Warren.AllFacilities)
+        {
+            FlowRail(RailRuns(i++), RailInnerWidth, out var lines);
+            most = Math.Max(most, lines);
+        }
+        _railLines = Math.Clamp(most, 1, 2);
+    }
+
+    /// <summary>
+    /// What the rail says of one facility: its name and level, its sentence, what the next level pays
+    /// — the same Core calls the card and the inspector make. Locked: its name, its sentence, what opens it.
+    /// </summary>
+    private List<RailRun> RailRuns(int index)
+    {
+        var f = Warren.AllFacilities.ElementAt(index);
+        var runs = new List<RailRun>(3);
+        if (!Warren.IsUnlocked(f.Kind))
+        {
+            var (need, next) = LockShortfall(index);
+            runs.Add(new RailRun($"{f.Info.Name}  ·  LOCKED", UiTypography.Body, Bone));
+            runs.Add(new RailRun(f.Info.Description, UiTypography.Secondary, Slate));
+            runs.Add(new RailRun($"{LockLine(need, next)} TO OPEN IT", UiTypography.Body, Ember));
+            return runs;
+        }
+        var pair = RatePair(Warren.OutputPerMinute(f.Kind), Warren.NextLevelOutputPerMinute(f.Kind));
+        runs.Add(new RailRun($"{f.Info.Name}  ·  LEVEL {f.Level}", UiTypography.Body, Bone));
+        runs.Add(new RailRun(f.Info.Description, UiTypography.Secondary, Slate));
+        runs.Add(new RailRun($"NEXT LEVEL  +{pair.Next} {ResName(f.Info.Produces)} /min", UiTypography.Body, ResColor(f.Info.Produces)));
+        return runs;
+    }
+
+    /// <summary>
+    /// The runs' words flowed left to right at <paramref name="width"/>: a run's words in order with a
+    /// space between, a breath between runs, a new line when a word will not fit. Pure arithmetic on
+    /// measured widths — the one call both lays the rail out and counts the lines it needs.
+    /// </summary>
+    private List<RailWord> FlowRail(IReadOnlyList<RailRun> runs, int width, out int lines)
+    {
+        var placed = new List<RailWord>(24);
+        int x = 0, line = 0;
+        var breath = UiMetrics.Space(24);
+        foreach (var run in runs)
+        {
+            var space = Math.Max(1, _ui.MeasureBig("a a", run.Px) - _ui.MeasureBig("aa", run.Px));
+            var first = true;
+            foreach (var word in run.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var w = _ui.MeasureBig(word, run.Px);
+                var lead = x == 0 ? 0 : first ? breath : space;
+                if (x > 0 && x + lead + w > width) { line++; x = 0; lead = 0; }
+                placed.Add(new RailWord(word, run.Px, run.Ink, x + lead, line));
+                x += lead + w;
+                first = false;
+            }
+        }
+        lines = line + 1;
+        return placed;
+    }
+
+    /// <summary>The rail: the hovered card's line, or the quiet hint that a hover would say one.</summary>
+    private void DrawRail(SpriteBatch b)
+    {
+        var rail = DetailRail;
+        _ui.Plate(b, rail);
+        var x0 = rail.X + GridPad;
+        var pitch = UiTypography.Pitch(UiTypography.Body);
+        if (_hover < 0)
+        {
+            var y = rail.Y + RailPad + (_railLines * pitch - UiTypography.Pitch(UiTypography.Secondary)) / 2;
+            _ui.TextBig(b, RailHint, x0, y, Slate, UiTypography.Secondary);
+            return;
+        }
+        var words = FlowRail(RailRuns(_hover), RailInnerWidth, out var lines);
+        // Fewer lines than the rail holds sit centred in it; a smaller rung sits on the Body's foot.
+        var top = rail.Y + RailPad + (_railLines - lines) * pitch / 2;
+        foreach (var w in words)
+            _ui.TextBig(b, w.Text, x0 + w.X, top + w.Line * pitch + (UiTypography.Body - w.Px), w.Ink, w.Px);
+    }
+
+    /// <summary>
+    /// How many regions a locked facility still wants, and the next one's name (empty past the chain's
+    /// end). Facility k opens at ConqueredRegions >= k - 1 (UnlockedFacilityCount = 2 + conquered), so
+    /// the shortfall is measured from the card's OWN index.
+    /// </summary>
+    private (int Need, string Next) LockShortfall(int index)
+    {
+        var need = index - 1 - Warren.ConqueredRegions;
+        var next = Warren.ConqueredRegions >= 0 && Warren.ConqueredRegions < Regions.All.Count
+            ? Regions.All[Warren.ConqueredRegions].Name : "";
+        return (need, next);
+    }
+
+    /// <summary>WHICH conquest, not "another region": the chain is linear, so the next one is known.</summary>
+    private static string LockLine(int need, string next) =>
+        need <= 1 && next.Length > 0 ? $"CONQUER {next}"
+        : need <= 1 ? "CONQUER ONE MORE REGION"
+        : $"CONQUER {need} MORE REGIONS";
 
     // The away line is built only when the summary it describes changes — this screen redraws sixty
     // times a second and the string is the same every one of them.
@@ -651,13 +773,13 @@ public sealed class WarrenScreen
     {
         // The cursor arrives in page space (Game1.PageCursor); it is hit-tested as it is.
         var hit = mouse;
-        _tip = null;
-        _cardsVisible.Clear();
+        _hover = -1;
         // The host applied (or refused) last frame's request between then and now: light what changed
         // BEFORE this frame's clicks can ask for anything else.
         Settle();
         PoseForTheRig();
         MeasureStrip();
+        MeasureRail();
         // The rig cannot hold a mouse button down, so the PRESSED state of every control on the page —
         // this screen's cards and the kit's own button — would be unphotographable without this.
         if (PosedPress) UiKit.MouseHeld = true;
@@ -678,31 +800,8 @@ public sealed class WarrenScreen
         DrawSummary(b);
         DrawGrid(b, hit, clicked);
         DrawInspector(b, hit, clicked, wheel);
-        // THE TIP IS ONE PLACEMENT PROBLEM FOR THE WHOLE GRID (2026-09-06). The layout's own rectangles
-        // say what it may not cover — the summary strip, every other card in view, the inspector, the
-        // scroll hint — and the grid's panel is the decoration it may cover before the card it explains.
-        // Its viewport is the Warren's body, from the strip's top to the page's foot: the title and the
-        // notice lane above are never a place to stand. Above the card first, then a clear side, then
-        // below — and PopoverPlacement steps past whatever blocks a side, so a tip that has nowhere
-        // clean beside its card ends in the free room under the grid, never on the strip's last line,
-        // never on the hint, never on a neighbour's figures. It used to hang off the pointer.
-        // When nothing around the card is free — the grid is packed, the strip above it is all
-        // information and the page ends a breath under the grid — the tip stands OVER the card it
-        // explains, no wider than the card, at its head: the one surface the hover itself has already
-        // claimed. The card's own figures are SOFT: the tip slides clear of them where the card's head
-        // has the room, and covers them — never the hint, the strip or a neighbour — where it does not
-        // (a card scrolled down to its figures alone).
-        if (_tip is { } tip)
-        {
-            var hard = _cardsVisible.Where(r => r != _tipAnchor).Append(SummaryContent).Append(InspectorPanel).ToList();
-            if (!GridCaption.IsEmpty) hard.Add(GridCaption);
-            var soft = new List<Rectangle> { GridPanel, SummaryStrip };
-            if (!_tipFigures.IsEmpty) soft.Add(_tipFigures);
-            var body = new Rectangle(UiKit.Page.X, SummaryStrip.Y, UiKit.Page.Width, UiKit.Page.Bottom - SummaryStrip.Y);
-            _ui.HoverTip(b, tip, _tipAnchor, hard,
-                         new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Over },
-                         UiMetrics.Space(8), soft: soft, viewport: body, maxWidth: _tipAnchor.Width);
-        }
+        // THE FACILITY DETAIL RAIL says the hovered card; nothing floats over the grid.
+        DrawRail(b);
         if (DevWarrenDebug) DrawDebug(b);
     }
 
@@ -950,7 +1049,6 @@ public sealed class WarrenScreen
             // click and the tip — a card scrolled under the strip, or under the caption band, answers
             // only in its visible part, and a wholly hidden one not at all (UiKit.VisibleWithin).
             var visible = UiKit.VisibleWithin(card, GridVisible);
-            if (!visible.IsEmpty) _cardsVisible.Add(visible);
             var open = Warren.IsUnlocked(f.Kind);
             // ── THE STANDARD STATES (§25–§29), on a card the kit does not draw for us. HOVER is a thin
             //    luminance lift eased in over ~100 ms, the same one UiKit.Button gets, so a card is
@@ -1015,12 +1113,8 @@ public sealed class WarrenScreen
                 // Facility k opens at ConqueredRegions >= k - 1 (UnlockedFacilityCount = 2 + conquered),
                 // so the shortfall is measured from the card's OWN index — not the loop counter, which
                 // has already moved on and made every locked card ask for one region too many.
-                var need = index - 1 - Warren.ConqueredRegions;
-                var next = Warren.ConqueredRegions >= 0 && Warren.ConqueredRegions < Regions.All.Count
-                    ? Regions.All[Warren.ConqueredRegions].Name : "";
-                var line = need <= 1 && next.Length > 0 ? $"CONQUER {next}"
-                         : need <= 1 ? "CONQUER ONE MORE REGION"
-                         : $"CONQUER {need} MORE REGIONS";
+                var (need, next) = LockShortfall(index);
+                var line = LockLine(need, next);
                 // A SHORTER SENTENCE BEFORE AN ELLIPSIS. At 125 % the chip read "CONQUER 2 MOR..." and
                 // "CONQUER CINDE..." — the verb kept and the one word that mattered cut. The chip's lock
                 // glyph already says "a requirement", so the verb is what goes: "2 MORE REGIONS",
@@ -1037,7 +1131,7 @@ public sealed class WarrenScreen
                     _ui.Fill(b, new Rectangle(chip.X + 3, chip.Y + 3, chip.Width - 6, chip.Height - 6), Ember * (0.30f * lockedLit));
                 _ui.Icon(b, "ui_slot_locked", chipIcon, Bone);
                 _ui.TextBig(b, chipLine, chipTextX, chipTextY, Color.Lerp(Bone, Ember, 0.7f * lockedLit), UiTypography.Body);
-                Tip(visible, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.", Rectangle.Intersect(chip, visible));
+                Hover(visible, hit, index);
                 continue;
             }
 
@@ -1151,8 +1245,7 @@ public sealed class WarrenScreen
                                  !UiMotion.Reduced && _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
             if (frameLit > 0f)
                 Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
-            Tip(visible, hit, $"{f.Info.Name} — {f.Info.Description}",
-                Rectangle.Intersect(new Rectangle(card.X, rows.FigureY, card.Width, card.Bottom - rows.FigureY), visible));
+            Hover(visible, hit, index);
         }
 
         if (scrolls)
@@ -1451,7 +1544,7 @@ public sealed class WarrenScreen
 
     private void DrawDebug(SpriteBatch b)
     {
-        foreach (var r in new[] { SummaryStrip, GridPanel, InspectorPanel })
+        foreach (var r in new[] { SummaryStrip, GridPanel, InspectorPanel, DetailRail })
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);

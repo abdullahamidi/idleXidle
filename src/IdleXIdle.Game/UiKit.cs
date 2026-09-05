@@ -1723,32 +1723,6 @@ public sealed class UiKit
     /// never clipped off screen. Deliberately a flat plate rather than an ornate panel: a tooltip is
     /// furniture, and the ornate frame is a claim of importance this text should not make.
     /// </remarks>
-    /// <summary>
-    /// A hover tip hung off a RECTANGLE — the control, the card — rather than the pointer, placed by the
-    /// one rule with the caller's sides and avoided rectangles (2026-09-06: the Warren's facility tips
-    /// hang above their card, clear of the neighbouring cards' figures and the inspector).
-    /// </summary>
-    public void HoverTip(SpriteBatch b, string text, Rectangle anchor, IReadOnlyList<Rectangle>? avoid,
-                         IReadOnlyList<PopoverSide>? preferred, int? gap = null,
-                         IReadOnlyList<Rectangle>? soft = null, Rectangle? viewport = null, int? maxWidth = null)
-    {
-        int width = Math.Min(UiMetrics.Text(430), maxWidth ?? int.MaxValue), pad = UiMetrics.Space(14);
-        var lineH = UiTypography.Pitch(UiTypography.Secondary);
-        var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
-        if (lines.Count == 0) return;
-        var h = pad * 2 + lines.Count * lineH;
-        var tip = PopoverPlacement.Place(anchor, new Point(width, h), viewport ?? Page, avoid, preferred, gap, soft);
-        DrawTip(b, lines, tip, pad, lineH);
-    }
-
-    private void DrawTip(SpriteBatch b, IReadOnlyList<string> lines, Rectangle tip, int pad, int lineH)
-    {
-        Fill(b, new Rectangle(tip.X + 4, tip.Y + 5, tip.Width, tip.Height), new Color(0, 0, 0) * 0.45f);
-        Plate(b, tip);
-        var ty = tip.Y + pad;
-        foreach (var l in lines) { TextBig(b, l, tip.X + pad, ty, Vellum, UiTypography.Secondary); ty += lineH; }
-    }
-
     public void HoverTip(SpriteBatch b, string text, Point anchor)
     {
         int width = UiMetrics.Text(430), pad = UiMetrics.Space(14);
@@ -1769,6 +1743,14 @@ public sealed class UiKit
         // furniture wears the tier every list and chip on the page wears. The 4 px shadow stays, so the tip
         // still lifts off what it covers.
         DrawTip(b, lines, tip, pad, lineH);
+    }
+
+    private void DrawTip(SpriteBatch b, IReadOnlyList<string> lines, Rectangle tip, int pad, int lineH)
+    {
+        Fill(b, new Rectangle(tip.X + 4, tip.Y + 5, tip.Width, tip.Height), new Color(0, 0, 0) * 0.45f);
+        Plate(b, tip);
+        var ty = tip.Y + pad;
+        foreach (var l in lines) { TextBig(b, l, tip.X + pad, ty, Vellum, UiTypography.Secondary); ty += lineH; }
     }
 
     /// <summary>The sized-text twin of <see cref="Shorten"/>, for anything drawn with TextBig.</summary>
