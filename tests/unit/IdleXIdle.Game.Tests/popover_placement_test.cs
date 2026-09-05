@@ -120,9 +120,9 @@ public class popover_placement_test
     [Fact]
     public void test_when_every_side_covers_something_the_least_covering_side_is_chosen_deterministically()
     {
-        // Arrange: a viewport that ends right past the blocks, so no push can step clear of them.
+        // Arrange
         var anchor = new Rectangle(800, 500, 100, 100);
-        var view = new Rectangle(380, 230, 940, 700);
+        var view = Page;
         var avoid = new List<Rectangle>
         {
             new(900, 500, 400, 300),   // RIGHT, full cover
@@ -139,41 +139,6 @@ public class popover_placement_test
         Assert.Equal(a, b);
         Assert.True(a.Y >= anchor.Bottom, "BELOW covers least");
         Assert.True(Inside(a, view));
-    }
-
-    [Fact]
-    public void test_a_below_popover_pushes_past_a_covered_band_into_free_room()
-    {
-        // Arrange: the Warren — a card whose foot sits on the grid's scroll hint, with the page's free
-        // room under the grid. BELOW covers the hint; sliding along the card cannot clear a band the
-        // width of the page; pushing past it can.
-        var card = new Rectangle(800, 700, 100, 100);
-        var hint = new Rectangle(0, 812, 1920, 30);
-
-        // Act
-        var r = PopoverPlacement.Place(card, Size, Page, new[] { hint }, new[] { PopoverSide.Below });
-
-        // Assert: under the hint, still centred on its card, inside the page.
-        Assert.True(r.Y > hint.Bottom, "pushed past the hint");
-        Assert.False(r.Intersects(hint));
-        Assert.Equal(card.Center.X, r.Center.X);
-        Assert.True(Inside(r, Page));
-    }
-
-    [Fact]
-    public void test_a_push_is_tried_only_after_every_side_has_been()
-    {
-        // Arrange: RIGHT is blocked by a BUY it cannot slide clear of; LEFT is free. A push past the
-        // BUY would also be clean — but it is farther, and every side comes first.
-        var anchor = new Rectangle(800, 500, 100, 100);
-        var buy = new Rectangle(912, 500, 300, 60);
-
-        // Act
-        var r = PopoverPlacement.Place(anchor, Size, Page, new[] { buy });
-
-        // Assert
-        Assert.True(r.Right <= anchor.X, "LEFT, not RIGHT pushed past the BUY");
-        Assert.False(r.Intersects(buy));
     }
 
     [Fact]

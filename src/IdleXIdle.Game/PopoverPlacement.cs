@@ -25,15 +25,17 @@ public enum PopoverSide { Right, Left, Below, Above }
 /// <para>
 /// THE CANDIDATES, in the order they may win: each side's own place and then that side's SLIDES along
 /// the anchor's edge (up or left, then down or right, to the far side of what it covered, while it
-/// still shares half its extent with the anchor) — side after side in the caller's order; and only
-/// after every side has been tried where it belongs, each side's PUSHES away from the anchor, past
-/// everything it covered, as far as the viewport allows. The trader's tall card beside a tall offer
-/// slides up clear of the BUY under the next offer.
+/// still shares half its extent with the anchor) — side after side in the caller's order. The slide
+/// is the trader's: its tall card beside a tall offer slides up clear of the BUY under the next offer.
 /// </para>
 /// <para>
-/// (Soft, decorative avoid regions and an OVER-the-anchor stance were added for the Warren's facility
-/// tips and removed with them on 2026-09-06: the Warren says its hover in a rail under the grid now,
-/// and nothing else asked for either.)
+/// THE VOCABULARY IS WHAT THE GAME USES (2026-09-06). Soft, decorative avoid regions, an OVER-the-anchor
+/// stance and PUSHES away from the anchor past what blocked a side were added for the Warren's facility
+/// tips and removed with them: the Warren says its hover in a rail under the grid now, and none of the
+/// four requests left can reach a push — the item card avoids nothing; the pointer tip's one blocker is
+/// the action band at the page's foot, with ABOVE clean before it; the enemy inspector's one blocker is
+/// the hunter, with only the arena's edge behind it; the trader's slide always covers less than a push
+/// would. Reachable in theory is not a consumer.
 /// </para>
 /// <para>
 /// The rectangle returned is the rectangle to DRAW and the rectangle to HIT-TEST — a caller never
@@ -46,9 +48,6 @@ public static class PopoverPlacement
     public static int Gap => UiMetrics.Space(12);
 
     private static readonly PopoverSide[] DefaultOrder = { PopoverSide.Right, PopoverSide.Left, PopoverSide.Above, PopoverSide.Below };
-
-    /// <summary>How many rectangles a push may step past before it gives up on that side.</summary>
-    private const int MaxPushes = 4;
 
     /// <summary>
     /// Place a popover of <paramref name="size"/> beside <paramref name="anchor"/>, inside
@@ -90,21 +89,17 @@ public static class PopoverPlacement
         return best;
     }
 
-    /// <summary>Every candidate, in the order it is entitled to win: each side's place and slides; then each side's pushes.</summary>
+    /// <summary>Every candidate, in the order it is entitled to win: each side's place, then that side's slides.</summary>
     private static IEnumerable<(PopoverSide Side, Rectangle Rect)> Candidates(IReadOnlyList<PopoverSide> order, Rectangle anchor,
                                                                               int w, int h, int g, Rectangle viewport,
                                                                               IReadOnlyList<Rectangle> avoid)
     {
-        var primaries = new Rectangle[order.Count];
         for (var i = 0; i < order.Count; i++)
         {
             var c = Clamp(At(order[i], anchor, w, h, g), viewport, g);
-            primaries[i] = c;
             yield return (order[i], c);
             foreach (var s in Slides(order[i], c, anchor, viewport, avoid, g)) yield return (order[i], s);
         }
-        for (var i = 0; i < order.Count; i++)
-            foreach (var p in Pushes(order[i], primaries[i], viewport, avoid, g)) yield return (order[i], p);
     }
 
     /// <summary>The rectangle a side would put the popover in, before any clamping.</summary>
@@ -136,48 +131,6 @@ public static class PopoverPlacement
                 var r = Clamp(moved, viewport, g);
                 if (SharesHalf(alongY, r, anchor)) yield return r;
             }
-        }
-    }
-
-    /// <summary>
-    /// A candidate that covers avoided rectangles, pushed away from the anchor past the farthest edge of
-    /// all it covers, again and again while the viewport has room — each step a candidate of its own.
-    /// It stops where the clamp would put it back onto what it tried to pass.
-    /// </summary>
-    private static IEnumerable<Rectangle> Pushes(PopoverSide side, Rectangle c, Rectangle viewport,
-                                                 IReadOnlyList<Rectangle> avoid, int g)
-    {
-        var outward = side is PopoverSide.Right or PopoverSide.Below;   // the edge grows away from the anchor
-        for (var step = 0; step < MaxPushes; step++)
-        {
-            var any = false;
-            var edge = 0;
-            foreach (var a in avoid)
-            {
-                if (!c.Intersects(a)) continue;
-                var e = side switch { PopoverSide.Right => a.Right, PopoverSide.Left => a.X, PopoverSide.Below => a.Bottom, _ => a.Y };
-                edge = !any ? e : outward ? Math.Max(edge, e) : Math.Min(edge, e);
-                any = true;
-            }
-            if (!any) yield break;
-            var moved = side switch
-            {
-                PopoverSide.Right => new Rectangle(edge + g, c.Y, c.Width, c.Height),
-                PopoverSide.Left => new Rectangle(edge - g - c.Width, c.Y, c.Width, c.Height),
-                PopoverSide.Below => new Rectangle(c.X, edge + g, c.Width, c.Height),
-                _ => new Rectangle(c.X, edge - g - c.Height, c.Width, c.Height),
-            };
-            var r = Clamp(moved, viewport, g);
-            var stillCovers = side switch
-            {
-                PopoverSide.Right => r.X < edge,
-                PopoverSide.Left => r.Right > edge,
-                PopoverSide.Below => r.Y < edge,
-                _ => r.Bottom > edge,
-            };
-            if (r == c || stillCovers) yield break;
-            yield return r;
-            c = r;
         }
     }
 

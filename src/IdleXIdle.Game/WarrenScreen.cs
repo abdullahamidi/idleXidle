@@ -404,10 +404,13 @@ public sealed class WarrenScreen
     // profile (150 %), and every row under them moves down by the lines they took. They used to be
     // shortened to "EFFICIENCY..." — the one figure the row exists to say was the part cut.
     private int _closedLines = 1, _levelLines = 1;
+    // THE AWAY LINE WRAPS TOO (2026-09-06): it was shortened to "UP TO 12 HOU…" at 150 % once the camp's
+    // figure ran long ("2H 42M") — the one line that says what an absence holds, cut at the number.
+    private int _awayLines = 1;
     private int StripRegionsY => StripMultiplierY + _closedLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
     private int StripRuleY => StripRegionsY + _levelLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
     private int StripAwayY => StripRuleY + UiMetrics.Space(8);
-    private int StripHeight => StripAwayY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    private int StripHeight => StripAwayY + _awayLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
 
     /// <summary>Cell C's sentences, measured before the strip is laid out, so its height is theirs.</summary>
     private string ClosedLine => $"WHILE THE GAME IS CLOSED IT PAYS {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY  (+{OfflineCamp.EfficiencyPerFacilityLevel:P1} A LEVEL)";
@@ -419,6 +422,8 @@ public sealed class WarrenScreen
         var cw = iw - iw * 26 / 100 - iw * 28 / 100;
         _closedLines = Math.Clamp(_ui.WrapBig(ClosedLine, cw, UiTypography.Secondary).Count, 1, 2);
         _levelLines = Math.Clamp(_ui.WrapBig(LevelLine, cw, UiTypography.Secondary).Count, 1, 2);
+        // The away line takes the strip's whole width and as many rows as its words need — never cut.
+        _awayLines = Math.Max(1, _ui.WrapBig(AwayText, iw, UiTypography.Secondary).Count);
     }
 
     /// <summary>The strip's width, which no sentence changes — what the sentences are wrapped to.</summary>
@@ -738,13 +743,33 @@ public sealed class WarrenScreen
         : need <= 1 ? "CONQUER ONE MORE REGION"
         : $"CONQUER {need} MORE REGIONS";
 
-    // The away line is built only when the summary it describes changes — this screen redraws sixty
-    // times a second and the string is the same every one of them.
+    // The away line is built only when the absence it describes changes — this screen redraws sixty
+    // times a second and the string is the same every one of them. Both fields start null, so the
+    // cache is keyed on "built yet?" as well as "did it change?", or the first string would never be built.
     private WelcomeSummary? _awayFrom;
-    // Seeded with the never-been-away line: both fields start null, so a cache keyed on "did it
-    // change?" would never build the first string and the row would draw empty.
     private string _awayLine = "";
     private bool _awayBuilt;
+
+    /// <summary>
+    /// What the strip's last row says: the absence that actually happened, in its figures — or, with
+    /// no absence to report, what the camp holds now (AwayNever, formatted live: an upgrade changes it).
+    /// One text for the measure and the draw, so the strip's height is the line's.
+    /// </summary>
+    private string AwayText
+    {
+        get
+        {
+            if (!_awayBuilt || !Equals(_awayFrom, LastReturn))
+            {
+                _awayBuilt = true;
+                _awayFrom = LastReturn;
+                _awayLine = LastReturn is { } w && w.WarrenParts().Count > 0
+                    ? $"WHILE YOU WERE AWAY {WelcomeSummary.AwayText(w.AwaySeconds)} THE WARREN MADE {string.Join("  ·  ", w.WarrenParts())}"
+                    : "";
+            }
+            return _awayLine.Length > 0 ? _awayLine : AwayNever;
+        }
+    }
 
     // THE CAMP'S CAPACITY, in the Warren's own words (OfflineCamp, 2026-09-06): what an absence holds
     // now, and what one more facility level buys — the offline dimension every upgrade improves.
@@ -1012,15 +1037,14 @@ public sealed class WarrenScreen
         // THE AWAY LINE — the screen's own question, answered with the figures from the absence that
         // actually happened. The host already had them; this screen never showed them.
         _ui.Fill(b, new Rectangle(ix, strip.Y + StripRuleY, iw, 1), Dim);
-        if (!_awayBuilt || !Equals(_awayFrom, LastReturn))
+        // Wrapped, never shortened (the responsive-text law): the rows it takes were measured into the
+        // strip's height, so the grid below starts where the last row ends.
+        var awayY = strip.Y + StripAwayY;
+        foreach (var l in _ui.WrapBig(AwayText, iw, UiTypography.Secondary))
         {
-            _awayBuilt = true;
-            _awayFrom = LastReturn;
-            _awayLine = LastReturn is { } w && w.WarrenParts().Count > 0
-                ? $"WHILE YOU WERE AWAY {WelcomeSummary.AwayText(w.AwaySeconds)} THE WARREN MADE {string.Join("  ·  ", w.WarrenParts())}"
-                : AwayNever;
+            _ui.TextBig(b, l, ix, awayY, Bone, UiTypography.Secondary);
+            awayY += UiTypography.Pitch(UiTypography.Secondary);
         }
-        _ui.TextBig(b, _ui.ShortenBig(_awayLine.Length > 0 ? _awayLine : AwayNever, iw, UiTypography.Secondary), ix, strip.Y + StripAwayY, Bone, UiTypography.Secondary);
     }
 
     // ── THE GRID. Eight cards, each answering "can I upgrade this one?" without being clicked. ──
