@@ -12,7 +12,7 @@
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
-#        rosterswitch warrenready warrenfresh weavefresh keystonenotice
+#        rosterswitch warrenready warrenfresh warrenlocked weavefresh keystonenotice
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a

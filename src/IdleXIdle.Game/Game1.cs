@@ -1902,7 +1902,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
-                or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "warrenlocked" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec" or "vfxdebug")
@@ -2704,6 +2704,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _deepestEver = 20;
                     _hunter.AddGleam(500);
                     _dust.AddDust(60);
+                }
+                // warrenlocked: THE RAIL'S LOCKED LINE (2026-09-06). Two conquests, so four facilities
+                // are open and four are locked with REAL reasons from the unlock model
+                // (UnlockedFacilityCount = 2 + conquered): the next region by name, then "2 MORE
+                // REGIONS" and on. One facility upgraded and capped by the depth, one with an upgrade
+                // it can afford, two at level 1 — every card state the rail has to explain.
+                if (sm == "warrenlocked")
+                {
+                    _showWarren = true;
+                    foreach (var id in new[] { "verdant_hollow", "cinderworks" }) _world.Conquer(id);
+                    _warren.Restore(6, 1_200, new Dictionary<FacilityKind, int>
+                    {
+                        [FacilityKind.Nursery] = 6, [FacilityKind.Tunnels] = 3,
+                    });
+                    _deepestEver = 30;                  // cap 6: the Nursery is capped, the Tunnels are not
+                    _hunter.AddGleam(9_000);
+                    _dust.AddDust(300);
+                    _hunter.AddMaterials(120);
                 }
                 if (sm == "farm")
                 {
@@ -5788,8 +5806,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     //      RH_SHOT_MOUSE=x,y          the rig's historical canvas dial, in the 480×270 art grid
     //    A value that does not parse, lies outside its space, or names two spaces at once THROWS at
     //    the first read — a silently defaulted pose photographs the wrong thing and passes.
+    //    NO DIAL UNDER THE RIG IS A POSE TOO (2026-09-06): the cursor is PARKED outside the canvas, so a
+    //    plain capture hovers nothing. It used to read the desk's mouse, and a "plain" Warren shot
+    //    photographed whichever card the mouse happened to rest on. A hover is always posed by a dial.
     private static (bool Page, float X, float Y)? _posedCursor;
     private static bool _posedCursorRead;
+
+    /// <summary>The rig's neutral pose: a canvas point far outside every rectangle a screen could hit-test.</summary>
+    private static readonly (bool Page, float X, float Y) ParkedCursor = (false, -4096f, -4096f);
 
     private static (bool Page, float X, float Y)? PosedCursor
     {
@@ -5806,7 +5830,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var canvas = Environment.GetEnvironmentVariable("RH_SHOT_CANVAS_MOUSE");
         var legacy = Environment.GetEnvironmentVariable("RH_SHOT_MOUSE");
         var set = new[] { page, canvas, legacy }.Count(v => !string.IsNullOrEmpty(v));
-        if (set == 0) return null;
+        if (set == 0) return Environment.GetEnvironmentVariable("RH_SHOT") is not null ? ParkedCursor : null;
         if (set > 1)
             throw new InvalidOperationException("RH_SHOT_PAGE_MOUSE, RH_SHOT_CANVAS_MOUSE and RH_SHOT_MOUSE name one cursor in three spaces — set exactly one.");
 

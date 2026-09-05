@@ -622,6 +622,7 @@ public sealed class WarrenScreen
 
     private int _railLines = 1;
     private const string RailHint = "HOVER A FACILITY FOR DETAILS";
+    private static readonly bool UnderRig = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
 
     /// <summary>
     /// How many lines the rail needs at this profile: the most any facility's runs take at the rail's
@@ -630,6 +631,8 @@ public sealed class WarrenScreen
     /// </summary>
     private void MeasureRail()
     {
+        // Eight short lines measured a frame — cheaper than a cache and its invalidation. Do not cache
+        // this without a profile that says so.
         var most = 1;
         var i = 0;
         foreach (var _ in Warren.AllFacilities)
@@ -637,7 +640,12 @@ public sealed class WarrenScreen
             FlowRail(RailRuns(i++), RailInnerWidth, out var lines);
             most = Math.Max(most, lines);
         }
-        _railLines = Math.Clamp(most, 1, 2);
+        // The rail grows to what its longest line needs: copy is never shortened, never cut. Under the
+        // capture rig a line that outgrows two rows FAILS the capture rather than photographing a
+        // taller rail as if it were the design.
+        if (most > 2 && UnderRig)
+            throw new InvalidOperationException($"The Warren's detail rail needs {most} lines at this profile — its copy outgrew the rail.");
+        _railLines = most;
     }
 
     /// <summary>
