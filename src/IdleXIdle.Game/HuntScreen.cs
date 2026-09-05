@@ -1878,8 +1878,9 @@ public sealed class HuntScreen
     {
         if (_replay is null || _run is null) return -1;
         var found = -1;
-        foreach (var (slot, box) in _creatureBoxes)
-            if (box.Contains(hit) && _replay.CreatureAlive(slot)) found = slot;
+        // The VISIBLE body takes the pointer (CreaturePresentation), a creature that is still standing.
+        foreach (var slot in _creatureBoxes.Keys)
+            if (Presentation(slot).Hovers(hit) && _replay.CreatureAlive(slot)) found = slot;
         return found;
     }
 
@@ -1931,19 +1932,16 @@ public sealed class HuntScreen
                 + lineB + rows.Count * lineS + UiMetrics.Space(6)              // health and the three pairs
                 + (statuses.Count > 0 ? UiMetrics.Space(2) + lineS + statuses.Count * lineS : lineS)
                 + pad;
-        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the side AWAY FROM THE HUNTER
-        // first, then the other sides; the hunter's own rectangle is avoided, the header stack and the
-        // skill dock bound the viewport. At 150 % a creature near the centre used to put this plate
-        // over the hunter — the hand-rolled right/above/left never asked where the hunter was.
-        var box = _creatureBoxes[slot];
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06), as EnemyInspectorPlacement
+        // asks it: the side AWAY FROM THE HUNTER first, then the other sides; the hunter's rectangle
+        // and the IDLE panel are avoided, the header stack and the skill dock bound the viewport. At
+        // 150 % a creature near the centre used to put this plate over the hunter, and at 125 % one
+        // near the right edge put it over OPEN VAULT. The anchor is the creature's VISIBLE body.
+        var box = Presentation(slot).InspectorAnchor;
         var ceiling = HeaderStackBottom + UiMetrics.Space(8);
         var floor = Math.Min(s_dockRect.Height > 0 ? s_dockRect.Y : UiKit.PageBottom(UiMetrics.Space(12)), UiKit.PageBottom(UiMetrics.Space(12)));
         var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
-        var awayFromHunter = box.Center.X >= ChampBox.Center.X;
-        var order = awayFromHunter
-            ? new[] { PopoverSide.Right, PopoverSide.Above, PopoverSide.Below, PopoverSide.Left }
-            : new[] { PopoverSide.Left, PopoverSide.Above, PopoverSide.Below, PopoverSide.Right };
-        var plate = PopoverPlacement.Place(box, new Point(w, h), viewport, new[] { ChampBox }, order);
+        var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampBox, _utilityPanel);
         _ui.Fill(b, plate, Color.Black * 0.45f);
         _ui.Plate(b, plate, EnemySource is { } src ? SourceGlow(src) : null);
 
@@ -2109,6 +2107,21 @@ public sealed class HuntScreen
     /// <summary>The layout box laid out for creature <paramref name="slot"/> this frame.</summary>
     private Rectangle CreatureBox(int slot)
         => _creatureBoxes.TryGetValue(slot, out var r) ? r : EnemyBox;
+
+    /// <summary>
+    /// Creature <paramref name="slot"/>'s geometry this frame: its draw box, and the visible body the
+    /// arena published for it (falling back to the box only where no art resolved, which is what the
+    /// draw itself falls back to). The hover and the inspector's anchor read this, nothing else.
+    /// </summary>
+    private CreaturePresentation Presentation(int slot)
+    {
+        var box = CreatureBox(slot);
+        var body = _actors.TryBounds(VfxSubject.Creature(slot), out var vb) ? vb.Rect : box;
+        return new CreaturePresentation(box, body);
+    }
+
+    /// <summary>The right column's IDLE panel as the column laid it out this frame — the inspector keeps clear of it.</summary>
+    private Rectangle _utilityPanel;
 
     /// <summary>Where a creature's VISIBLE middle is — the anchor a damage number hangs from.</summary>
     private int CreatureCentreX(int slot)
@@ -3882,6 +3895,7 @@ public sealed class HuntScreen
         // beside three siblings that did not (release polish 2026-09-05, hunt-02).
         _ui.PanelQuiet(b, panel, artKey: "ui_panel_medium");
         s_railBottom = panel.Bottom + 10;
+        _utilityPanel = panel;   // the inspector, drawn after this column, keeps clear of it
 
         var x = panel.X + UtilityPad;
         var w = panel.Width - UtilityPad * 2;
