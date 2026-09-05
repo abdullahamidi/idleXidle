@@ -122,6 +122,131 @@ public static class ItemTooltip
     /// one it only walks, and returns the height the same lines take. Both callers share it, so the height
     /// a caller places by and the height the card draws to are one number.
     /// </summary>
+    // ── THE COMPACT READING (2026-09-06): what a buyer needs BEFORE the purchase — the art, the grade,
+    //    the name, the level and Source, the power verdict, the rolled numbers, the price — on the
+    //    same canonical data the full card walks (the same Core calls; nothing recomputed here). The
+    //    full card is the item's page once it is owned; at the stall it stood 700 px tall at 150 % and
+    //    could only be placed over the title or a BUY.
+
+    /// <summary>The compact card's width.</summary>
+    public static int CompactWidth => UiMetrics.Control(340);
+
+    /// <summary>A price line the compact card prints: the material, the amount, what the hunter holds.</summary>
+    public readonly record struct PriceLine(string Material, int Amount, long Held);
+
+    /// <summary>How tall the compact card will be — so a caller can place it before drawing.</summary>
+    public static int CompactHeightFor(ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices)
+        => WalkCompact(null, null, item, hunter, prices, null, new Rectangle(0, 0, CompactWidth, 0));
+
+    /// <summary>Draw the compact card in a rectangle a caller has PLACED (through PopoverPlacement).</summary>
+    public static void DrawCompact(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices,
+                                   Action<SpriteBatch, ItemInstance, Rectangle>? drawArt, Rectangle card)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
+        ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
+        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
+        WalkCompact(ui, b, item, hunter, prices, drawArt, card);
+    }
+
+    private static int WalkCompact(UiKit? ui, SpriteBatch? b, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices,
+                                   Action<SpriteBatch, ItemInstance, Rectangle>? drawArt, Rectangle card)
+    {
+        var draw = ui is not null && b is not null;
+        var lx = card.X + PadX;
+        var rx = card.Right - PadX;
+        var innerW = card.Width - PadX * 2;
+        var cy = card.Y + PadTop;
+        var edge = RarityInk[(int)item.Rarity];
+        var art = UiMetrics.Control(56);
+        var slot = Gear.SlotFor(item.BaseType);
+
+        void L(string s, Color c) { if (draw) ui!.Text(b!, s, lx, cy, c); }
+        void R(string s, Color c) { if (draw) ui!.TextRight(b!, s, rx, cy, c); }
+
+        // The art beside the name and the grade line, so the card reads as the offer it hangs off.
+        if (draw)
+        {
+            var artBox = new Rectangle(lx, cy, art, art);
+            if (drawArt is not null) drawArt(b!, item, artBox); else ui!.Fill(b!, artBox, edge * 0.5f);
+        }
+        var textX = lx + art + UiMetrics.Space(12);
+        var textW = innerW - art - UiMetrics.Space(12);
+        if (draw) ui!.TextBig(b!, ui.ShortenBig(ItemNaming.FullName(item), textW, UiTypography.Body), textX, cy + (art - UiTypography.Body) / 2, edge, UiTypography.Body);
+        cy += art + UiMetrics.Space(6);
+        // The grade line takes the card's whole width under the art row: beside the art it was cut to
+        // "LEVEL 18 · SPI…" at 150 %, and the Source is one of the reasons a buyer looks.
+        var grade = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  {(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  LEVEL {item.ItemLevel}";
+        if (item.Element is { } el) grade += $"  ·  {el.ToString().ToUpperInvariant()}";
+        L(grade, Dim);
+        cy += LineH + UiMetrics.Space(4);
+        if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
+        cy += UiMetrics.Space(10);
+
+        // ITEM POWER and the verdict against what is worn — the same call the full card makes.
+        if (hunter is not null && slot is { } s)
+        {
+            var mine = hunter.PowerContribution(item);
+            L("ITEM POWER", Dim);
+            R($"{mine:N0}", Ink);
+            cy += LineH;
+            var worn = hunter.Worn(s);
+            if (worn is not null && worn.InstanceId != item.InstanceId)
+            {
+                var delta = mine - hunter.PowerContribution(worn);
+                var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
+                var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
+                L($"{word} OVER WHAT YOU WEAR", tone);
+                R($"{delta:+#,0;-#,0;0}", tone);
+            }
+            else L(worn is null ? "THE SLOT IS EMPTY" : "WORN", worn is null ? Good : Gold);
+            cy += LineH + UiMetrics.Space(6);
+        }
+        else if (GemCraft.IsGem(item))
+        {
+            L(GemCraft.Grant(item), Good);
+            cy += LineH;
+            L("SET IT INTO RARE OR BETTER GEAR", Dim);
+            cy += LineH + UiMetrics.Space(6);
+        }
+
+        // The rolled numbers (up to four), the built-in channel, the prefix and the enchant by name.
+        var affixes = ItemAffixes.Of(item);
+        var shown = 0;
+        foreach (var a in affixes)
+        {
+            if (shown++ >= 4) break;
+            L(ItemAffixes.Describe(a), Good);
+            cy += LineH;
+        }
+        if (affixes.Count > 4) { L($"AND {affixes.Count - 4} MORE — READ IT ON THE GEAR SCREEN ONCE IT IS YOURS", Dim); cy += LineH; }
+        if (ItemFamilies.BonusOf(item) is { } fam)
+        {
+            L($"{ItemNaming.TypeWord(item)}  {ItemAffixes.GrantLabel(fam.Stat, fam.Magnitude)}", Gold);
+            R("BUILT IN", Dim);
+            cy += LineH;
+        }
+        if (GearTraits.TraitOf(item) is { } trait) { L(GearTraits.NameOf(trait), Gold); R("PREFIX", Dim); cy += LineH; }
+        if (Enchantments.Of(item) is { } ench) { L(ench.Name, Violet); R("ENCHANT", Dim); cy += LineH; }
+        cy += UiMetrics.Space(6);
+
+        // THE PRICE, in the wallet's verdict colour — the one thing the full card never says.
+        if (prices.Count > 0)
+        {
+            if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
+            cy += UiMetrics.Space(10);
+            foreach (var p in prices)
+            {
+                var enough = p.Held >= p.Amount;
+                L($"{p.Amount} {p.Material}", enough ? Ink : Bad);
+                R(enough ? "YOU CAN AFFORD IT" : $"YOU HOLD {p.Held}", enough ? Good : Bad);
+                cy += LineH;
+            }
+        }
+
+        return cy - card.Y + PadBottom;
+    }
+
     private static int Walk(UiKit? ui, SpriteBatch? b, ItemInstance item, Hunter? hunter, Character? wearer, Rectangle card)
     {
         var draw = ui is not null && b is not null;

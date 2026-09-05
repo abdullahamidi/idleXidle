@@ -6,6 +6,8 @@ using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Forging;
+using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Warrens;
 using Xunit;
@@ -165,6 +167,19 @@ public class offline_economy_benchmark_test
             _out.WriteLine($"{"",-36} region {p.RegionIndex} prog {p.Progression}, deepest {hour.DeepestWave}, {hour.WavesCleared} waves, fell {hour.Falls}; "
                            + $"warren levels {warren.FacilityLevelsBought}, share {warren.Share:P0} of a {warren.HuntGleamPerHour:N0}/h baseline; "
                            + $"dust {warren.ProductionPerMinute(WarrenResource.Dust) * 60:N0}/h scrap {warren.ProductionPerMinute(WarrenResource.Scrap) * 60:N0}/h essence {warren.ProductionPerMinute(WarrenResource.Essence) * 60:N0}/h");
+            // THE MATERIALS, AGAINST WHAT THEY BUY (playtest debt, 2026-09-06 — recorded, not tuned): an hour of
+            // the Warren's Dust, Scrap and Essence beside the representative sinks at this progression. The
+            // weights and exchange rates in WarrenBudget came from prices; the decision to move them waits for play.
+            var dustH = warren.ProductionPerMinute(WarrenResource.Dust) * 60f;
+            var scrapH = warren.ProductionPerMinute(WarrenResource.Scrap) * 60f;
+            var essenceH = warren.ProductionPerMinute(WarrenResource.Essence) * 60f;
+            var nextLevelDust = warren.UpgradeCost(FacilityKind.Nursery).Dust;
+            var skipTenWaves = Checkpoints.DustPerWave * 10;
+            var refineScrap = (ForgeTuning.Default.RefineScrapBase + Math.Max(1, hour.DeepestWave)) * 4 / 4;   // a first refine at the depth's item level
+            var socketEssence = GemCraft.SocketCost(Rarity.Rare);
+            string Hours(float perHour, int cost) => perHour <= 0f ? "—" : $"{cost / perHour:0.0}h";
+            _out.WriteLine($"{"",-36} materials/h: dust {dustH:N0} (next facility level {nextLevelDust} = {Hours(dustH, nextLevelDust)}, skip 10 waves {skipTenWaves} = {Hours(dustH, skipTenWaves)}) · "
+                           + $"scrap {scrapH:N0} (a refine ≈ {refineScrap} = {Hours(scrapH, refineScrap)}) · essence {essenceH:N0} (a rare socket {socketEssence} = {Hours(essenceH, socketEssence)})");
 
             // ── THE LAW ──
             // 1. The Warren is subordinate to the hunt: never past the hard cap of the MEASURED rate.

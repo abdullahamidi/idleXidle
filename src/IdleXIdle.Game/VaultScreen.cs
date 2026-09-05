@@ -1375,12 +1375,20 @@ public sealed class VaultScreen
         // through the one rule (PopoverPlacement, 2026-09-06): beside the card first, above it before
         // below, and never on a BUY button while a side avoids them. It sat on the hovered card's own
         // BUY at 150 %, and on its neighbour's.
+        // THE COMPACT READING (2026-09-06): the full item card stood 700 px tall at 150 % and could only
+        // be placed over the stall's title or a BUY. This is the buyer's card — art, grade, name, level,
+        // Source, the power verdict, the rolled numbers, the price — on the same data, placed through
+        // the one rule inside the stall UNDER its caption (so the title is never covered), beside the
+        // offer first, and clear of every BUY.
         if (hoverOffer is not null)
         {
-            var size = new Point(ItemTooltip.Width, ItemTooltip.HeightFor(hoverOffer, Hunter));
-            var placed = PopoverPlacement.Place(hoverCard, size, UiKit.Page, buyRects,
-                                                new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below });
-            ItemTooltip.DrawAt(_ui, b, hoverOffer, Hunter, placed);
+            var prices = WanderingTrader.PriceOf(hoverOffer, TraderTuning.Default)
+                .Select(p => new ItemTooltip.PriceLine(p.Item1.ToString().ToUpperInvariant(), p.Item2, Hunter?.MaterialOf(p.Item1) ?? 0)).ToList();
+            var size = new Point(ItemTooltip.CompactWidth, ItemTooltip.CompactHeightFor(hoverOffer, Hunter, prices));
+            var stall = new Rectangle(panel.X, cardsTop - UiMetrics.Space(24), panel.Width, panel.Bottom - cardsTop + UiMetrics.Space(24));
+            var placed = PopoverPlacement.Place(hoverCard, size, stall, buyRects,
+                                                new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Above, PopoverSide.Below });
+            ItemTooltip.DrawCompact(_ui, b, hoverOffer, Hunter, prices, DrawItem, placed);
         }
     }
 

@@ -2713,7 +2713,7 @@ public sealed class HuntScreen
                                   Math.Min(widest + pad * 2, ArenaRect.Width - pad * 2),
                                   pitch * read.Count + UiMetrics.Space(10));
         plate.Y = SkillStrip.Y - UiMetrics.Space(8) - plate.Height;
-        _ui.Fill(b, plate, new Color(0x08, 0x06, 0x0A) * 0.86f);
+        _ui.Fill(b, plate, UiInk.Ground * 0.86f);
         var y = plate.Y + UiMetrics.Space(5);
         foreach (var (text, tint) in read)
         {
@@ -4755,8 +4755,8 @@ public sealed class HuntScreen
                          (int)(box.Width * (0.62f - 0.18f * shadowEase)), 46, 0.6f - 0.25f * shadowEase);
 
         var tint = dead && !hasDeathClip
-            ? Color.Lerp(new Color(0x6A, 0x5A, 0x62), new Color(0x2A, 0x28, 0x34), ease) * (1f - 0.45f * ease)
-            : dead ? Color.Lerp(Color.White, new Color(0x8A, 0x80, 0x88), ease * 0.6f)
+            ? Color.Lerp(new Color(0x6A, 0x60, 0x5C), new Color(0x2A, 0x26, 0x24), ease) * (1f - 0.45f * ease)
+            : dead ? Color.Lerp(Color.White, new Color(0x8A, 0x84, 0x80), ease * 0.6f)
             : Color.White;
 
         // ATTACK and CAST do not loop. They are the ONE committed clip UpdateChampionClip aimed at the

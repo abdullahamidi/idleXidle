@@ -4883,7 +4883,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Activity.Mastery => MasteryScreen.Spotlights(target),
             Activity.Vault => VaultScreen.Spotlights(target),
             Activity.Forge => ForgeScreen.Spotlights(target),
-            Activity.Warren => WarrenScreen.Spotlights(target),
+            Activity.Warren => _warrenScreen.Spotlights(target),
             Activity.Map => _mapScreen.Spotlights(target),
             Activity.Traits => TraitCollectionScreen.Spotlights(target),
             Activity.Roster => RosterScreen.Spotlights(target),
@@ -8181,12 +8181,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // draw squashed its end scrollwork 0.7× one way and 1.02× the other (release polish).
                 if (_assets.Get("ui_tab_active") is { } tab) _ui.SliceFrame(_batch, tab, r, Color.White);
                 else if (_assets.Get("ui_button_primary") is { } bp) _ui.SliceFrame(_batch, bp, r, Color.White);
-                else _ui.Fill(_batch, r, new Color(0x3A, 0x28, 0x54));
-                _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.18f);   // purple interior tint
+                else _ui.Fill(_batch, r, UiInk.Raised);
+                // The lit tile's interior is a GOLD wash now (2026-09-06) — selected is gold everywhere
+                // else in the game; the purple wash was the last of the old violet chrome on the rail.
+                _ui.Fill(_batch, r, UiInk.Accent * 0.12f);
             }
             else if (hover)
             {
-                _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.10f);
+                _ui.Fill(_batch, r, UiInk.Accent * 0.06f);
             }
 
             // Icon above, label below, both centred in the shorter tile.

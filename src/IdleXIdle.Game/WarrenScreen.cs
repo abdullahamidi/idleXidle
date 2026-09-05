@@ -367,11 +367,11 @@ public sealed class WarrenScreen
     private static Rectangle InspectorPanel =>
         new(UiKit.PageRight(RightInset) - InspectorW, Top, InspectorW, UiKit.PageBottom(BottomMargin) - Top);
 
-    private static Rectangle SummaryStrip =>
-        new(LeftMargin, Top, InspectorPanel.X - PanelGap - LeftMargin, StripHeight);
+    private Rectangle SummaryStrip =>
+        new(LeftMargin, Top, SummaryStripWidth, StripHeight);
 
-    private static Rectangle GridPanel =>
-        new(LeftMargin, Top + StripHeight + StripGap, SummaryStrip.Width,
+    private Rectangle GridPanel =>
+        new(LeftMargin, Top + StripHeight + StripGap, SummaryStripWidth,
             UiKit.PageBottom(BottomMargin) - (Top + StripHeight + StripGap));
 
     // ── THE STRIP'S RHYTHM. Cell C's stack (a caption, the four figures, their names, the multipliers,
@@ -381,16 +381,36 @@ public sealed class WarrenScreen
     private static int StripGlyphRowY => StripCaptionY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
     private static int StripNamesY => StripGlyphRowY + UiTypography.Pitch(UiTypography.Headline) - 2;
     private static int StripMultiplierY => StripNamesY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
-    private static int StripRegionsY => StripMultiplierY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
-    private static int StripRuleY => StripRegionsY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
-    private static int StripAwayY => StripRuleY + UiMetrics.Space(8);
-    private static int StripHeight => StripAwayY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    // THE STRIP GROWS WITH ITS SENTENCES (2026-09-06, the responsive text law): cell C's two lines —
+    // what an absence pays, what a level buys — wrap to two each where the cell is narrow for the
+    // profile (150 %), and every row under them moves down by the lines they took. They used to be
+    // shortened to "EFFICIENCY..." — the one figure the row exists to say was the part cut.
+    private int _closedLines = 1, _levelLines = 1;
+    private int StripRegionsY => StripMultiplierY + _closedLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
+    private int StripRuleY => StripRegionsY + _levelLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    private int StripAwayY => StripRuleY + UiMetrics.Space(8);
+    private int StripHeight => StripAwayY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+
+    /// <summary>Cell C's sentences, measured before the strip is laid out, so its height is theirs.</summary>
+    private string ClosedLine => $"WHILE THE GAME IS CLOSED IT PAYS {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY  (+{OfflineCamp.EfficiencyPerFacilityLevel:P1} A LEVEL)";
+    private string LevelLine => $"EACH LEVEL: A LARGER SHARE OF THE HUNT'S PAY  ({Warren.Share:P0} NOW)";
+
+    private void MeasureStrip()
+    {
+        var iw = SummaryStripWidth - GridPad * 2;
+        var cw = iw - iw * 26 / 100 - iw * 28 / 100;
+        _closedLines = Math.Clamp(_ui.WrapBig(ClosedLine, cw, UiTypography.Secondary).Count, 1, 2);
+        _levelLines = Math.Clamp(_ui.WrapBig(LevelLine, cw, UiTypography.Secondary).Count, 1, 2);
+    }
+
+    /// <summary>The strip's width, which no sentence changes — what the sentences are wrapped to.</summary>
+    private static int SummaryStripWidth => InspectorPanel.X - PanelGap - LeftMargin;
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
     /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
     /// </summary>
-    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    internal Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.Facilities => new[] { GridPanel },
         TourTarget.FacilityDetail => new[] { InspectorPanel },
@@ -398,13 +418,13 @@ public sealed class WarrenScreen
         _ => Array.Empty<Rectangle>(),
     };
 
-    private static int CardW => (GridPanel.Width - GridPad * 2 - CardGap * 3) / 4;
+    private int CardW => (GridPanel.Width - GridPad * 2 - CardGap * 3) / 4;
     /// <summary>
     /// A card's height: half the grid, but NEVER under the height its rows need. When the page is too
     /// short for two whole rows — 150 % with the notice lane open, where the cards collapsed onto
     /// their own chips — the grid scrolls instead (the mouse wheel over it; a caption says so).
     /// </summary>
-    private static int CardH => Math.Max(MinCardH, (GridPanel.Height - GridPad * 2 - CardGap) / 2);
+    private int CardH => Math.Max(MinCardH, (GridPanel.Height - GridPad * 2 - CardGap) / 2);
 
     /// <summary>The least a card can be: name, resource row, the figure with its caption, the chip, and their breaths.</summary>
     private static int MinCardH
@@ -417,10 +437,19 @@ public sealed class WarrenScreen
     private static int GridCaptionBand => UiTypography.Secondary + UiMetrics.Space(12);
 
     /// <summary>How much taller the two rows are than the grid's panel — what the wheel may scroll.</summary>
-    private static int GridOverflow => Math.Max(0, GridPad * 2 + CardH * 2 + CardGap + GridCaptionBand - GridPanel.Height);
+    private int GridOverflow => Math.Max(0, GridPad * 2 + CardH * 2 + CardGap + GridCaptionBand - GridPanel.Height);
+
+    /// <summary>The part of the grid a card can be seen in: the panel above its caption band while it scrolls.</summary>
+    private Rectangle GridVisible => GridOverflow > 0
+        ? new Rectangle(GridPanel.X, GridPanel.Y, GridPanel.Width, GridPanel.Height - GridCaptionBand)
+        : GridPanel;
+
+    /// <summary>RH_SHOT_GRID_SCROLL=&lt;page px&gt;: the grid scrolled, for the fixture that shows a card half under the strip.</summary>
+    private static readonly int PosedGridScroll = int.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_GRID_SCROLL"), out var ps) ? ps : 0;
 
     /// <summary>The grid's scroll, in page pixels down from the top row.</summary>
     private int _gridScroll;
+    private bool _scrollPosed;
 
     private RasterizerState? _clip;
     private RasterizerState Clip => _clip ??= new RasterizerState { ScissorTestEnable = true };
@@ -605,6 +634,7 @@ public sealed class WarrenScreen
         // BEFORE this frame's clicks can ask for anything else.
         Settle();
         PoseForTheRig();
+        MeasureStrip();
         // The rig cannot hold a mouse button down, so the PRESSED state of every control on the page —
         // this screen's cards and the kit's own button — would be unphotographable without this.
         if (PosedPress) UiKit.MouseHeld = true;
@@ -613,6 +643,7 @@ public sealed class WarrenScreen
         var wheel = InspectorPanel.Contains(hit) ? notches : 0;
         if (GridPanel.Contains(hit) && notches != 0)
             _gridScroll = Math.Clamp(_gridScroll - notches * UiMetrics.Control(48), 0, GridOverflow);
+        if (PosedGridScroll > 0 && !_scrollPosed) { _gridScroll = PosedGridScroll; _scrollPosed = true; }
         _gridScroll = Math.Clamp(_gridScroll, 0, GridOverflow);   // the page may have grown back
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));   // scrim so panels pop
@@ -810,14 +841,19 @@ public sealed class WarrenScreen
         // THE CAMP, in two lines (the rate model, 2026-09-06): what an absence holds and at what share
         // of live pay, then what every level buys — the three things a level moves, in player words.
         // The figures are Core's (OfflineCamp, WarrenBudget); nothing here owns a number.
-        _ui.TextBig(b, _ui.ShortenBig(
-                        $"WHILE THE GAME IS CLOSED IT PAYS {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY  (+{OfflineCamp.EfficiencyPerFacilityLevel:P1} A LEVEL)",
-                        cw, UiTypography.Secondary),
-                    cx, strip.Y + StripMultiplierY, Bone, UiTypography.Secondary);
-        _ui.TextBig(b, _ui.ShortenBig(
-                        $"EACH LEVEL: A LARGER SHARE OF THE HUNT'S PAY  ({Warren.Share:P0} NOW)",
-                        cw, UiTypography.Secondary),
-                    cx, strip.Y + StripRegionsY, Slate, UiTypography.Secondary);
+        // Wrapped, never shortened (MeasureStrip reserved the lines): the figure is the sentence's point.
+        var closedY = strip.Y + StripMultiplierY;
+        foreach (var l in _ui.WrapBig(ClosedLine, cw, UiTypography.Secondary).Take(2))
+        {
+            _ui.TextBig(b, l, cx, closedY, Bone, UiTypography.Secondary);
+            closedY += UiTypography.Pitch(UiTypography.Secondary);
+        }
+        var levelY = strip.Y + StripRegionsY;
+        foreach (var l in _ui.WrapBig(LevelLine, cw, UiTypography.Secondary).Take(2))
+        {
+            _ui.TextBig(b, l, cx, levelY, Slate, UiTypography.Secondary);
+            levelY += UiTypography.Pitch(UiTypography.Secondary);
+        }
 
         // THE AWAY LINE — the screen's own question, answered with the figures from the absence that
         // actually happened. The host already had them; this screen never showed them.
@@ -849,7 +885,6 @@ public sealed class WarrenScreen
             _ui.Device.ScissorRectangle = Rectangle.Intersect(Game1.OverlayToCanvas(clipTo, Vector2.Zero), _ui.Device.Viewport.Bounds);
             b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                     DepthStencilState.None, Clip, null, Game1.OverlayTransform(Vector2.Zero));
-            if (!GridPanel.Contains(hit)) hit = new Point(-1, -1);   // a card scrolled under the strip takes nothing
         }
         var lockGlyph = UiMetrics.Control(20);
         // WHERE A LOCKED CARD WEARS ITS BADGE is decided once for the grid, not once per card: at 125 %
@@ -865,6 +900,10 @@ public sealed class WarrenScreen
         {
             var index = i++;
             var card = Card(index);
+            // CLIP-AWARE (2026-09-06): what the player can SEE of the card is what takes the hover, the
+            // click and the tip — a card scrolled under the strip, or under the caption band, answers
+            // only in its visible part, and a wholly hidden one not at all (UiKit.VisibleWithin).
+            var visible = UiKit.VisibleWithin(card, GridVisible);
             var open = Warren.IsUnlocked(f.Kind);
             // ── THE STANDARD STATES (§25–§29), on a card the kit does not draw for us. HOVER is a thin
             //    luminance lift eased in over ~100 ms, the same one UiKit.Button gets, so a card is
@@ -872,7 +911,7 @@ public sealed class WarrenScreen
             //    exactly as long as the button is held. SELECTED keeps its persistent gold frame, which
             //    hover can never be mistaken for. DISABLED — a locked facility — takes neither hover nor
             //    press and sits back under a wash, so "not yet" reads before a word of it is read.
-            var hot = open && card.Contains(hit);
+            var hot = open && visible.Contains(hit);
             var lift = Hover(card, hot);
             var held = hot && UiKit.MouseHeld;
             var drawn = held ? new Rectangle(card.X, card.Y + 2, card.Width, card.Height) : card;
@@ -896,7 +935,7 @@ public sealed class WarrenScreen
                 _ui.Fill(b, inner, Color.Black * 0.25f);
                 // A CLICK ON A LOCKED CARD IS AN ANSWER, not silence: the reason lights and the host
                 // plays the refusal. Selection is unchanged — a locked facility has no inspector.
-                if (UiKit.ClickedIn(card, hit, clicked)) Refuse(f.Kind);
+                if (UiKit.ClickedIn(visible, hit, clicked)) Refuse(f.Kind);
                 var lockedLit = RefusalLit(f.Kind);
                 // Centred in the space the LOCKED badge leaves, not in the whole card — BREEDING
                 // CHAMBER at Headline reached the badge and the two words touched. And when that space
@@ -951,13 +990,13 @@ public sealed class WarrenScreen
                     _ui.Fill(b, new Rectangle(chip.X + 3, chip.Y + 3, chip.Width - 6, chip.Height - 6), Ember * (0.30f * lockedLit));
                 _ui.Icon(b, "ui_slot_locked", chipIcon, Bone);
                 _ui.TextBig(b, chipLine, chipTextX, chipTextY, Color.Lerp(Bone, Ember, 0.7f * lockedLit), UiTypography.Body);
-                Tip(card, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.");
+                Tip(visible, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.");
                 continue;
             }
 
             var sel = f.Kind == _selected;
             // A new selection opens its inspector at the top, wherever the last one was scrolled to.
-            if (UiKit.ClickedIn(card, hit, clicked) && !sel) { _selected = f.Kind; _inspectorFirst = 0; }
+            if (UiKit.ClickedIn(visible, hit, clicked) && !sel) { _selected = f.Kind; _inspectorFirst = 0; }
             var rc = ResColor(f.Info.Produces);
 
             _ui.Plate(b, drawn);
@@ -1065,7 +1104,7 @@ public sealed class WarrenScreen
                                  !UiMotion.Reduced && _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
             if (frameLit > 0f)
                 Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
-            Tip(card, hit, $"{f.Info.Name} — {f.Info.Description}");
+            Tip(visible, hit, $"{f.Info.Name} — {f.Info.Description}");
         }
 
         if (scrolls)

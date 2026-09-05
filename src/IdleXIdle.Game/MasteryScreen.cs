@@ -826,8 +826,56 @@ public sealed class MasteryScreen
         var zoom = MathF.Min((TreeView.Width - margin * 2f) / MathF.Max(1f, size.X),
                              (TreeView.Height - margin * 2f) / MathF.Max(1f, size.Y));
         // Never tighter than the first-open framing (the nodes would balloon), never looser than the whole tree.
-        _zoom = Math.Clamp(zoom, MathF.Max(MinZoom, WholeTreeZoom), MathF.Min(MaxZoom, FirstOpenZoom));
-        _pan = (min + max) / 2f;
+        FlyTo(Math.Clamp(zoom, MathF.Max(MinZoom, WholeTreeZoom), MathF.Min(MaxZoom, FirstOpenZoom)), (min + max) / 2f);
+    }
+
+    // ── THE CAMERA FLIGHT (2026-09-06). A reframe used to cut; it travels now — pan and zoom together,
+    //    smoothstepped over FlightMs, no overshoot — so the player sees where the tree is taking them.
+    //    Only the CAMERA moves: nodes, wires and topology are drawn where they always are. Under
+    //    Reduced Motion the camera jumps (a travelling camera is what that setting drops). Any manual
+    //    camera input — a wheel notch, a drag, an arrow, HOME — cancels the flight at once, where it is.
+
+    private const float FlightMs = 240f;
+    private (float ZoomFrom, Vector2 PanFrom, float ZoomTo, Vector2 PanTo, double StartMs)? _flight;
+
+    /// <summary>RH_SHOT_FLIGHT=&lt;0..1&gt; holds the flight at that fraction — the fixture's before and after.</summary>
+    private static readonly float? DevFlight = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_FLIGHT"),
+        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var df) ? Math.Clamp(df, 0f, 1f) : null;
+
+    private void FlyTo(float zoom, Vector2 pan)
+    {
+        var jump = UiMotion.Reduced || (MathF.Abs(zoom - _zoom) < 1e-3f && Vector2.Distance(pan, _pan) < 1f);
+        if (jump)
+        {
+            _flight = null;
+            _zoom = zoom;
+            _pan = pan;
+            ClampPan();
+            return;
+        }
+        _flight = (_zoom, _pan, zoom, pan, _breath.Elapsed.TotalMilliseconds);
+    }
+
+    /// <summary>The player took the camera: the flight ends where it is.</summary>
+    private void CancelFlight() => _flight = null;
+
+    /// <summary>Advance the flight one frame; the camera lands exactly on its target and the flight ends.</summary>
+    private void AdvanceFlight()
+    {
+        if (_flight is not { } f) return;
+        var t = DevFlight ?? (float)((_breath.Elapsed.TotalMilliseconds - f.StartMs) / FlightMs);
+        if (t >= 1f)
+        {
+            _zoom = f.ZoomTo;
+            _pan = f.PanTo;
+            ClampPan();
+            _flight = null;
+            return;
+        }
+        var s = UiMotion.Smooth(Math.Max(0f, t));
+        // Zoom eases in its own log space, so the halfway frame looks halfway rather than mostly there.
+        _zoom = MathF.Exp(MathF.Log(f.ZoomFrom) + (MathF.Log(f.ZoomTo) - MathF.Log(f.ZoomFrom)) * s);
+        _pan = Vector2.Lerp(f.PanFrom, f.PanTo, s);
         ClampPan();
     }
 
@@ -1220,12 +1268,17 @@ public sealed class MasteryScreen
         // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
         if (_specNodeId is not null) { _dragFrom = null; _draggedThisPress = false; }
 
+        AdvanceFlight();
+
         if (_specNodeId is null)
         {
             var over = mouse;
 
             if (wheel != 0 && TreeView.Contains(over) && !OverDock(over))
+            {
+                CancelFlight();
                 ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
+            }
 
             // THE INSPECTOR SCROLLS UNDER THE WHEEL when its reading is taller than its room (150 % on
             // a Specialisation). A notch is one Body line; the last page stays full (UiKit.Scrolled).
@@ -1237,7 +1290,7 @@ public sealed class MasteryScreen
             // a scrollbar is a tree nobody moves.
             if (held && TreeView.Contains(over) && (_dragFrom is not null || !OverDock(over)))
             {
-                if (_dragFrom is null) { _dragFrom = over; _dragPanFrom = _pan; }
+                if (_dragFrom is null) { CancelFlight(); _dragFrom = over; _dragPanFrom = _pan; }
                 else
                 {
                     var d = _dragFrom.Value;
@@ -1255,14 +1308,14 @@ public sealed class MasteryScreen
             // to pan west left the tree and opened another screen. The arrows are already the pan keys
             // everywhere else in this game and collide with nothing here.
             var step = 260f / _zoom * 0.06f;
-            if (keys.IsKeyDown(Keys.Left)) { _pan.X -= step; ClampPan(); }
-            if (keys.IsKeyDown(Keys.Right)) { _pan.X += step; ClampPan(); }
-            if (keys.IsKeyDown(Keys.Up)) { _pan.Y -= step; ClampPan(); }
-            if (keys.IsKeyDown(Keys.Down)) { _pan.Y += step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Left)) { CancelFlight(); _pan.X -= step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Right)) { CancelFlight(); _pan.X += step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Up)) { CancelFlight(); _pan.Y -= step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Down)) { CancelFlight(); _pan.Y += step; ClampPan(); }
             bool Tapped(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
-            if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) ZoomAt(TreeView.Center, 1.25f);
-            if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) ZoomAt(TreeView.Center, 1f / 1.25f);
-            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = WholeTreeZoom; }
+            if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) { CancelFlight(); ZoomAt(TreeView.Center, 1.25f); }
+            if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) { CancelFlight(); ZoomAt(TreeView.Center, 1f / 1.25f); }
+            if (Tapped(Keys.Home)) { CancelFlight(); _pan = Vector2.Zero; _zoom = WholeTreeZoom; }
         }
 
         // THE RIGHT-CLICK REFUND, ABOVE THE LEFT-CLICK GATE. It was written below `if (!clicked)

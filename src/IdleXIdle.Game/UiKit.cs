@@ -1521,6 +1521,14 @@ public sealed class UiKit
     /// visible margin and lines up with the panel's title row (playtest 2026-08-26: "the close buttons
     /// have no margin, they run into the frame").
     /// </summary>
+    /// <summary>
+    /// The part of an element the player can actually see under a clip — the rectangle a hover, a
+    /// click or a tip must test, never the element's own (2026-09-06). A card scrolled under a strip
+    /// used to raise a tooltip from the rows nobody could see; a wholly hidden element gives an empty
+    /// rectangle, which contains nothing.
+    /// </summary>
+    public static Rectangle VisibleWithin(Rectangle element, Rectangle clip) => Rectangle.Intersect(element, clip);
+
     public static Rectangle CloseRect(Rectangle panel, int size = 0)
     {
         if (size <= 0) size = UiMetrics.Control(CloseSize);   // a hit target: it follows the profile
