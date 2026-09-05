@@ -2109,6 +2109,7 @@ public sealed class ForgeScreen
     private void DrawMaterialStrip(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit)
     {
         _ui.Plate(b, MaterialStrip);
+        _ui.Fill(b, new Rectangle(MaterialStrip.X, MaterialStrip.Y, MaterialStrip.Width, 2), Gold * 0.35f);   // the strip's own rule, so it reads as part of the page's frames
 
         // The five balances, and — for the tab that is open — the mark that says what it needs or
         // gives. The marks are verb-first ("UPGRADE NEEDS 12", "SALVAGE GIVES +32") and every one of
@@ -2123,26 +2124,24 @@ public sealed class ForgeScreen
             ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", hunter.MaterialOf(Material.Crystal), MatUse(Material.Crystal)),
         };
 
+        // FIVE CELLS through the house resource cell (UiKit.ResourceCell): the well says which
+        // resource, the line over the figure says what the open action NEEDS or GIVES of it (in the
+        // met / unmet ink) or the resource's name when nothing is asked, and the figure itself turns
+        // to the danger ink while it is short. Hairlines between the cells; the frame's own rule on top.
         for (var i = 0; i < rows.Length; i++)
         {
             var chip = MatChip(i);
             var r = rows[i];
-            // ── THE CHIP THAT PAID REACTS (§37). A short wash over the chip and its figure ticking from
-            //    what it was to what it is — no flying resources, no new label, nothing that repeats.
             var feel = PurseFeel(r.Key);
             var moved = Felt(feel);
-            if (moved > 0f) _ui.Fill(b, chip, UiInk.Accent * (0.16f * UiMotion.Smooth(moved)));
-            DrawMatIcon(b, r.Icon, r.Tint, new Rectangle(chip.X, chip.Y + UiMetrics.Space(2), MatIconSize, MatIconSize));
-            // The name gives way to the figure: a chip is one balance, and the number is the balance.
             var held = Ab(TickedWhole(feel, r.Held));
-            var nameX = chip.X + MatIconSize + UiMetrics.Space(8);
-            var nameRoom = chip.Right - _ui.MeasureBig(held, UiTypography.Headline) - UiMetrics.Space(8) - nameX;
-            _ui.TextBig(b, _ui.ShortenBig(r.Name, nameRoom, UiTypography.Secondary), nameX, chip.Y + UiMetrics.Space(6),
-                        Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, held, chip.Right, chip.Y, TickInk(feel, Bone), UiTypography.Headline);
-            if (marks.TryGetValue(r.Key, out var mark))
-                _ui.TextRightBig(b, mark.Text, chip.Right, chip.Y + UiTypography.Pitch(UiTypography.Headline),
-                                 mark.Colour, UiTypography.Secondary);
+            var hasMark = marks.TryGetValue(r.Key, out var mark);
+            var isShort = hasMark && mark.Colour == Ember;
+            _ui.ResourceCell(b, chip, r.Icon, r.Tint,
+                             hasMark ? mark.Text : r.Name, hasMark ? mark.Colour : Slate,
+                             held, isShort ? Ember : TickInk(feel, Bone), UiMotion.Smooth(moved));
+            if (i > 0)
+                _ui.Fill(b, new Rectangle(chip.X - UiMetrics.Space(6), MaterialStrip.Y + UiMetrics.Space(10), 1, MaterialStrip.Height - UiMetrics.Space(20)), UiInk.Rule);
             if (chip.Contains(hit)) _stripTip = r.Use;
         }
 
@@ -2194,8 +2193,8 @@ public sealed class ForgeScreen
     {
         var marks = new Dictionary<string, (string Text, Color Colour)>();
         void Need(string key, string verb, long need, long have) =>
-            marks[key] = ($"{verb} NEEDS {need:N0}", have >= need ? Met : Ember);
-        void Gives(string key, string verb, long amount) => marks[key] = ($"{verb} GIVES +{amount:N0}", Gold);
+            marks[key] = ($"NEEDS {need:N0}", have >= need ? Met : Ember);
+        void Gives(string key, string verb, long amount) => marks[key] = ($"GIVES +{amount:N0}", Gold);
         if (item is null) return marks;
         switch (_tab)
         {

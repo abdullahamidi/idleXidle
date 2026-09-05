@@ -1243,6 +1243,46 @@ public sealed class UiKit
     /// A small currency badge — icon + value + faint label — the reference's top-right currency row.
     /// Drawn right-aligned to <paramref name="right"/>; returns its LEFT edge so pills chain right-to-left.
     /// </summary>
+    // ── THE RESOURCE CELL (2026-09-06): the one way a balance is shown on a strip. ─────────────────
+    //    An icon in a dark well, a line over the amount (the resource's name, or the mark that says what
+    //    the open action needs or gives), and the amount at the value rung. The FORGE's strip wore
+    //    five hand-placed icon+name+figure stacks and read as a debug bar; this is the shared component
+    //    so the quality cannot drift screen by screen.
+
+    /// <summary>The well a resource icon sits in — a dark square with the plate's rule.</summary>
+    public void IconWell(SpriteBatch b, Rectangle well, string? iconKey, Color fallback)
+    {
+        Fill(b, well, new Color(0x0C, 0x09, 0x12));
+        var rule = UiInk.Rule;
+        Fill(b, new Rectangle(well.X, well.Y, well.Width, 1), rule);
+        Fill(b, new Rectangle(well.X, well.Bottom - 1, well.Width, 1), rule);
+        Fill(b, new Rectangle(well.X, well.Y, 1, well.Height), rule);
+        Fill(b, new Rectangle(well.Right - 1, well.Y, 1, well.Height), rule);
+        var inset = Math.Max(3, well.Width / 7);
+        var inner = new Rectangle(well.X + inset, well.Y + inset, well.Width - inset * 2, well.Height - inset * 2);
+        if (iconKey is null || !Icon(b, iconKey, inner)) Diamond(b, inner, fallback);
+    }
+
+    /// <summary>
+    /// A resource cell: the icon well, then <paramref name="line"/> (the name, or the action's mark)
+    /// over <paramref name="amount"/>. <paramref name="glow"/> washes the cell in the accent while a
+    /// balance is being counted up or down.
+    /// </summary>
+    public void ResourceCell(SpriteBatch b, Rectangle cell, string? iconKey, Color tint,
+                             string line, Color lineInk, string amount, Color amountInk, float glow = 0f)
+    {
+        if (glow > 0f) Fill(b, cell, UiInk.Accent * (0.16f * glow));
+        var wellEdge = Math.Min(UiMetrics.Control(40), cell.Height);
+        var well = new Rectangle(cell.X, cell.Y + (cell.Height - wellEdge) / 2, wellEdge, wellEdge);
+        IconWell(b, well, iconKey, tint);
+        var tx = well.Right + UiMetrics.Space(10);
+        var room = Math.Max(1, cell.Right - tx);
+        var stack = UiTypography.Pitch(UiTypography.Caption) + UiTypography.Headline;
+        var ty = cell.Y + Math.Max(0, (cell.Height - stack) / 2);
+        TextBig(b, ShortenBig(line, room, UiTypography.Caption), tx, ty, lineInk, UiTypography.Caption);
+        TextBig(b, ShortenBig(amount, room, UiTypography.Headline), tx, ty + UiTypography.Pitch(UiTypography.Caption), amountInk, UiTypography.Headline);
+    }
+
     /// <summary>What a capsule of height <paramref name="h"/> wraps around its value: left pad, icon, gap, right pad.</summary>
     public static int PillChrome(int h) => h * 24 / 60 + h * 40 / 60 + h * 12 / 60 + h * 24 / 60;
 
