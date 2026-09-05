@@ -136,7 +136,7 @@ public class RosterParityTest
     private static MasteryTree ChassisTaught()
     {
         var tree = new MasteryTree();
-        tree.RestoreTaken(new[] { "road_hammer" });   // the node that teaches hammer_blow
+        tree.RestoreTaken(new[] { "road_hammer" }, repair: false);   // the node that teaches hammer_blow
         return tree;
     }
 

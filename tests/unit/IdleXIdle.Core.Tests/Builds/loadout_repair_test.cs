@@ -206,7 +206,7 @@ public class LoadoutRepairTest
     {
         var tree = new MasteryTree();
         tree.SetEarned(9999);
-        tree.RestoreTaken(new[] { "road_snare" });
+        tree.RestoreTaken(new[] { "road_snare" }, repair: false);
 
         var l = Woven("hammer_blow", "snare_jaws", Seeker.SignatureSkillId!, Anvil.SignatureSkillId!);
         LoadoutRepair.Repair(l, tree.AvailableSkills(), Seeker);

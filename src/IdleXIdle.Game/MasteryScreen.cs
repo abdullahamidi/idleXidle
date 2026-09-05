@@ -117,8 +117,11 @@ public sealed class MasteryScreen
     /// <summary>The take pulse on a node — a gold bloom that plays once, keyed to the node taken.</summary>
     private static int NodeKey(string id) => HashCode.Combine("node", id);
 
-    /// <summary>The wire into a node lighting up, keyed to the node whose take lit it.</summary>
-    private static int WireKey(string id) => HashCode.Combine("wire", id);
+    /// <summary>A wire lighting up, keyed by its two ends — a capstone has two wires, a bridge two.</summary>
+    private static int WireKey(string from, string to) => HashCode.Combine("wire", from, to);
+
+    /// <summary>A child's reveal — the ring that says "this way is open now" after its parent's take.</summary>
+    private static int RevealKey(string id) => HashCode.Combine("reveal", id);
 
     /// <summary>A node's hover lift.</summary>
     private static int HoverKey(string id) => HashCode.Combine("hover", id);
@@ -128,6 +131,63 @@ public sealed class MasteryScreen
 
     /// <summary>The AVAILABLE figure reacting to a spend or a refund (brief §36–§37).</summary>
     private static readonly int PointsKey = HashCode.Combine("points");
+
+    // ══ THE PURCHASE, IN ORDER (2026-09-06). One pulse per take, read in phases by the clock below:
+    //    1. the node REACTS — it is pressed, and holds its "available" look while the energy is on its way;
+    //    2. the wire ENERGISES — a bright run travels from the parent that unlocked it, over Reward;
+    //    3. the node ACTIVATES — gold frame, lit field, the bloom (two rings fading at a fixed radius);
+    //    4. the paths it opened REVEAL — each child now unlocked wears one soft ring in the branch
+    //       colour, in and out, after the bloom.
+    //    Reduced Motion drops the run (a thing moving along a line is what that setting drops) and
+    //    keeps the fades: the node activates at once and the reveal still plays, as a fade.
+
+    /// <summary>The take's length: the run, then the bloom.</summary>
+    private const float TakeLength = UiMotion.Reward + UiMotion.Transition;
+
+    /// <summary>A reveal's length: it waits through the parent's take, then plays over Reward.</summary>
+    private const float RevealLength = TakeLength + UiMotion.Reward;
+
+    /// <summary>Seconds since the node's take fired, or -1 when none is playing. The posed take names its own moment.</summary>
+    private static float TakeElapsed(string id)
+    {
+        if (DevPose is { } pose && id == DevTakeId) return pose * RevealLength;
+        var left = UiMotion.Pulse(NodeKey(id));
+        return left <= 0f ? -1f : (1f - left) * TakeLength;
+    }
+
+    /// <summary>How far along its wire the energy is, 0 → 1, or 0 when nothing runs. Never under Reduced Motion.</summary>
+    private static float Travel(string id)
+    {
+        if (UiMotion.Reduced) return 0f;
+        var e = TakeElapsed(id);
+        return e < 0f || e >= UiMotion.Reward ? 0f : MathF.Max(1e-3f, e / UiMotion.Reward);
+    }
+
+    /// <summary>The bloom, 1 → 0 once the energy has arrived. Under Reduced Motion the whole pulse is the fade.</summary>
+    private static float Bloom(string id)
+    {
+        var e = TakeElapsed(id);
+        if (e < 0f) return 0f;
+        if (UiMotion.Reduced) return Math.Clamp(1f - e / TakeLength, 0f, 1f);
+        return e < UiMotion.Reward ? 0f : Math.Clamp(1f - (e - UiMotion.Reward) / UiMotion.Transition, 0f, 1f);
+    }
+
+    /// <summary>A child's reveal, 0 → 1 → 0 in the window after its parent's bloom; 0 otherwise.</summary>
+    private float Reveal(string id)
+    {
+        float e;
+        if (DevPose is { } pose && DevTakeId is { } tid && !Mastery.IsTaken(id)
+            && MasteryLayout.Edges.Any(x => x.From == tid && x.To == id))
+            e = pose * RevealLength;
+        else
+        {
+            var left = UiMotion.Pulse(RevealKey(id));
+            if (left <= 0f) return 0f;
+            e = (1f - left) * RevealLength;
+        }
+        if (e < TakeLength) return 0f;
+        return MathF.Sin(Math.Clamp((e - TakeLength) / UiMotion.Reward, 0f, 1f) * MathF.PI);
+    }
 
     /// <summary>The ceremony's backdrop and panel fading in (brief §34).</summary>
     private static readonly int SpecKey = HashCode.Combine("ceremony");
@@ -228,11 +288,11 @@ public sealed class MasteryScreen
     private static int DevFireFrame => Game1.ShotAtFrame - 1;
 
     /// <summary>
-    /// Where the WIRE stands at a posed fraction of the take's bloom. The bloom runs over a Transition
-    /// and the wire over Fast, so the wire is 1.8× ahead of it and is already lit when the bloom is
-    /// half gone — the same relationship the two have when they run for real.
+    /// Where the WIRE's own light stands at a posed fraction of the purchase. A pose is a fraction of
+    /// <see cref="RevealLength"/> — the whole sequence — and the wire eases up over Fast from the
+    /// take, so it is lit well before the run reaches the node, as it is when the two run for real.
     /// </summary>
-    private static float PosedWire(float pose) => MathF.Min(1f, pose * UiMotion.Transition / UiMotion.Fast);
+    private static float PosedWire(float pose) => MathF.Min(1f, pose * RevealLength / UiMotion.Fast);
 
     /// <summary>The cursor the screen works with: the real one, or the posed one a dev dial put on a node.</summary>
     private Point Cursor(Point mouse)
@@ -563,7 +623,12 @@ public sealed class MasteryScreen
                                                .DefaultIfEmpty(0).Max();
         var sideKindHalf = _ui.MeasureBig("CAPSTONE", UiTypography.Secondary) / 2;
         var capR = MasteryLayout.NodeWorldRadius(MasteryKind.Mastery);
-        var capstone = capR / MasteryLayout.WorldRadius;
+        // THE CAPSTONE'S OUTER EDGE as a fraction of the rim, less one: the path layout (2026-09-06)
+        // stands the capstone INSIDE the rim, so the room the header needs is measured from where
+        // the medallion actually ends, not from the rim it used to sit on.
+        var capOut = MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Mastery)
+                                         .Select(n => NodePos(n).Length() + capR).DefaultIfEmpty(MasteryLayout.WorldRadius).Max();
+        var capstone = capOut / MasteryLayout.WorldRadius - 1f;
 
         (float Ring, float Zoom) Solve(bool kindLine)
         {
@@ -826,7 +891,12 @@ public sealed class MasteryScreen
     private float HeaderRing => Overview.Ring;
 
     /// <inheritdoc cref="HeaderRing"/>
-    private const float HeaderRingBase = 1.30f;
+    /// <remarks>
+    /// 1.30 while the capstones sat ON the rim; 1.15 since the path layout stood them inside it
+    /// (2026-09-06) — the whole-tree framing had a quarter of the view as empty ring, and a minor was
+    /// seven pixels. The solve above still lifts the ring wherever the headers' stacks need it.
+    /// </remarks>
+    private const float HeaderRingBase = 1.15f;
 
     /// <summary>What a branch IS, in one plain line — the promise its nodes then keep.</summary>
     /// <remarks>
@@ -1394,8 +1464,15 @@ public sealed class MasteryScreen
             // state: DrawTreeNodes eases every wire toward "both ends taken", so the light arrives on
             // the take and leaves on the refund without a second copy of the rule.
             Say("", node.Id, node.Kind == MasteryKind.Mastery ? "sfx_bind" : "sfx_weave");
-            UiMotion.Flash(NodeKey(node.Id), UiMotion.Transition);
+            UiMotion.Flash(NodeKey(node.Id), TakeLength);
             UiMotion.Flash(PointsKey, UiMotion.Transition);
+            // THE PATHS THIS OPENED. Unlocked by the rule, not affordable — a way that is open and not
+            // yet paid for is still news. Read from the drawn graph, so a capstone's second wire and a
+            // bridge's far side count exactly when the tree says they do.
+            foreach (var (from, to) in MasteryLayout.Edges)
+                if (from == node.Id && !Mastery.IsTaken(to)
+                    && MasteryCatalog.ById(to) is { } child && child.Unlocked(Mastery.IsTaken))
+                    UiMotion.Flash(RevealKey(to), RevealLength);
             Dirty = true;
             // THE SPECIALISATION: your first is the moment this game is named for, so it gets a ceremony
             // instead of a click-sound — the hexagon shown whole, the choice sealed or taken back.
@@ -1523,48 +1600,59 @@ public sealed class MasteryScreen
 
     private void DrawTreeNodes(SpriteBatch b, Point hit, Style? aff)
     {
-        // ONE EDGE PER NODE, to its NEAREST prerequisite.
-        //
-        // Drawing every prerequisite drew a spider's web: each notable lists all four of its branch's
-        // minors and each minor lists START, so a single branch produced sixteen crossing lines and the
-        // whole screen read as scribble. A prerequisite list is an "any of these" rule, not a diagram —
-        // so the drawing shows the SPINE (what the funnel looks like) and the tooltip carries the rule.
-        // Gold only when both ends are taken, so a walked branch reads as one continuous path.
-        foreach (var node in MasteryCatalog.Nodes)
+        // THE WIRES ARE THE CATALOGUE'S, NOT THE PLAYER'S (2026-09-06). Every edge in
+        // MasteryLayout.Edges is drawn, every frame, whatever is taken — one per (parent, node). The
+        // drawing used to choose ONE prerequisite per node, the nearest and preferably a taken one,
+        // because a prerequisite list was an "any of these" rule and drawing all of them was a web;
+        // but that choice READ the allocation, so buying a node re-routed the lines a player had
+        // planned against. A node has one parent now (a capstone two, a bridge one a side), so the
+        // whole graph is drawable, and it is fixed: the topology test holds the layout to it.
+        // Gold only when both ends are taken, so a walked route reads as one continuous path.
+        foreach (var (fromId, toId) in MasteryLayout.Edges)
         {
-            if (node.Prereqs.Count == 0) continue;
-            var to = NodePos(node);
-
-            MasteryNode? nearest = null;
-            var best = float.MaxValue;
-            foreach (var pre in node.Prereqs.Concat(node.SecondPrereqs))
+            if (MasteryCatalog.ById(fromId) is not { } from || MasteryCatalog.ById(toId) is not { } node) continue;
+            var a = Screen(NodePos(from));
+            var c = Screen(NodePos(node));
+            // TRIMMED TO THE FRAMES: a wire used to run centre to centre under the studs, which showed
+            // through START's hollow ring and through every frame's open field once a take lit it
+            // gold. Each end stops a hair inside its node's rim, so the run below ARRIVES at the node.
+            var dir = c - a;
+            var span = dir.Length();
+            var trimA = NodeDrawRadius(from.Kind) * 0.92f;
+            var trimC = NodeDrawRadius(node.Kind) * 0.92f;
+            if (span > trimA + trimC + 2f)
             {
-                if (MasteryCatalog.ById(pre) is not { } p) continue;
-                var from = NodePos(p);
-                // Prefer a TAKEN prerequisite when there is one, so the gold path follows the route the
-                // player actually walked rather than whichever node happens to sit closest.
-                var d = (from.X - to.X) * (from.X - to.X) + (from.Y - to.Y) * (from.Y - to.Y)
-                        - (Mastery.IsTaken(pre) ? 1_000_000 : 0);
-                if (d >= best) continue;
-                best = d;
-                nearest = p;
+                dir /= span;
+                a += dir * trimA;
+                c -= dir * trimC;
             }
-
-            if (nearest is null) continue;
-            var a = Screen(NodePos(nearest));
-            var c = Screen(to);
-            // AN UNWALKED WIRE IS DIMMER THAN THE NODE IT TOUCHES, which it was not before: Path is also
-            // the locked-node frame tint, so a node and the fatter wire running into it were the same
-            // colour and the node disappeared into the web. Half-alpha puts the wire behind the studs.
+            // AN UNWALKED WIRE IS DIMMER THAN THE NODE IT TOUCHES: Path is also the locked-node frame
+            // tint, so a node and the fatter wire running into it were the same colour and the node
+            // disappeared into the web. Half-alpha puts the wire behind the studs.
             // THE CONNECTION LIGHTS OVER FAST when the take joins both ends, and eases back down when a
-            // refund parts them (the polish spec for this screen; brief §31's 80–120 ms band). It is a
-            // STATE, eased, not a fired pulse: the wire is gold exactly while the tree says both ends
-            // are taken, so a save that loads a walked branch cannot get stuck half-lit, and Reduced
-            // Motion lands on the same end colour with no fade (UiMotion.Ease does that itself).
-            var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id);
-            var lit = Lift(WireKey(node.Id), walked, UiMotion.Fast);
+            // refund parts them. It is a STATE, eased, not a fired pulse: the wire is gold exactly while
+            // the tree says both ends are taken, so a save that loads a walked branch cannot get stuck
+            // half-lit, and Reduced Motion lands on the same end colour with no fade.
+            var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(from.Id);
+            var lit = Lift(WireKey(fromId, toId), walked, UiMotion.Fast);
             if (DevPose is { } wp && node.Id == DevTakeId) lit = PosedWire(wp);
-            _ui.LineSeg(b, a, c, WireThickness, lit <= 0f ? Path * 0.55f : Color.Lerp(Path * 0.55f, Gold, lit));
+            var dim = Path * 0.55f;
+
+            // THE ENERGY RUNS THE WIRE (the purchase, step two): from the parent that unlocked the node
+            // to the node just taken — the wire lights BEHIND the run, so the gold arrives with it.
+            // Only the wire from a taken parent runs; a capstone's other wire stays dim.
+            var travel = walked ? Travel(node.Id) : 0f;
+            if (travel > 0f)
+            {
+                var t = UiMotion.Smooth(travel);
+                var head = Vector2.Lerp(a, c, t);
+                _ui.LineSeg(b, a, c, WireThickness, dim);
+                _ui.LineSeg(b, a, head, WireThickness, Gold);
+                var tail = Vector2.Lerp(a, c, MathF.Max(0f, t - 0.22f));
+                _ui.LineSeg(b, tail, head, WireThickness + 2, Bone * 0.85f);
+                continue;
+            }
+            _ui.LineSeg(b, a, c, WireThickness, lit <= 0f ? dim : Color.Lerp(dim, Gold, lit));
         }
         // THE FOUR DIRECTIONS, NAMED OUTSIDE THE RIM. Between the wires and the nodes, so a header is
         // never drawn over a plaque even if the arithmetic in HeaderRing is one day wrong.
@@ -1898,8 +1986,8 @@ public sealed class MasteryScreen
             Line("Hover shows a node here; click pins it. Take it with the button below.", Slate);
             Rule();
             Section("WHAT EACH KIND COSTS IN POINTS");
-            Line("MINOR 1  ·  NOTABLE 3  ·  GREATER 5", Bone);
-            Line("SKILL 5  ·  SPECIALISATION 6  ·  CAPSTONE 8", Bone);
+            Line($"MINOR {MasteryCatalog.CostOf(MasteryKind.Minor)}  ·  NOTABLE {MasteryCatalog.CostOf(MasteryKind.Notable)}  ·  SKILL {MasteryCatalog.CostOf(MasteryKind.SkillRoad)}  ·  GREATER {MasteryCatalog.CostOf(MasteryKind.Greater)}", Bone);
+            Line($"SPECIALISATION {MasteryCatalog.CostOf(MasteryKind.Specialisation)}  ·  BRIDGE {MasteryCatalog.CostOf(MasteryKind.Bridge)}  ·  CAPSTONE {MasteryCatalog.CostOf(MasteryKind.Mastery)}", Bone);
             Rule();
             Section("HOW POINTS ARE EARNED");
             Line("The first time you reach a new depth in a region. Deeper pays more; every region pays.", Bone, UiTypography.Body, 3);
@@ -1943,7 +2031,10 @@ public sealed class MasteryScreen
         Section("WHAT IT DOES");
         var tail = Tail(n.Label);
         if (tail.Length > 0) Line(tail, Bone, UiTypography.Body, 3);
-        if (n.Stats is { Count: > 0 } stats)
+        // A MINOR'S LABEL IS ITS STAT ("BITE — +4 ATTACK POWER"), so the stat lines would say it twice
+        // ("+4 ATTACKPOWER" under "+4 ATTACK POWER" — the first capture of the path tree). The lines
+        // are for a node whose label says something ELSE and carries a stat besides, like DEEP.
+        if (n.Stats is { Count: > 0 } stats && n.Shape != SkillShape.None)
             foreach (var kv in stats.Take(3)) Line($"+{kv.Value:0} {kv.Key.ToString().ToUpperInvariant()}", Bone, UiTypography.Body, 1);
         if (roadDef is not null)
         {
@@ -1994,7 +2085,7 @@ public sealed class MasteryScreen
             if (n.SecondPrereqs.Count > 0)
             {
                 var second = n.SecondPrereqs.Select(MasteryCatalog.ById).Where(p => p is not null).Select(p => (Name: Head(p!.Label), Taken: Mastery.IsTaken(p.Id))).ToList();
-                Line("AND ONE OF  " + string.Join("  ·  ", second.Take(3).Select(p => $"{p.Name.ToUpperInvariant()} {(p.Taken ? "(TAKEN)" : "(NOT YET)")}")),
+                Line((second.Count > 1 ? "AND ONE OF  " : "AND  ") + string.Join("  ·  ", second.Take(3).Select(p => $"{p.Name.ToUpperInvariant()} {(p.Taken ? "(TAKEN)" : "(NOT YET)")}")),
                      second.Any(p => p.Taken) ? UiInk.Good : Bone, UiTypography.Body, 3);
             }
             Rule();
@@ -2086,15 +2177,22 @@ public sealed class MasteryScreen
     /// ring around its hexagonal field, a shape no other kind has. The plaque and chain art stay on
     /// disk, unused.
     /// </remarks>
+    /// <remarks>
+    /// <b>2026-09-06:</b> every kind has its own silhouette now. The capstone wears an eight-point
+    /// star medallion (ui_node_capstone) — still round at the centre, so it is the biggest of the
+    /// studs and not a plaque — and a SKILL node wears the jewelled hexagonal frame (ui_node_skill)
+    /// the skill icons already sit in on the BUILD screen, so "this teaches a skill" is read from the
+    /// shape before the glyph. The greater's spiked ring is the greater's alone again.
+    /// </remarks>
     private static string KindFrame(MasteryKind k) => k switch
     {
         MasteryKind.Start => "ui_node_start",
         MasteryKind.Minor => "ui_node_minor",
         MasteryKind.Notable => "ui_node_notable",
         MasteryKind.Greater => "ui_node_greater",
-        MasteryKind.Mastery => "ui_node_greater",
+        MasteryKind.Mastery => "ui_node_capstone",
         MasteryKind.Bridge => "ui_node_minor",
-        MasteryKind.SkillRoad => "ui_node_greater",   // priced like one, framed like one
+        MasteryKind.SkillRoad => "ui_node_skill",
         _ => "ui_node_spec",
     };
 
@@ -2146,8 +2244,13 @@ public sealed class MasteryScreen
         var hover = !OverDock(mouse)
                     && Math.Abs(mouse.X - cx) <= half && Math.Abs(mouse.Y - cyHit) <= half;
 
-        var taken = Mastery.IsTaken(node.Id);
-        var canTake = Mastery.CanTake(node.Id);
+        // THE NODE ACTIVATES WHEN THE ENERGY ARRIVES (the purchase, step three): while the run is on
+        // its wire the node is drawn as it was the frame before the click — available, in its branch
+        // colour — and turns gold as the bloom fires. Under Reduced Motion there is no run, so it
+        // activates at once. The tree's own answer is unchanged; only the drawing waits.
+        var arriving = Travel(node.Id) > 0f;
+        var taken = Mastery.IsTaken(node.Id) && !arriving;
+        var canTake = Mastery.CanTake(node.Id) || (arriving && Mastery.IsTaken(node.Id));
         var branchCol = BranchColor(node.Branch);
 
         // ══ THE STANDARD STATES, ON A NODE (brief §25–§29). A node is a control, drawn by hand, so it
@@ -2188,7 +2291,7 @@ public sealed class MasteryScreen
         // Stretched, not fitted: these are frames, and a frame that letterboxes stops framing what is
         // inside it. Every frame is square art in a square box now that the capstone is round too.
         var frame = _ui.Assets.Get(KindFrame(node.Kind));
-        var owned = node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() == node.Branch;
+        var owned = node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() == node.Branch && !arriving;
 
         // THE CAPSTONE'S HALO. Size is what says "the big one", and a halo in the branch colour a step
         // outside the medallion is how the size is made legible at the whole-tree framing, where the
@@ -2223,12 +2326,20 @@ public sealed class MasteryScreen
         // node, read here and never re-armed by a draw. A pure fade at a FIXED radius: a bloom that
         // expanded would be movement, and movement is the thing Reduced Motion drops — this one plays
         // the same on both settings, which is what the brief's "keep simple fades" allows.
-        var bloom = DevPose is { } bp && node.Id == DevTakeId ? 1f - bp : UiMotion.Pulse(NodeKey(node.Id));
+        var bloom = Bloom(node.Id);
         if (bloom > 0f)
         {
             DrawRing(b, new Vector2(cx, cy), rad * 1.22f, Math.Max(2f, rad * 0.14f), Gold * (0.90f * bloom));
             DrawRing(b, new Vector2(cx, cy), rad * 1.50f, Math.Max(1.5f, rad * 0.09f), Gold * (0.45f * bloom));
         }
+
+        // THE PATH OPENS (the purchase, step four): a child the take just unlocked wears one soft ring
+        // in its branch colour, in and out over Reward, after its parent's bloom — a restrained "this
+        // way is open now", not a second bloom. A fade at a fixed radius, so it plays under Reduced
+        // Motion too.
+        var reveal = Reveal(node.Id);
+        if (reveal > 0f)
+            DrawRing(b, new Vector2(cx, cy), rad * 1.34f, Math.Max(1.5f, rad * 0.10f), branchCol * (0.80f * reveal));
 
         // SELECTED — the node the inspector is reading, ringed in gold outside its own frame. Eased,
         // so moving the pin from one node to the next is a hand-off rather than a jump cut; instant
@@ -2265,7 +2376,7 @@ public sealed class MasteryScreen
             var fieldCol = node.Kind == MasteryKind.Start ? PanelBg
                            : lockedSpec ? Muted(branchCol, 0.30f) : fill;
             if (node.Kind == MasteryKind.Specialisation) _ui.Diamond(b, field, fieldCol);
-            else if (node.Kind == MasteryKind.Notable || node.Kind == MasteryKind.Bridge) _ui.Hex(b, field, fieldCol);
+            else if (node.Kind is MasteryKind.Notable or MasteryKind.Bridge or MasteryKind.SkillRoad) _ui.Hex(b, field, fieldCol);
             else _ui.Diamond(b, Circleish(field), fieldCol);
 
             // HOVER ARRIVES, IT NO LONGER SNAPS. It was `hover ? Bone : <state>` — the same bone white
@@ -2292,8 +2403,12 @@ public sealed class MasteryScreen
             // one label naming the centre of the tree was absent from the default view of it.
             if (_zoom > LabelZoom) _ui.TextCenterBig(b, "YOU", cx, cy - UiTypography.Body / 2 - 1, Bone, UiTypography.Body);
         }
-        else if (node.Kind == MasteryKind.Specialisation && _zoom > LabelZoom)
+        else if (node.Kind == MasteryKind.Specialisation && _zoom >= FirstOpenZoom * 0.55f)
         {
+            // FROM ABOUT HALF THE FIRST-OPEN ZOOM, like the notables' names — not from the whole-tree
+            // framing. The path layout hangs two specialisations a route apart on each branch, and at
+            // the overview their captions printed over each other ("SPECIALISATIONSPECIALISATION");
+            // there the diamond and its breath are what say "not an ordinary node".
             // THE SECOND-LARGEST NODE, AND THE ONLY OTHER ONE THAT SPEAKS. Its Form goes inside the
             // diamond because the Form IS the choice; the word underneath names the kind, so a player
             // can count the six of them without hovering one.

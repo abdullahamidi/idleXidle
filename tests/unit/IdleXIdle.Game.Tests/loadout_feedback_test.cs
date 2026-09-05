@@ -39,7 +39,7 @@ public class LoadoutFeedbackTests
         UiMotion.Reduced = false;
         var mastery = new MasteryTree();
         mastery.SetEarned(9999);
-        mastery.RestoreTaken(MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id).ToList());
+        mastery.RestoreTaken(MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id).ToList(), repair: false);
         // THE CHAMPION HAS TO BE IN THE CHAIR. The starter loadout carries that champion's own
         // SIGNATURE now, and a signature answers only to its owner — so a fixture that seats nobody
         // holds a skill the screen correctly refuses to know, and the tree it opens is null.

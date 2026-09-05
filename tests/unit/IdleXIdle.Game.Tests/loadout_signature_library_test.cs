@@ -36,7 +36,7 @@ public class LoadoutSignatureLibraryTests
         UiMotion.Reduced = false;
         var mastery = new MasteryTree();
         mastery.SetEarned(9999);
-        mastery.RestoreTaken(roads);
+        mastery.RestoreTaken(roads, repair: false);
         var loadout = new PlayerLoadout { SkillCapacity = 4 };
         return new LoadoutScreen(null!)
         {

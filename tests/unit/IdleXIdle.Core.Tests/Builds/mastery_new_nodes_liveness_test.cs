@@ -184,7 +184,7 @@ public class mastery_new_nodes_liveness_test
         {
             var n = MasteryCatalog.ById(id);
             Assert.NotNull(n);
-            Assert.Equal(MasteryCatalog.RingCost[n!.Ring], n.Cost);
+            Assert.Equal(MasteryCatalog.CostOf(n!.Kind), n.Cost);
             Assert.NotEqual(SkillShape.None, n.Shape);
             Assert.Contains("—", n.Label);   // NAME — WHAT IT DOES, like every card on the tree
         }

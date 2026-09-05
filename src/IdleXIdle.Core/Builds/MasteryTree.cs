@@ -90,21 +90,6 @@ public sealed record MasteryNode(
     /// build ever fills from twelve skills.
     /// </remarks>
     public string? GrantsSkillId { get; init; }
-
-    /// <summary>
-    /// A SPUR: a ring-1 Minor that hangs off another Minor instead of off START.
-    /// </summary>
-    /// <remarks>
-    /// The one place the tree grows SIDEWAYS rather than outward. A spur costs what its ring costs and
-    /// counts as a Minor everywhere a Minor is counted — but it needs its parent taken first, so the
-    /// side road it opens (parent, spur, the side notable, the side greater) is one node longer than
-    /// the spine, which is the whole point of it: a branch that took fifteen minutes to walk to a
-    /// specialisation now has a longer way round. The layout draws a spur off its parent's outer
-    /// shoulder rather than inside the ring-1 fan, so the four minors a player has memorised do not
-    /// move when the fifth arrives.
-    /// </remarks>
-    public bool Spur { get; init; }
-
     /// <summary>
     /// A SECOND prerequisite group. Any one of <see cref="Prereqs"/> AND any one of these.
     /// </summary>
@@ -114,6 +99,12 @@ public sealed record MasteryNode(
     /// into a 3-point splash and quietly deletes the price the design put on hybridising.
     /// </remarks>
     public IReadOnlyList<string> SecondPrereqs { get; init; } = Array.Empty<string>();
+
+    /// <summary>Where the node stands in its branch's drawing — trunk, a route, the capstone, or a bridge.</summary>
+    public MasteryRoute Route { get; init; } = MasteryRoute.Trunk;
+
+    /// <summary>Its step along that route, from the fork (trunk: from START). Layout data, not a rule.</summary>
+    public int Step { get; init; }
 
     /// <summary>Is this node's prerequisite satisfied by the given allocation?</summary>
     public bool Unlocked(Func<string, bool> isTaken)
@@ -180,13 +171,38 @@ public sealed class MasteryTree
     /// </summary>
     public void SetEarned(int earned) => Earned = Math.Max(0, earned);
 
-    public void RestoreTaken(IEnumerable<string> ids)
+    /// <summary>
+    /// Set the taken set from a save. With <paramref name="repair"/> (the default, and what a real
+    /// load wants) a node whose parent is not in the set is dropped, so a save from an older
+    /// catalogue comes back consistent with this one; without it the set is taken as given, which is
+    /// the seam the liveness harnesses and the capture fixtures use to hold ONE node without its road.
+    /// </summary>
+    public void RestoreTaken(IEnumerable<string> ids, bool repair = true)
     {
         _taken.Clear();
         _taken.Add(MasteryCatalog.StartId);
         if (ids is null) return;
         foreach (var id in ids)
             if (MasteryCatalog.ById(id) is not null) _taken.Add(id);
+        if (!repair) return;
+
+        // THE REPAIR (2026-09-06): a node whose parent is not taken — because the catalogue moved it
+        // under a different parent, or its old parent no longer exists — is dropped, and its points
+        // come back through Spent. Repeated until nothing else falls, from the outside in, so a
+        // whole detached route returns rather than leaving one orphan per load.
+        bool dropped;
+        do
+        {
+            dropped = false;
+            foreach (var id in _taken.ToList())
+            {
+                if (id == MasteryCatalog.StartId) continue;
+                var node = MasteryCatalog.ById(id)!;
+                if (node.Unlocked(_taken.Contains)) continue;
+                _taken.Remove(id);
+                dropped = true;
+            }
+        } while (dropped);
     }
 
     /// <summary>

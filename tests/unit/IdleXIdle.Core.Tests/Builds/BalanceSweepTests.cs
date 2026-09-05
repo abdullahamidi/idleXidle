@@ -135,6 +135,31 @@ public class BalanceSweepTests
         return run.Wave;
     }
 
+    /// <summary>One run's gleam, wave by wave, on the same seeds and cap <see cref="DepthOn"/> uses.</summary>
+    private static double HaulOn(Build build, Hunter hunter, int runIndex, string region = "verdant_hollow")
+    {
+        var hp = SoloBattle.ChampionHealth(build, hunter);
+        var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, hunter,
+                                     enemyBaseHealth: 120f, enemyBaseDamage: 9f,
+                                     ExpeditionTuning.Default, rng: new Random(9_000 + runIndex))
+        {
+            RegionId = region,
+            RunIndex = runIndex,
+        };
+        double gleam = 0;
+        while (!run.Over && run.Wave < DepthCap)
+        {
+            var before = run.Wave;
+            run.PushWave();
+            if (run.Wave == before) break;
+            gleam += run.LastWaveHaul.Gleam;
+        }
+        return gleam;
+    }
+
+    private static double MeasureHaul(Build build, Hunter hunter)
+        => Enumerable.Range(0, Seeds).Select(i => HaulOn(build, hunter, i)).Average();
+
     private readonly record struct Spread(int P25, int Median, int P75, double Mean, int Max)
     {
         public override string ToString() =>
@@ -268,9 +293,23 @@ public class BalanceSweepTests
         // measured +0.3 at the time of writing; a branch that cannot buy a sixth of a wave on
         // average at 18 points is dormant in the sense this project polices.
         foreach (var (b, s) in rows)
+        {
+            if (b == Branch.Loot) continue;   // LOOT pays in haul — measured in its own coin below
             Assert.True(s.Mean > gearedBase.Mean + 0.15,
                         $"{b} at {Budget} points buys no visible depth over an untouched tree "
                         + $"({s.Mean:0.00} vs {gearedBase.Mean:0.00})");
+        }
+
+        // LOOT PAYS IN WHAT YOU CARRY OUT, not in depth (the path redesign, 2026-09-06). Its minors
+        // are GUILE alone now — the +5 HEALTH and +4 FOCUS the old COUNT and TALLY carried were the
+        // stat soup the redesign retired, and they were the only reason this branch ever bought a
+        // wave. The honest instrument for it is the gleam the same runs bring out.
+        var (lootBuild, lootHunter) = Walked(Branch.Loot, Budget, geared);
+        var lootHaul = MeasureHaul(lootBuild, lootHunter);
+        var baseHaul = MeasureHaul(BuildWith(SkillShape.None, geared), MidCareerHunter());
+        _out.WriteLine($"HAUL    baseline {baseHaul,9:0}   Loot @ {Budget} {lootHaul,9:0}   x{lootHaul / Math.Max(1, baseHaul):0.00}");
+        Assert.True(lootHaul > baseHaul * 1.10,
+                    $"Loot at {Budget} points buys no visible haul over an untouched tree ({lootHaul:0} vs {baseHaul:0})");
 
         var best = rows.MaxBy(kv => kv.Value.Median);
         var worst = rows.MinBy(kv => kv.Value.Median);

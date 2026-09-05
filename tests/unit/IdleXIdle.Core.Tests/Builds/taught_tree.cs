@@ -34,7 +34,7 @@ internal static class Taught
         tree.SetEarned(9999);
         tree.RestoreTaken(MasteryCatalog.Nodes
             .Where(n => n.Kind == MasteryKind.SkillRoad)
-            .Select(n => n.Id));
+            .Select(n => n.Id), repair: false);
         return tree;
     }
 }

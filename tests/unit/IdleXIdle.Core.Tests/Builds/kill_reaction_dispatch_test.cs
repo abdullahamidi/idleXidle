@@ -39,7 +39,7 @@ public class KillReactionDispatchTests
         tree.SetEarned(9999);
         tree.RestoreTaken(MasteryCatalog.Nodes
             .Where(x => x.Kind == MasteryKind.SkillRoad)
-            .Select(x => x.Id));
+            .Select(x => x.Id), repair: false);
         return tree;
     }
 

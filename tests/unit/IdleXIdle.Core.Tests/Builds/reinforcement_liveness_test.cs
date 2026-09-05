@@ -58,7 +58,7 @@ public class ReinforcementLivenessTests
         // VOLLEY specialisation's extra target had already covered the reach it gives up.
         tree.RestoreTaken(MasteryCatalog.Nodes
             .Where(x => x.Kind == MasteryKind.SkillRoad)
-            .Select(x => x.Id));
+            .Select(x => x.Id), repair: false);
         return tree;
     }
 

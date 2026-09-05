@@ -72,7 +72,7 @@ public class MasteryNodeLivenessTests
         // do with the node. The roads are held identical on both sides, so they cannot be the thing
         // that moved.
         tree.RestoreTaken(ids.Concat(MasteryCatalog.Nodes
-            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)));
+            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)), repair: false);
         return tree;
     }
 
@@ -155,12 +155,13 @@ public class MasteryNodeLivenessTests
         // The plumbing the minors need, asserted on its own: a node's Stats must survive the tree,
         // the push, and Hunter.ValueOf. If this breaks, six minors go quietly inert.
         var tree = TreeWith("chime");
-        Assert.Equal(6f, tree.Stats()[HunterStat.ResonanceAffinity]);
+        var chime = MasteryCatalog.ById("chime")!.Stats![HunterStat.ResonanceAffinity];
+        Assert.Equal(chime, tree.Stats()[HunterStat.ResonanceAffinity]);
 
         var plain = new Hunter();
         var lifted = new Hunter();
         lifted.SetMasteryStats(tree.Stats());
-        Assert.Equal(plain.ValueOf(HunterStat.ResonanceAffinity) + 6f,
+        Assert.Equal(plain.ValueOf(HunterStat.ResonanceAffinity) + chime,
                      lifted.ValueOf(HunterStat.ResonanceAffinity));
 
         // And respec gives it back — the tree replaces the grant rather than accumulating it.

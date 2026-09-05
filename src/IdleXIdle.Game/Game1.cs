@@ -1999,10 +1999,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // named retired at the 2026-08-30 re-axe, Take() no-ops on an unknown id, and the
                     // "six passives" pose had quietly become an empty list. Walking a branch's Minors
                     // and Notables in catalog order respects prereqs the same way the ATTUNE fixture does.
-                    foreach (var wn in MasteryCatalog.Nodes.Where(
-                                 x => x.Branch == Branch.Resonance
-                                      && x.Kind is MasteryKind.Minor or MasteryKind.Notable))
-                        _mastery.Take(wn.Id);
+                    // THE PATH TREE (2026-09-06): a route is walked in order, skill nodes included, so
+                    // the walk repeats until nothing more in RESONANCE below its greaters can be taken.
+                    bool walked;
+                    do
+                    {
+                        walked = false;
+                        foreach (var wn in MasteryCatalog.Nodes.Where(
+                                     x => x.Branch == Branch.Resonance && x.Link is null
+                                          && x.Kind is MasteryKind.Minor or MasteryKind.Notable or MasteryKind.SkillRoad))
+                            if (!_mastery.IsTaken(wn.Id) && _mastery.Take(wn.Id)) walked = true;
+                    } while (walked);
 
                     // BUILDTREE frames the whole tree. The TOUR of this screen is, by definition, a first
                     // visit, so it is posed on the first-open framing a real first visit gets — the
@@ -2021,7 +2028,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (Environment.GetEnvironmentVariable("RH_SHOT_RESPEC") == "1")
                     {
                         _mastery.SetEarned(9999);
-                        _mastery.RestoreTaken(_mastery.Taken.Concat(new[] { "road_hammer", "road_snare" }).ToList());
+                        _mastery.RestoreTaken(_mastery.Taken.Concat(new[] { "road_hammer", "road_snare" }).ToList(), repair: false);
                         if (_loadout.IndexOfSkill("snare_jaws") < 0)
                         {
                             var extra = _loadout.AddSkill();
@@ -2198,7 +2205,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _mastery.SetEarned(9999);
                         _mastery.RestoreTaken(_mastery.Taken
                             .Concat(MasteryCatalog.Nodes.Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id))
-                            .ToList());
+                            .ToList(), repair: false);
                         // PRESS IS IN THE FIXTURE ON PURPOSE: it is the skill whose whole effect had no
                         // picture, so a capture of the fight that does not carry it cannot show the
                         // badge that was added for it.
@@ -2789,7 +2796,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _showLoadout = true;
                     _deepestEver = 6;                       // the BUILD screen's own gate, and no further
                     _mastery.SetEarned(3);
-                    _mastery.RestoreTaken(new[] { "road_volley", "road_volley_2" });
+                    _mastery.RestoreTaken(new[] { "road_volley", "road_volley_2" }, repair: false);
                     if (_characters.Active.SignatureSkillId is { } freshSig)
                     {
                         if (_loadout.Skills.Count == 0) _loadout.AddSkill();
@@ -2845,7 +2852,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _mastery.RestoreTaken(_mastery.Taken
                         .Concat(new[] { "road_volley", "road_volley_2", "road_field", "road_field_2",
                                         "road_snare", "road_snare_2", "road_sign" })
-                        .ToList());
+                        .ToList(), repair: false);
                     ApplySkillCapacity();
                     // The gradual-unlock gate would hold a fresh fixture at two slots, and two slots
                     // is one active and one passive — not enough to show a build.

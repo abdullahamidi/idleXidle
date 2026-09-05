@@ -53,7 +53,7 @@ public class MasteryRespecRepairTests
         UiMotion.Clear();
         var mastery = new MasteryTree();
         mastery.SetEarned(9999);
-        mastery.RestoreTaken(new[] { "road_hammer", "road_snare" });
+        mastery.RestoreTaken(new[] { "road_hammer", "road_snare" }, repair: false);
 
         var loadout = new PlayerLoadout { SkillCapacity = 4 };
         foreach (var id in new[] { "hammer_blow", "snare_jaws", Seeker.SignatureSkillId! })
@@ -174,7 +174,7 @@ public class MasteryRespecRepairTests
         UiMotion.Clear();
         var mastery = new MasteryTree();
         mastery.SetEarned(9999);
-        mastery.RestoreTaken(new[] { "road_hammer" });
+        mastery.RestoreTaken(new[] { "road_hammer" }, repair: false);
         var s = new MasteryScreen(null!) { Loadout = new PlayerLoadout { SkillCapacity = 4 }, Mastery = mastery, Character = Seeker };
 
         Press(s);

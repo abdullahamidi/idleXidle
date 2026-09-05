@@ -242,7 +242,7 @@ public class ComposedSlotSplitTests
 
         var walked = new MasteryTree();
         walked.SetEarned(999);
-        walked.RestoreTaken(new[] { "spec_strike", "road_hammer", "road_hammer_2" });
+        walked.RestoreTaken(new[] { "spec_strike", "road_hammer", "road_hammer_2" }, repair: false);
         var b = With(walked);
         Assert.Equal(2, b.Skills.Count);
         Assert.Equal(SkillCatalogue.PassiveOf(Style.Hammer).Id, b.Skills[1].Def.Id);
