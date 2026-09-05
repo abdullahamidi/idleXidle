@@ -1729,14 +1729,15 @@ public sealed class UiKit
     /// hang above their card, clear of the neighbouring cards' figures and the inspector).
     /// </summary>
     public void HoverTip(SpriteBatch b, string text, Rectangle anchor, IReadOnlyList<Rectangle>? avoid,
-                         IReadOnlyList<PopoverSide>? preferred, int? gap = null)
+                         IReadOnlyList<PopoverSide>? preferred, int? gap = null,
+                         IReadOnlyList<Rectangle>? soft = null, Rectangle? viewport = null, int? maxWidth = null)
     {
-        int width = UiMetrics.Text(430), pad = UiMetrics.Space(14);
+        int width = Math.Min(UiMetrics.Text(430), maxWidth ?? int.MaxValue), pad = UiMetrics.Space(14);
         var lineH = UiTypography.Pitch(UiTypography.Secondary);
         var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
         if (lines.Count == 0) return;
         var h = pad * 2 + lines.Count * lineH;
-        var tip = PopoverPlacement.Place(anchor, new Point(width, h), Page, avoid, preferred, gap);
+        var tip = PopoverPlacement.Place(anchor, new Point(width, h), viewport ?? Page, avoid, preferred, gap, soft);
         DrawTip(b, lines, tip, pad, lineH);
     }
 

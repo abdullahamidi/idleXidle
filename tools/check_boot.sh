@@ -66,9 +66,9 @@ if [ $rc -eq 124 ]; then
   exit 1
 fi
 
-echo "$out" | grep -aE "BOOT OK|Unhandled|Exception" | head -5
+echo "$out" | grep -E "BOOT OK|Unhandled|Exception" | head -5
 
-if [ $rc -ne 0 ] || ! echo "$out" | grep -aq "BOOT OK"; then
+if [ $rc -ne 0 ] || ! echo "$out" | grep -q "BOOT OK"; then
   echo "BOOT FAILED — the game does not start." >&2
   echo "$out" | tail -20 >&2
   exit 1
@@ -98,9 +98,9 @@ rm -f "$FRESH/save.json"
 fresh_out="$(boot_run "$(winpath "$FRESH")")"
 fresh_rc=$?
 
-echo "$fresh_out" | grep -aE "BOOT OK|Unhandled|Exception" | head -3
+echo "$fresh_out" | grep -E "BOOT OK|Unhandled|Exception" | head -3
 
-if [ $fresh_rc -ne 0 ] || ! echo "$fresh_out" | grep -aq "BOOT OK"; then
+if [ $fresh_rc -ne 0 ] || ! echo "$fresh_out" | grep -q "BOOT OK"; then
   echo "FIRST LAUNCH FAILED — a new player cannot start the game." >&2
   echo "$fresh_out" | tail -20 >&2
   exit 1
@@ -126,9 +126,9 @@ if [ ! -f "$FRESH/save.json" ]; then
 fi
 
 reload="$(boot_run "$(winpath "$FRESH")")"
-echo "$reload" | grep -aE "BOOT OK|Unhandled|Exception" | head -3
+echo "$reload" | grep -E "BOOT OK|Unhandled|Exception" | head -3
 
-if ! echo "$reload" | grep -aq "save loaded"; then
+if ! echo "$reload" | grep -q "save loaded"; then
   echo "WHAT IT WROTE, IT CANNOT READ — the second run did not see a save." >&2
   echo "$reload" | tail -20 >&2
   exit 1

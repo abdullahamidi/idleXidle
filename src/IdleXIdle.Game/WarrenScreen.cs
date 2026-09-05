@@ -370,6 +370,14 @@ public sealed class WarrenScreen
     private Rectangle SummaryStrip =>
         new(LeftMargin, Top, SummaryStripWidth, StripHeight);
 
+    /// <summary>
+    /// THE STRIP'S INFORMATION (2026-09-06): the band its rows occupy, from the caption row to the foot
+    /// of the away line — what a tip must never cover. The breath above and below it is the strip's
+    /// decoration, which a tip may cover before it covers the card it explains.
+    /// </summary>
+    private Rectangle SummaryContent =>
+        new(LeftMargin, Top + StripCaptionY, SummaryStripWidth, StripAwayY + UiTypography.Pitch(UiTypography.Secondary) - StripCaptionY);
+
     private Rectangle GridPanel =>
         new(LeftMargin, Top + StripHeight + StripGap, SummaryStripWidth,
             UiKit.PageBottom(BottomMargin) - (Top + StripHeight + StripGap));
@@ -435,6 +443,15 @@ public sealed class WarrenScreen
 
     /// <summary>The caption band at the grid's foot while it scrolls — the cards stop above it.</summary>
     private static int GridCaptionBand => UiTypography.Secondary + UiMetrics.Space(12);
+
+    /// <summary>
+    /// THE SCROLL HINT'S OWN RECTANGLE (2026-09-06): where "MORE BELOW — THE MOUSE WHEEL SCROLLS" is
+    /// drawn and what a tip keeps clear of — one rectangle for both, so the two can never drift apart.
+    /// Empty while the grid does not scroll and there is no hint.
+    /// </summary>
+    private Rectangle GridCaption => GridOverflow > 0
+        ? new Rectangle(GridPanel.X, GridPanel.Bottom - GridCaptionBand, GridPanel.Width, GridCaptionBand)
+        : Rectangle.Empty;
 
     /// <summary>How much taller the two rows are than the grid's panel — what the wheel may scroll.</summary>
     private int GridOverflow => Math.Max(0, GridPad * 2 + CardH * 2 + CardGap + GridCaptionBand - GridPanel.Height);
@@ -580,13 +597,15 @@ public sealed class WarrenScreen
 
     private string? _tip;
     private Rectangle _tipAnchor;
+    /// <summary>The hovered card's own figures — the rate, its promise, the chip — which the tip keeps clear of even on that card.</summary>
+    private Rectangle _tipFigures;
 
     /// <summary>Every card's visible rectangle this frame — what a tip must keep clear of, bar the card it explains.</summary>
     private readonly List<Rectangle> _cardsVisible = new(8);
 
-    private void Tip(Rectangle r, Point hit, string text)
+    private void Tip(Rectangle r, Point hit, string text, Rectangle figures = default)
     {
-        if (r.Contains(hit)) { _tip = text; _tipAnchor = r; }
+        if (r.Contains(hit)) { _tip = text; _tipAnchor = r; _tipFigures = figures; }
     }
 
     // The away line is built only when the summary it describes changes — this screen redraws sixty
@@ -659,14 +678,30 @@ public sealed class WarrenScreen
         DrawSummary(b);
         DrawGrid(b, hit, clicked);
         DrawInspector(b, hit, clicked, wheel);
-        // THE TIP HANGS ABOVE ITS CARD (2026-09-06), then to a clear side, then below — and never over
-        // another card's figures or the inspector while a placement avoids them (PopoverPlacement).
-        // It used to hang off the pointer and sat on the neighbouring card's production and level.
+        // THE TIP IS ONE PLACEMENT PROBLEM FOR THE WHOLE GRID (2026-09-06). The layout's own rectangles
+        // say what it may not cover — the summary strip, every other card in view, the inspector, the
+        // scroll hint — and the grid's panel is the decoration it may cover before the card it explains.
+        // Its viewport is the Warren's body, from the strip's top to the page's foot: the title and the
+        // notice lane above are never a place to stand. Above the card first, then a clear side, then
+        // below — and PopoverPlacement steps past whatever blocks a side, so a tip that has nowhere
+        // clean beside its card ends in the free room under the grid, never on the strip's last line,
+        // never on the hint, never on a neighbour's figures. It used to hang off the pointer.
+        // When nothing around the card is free — the grid is packed, the strip above it is all
+        // information and the page ends a breath under the grid — the tip stands OVER the card it
+        // explains, no wider than the card, at its head: the one surface the hover itself has already
+        // claimed. The card's own figures are SOFT: the tip slides clear of them where the card's head
+        // has the room, and covers them — never the hint, the strip or a neighbour — where it does not
+        // (a card scrolled down to its figures alone).
         if (_tip is { } tip)
         {
-            var avoid = _cardsVisible.Where(r => r != _tipAnchor).Append(InspectorPanel).ToList();
-            _ui.HoverTip(b, tip, _tipAnchor, avoid,
-                         new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below }, UiMetrics.Space(8));
+            var hard = _cardsVisible.Where(r => r != _tipAnchor).Append(SummaryContent).Append(InspectorPanel).ToList();
+            if (!GridCaption.IsEmpty) hard.Add(GridCaption);
+            var soft = new List<Rectangle> { GridPanel, SummaryStrip };
+            if (!_tipFigures.IsEmpty) soft.Add(_tipFigures);
+            var body = new Rectangle(UiKit.Page.X, SummaryStrip.Y, UiKit.Page.Width, UiKit.Page.Bottom - SummaryStrip.Y);
+            _ui.HoverTip(b, tip, _tipAnchor, hard,
+                         new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Over },
+                         UiMetrics.Space(8), soft: soft, viewport: body, maxWidth: _tipAnchor.Width);
         }
         if (DevWarrenDebug) DrawDebug(b);
     }
@@ -892,9 +927,8 @@ public sealed class WarrenScreen
         {
             // The cards are clipped ABOVE the caption band at the panel's foot, so the caption never
             // prints through a card's own rows.
-            var clipTo = new Rectangle(GridPanel.X, GridPanel.Y, GridPanel.Width, GridPanel.Height - GridCaptionBand);
             b.End();
-            _ui.Device.ScissorRectangle = Rectangle.Intersect(Game1.OverlayToCanvas(clipTo, Vector2.Zero), _ui.Device.Viewport.Bounds);
+            _ui.Device.ScissorRectangle = Rectangle.Intersect(Game1.OverlayToCanvas(GridVisible, Vector2.Zero), _ui.Device.Viewport.Bounds);
             b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                     DepthStencilState.None, Clip, null, Game1.OverlayTransform(Vector2.Zero));
         }
@@ -1003,7 +1037,7 @@ public sealed class WarrenScreen
                     _ui.Fill(b, new Rectangle(chip.X + 3, chip.Y + 3, chip.Width - 6, chip.Height - 6), Ember * (0.30f * lockedLit));
                 _ui.Icon(b, "ui_slot_locked", chipIcon, Bone);
                 _ui.TextBig(b, chipLine, chipTextX, chipTextY, Color.Lerp(Bone, Ember, 0.7f * lockedLit), UiTypography.Body);
-                Tip(visible, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.");
+                Tip(visible, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.", Rectangle.Intersect(chip, visible));
                 continue;
             }
 
@@ -1117,7 +1151,8 @@ public sealed class WarrenScreen
                                  !UiMotion.Reduced && _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
             if (frameLit > 0f)
                 Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
-            Tip(visible, hit, $"{f.Info.Name} — {f.Info.Description}");
+            Tip(visible, hit, $"{f.Info.Name} — {f.Info.Description}",
+                Rectangle.Intersect(new Rectangle(card.X, rows.FigureY, card.Width, card.Bottom - rows.FigureY), visible));
         }
 
         if (scrolls)
@@ -1127,10 +1162,11 @@ public sealed class WarrenScreen
                     null, null, null, Game1.OverlayTransform(Vector2.Zero));
             // The caption every scrolling grid wears (TRAITS, the VAULT), at the panel's foot, only
             // while there is more below.
-            _ui.TextBig(b, _gridScroll < GridOverflow ? "MORE BELOW — THE MOUSE WHEEL SCROLLS" : "THE MOUSE WHEEL SCROLLS BACK UP", GridPanel.X + GridPad,
-                        GridPanel.Bottom - GridCaptionBand + UiMetrics.Space(4), Slate, UiTypography.Secondary);
-            _ui.ScrollBar(b, new Rectangle(GridPanel.Right - UiMetrics.ScrollbarWidth - 2, GridPanel.Y + GridPad, UiMetrics.ScrollbarWidth, GridPanel.Height - GridCaptionBand - GridPad),
-                          _gridScroll, GridPanel.Height - GridCaptionBand, GridPanel.Height - GridCaptionBand + GridOverflow);
+            var caption = GridCaption;
+            _ui.TextBig(b, _gridScroll < GridOverflow ? "MORE BELOW — THE MOUSE WHEEL SCROLLS" : "THE MOUSE WHEEL SCROLLS BACK UP",
+                        caption.X + GridPad, caption.Y + UiMetrics.Space(4), Slate, UiTypography.Secondary);
+            _ui.ScrollBar(b, new Rectangle(GridPanel.Right - UiMetrics.ScrollbarWidth - 2, GridPanel.Y + GridPad, UiMetrics.ScrollbarWidth, caption.Y - GridPanel.Y - GridPad),
+                          _gridScroll, GridVisible.Height, GridVisible.Height + GridOverflow);
         }
     }
 

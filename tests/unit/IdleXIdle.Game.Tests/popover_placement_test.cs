@@ -120,7 +120,9 @@ public class popover_placement_test
     [Fact]
     public void test_when_every_side_covers_something_the_least_covering_side_is_chosen_deterministically()
     {
+        // Arrange: a viewport that ends right past the blocks, so no push can step clear of them.
         var anchor = new Rectangle(800, 500, 100, 100);
+        var view = new Rectangle(380, 230, 940, 700);
         var avoid = new List<Rectangle>
         {
             new(900, 500, 400, 300),   // RIGHT, full cover
@@ -128,10 +130,170 @@ public class popover_placement_test
             new(650, 250, 400, 250),   // ABOVE, full cover
             new(700, 612, 100, 100),   // BELOW, a corner only
         };
-        var a = PopoverPlacement.Place(anchor, Size, Page, avoid);
-        var b = PopoverPlacement.Place(anchor, Size, Page, avoid);
+
+        // Act
+        var a = PopoverPlacement.Place(anchor, Size, view, avoid);
+        var b = PopoverPlacement.Place(anchor, Size, view, avoid);
+
+        // Assert
         Assert.Equal(a, b);
         Assert.True(a.Y >= anchor.Bottom, "BELOW covers least");
+        Assert.True(Inside(a, view));
+    }
+
+    [Fact]
+    public void test_a_below_popover_pushes_past_a_covered_band_into_free_room()
+    {
+        // Arrange: the Warren — a card whose foot sits on the grid's scroll hint, with the page's free
+        // room under the grid. BELOW covers the hint; sliding along the card cannot clear a band the
+        // width of the page; pushing past it can.
+        var card = new Rectangle(800, 700, 100, 100);
+        var hint = new Rectangle(0, 812, 1920, 30);
+
+        // Act
+        var r = PopoverPlacement.Place(card, Size, Page, new[] { hint }, new[] { PopoverSide.Below });
+
+        // Assert: under the hint, still centred on its card, inside the page.
+        Assert.True(r.Y > hint.Bottom, "pushed past the hint");
+        Assert.False(r.Intersects(hint));
+        Assert.Equal(card.Center.X, r.Center.X);
+        Assert.True(Inside(r, Page));
+    }
+
+    [Fact]
+    public void test_a_push_is_tried_only_after_every_side_has_been()
+    {
+        // Arrange: RIGHT is blocked by a BUY it cannot slide clear of; LEFT is free. A push past the
+        // BUY would also be clean — but it is farther, and every side comes first.
+        var anchor = new Rectangle(800, 500, 100, 100);
+        var buy = new Rectangle(912, 500, 300, 60);
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, Size, Page, new[] { buy });
+
+        // Assert
+        Assert.True(r.Right <= anchor.X, "LEFT, not RIGHT pushed past the BUY");
+        Assert.False(r.Intersects(buy));
+    }
+
+    [Fact]
+    public void test_over_the_anchor_is_the_last_resort_and_stands_at_its_top()
+    {
+        // Arrange: information on every side, in a viewport with no room to push past any of it.
+        var anchor = new Rectangle(800, 500, 200, 300);
+        var view = new Rectangle(380, 190, 1032, 922);
+        var hard = new List<Rectangle>
+        {
+            new(400, 450, 400, 400),    // LEFT
+            new(1012, 450, 400, 400),   // RIGHT
+            new(600, 200, 600, 288),    // ABOVE
+            new(600, 812, 600, 300),    // BELOW
+        };
+        var order = new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Over };
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, new Point(200, 150), view, hard, order);
+
+        // Assert: on the anchor, at its top, covering nothing that is information.
+        Assert.Equal(anchor.X, r.X);
+        Assert.Equal(anchor.Y, r.Y);
+        foreach (var a in hard) Assert.False(r.Intersects(a));
+    }
+
+    [Fact]
+    public void test_over_slides_up_off_the_anchors_own_figures_even_when_they_are_only_soft()
+    {
+        // Arrange: the card's figures are a SOFT rectangle inside the anchor — the tip may cover them
+        // when it must, but it slides clear when it can; the tip is taller than the room above them.
+        var anchor = new Rectangle(800, 500, 200, 300);
+        var figures = new Rectangle(800, 700, 200, 100);
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, new Point(200, 250), Page, preferred: new[] { PopoverSide.Over }, soft: new[] { figures });
+
+        // Assert: still on the card's column, clear of the figures, its extra height above the card.
+        Assert.Equal(anchor.X, r.X);
+        Assert.True(r.Bottom <= figures.Y, "clear of the figures");
+        Assert.True(r.Y < anchor.Y, "slid up past the anchor's top");
+        Assert.False(r.Intersects(figures));
+    }
+
+    [Fact]
+    public void test_over_covers_the_anchors_soft_figures_before_it_covers_information()
+    {
+        // Arrange: a card scrolled so that only its figures show; the scroll hint is hard, right under
+        // it; the strip is hard, right above; neighbours on both sides. The tip is as tall as the card.
+        var anchor = new Rectangle(800, 700, 200, 120);
+        var figures = anchor;
+        var hard = new List<Rectangle>
+        {
+            new(0, 832, 1920, 30),      // the scroll hint
+            new(0, 400, 1920, 288),     // the strip's content
+            new(0, 700, 788, 120),      // the row to the LEFT, to the viewport's edge
+            new(1012, 700, 908, 120),   // the row to the RIGHT, to the viewport's edge
+        };
+        var view = new Rectangle(0, 400, 1920, 500);
+        var order = new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Over };
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, new Point(200, 120), view, hard, order, soft: new[] { figures });
+
+        // Assert: on the card, over its own figures — the hint and the strip untouched.
+        Assert.Equal(anchor, r);
+        foreach (var a in hard) Assert.False(r.Intersects(a));
+    }
+
+    [Fact]
+    public void test_a_side_the_clamp_pushed_onto_the_anchor_loses_to_over()
+    {
+        // Arrange: an anchor at the viewport's left edge; LEFT clamps onto it. That is an accident,
+        // not a place — OVER, which stands on the anchor deliberately, wins.
+        var anchor = new Rectangle(100, 500, 300, 200);
+        var hard = new List<Rectangle> { new(412, 500, 300, 200), new(0, 200, 800, 288), new(0, 712, 800, 300) };
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, new Point(300, 100), Page, hard, new[] { PopoverSide.Left, PopoverSide.Over });
+
+        // Assert
+        Assert.Equal(anchor.X, r.X);
+        Assert.Equal(anchor.Y, r.Y);
+    }
+
+    [Fact]
+    public void test_a_soft_rectangle_is_never_covered_while_a_clean_place_exists()
+    {
+        // Arrange: RIGHT is decorative room (soft); LEFT is clean.
+        var anchor = new Rectangle(800, 500, 100, 100);
+        var decor = new Rectangle(912, 450, 400, 300);
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, Size, Page, soft: new[] { decor });
+
+        // Assert
+        Assert.True(r.Right <= anchor.X, "LEFT is clean, so the decoration stays uncovered");
+    }
+
+    [Fact]
+    public void test_decoration_is_covered_before_information_when_nothing_is_clean()
+    {
+        // Arrange: information on LEFT, ABOVE and BELOW (hard), decoration on RIGHT (soft), in a
+        // viewport with no room to push past any of them.
+        var anchor = new Rectangle(800, 500, 100, 100);
+        var view = new Rectangle(380, 190, 940, 740);
+        var hard = new List<Rectangle>
+        {
+            new(400, 450, 400, 300),   // LEFT
+            new(600, 200, 300, 300),   // ABOVE
+            new(600, 612, 300, 300),   // BELOW
+        };
+        var decor = new Rectangle(912, 450, 400, 300);   // RIGHT
+
+        // Act
+        var r = PopoverPlacement.Place(anchor, Size, view, hard, soft: new[] { decor });
+
+        // Assert
+        Assert.True(r.X >= anchor.Right, "RIGHT covers only decoration");
+        foreach (var a in hard) Assert.False(r.Intersects(a));
     }
 
     [Fact]

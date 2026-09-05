@@ -35,6 +35,7 @@ for spec in "$@"; do
   # A capture that produced no file FAILED — and says why: a posed cursor outside its space, or a
   # dial that does not parse, throws in the game (Game1.ParsePosedCursor) rather than photographing
   # a plausible default, and the last lines of its log are the message.
-  if [ -f "$out" ]; then echo "ok   $out"; else echo "FAIL $out"; grep -a -E 'Exception|RH_SHOT' "$SHOT_LOG" | tail -3 | sed 's/^/     /'; fi
+  # The log is UTF-8 text (Program.cs sets the console's encoding), so an ordinary grep reads it.
+  if [ -f "$out" ]; then echo "ok   $out"; else echo "FAIL $out"; grep -E 'Exception|RH_SHOT' "$SHOT_LOG" | tail -3 | sed 's/^/     /'; fi
 done
 echo "shots done"

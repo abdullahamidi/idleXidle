@@ -211,14 +211,20 @@ public static class ItemTooltip
             cy += LineH + UiMetrics.Space(6);
         }
 
-        // The rolled numbers (up to four), the built-in channel, the prefix and the enchant by name.
+        // THE ROLLED NUMBERS (up to four), TWO TO A ROW WHERE TWO FIT (2026-09-06): the first at the
+        // margin, the second right-aligned on the same rung — the two columns a stat sheet has, so a
+        // legendary's four rolls take two rows, not four. A roll too long to share keeps its own row;
+        // the same measure decides in the height pass, so the placed card is the drawn card.
         var affixes = ItemAffixes.Of(item);
-        var shown = 0;
-        foreach (var a in affixes)
+        var rolls = affixes.Take(4).Select(a => ItemAffixes.Describe(a)).ToList();
+        for (var k = 0; k < rolls.Count;)
         {
-            if (shown++ >= 4) break;
-            L(ItemAffixes.Describe(a), Good);
+            var pair = k + 1 < rolls.Count && ui is not null
+                       && ui.Measure(rolls[k]) + UiMetrics.Space(24) + ui.Measure(rolls[k + 1]) <= innerW;
+            L(rolls[k], Good);
+            if (pair) R(rolls[k + 1], Good);
             cy += LineH;
+            k += pair ? 2 : 1;
         }
         if (affixes.Count > 4) { L($"AND {affixes.Count - 4} MORE — READ IT ON THE GEAR SCREEN ONCE IT IS YOURS", Dim); cy += LineH; }
         if (ItemFamilies.BonusOf(item) is { } fam)
