@@ -32,11 +32,14 @@ public sealed class MasteryScreen
     private static readonly Color Ember = UiInk.Danger;
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
-    private static readonly Color PanelBg = new(0x14, 0x11, 0x1A, 0xC8);
+    private static readonly Color PanelBg = new(0x15, 0x10, 0x0F, 0xC8);
     private static readonly Color Quiet = UiInk.Plate;
-    private static readonly Color SbBg = new(0x0F, 0x0D, 0x15);
+    private static readonly Color SbBg = new(0x10, 0x0C, 0x0B);
     private static readonly Color Hi = new(0x2A, 0x24, 0x14);
-    private static readonly Color Path = new(0x39, 0x33, 0x44);
+    private static readonly Color Path = new(0x4A, 0x3F, 0x36);
+
+    /// <summary>A future, valid wire: muted, and definitely visible — the plan is readable before a point is spent.</summary>
+    private static readonly Color FutureWire = new(0x66, 0x5E, 0x62);
     private static readonly Color Verd = new(0x5A, 0x9A, 0x4A);
     private static readonly Color Purple = new(0x8A, 0x5A, 0xC8);
 
@@ -788,6 +791,47 @@ public sealed class MasteryScreen
     }
 
     /// <summary>
+    /// Frame the ACTIONABLE FRONTIER (2026-09-06): every taken node, every node the rule allows now,
+    /// and the step each of those leads to — so a reopen shows the path walked, the fork it stands
+    /// at and the next decisions, at a zoom the names are readable at. HOME still shows the whole
+    /// tree; the camera is not touched again during the visit.
+    /// </summary>
+    public void FrameFrontier()
+    {
+        var min = new Vector2(float.MaxValue);
+        var max = new Vector2(float.MinValue);
+        var any = false;
+        void Take(MasteryNode n)
+        {
+            var p = NodePos(n);
+            var r = MasteryLayout.NodeWorldRadius(n.Kind);
+            min = Vector2.Min(min, new Vector2(p.X - r, p.Y - r));
+            max = Vector2.Max(max, new Vector2(p.X + r, p.Y + r));
+            any = true;
+        }
+        foreach (var n in MasteryCatalog.Nodes)
+        {
+            var taken = Mastery.IsTaken(n.Id);
+            var open = !taken && n.Unlocked(Mastery.IsTaken);
+            if (!taken && !open) continue;
+            Take(n);
+            if (!open) continue;
+            foreach (var (from, to) in MasteryLayout.Edges)
+                if (from == n.Id && MasteryCatalog.ById(to) is { } child) Take(child);
+        }
+        if (!any) { FrameFirstOpen(); return; }
+
+        var size = max - min;
+        var margin = UiMetrics.Space(80);
+        var zoom = MathF.Min((TreeView.Width - margin * 2f) / MathF.Max(1f, size.X),
+                             (TreeView.Height - margin * 2f) / MathF.Max(1f, size.Y));
+        // Never tighter than the first-open framing (the nodes would balloon), never looser than the whole tree.
+        _zoom = Math.Clamp(zoom, MathF.Max(MinZoom, WholeTreeZoom), MathF.Min(MaxZoom, FirstOpenZoom));
+        _pan = (min + max) / 2f;
+        ClampPan();
+    }
+
+    /// <summary>
     /// The tree's canvas — and, through its centre, where the world origin is projected.
     /// </summary>
     /// <remarks>
@@ -1498,7 +1542,7 @@ public sealed class MasteryScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         // The SAME posed cursor Update works with, or a capture would hit-test one point and draw another.
         var hit = Cursor(mouse);
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD8));
 
         DrawEditor(b, hit);
         if (DevBuildDebug) DrawDebug(b);
@@ -1636,7 +1680,12 @@ public sealed class MasteryScreen
             var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(from.Id);
             var lit = Lift(WireKey(fromId, toId), walked, UiMotion.Fast);
             if (DevPose is { } wp && node.Id == DevTakeId) lit = PosedWire(wp);
-            var dim = Path * 0.55f;
+            // THE PATH HIERARCHY (2026-09-06): OWNED gold; AVAILABLE — from a taken node into a node the
+            // rule allows now — the branch's colour, restrained; FUTURE — every other authored wire — a
+            // muted but definite grey, so the whole topology can be planned against before a point is
+            // spent. It was Path at half alpha, which vanished into the panel ground.
+            var available = !walked && Mastery.IsTaken(from.Id) && node.Unlocked(Mastery.IsTaken);
+            var dim = available ? Muted(BranchColor(node.Branch), 0.62f) : FutureWire;
 
             // THE ENERGY RUNS THE WIRE (the purchase, step two): from the parent that unlocked the node
             // to the node just taken — the wire lights BEHIND the run, so the gold arrives with it.
@@ -1847,7 +1896,7 @@ public sealed class MasteryScreen
         // The panel fading UP from the page's own black — one veil over the modal rather than an alpha
         // threaded through thirty draw calls, which is what a "fade the panel in" would otherwise cost.
         // Drawn last, so it covers the buttons too; gone entirely once the fade has run.
-        if (open < 1f) _ui.Fill(b, modal, new Color(0x0A, 0x08, 0x10) * (1f - open));
+        if (open < 1f) _ui.Fill(b, modal, new Color(0x0B, 0x09, 0x08) * (1f - open));
     }
 
     /// <summary>The label's tail — what the node DOES, after the em dash that follows its name.</summary>
@@ -2278,7 +2327,7 @@ public sealed class MasteryScreen
         // Colour says BRANCH; brightness says state. A field of identical grey boxes told the player
         // neither, and the tree's whole shape — four opposed roads — was invisible until they read
         // labels one at a time.
-        var fill = taken ? branchCol : canTake ? branchCol * 0.34f : new Color(0x14, 0x11, 0x1E, 0xE0);
+        var fill = taken ? branchCol : canTake ? branchCol * 0.34f : new Color(0x15, 0x10, 0x0F, 0xE0);
         var edge = taken ? Gold : canTake ? branchCol : Path;
         var thick = Math.Max(2, (int)(4 * _zoom * 1.6f));
 
@@ -2416,7 +2465,7 @@ public sealed class MasteryScreen
             // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
             // the capture, a caption floating in empty space.
             _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - UiTypography.Secondary / 2,
-                              taken ? new Color(0x14, 0x11, 0x1E) : aff is null ? Bone : Muted(Bone, 0.62f),
+                              taken ? new Color(0x15, 0x10, 0x0F) : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
             // INWARD, toward the centre: on the south arms the road node stands just outside this diamond and
             // used to print through the caption ("S ECIALISATION").
@@ -2437,7 +2486,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * 0.50f);
             var learnedRoad = Mastery.AvailableSkills().Contains(roadSkill);
             _ui.SpriteFit(b, skillGlyph, new Rectangle(cx - g / 2, cy - g / 2, g, g),
-                          taken ? new Color(0x14, 0x11, 0x1E) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
+                          taken ? new Color(0x15, 0x10, 0x0F) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
             if (learnedRoad && !taken)
             {
                 var bd = Math.Max(8, rad / 3);
@@ -2452,7 +2501,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * (node.Kind == MasteryKind.Mastery ? 0.54f : 0.46f));
             // Dark on a lit field once taken, lit on a dark field before: whichever way round, the
             // glyph is the thing with contrast against what is behind it.
-            var tint = taken ? new Color(0x14, 0x11, 0x1E) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
+            var tint = taken ? new Color(0x15, 0x10, 0x0F) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
             _ui.SpriteFit(b, glyph, new Rectangle(cx - g / 2, cy - g / 2, g, g), tint);
         }
         else if (frame is null && _zoom > 0.34f
@@ -2462,7 +2511,7 @@ public sealed class MasteryScreen
             // The greybox kind mark, kept for the no-art path only.
             var pip = Math.Max(3, rad / 4);
             _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2),
-                     taken ? new Color(0x14, 0x11, 0x1E) : branchCol);
+                     taken ? new Color(0x15, 0x10, 0x0F) : branchCol);
         }
 
         // A CAPSTONE WEARS ITS OWN NAME, under the medallion. It used to print Short(node.Branch) inside
@@ -2497,6 +2546,28 @@ public sealed class MasteryScreen
                 _ui.TextCenterBig(b, Head(node.Label), cx, nameY, nameCol, UiTypography.Body);
                 if (kind) _ui.TextCenterBig(b, "CAPSTONE", cx, nameY + UiTypography.Body, kindCol, UiTypography.Secondary);
             }
+        }
+
+        // THE ROUTE'S NAME at its first step (2026-09-06): the fork is where the tree asks its question,
+        // and the two roads answer by name — THE ONE SOURCE, THE SWORN — set beside the route's first
+        // node on its outer side, from the zoom the notables' names appear at.
+        if (node.Route is MasteryRoute.Left or MasteryRoute.Right && node.Step == 0 && node.Kind == MasteryKind.Minor
+            && _zoom >= FirstOpenZoom * 0.55f)
+        {
+            var routeName = MasteryCatalog.RouteName(node.Branch, node.Route);
+            var axis = MasteryLayout.AngleOf(node.Branch);
+            var side = node.Route == MasteryRoute.Left ? -1f : 1f;
+            var perp = new Vector2(-MathF.Sin(axis), MathF.Cos(axis)) * side;   // away from the branch's axis
+            var reach = rad + UiMetrics.Space(10);
+            var lx = cx + (int)(perp.X * reach);
+            var ly = cy + (int)(perp.Y * reach);
+            var ink = Muted(branchCol, taken || canTake ? 1f : 0.72f);
+            if (MathF.Abs(perp.X) > 0.5f)
+            {
+                if (perp.X > 0f) _ui.TextBig(b, routeName, lx, ly - UiTypography.Secondary / 2, ink, UiTypography.Secondary);
+                else _ui.TextRightBig(b, routeName, lx, ly - UiTypography.Secondary / 2, ink, UiTypography.Secondary);
+            }
+            else _ui.TextCenterBig(b, routeName, lx, perp.Y > 0f ? ly : ly - UiTypography.Secondary, ink, UiTypography.Secondary);
         }
 
         // NAMES ON THE CANVAS (UX V2 P1.5): every node that is a decision says what it is without a hover.

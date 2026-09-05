@@ -29,8 +29,8 @@ public readonly record struct TreePoint(float X, float Y);
 /// </remarks>
 public static class MasteryLayout
 {
-    /// <summary>The rim: past the farthest capstone, with room for the branch headers beyond it.</summary>
-    public const float WorldRadius = 3420f;
+    /// <summary>The rim: past the farthest capstone (RESONANCE and LOOT, at step 6), with room for the branch headers beyond it.</summary>
+    public const float WorldRadius = 3100f;
 
     /// <summary>The trunk: its first node's radius, and the step between trunk nodes.</summary>
     public const float TrunkStart = 400f;
@@ -58,7 +58,7 @@ public static class MasteryLayout
     /// <summary>A node's drawn radius in world units, with the 1.9 draw factor folded in.</summary>
     /// <remarks>
     /// A quarter larger than the sizes the ring tree drew (2026-09-06): the world grew from a 2000
-    /// rim to 3420 so that a route reads as a road, and the whole-tree framing zooms out by the same
+    /// rim to 3100 so that a route reads as a road, and the whole-tree framing zooms out by the same
     /// amount — at the old sizes a minor was six pixels there. The spacing constants above were
     /// chosen against THESE radii (a step is a skill node, a notable and a hand's width); the layout
     /// test holds every pair apart.

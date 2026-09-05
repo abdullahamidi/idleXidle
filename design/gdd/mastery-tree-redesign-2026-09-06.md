@@ -126,8 +126,9 @@ nodes whose parent changed are refunded the same way (`MasteryTree.RestoreTaken`
 Polar, per branch: trunk step k at radius 400 + 260·k on the branch axis; the fork is the trunk's
 last node; route steps at radius 900 + 325·k, the left route at −16° and the right at +16° from the
 axis; a specialisation leaf one step further out than its notable and 10° further from the axis; the
-capstone on the axis at step 7, past the longest route; a bridge at the midpoint angle at radius 1100.
-The world rim is 3420. Node radii are a quarter larger than the ring tree's (`MasteryLayout.NodeWorldRadius`).
+capstone on the axis ONE step past the deeper of its two greaters (step 6 on RESONANCE and LOOT, step 5 on
+TEMPO and ENDURE — geometry follows actual content depth, so the rim is asymmetric); a bridge at the midpoint
+angle at radius 1100. The world rim is 3100. Node radii are a quarter larger than the ring tree's (`MasteryLayout.NodeWorldRadius`).
 `MasteryLayout.Edges` is the drawn graph: one edge per (node, parent). Nothing in it reads the
 player's allocation.
 

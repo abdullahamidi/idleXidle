@@ -93,8 +93,21 @@ public static class MasteryCatalog
     public const int SpecialisationCost = 6;
     public const int SkillRoadCost = 4;
 
-    /// <summary>Where every capstone stands on its axis — past the longest route and its leaf.</summary>
-    public const int CapstoneStep = 7;
+    /// <summary>
+    /// The name of a route — the build story it tells — for the fork label on the tree.
+    /// </summary>
+    public static string RouteName(Branch b, MasteryRoute route) => (b, route) switch
+    {
+        (Branch.Resonance, MasteryRoute.Left) => "THE ONE SOURCE",
+        (Branch.Resonance, MasteryRoute.Right) => "THE SWORN",
+        (Branch.Tempo, MasteryRoute.Left) => "THE OPENING",
+        (Branch.Tempo, MasteryRoute.Right) => "THE RHYTHM",
+        (Branch.Endure, MasteryRoute.Left) => "THICK SKIN",
+        (Branch.Endure, MasteryRoute.Right) => "REPRISAL",
+        (Branch.Loot, MasteryRoute.Left) => "THE CLEAN RUN",
+        (Branch.Loot, MasteryRoute.Right) => "THE DEEP VEIN",
+        _ => "",
+    };
 
     public static IReadOnlyList<MasteryNode> Nodes { get; } = Build();
 
@@ -352,13 +365,22 @@ public static class MasteryCatalog
             Route = route, Step = step, Style = style,
         });
 
+    /// <remarks>
+    /// GEOMETRY FOLLOWS ACTUAL CONTENT DEPTH (2026-09-06): the capstone stands ONE step past the
+    /// deeper of its two greaters. It stood at step 7 on every branch for a symmetric rim, which left
+    /// TEMPO and ENDURE — whose routes end at step 4 — a wire three steps long into nothing. The rim
+    /// is asymmetric now, and the branches with the longer roads look like it.
+    /// </remarks>
     private static void Capstone(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape,
                                  string leftGreater, string rightGreater)
-        => n.Add(new(id, MasteryKind.Mastery, b, 4, CostOf(MasteryKind.Mastery), label, shape, null,
-                     new[] { leftGreater, rightGreater })
+    {
+        var deepest = Math.Max(n.First(x => x.Id == leftGreater).Step, n.First(x => x.Id == rightGreater).Step);
+        n.Add(new(id, MasteryKind.Mastery, b, 4, CostOf(MasteryKind.Mastery), label, shape, null,
+                  new[] { leftGreater, rightGreater })
         {
-            Route = MasteryRoute.Capstone, Step = CapstoneStep,
+            Route = MasteryRoute.Capstone, Step = deepest + 1,
         });
+    }
 
     private static void Bridge(List<MasteryNode> n, Branch a, Branch c, string id, string label, SkillShape shape,
                                string notableOfA, string notableOfC)
