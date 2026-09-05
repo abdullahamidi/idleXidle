@@ -77,10 +77,11 @@ public class KeystoneNoticeTests
             var k = Keystones.ById(source.KeystoneId);
             Assert.NotNull(k);
 
-            // The detail the host actually posts: where it came from, then what it does.
-            // (Game1.RevealKeystone: PostNotice($"NEW KEYSTONE — {k.Name}", $"{where} {k.Blurb}").)
-            var where = $"{Regions.Find(source.RegionId)?.Name ?? source.RegionId} gave it up.";
-            var detail = $"{where} {k!.Blurb}";
+            // The detail the host actually posts — read from the host's own sentence-maker, so the two
+            // cannot drift: where it came from, the first sentence of what it does, and the pointer.
+            var detail = (string)(typeof(Game1).GetMethod("KeystoneRevealDetail", Statics)
+                                   ?? throw new Xunit.Sdk.XunitException("Game1 has no KeystoneRevealDetail — the reveal was reshaped without its test."))
+                .Invoke(null, new object[] { k! })!;
 
             var need = LinesNeeded(detail);
             Assert.True(need <= budget,

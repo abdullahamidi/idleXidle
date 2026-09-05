@@ -898,6 +898,21 @@ public sealed class UiKit
     }
 
     /// <summary>
+    /// A plate's EDGE and accent alone — for a plate whose face is art (a region banner, a portrait
+    /// well): draw the art, then this over it, so the plate keeps its hairline and its accent rule
+    /// instead of the art painting them out (release polish 2026-09-05, map-10).
+    /// </summary>
+    public void PlateEdge(SpriteBatch b, Rectangle r, Color? accent = null, float alpha = 1f)
+    {
+        var rule = UiInk.Rule * alpha;
+        Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), rule);
+        Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), rule);
+        Fill(b, new Rectangle(r.X, r.Y, 1, r.Height), rule);
+        Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), rule);
+        if (accent is { } a) Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), a * alpha);
+    }
+
+    /// <summary>
     /// WHICH FRAME ART a panel of this shape will wear. Chosen by aspect ratio, so resizing a panel
     /// silently changes its texture — and the three have visibly different ornaments.
     /// </summary>
@@ -1228,14 +1243,22 @@ public sealed class UiKit
     /// A small currency badge — icon + value + faint label — the reference's top-right currency row.
     /// Drawn right-aligned to <paramref name="right"/>; returns its LEFT edge so pills chain right-to-left.
     /// </summary>
-    public int Pill(SpriteBatch b, int right, int y, string? iconKey, Color gem, string value, string label, Color accent)
+    /// <summary>What a capsule of height <paramref name="h"/> wraps around its value: left pad, icon, gap, right pad.</summary>
+    public static int PillChrome(int h) => h * 24 / 60 + h * 40 / 60 + h * 12 / 60 + h * 24 / 60;
+
+    public int Pill(SpriteBatch b, int right, int y, string? iconKey, Color gem, string value, string label, Color accent, int h = 60)
     {
         // Measure returns width in the ACTIVE coordinate space; DrawCurrencyPills now draws this at scale 1 in
         // 1920 coords, so every fixed size/inset below is ×4 of its old 480-space value to match valW/labW.
+        // The capsule's proportions are the 60 px design's, scaled to the height the host asks for — so at
+        // 150 % the icon and the pads grow with the digits instead of the digits crowding a 100 % capsule
+        // (release polish 2026-09-05, chrome-17).
         var valW = Measure(value);
         var labW = label.Length > 0 ? Measure(label) : 0;
-        const int icon = 40, h = 60;
-        var w = 24 + icon + 12 + valW + (labW > 0 ? 16 + labW : 0) + 24;
+        var icon = h * 40 / 60;
+        var padX = h * 24 / 60;
+        var gap = h * 12 / 60;
+        var w = padX + icon + gap + valW + (labW > 0 ? 16 + labW : 0) + padX;
         var r = new Rectangle(right - w, y, w, h);
 
         // Ornate capsule from package_01 (guide), not a flat fill. Through the measured slicer: the small
@@ -1251,15 +1274,15 @@ public sealed class UiKit
             Fill(b, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), Color.Black * 0.35f);
         }
 
-        var ix = r.X + 24;
+        var ix = r.X + padX;
         if (iconKey is not null && Assets.Get(iconKey) is { } ic)
-            b.Draw(ic, new Rectangle(ix, r.Y + 12, icon, icon), Color.White);
+            b.Draw(ic, new Rectangle(ix, r.Y + (h - icon) / 2, icon, icon), Color.White);
         else
-            Diamond(b, new Rectangle(ix + 4, r.Y + 16, 32, 32), gem);
+            Diamond(b, new Rectangle(ix + icon / 10, r.Y + (h - icon * 4 / 5) / 2, icon * 4 / 5, icon * 4 / 5), gem);
 
-        var tx = ix + icon + 12;
-        Text(b, value, tx, r.Y + 16, new Color(0xEC, 0xE6, 0xF2));
-        if (labW > 0) Text(b, label, tx + valW + 16, r.Y + 20, new Color(0x8A, 0x82, 0xA0));
+        var tx = ix + icon + gap;
+        Text(b, value, tx, r.Y + h * 16 / 60, UiInk.Primary);
+        if (labW > 0) Text(b, label, tx + valW + 16, r.Y + h * 20 / 60, UiInk.Secondary);
         return r.X;
     }
 
@@ -1503,6 +1526,39 @@ public sealed class UiKit
         if (Assets.Get("ui_keycap") is { } cap) b.Draw(cap, new Rectangle(x, y, w, 16), Color.White);
         else { Fill(b, new Rectangle(x, y, w, 16), Dim); Fill(b, new Rectangle(x + 1, y + 1, w - 2, 14), PanelBg); }
         Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? new Color(0xE8, 0xDF, 0xC8));
+    }
+
+    /// <summary>
+    /// THE LOCK GLYPH: the padlock cut from the centre of the locked-slot tile, so it fills its box.
+    /// </summary>
+    /// <remarks>
+    /// <c>ui_slot_locked</c> is a 128 px SLOT — a dark tile with a gold frame and a small padlock in the
+    /// middle. Drawn whole at 20–24 px it was a grey smudge (BUILD), a lilac square (MAP) or, tinted
+    /// with a dark ink on a coloured band, a solid black square (ROSTER) — release polish 2026-09-05,
+    /// build-05 / map-05 / roster-01. This crops the padlock (the centre 62 of 128) and draws THAT, in
+    /// the caller's tint, and draws a plain padlock from rectangles when the art is missing.
+    /// </remarks>
+    public void LockGlyph(SpriteBatch b, Rectangle box, Color tint)
+    {
+        if (Assets.Get("ui_slot_locked") is { } t)
+        {
+            // The padlock itself lives at 58..71 × 53..74 of the 128 px tile (measured); a breath of
+            // dark tile around it, and the whole square frame stays out of the crop.
+            var src = new Rectangle(t.Width * 54 / 128, t.Height * 50 / 128, t.Width * 22 / 128, t.Height * 28 / 128);
+            var dh = box.Height;
+            var dw = Math.Max(1, dh * src.Width / src.Height);
+            var dst = new Rectangle(box.Center.X - dw / 2, box.Y, dw, dh);
+            UiRasterLedger.Note("ui_slot_locked", src.Width, src.Height, dst.Width, dst.Height, "UiKit.LockGlyph");
+            b.Draw(t, dst, src, tint);
+            return;
+        }
+        var bodyH = box.Height * 11 / 20;
+        var body = new Rectangle(box.X + box.Width / 8, box.Bottom - bodyH, box.Width * 3 / 4, bodyH);
+        var sw = Math.Max(2, box.Width / 6);
+        Fill(b, body, tint);
+        Fill(b, new Rectangle(body.X + sw, box.Y, sw, body.Y - box.Y + 1), tint);
+        Fill(b, new Rectangle(body.Right - sw * 2, box.Y, sw, body.Y - box.Y + 1), tint);
+        Fill(b, new Rectangle(body.X + sw, box.Y, body.Width - sw * 2, sw), tint);
     }
 
     /// <summary>Draw an icon in a box, or nothing if it's missing (caller may draw a fallback first).</summary>

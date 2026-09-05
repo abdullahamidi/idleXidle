@@ -2515,8 +2515,19 @@ public sealed class ForgeScreen
         var ey = enchTop;
         void Band(string s, Color ink)
         {
+            // Two lines where the foot leaves room for them, else one shortened: at 150 % the line that
+            // says WHERE a missing keystone is was cut to "CONQUER UMBRAL REAC…" (release polish 2026-09-05).
+            var pitch = UiTypography.Pitch(UiTypography.Secondary);
+            var lines = _ui.WrapBig(s, w, UiTypography.Secondary);
+            if (lines.Count > 1 && ey + pitch * 2 <= socketTop - UiMetrics.Space(6))
+            {
+                _ui.TextBig(b, lines[0], x, ey, ink, UiTypography.Secondary);
+                _ui.TextBig(b, _ui.ShortenBig(string.Join(" ", lines.Skip(1)), w, UiTypography.Secondary), x, ey + pitch, ink, UiTypography.Secondary);
+                ey += pitch * 2;
+                return;
+            }
             _ui.TextBig(b, _ui.ShortenBig(s, w, UiTypography.Secondary), x, ey, ink, UiTypography.Secondary);
-            ey += UiTypography.Pitch(UiTypography.Secondary);
+            ey += pitch;
         }
         _ui.Fill(b, new Rectangle(x, ey - UiMetrics.Space(10), w, 1), Dim);
         if (ench is null)

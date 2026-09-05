@@ -57,9 +57,7 @@ public sealed class RosterScreen
     private static readonly Color Met = UiInk.Good;
 
     // The card's own surfaces — the GearScreen cell precedent. A card is a QUIET plate with a state.
-    private static readonly Color CardBg = new(0x1C, 0x18, 0x28, 0xF0);
     private static readonly Color CardLocked = new(0x12, 0x0F, 0x1A, 0xF0);
-    private static readonly Color CardActive = new(0x2A, 0x22, 0x10, 0xF0);
 
     // ── THE CARD'S STATES (UI polish §25–§29), each a number the draw reads, none a second surface.
     //
@@ -87,8 +85,6 @@ public sealed class RosterScreen
     private float _anim;
     private string? _notice;
     private string? _cue;                   // sound cue waiting for the host to play — the host owns audio
-    private string? _tip;
-    private Point _tipAt;
 
     /// <summary>
     /// DEV (capture rig only): pose a transient no frame-60 shutter can catch. Read from
@@ -259,7 +255,7 @@ public sealed class RosterScreen
     private const int Edge = 3, EdgeLit = 4, SelectRule = 2;
     private static int BadgeH => UiMetrics.Control(36);
     private static int CardBreath => UiMetrics.Space(8);
-    private static int PortraitInset => UiMetrics.Space(20);
+    private static int PortraitInset => UiMetrics.Space(12);   // the art keeps its width as the controls grow (roster-05)
     private static int NameInset => UiMetrics.Space(8);
 
     /// <summary>
@@ -270,6 +266,9 @@ public sealed class RosterScreen
     private static int StatusH =>
         UiMetrics.Space(22) + UiMetrics.Control(12) + UiMetrics.Space(8)
         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
+
+    /// <summary>An unlocked card's band: one Secondary word with its breaths — the portrait keeps the rest (roster-05).</summary>
+    private static int ChipBandH => UiMetrics.Space(10) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
 
     /// <summary>The least a portrait may keep of its card before the innate label under the name gives way.</summary>
     private static int MinPortrait(Rectangle card) => card.Height * 3 / 10;
@@ -317,9 +316,12 @@ public sealed class RosterScreen
     // champion now (BRIEF sec.9), so switching genuinely changes which techniques you can weave -
     // that is the point of the system - and the line has to say so rather than promise otherwise.
     // What DOES stay is every skill's experience: access is temporary, experience is permanent.
-    private const string FreeLine = "SWITCHING IS FREE. GEAR, TRAITS AND THE WARREN STAY, AND NO SKILL EVER LOSES ITS LEVELS.";
-    private const string PickAnotherLine = "PICK ANOTHER CARD TO READ A DIFFERENT HUNTER.";
-    private const string JoinsLine = "THIS HUNTER JOINS YOU THE MOMENT IT IS DONE.";
+    // Sentence case, in the Primary ink, and shorter: four capitalised sentences in the label ink under
+    // the hunter's mixed-case prose were two voices in one column, and at 150 % their four lines were
+    // what pushed ROAD AND GEAR off the page (release polish 2026-09-05, roster-09, roster-15).
+    private const string FreeLine = "Switching is free — gear, traits and the Warren stay, and no skill loses its levels.";
+    private const string PickAnotherLine = "Pick another card to read a different hunter.";
+    private const string JoinsLine = "Joins you the moment it is done.";
 
     public void Update(Point mouse, bool clicked, CharacterState state)
     {
@@ -368,7 +370,6 @@ public sealed class RosterScreen
     {
         ArgumentNullException.ThrowIfNull(state);
         _anim += 1f / 60f;
-        _tip = null;
         var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
@@ -380,7 +381,6 @@ public sealed class RosterScreen
 
         DrawGrid(b, state, hit);
         DrawDetail(b, state, hit, clicked);
-        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
         if (DevRosterDebug)
             foreach (var r in new[] { GridPlate, Inspector })
             {
@@ -403,12 +403,15 @@ public sealed class RosterScreen
         // offsets from its centre, which the bigger type walked straight across. If the widest group on
         // the row would not clear its column, the whole row drops its glyphs together: the badge on the
         // card below carries the same one, and a row with three glyphs and two gaps reads as a fault.
+        // Heads at Secondary — they are heads, not prose — so the class glyph stays beside the word at
+        // 150 % (roster-10), and in the Secondary ink: the class colour lives in the rule under the head,
+        // the badge and the card's edge, and a red head read as an error line (roster-12).
         var headIcon = UiMetrics.IconSmall;
         var headGap = UiMetrics.Space(6);
         var withIcon = true;
         for (var column = 0; column < CharacterRoster.ClassColumns.Count; column++)
         {
-            var w = headIcon + headGap + _ui.MeasureBig($"THE {ItemClasses.PluralOf(CharacterRoster.ClassColumns[column])}", UiTypography.Body);
+            var w = headIcon + headGap + _ui.MeasureBig($"THE {ItemClasses.PluralOf(CharacterRoster.ClassColumns[column])}", UiTypography.Secondary);
             if (w > ColumnPitch - UiMetrics.Space(4)) withIcon = false;
         }
         for (var column = 0; column < CharacterRoster.ClassColumns.Count; column++)
@@ -417,16 +420,16 @@ public sealed class RosterScreen
             var top = Card(column, 0);
             var color = UiKit.ClassColor(cls);
             var label = $"THE {ItemClasses.PluralOf(cls)}";
-            var textW = _ui.MeasureBig(label, UiTypography.Body);
+            var textW = _ui.MeasureBig(label, UiTypography.Secondary);
             var groupW = (withIcon ? headIcon + headGap : 0) + textW;
             var x = top.Center.X - groupW / 2;
             var y = GridPlate.Y + HeaderY;
             if (withIcon)
             {
-                _ui.ClassIcon(b, cls, new Rectangle(x, y + (UiTypography.Body - headIcon) / 2, headIcon, headIcon));
+                _ui.ClassIcon(b, cls, new Rectangle(x, y + (UiTypography.Secondary - headIcon) / 2, headIcon, headIcon));
                 x += headIcon + headGap;
             }
-            _ui.TextBig(b, label, x, y, color, UiTypography.Body);
+            _ui.TextBig(b, label, x, y, Slate, UiTypography.Secondary);
             _ui.Fill(b, new Rectangle(top.X, GridPlate.Y + RuleY, top.Width, 2), color * 0.6f);
         }
 
@@ -441,7 +444,7 @@ public sealed class RosterScreen
         var slot = CardBreath + glyph + CardBreath;
         var badgeGlyphs = true;
         foreach (var cls in CharacterRoster.ClassColumns)
-            if (_ui.MeasureBig(ItemClasses.NameOf(cls), UiTypography.Body) > CardWidth - 2 * EdgeLit - 2 * slot)
+            if (_ui.MeasureBig(ItemClasses.NameOf(cls), UiTypography.Secondary) > CardWidth - 2 * EdgeLit - 2 * slot)
                 badgeGlyphs = false;
 
         var i = -1;
@@ -454,11 +457,8 @@ public sealed class RosterScreen
             var active = state.ActiveId == c.Id;
             var sel = _selectedId == c.Id;
             var hot = card.Contains(hit);
-            if (hot)
-            {
-                _tip = unlocked ? $"{c.Name} — {c.Blurb}" : $"{c.Name} — {UnlockText(c)}";
-                _tipAt = hit;
-            }
+            // No card hover tip: it crossed into the inspector and covered SET ACTIVE at 125/150 %, and
+            // the inspector is the card's explanation (roster-04). Click selects; the column explains.
 
             var t = active || sel ? EdgeLit : Edge;
             // HOVER eases in (UiMotion.Fast; at once under Reduced Motion) — the same lift a button
@@ -473,21 +473,31 @@ public sealed class RosterScreen
             var flash = Math.Max(SwitchHighlight(c.Id), DevFlashFrozen && active ? 1f : 0f);
             if (held) card = new Rectangle(card.X, card.Y + PressDrop, card.Width, card.Height);
             var inner = new Rectangle(card.X + t, card.Y + t, card.Width - 2 * t, card.Height - 2 * t);
-            _ui.Fill(b, card, active ? CardActive : !unlocked ? CardLocked : CardBg);
+            // THE HOUSE PLATE under every card (roster-07): ten hand-filled rectangles with saturated
+            // 3 px strokes and full-chroma bands outranked the hunter art and read as a colour legend.
+            // Locked keeps its darker tint; ACTIVE is the plate with a warm gold wash and its gold edge,
+            // not a brown face beside nine navy ones (roster-14).
+            _ui.Plate(b, card);
+            if (!unlocked) _ui.Fill(b, card, CardLocked);
+            else if (active) _ui.Fill(b, inner, Gold * 0.08f);
             if (glow > 0f) _ui.Fill(b, inner, Color.White * (HoverLift * glow));
             if (held) _ui.Fill(b, inner, Color.Black * PressShade);
 
             // ACTIVE WINS. The edge used to read `sel ? Bone : active ? Gold : …`, so clicking the
             // hunter you are playing took its gold away — the one law the colour carries, lost on the
             // one card it matters most on. Selection adds a second cue instead of replacing the first.
-            // Hover nudges the edge a quarter of the way to white — the small accent shift of §26 —
-            // and never changes WHICH colour it is.
-            var edge = active ? Gold : unlocked ? UiKit.ClassColor(c.Class) : Dim;
-            if (glow > 0f) edge = Color.Lerp(edge, Color.White, EdgeLift * glow);
-            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, t), edge);
-            _ui.Fill(b, new Rectangle(card.X, card.Bottom - t, card.Width, t), edge);
-            _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
-            _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
+            // Only a STATE strokes the plate (the plate has its own rule): gold for the hunter you
+            // are playing, the class colour at a quarter for one you may play, nothing for a locked one.
+            if (active || unlocked)
+            {
+                var edge = active ? Gold : UiKit.ClassColor(c.Class) * 0.45f;
+                if (glow > 0f) edge = Color.Lerp(edge, Color.White, EdgeLift * glow);
+                var et = active ? t : 1;
+                _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, et), edge);
+                _ui.Fill(b, new Rectangle(card.X, card.Bottom - et, card.Width, et), edge);
+                _ui.Fill(b, new Rectangle(card.X, card.Y, et, card.Height), edge);
+                _ui.Fill(b, new Rectangle(card.Right - et, card.Y, et, card.Height), edge);
+            }
             if (sel)
             {
                 _ui.Fill(b, new Rectangle(inner.X, inner.Y, inner.Width, SelectRule), Bone);
@@ -499,19 +509,24 @@ public sealed class RosterScreen
             // THE CLASS BADGE, at FULL strength whether locked or not. It was drawn at 0.45 alpha on a
             // locked card, which halved the one element that reads at any size — and the padlock says
             // "locked" better than a dimmed colour does.
+            // THE CLASS BADGE: the class colour as an ACCENT — a quarter-strength wash under a full-
+            // colour top rule, the word in Bone — not a full-chroma band (roster-07). The lock is the
+            // house padlock, cut from the slot tile, in Bone: tinted with a dark ink over a coloured band
+            // it came out as a solid black square (roster-01).
             var classColor = UiKit.ClassColor(c.Class);
             var badge = new Rectangle(card.X + t, card.Y + t, card.Width - 2 * t, BadgeH);
-            _ui.Fill(b, badge, classColor);
-            var ink = new Color(0x14, 0x10, 0x1A);
+            _ui.Fill(b, badge, classColor * 0.28f);
+            _ui.Fill(b, new Rectangle(badge.X, badge.Y, badge.Width, UiMetrics.Control(3)), classColor);
+            var ink = Bone;
             var glyphY = badge.Y + (BadgeH - glyph) / 2;
-            var labelY = badge.Y + (BadgeH - UiTypography.Body) / 2;
+            var labelY = badge.Y + (BadgeH - UiTypography.Secondary) / 2;
             var label = ItemClasses.NameOf(c.Class);
             if (badgeGlyphs)
             {
-                _ui.ClassIcon(b, c.Class, new Rectangle(badge.X + CardBreath, glyphY, glyph, glyph), fallback: ink);
-                _ui.TextCenterBig(b, label, badge.Center.X, labelY, ink, UiTypography.Body);
+                _ui.ClassIcon(b, c.Class, new Rectangle(badge.X + CardBreath, glyphY, glyph, glyph), fallback: classColor);
+                _ui.TextCenterBig(b, label, badge.Center.X, labelY, ink, UiTypography.Secondary);
                 if (!unlocked)
-                    _ui.Icon(b, "ui_slot_locked", new Rectangle(badge.Right - CardBreath - glyph, glyphY, glyph, glyph), ink);
+                    _ui.LockGlyph(b, new Rectangle(badge.Right - CardBreath - glyph, glyphY, glyph, glyph), ink);
             }
             else
             {
@@ -521,26 +536,31 @@ public sealed class RosterScreen
                 // it its last letters, and a shortened word is the one thing this branch exists to avoid.
                 var tight = UiMetrics.Space(4);
                 var lockW = unlocked ? 0 : tight + glyph;
-                label = _ui.ShortenBig(label, badge.Width - 2 * tight - lockW, UiTypography.Body);
-                var labelW = _ui.MeasureBig(label, UiTypography.Body);
+                label = _ui.ShortenBig(label, badge.Width - 2 * tight - lockW, UiTypography.Secondary);
+                var labelW = _ui.MeasureBig(label, UiTypography.Secondary);
                 var x = badge.Center.X - (labelW + lockW) / 2;
-                _ui.TextBig(b, label, x, labelY, ink, UiTypography.Body);
+                _ui.TextBig(b, label, x, labelY, ink, UiTypography.Secondary);
                 if (!unlocked)
-                    _ui.Icon(b, "ui_slot_locked", new Rectangle(x + labelW + tight, glyphY, glyph, glyph), ink);
+                    _ui.LockGlyph(b, new Rectangle(x + labelW + tight, glyphY, glyph, glyph), ink);
             }
 
             // THE TEXT BLOCK under the portrait: the short name at Headline — on two lines when the card
             // is too narrow for it on one, which only happens at 150 % — and the innate label, which
             // gives way when it would leave the portrait under a third of the card.
-            var headlineH = UiTypography.Pitch(UiTypography.Headline);
+            // THE NAME ON ONE ROW, a rung down when it would wrap: FALLING TOWER on two Headline rows
+            // left its portrait half its neighbours' at 150 % (roster-02) — the same fit-or-step policy
+            // ShortenBig embodies, applied to the rung instead of the letters.
             var bodyH = UiTypography.Pitch(UiTypography.Body);
             var nameW = card.Width - NameInset * 2;
-            var nameLines = _ui.WrapBig(c.ShortName, nameW, UiTypography.Headline);
-            var nameRows = Math.Clamp(nameLines.Count, 1, 2);
+            var nameRung = _ui.WrapBig(c.ShortName, nameW, UiTypography.Headline).Count > 1 ? UiTypography.Body : UiTypography.Headline;
+            var headlineH = UiTypography.Pitch(nameRung);
+            const int nameRows = 1;
 
             // The hunter themselves, taking whatever the stack leaves. Each breathes on its own phase,
-            // so ten cards do not pulse in unison.
-            var statusTop = card.Bottom - t - StatusH;
+            // so ten cards do not pulse in unison. An unlocked card's band is a WORD, so it reserves a
+            // word's height, not the locked band's bar-and-caption stack (roster-05).
+            var bandH = unlocked ? ChipBandH : StatusH;
+            var statusTop = card.Bottom - t - bandH;
             var py = badge.Bottom + CardBreath;
             var room = statusTop - CardBreath - py;
             var showLabel = room - (headlineH * nameRows + bodyH) >= MinPortrait(card);
@@ -556,20 +576,14 @@ public sealed class RosterScreen
             // at this rung would ellipsise on a 249 px card.
             var ny = portrait.Bottom + CardBreath;
             var nameInk = unlocked ? Bone : Slate;
-            if (nameRows == 1)
-                _ui.TextCenterBig(b, _ui.ShortenBig(c.ShortName, nameW, UiTypography.Headline),
-                                  card.Center.X, ny, nameInk, UiTypography.Headline);
-            else
-                for (var row = 0; row < nameRows; row++)
-                    _ui.TextCenterBig(b, _ui.ShortenBig(nameLines[row], nameW, UiTypography.Headline),
-                                      card.Center.X, ny + row * headlineH, nameInk, UiTypography.Headline);
+            _ui.TextCenterBig(b, _ui.ShortenBig(c.ShortName, nameW, nameRung), card.Center.X, ny, nameInk, nameRung);
             // The identity label: the hunter's own innate, which is unique to them — unlike the road or
             // the tier line, which the card used to spend two rows on.
             if (showLabel)
                 _ui.TextCenterBig(b, _ui.ShortenBig(c.PassiveName, nameW, UiTypography.Body),
                                   card.Center.X, ny + headlineH * nameRows, Slate, UiTypography.Body);
 
-            DrawStatusBand(b, c, new Rectangle(card.X, statusTop, card.Width, StatusH), unlocked, active);
+            DrawStatusBand(b, c, new Rectangle(card.X, statusTop, card.Width, bandH), unlocked, active);
 
             // THE SWITCH HIGHLIGHT: one gold wash over the whole card — art, name, chip — for one
             // Transition after you became this hunter. OVER the content, so it reads as a flash on
@@ -592,17 +606,16 @@ public sealed class RosterScreen
         var textW = band.Width - NameInset * 2;
         if (unlocked)
         {
+            // THE STATE AS A WORD with a small diamond before it — not a bordered box, which sat where
+            // a button sits and made the grid read as ten buttons beside the one real one (roster-06).
             var word = active ? "PLAYING" : "READY";
             var col = active ? Gold : Met;
-            var w = _ui.MeasureBig(word, UiTypography.Body) + UiMetrics.Space(44);
-            var pill = new Rectangle(band.Center.X - w / 2, band.Y + UiMetrics.Space(26), w,
-                                     UiTypography.Body + UiMetrics.Space(12));
-            _ui.Fill(b, pill, col * 0.14f);
-            _ui.Fill(b, new Rectangle(pill.X, pill.Y, pill.Width, 1), col);
-            _ui.Fill(b, new Rectangle(pill.X, pill.Bottom - 1, pill.Width, 1), col);
-            _ui.Fill(b, new Rectangle(pill.X, pill.Y, 1, pill.Height), col);
-            _ui.Fill(b, new Rectangle(pill.Right - 1, pill.Y, 1, pill.Height), col);
-            _ui.TextCenterBig(b, word, pill.Center.X, pill.Y + UiMetrics.Space(6), col, UiTypography.Body);
+            var pip = UiMetrics.Control(8);
+            var wordW = _ui.MeasureBig(word, UiTypography.Secondary);
+            var x = band.Center.X - (pip + UiMetrics.Space(8) + wordW) / 2;
+            var y = band.Y + UiMetrics.Space(10);
+            _ui.Diamond(b, new Rectangle(x, y + (UiTypography.Secondary - pip) / 2, pip, pip), col);
+            _ui.TextBig(b, word, x + pip + UiMetrics.Space(8), y, col, UiTypography.Secondary);
             return;
         }
 
@@ -620,8 +633,10 @@ public sealed class RosterScreen
         {
             var (now, need) = ConquestProgress(region);
             var nameY = band.Y + UiMetrics.Space(2);
+            // The region's name takes the band's full width (it has no glyph slots), so THE STILL
+            // ARCHIVE is not cut on a 172 px card at 150 % (roster-11).
             if (Regions.Find(region) is { } def)
-                _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, textW, UiTypography.Secondary),
+                _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, band.Width - UiMetrics.Space(8), UiTypography.Secondary),
                                   band.Center.X, nameY, Slate, UiTypography.Secondary);
             var barY = nameY + UiTypography.Pitch(UiTypography.Secondary);
             _ui.Bar(b, band.X + barInset, barY, band.Width - barInset * 2, barH, need <= 0 ? 0f : now / (float)need, Met);
@@ -656,7 +671,12 @@ public sealed class RosterScreen
     /// <summary>The lock glyph's column in YOU NEED FIRST: the glyph plus a breath — 32 at 100 %.</summary>
     private static int LockColumn => UiMetrics.Control(22) + UiMetrics.Space(10);
 
-    private int Lines(string text, int width, int cap) => Math.Clamp(_ui.WrapBig(text, width, UiTypography.Body).Count, 1, cap);
+    private int Lines(string text, int width, int cap, int rung = 0)
+        => Math.Clamp(_ui.WrapBig(text, width, rung == 0 ? UiTypography.Body : rung).Count, 1, cap);
+
+    /// <summary>The road and what the class wears, in one sentence — colour AND word, never the hue alone.</summary>
+    private static string RoadLine(Character c)
+        => (c.Lean is { } br ? $"{BranchName(br)} ROAD" : "NO ROAD — EVERY ROAD FITS") + " · " + ItemClasses.WearsLine(c.Class);
 
     private void DrawDetail(SpriteBatch b, CharacterState state, Point hit, bool clicked)
     {
@@ -678,21 +698,33 @@ public sealed class RosterScreen
         // The state block FOLLOWS the content, and the content is cut so that it always can: the block
         // used to be reserved as a flat 232 px, which was one hunter's worth at one profile.
         var showButton = unlocked && !active;
-        var limit = (showButton ? ActionRect.Y : UiKit.ContentBottom(Inspector)) - UiMetrics.Space(12);
+        // The column's foot is the button when there is one, else the content edge itself — the extra
+        // breath that was reserved for a button not drawn cost a locked hunter its innate at 150 % (roster-03).
+        var limit = showButton ? ActionRect.Y - UiMetrics.Space(12) : UiKit.ContentBottom(Inspector);
         var y = Inspector.Y + UiTypography.PanelTitleTop;
 
         var blurbAll = Lines(c.Blurb, width, 2);
         var skillLines = skill is null ? 1 : Lines(skill.Line, width, 2);
         var passiveAll = Lines(c.PassiveText, width, 3);
-        var wearsLines = Lines(ItemClasses.WearsLine(c.Class), width, 2);
-        var stateH = StateBlockHeight(c, width, unlocked, active);
 
-        var fixedH = headH + UiMetrics.Space(6)                                                  // 1 CATEGORY
+        var fixedBase = headH + UiMetrics.Space(6)                                               // 1 CATEGORY
                    + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(2)             // 2 NAME
                    + ruleH + headH + (skill is null ? lineH : SkillIconRow + skillLines * lineH) // 4 STARTING SKILL
                    + ruleH + headH + lineH                                                      // 5 INNATE, its name
-                   + stateGap + stateH;                                                         // 7 the state
-        var roadH = ruleH + headH + lineH + wearsLines * lineH;
+                   + stateGap;
+        // THE STATE BLOCK YIELDS ITS BOILERPLATE before the innate loses its one line: at 150 % the
+        // column cannot hold the header, the skill, the innate AND four lines of state, and a block that
+        // did not yield drew its last line under SET ACTIVE. The shed line — the one sentence that
+        // de-risks the press — never yields.
+        var stateH = StateBlockHeight(c, width, unlocked, active, brief: false);
+        var stateBrief = fixedBase + stateH + lineH > limit - y;
+        if (stateBrief) stateH = StateBlockHeight(c, width, unlocked, active, brief: true);
+        var fixedH = fixedBase + stateH;                                                          // 7 the state
+        // ROAD AND GEAR is one sentence at Secondary now — road · what it wears — wrapped to at most two
+        // lines, so it fits the 150 % column instead of being the first thing dropped (roster-09).
+        var roadText = RoadLine(c);
+        var roadLines = Lines(roadText, width - UiMetrics.Control(8) - UiMetrics.Space(8), 2, UiTypography.Secondary);
+        var roadH = ruleH + headH + roadLines * headH;
         var room = limit - y - fixedH;
         int Need(int blurb, int passive, bool withRoad)
             => (blurb > 0 ? blurb * lineH + UiMetrics.Space(10) : 0) + passive * lineH + (withRoad ? roadH : 0);
@@ -732,7 +764,7 @@ public sealed class RosterScreen
         var catIcon = UiMetrics.Control(26);
         _ui.ClassIcon(b, c.Class, new Rectangle(left, y, catIcon, catIcon));
         _ui.TextBig(b, $"HUNTER · {ItemClasses.NameOf(c.Class)}", left + catIcon + UiMetrics.Space(10),
-                    y + (catIcon - UiTypography.Secondary) / 2, UiKit.ClassColor(c.Class), UiTypography.Secondary);
+                    y + (catIcon - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);   // the class icon carries the colour (roster-12)
         y += headH + UiMetrics.Space(6);
 
         // 2 NAME
@@ -753,7 +785,7 @@ public sealed class RosterScreen
         //   can ever weave it, and unlocking them does not add it to anybody's library.
         Rule();
         _ui.TextBig(b, "SIGNATURE SKILL", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"ONLY {c.Name}", right, y, Gold, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"ONLY {c.Name}", right, y, Slate, UiTypography.Secondary);   // a descriptor, not an earned state (roster-13)
         y += headH;
         if (skill is null)
         {
@@ -786,21 +818,20 @@ public sealed class RosterScreen
         {
             Rule();
             _ui.TextBig(b, "ROAD AND GEAR", left, y, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, c.TierLine, right, y, Slate, UiTypography.Secondary);
             y += headH;
-            // Colour AND word: the road never has to be read out of a hue alone.
-            _ui.TextBig(b, c.Lean is { } br ? $"{BranchName(br)} ROAD" : "NO ROAD — EVERY ROAD FITS",
-                        left, y, lean, UiTypography.Body);
-            _ui.TextRightBig(b, c.TierLine, right, y + (UiTypography.Body - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
-            y += lineH;
-            // The CLASS's own line, not its description: for THE OATHBOUND the description printed
-            // "BUILT FOR THE LOOT ROAD" one row under "NO ROAD — EVERY ROAD FITS", which is the class
-            // and the hunter contradicting each other on screen.
-            y = DrawWrapped(b, ItemClasses.WearsLine(c.Class), left, y, width, Bone, UiTypography.Body, wearsLines);
+            // ONE line: a colour square for the road, then the road and what the class wears in words —
+            // colour AND word, and never the branch hue as type (roster-09, roster-12).
+            var pip = UiMetrics.Control(8);
+            _ui.Diamond(b, new Rectangle(left, y + (UiTypography.Secondary - pip) / 2, pip, pip), lean);
+            y = DrawWrapped(b, roadText, left + pip + UiMetrics.Space(8), y, width - pip - UiMetrics.Space(8),
+                            Bone, UiTypography.Secondary, roadLines);
         }
 
-        // 7 THE STATE — right after the content, and never so low that it runs under the button: the
-        //   cuts above guarantee the second, the clamp is for a hunter whose words outgrow the column.
-        DrawStateBlock(b, c, Math.Min(y + stateGap, limit - stateH), left, right, width, unlocked, active);
+        // 7 THE STATE — pinned to the column's foot, so CURRENT STATE / YOU NEED FIRST sits directly
+        //   above the button (or the foot) and the free room lands under the descriptive blocks
+        //   instead of between the sentence that de-risks the press and the press itself (roster-08).
+        DrawStateBlock(b, c, Math.Max(y + stateGap, limit - stateH), left, right, width, unlocked, active, stateBrief);
 
         // 8 ONE BUTTON, and only when it can be pressed. A disabled PLAYING / LOCKED button is a
         // control that invites a click with no answer; the state block above already said both.
@@ -819,9 +850,9 @@ public sealed class RosterScreen
     }
 
     private static string ShedLine(int shed) =>
-        shed == 0 ? "NOTHING COMES OFF. THIS HUNTER CAN WEAR EVERYTHING YOU HAVE ON."
-        : shed == 1 ? "1 WORN PIECE GOES BACK TO YOUR BAG. THIS HUNTER CANNOT WEAR IT."
-        : $"{shed} WORN PIECES GO BACK TO YOUR BAG. THIS HUNTER CANNOT WEAR THEM.";
+        shed == 0 ? "Nothing comes off — this hunter can wear everything you have on."
+        : shed == 1 ? "1 worn piece goes back to your bag — this hunter cannot wear it."
+        : $"{shed} worn pieces go back to your bag — this hunter cannot wear them.";
 
     /// <summary>The gate a locked hunter is behind: how far along, the count, and what is counted.</summary>
     private (float Pct, string Count, string Unit) Gate(Character c)
@@ -839,25 +870,27 @@ public sealed class RosterScreen
     }
 
     /// <summary>The state block's height, measured with the words <see cref="DrawStateBlock"/> draws.</summary>
-    private int StateBlockHeight(Character c, int width, bool unlocked, bool active)
+    private int StateBlockHeight(Character c, int width, bool unlocked, bool active, bool brief)
     {
         var lineH = UiTypography.Pitch(UiTypography.Body);
         var h = UiMetrics.Space(12) + UiTypography.Pitch(UiTypography.Secondary);
         if (unlocked)
         {
-            h += lineH + Lines(FreeLine, width, 2) * lineH;
-            h += Lines(active ? PickAnotherLine : ShedLine(ShedCount(c)), width, 2) * lineH;
+            // Three lines each: at 150 % the shed sentence needs three, and a block that reserved two
+            // drew its third line under SET ACTIVE.
+            h += lineH + (brief ? 0 : Lines(FreeLine, width, 3) * lineH);   // brief: the boilerplate yields, the shed line never does
+            h += Lines(active ? PickAnotherLine : ShedLine(ShedCount(c)), width, 3) * lineH;
             return h;
         }
         h += Lines(UnlockText(c), width - LockColumn, 2) * lineH + UiMetrics.Space(6);
         if (Gate(c).Count.Length > 0)
             h += UiMetrics.Control(16) + UiMetrics.Space(10) + UiTypography.Pitch(UiTypography.PrimaryValue);
-        return h + Lines(JoinsLine, width, 2) * lineH;
+        return h + (brief ? 0 : Lines(JoinsLine, width, 2) * lineH);
     }
 
     /// <summary>CURRENT STATE for a hunter you can play, YOU NEED FIRST for one you cannot.</summary>
     private void DrawStateBlock(SpriteBatch b, Character c, int y, int left, int right, int width,
-                                bool unlocked, bool active)
+                                bool unlocked, bool active, bool brief)
     {
         var lineH = UiTypography.Pitch(UiTypography.Body);
         _ui.Fill(b, new Rectangle(left, y, width, 1), Dim);
@@ -870,16 +903,16 @@ public sealed class RosterScreen
             _ui.TextBig(b, active ? "YOU ARE PLAYING THIS HUNTER" : "READY TO PLAY", left, y,
                         active ? Gold : Met, UiTypography.Body);
             y += lineH;
-            y = DrawWrapped(b, FreeLine, left, y, width, Slate, UiTypography.Body, 2);
+            if (!brief) y = DrawWrapped(b, FreeLine, left, y, width, Bone, UiTypography.Body, 3);
             if (active)
             {
-                DrawWrapped(b, PickAnotherLine, left, y, width, Slate, UiTypography.Body, 2);
+                DrawWrapped(b, PickAnotherLine, left, y, width, Bone, UiTypography.Body, 3);
                 return;
             }
 
             // WHAT DOES COME OFF. The same test the host runs after the switch — so the one thing the
             // old banner got wrong is stated before the press, not discovered after it.
-            DrawWrapped(b, ShedLine(ShedCount(c)), left, y, width, Slate, UiTypography.Body, 2);
+            DrawWrapped(b, ShedLine(ShedCount(c)), left, y, width, Bone, UiTypography.Body, 3);
             return;
         }
 
@@ -888,7 +921,7 @@ public sealed class RosterScreen
         _ui.TextBig(b, "YOU NEED FIRST", left, y, Slate, UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary);
         var lockGlyph = UiMetrics.Control(22);
-        _ui.Icon(b, "ui_slot_locked", new Rectangle(left, y + (lineH - lockGlyph) / 2, lockGlyph, lockGlyph), Bone);
+        _ui.LockGlyph(b, new Rectangle(left, y + (lineH - lockGlyph) / 2, lockGlyph, lockGlyph), Bone);
         y = DrawWrapped(b, UnlockText(c), left + LockColumn, y, width - LockColumn, Bone, UiTypography.Body, 2) + UiMetrics.Space(6);
 
         var (pct, count, unit) = Gate(c);
@@ -903,7 +936,7 @@ public sealed class RosterScreen
                              y + (UiTypography.PrimaryValue - UiTypography.Body) / 2, Slate, UiTypography.Body);
             y += UiTypography.Pitch(UiTypography.PrimaryValue);
         }
-        DrawWrapped(b, JoinsLine, left, y, width, Slate, UiTypography.Body, 2);
+        if (!brief) DrawWrapped(b, JoinsLine, left, y, width, Bone, UiTypography.Body, 2);
     }
 
     /// <summary>Word-wrap into a width at a rung, bounded. Returns the y AFTER the last line drawn.</summary>

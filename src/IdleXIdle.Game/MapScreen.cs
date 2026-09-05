@@ -239,7 +239,11 @@ public sealed class MapScreen
     /// inspector label in P1.7. Tying the width to the height keeps the ratio on the right side of it;
     /// at 150 % it is this cap, not the profile, that decides (744 wanted, 700 allowed).
     /// </remarks>
-    private static int InspectorW => Math.Min(UiMetrics.InspectorWidth(UiKit.Page.Width), ColumnH * 80 / 100);
+    // AT LEAST THE WIDE-PANEL WIDTH, so the inspector takes PanelPadX at every profile: at 100 % it came
+    // out 496, under WidePanelFrom, and wore the narrow pad while 125/150 wore the wide one — the same
+    // panel with two margins, and the scrollbar hugging the bevel (release polish 2026-09-05, map-12).
+    private static int InspectorW =>
+        Math.Min(Math.Max(UiMetrics.InspectorWidth(UiKit.Page.Width), UiTypography.WidePanelFrom), ColumnH * 80 / 100);
     private static Rectangle DetailPanel => new(UiKit.PageRight(40) - InspectorW, Top, InspectorW, ColumnH);
     private static Rectangle MapCanvas => new(34, Top, DetailPanel.X - Gutter - 34, ColumnH);
 
@@ -323,7 +327,9 @@ public sealed class MapScreen
     // NEVER WIDER THAN ITS COLUMN. Three cards share the field's width at 0.20 / 0.50 / 0.80, so a card
     // past 28 % of it would touch its neighbour; at 100 % the aspect wins by a wide margin (240 of 372),
     // at 150 % the column does, and the card comes out a little squarer rather than overlapping.
-    private int NodeW => Math.Min(NodeH * 240 / 176, NodeField.Width * 28 / 100);
+    // 25 %, not 28: at 28 the gap between neighbours at 150 % was 2 % of the field (~19 px) and the
+    // connector between them collapsed to one stray dot (map-04). At 25 the edge gap is 5 %.
+    private int NodeW => Math.Min(NodeH * 240 / 176, NodeField.Width * 25 / 100);
 
     // Six region nodes in a serpentine across the canvas: 0-1-2 along the top, 3-4-5 back along the bottom.
     private static readonly (float Fx, float Fy)[] NodeFrac =
@@ -414,10 +420,9 @@ public sealed class MapScreen
     /// padlock too many, and the drawn one is the poorer of the two at this size.
     /// </remarks>
     private void DrawLockArt(SpriteBatch b, Rectangle box)
-    {
-        if (_ui.Assets.Get("ui_slot_locked") is { } art) b.Draw(art, box, new Color(0xB0, 0xA8, 0xC0));
-        else DrawLock(b, box, Slate);
-    }
+        // The house padlock — the lock cut from the slot tile, in Primary. Drawing the whole 128 px slot
+        // into an 18 px box gave a lilac smudge beside the word LOCKED (map-05).
+        => _ui.LockGlyph(b, box, Bone);
 
     /// <summary>The glyph for a gear slot. Literal arms, so check_asset_keys can see every key.</summary>
     private static string? SlotGlyph(ItemBaseType t) => t switch
@@ -613,11 +618,30 @@ public sealed class MapScreen
         else _ui.Fill(b, field, new Color(0x12, 0x0E, 0x1C));
         _ui.Fill(b, field, new Color(0x08, 0x06, 0x12, 0x66));   // scrim, so the node cards still read
 
-        // Connection lines along the conquer-chain (gold once the source region is conquered).
+        // Connection lines along the conquer-chain (gold once the source region is conquered) — EDGE TO
+        // EDGE, never centre to centre: a centre line ran under the card faces for nothing and, on the
+        // one vertical link, straight through the POWER label under the card (map-01).
         for (var i = 0; i < RegionCount - 1; i++)
         {
-            var a = Node(i).Center;
-            var c = Node(i + 1).Center;
+            var from = Node(i);
+            var to = Node(i + 1);
+            var breath = UiMetrics.Space(4);
+            Point a, c;
+            if (Math.Abs(NodeFrac[i].Fx - NodeFrac[i + 1].Fx) < 0.01f)
+            {
+                // The vertical link leaves under the card's POWER row (and its requirement line, when
+                // the region is locked and the line is printed) and arrives above the next card.
+                var tail = PowerRowH + (World.IsUnlocked(Def(i).Id) ? 0 : UiTypography.Pitch(UiTypography.Secondary));
+                a = new Point(from.Center.X, from.Bottom + tail + breath);
+                c = new Point(to.Center.X, to.Y - breath);
+            }
+            else
+            {
+                var cy = (from.Center.Y + to.Center.Y) / 2;
+                var leftToRight = to.X > from.X;
+                a = new Point(leftToRight ? from.Right + breath : from.X - breath, cy);
+                c = new Point(leftToRight ? to.X - breath : to.Right + breath, cy);
+            }
             // Vellum, not Dim: these connectors sit on the parchment chart now, and Dim (1.6:1 on both
             // surfaces) was the colour that failed everywhere else on this screen too.
             var col = World.IsConquered(Def(i).Id) ? Gold * 0.9f : UiKit.Vellum * 0.5f;
@@ -678,7 +702,9 @@ public sealed class MapScreen
             var lift = UiMotion.Ease(UiMotion.KeyOf(node), hot ? 1f : 0f);
             if (lift > 0f) _ui.Fill(b, face, Color.White * (0.07f * lift));
             if (pressed) _ui.Fill(b, face, Color.Black * 0.18f);
-            var restEdge = active ? Gold : sel ? Bone : conq ? Met : unlocked ? sc : Dim;
+            // A locked card's edge is Disabled, not Rule: the hairline ink vanished on the locked scrim
+            // and the one card the player most needs to read about looked unfinished (map-11).
+            var restEdge = active ? Gold : sel ? Bone : conq ? Met : unlocked ? sc : UiInk.Disabled;
             var edge = active || sel ? restEdge : Color.Lerp(restEdge, Bone, lift);
             var thick = active ? FrameThick + 1 : FrameThick;
             foreach (var e in new[] { new Rectangle(face.X, face.Y, face.Width, thick), new Rectangle(face.X, face.Bottom - thick, face.Width, thick),
@@ -728,7 +754,9 @@ public sealed class MapScreen
             var gemBox = new Rectangle(ex, face.Y + GemTop, GemSize, GemSize);
             if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } gem) b.Draw(gem, gemBox, Color.White);
             else _ui.Diamond(b, gemBox, sc);
-            _ui.TextBig(b, element, gemBox.Right + wordGap, gemBox.Y + (GemSize - body) / 2, sc, body);
+            // The word in Primary; the Source colour stays on the gem beside it — six Source hues as
+            // text were off the ink palette and three fell under the contrast floor (map-06).
+            _ui.TextBig(b, element, gemBox.Right + wordGap, gemBox.Y + (GemSize - body) / 2, Bone, body);
 
             // BELOW the card, not across its bottom border. Vellum, because these labels sit on the
             // parchment chart rather than on black.
@@ -1003,7 +1031,9 @@ public sealed class MapScreen
         }
         void Rule()
         {
-            if (Item(UiMetrics.Space(16), out var t)) _ui.Fill(b, new Rectangle(x, t + UiMetrics.Space(6), w, 1), Dim);
+            // 12, not 16: five rules at 16 were the twenty pixels that put the third keystone row under
+            // the fold at 100 % (map-02).
+            if (Item(UiMetrics.Space(12), out var t)) _ui.Fill(b, new Rectangle(x, t + UiMetrics.Space(5), w, 1), Dim);
         }
         void Pair(string label, string figure, Color figureInk)
         {
@@ -1014,21 +1044,26 @@ public sealed class MapScreen
 
         // ── IDENTITY: the region's own ground, its gem, its element. The Source gem used to be drawn
         //    four times per region on this screen; it appears twice now — once on the node, once here. ──
-        var gemS = UiMetrics.Control(56);
-        var plateH = UiMetrics.Space(14) * 2 + gemS;
+        // A 44 px gem in a 10 px breath (it was 56 in 14): the thirty-two pixels that, with the rules
+        // and the one-line description, bring the whole flow onto the 100 % page (map-02).
+        var gemS = UiMetrics.Control(44);
+        var plateH = UiMetrics.Space(10) * 2 + gemS;
         if (Item(plateH + UiMetrics.Space(12), out var pt))
         {
             var plate = new Rectangle(x, pt, w, plateH);
-            _ui.Plate(b, plate, sc);
             if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground) b.Draw(ground, plate, CentreCrop(ground, plate), Color.White);
+            else _ui.Fill(b, plate, UiInk.Plate);
             _ui.Fill(b, plate, new Color(0x0A, 0x08, 0x14, 0x9E));
             _ui.Fill(b, plate, sc * 0.16f);
-            var gemBox = new Rectangle(plate.X + UiMetrics.Space(18), plate.Y + UiMetrics.Space(14), gemS, gemS);
+            // The plate's edge and Source accent OVER the art, so the banner is a plate with a ground and
+            // not an image pasted into the panel (map-10).
+            _ui.PlateEdge(b, plate, sc);
+            var gemBox = new Rectangle(plate.X + UiMetrics.Space(18), plate.Y + UiMetrics.Space(10), gemS, gemS);
             if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } pgem) b.Draw(pgem, gemBox, Color.White);
             _ui.TextBig(b, def.Theme.ToString().ToUpperInvariant(), gemBox.Right + UiMetrics.Space(16),
-                        plate.Y + (plateH - UiTypography.Headline) / 2, sc, UiTypography.Headline);
+                        plate.Y + (plateH - UiTypography.Headline) / 2, Bone, UiTypography.Headline);
         }
-        Line(Description(def.Theme), Bone, body, 2);
+        Line(Description(def.Theme), Bone, body, 1);
         Rule();
 
         // ── CAN I SURVIVE IT — the two figures, and the gap between them IN WORDS. ──
@@ -1057,7 +1092,7 @@ public sealed class MapScreen
             _ => "EVEN — A STEADY PACE",
         }, Bone, body, 1);
         var mod = RegionModifiers.For(def.Id);
-        Line(mod.Name, sc, body, 1);
+        Line(mod.Name, Bone, body, 1);
         Line(mod.Blurb, Bone, body, 2);
         Rule();
 
@@ -1067,13 +1102,14 @@ public sealed class MapScreen
         if (drops.Favoured.Count > 0)
         {
             Section("WHAT IT DROPS");
-            Line($"{def.Theme.ToString().ToUpperInvariant()} ITEMS", sc, body, 1);
+            Line($"{def.Theme.ToString().ToUpperInvariant()} ITEMS", Slate, body, 1);
             var glyph = UiMetrics.IconSmall;
             foreach (var slot in drops.Favoured)
             {
                 if (!Item(bodyPitch, out var t)) continue;
+                // The slot art as shipped — coloured art tinted cream only darkens (map-07).
                 if (SlotGlyph(slot) is { } key && _ui.Assets.Get(key) is { } gi)
-                    b.Draw(gi, new Rectangle(x, t + (bodyPitch - glyph) / 2, glyph, glyph), Bone);
+                    b.Draw(gi, new Rectangle(x, t + (bodyPitch - glyph) / 2, glyph, glyph), Color.White);
                 _ui.TextBig(b, RegionDrops.PlainName(slot), x + glyph + wordGap, t, Bone, body);
             }
             Rule();
@@ -1113,7 +1149,7 @@ public sealed class MapScreen
                 Line($"BEST WAVE {farm.BestDepth} OF {ConquerWaves}", Bone, body, 1);
                 // The rule is Game1's `Deepest >= ConquerWaveDepth`, and the guide already says "REACH
                 // WAVE 20" — "HOLD 20 WAVES" was the same rule in a second voice.
-                Line($"REACH WAVE {ConquerWaves} TO CONQUER THIS REGION", Slate, body, 2);
+                Line($"REACH WAVE {ConquerWaves} TO CONQUER THIS REGION", Bone, body, 2);   // the instruction, in Primary (map-09)
             }
         }
         Rule();
@@ -1131,12 +1167,20 @@ public sealed class MapScreen
                 if (Keystones.ById(src.KeystoneId) is not { } k) continue;
                 var reached = Keystones.IsReached(src, World);
                 if (!Item(bodyPitch, out var t)) continue;
-                if (reached) DrawCheck(b, new Rectangle(x, t + UiMetrics.Space(2), CheckW, CheckH), Met);
+                var mark = new Rectangle(x, t + UiMetrics.Space(2), CheckW, CheckH);
+                if (reached) DrawCheck(b, mark, Met);
+                else Ring(b, new Rectangle(mark.X + (CheckW - CheckH) / 2, mark.Y, CheckH, CheckH), Slate);   // an unticked box, so the column reads reached / not yet (map-08)
                 _ui.TextBig(b, _ui.ShortenBig($"{Keystones.RungAsk(src.Rung)}: {k.Name}",
                                               w - CheckW - wordGap, body),
                             x + CheckW + wordGap, t, reached ? Met : Bone, body);
             }
         }
+
+        // THE FOOT SAYS WHAT THE LEFTOVER BAND IS: when the flow is cut and the last item did not fit,
+        // the empty band above the button read as "the content ended here" (map-03).
+        if (draw && full && region.Bottom - y >= UiTypography.Pitch(UiTypography.Secondary))
+            _ui.TextRightBig(b, "SCROLL FOR MORE", x + w, region.Bottom - UiTypography.Pitch(UiTypography.Secondary),
+                             Slate, UiTypography.Secondary);
 
         return shown;
 
@@ -1229,16 +1273,29 @@ public sealed class MapScreen
         for (var k = 0; k < S(11); k++) _ui.Fill(b, new Rectangle(r.X + S(6) + k, r.Bottom - S(2) - k, dot, dot), c);
     }
 
+    /// <summary>A hollow box: the unticked mark in a checklist column.</summary>
+    private void Ring(SpriteBatch b, Rectangle r, Color c, int t = 2)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
+        _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
+    }
+
     private void DrawDottedLine(SpriteBatch b, Point a, Point c, Color col)
     {
         var dx = c.X - a.X;
         var dy = c.Y - a.Y;
         var len = MathF.Sqrt(dx * dx + dy * dy);
-        var steps = Math.Max(1, (int)(len / 26f));
+        // The step follows the spacing rate, and a gap too short for two steps draws NOTHING rather
+        // than one stray dot beside a card (map-04).
+        var steps = (int)(len / UiMetrics.Space(14));
+        if (steps < 2) return;
+        var dot = UiMetrics.Control(6);
         for (var s = 0; s <= steps; s++)
         {
             var t = s / (float)steps;
-            _ui.Fill(b, new Rectangle((int)(a.X + dx * t) - 3, (int)(a.Y + dy * t) - 3, 7, 7), col);
+            _ui.Fill(b, new Rectangle((int)(a.X + dx * t) - dot / 2, (int)(a.Y + dy * t) - dot / 2, dot, dot), col);
         }
     }
 

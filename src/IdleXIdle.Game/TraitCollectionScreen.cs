@@ -51,6 +51,9 @@ public sealed class TraitCollectionScreen
     /// <summary>The trait the inspector is reading, or "" for none. An UNKNOWN slot selects as "?<index>".</summary>
     private string _selected = "";
 
+    /// <summary>The first visible ROW of the collection when the page cannot hold every sigil (UI SCALE 150).</summary>
+    private int _scroll;
+
     private string? _cue;
 
     public TraitCollectionScreen(UiKit ui)
@@ -157,9 +160,10 @@ public sealed class TraitCollectionScreen
     /// <summary>One worn slot's square, counted from the left of the strip.</summary>
     private static Rectangle WornSlot(int i)
     {
+        // LEFT-ALIGNED under the title, not centred in a 1150 px strip: the eye read the title, then
+        // travelled 420 px of black to find its subject (traits-11).
         var strip = WornStrip;
-        var span = WornSide * TraitCatalogue.SlotsPerCharacter + Gap * (TraitCatalogue.SlotsPerCharacter - 1);
-        var x = strip.X + (strip.Width - span) / 2;
+        var x = strip.X + UiMetrics.Space(16);
         return new Rectangle(x + i * (WornSide + Gap), strip.Y, WornSide, WornSide);
     }
 
@@ -202,7 +206,7 @@ public sealed class TraitCollectionScreen
     /// at 100 % pushes the last row through the panel's foot at 150 %. Columns are clamped to a
     /// sensible band so a very wide page does not lay twenty-six sigils out in one thin line.
     /// </remarks>
-    private static (int Cols, int Rows, int CellW, int CellH) Grid(int count)
+    private (int Cols, int Rows, int CellW, int CellH, int Visible) Grid(int count)
     {
         var area = CollectionArea;
         count = Math.Max(1, count);
@@ -228,9 +232,31 @@ public sealed class TraitCollectionScreen
         }
         if (best == 0) best = Math.Min(9, count);
 
-        var chosenRows = Math.Max(1, (count + best - 1) / best);
-        return (best, chosenRows, area.Width / best, area.Height / chosenRows);
+        if (bestSide >= MinTile)
+        {
+            var chosenRows = Math.Max(1, (count + best - 1) / best);
+            return (best, chosenRows, area.Width / best, area.Height / chosenRows, chosenRows);
+        }
+
+        // OVERFLOW. At UI SCALE 150 no column count holds twenty-six sigils with a two-line caption at
+        // a legible size: the best the solver could do was a 72 px tile with UNDISCOVERED running into
+        // its neighbour (release polish 2026-09-05). So the grid keeps a legible tile and a cell wide
+        // enough for its widest caption word, and SCROLLS BY ROWS — the GEAR bag's contract — with a
+        // lane for the bar inside the content edge.
+        var lane = UiMetrics.ScrollbarWidth + UiMetrics.Space(8);
+        var width = Math.Max(1, area.Width - lane);
+        var minCellW = _ui.MeasureBig("UNDISCOVERED", UiTypography.Caption) + UiMetrics.Space(12);
+        var lanes = Math.Clamp(width / Math.Max(1, minCellW), 3, 9);
+        var cellW = width / lanes;
+        var tileSide = Math.Max(1, Math.Min(cellW - Gap, MinTile + UiMetrics.Space(16)));
+        var cellH = tileSide + CaptionBlock;
+        var rowsAll = Math.Max(1, (count + lanes - 1) / lanes);
+        var visible = Math.Clamp(area.Height / cellH, 1, rowsAll);
+        return (lanes, rowsAll, cellW, cellH, visible);
     }
+
+    /// <summary>The smallest sigil tile the grid will draw before it chooses to scroll instead.</summary>
+    private static int MinTile => UiMetrics.Control(64);
 
     /// <summary>
     /// What a cell must keep under its tile: the trait's name, the WORN line, and a breath.
@@ -241,12 +267,12 @@ public sealed class TraitCollectionScreen
     /// </remarks>
     private static int CaptionBlock => UiTypography.Pitch(UiTypography.Caption) * 2 + UiMetrics.Space(6);
 
-    /// <summary>The cell one entry of the collection occupies.</summary>
-    private static Rectangle Cell(int index, int count)
+    /// <summary>The cell one entry of the collection occupies — by its row LESS the scroll, so a row above the first visible one lands above the area.</summary>
+    private Rectangle Cell(int index, int count)
     {
-        var (cols, _, cw, ch) = Grid(count);
+        var (cols, _, cw, ch, _) = Grid(count);
         var area = CollectionArea;
-        return new Rectangle(area.X + index % cols * cw, area.Y + index / cols * ch, cw, ch);
+        return new Rectangle(area.X + index % cols * cw, area.Y + (index / cols - _scroll) * ch, cw, ch);
     }
 
     /// <summary>The square inside a cell the sigil is drawn in — the rest of the cell is its name.</summary>
@@ -281,7 +307,7 @@ public sealed class TraitCollectionScreen
     /// <param name="characterId">Whose three slots these are — the loadout is per champion (§26).</param>
     /// <param name="characterName">What to call them, in the strip's caption.</param>
     public void Draw(SpriteBatch b, TraitLedger ledger, string characterId, string characterName,
-                     Point mouse, bool clicked)
+                     Point mouse, bool clicked, int wheel = 0)
     {
         ArgumentNullException.ThrowIfNull(b);
         ArgumentNullException.ThrowIfNull(ledger);
@@ -295,7 +321,9 @@ public sealed class TraitCollectionScreen
                           UiTypography.ScreenTitle, TextFace.Display);
         // NO TALLY. "17 of 26" is the achievement menu §90 forbids in as many words; what the screen
         // says instead is what traits ARE and how they arrive.
-        const string caption = "CHARACTERISTICS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH";
+        // TRAITS, the rail's own word — CHARACTERISTICS was a synonym the player was never taught
+        // (release polish 2026-09-05, traits-09).
+        const string caption = "TRAITS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH";
         // THE RULE IS AS WIDE AS THE SENTENCE UNDER IT, measured rather than guessed: a literal width
         // is a promise about a font at one UI SCALE, and at 125 and 150 the caption grows past it
         // while the rule does not. Measured, the two agree at every scale.
@@ -312,7 +340,7 @@ public sealed class TraitCollectionScreen
 
         var worn = ledger.LoadoutOf(characterId);
         DrawWorn(b, ledger, characterId, characterName, worn, mouse, clicked);
-        DrawCollection(b, ledger, characterId, worn, mouse, clicked);
+        DrawCollection(b, ledger, characterId, worn, mouse, clicked, wheel);
         DrawInspector(b, ledger, characterId, worn, mouse, clicked);
     }
 
@@ -320,8 +348,10 @@ public sealed class TraitCollectionScreen
                           IReadOnlyList<string> worn, Point mouse, bool clicked)
     {
         var board = Board;
+        // A breath past the corner flourish, which points straight at the title's first letter on the
+        // medium frame (traits-07).
         _ui.TextBig(b, $"{characterName.ToUpperInvariant()} WEARS THREE",
-                    UiKit.ContentLeft(board), UiKit.TitleTop(board), Bone, UiTypography.PanelTitle);
+                    UiKit.ContentLeft(board) + UiMetrics.Space(16), UiKit.TitleTop(board), Bone, UiTypography.PanelTitle);
 
         for (var i = 0; i < TraitCatalogue.SlotsPerCharacter; i++)
         {
@@ -342,7 +372,7 @@ public sealed class TraitCollectionScreen
                 // AN EMPTY SLOT SAYS SO, in a word, rather than being a hole. Never "LOCKED": the
                 // slots are not earned, the traits are.
                 _ui.TextCenterBig(b, "EMPTY", slot.Center.X,
-                                  slot.Center.Y - UiTypography.Caption / 2, Dim, UiTypography.Caption);
+                                  slot.Center.Y - UiTypography.Caption / 2, UiInk.Empty, UiTypography.Caption);
             }
 
             if (hot) _ui.Fill(b, slot, Color.White * 0.05f);
@@ -368,7 +398,7 @@ public sealed class TraitCollectionScreen
     }
 
     private void DrawCollection(SpriteBatch b, TraitLedger ledger, string characterId,
-                               IReadOnlyList<string> worn, Point mouse, bool clicked)
+                               IReadOnlyList<string> worn, Point mouse, bool clicked, int wheel)
     {
         var board = Board;
         _ui.TextBig(b, "WHAT YOU HAVE AWAKENED", UiKit.ContentLeft(board),
@@ -378,8 +408,13 @@ public sealed class TraitCollectionScreen
                                   UiKit.ContentRight(board) - UiKit.ContentLeft(board), 1), Dim);
 
         var all = TraitCatalogue.All;
+        var (cols, rowsAll, _, cellH, visible) = Grid(all.Count);
+        var area = CollectionArea;
+        _scroll = UiKit.Scrolled(_scroll, wheel != 0 && Board.Contains(mouse) ? Math.Sign(wheel) : 0, visible, rowsAll);
         for (var i = 0; i < all.Count; i++)
         {
+            var row = i / cols;
+            if (row < _scroll || row >= _scroll + visible) continue;   // rows beyond the page wait for the wheel
             var def = all[i];
             var known = ledger.Has(def.Id);
             var cell = Cell(i, all.Count);
@@ -388,38 +423,59 @@ public sealed class TraitCollectionScreen
             var isWorn = worn.Contains(def.Id, StringComparer.Ordinal);
             var picked = string.Equals(_selected, known ? def.Id : UnknownKey(i), StringComparison.Ordinal);
 
+            // EVERY TILE IS THE HOUSE PLATE, as the worn strip's slots are — a bare sigil on the scrim with
+            // a hollow outline for its states was one object in two visual languages (traits-06). A worn
+            // tile carries the gold accent the strip gives a worn slot, so WORN needs no third line.
+            _ui.Plate(b, tile, isWorn ? Gold : null);
+            if (hot && !picked) _ui.Fill(b, tile, Color.White * 0.05f);
             if (known)
             {
                 Sigil(b, tile, def.Id, isWorn ? Gold : Bone, lit: true);
-                // The name reads the same worn or not — only its INK changes, and the WORN rung below
-                // says the rest. (It was written as a ternary with both arms identical, which reads as
-                // an unfinished intention rather than a decision.)
-                _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, cell.Width - UiMetrics.Space(6), UiTypography.Caption),
-                                  cell.Center.X, tile.Bottom + UiMetrics.Space(4),
-                                  isWorn ? Gold : Bone, UiTypography.Caption);
-                if (isWorn)
-                    _ui.TextCenterBig(b, "WORN", cell.Center.X,
-                                      tile.Bottom + UiMetrics.Space(4) + UiTypography.Pitch(UiTypography.Caption),
-                                      Slate, UiTypography.Caption);
+                // The name WRAPS to the two Caption lines the cell reserves — at 125/150 half the awakened
+                // names were cut to stubs, and the name is the tile's only identifier (traits-02).
+                var ny = tile.Bottom + UiMetrics.Space(4);
+                foreach (var l in _ui.WrapBig(def.Name, cell.Width - UiMetrics.Space(6), UiTypography.Caption).Take(2))
+                {
+                    _ui.TextCenterBig(b, l, cell.Center.X, ny, isWorn ? Gold : Bone, UiTypography.Caption);
+                    ny += UiTypography.Pitch(UiTypography.Caption);
+                }
             }
             else
             {
-                // AN UNKNOWN TRAIT IS A SHAPE AND A QUESTION, and nothing else — no name, no tag, no
-                // hint, no condition, no bar (§28, §39). The sigil is still the trait's own, so a
-                // player who awakens it recognises the constellation that was there all along.
-                Sigil(b, tile, def.Id, Unknown, lit: false);
-                _ui.TextCenterBig(b, "???", cell.Center.X, tile.Bottom + UiMetrics.Space(4),
-                                  Unknown, UiTypography.Caption);
+                // AN UNDISCOVERED TRAIT IS A SEAL AND A QUESTION — the house's unknown seal, the ???, the
+                // word — the same reading the BUILD library gives an unreached skill (traits-05). Its own
+                // constellation stays behind the seal, faint, so a player who awakens it recognises the
+                // shape that was there all along.
+                Sigil(b, tile, def.Id, Unknown * 0.4f, lit: false);
+                var sealSide = tile.Width * 3 / 4;
+                var seal = new Rectangle(tile.Center.X - sealSide / 2, tile.Center.Y - sealSide / 2, sealSide, sealSide);
+                if (!_ui.Icon(b, "icon_unknown_seal", seal, Color.White * (hot ? 0.9f : 0.75f))) _ui.Diamond(b, seal, Unknown * 0.6f);
+                _ui.TextCenterBig(b, "???", cell.Center.X, tile.Bottom + UiMetrics.Space(4), Unknown, UiTypography.Caption);
+                // The word only where it fits its cell: the seal and the ??? already say it, and a word
+                // that ran into its neighbour's said nothing.
+                if (_ui.MeasureBig("UNDISCOVERED", UiTypography.Caption) <= cell.Width - UiMetrics.Space(4))
+                    _ui.TextCenterBig(b, "UNDISCOVERED", cell.Center.X, tile.Bottom + UiMetrics.Space(4) + UiTypography.Pitch(UiTypography.Caption),
+                                      Unknown * 0.8f, UiTypography.Caption);
             }
 
             if (picked) Outline(b, tile, Gold * 0.9f, 2);
-            else if (hot) Outline(b, tile, Slate * 0.7f, 1);
 
             if (UiKit.ClickedIn(cell, mouse, clicked))
             {
                 _selected = known ? def.Id : UnknownKey(i);
                 _cue = "sfx_click";
             }
+        }
+
+        // THE SCROLLBAR, in its lane inside the content edge — only when a row waits beyond the last
+        // visible one, and then the same words the GEAR bag uses for the same gesture.
+        if (rowsAll > visible)
+        {
+            _ui.ScrollBar(b, new Rectangle(area.Right - UiMetrics.ScrollbarWidth, area.Y, UiMetrics.ScrollbarWidth, visible * cellH),
+                          _scroll, visible, rowsAll);
+            if (_scroll + visible < rowsAll)
+                _ui.TextBig(b, "MORE BELOW — THE MOUSE WHEEL SCROLLS", area.X, area.Y + visible * cellH + UiMetrics.Space(2),
+                            Slate, UiTypography.Caption);
         }
     }
 
@@ -448,10 +504,10 @@ public sealed class TraitCollectionScreen
             }
             y += UiMetrics.Space(10);
             foreach (var line in _ui.WrapBig(
-                         "A CHARACTERISTIC AWAKENS FROM WHAT YOU DO, NOT FROM WHAT YOU BUY. KEEP HUNTING.",
+                         "A TRAIT AWAKENS FROM WHAT YOU DO, NOT FROM WHAT YOU BUY. KEEP HUNTING.",
                          room, UiTypography.Secondary))
             {
-                _ui.TextBig(b, line, left, y, Dim, UiTypography.Secondary);
+                _ui.TextBig(b, line, left, y, Slate, UiTypography.Secondary);
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
             return;
@@ -459,13 +515,13 @@ public sealed class TraitCollectionScreen
 
         if (TraitCatalogue.Find(_selected) is not { } def || !ledger.Has(def.Id))
         {
-            _ui.TextBig(b, "PICK A CHARACTERISTIC", left, y, Slate, UiTypography.PanelTitle);
+            _ui.TextBig(b, "PICK A TRAIT", left, y, Slate, UiTypography.PanelTitle);
             y += UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8);
             foreach (var line in _ui.WrapBig(
                          "CLICK ONE BELOW TO READ IT. YOU MAY WEAR THREE AT A TIME, AND CHANGING THEM COSTS NOTHING.",
                          room, UiTypography.Body))
             {
-                _ui.TextBig(b, line, left, y, Dim, UiTypography.Body);
+                _ui.TextBig(b, line, left, y, Slate, UiTypography.Body);
                 y += UiTypography.Pitch(UiTypography.Body);
             }
             return;
@@ -473,16 +529,32 @@ public sealed class TraitCollectionScreen
 
         var isWorn = worn.Contains(def.Id, StringComparer.Ordinal);
 
-        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.PanelTitle), left, y, Gold,
-                    UiTypography.PanelTitle);
-        y += UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(2);
+        // THE INSPECTOR GRAMMAR (UX guide §6): CATEGORY in Secondary, then the NAME at Headline — gold
+        // only while it is worn (traits-08). The identity line is the trait's own sentence, in the
+        // Primary ink: it was the hairline ink, about 1.5:1, and unreadable at every profile (traits-03).
         _ui.TextBig(b, TraitCatalogue.TagName(def.Tag), left, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), left, y, isWorn ? Gold : Bone,
+                    UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
 
-        foreach (var line in _ui.WrapBig(def.Flavour.ToUpperInvariant(), room, UiTypography.Secondary))
+        // THE HERO SIGIL — the constellation at a size the grid cannot afford, on a plate, so the column
+        // is the trait's identity rather than five lines over half a panel of black (traits-04). Skipped
+        // when the column has no room for it above the button.
+        var heroSide = UiMetrics.Control(120);
+        var textBelow = UiTypography.Pitch(UiTypography.Body) * 6 + UiTypography.Pitch(UiTypography.Secondary) * 4 + UiMetrics.Space(60);
+        if (y + heroSide + textBelow < ActionButton.Y)
         {
-            _ui.TextBig(b, line, left, y, Dim, UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary);
+            var hero = new Rectangle(left, y, heroSide, heroSide);
+            _ui.Plate(b, hero, isWorn ? Gold : null);
+            Sigil(b, hero, def.Id, isWorn ? Gold : Bone, lit: true);
+            y += heroSide + UiMetrics.Space(12);
+        }
+
+        foreach (var line in _ui.WrapBig(def.Flavour.ToUpperInvariant(), room, UiTypography.Body))
+        {
+            _ui.TextBig(b, line, left, y, Bone, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
         }
         y += UiMetrics.Space(12);
 
@@ -495,7 +567,7 @@ public sealed class TraitCollectionScreen
         }
         y += UiMetrics.Space(14);
 
-        _ui.TextBig(b, "RIGHT NOW", left, y, Slate, UiTypography.SectionLabel);
+        _ui.TextBig(b, "CURRENT STATE", left, y, Slate, UiTypography.SectionLabel);   // the grammar's word, as BUILD, MAP and ROSTER say it (traits-08)
         y += UiTypography.Pitch(UiTypography.SectionLabel) + UiMetrics.Space(4);
         _ui.TextBig(b, isWorn ? "YOU ARE WEARING IT" : "AWAKENED, AND NOT WORN", left, y,
                     isWorn ? Gold : Bone, UiTypography.Body);
@@ -511,7 +583,7 @@ public sealed class TraitCollectionScreen
                 : $"FIRST AWAKENED BY {who}";
             foreach (var wrapped in _ui.WrapBig(line, room, UiTypography.Secondary))
             {
-                _ui.TextBig(b, wrapped, left, y, Dim, UiTypography.Secondary);
+                _ui.TextBig(b, wrapped, left, y, Slate, UiTypography.Secondary);   // Secondary ink, not the hairline's (traits-03)
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
         }

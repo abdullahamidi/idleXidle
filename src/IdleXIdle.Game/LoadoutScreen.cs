@@ -637,18 +637,35 @@ public sealed class LoadoutScreen
     private static int RiskPipsWidth(int pip) => pip * 4 + UiMetrics.Space(3) * 3;
 
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
-    internal Rectangle[] Spotlights(TourTarget target) => target switch
+    internal Rectangle[] Spotlights(TourTarget target)
     {
-        TourTarget.SkillSlots => new[] { new Rectangle(LoadoutPanel.X, LoadoutPanel.Y, LoadoutPanel.Width, Math.Max(UiMetrics.Control(200), _rowsEnd - LoadoutPanel.Y)) },
-        TourTarget.SkillPicker => new[] { SkillsPanel },
-        TourTarget.Vows => new[]
+        switch (target)
         {
-            InspectorPanel,
-            new Rectangle(LoadoutPanel.X, _keystoneHead.Y - UiMetrics.Space(10), LoadoutPanel.Width,
-                          (_chips.Count > 0 ? _chips[^1].Rect.Bottom : _keystoneHead.Bottom) + UiMetrics.Space(16) - _keystoneHead.Y + UiMetrics.Space(10)),
-        },
-        _ => Array.Empty<Rectangle>(),
-    };
+            case TourTarget.SkillSlots:
+                return new[] { new Rectangle(LoadoutPanel.X, LoadoutPanel.Y, LoadoutPanel.Width, Math.Max(UiMetrics.Control(200), _rowsEnd - LoadoutPanel.Y)) };
+            case TourTarget.SkillPicker:
+                return new[] { SkillsPanel };
+            case TourTarget.Vows:
+            {
+                // THE KEYSTONES BLOCK, IN VIEW. At 150 % the column scrolls and the block sits under the
+                // fold, so its layout rect was returned off the panel and the tour lit an empty band past
+                // the canvas (chrome-01). The block is cut to the panel it lives in, and when that leaves
+                // nothing worth lighting the column is scrolled to its end — where the block is — so the
+                // next frame lights the real thing.
+                var block = new Rectangle(LoadoutPanel.X, _keystoneHead.Y - UiMetrics.Space(10), LoadoutPanel.Width,
+                                          (_chips.Count > 0 ? _chips[^1].Rect.Bottom : _keystoneHead.Bottom) + UiMetrics.Space(16) - _keystoneHead.Y + UiMetrics.Space(10));
+                var seen = Rectangle.Intersect(block, LoadoutPanel);
+                if (seen.Height < UiMetrics.Control(60))
+                {
+                    if (_loadOverflow > 0) _loadScroll = _loadOverflow;
+                    return new[] { InspectorPanel };
+                }
+                return new[] { InspectorPanel, seen };
+            }
+            default:
+                return Array.Empty<Rectangle>();
+        }
+    }
 
     // ── CLIPPING. A column that scrolls is drawn under a scissor on its region — the house pattern (MASTERY,
     // TRAITS): close the host's batch, reopen it clipped in the SAME transform, and reopen it unclipped after.

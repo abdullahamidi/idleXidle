@@ -83,7 +83,13 @@ Rules:
   brown column reads as two screens.
 - Three PRIMARY surfaces on one screen is zero hierarchy. Count them in the capture.
 - A plate is not a panel: it has no title row and no frame drop. Do not hand-draw plates with `Fill`;
-  call `Plate` so the tier is visible in code.
+  call `Plate` so the tier is visible in code. A plate whose FACE is art (a region banner, a portrait
+  well) draws the art first and then `UiKit.PlateEdge(r, accent)` over it, so the hairline and the
+  accent rule are never painted out by the picture.
+- **Cards are plates with a state (release polish 2026-09-05).** A roster card, a trait tile, a map node:
+  the house `Plate`, then the STATE as a stroke or a wash — gold for active, the class or Source colour
+  at a quarter for available, nothing for locked. Never a stack of hand-filled rectangles with saturated
+  bands: ten of them outrank the art they frame and read as a colour legend.
 - **Frames are sliced at the ornament (release polish 2026-09-05).** Every frame texture — panels,
   buttons, fields, tabs, bars, the currency pill — is drawn through `UiKit.SliceFrame`, which MEASURES
   each texture's corner flourish and centre ornament off its pixels (`UiKit.FrameSpec`, `Measure`) and
@@ -173,7 +179,19 @@ Rules:
   quest count. It has no raster, so it cannot stretch or blur at any UI SCALE. Never hand-draw a bar from
   two `Fill`s, and never draw a bar frame texture whole.
 - Dropdowns are `UiKit.Field` + `DropdownClosed` (value left, chevron right). Sliders are the settings'
-  `SliderRow`. Close icons sit at `UiKit.CloseRect(panel)`; slot/card closes at `HintCloseRect`.
+  `SliderRow` — the slim `Bar` for the track and a `Diamond` for the knob. Close icons sit at
+  `UiKit.CloseRect(panel)`; slot/card closes at `HintCloseRect`.
+- **The lock is one glyph:** `UiKit.LockGlyph(box, ink)` — the padlock cut from the centre of the
+  locked-slot tile, in the caller's ink (Primary as a rule). Never draw the whole `ui_slot_locked` tile
+  into a glyph box: at 18–24 px it is a smudge, and tinted dark on a coloured band it is a black square.
+- **A grid that cannot hold its tiles scrolls by rows** (the GEAR bag, the TRAITS collection at 150 %):
+  the tile keeps a legible size (`Control(64)` and up), the cell keeps the width its widest caption word
+  needs, rows past the page wait for the wheel, a `ScrollBar` takes a lane inside the content edge, and
+  the foot says "MORE BELOW — THE MOUSE WHEEL SCROLLS". A caption word that does not fit its cell is
+  dropped, never overprinted onto the neighbour's.
+- **A modal's actions are pinned, never scrolled.** SETTINGS keeps QUIT, COPY FEEDBACK CODE and the
+  DANGER ZONE in a footer at every profile; only the rows above scroll. A clip line must never cross a
+  plate or a button. A modal is its content, centred — never a design height with a bare fifth of frame.
 - Hover = highlight + one-line tip (`UiKit.HoverTip`, flips inside `UiKit.Page`). Click = select (feeds
   the inspector). Primary button = commit. Nothing is hover-only; nothing commits on hover.
 - A card that IS the commit (the VAULT's chest) carries its action as a labelled `Plate` chip, not a
@@ -227,6 +245,14 @@ Rules:
 - Screens keep y 86–134 free of interactive content on the page (the slot sits there).
 - ONE toast anchor per zone: menu screens under the title (`ToastTop 176`), HUNT under the header stack.
   Toasts queue; they never stack.
+- **Every teaching surface is the same plate** (release polish 2026-09-05): the hint slot, the tour card
+  and the notice toast are `Fill(SlotGround)` + `Plate(r, UiInk.Accent)`, the title in the accent, the
+  body in Primary, the counter and footer in Secondary. A notice is a title and at most two body lines
+  (`NoticeBodyLines`); a keystone reveal posts its first sentence and points at the BUILD screen.
+- Under a tour the screen gets no pointer (`PageCursor` is off-page while `_tourActive`, as the keyboard
+  is muted): nothing hovers, tips or lifts under the scrim. Every lit hole is cut to the canvas; a hole
+  that would light nothing scrolls its subject into view instead. The card keeps off the currency row
+  and, on the HUNT, the skill dock.
 
 ---
 
@@ -335,8 +361,13 @@ screenshot.
 
 Canonical rail order (`Game1.Nav`): HUNT · GEAR · STATS→TRAINING · BUILD · MASTERY · VAULT · FORGE ·
 WARREN · MAP · TRAITS · ROSTER. One shared quiet rail; only the active tile is lit; inactive tiles are
-never framed. Tile labels are `NavigationLabel`. The NEW mark (§7) sits left; the VAULT's chest count
-sits right. Locked tiles say their price in a toast on click, never a blank.
+never framed. Tile labels are `NavigationLabel` in `UiInk.Secondary` (gold on the lit tile); the icon is
+`Control(38)` and gives up its top pad before its floor as the profile grows, so a bigger profile never
+makes the glyphs smaller. The NEW mark (§7) sits left and the VAULT's chest count right, both as the
+house chip — `Plate` with the accent rule, the word in the accent, the count in Primary — never a solid
+red or gold square. The currency capsules (`UiKit.Pill`) and the settings gear are `Control(60)` tall,
+so the chrome grows with the digits inside it. Locked tiles say their price in a toast on click, never a
+blank.
 
 ---
 
