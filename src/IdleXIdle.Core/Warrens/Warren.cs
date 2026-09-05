@@ -24,7 +24,7 @@ public enum FacilityKind
 }
 
 /// <summary>Static, authored metadata for a facility - never changes at runtime.</summary>
-public sealed record FacilityInfo(FacilityKind Kind, string Name, string Description, WarrenResource Produces, float BaseRatePerMin);
+public sealed record FacilityInfo(FacilityKind Kind, string Name, string Description, WarrenResource Produces);
 
 /// <summary>
 /// The authored facility catalog, in UNLOCK ORDER (see <see cref="Warren.UnlockedFacilityCount"/>):
@@ -51,14 +51,14 @@ public static class Facilities
 {
     public static readonly IReadOnlyList<FacilityInfo> All = new List<FacilityInfo>
     {
-        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and raise young. More paws at work, more Gleam.",  WarrenResource.Gleam,   30f),
-        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Search the deep soil for Memory Dust.",                  WarrenResource.Dust,    15f),
-        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady Gleam from the digging.",       WarrenResource.Gleam,   29f),
-        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners out to bring back Scrap.",                  WarrenResource.Scrap,   3f),
-        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the resonance. Slow, deep Essence.",           WarrenResource.Essence, 1.5f),
-        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Patrol the forage trails, shaking loose more Dust.",     WarrenResource.Dust,    6f),
-        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Sort and store the salvage. Steady Scrap.",              WarrenResource.Scrap,   2f),
-        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed resonant stock. Their sheddings carry Essence.",   WarrenResource.Essence, 1f),
+        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and raise young. More paws at work, more Gleam.",  WarrenResource.Gleam),
+        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Search the deep soil for Memory Dust.",                  WarrenResource.Dust),
+        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady Gleam from the digging.",       WarrenResource.Gleam),
+        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners out to bring back Scrap.",                  WarrenResource.Scrap),
+        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the resonance. Slow, deep Essence.",           WarrenResource.Essence),
+        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Patrol the forage trails, shaking loose more Dust.",     WarrenResource.Dust),
+        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Sort and store the salvage. Steady Scrap.",              WarrenResource.Scrap),
+        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed resonant stock. Their sheddings carry Essence.",   WarrenResource.Essence),
     };
 
     public static FacilityInfo Info(FacilityKind kind) => All.First(f => f.Kind == kind);
@@ -74,11 +74,7 @@ public readonly record struct WarrenYield(long Gleam, long Dust, long Scrap, lon
 public sealed record WarrenTuning
 {
     // Global "+% All Production" from Warren level, plus a per-track bonus (the bonuses strip).
-    public float AllProductionPerLevel { get; init; } = 0.03f;
-    public float GleamBonusPerLevel { get; init; } = 0.02f;
-    public float DustBonusPerLevel { get; init; } = 0.009f;
     /// <summary>One track for both material tiers - Scrap and Essence rise together.</summary>
-    public float MaterialBonusPerLevel { get; init; } = 0.013f;
 
     // Facility upgrade cost - geometric in the facility's current level (cost to go level -> level+1).
     // The upgrade price is only meaningful as a multiple of what the building earns; move these and
@@ -92,13 +88,11 @@ public sealed record WarrenTuning
     public int XpPerUpgradeLevel { get; init; } = 100;
 
     /// <summary>Global production bonus granted per conquered region - ties the world map into the idle economy.</summary>
-    public float ConquestBonusPerRegion { get; init; } = 0.10f;
 
     /// <summary>A facility crosses a MILESTONE every this-many levels - a permanent step-up in its output.</summary>
     public int MilestoneEvery { get; init; } = 5;
 
     /// <summary>Output multiplier added per milestone crossed (e.g. +15% at L5, +30% at L10, ...).</summary>
-    public float MilestoneBonusPerTier { get; init; } = 0.15f;
 
     // -- Automation. What a facility does for you as well as what it produces. ---------------------
     //
@@ -146,23 +140,6 @@ public sealed class Facility
     public int NextMilestoneLevel => (MilestoneTier + 1) * _t.MilestoneEvery;
 
     /// <summary>The permanent output multiplier the crossed milestones grant.</summary>
-    public float MilestoneMultiplier => 1f + _t.MilestoneBonusPerTier * MilestoneTier;
-
-    /// <summary>Raw per-minute output at this level (level x milestone step-ups), BEFORE Warren bonuses.</summary>
-    public int BaseOutputPerMin => (int)MathF.Round(Info.BaseRatePerMin * Level * MilestoneMultiplier);
-
-    /// <summary>Raw output after one more upgrade - milestone jumps included, so "NEXT" reads the real step.</summary>
-    public int NextLevelOutput
-    {
-        get
-        {
-            var nl = Level + 1;
-            var mult = 1f + _t.MilestoneBonusPerTier * (nl / _t.MilestoneEvery);
-            return (int)MathF.Round(Info.BaseRatePerMin * nl * mult);
-        }
-    }
-
-    /// <summary>The cost to raise this facility one level (grows with its current level).</summary>
     public WarrenCost UpgradeCost() => new(
         (int)MathF.Round(_t.GleamCostBase * MathF.Pow(_t.GleamCostGrowth, Level)),
         (int)MathF.Round(_t.DustCostBase * MathF.Pow(_t.DustCostGrowth, Level)));
@@ -242,29 +219,29 @@ public sealed class Warren
     }
 
     /// <summary>The global "+% All Production" the Warren's level grants.</summary>
-    public float AllProductionBonus => (Level - 1) * _t.AllProductionPerLevel;
+    /// <summary>Every facility level bought across the Warren — what the budget's share and the camp's hours grow by.</summary>
+    public int FacilityLevelsBought => AllFacilities.Sum(f => Math.Max(0, f.Level - 1));
 
-    /// <summary>A per-track production bonus (the Warren-bonuses strip), on top of All Production.</summary>
-    public float ResourceBonus(WarrenResource r) => r switch
-    {
-        WarrenResource.Gleam => Level * _t.GleamBonusPerLevel,
-        WarrenResource.Dust => Level * _t.DustBonusPerLevel,
-        _ => Level * _t.MaterialBonusPerLevel,
-    };
+    /// <summary>The Warren's share of the hunt's expected pay, for the levels bought so far (see <see cref="WarrenBudget"/>).</summary>
+    public float Share => WarrenBudget.Share(FacilityLevelsBought);
 
-    /// <summary>The global production bonus from conquered regions - every region taken makes the base earn more.</summary>
-    public float ConquestBonus => ConqueredRegions * _t.ConquestBonusPerRegion;
+    /// <summary>What the hunt at this progression is expected to pay an hour — the budget the facilities spend.</summary>
+    public float HuntGleamPerHour => WarrenBudget.HuntGleamPerHour(ConqueredRegions);
 
-    /// <summary>The total production multiplier applied to a resource's raw facility output.</summary>
-    public float Multiplier(WarrenResource r) => 1f + AllProductionBonus + ConquestBonus + ResourceBonus(r);
+    /// <summary>
+    /// What one facility produces a minute, in its own resource; nothing while it is locked. A FRACTION,
+    /// not a whole: Essence is a slow trickle by design and a per-minute integer lost it entirely.
+    /// </summary>
+    public float OutputPerMinute(FacilityKind kind)
+        => IsUnlocked(kind) ? WarrenBudget.PerMinute(kind, ConqueredRegions, FacilityLevelsBought) : 0f;
 
-    /// <summary>Per-minute production for a resource, bonuses applied. Locked facilities pay nothing.</summary>
-    public long ProductionPerMinute(WarrenResource r)
-    {
-        var raw = AllFacilities.Where(f => f.Info.Produces == r && IsUnlocked(f.Kind))
-                               .Sum(f => (long)f.BaseOutputPerMin);
-        return (long)MathF.Round(raw * Multiplier(r));
-    }
+    /// <summary>What the facility would produce a minute after one more level bought anywhere — the next level's promise.</summary>
+    public float NextLevelOutputPerMinute(FacilityKind kind)
+        => WarrenBudget.PerMinute(kind, ConqueredRegions, FacilityLevelsBought + 1);
+
+    /// <summary>A resource's whole production a minute, across every unlocked facility that makes it.</summary>
+    public float ProductionPerMinute(WarrenResource r)
+        => AllFacilities.Where(f => f.Info.Produces == r).Sum(f => OutputPerMinute(f.Kind));
 
     public WarrenCost UpgradeCost(FacilityKind kind) => _facilities[kind].UpgradeCost();
 

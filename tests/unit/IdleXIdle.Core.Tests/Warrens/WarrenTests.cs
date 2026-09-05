@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Warrens;
@@ -18,67 +19,74 @@ public class WarrenTests
         Assert.All(w.AllFacilities, f => Assert.Equal(1, f.Level));
     }
 
+    // ── THE BUDGET (2026-09-06): production is a share of the hunt's expected pay, never a flat rate. ──
+
     [Fact]
-    public void test_facility_output_scales_linearly_within_a_milestone_band()
+    public void test_every_facility_level_bought_anywhere_raises_the_whole_warrens_output()
     {
-        var w = new Warren();
-        var atOne = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;   // L1, milestone tier 0
-
-        w.Restore(level: 1, xp: 0, facilityLevels: new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
-        var atFour = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;   // L4, still tier 0
-
-        Assert.True(atFour > atOne);
-        Assert.Equal(atOne * 4, atFour);   // linear in level below the first milestone
+        var w = new Warren { ConqueredRegions = 2 };
+        var before = w.ProductionPerMinute(WarrenResource.Gleam);
+        var nurseryBefore = w.OutputPerMinute(FacilityKind.Nursery);
+        w.Upgrade(FacilityKind.ForagingPits);   // a DUST facility's level
+        Assert.True(w.ProductionPerMinute(WarrenResource.Gleam) > before, "a level anywhere is a bigger share for every facility");
+        Assert.True(w.OutputPerMinute(FacilityKind.Nursery) > nurseryBefore);
+        Assert.Equal(1, w.FacilityLevelsBought);
     }
 
     [Fact]
-    public void test_facility_crosses_a_milestone_every_five_levels_and_output_jumps()
+    public void test_the_next_level_promise_is_what_one_more_level_pays()
     {
-        var below = new Warren();
-        below.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
-        var at = new Warren();
-        at.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 5 });
-
-        Assert.Equal(0, below.Facility(FacilityKind.Nursery).MilestoneTier);
-        Assert.Equal(1, at.Facility(FacilityKind.Nursery).MilestoneTier);
-        Assert.True(at.Facility(FacilityKind.Nursery).MilestoneMultiplier > 1f);
-
-        // Crossing the milestone is worth MORE than a plain linear level (L5 beats 5/4 of L4).
-        Assert.True(at.Facility(FacilityKind.Nursery).BaseOutputPerMin
-                    > below.Facility(FacilityKind.Nursery).BaseOutputPerMin * 5 / 4);
+        var w = new Warren { ConqueredRegions = 1 };
+        var promised = w.NextLevelOutputPerMinute(FacilityKind.Nursery);
+        w.Upgrade(FacilityKind.Tunnels);
+        Assert.Equal(promised, w.OutputPerMinute(FacilityKind.Nursery));
     }
 
     [Fact]
-    public void test_next_level_output_includes_a_milestone_jump()
+    public void test_conquering_regions_raises_the_baseline_and_so_the_production()
     {
-        var w = new Warren();
-        w.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
-        var f = w.Facility(FacilityKind.Nursery);
-
-        // Upgrading L4 -> L5 crosses a milestone, so NEXT output beats a plain linear step.
-        Assert.True(f.NextLevelOutput > f.BaseOutputPerMin * 5 / 4);
-        Assert.Equal(5, f.NextMilestoneLevel);   // from L4, the next milestone lands at L5
+        var one = new Warren { ConqueredRegions = 1 };
+        var three = new Warren { ConqueredRegions = 3 };
+        Assert.True(three.HuntGleamPerHour > one.HuntGleamPerHour);
+        Assert.True(three.ProductionPerMinute(WarrenResource.Gleam) > one.ProductionPerMinute(WarrenResource.Gleam));
     }
 
     [Fact]
-    public void test_higher_warren_level_multiplies_production()
+    public void test_the_share_starts_at_the_base_and_stops_at_the_ceiling()
     {
-        var low = new Warren();
-        var high = new Warren();
-        high.Restore(level: 20, xp: 0, facilityLevels: null);
-
-        Assert.True(high.Multiplier(WarrenResource.Gleam) > low.Multiplier(WarrenResource.Gleam));
-        Assert.True(high.ProductionPerMinute(WarrenResource.Gleam) > low.ProductionPerMinute(WarrenResource.Gleam));
+        var w = new Warren { ConqueredRegions = 6 };
+        Assert.Equal(WarrenBudget.BaseShare, w.Share, 3);
+        for (var i = 0; i < 200; i++) w.Upgrade(FacilityKind.Nursery);
+        Assert.Equal(WarrenBudget.MaxShare, w.Share, 2);
+        // And every level still climbs: the curve saturates, it never walls.
+        var before = w.Share;
+        w.Upgrade(FacilityKind.Nursery);
+        Assert.True(w.Share > before);
+        Assert.True(WarrenBudget.MaxShare < WarrenBudget.HardCap, "the ceiling must sit under the law's cap");
+        // At the ceiling, Gleam a minute is exactly the ceiling's share of the baseline.
+        var perHour = w.ProductionPerMinute(WarrenResource.Gleam) * 60f;
+        Assert.InRange(perHour / w.HuntGleamPerHour, WarrenBudget.MaxShare - 0.01f, WarrenBudget.MaxShare + 0.01f);
     }
 
     [Fact]
-    public void test_conquering_regions_raises_production()
+    public void test_the_baseline_never_reads_the_build()
     {
-        var none = new Warren();
-        var some = new Warren { ConqueredRegions = 4 };
+        // The budget is a function of the progression band alone: two Warrens at the same conquests
+        // and the same levels produce the same, whatever else differs about the account.
+        var a = new Warren { ConqueredRegions = 2 };
+        var b = new Warren { ConqueredRegions = 2 };
+        a.Restore(level: 30, xp: 500, facilityLevels: null);   // Warren rank is not production any more
+        Assert.Equal(a.ProductionPerMinute(WarrenResource.Gleam), b.ProductionPerMinute(WarrenResource.Gleam));
+    }
 
-        Assert.True(some.ConquestBonus > 0f);
-        Assert.True(some.ProductionPerMinute(WarrenResource.Gleam) > none.ProductionPerMinute(WarrenResource.Gleam));
+    [Fact]
+    public void test_the_two_facilities_of_a_resource_share_its_whole_budget()
+    {
+        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Dust, WarrenResource.Scrap, WarrenResource.Essence })
+        {
+            var portions = Facilities.All.Where(f => f.Produces == r).Sum(f => WarrenBudget.Portion(f.Kind));
+            Assert.Equal(1f, portions, 3);
+        }
     }
 
     [Fact]
@@ -147,7 +155,7 @@ public class WarrenTests
         oneMinute.Restore(level: 10, xp: 0, facilityLevels: null);
         var y = oneMinute.Tick(60f);
 
-        Assert.Equal(perMin, y.Gleam);
+        Assert.Equal((long)MathF.Floor(perMin), y.Gleam);   // whole units paid, the fraction carried
     }
 
     [Fact]
@@ -268,7 +276,7 @@ public class WarrenTests
         });
 
         Assert.True(w.IsUnlocked(FacilityKind.BreedingChamber));
-        Assert.True(w.ProductionPerMinute(WarrenResource.Essence) > 0);
+        Assert.True(w.ProductionPerMinute(WarrenResource.Essence) > 0f);
     }
 
     /// <summary>The host's cap arithmetic lives on the model: one facility level per five proven waves.</summary>

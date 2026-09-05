@@ -53,8 +53,7 @@ public static class OfflineCamp
     public const float EfficiencyPerFacilityLevel = 0.003f;
 
     /// <summary>Facility levels BOUGHT — every facility starts at 1, so the first level is free.</summary>
-    public static int FacilityLevels(Warren? warren)
-        => warren is null ? 0 : warren.AllFacilities.Sum(f => Math.Max(0, f.Level - 1));
+    public static int FacilityLevels(Warren? warren) => warren?.FacilityLevelsBought ?? 0;
 
     public static float HoursFor(Warren? warren)
         => MathF.Min(MaxHours, BaseHours + FacilityLevels(warren) * HoursPerFacilityLevel);

@@ -399,11 +399,35 @@ public sealed class WarrenScreen
     };
 
     private static int CardW => (GridPanel.Width - GridPad * 2 - CardGap * 3) / 4;
-    private static int CardH => (GridPanel.Height - GridPad * 2 - CardGap) / 2;
+    /// <summary>
+    /// A card's height: half the grid, but NEVER under the height its rows need. When the page is too
+    /// short for two whole rows — 150 % with the notice lane open, where the cards collapsed onto
+    /// their own chips — the grid scrolls instead (the mouse wheel over it; a caption says so).
+    /// </summary>
+    private static int CardH => Math.Max(MinCardH, (GridPanel.Height - GridPad * 2 - CardGap) / 2);
 
-    private static Rectangle Card(int i) =>
+    /// <summary>The least a card can be: name, resource row, the figure with its caption, the chip, and their breaths.</summary>
+    private static int MinCardH
+        => UiMetrics.Space(12) + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body)
+           + UiMetrics.Space(9) + UiMetrics.IconSize + UiMetrics.Space(4)
+           + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Secondary)
+           + ChipHeight + UiMetrics.Space(16);
+
+    /// <summary>The caption band at the grid's foot while it scrolls — the cards stop above it.</summary>
+    private static int GridCaptionBand => UiTypography.Secondary + UiMetrics.Space(12);
+
+    /// <summary>How much taller the two rows are than the grid's panel — what the wheel may scroll.</summary>
+    private static int GridOverflow => Math.Max(0, GridPad * 2 + CardH * 2 + CardGap + GridCaptionBand - GridPanel.Height);
+
+    /// <summary>The grid's scroll, in page pixels down from the top row.</summary>
+    private int _gridScroll;
+
+    private RasterizerState? _clip;
+    private RasterizerState Clip => _clip ??= new RasterizerState { ScissorTestEnable = true };
+
+    private Rectangle Card(int i) =>
         new(GridPanel.X + GridPad + i % 4 * (CardW + CardGap),
-            GridPanel.Y + GridPad + i / 4 * (CardH + CardGap), CardW, CardH);
+            GridPanel.Y + GridPad + i / 4 * (CardH + CardGap) - _gridScroll, CardW, CardH);
 
     /// <summary>
     /// WHERE A CARD'S ROWS SIT, from the height it was given. The name, the resource row, the figure and
@@ -474,9 +498,26 @@ public sealed class WarrenScreen
 
     /// <summary>What this facility actually pays per minute — Core's raw output through Core's own
     /// multiplier, which is what makes a card's figure reconcile with the strip's total.</summary>
-    private int Boosted(Facility f) => (int)MathF.Round(f.BaseOutputPerMin * Warren.Multiplier(f.Info.Produces));
+    private int Boosted(Facility f) => (int)MathF.Round(Warren.OutputPerMinute(f.Kind));
 
-    private int BoostedNext(Facility f) => (int)MathF.Round(f.NextLevelOutput * Warren.Multiplier(f.Info.Produces));
+    /// <summary>What the facility pays after one more level, bought anywhere — the budget's share grows with every level (WarrenBudget).</summary>
+    private int BoostedNext(Facility f) => (int)MathF.Round(Warren.NextLevelOutputPerMinute(f.Kind));
+
+    /// <summary>A rate as the card prints it: whole above ten a minute, a tenth below — Essence trickles.</summary>
+    private static string Rate(float perMinute)
+        => perMinute >= 10f ? Ab((long)MathF.Round(perMinute)) : perMinute.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The now → next pair. When both round to the same whole number — a deep Warren's share climbs by
+    /// less each level — the tenths are shown, so "+92 → +92" never claims a level buys nothing.
+    /// </summary>
+    private static (string Now, string Next) RatePair(float now, float next)
+    {
+        if (now >= 10f && MathF.Round(now) == MathF.Round(next))
+            return (now.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                    next.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture));
+        return (Rate(now), Rate(next));
+    }
 
     /// <summary>
     /// The currency's real icon (Gleam coin, Memory Dust, the Forge's material gems), the tinted
@@ -568,10 +609,13 @@ public sealed class WarrenScreen
         // this screen's cards and the kit's own button — would be unphotographable without this.
         if (PosedPress) UiKit.MouseHeld = true;
         // Latched every frame so a notch turned over the grid is not applied later over the inspector.
-        var wheel = WheelNotches();
-        if (!InspectorPanel.Contains(hit)) wheel = 0;
+        var notches = WheelNotches();
+        var wheel = InspectorPanel.Contains(hit) ? notches : 0;
+        if (GridPanel.Contains(hit) && notches != 0)
+            _gridScroll = Math.Clamp(_gridScroll - notches * UiMetrics.Control(48), 0, GridOverflow);
+        _gridScroll = Math.Clamp(_gridScroll, 0, GridOverflow);   // the page may have grown back
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "WARREN", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
         // (The subtitle is gone. What it promised — the place earns while you are away — is now the
@@ -748,7 +792,7 @@ public sealed class WarrenScreen
         }
 
         // CELL C — what it all makes, per minute, with the bonuses already in it.
-        _ui.TextBig(b, "EVERY MINUTE, WITH WARREN BONUSES", cx, strip.Y + StripCaptionY, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "EVERY MINUTE, WHILE THE GAME IS OPEN", cx, strip.Y + StripCaptionY, Slate, UiTypography.Secondary);
         var chw = cw / 4;
         var glyph = UiMetrics.Control(28);
         var k = 0;
@@ -758,20 +802,20 @@ public sealed class WarrenScreen
             ResGlyph(b, new Rectangle(cx + k * chw, strip.Y + StripGlyphRowY, glyph, glyph), r);
             // A zero rate is drawn in the placeholder ink — the honest fresh-Warren state, where both
             // material facilities are still locked.
-            _ui.TextBig(b, $"+{Ab(v)}", cx + k * chw + glyph + UiMetrics.Space(6), strip.Y + StripGlyphRowY - UiMetrics.Space(4),
-                        v > 0 ? Bone : UiInk.Empty, UiTypography.Headline);
-            _ui.TextBig(b, ResName(r), cx + k * chw, strip.Y + StripNamesY, v > 0 ? ResColor(r) : Slate, UiTypography.Secondary);
+            _ui.TextBig(b, $"+{Rate(v)}", cx + k * chw + glyph + UiMetrics.Space(6), strip.Y + StripGlyphRowY - UiMetrics.Space(4),
+                        v > 0f ? Bone : UiInk.Empty, UiTypography.Headline);
+            _ui.TextBig(b, ResName(r), cx + k * chw, strip.Y + StripNamesY, v > 0f ? ResColor(r) : Slate, UiTypography.Secondary);
             k++;
         }
-        // All that survives of WARREN BONUSES: the three multipliers themselves, and where they came from.
+        // THE CAMP, in two lines (the rate model, 2026-09-06): what an absence holds and at what share
+        // of live pay, then what every level buys — the three things a level moves, in player words.
+        // The figures are Core's (OfflineCamp, WarrenBudget); nothing here owns a number.
         _ui.TextBig(b, _ui.ShortenBig(
-                        $"GLEAM ×{Warren.Multiplier(WarrenResource.Gleam):0.00}   ·   DUST ×{Warren.Multiplier(WarrenResource.Dust):0.00}   ·   SCRAP AND ESSENCE ×{Warren.Multiplier(WarrenResource.Scrap):0.00}",
+                        $"WHILE THE GAME IS CLOSED IT PAYS {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY  (+{OfflineCamp.EfficiencyPerFacilityLevel:P1} A LEVEL)",
                         cw, UiTypography.Secondary),
-                    cx, strip.Y + StripMultiplierY, Slate, UiTypography.Secondary);
+                    cx, strip.Y + StripMultiplierY, Bone, UiTypography.Secondary);
         _ui.TextBig(b, _ui.ShortenBig(
-                        Warren.ConqueredRegions == 1
-                            ? $"1 REGION TAKEN ADDS +{Warren.ConquestBonus * 100f:0}% TO ALL OF IT"
-                            : $"{Warren.ConqueredRegions} REGIONS TAKEN ADD +{Warren.ConquestBonus * 100f:0}% TO ALL OF IT",
+                        $"EACH LEVEL: A LARGER SHARE OF THE HUNT'S PAY  ({Warren.Share:P0} NOW)",
                         cw, UiTypography.Secondary),
                     cx, strip.Y + StripRegionsY, Slate, UiTypography.Secondary);
 
@@ -795,6 +839,18 @@ public sealed class WarrenScreen
         // QUIET, not ornate: this is a grid of things to pick between, and it wore the gold frame
         // while the column that explains them wore the brown.
         _ui.Plate(b, GridPanel);
+        var scrolls = GridOverflow > 0;
+        if (scrolls)
+        {
+            // The cards are clipped ABOVE the caption band at the panel's foot, so the caption never
+            // prints through a card's own rows.
+            var clipTo = new Rectangle(GridPanel.X, GridPanel.Y, GridPanel.Width, GridPanel.Height - GridCaptionBand);
+            b.End();
+            _ui.Device.ScissorRectangle = Rectangle.Intersect(Game1.OverlayToCanvas(clipTo, Vector2.Zero), _ui.Device.Viewport.Bounds);
+            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                    DepthStencilState.None, Clip, null, Game1.OverlayTransform(Vector2.Zero));
+            if (!GridPanel.Contains(hit)) hit = new Point(-1, -1);   // a card scrolled under the strip takes nothing
+        }
         var lockGlyph = UiMetrics.Control(20);
         // WHERE A LOCKED CARD WEARS ITS BADGE is decided once for the grid, not once per card: at 125 %
         // RITUAL NEST kept LOCKED beside its name while its three neighbours, whose names are longer,
@@ -953,12 +1009,12 @@ public sealed class WarrenScreen
             var outLit = Lit(f.Kind, Feed.Output);
             var pay = _landed is { } paid && paid.Kind == f.Kind
                 ? Ticked(paid.FromOutput, Boosted(f), outLit) : Boosted(f);
-            _ui.TextBig(b, $"+{Ab(pay)} /min", drawn.X + CardPadX, rows.FigureY,
+            var rateNow = Warren.OutputPerMinute(f.Kind);
+            _ui.TextBig(b, rateNow < 10f ? $"+{Rate(rateNow)} /min" : $"+{Ab(pay)} /min", drawn.X + CardPadX, rows.FigureY,
                         Color.Lerp(Bone, Flare, outLit), UiTypography.Headline);
-            if (f.MilestoneTier > 0)
-                _ui.TextRightBig(b, $"×{f.MilestoneMultiplier:0.00}", drawn.Right - CardPadX, rows.FigureY + UiMetrics.Space(4), Gold, UiTypography.Secondary);
+            // THE NEXT LEVEL'S PROMISE, under the figure — what the upgrade changes, answered on the card.
             if (rows.HasMilestone)
-                _ui.TextBig(b, _ui.ShortenBig($"MILESTONE AT LEVEL {f.NextMilestoneLevel}", drawn.Width - CardPadX * 2, UiTypography.Secondary),
+                _ui.TextBig(b, _ui.ShortenBig($"NEXT LEVEL  +{RatePair(Warren.OutputPerMinute(f.Kind), Warren.NextLevelOutputPerMinute(f.Kind)).Next} /min", drawn.Width - CardPadX * 2, UiTypography.Secondary),
                             drawn.X + CardPadX, rows.MilestoneY, Slate, UiTypography.Secondary);
 
             // ── THE CHIP: the answer the player had to click eight cards to find. ──
@@ -1010,6 +1066,19 @@ public sealed class WarrenScreen
             if (frameLit > 0f)
                 Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
             Tip(card, hit, $"{f.Info.Name} — {f.Info.Description}");
+        }
+
+        if (scrolls)
+        {
+            b.End();
+            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                    null, null, null, Game1.OverlayTransform(Vector2.Zero));
+            // The caption every scrolling grid wears (TRAITS, the VAULT), at the panel's foot, only
+            // while there is more below.
+            _ui.TextBig(b, _gridScroll < GridOverflow ? "MORE BELOW — THE MOUSE WHEEL SCROLLS" : "THE MOUSE WHEEL SCROLLS BACK UP", GridPanel.X + GridPad,
+                        GridPanel.Bottom - GridCaptionBand + UiMetrics.Space(4), Slate, UiTypography.Secondary);
+            _ui.ScrollBar(b, new Rectangle(GridPanel.Right - UiMetrics.ScrollbarWidth - 2, GridPanel.Y + GridPad, UiMetrics.ScrollbarWidth, GridPanel.Height - GridCaptionBand - GridPad),
+                          _gridScroll, GridPanel.Height - GridCaptionBand, GridPanel.Height - GridCaptionBand + GridOverflow);
         }
     }
 
@@ -1070,13 +1139,12 @@ public sealed class WarrenScreen
 
         Head("WHAT IT DOES");
         _rows.Add(new Row(RowKind.Pair, UiTypography.Pitch(UiTypography.Headline),
-                          $"+{Ab(landed is { } p ? Ticked(p.FromOutput, Boosted(f), outLit) : Boosted(f))} /min",
-                          $"+{Ab(BoostedNext(f))} /min", Lit: outLit));
-        // The ONLY place the raw figure appears — and it is labelled, so the two can never be mistaken
-        // for a disagreement.
-        Line($"BEFORE WARREN BONUSES: +{Ab(f.BaseOutputPerMin)} → +{Ab(f.NextLevelOutput)}", Slate, UiTypography.Secondary, 2);
+                          $"+{RatePair(Warren.OutputPerMinute(f.Kind), Warren.NextLevelOutputPerMinute(f.Kind)).Now} /min",
+                          $"+{RatePair(Warren.OutputPerMinute(f.Kind), Warren.NextLevelOutputPerMinute(f.Kind)).Next} /min", Lit: outLit));
         Line(SinkLine(f.Info.Produces), Bone, UiTypography.Body, 2);
-        Line($"MILESTONE AT LEVEL {f.NextMilestoneLevel} — A PERMANENT STEP UP IN OUTPUT", Bone, UiTypography.Body, 2);
+        // THE MODEL, in one player sentence: a level bought ANYWHERE raises every facility, because
+        // the whole Warren draws one share of what a hunt at this progression pays (WarrenBudget).
+        Line($"A LEVEL BOUGHT ANYWHERE RAISES EVERY FACILITY — THE WARREN EARNS {Warren.Share:P0} OF WHAT A HUNT AT YOUR PROGRESS PAYS", Slate, UiTypography.Secondary, 3);
         // AUTOMATION, WHICH IS THE OTHER THING A LEVEL BUYS. Auto-sell and auto-merge used to be trait
         // purchases; they belong to the Warren, which already owns the account's idle layer. The card
         // states what this facility already does for you, and what its next automation level will do.
@@ -1107,10 +1175,8 @@ public sealed class WarrenScreen
         Head("CURRENT STATE");
         _rows.Add(new Row(RowKind.Line, UiTypography.Pitch(UiTypography.Body), $"LEVEL {f.Level}",
                           Ink: Bone, Px: UiTypography.Body, Lit: levelLit));
-        Line(f.MilestoneTier == 0 ? "NO MILESTONE CROSSED YET"
-             : f.MilestoneTier == 1 ? $"1 MILESTONE CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT"
-             : $"{f.MilestoneTier} MILESTONES CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT",
-             Slate, UiTypography.Secondary, 2);
+        Line($"THE CAMP HOLDS {OfflineCamp.HoursText(OfflineCamp.HoursFor(Warren))} AT {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY WHILE THE GAME IS CLOSED — THIS LEVEL HOLDS {OfflineCamp.HoursPerFacilityLevel * 60f:0} MINUTES MORE",
+             Slate, UiTypography.Secondary, 3);
         Gap();
         Rule();
 

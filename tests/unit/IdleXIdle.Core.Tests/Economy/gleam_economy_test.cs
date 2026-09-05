@@ -76,7 +76,7 @@ public class GleamEconomyTest
     private static long WarrenGleamPerMinute(int conquered = 1)
     {
         var w = new Warren { ConqueredRegions = conquered };
-        return w.ProductionPerMinute(WarrenResource.Gleam);
+        return (long)MathF.Round(w.ProductionPerMinute(WarrenResource.Gleam));
     }
 
     private static Build StarterBuild()
