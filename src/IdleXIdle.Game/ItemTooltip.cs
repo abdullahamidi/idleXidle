@@ -46,12 +46,15 @@ public static class ItemTooltip
     /// <summary>The card's width. It follows the profile with the text it holds, so a line that fits at 100 % fits at 150 %.</summary>
     public static int Width => UiMetrics.Control(460);
 
-    private static readonly Color Ink = new(0xE8, 0xE2, 0xD4);
-    private static readonly Color Dim = new(0x8A, 0x82, 0x74);
-    private static readonly Color Gold = new(0xE8, 0xC8, 0x7A);
-    private static readonly Color Good = new(0x6E, 0xC8, 0x7A);
-    private static readonly Color Bad = new(0xC8, 0x5A, 0x5A);
-    private static readonly Color Violet = new(0xB0, 0x8A, 0xE0);
+    // THE HOUSE INKS (UiInk), under the old local names. The card spoke its own warm palette beside an
+    // inspector in the blue-grey Secondary, so the same word read in two colours 300 px apart
+    // (release polish 2026-09-05, gear-03). An enchant's name is a name, not a state: Primary.
+    private static readonly Color Ink = UiInk.Primary;
+    private static readonly Color Dim = UiInk.Secondary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Good = UiInk.Good;
+    private static readonly Color Bad = UiInk.Danger;
+    private static readonly Color Violet = UiInk.Primary;
 
     private static readonly Color[] RarityInk =
         [new(0xC8, 0xC2, 0xB4), new(0x6E, 0xC8, 0x7A), new(0x4A, 0x90, 0xD9), new(0xB0, 0x6A, 0xC8), new(0xE8, 0xC8, 0x7A)];
@@ -60,7 +63,7 @@ public static class ItemTooltip
     // <c>ui.Text</c> draws at the Label rung, which is Body, so a plain line advances by Body's pitch.
     private static int PadX => UiMetrics.Space(20);
     private static int PadTop => UiMetrics.Space(18);
-    private static int PadBottom => UiMetrics.Space(28);
+    private static int PadBottom => PadTop;   // symmetric, now that the card is a plate with no bottom rule (gear-03)
     private static int LineH => UiTypography.Pitch(UiTypography.Label);
 
     /// <summary>How tall the card will be for this item — so a caller can place it before drawing.</summary>
@@ -95,13 +98,10 @@ public static class ItemTooltip
 
         // Its own dark ground rather than UiKit.Panel: the panel art's 40px inset would eat a third of a
         // card this size, and a tooltip wants to read as a floating label, not as another window.
+        // The house QUIET plate with the rarity as its accent, over a soft shadow — not four hand-drawn
+        // edges in the rarity colour (gear-03). It still reads as a floating label, on a house surface.
         ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
-        ui.Fill(b, card, new Color(0x0E, 0x0C, 0x14, 0xF2));
-        var edge = RarityInk[(int)item.Rarity];
-        ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 3), edge);
-        ui.Fill(b, new Rectangle(card.X, card.Bottom - 3, card.Width, 3), edge * 0.5f);
-        ui.Fill(b, new Rectangle(card.X, card.Y, 3, card.Height), edge * 0.5f);
-        ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), edge * 0.5f);
+        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
 
         Walk(ui, b, item, hunter, wearer, card);
     }
@@ -258,7 +258,7 @@ public static class ItemTooltip
             L(ench.Name, Violet);
             R("ENCHANT", Dim);
             cy += LineH;
-            L(ench.Blurb.ToUpperInvariant(), Ink);
+            L(ench.LongBlurb.ToUpperInvariant(), Ink);
             cy += LineH + UiMetrics.Space(8);
         }
 

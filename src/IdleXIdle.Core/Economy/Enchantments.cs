@@ -156,10 +156,20 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     /// edge, and that is what fits. The first draft ("ON A KILL: 38% CHANCE OF A SPARE CORE.") ran
     /// clean off the panel and lost the half of the sentence that carried the meaning.
     /// </remarks>
+    /// <summary>
+    /// The blurb with room to say it: the GEAR inspector and the hover card have a full column, and there
+    /// "38% CORE PER KILL" can be the sentence it stands for. Everything else is <see cref="Blurb"/> as is.
+    /// </summary>
+    public string LongBlurb => Kind switch
+    {
+        EnchantKind.Harvest => $"ON KILL: {Magnitude * 100f:0}% CHANCE OF A SPARE CORE",
+        _ => Blurb,
+    };
+
     public string Blurb => Kind switch
     {
         EnchantKind.Splinter => "ON KILL: RICHER LOOT",
-        EnchantKind.Harvest => $"ON KILL: {Magnitude * 100f:0}% CORE",
+        EnchantKind.Harvest => $"{Magnitude * 100f:0}% CORE PER KILL",
         EnchantKind.Venom => $"SKILLS POISON +{Magnitude * 100f:0}%",
         EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
         EnchantKind.Overdraw => "VOLLEY FIRES +1",

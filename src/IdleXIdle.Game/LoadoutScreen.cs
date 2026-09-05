@@ -192,7 +192,11 @@ public sealed class LoadoutScreen
     /// </summary>
     private void Cell(SpriteBatch b, Rectangle r, Color surface, bool selected, bool over)
     {
-        _ui.Fill(b, r, selected ? Selected : surface);
+        // THE HOUSE PLATE under every cell (release polish 2026-09-05, build-06): rows, tiles, cards and
+        // chips were four hand-mixed fills, some hair-lined and some not — one tier, four looks. The
+        // tint argument is history; the Selected wash, the hover lift and the press lip go on top.
+        _ui.Plate(b, r);
+        if (selected) _ui.Fill(b, r, Selected);
         var down = Down(over);
         // §27: PRESSED is a depression with REDUCED glow — so the hover's lift comes OFF while the mouse is
         // down and the cell darkens under a lip at its top edge. Without dropping the lift, pressed was a
@@ -358,8 +362,10 @@ public sealed class LoadoutScreen
     private int KeystoneRows => Loadout.SkillCapacity >= 5 ? 2 : 3;
 
     /// <summary>The bench's block: a caption line, the headline figure, and its air.</summary>
-    private static int BenchH => UiTypography.Pitch(UiTypography.Secondary) + UiTypography.PrimaryValue + UiMetrics.Space(30);
-    private static Rectangle BenchBlock => new(LoadX, LoadoutPanel.Bottom - UiKit.PanelCorner - UiMetrics.Space(10) - BenchH, LoadW, BenchH);
+    // Tight to the frame's bottom rail: the bench used to keep 40 px of air under its figure while the
+    // list above it had to scroll and clip a row at 125/150 % (release polish 2026-09-05, build-08).
+    private static int BenchH => UiTypography.Pitch(UiTypography.Secondary) + UiTypography.PrimaryValue + UiMetrics.Space(8);
+    private static Rectangle BenchBlock => new(LoadX, LoadoutPanel.Bottom - UiKit.PanelCorner - BenchH, LoadW, BenchH);
     /// <summary>Where the list lives: from the panel's first body row down to the bench. Rows are clipped to it when it scrolls.</summary>
     private static Rectangle ListRegion
     {
@@ -450,24 +456,29 @@ public sealed class LoadoutScreen
 
     // ── SKILLS: the library and the selected skill's tree, one scrolling column under the SKILLS head. ──
     private const int StyleCount = 6;
-    private static int SkillsX => SkillsPanel.X + UiMetrics.PanelPadding;
-    private static int SkillsW => SkillsPanel.Width - UiMetrics.PanelPadding * 2;
-    private static int SkillsHeadY => SkillsPanel.Y + UiMetrics.Space(16);
-    /// <summary>Everything under the SKILLS head, down to the plate's bottom padding. Clipped to when it scrolls.</summary>
+    // The column wears the quiet FRAME now (build-07), so its content grid is the frame's: the head at the
+    // panel's title row, the library and tree inside the corner scrollwork.
+    private static int SkillsX => UiKit.ContentLeft(SkillsPanel);
+    private static int SkillsW => UiKit.ContentRight(SkillsPanel) - SkillsX;
+    private static int SkillsHeadY => UiKit.TitleTop(SkillsPanel);
+    /// <summary>Everything under the SKILLS head, down to the frame's bottom rail. Clipped to when it scrolls.</summary>
     private static Rectangle SkillsRegion
     {
         get
         {
             var top = SkillsHeadY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
-            return new(SkillsPanel.X + 2, top, SkillsPanel.Width - 4, SkillsPanel.Bottom - UiMetrics.PanelPadding - top);
+            return new(SkillsPanel.X + UiKit.PanelCorner / 2, top, SkillsPanel.Width - UiKit.PanelCorner, SkillsPanel.Bottom - UiMetrics.Space(24) - top);
         }
     }
     private int _skillsScroll;
     private int _skillsOverflow;
     private int LibW => SkillsW - (_skillsOverflow > 0 ? ScrollLane : 0);
     private int LibTop => SkillsRegion.Y + UiMetrics.Space(6) - _skillsScroll;
+    // A Body name over a Secondary state line with their pads fits 52 (6 + 28 + 19 = 53 with the
+    // descender room the pitch already holds) — and the tree's reinforcement chips must stay reachable
+    // without a scroll at 100 % (build-04; loadout_feedback_test pins it).
     private static int LibTileH => UiMetrics.Control(52);
-    private static int LibRowPitch => LibTileH + UiMetrics.Space(10);
+    private static int LibRowPitch => LibTileH + UiMetrics.Space(8);
     /// <summary>The style label's column: ~80 px of ink at 100 % and the rest is the gap to the tiles, so it grows at the spacing rate and the tiles keep their width.</summary>
     private static int LibStyleW => UiMetrics.Space(118);
     private static int LibTileGap => UiMetrics.Space(12);
@@ -504,10 +515,10 @@ public sealed class LoadoutScreen
         var w = (LibW - LibStyleW - LibTileGap) / 2;
         return new(SkillsX + LibStyleW + which * (w + LibTileGap), LibTop + SigBlockH + style * LibRowPitch, w, LibTileH);
     }
-    private int TreeTop => LibTop + SigBlockH + StyleCount * LibRowPitch + UiMetrics.Space(22);
+    private int TreeTop => LibTop + SigBlockH + StyleCount * LibRowPitch + UiMetrics.Space(14);
     private static int TreeIcon => UiMetrics.Control(48);
     private int RailY => TreeTop + TreeIcon + UiMetrics.Space(10);
-    private static int VarCardH => UiMetrics.Control(96);
+    private static int VarCardH => UiMetrics.Control(112);   // room for the variation's sentence on two Secondary lines (build-03)
     private static int VarCardGap => UiMetrics.Space(16);
     private Rectangle VarCard(int which)
     {
@@ -550,7 +561,10 @@ public sealed class LoadoutScreen
     private static Rectangle RespecText => new(InsX, PrimaryBtn.Y - UiMetrics.Space(8) - ActionRowH, InsW / 2 - UiMetrics.Space(8), ActionRowH);
     private static Rectangle CopyText => new(InsX + InsW / 2 + UiMetrics.Space(8), RespecText.Y, InsW / 2 - UiMetrics.Space(8), ActionRowH);
     private static int RefusalY => RespecText.Y - UiMetrics.Space(4) - UiTypography.Pitch(UiTypography.Secondary);
-    private static int InsBodyTop => InspectorPanel.Y + UiTypography.PanelTitleTop;
+    // Under the frame's corner scrollwork, not in it: at PanelTitleTop the CATEGORY line's first letters
+    // sat on the top-left curl and the scroll track ran over the top rail (release polish 2026-09-05,
+    // build-01). The body scrolls, so the rows are not lost.
+    private static int InsBodyTop => UiKit.PanelInner(InspectorPanel).Y + UiMetrics.Space(6);
     /// <summary>
     /// The second line the refusal needs, when one line of this column cannot hold it. A DISABLED CONTROL
     /// SAYS WHY (§29) — and a reason that ends "… PICK THAT SLOT TO CH…" has not said it. The refusal wraps
@@ -560,7 +574,13 @@ public sealed class LoadoutScreen
     /// </summary>
     private int _refusalRise;
     /// <summary>The body's room: from the title row down to the refusal. The body is clipped to it when it scrolls.</summary>
-    private Rectangle InsRegion => new(InspectorPanel.X + UiKit.PanelCorner / 2, InsBodyTop, InspectorPanel.Width - UiKit.PanelCorner, RefusalY - _refusalRise - UiMetrics.Space(4) - InsBodyTop);
+    /// <summary>Whether the selection has a refusal to show — only then is the refusal's line reserved (build-09).</summary>
+    private bool _refusalShown;
+    // The refusal's room is reserved only when there IS a refusal: an always-reserved line was an 88 px
+    // dead band above RESPEC / COPY at 150 % while the vow card sat out of view (release polish
+    // 2026-09-05, build-09). The refusal depends only on the selection, so this cannot oscillate.
+    private Rectangle InsRegion => new(InspectorPanel.X + UiKit.PanelCorner / 2, InsBodyTop, InspectorPanel.Width - UiKit.PanelCorner,
+                                       (_refusalShown ? RefusalY - _refusalRise - UiMetrics.Space(4) : RespecText.Y - UiMetrics.Space(8)) - InsBodyTop);
     private int _insScroll;
     private int _insOverflow;
     /// <summary>The body's width — the content column less the scrollbar's lane while it scrolls. Wrapping follows, and the two states cannot flip-flop: text in the narrower column is never shorter.</summary>
@@ -1173,7 +1193,7 @@ public sealed class LoadoutScreen
             _ui.TextCenterBig(b, $"{slot + 1}", spine.Center.X, row.Y + (row.Height - UiTypography.Body) / 2, on ? Bone : Bone * 0.75f, UiTypography.Body);
 
             var gbox = GlyphRect(row);
-            _ui.Fill(b, gbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
+            // (No darker well behind the glyph: it read as an empty image frame the icon was pasted into — build-19.)
             // The row's three lines: the name, the style line one headline pitch under it, and the variation line
             // sitting on the row's bottom pad — so a taller row (a bigger profile) opens air between them rather
             // than printing line 2 over line 3.
@@ -1226,7 +1246,7 @@ public sealed class LoadoutScreen
             _ui.TextBig(b, _ui.ShortenBig(def.Name, right - pillW - pad - tx, UiTypography.Headline), tx, line1, on ? Gold : Bone, UiTypography.Headline);
             // Line 2: STYLE · LEVEL · the style factor.
             var level = SkillLevels.LevelOf(def.Id);
-            var line2Text = $"{StyleName(def.Style)} · LV {level}";
+            var line2Text = $"{StyleName(def.Style)} · LEVEL {level}";   // the word, as the inspector and the tree say it (build-11)
             if (ChosenStyle is { } dd)
             {
                 var f = StyleAffinity.Factor(dd, def.Style, vowKept);
@@ -1257,13 +1277,18 @@ public sealed class LoadoutScreen
                 var vname = chosen.Name.ToUpperInvariant();
                 const string dot = " · ";
                 var source = SourceName(chosen.Source);
-                var spare = free > 0 ? $"  +{free}" : "";
+                // "+1 TO SPEND" says what the number is; a bare "+1" after "0/3" was two numbers with no noun
+                // (build-11). The short form is the last rung of the fit ladder below.
+                var spare = free > 0 ? $"  +{free} TO SPEND" : "";
+                var spareShort = free > 0 ? $"  +{free}" : "";
                 var tail = $"{dot}{bought}/{chosen.Reinforcements.Count}{spare}";
                 var fixedW = _ui.MeasureBig(dot, UiTypography.Body) + _ui.MeasureBig(source, UiTypography.Body);
                 // Fit, in order: the whole line; else without the bought count (the tree's chips carry it) but
-                // never without a level to spend; else the name gives way. The Source word always stays — it is
-                // the skill's identity, and a colour alone must never carry it.
-                if (_ui.MeasureBig(vname, UiTypography.Body) + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spare;
+                // never without a level to spend; then the short spend; else the name gives way. The Source word
+                // always stays — it is the skill's identity, and a colour alone must never carry it.
+                var nameW = _ui.MeasureBig(vname, UiTypography.Body);
+                if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spare;
+                if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spareShort;
                 vname = _ui.ShortenBig(vname, room - fixedW - _ui.MeasureBig(tail, UiTypography.Body), UiTypography.Body);
                 _ui.TextBig(b, vname, x3, y3, Bone, UiTypography.Body); x3 += _ui.MeasureBig(vname, UiTypography.Body);
                 _ui.TextBig(b, dot, x3, y3, Slate, UiTypography.Body); x3 += _ui.MeasureBig(dot, UiTypography.Body);
@@ -1326,7 +1351,8 @@ public sealed class LoadoutScreen
         {
             var bench = BenchBlock;
             _ui.Fill(b, new Rectangle(bench.X, bench.Y - UiMetrics.Space(10), bench.Width, 1), Dim);
-            _ui.TextBig(b, "BUILD DAMAGE (BENCH)", bench.X, bench.Y, Slate, UiTypography.Secondary);
+            // "BENCH" was the developer's word for the test bench the figure is measured on (build-18).
+            _ui.TextBig(b, _ui.ShortenBig("DAMAGE PER SECOND · PRACTICE DUMMY", bench.Width, UiTypography.Secondary), bench.X, bench.Y, Slate, UiTypography.Secondary);
             if (_currentRev != _buildRev) { _currentDps = Dps(Loadout, hunter); _currentRev = _buildRev; }
             var vy = bench.Y + UiTypography.Pitch(UiTypography.Secondary);
             _ui.TextBig(b, $"{_currentDps:N0} / s", bench.X, vy, Bone, UiTypography.PrimaryValue);
@@ -1374,7 +1400,10 @@ public sealed class LoadoutScreen
     private void DrawSkills(SpriteBatch b, Point hit)
     {
         var panel = SkillsPanel;
-        _ui.Plate(b, panel);
+        // The quiet FRAME, like its two neighbours: the largest surface on the screen was a flat plate
+        // between the gold loadout frame and the bronze inspector, and read as the least finished thing
+        // on it (release polish 2026-09-05, build-07).
+        _ui.PanelQuiet(b, panel);
         var known = KnownSkills();
         var skills = Loadout.Skills;
         _ui.TextBig(b, "SKILLS", SkillsX, SkillsHeadY, Slate, UiTypography.Secondary);
@@ -1405,9 +1434,10 @@ public sealed class LoadoutScreen
     private void DrawLibrary(SpriteBatch b, Point hit, Rectangle region, IReadOnlySet<string> known, IReadOnlySet<string> equipped)
     {
         var icoEdge = UiMetrics.Control(36);
-        var lockEdge = UiMetrics.Control(20);
+        var lockEdge = UiMetrics.Control(24);   // the lock badge on a locked tile's icon (build-05)
         var nameLeft = UiMetrics.Control(52);
         var edgePad = UiMetrics.Space(8);
+        static int nameY0(Rectangle tile) => tile.Y + UiMetrics.Space(6);
         // The EQUIPPED · SLOT N badge shares the name's line. Where a tile at this profile cannot hold the
         // widest badge AND the library's widest name beside it, the badge says only SLOT N — the gold outline
         // already says equipped (brief §9: 150 % may carry less secondary text; never a smaller font). Decided
@@ -1421,11 +1451,11 @@ public sealed class LoadoutScreen
         // hunter cannot weave right now says LOCKED and — where waves have been spent on it — the LEVEL it
         // keeps, which is the whole of BRIEF sec.20. Where the narrow tile cannot hold ACTIVE and both, the
         // kind is what goes: the inspector still says it, and no word may imply the levels are gone (LAW 4).
-        var subRoom = LibTile(0, 0).Width - nameLeft - lockEdge - edgePad * 2;
+        var subRoom = LibTile(0, 0).Width - nameLeft - edgePad * 2;
         var widestLock = 0;
         for (var st = 0; st < StyleCount; st++)
             foreach (var d in new[] { SkillCatalogue.ActiveOf((Style)st), SkillCatalogue.PassiveOf((Style)st) })
-                if (!known.Contains(d.Id)) widestLock = Math.Max(widestLock, _ui.MeasureBig(LockLine(d, full: true), UiTypography.Caption));
+                if (!known.Contains(d.Id)) widestLock = Math.Max(widestLock, _ui.MeasureBig(LockLine(d, full: true), UiTypography.Secondary));
         var longLock = widestLock <= subRoom;
 
         // One tile, wherever it sits: the signature's own row and the twelve are the same object drawn twice,
@@ -1438,8 +1468,10 @@ public sealed class LoadoutScreen
             var on = _pick == Pick.Library && _pickSkillId == def.Id;
             var over = shown.Contains(hit);
             Cell(b, tile, TileBg, on, over);
-            Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
+            // Only a STATE draws an outline over the plate's own rule (build-06).
+            if (on || isEquipped || over) Outline(b, tile, on ? Bone : isEquipped ? Gold : Slate, on || isEquipped ? 2 : 1);
             var ico = new Rectangle(tile.X + edgePad, tile.Y + edgePad, icoEdge, icoEdge);
+            var subY = nameY0(tile) + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6);
             if (!have && !Seen(def))
             {
                 // AN UNDISCOVERED SKILL IS A SEAL AND A QUESTION, and nothing else — no name, no glyph, no
@@ -1447,25 +1479,31 @@ public sealed class LoadoutScreen
                 // TRAITS screen gives an unknown characteristic, so the two libraries agree on what a
                 // secret looks like. The tile stays clickable: the inspector says how a skill is revealed.
                 if (!_ui.Icon(b, "icon_unknown_seal", ico, Color.White * (over ? 1f : 0.85f))) _ui.Diamond(b, ico, Unknown * 0.6f);
-                _ui.TextBig(b, "???", tile.X + nameLeft, tile.Y + UiMetrics.Space(6), Unknown, UiTypography.Body);
-                _ui.TextBig(b, "UNDISCOVERED", tile.X + nameLeft, tile.Y + UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Unknown * 0.8f, UiTypography.Caption);
+                _ui.TextBig(b, "???", tile.X + nameLeft, nameY0(tile), Unknown, UiTypography.Body);
+                _ui.TextBig(b, "UNDISCOVERED", tile.X + nameLeft, subY, Unknown * 0.8f, UiTypography.Secondary);
                 Tip(shown, hit, "An undiscovered skill. A road on the MASTERY tree reveals it.");
                 return;
             }
             if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
-            var badge = isEquipped ? (longBadge ? $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}" : $"SLOT {Loadout.IndexOfSkill(def.Id) + 1}") : "";
-            var tail = isEquipped ? _ui.MeasureBig(badge, UiTypography.Caption) + edgePad : !have ? lockEdge + edgePad : 0;
+            if (!have)
+            {
+                // THE LOCK AS A BADGE ON THE ICON, on its own dark plate — the 20 px copy at the tile's far
+                // edge was a 128 px medallion downscaled to a grey smudge (build-05).
+                var badge = new Rectangle(ico.Right - lockEdge * 2 / 3, ico.Bottom - lockEdge * 2 / 3, lockEdge, lockEdge);
+                _ui.Fill(b, badge, UiInk.Plate);
+                _ui.Icon(b, "ui_slot_locked", badge, Bone);
+            }
+            var badgeText = isEquipped ? (longBadge ? $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}" : $"SLOT {Loadout.IndexOfSkill(def.Id) + 1}") : "";
+            var tail = isEquipped ? _ui.MeasureBig(badgeText, UiTypography.Caption) + edgePad : 0;
             var nameX = tile.X + nameLeft;
-            var nameY = tile.Y + UiMetrics.Space(6);
+            var nameY = nameY0(tile);
             _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Right - edgePad - tail - nameX, UiTypography.Body), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
             var sub = have ? (def.TakesABeat ? "ACTIVE" : "PASSIVE") : LockLine(def, longLock);
-            // The kept LEVEL is the one thing on a locked tile the player must not miss, so those tiles —
-            // and only those — carry the warning ink. A library of ten quiet locks stays quiet.
-            var subInk = have || SkillLevels.LevelOf(def.Id) <= 0 ? Slate : Ember;
-            _ui.TextBig(b, _ui.ShortenBig(sub, tile.Right - edgePad - (isEquipped ? tail : lockEdge + edgePad) - nameX, UiTypography.Caption),
-                        nameX, nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), subInk, UiTypography.Caption);
-            if (!have) _ui.Icon(b, "ui_slot_locked", new Rectangle(tile.Right - edgePad - lockEdge, tile.Y + (tile.Height - lockEdge) / 2, lockEdge, lockEdge), Slate);
-            else if (isEquipped) _ui.TextRightBig(b, badge, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
+            // The state line at Secondary, never fine print, and never the refusal red: a kept level is
+            // good news (build-04). The lock badge and the Slate name already say LOCKED.
+            var subInk = have ? Slate : Bone;
+            _ui.TextBig(b, _ui.ShortenBig(sub, tile.Right - edgePad - tail - nameX, UiTypography.Secondary), nameX, subY, subInk, UiTypography.Secondary);
+            if (isEquipped) _ui.TextRightBig(b, badgeText, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
             Tip(shown, hit, have ? $"{def.Name} — {def.Line}" : LockTip(def));
         }
 
@@ -1474,10 +1512,12 @@ public sealed class LoadoutScreen
         if (Signature is { } sig)
         {
             var sigLabelY = LibTop + UiMetrics.Space(14);
-            _ui.TextBig(b, "SIGNATURE", SkillsX, sigLabelY, Gold, UiTypography.Body);
+            // The row label in Primary and the owner in Secondary — gold is for the equipped tile beside
+            // them, and a label wearing it was a third gold claim in one row (build-16).
+            _ui.TextBig(b, "SIGNATURE", SkillsX, sigLabelY, Bone, UiTypography.Body);
             if (Character is { } who)
-                _ui.TextBig(b, _ui.ShortenBig(who.Name.ToUpperInvariant(), LibStyleW - UiMetrics.Space(10), UiTypography.Caption),
-                            SkillsX, sigLabelY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Gold, UiTypography.Caption);
+                _ui.TextBig(b, _ui.ShortenBig(who.Name.ToUpperInvariant(), LibStyleW - UiMetrics.Space(10), UiTypography.Secondary),
+                            SkillsX, sigLabelY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6), Slate, UiTypography.Secondary);
             Tile(SigTile, sig);
             // The rule that says the twelve below are a different kind of thing: shared, and behind a road.
             _ui.Fill(b, new Rectangle(SkillsX, LibTop + LibRowPitch + UiMetrics.Space(4), LibW, 1), Dim);
@@ -1551,12 +1591,18 @@ public sealed class LoadoutScreen
         var lvl = level >= SkillProgress.MaxLevel ? $"LEVEL {level} · MAX" : $"LEVEL {level} · {uses}/{SkillProgress.UsesForLevel(level + 1)} WAVES TO THE NEXT";
         if (free > 0) lvl += $"  ·  +{free} TO SPEND";
         _ui.TextBig(b, _ui.ShortenBig(lvl, headRoom, UiTypography.Secondary), headX, treeTop + UiTypography.Pitch(UiTypography.Headline) - UiMetrics.Space(4), free > 0 ? Gold : Slate, UiTypography.Secondary);
-        Tip(In(new Rectangle(SkillsX, treeTop, LibW, TreeIcon + UiMetrics.Space(12)), region), hit, "A skill levels by being used: clear waves with it equipped. The first level chooses a variation — and the variation is what gives the skill its Source. The next levels buy that variation's reinforcements. Respec is free.");
+        // One clause: the four-line paragraph here was the only telling of the levelling rule, and it sat
+        // over the inspector's action band (build-14). The inspector's CURRENT STATE says the rest.
+        Tip(In(new Rectangle(SkillsX, treeTop, LibW, TreeIcon + UiMetrics.Space(12)), region), hit, "Levels come from clearing waves with it equipped. Respec is free.");
 
-        // The rails from the skill down to the two variations.
+        // The rails from the skill down to the two variations — the crossbar STARTS at the trunk, so the
+        // fork connects: a stub under the icon and a floating bracket over the cards read as two stray
+        // fragments (build-02).
         var railY = RailY;
-        _ui.Fill(b, new Rectangle(headIco.Center.X - 1, headIco.Bottom, 2, railY - headIco.Bottom), Dim);
-        _ui.Fill(b, new Rectangle(VarCard(0).Center.X, railY, VarCard(1).Center.X - VarCard(0).Center.X, 2), Dim);
+        var trunkX = headIco.Center.X;
+        var barX0 = Math.Min(trunkX, VarCard(0).Center.X);
+        _ui.Fill(b, new Rectangle(trunkX - 1, headIco.Bottom, 2, railY - headIco.Bottom), Dim);
+        _ui.Fill(b, new Rectangle(barX0 - 1, railY, VarCard(1).Center.X - barX0 + 2, 2), Dim);
         var cardPad = UiMetrics.Space(12);
         for (var vi = 0; vi < treeDef.Variations.Count && vi < 2; vi++)
         {
@@ -1577,7 +1623,7 @@ public sealed class LoadoutScreen
             if (branch > 0f) _ui.Fill(b, rail, col * branch);
             Cell(b, card, CardBg, on, over);
             if (branch > 0f) { _ui.Fill(b, card, col * (0.30f * branch)); Outline(b, card, Gold * branch, 2); }
-            Outline(b, card, on ? Bone : taken ? Gold : Dim, on || taken ? 2 : 1);
+            if (on || taken) Outline(b, card, on ? Bone : Gold, 2);   // only a state outlines the plate (build-06)
             if (taken) _ui.Fill(b, new Rectangle(card.X, card.Y, 5, card.Height), Gold);
             var gem = new Rectangle(card.X + UiMetrics.Space(16), card.Y + cardPad, UiMetrics.IconSize, UiMetrics.IconSize);
             _ui.Diamond(b, new Rectangle(gem.X - 3, gem.Y - 3, gem.Width + 6, gem.Height + 6), col * (other ? 0.12f : 0.30f));
@@ -1586,7 +1632,14 @@ public sealed class LoadoutScreen
             var nameY = card.Y + UiMetrics.Space(10);
             _ui.TextBig(b, v.Name.ToUpperInvariant(), textX, nameY, taken ? Gold : other ? Slate : Bone, UiTypography.Body);
             _ui.TextBig(b, $"{SourceName(v.Source)}{(taken ? " · CHOSEN" : "")}", textX, nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(4), other ? Slate : col, UiTypography.Secondary);
-            _ui.TextBig(b, _ui.ShortenBig(v.Line.ToUpperInvariant(), card.Width - cardPad * 2, UiTypography.Caption), card.X + cardPad, card.Bottom - UiMetrics.Space(8) - UiTypography.Caption - 2, Slate, UiTypography.Caption);
+            // The sentence WRAPS at Secondary — it was cut mid-word at Caption on both profiles where it
+            // showed, and it is the one line that says what the variation does (build-03).
+            var ly = nameY + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(2);
+            foreach (var l in _ui.WrapBig(v.Line.ToUpperInvariant(), card.Width - cardPad * 2, UiTypography.Secondary).Take(2))
+            {
+                _ui.TextBig(b, l, card.X + cardPad, ly, Slate, UiTypography.Secondary);
+                ly += UiTypography.Pitch(UiTypography.Secondary);
+            }
             Tip(shown, hit, $"{v.Name} · {SourceName(v.Source)} — {v.Line} {BuildGlossary.SourceLine(v.Source)}.");
 
             // Its three reinforcements: under a taken fork they are buyable; under the other, a road not taken (readable, not dim).
@@ -1633,6 +1686,7 @@ public sealed class LoadoutScreen
         var refusalWrap = refusal.Length > 0 ? _ui.WrapBig(refusal, InsW, UiTypography.Secondary) : System.Array.Empty<string>();
         var refusalRows = Math.Min(3, refusalWrap.Count);   // two is the longest any refusal here needs; three is the net
         _refusalRise = Math.Max(0, refusalRows - 1) * UiTypography.Pitch(UiTypography.Secondary);
+        _refusalShown = refusalRows > 0;
         var panel = InspectorPanel;
         _ui.PanelQuiet(b, panel);
         // The body is a scrolling region (brief §18: long inspectors) between the title row and the refusal
@@ -1822,7 +1876,7 @@ public sealed class LoadoutScreen
             _ui.Icon(b, $"icon_skill_{def.Id}", ico, Ins(have ? Gold : Slate));
             _ui.TextBig(b, _ui.ShortenBig(def.Name.ToUpperInvariant(), x + w - ico.Right - UiMetrics.Space(12), UiTypography.Headline), ico.Right + UiMetrics.Space(12), y + UiMetrics.Space(8), Ins(Bone), UiTypography.Headline);
             y += TreeIcon + UiMetrics.Space(8);
-            Line(def.Line, Bone);
+            Line(def.Line.ToUpperInvariant(), Bone);   // one case for the column (build-15): the tree cards uppercase the same sentence
             // EXCLUSIVE, AND SAID SO (BRIEF sec.11-12, LAW 1). A signature is the one skill on this screen
             // that no road opens and no other champion may ever hold.
             if (ownSignature && Character is { } owner)
@@ -1831,13 +1885,13 @@ public sealed class LoadoutScreen
             Head("WHAT IT DOES");
             if (chosen is null)
             {
-                foreach (var v in def.Variations.Take(2)) Line($"{v.Name.ToUpperInvariant()} · {SourceName(v.Source)} — {v.Line}", Bone, UiTypography.Body, 2);
+                foreach (var v in def.Variations.Take(2)) Line($"{v.Name.ToUpperInvariant()} · {SourceName(v.Source)} — {v.Line.ToUpperInvariant()}", Bone, UiTypography.Body, 2);
                 if (have) Line("A VARIATION IS CHOSEN IN THE SKILL TREE — IT GIVES THE SKILL ITS SOURCE.", Slate, UiTypography.Secondary, 2);
             }
             else
             {
-                Line($"{chosen.Name.ToUpperInvariant()} · {SourceName(chosen.Source)} — {chosen.Line}", Bone, UiTypography.Body, 2);
-                foreach (var r in chosen.Reinforcements.Where(r => SkillLevels.HasReinforcement(def.Id, r.Name))) Line($"{r.Name.ToUpperInvariant()} — {r.Line}", Met, UiTypography.Body, 2);
+                Line($"{chosen.Name.ToUpperInvariant()} · {SourceName(chosen.Source)} — {chosen.Line.ToUpperInvariant()}", Bone, UiTypography.Body, 2);
+                foreach (var r in chosen.Reinforcements.Where(r => SkillLevels.HasReinforcement(def.Id, r.Name))) Line($"{r.Name.ToUpperInvariant()} — {r.Line.ToUpperInvariant()}", Met, UiTypography.Body, 2);
             }
             Gap(); Rule();
             if (!have)
@@ -1908,17 +1962,15 @@ public sealed class LoadoutScreen
                         // says how a promise is found. A card, like a sworn one, so the block keeps its
                         // shape whether or not a vow is in it.
                         var card = new Rectangle(x, y, w, UiMetrics.Control(64) + UiMetrics.Space(20));
-                        _ui.Plate(b, card, Ins(Dim), _insAlpha);
+                        _ui.Plate(b, card, null, _insAlpha);   // no accent: a Rule-grey bar read as a stray line (build-12)
                         var sealBox = new Rectangle(card.X + UiMetrics.Space(14), card.Y + UiMetrics.Space(10), UiMetrics.Control(64), UiMetrics.Control(64));
                         EmptySeal(b, sealBox, _insAlpha);
                         var tx0 = sealBox.Right + UiMetrics.Space(14);
                         _ui.TextBig(b, "NO VOW SWORN", tx0, card.Y + UiMetrics.Space(14), Ins(UiInk.Empty), UiTypography.Headline);
                         var hint = Known.Count == 0 ? "A VOW REVEALS ITSELF WHEN YOU KEEP ITS RULE WITHOUT IT" : "A PROMISE KEPT IS PAID ON EVERY SKILL";
-                        foreach (var l in _ui.WrapBig(hint, card.Right - UiMetrics.Space(12) - tx0, UiTypography.Caption).Take(2))
-                        {
-                            _ui.TextBig(b, l, tx0, card.Y + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Headline), Ins(Slate), UiTypography.Caption);
-                            break;
-                        }
+                        // At Secondary, the floor for a sentence (build-12); the card has the room for one line.
+                        foreach (var l in _ui.WrapBig(hint, card.Right - UiMetrics.Space(12) - tx0, UiTypography.Secondary).Take(1))
+                            _ui.TextBig(b, l, tx0, card.Y + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Headline), Ins(Slate), UiTypography.Secondary);
                         y = card.Bottom + UiMetrics.Space(8);
                     }
                     else
@@ -1987,10 +2039,9 @@ public sealed class LoadoutScreen
                         _changeVowY = y + UiMetrics.Space(4);
                         _changeVowShown = true;
                         var btn = ChangeVowBtn(_changeVowY);
-                        var overBtn = In(btn, region).Contains(hit);
-                        Cell(b, btn, Quiet, false, overBtn);
-                        Outline(b, btn, Ins(overBtn ? Bone : Dim), 1);
-                        _ui.TextCenterBig(b, sworn.Count == 0 ? "SWEAR A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
+                        // A real Secondary button: a hairlined box with Slate text read as a disabled
+                        // placeholder above the gold primary (build-10). The click stays in UpdateInput.
+                        _ui.Button(b, btn, sworn.Count == 0 ? "SWEAR A VOW" : "CHANGE VOW", hit, false, true, ButtonStyle.Secondary);
                         y = btn.Bottom + UiMetrics.Space(8);
                     }
                 }
@@ -2093,10 +2144,7 @@ public sealed class LoadoutScreen
         _changeVowY = y + UiMetrics.Space(4);
         _changeVowShown = true;
         var btn = ChangeVowBtn(_changeVowY);
-        var overBtn = In(btn, region).Contains(hit);
-        Cell(b, btn, Quiet, false, overBtn);
-        Outline(b, btn, Ins(Dim), 1);
-        _ui.TextCenterBig(b, "CLOSE", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
+        _ui.Button(b, btn, "CLOSE", hit, false, true, ButtonStyle.Secondary);   // a real button (build-10); the click stays in UpdateInput
         y = btn.Bottom + UiMetrics.Space(8);
         if (_vowListReveal > 0 && --_vowListReveal == 0)
         {

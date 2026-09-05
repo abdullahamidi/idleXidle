@@ -534,9 +534,20 @@ public sealed class TrainingScreen
 
         var y = RowsTop;
         var bottom = RowsTop + RowsAvail;
-        for (var i = _listFirst; i < Entries.Length; i++)
+        // THE LEFTOVER GOES INTO THE GROUP GAPS. An entry is drawn whole or not at all, so when the next
+        // one does not fit the drawn ones ended above a band of bare panel (45 px at 125 %) with the
+        // scroll track running through it. The room is shared out over the group gaps between the drawn
+        // entries instead, so the list ends on its floor (release polish 2026-09-05, training-03).
+        int drawnH = 0, closes = 0, last = _listFirst - 1;
+        for (var i = _listFirst; i < Entries.Length && EntryFits(i, bottom - RowsTop - drawnH); i++)
         {
-            if (!EntryFits(i, bottom - y)) break;
+            drawnH += EntryH(i);
+            if (Entries[i].Closes && i + 1 < Entries.Length) closes++;
+            last = i;
+        }
+        var spare = last >= 0 && last + 1 < Entries.Length && closes > 0 ? Math.Max(0, bottom - RowsTop - drawnH) / closes : 0;
+        for (var i = _listFirst; i <= last; i++)
+        {
             var (g, k, _) = Entries[i];
             if (k < 0)
             {
@@ -545,7 +556,7 @@ public sealed class TrainingScreen
             }
             else
                 DrawRow(b, hunter, build, mods, shape, Groups[g].Stats[k], new Rectangle(left, y, RowW, RowH), hit, clicked);
-            y += EntryH(i);
+            y += EntryH(i) + (Entries[i].Closes && i < last ? spare : 0);
         }
     }
 
@@ -576,7 +587,9 @@ public sealed class TrainingScreen
     private static int IconCol => UiMetrics.Space(6);
     private static int IconArt => UiMetrics.Control(36);
     private static int NameCol => IconCol + IconArt + UiMetrics.Gap;             // 54 at 100 %
-    private static int RowButtonH => UiMetrics.Control(44);
+    // The small button, so the ornate frame keeps 5–6 px of air inside its row at every profile: at 44
+    // in a 51 px row its top and bottom gems sat on the row rules (release polish 2026-09-05, training-07).
+    private static int RowButtonH => UiMetrics.ButtonHeightSmall;
     private static int RowGap => UiMetrics.Space(4);                             // the plate's pitch minus its height
     private static int RankBarH => UiMetrics.Control(8);
 
@@ -687,8 +700,10 @@ public sealed class TrainingScreen
 
     private static int RowW => UiKit.ContentRight(ListPanel) - UiKit.ContentLeft(ListPanel) - ListLane;
     private static int RankCol => RowW * 20 / 100;
-    private static int ValueCol => RowW * 39 / 100;
-    private static int RankBarW => RowW * 16 / 100;
+    // The value column takes five more hundredths from the rank bar, so DAMAGE TAKEN and CRITICAL DAMAGE
+    // keep their nouns at 150 % instead of printing as bare figures (release polish 2026-09-05, training-02).
+    private static int ValueCol => RowW * 34 / 100;
+    private static int RankBarW => RowW * 12 / 100;
 
     /// <summary>
     /// The TRAIN button's width — 224 at 100 %, growing with its label, never more than 27 % of the
@@ -721,7 +736,9 @@ public sealed class TrainingScreen
             _ui.Fill(b, new Rectangle(inner.X, inner.Y, inner.Width, UiMetrics.Control(2)), Slate * 0.6f);
         }
         if (glow > 0f) _ui.Fill(b, inner, Gold * (0.06f * glow));
-        if (hot) _tip = IdentityOf(stat);
+        // No hover tip on a row: it repeated the identity sentence the inspector prints on the click, in
+        // a box across the panel's foot (release polish 2026-09-05, training-04). Click selects; the
+        // inspector explains.
 
         var (key, gem) = ArtFor(stat);
         var art = Math.Min(IconArt, row.Height - UiMetrics.Space(8));
@@ -770,24 +787,27 @@ public sealed class TrainingScreen
         var head = $"{label} {now}";
         if (after != now)
         {
-            var full = $"{head}  →  {after}";
+            const string arrow = " → ";   // single-spaced: the double spaces cost two Headline spaces a side at 150 %
+            var full = $"{head}{arrow}{after}";
             if (_ui.MeasureBig(full, UiTypography.Headline) <= room)
             {
                 x = DrawFigure(b, label, now, x, vy, nowInk);
-                _ui.TextBig(b, "  →  ", x, vy, Slate, UiTypography.Headline);
-                x += _ui.MeasureBig("  →  ", UiTypography.Headline);
+                _ui.TextBig(b, arrow, x, vy, Slate, UiTypography.Headline);
+                x += _ui.MeasureBig(arrow, UiTypography.Headline);
                 _ui.TextBig(b, after, x, vy, aftInk, UiTypography.Headline);
             }
             else
             {
-                // Too narrow for both — the widest labels at 150 % — so the AFTER, which is the decision,
-                // keeps its place and the label gives way; the row's name and the inspector still carry
-                // it. The figures flow on as one phrase, exactly as they do in the rows that fit.
-                var lead = $"{now}  →  ";
+                // Too narrow for all three — the widest labels at 150 % — so NOW gives way and the NOUN
+                // stays: the inspector carries NOW, and a row that read "-9.1% → -10.7%" was a signed
+                // percentage of nothing (release polish 2026-09-05, training-02). The figures still flow
+                // as one phrase, exactly as they do in the rows that fit.
+                var lead = $"{label}{arrow}";
                 var leadW = _ui.MeasureBig(lead, UiTypography.Headline);
                 if (leadW + _ui.MeasureBig(after, UiTypography.Headline) <= room)
                 {
-                    _ui.TextBig(b, lead, x, vy, nowInk, UiTypography.Headline);
+                    _ui.TextBig(b, label, x, vy, nowInk, UiTypography.Headline);
+                    _ui.TextBig(b, arrow, x + _ui.MeasureBig(label, UiTypography.Headline), vy, Slate, UiTypography.Headline);
                     _ui.TextBig(b, after, x + leadW, vy, aftInk, UiTypography.Headline);
                 }
                 else
@@ -851,18 +871,42 @@ public sealed class TrainingScreen
         // the prose fills the difference. The refusal line keeps two lines of room so a long one wraps.
         var cta = new Rectangle(left, InspectorPanel.Bottom - UiMetrics.Space(24) - UiMetrics.ButtonHeightPrimary,
                                 width, UiMetrics.ButtonHeightPrimary);
-        var refusalY = cta.Y - breath - 2 * capH;
+        // THE REFUSAL'S ROOM IS RESERVED ONLY WHEN THERE IS A REFUSAL. Two lines were always kept for
+        // it, so on the common path (the rank is affordable) 56–86 px sat blank above the button while
+        // WHAT IT DOES had nothing under it at 150 % (release polish 2026-09-05, training-01).
+        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
+        var afford = hunter.CanTrain(stat);
+        var refusalRoom = afford ? 0 : breath + 2 * capH;
+        var refusalY = cta.Y - refusalRoom;
         var stateH = capH + breath + lineH + UiTypography.Pitch(UiTypography.PrimaryValue) + lineH * 2;
         var stateTop = refusalY - breath - stateH;
-        var floor = stateTop - UiMetrics.Space(12);
+        var floor = stateTop - UiMetrics.Space(8);
 
-        // THE HEADER stays put — the category and the name are what the scrolled prose is about.
+        // THE HEADER stays put — the category, the name, the identity line and the WHAT IT DOES caption
+        // are what the scrolled prose is about, so they never scroll off (training-01).
         var y = InspectorPanel.Y + UiTypography.PanelTitleTop;
         _ui.TextBig(b, _ui.ShortenBig($"{GroupOf(stat)}  ·  TRAINED STAT", width, UiTypography.Secondary),
                     left, y, Slate, UiTypography.Secondary);
         y += capH;
         _ui.TextBig(b, _ui.ShortenBig(WordFor(stat), width, UiTypography.Headline), left, y, Bone, UiTypography.Headline);
         y += UiTypography.Pitch(UiTypography.Headline);
+        // The identity line, unless the description's first sentence already IS it (MIGHT's does): the
+        // same sentence twice, three lines apart, was two of the five lines the 125 % viewport could
+        // show (training-06).
+        var identity = IdentityOf(stat);
+        var core = identity.TrimEnd('.');
+        if (core.StartsWith("Your ", StringComparison.OrdinalIgnoreCase)) core = core[5..];
+        var firstPara = Describe(stat, hunter, build, mods, shape).FirstOrDefault() ?? "";
+        if (!firstPara.Contains(core, StringComparison.OrdinalIgnoreCase))
+            foreach (var l in _ui.WrapBig(identity, width, UiTypography.Body))
+            {
+                _ui.TextBig(b, l, left, y, Slate, UiTypography.Body);
+                y += lineH;
+            }
+        _ui.Fill(b, new Rectangle(left, y + UiMetrics.Space(4), width, 1), Dim);
+        y += UiMetrics.Space(14);
+        _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
+        y += capH;
 
         // THE PROSE — the identity line, WHAT IT DOES and its paragraphs — fills the room between the
         // header and the state block. At 100 % it fits. At the larger profiles it does not (three
@@ -907,9 +951,7 @@ public sealed class TrainingScreen
         var aftShown = playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV;
         var now = Fmt(style, nowShown);
         var after = Fmt(style, aftShown);
-        var maxed = rank >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
-        var afford = hunter.CanTrain(stat);
 
         void Pair(string k, string v, Color ink)
         {
@@ -976,10 +1018,8 @@ public sealed class TrainingScreen
     {
         _prose.Clear();
         var lineH = UiTypography.Pitch(UiTypography.Body);
-        foreach (var l in _ui.WrapBig(IdentityOf(stat), width, UiTypography.Body))
-            _prose.Add((l, Slate, UiTypography.Body, lineH));
-        _prose.Add((null, Dim, 0, UiMetrics.Space(14)));
-        _prose.Add(("WHAT IT DOES", Slate, UiTypography.Secondary, UiTypography.Pitch(UiTypography.Secondary)));
+        // Only the paragraphs scroll: the identity line, its rule and the WHAT IT DOES caption are drawn
+        // fixed under the name by DrawInspector (training-01).
         foreach (var para in Describe(stat, hunter, build, mods, shape))
         {
             var lines = _ui.WrapBig(para, width, UiTypography.Body);

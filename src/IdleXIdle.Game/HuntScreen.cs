@@ -2215,9 +2215,11 @@ public sealed class HuntScreen
             // The creature art fills roughly the lower four-fifths of its frame; captured and checked.
             // With the headroom trimmed by measurement the figure's top IS box.Y, so the pip sits a
             // fixed 14px above it (the old 0.22 head fraction was measured on the previous art).
-            var pip = new Rectangle(box.Center.X - 28, box.Y - 14, 56, 6);
-            _ui.Fill(b, pip, new Color(0x12, 0x0C, 0x10));
-            if (frac > 0f) _ui.Fill(b, new Rectangle(pip.X, pip.Y, (int)(pip.Width * frac), pip.Height), Ember);
+            // The house SLIM bar (UiKit.Bar) rather than two bare fills: a 56×6 red dash with no edge read as
+            // a debug marker over the sprites, and at full life the well was invisible so nothing said
+            // "a bar" until damage was taken (release polish 2026-09-05, hunt-05). Still world-anchored.
+            var pip = new Rectangle(box.Center.X - 28, box.Y - 14, 56, 8);
+            _ui.Bar(b, pip.X, pip.Y, pip.Width, pip.Height, frac, Ember);
         }
 
         // One wave-level nameplate: what this wave IS, which is the thing the player has to learn.
@@ -2358,7 +2360,10 @@ public sealed class HuntScreen
         // HUNG FROM THE HEADER'S FOOT, one name line and a breath under it, so a header that grew with the
         // profile pushes the bar down rather than the name up into it. (660, 200, 600, 54) at 100 %.
         var barY = StageHeaderBottomY + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Headline);
-        var bar = new Rectangle(660, barY, 600, UiMetrics.Control(54));
+        // ON THE HEADER'S OWN COLUMN (630..1190, centred on 910): at (660, 600) the bar jutted 70 px past
+        // the header's right rail and its name was centred 50 px off the WAVE line above it, so the
+        // stack read as two misaligned pieces (release polish 2026-09-05, hunt-04).
+        var bar = new Rectangle(StageHeader.X, barY, StageHeader.Width, UiMetrics.Control(54));
         HeaderStackBottom = bar.Bottom;   // the host's toasts hang under the boss bar, not across it
         // The dev fixture's underlying wave-2 enemy is already dead (0%), so pose a representative fill.
         var frac = DevForceBoss ? 0.78f : Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f);
@@ -2367,7 +2372,12 @@ public sealed class HuntScreen
         // panels: when the surface is already gold, the word moves off it.
         _ui.BarArt(b, bar, frac, "boss");
         _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - UiTypography.Pitch(UiTypography.Headline) - 1, UiKit.Vellum, UiTypography.Headline);
-        _ui.TextCenterBig(b, $"{(int)(frac * 100)}%", bar.Center.X, bar.Y + (bar.Height - UiTypography.OverlayBody) / 2 + 1, UiKit.Ink, UiTypography.OverlayBody);
+        // BONE OVER A SHADOW, like the dock's words: the figure was the near-black plate ink, legible only
+        // while the molten fill happened to be under it, and dark-on-dark once the fill fell past the
+        // middle (release polish 2026-09-05, hunt-12).
+        var pct = $"{(int)(frac * 100)}%";
+        ShadowText(b, pct, bar.Center.X - _ui.MeasureBig(pct, UiTypography.OverlayBody) / 2,
+                   bar.Y + (bar.Height - UiTypography.OverlayBody) / 2 + 1, Bone, UiTypography.OverlayBody);
     }
 
     /// <summary>Rev 5 §17: fixture-only bounds visualization (ground pivot, body, full silhouette, arena).</summary>
@@ -3053,10 +3063,13 @@ public sealed class HuntScreen
     private static Rectangle HunterCard => new(196, 14, 420, HunterCardBaseHeight);
 
     /// <summary>The card's height when nothing reflows: the name line, the life line, the status row. 140 at 100 %.</summary>
+    // NO RESERVED CHIP ROW: the card is sized by what it draws. It always added a status-chip line, so a
+    // build with no UNDYING / CHARGE chip — most builds — fought under a card with an orphaned black band
+    // 50–70 px deep at 125/150 % (release polish 2026-09-05, hunt-03). The chip block is added in
+    // DrawHunterHud only when there are chips.
     private static int HunterCardBaseHeight
         => UiMetrics.Space(20) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6)
-         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6)
-         + ChipHeight + UiMetrics.Space(22);
+         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(18);
 
     /// <summary>A Caption chip's height — the status row's, and the enemy strip's affix chips'.</summary>
     private static int ChipHeight => UiTypography.Caption + UiTypography.ChipPadY * 2;
@@ -3165,7 +3178,7 @@ public sealed class HuntScreen
         var height = HunterCardBaseHeight
                    + (clsOnLine2 ? UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2) : 0)
                    + (powerBeside ? 0 : UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(2))
-                   + (chipRows - 1) * (ChipHeight + UiMetrics.Space(6));
+                   + (chips.Count == 0 ? 0 : chipRows * (ChipHeight + UiMetrics.Space(6)) + UiMetrics.Space(4));
         var panel = new Rectangle(frame.X, frame.Y, frame.Width, height);
         _ui.PanelQuiet(b, panel);
         s_hunterCardBottom = panel.Bottom;
@@ -3364,14 +3377,16 @@ public sealed class HuntScreen
     {
         if (_replay is null || _run is null || _isBossWave) return;
         var strip = EnemyStrip;
-        _ui.Fill(b, strip, new Color(0x14, 0x10, 0x1A, 0xE0));
-        Outline(b, strip, PlateEdge, 2);
+        // THE HOUSE PLATE with the wave's Source as its accent — it was a hand-drawn fill with a 2 px
+        // bronze outline no other surface wears, so the one QUIET surface in the header stack competed
+        // with the frame above it instead of sitting under it (release polish 2026-09-05, hunt-06).
+        _ui.Plate(b, strip, EnemySource is { } accent ? SourceGlow(accent) : null);
         HeaderStackBottom = strip.Bottom;
 
         // LEFT: the wave's Source glyph, then its kind. Everything on the strip is centred on its height,
         // which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
         var glyphEdge = UiMetrics.Control(30);
-        var glyph = new Rectangle(strip.X + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
+        var glyph = new Rectangle(strip.X + 5 + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
         if (EnemySource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
             b.Draw(g, glyph, Color.White);
         else
@@ -3533,8 +3548,11 @@ public sealed class HuntScreen
         if (px == 0) px = UiTypography.Caption;   // a rung is a profile-scaled property, not a constant
         var w = ChipWidth(text, px);
         var r = new Rectangle(x, y, w, px + UiTypography.ChipPadY * 2);
-        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
-        Outline(b, r, edge, 1);
+        // A chip is the house plate; only a chip with its OWN edge colour (NEW RECORD's gold) draws a
+        // rule over it — the bronze PlateEdge was the plate's imitation and is the plate now
+        // (release polish 2026-09-05, hunt-06).
+        _ui.Plate(b, r);
+        if (edge != PlateEdge) Outline(b, r, edge, 1);
         _ui.TextBig(b, text, x + UiTypography.ChipPadX, y + UiTypography.ChipPadY, ink, px);
         return w;
     }
@@ -3609,7 +3627,8 @@ public sealed class HuntScreen
     //    number. The doors name no keys in their labels; the tour and the help sheet teach the keys.
     private const int ColumnX = 1570, ColumnW = 326;   // page anchors: the column's place beside the arena
     private const int UtilityTop = 110;
-    private static int UtilityPad => UiTypography.PanelPadNarrow;
+    /// <summary>The column's inset, at the profile — it was the bare 28, so at 150 % the door's foot sat in the frame's bottom band (release polish 2026-09-05, hunt-02).</summary>
+    private static int UtilityPad => UiMetrics.Space(UiTypography.PanelPadNarrow);
     /// <summary>A door button's height and the step to the next — controls, at the profile. 44 / 52 at 100 %.</summary>
     private static int DoorHeight => UiMetrics.Control(44);
     private static int DoorPitch => DoorHeight + UiMetrics.Space(8);
@@ -3633,7 +3652,10 @@ public sealed class HuntScreen
         var rewardBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body);
         var doorBlock = doors > 0 ? UiMetrics.Space(8) + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
         var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + UiMetrics.Space(10) + rewardBlock + doorBlock + UtilityPad);
-        _ui.PanelQuiet(b, panel);
+        // PINNED to the medium frame: this panel's height follows the profile while its width is a page
+        // anchor, so its aspect crossed 1.30 at 125 % and it alone switched to the crested square frame
+        // beside three siblings that did not (release polish 2026-09-05, hunt-02).
+        _ui.PanelQuiet(b, panel, artKey: "ui_panel_medium");
         s_railBottom = panel.Bottom + 10;
 
         var x = panel.X + UtilityPad;
@@ -3653,17 +3675,23 @@ public sealed class HuntScreen
         var points = $"{Mastery.Available} MASTERY POINT{(Mastery.Available == 1 ? "" : "S")}";
         var line = chestRow && pointsRow ? $"{chests} · {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}"
                  : chestRow ? chests : pointsRow ? points : "NOTHING WAITING";
-        _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : UiInk.Empty, UiTypography.Body);
+        // NOTHING WAITING in Slate, not the Empty ink: a sentence under the contrast floor with no
+        // shape beside it read as disabled text (release polish 2026-09-05, hunt-11).
+        _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : Slate, UiTypography.Body);
         y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
+        // THE FIRST DOOR IS THE SCREEN'S PRIMARY: a chest waiting is the one thing this screen asks the
+        // player to do, so its door is lit; the points door is lit only when it is the sole door
+        // (release polish 2026-09-05, hunt-10).
         if (chestRow)
         {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), "OPEN VAULT", hit, clicked)) WantsVault = true;
+            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), "OPEN VAULT", hit, clicked, true, ButtonStyle.Primary)) WantsVault = true;
             y += DoorPitch;
         }
         if (pointsRow)
         {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked))
+            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked,
+                           true, chestRow ? ButtonStyle.Secondary : ButtonStyle.Primary))
                 WantsMastery = true;
         }
     }
@@ -3789,7 +3817,19 @@ public sealed class HuntScreen
         if (actives.Count + passives.Count == 0) { s_dockRect = new Rectangle(SkillStrip.X, SkillStrip.Y, 0, 0); return; }
 
         var strip = SkillStrip;
-        var slotW = DockSlotW;
+        // SIZED BY THE WIDEST WORDS IT HOLDS, never under the house width: a slot that could not fit
+        // "ON BITE · SHADOW" at 100 % dropped the Source word and told the player less than the same
+        // slot at 150 % — the density profile changing information, not size (release polish 2026-09-05,
+        // hunt-09). The dock centres on its measured width and the arena clip is wider still.
+        var widest = 0;
+        foreach (var i in actives.Concat(passives))
+        {
+            var d = skills[i].Def;
+            var line2 = "2 ACTIONS · " + skills[i].Source.ToString().ToUpperInvariant();
+            widest = Math.Max(widest, Math.Max(_ui.MeasureBig(d.Name, UiTypography.Headline) + UiMetrics.Space(8) + UiMetrics.Control(22),
+                                               _ui.MeasureBig(line2, UiTypography.Body)));
+        }
+        var slotW = Math.Max(DockSlotW, UiMetrics.Space(10) + MedallionPx + UiMetrics.Space(14) + widest + UiMetrics.Space(8));
         var groupGap = actives.Count > 0 && passives.Count > 0 ? StripGroupGap : 0;
         var gaps = Math.Max(0, actives.Count - 1) + Math.Max(0, passives.Count - 1);
         var width = (actives.Count + passives.Count) * slotW + gaps * SlotGap + groupGap;
@@ -3891,16 +3931,16 @@ public sealed class HuntScreen
         var source = s.Source.ToString().ToUpperInvariant();
         var wordW = _ui.MeasureBig(word, UiTypography.Body);
         ShadowText(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
-        if (wordW + _ui.MeasureBig(" · " + source, UiTypography.Body) <= room)
-        {
-            ShadowText(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
-            ShadowText(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
-        }
-        // The Source glyph in the corner — the third cue beside the colour and the word.
+        // The Source word ALWAYS prints — the slot is sized for it (DrawSkillDock, hunt-09).
+        ShadowText(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
+        ShadowText(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
+        // The Source glyph BESIDE THE NAME — the third cue beside the colour and the word. Pinned to the
+        // slot's far corner it hung in empty space for a short name (release polish 2026-09-05, hunt-09).
         if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } sg2)
         {
-            var gem = UiMetrics.Control(22);   // a small glyph in the corner — an icon box, at the profile
-            b.Draw(sg2, new Rectangle(slot.Right - UiMetrics.Space(8) - gem, slot.Y + UiMetrics.Space(8), gem, gem), Color.White * 0.9f);
+            var gem = UiMetrics.Control(22);   // a small glyph beside the name — an icon box, at the profile
+            var nameW = _ui.MeasureBig(_ui.ShortenBig(def.Name, room, UiTypography.Headline), UiTypography.Headline);
+            b.Draw(sg2, new Rectangle(tx + nameW + UiMetrics.Space(8), nameY + (UiTypography.Headline - gem) / 2 + 1, gem, gem), Color.White * 0.9f);
         }
     }
 
@@ -4541,13 +4581,28 @@ public sealed class HuntScreen
         b.Draw(baseTex, rect, tint);
     }
 
+    /// <summary>
+    /// The lowest y the host's overlays reach this frame — the welcome toast's or the lesson card's foot
+    /// — or 0 when nothing hangs under the header stack. The callouts keep under it.
+    /// </summary>
+    /// <remarks>
+    /// The champion's skill names stack five lanes UP from its head and the damage numbers five lanes up
+    /// from the creatures' shoulders; at 150 % the lanes are 79 px each and the toast's foot is at y≈400,
+    /// so SNARE printed as "SNA" behind the toast's edge and "-4 JAWS" lost its sign (release polish
+    /// 2026-09-05, hunt-01). A callout that would rise into the overlay is held at its foot instead.
+    /// </remarks>
+    public int OverlayFloor { get; set; }
+
     private void DrawCallouts(SpriteBatch b)
     {
+        var floor = OverlayFloor > 0 ? OverlayFloor : HeaderStackBottom;
         foreach (var c in _callouts)
         {
             var rise = (int)((1f - c.Life) * 40f);
+            var px = c.Px <= 0 ? SayPx : c.Px;
+            var y = Math.Max(c.Y - rise, floor + UiMetrics.Space(4));
             var fade = Math.Clamp(c.Life * 1.8f, 0f, 1f);
-            _ui.TextCenterBig(b, c.Text, c.X, c.Y - rise, c.Color * fade, c.Px <= 0 ? SayPx : c.Px);
+            _ui.TextCenterBig(b, c.Text, c.X, y, c.Color * fade, px);
         }
     }
 

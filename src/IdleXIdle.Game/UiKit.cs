@@ -828,8 +828,14 @@ public sealed class UiKit
     /// logical (1:1 on screen — crisp). Edge-midpoint gems do stretch with the edge bands; that is the
     /// known cost of scaling a decorated frame to arbitrary panel sizes.
     /// </summary>
-    public void Panel(SpriteBatch b, Rectangle r, bool gold = false)
-        => PanelAt(b, r, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White, gold);
+    /// <param name="artKey">
+    /// Pin the frame art (<c>ui_panel_medium</c> / <c>ui_panel_square</c> / <c>ui_panel_vertical</c>) instead of
+    /// letting <see cref="PanelArtKey"/> choose by aspect. For a panel whose HEIGHT follows the profile
+    /// while its width is a page anchor — the HUNT's right column — the aspect crosses 1.30 at 125 %, and
+    /// the panel alone changed frames beside three siblings that did not (release polish 2026-09-05).
+    /// </param>
+    public void Panel(SpriteBatch b, Rectangle r, bool gold = false, string? artKey = null)
+        => PanelAt(b, r, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White, gold, artKey);
 
     /// <summary>
     /// Tier 2: a SUPPORTING surface. The same frame, drawn quiet, so the ornate one is the subject.
@@ -862,7 +868,8 @@ public sealed class UiKit
     /// </para>
     /// </remarks>
     /// <param name="alpha">A fade for transient panels (a toast on its way out); 1 draws it solid.</param>
-    public void PanelQuiet(SpriteBatch b, Rectangle r, float alpha = 1f) => PanelAt(b, r, QuietFrame * alpha, false);
+    /// <param name="artKey">Pin the frame art — see <see cref="Panel"/>. Null lets the aspect choose.</param>
+    public void PanelQuiet(SpriteBatch b, Rectangle r, float alpha = 1f, string? artKey = null) => PanelAt(b, r, QuietFrame * alpha, false, artKey);
 
     /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
     private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
@@ -1008,9 +1015,9 @@ public sealed class UiKit
     /// <summary>This panel's bottom content edge — the last row must end above it.</summary>
     public static int ContentBottom(Rectangle r) => r.Bottom - UiTypography.PanelPadBottom - FrameDrop(r);
 
-    private void PanelAt(SpriteBatch b, Rectangle r, Color tint, bool gold)
+    private void PanelAt(SpriteBatch b, Rectangle r, Color tint, bool gold, string? artKey = null)
     {
-        var key = PanelArtKey(r);
+        var key = artKey ?? PanelArtKey(r);
         var tex = Assets.Get(key);
         if (tex is null)
         {
@@ -1297,7 +1304,13 @@ public sealed class UiKit
         // itself (build/shots/pressed_100.png, photographed the day RH_SHOT_HELD made a pressed face
         // visible at all). The resting secondary art is opaque and needs nothing, so the well goes
         // only under the lit one, inside the frame's own inset so no ornament is covered.
-        if (key == "ui_button_primary") Fill(b, ButtonFace(r), Ink);
+        // A PRIMARY IS LIT ON ITS FACE, not only at its rim (release polish 2026-09-05, gear-02). The
+        // well used to be the panel's own near-black, inset by the end ornament's width, so the one lit
+        // button on a screen read as a broken secondary: a dark rectangle floating inside a gold frame
+        // with two darker bands where the transparent art showed the panel through. The well now runs
+        // to the frame's own inset on every side and carries a warm lift toward the accent — a face a
+        // player reads as "pressable" before the label is read.
+        if (key == "ui_button_primary") Fill(b, PrimaryWell(r), PrimaryFace);
         var tex = Assets.Get(key);
         // Every button is sliced (playtest 2026-08-26: "the button frame is stretched and looks cheap" —
         // the 420 px reset button, the 400 px settings pair). The end scrollwork AND the centre ornament
@@ -1356,6 +1369,17 @@ public sealed class UiKit
         var side = Math.Min(FieldCapWidth(r.Height), Math.Max(2, r.Width / 2 - 2));
         return new Rectangle(r.X + side, r.Y + inset, Math.Max(1, r.Width - side * 2), Math.Max(1, r.Height - inset * 2));
     }
+
+    /// <summary>The primary button's well: inside the frame's own inset on every side, so no band of the panel shows between the well and the end scrollwork.</summary>
+    private static Rectangle PrimaryWell(Rectangle r)
+    {
+        var inset = Math.Max(2, r.Height / 8);
+        var side = Math.Max(2, r.Height / 6);
+        return new Rectangle(r.X + side, r.Y + inset, Math.Max(1, r.Width - side * 2), Math.Max(1, r.Height - inset * 2));
+    }
+
+    /// <summary>The primary's face: the panel ground lifted a fifth of the way to the accent — warm, dark enough for a Bone label at 8:1.</summary>
+    private static readonly Color PrimaryFace = Color.Lerp(new Color(0x1A, 0x14, 0x1E), UiInk.Accent, 0.18f);
 
     /// <summary>
     /// How wide the button art's end ornament lands at a given control height — the inset a caller
@@ -1593,10 +1617,17 @@ public sealed class UiKit
         var x = anchor.X + 26;
         if (x + width > PageRight(8)) x = anchor.X - width - 12;
         var y = anchor.Y + 30;
-        if (y + h > PageBottom(8)) y = anchor.Y - h - 14;
-        Fill(b, new Rectangle(x + 4, y + 5, width, h), new Color(0, 0, 0) * 0.45f);   // soft drop shadow
-        Fill(b, new Rectangle(x, y, width, h), new Color(0x14, 0x0E, 0x20));
-        Fill(b, new Rectangle(x, y, width, 2), new Color(0xC8, 0x9A, 0x3C));
+        // Flips ABOVE the anchor when it would reach the page's ACTION BAND — the bottom rows where every
+        // inspector keeps its refusal line and its one primary button — not only at the page's edge: a
+        // tip that lands on the button it explains is a tip nobody can act on (release polish 2026-09-05).
+        var actionBand = PageBottom(UiMetrics.Space(36)) - UiMetrics.ButtonHeightPrimary - UiMetrics.Space(24);
+        if (y + h > actionBand) y = anchor.Y - h - 14;
+        if (y < 8) y = Math.Max(8, anchor.Y + 30);
+        // THE HOUSE PLATE (§2 QUIET), not a private purple box with a gold rule: a tip is furniture, and
+        // furniture wears the tier every list and chip on the page wears. The 4 px shadow stays, so the tip
+        // still lifts off what it covers.
+        Fill(b, new Rectangle(x + 4, y + 5, width, h), new Color(0, 0, 0) * 0.45f);
+        Plate(b, new Rectangle(x, y, width, h));
         var ty = y + pad;
         foreach (var l in lines) { TextBig(b, l, x + pad, ty, Vellum, UiTypography.Secondary); ty += lineH; }
     }

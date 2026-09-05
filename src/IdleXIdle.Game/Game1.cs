@@ -4392,7 +4392,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var r = HuntLessonRect(step);
         var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - CardPadX - CardCloseLane, UiTypography.Secondary);
-        _ui.PanelQuiet(_batch, r, alpha);
+        // The QUIET plate with the gold rule, the same surface the boot toast wears in this slot — one
+        // surface per toast slot (release polish 2026-09-05, hunt-07).
+        _ui.Plate(_batch, r, UiInk.Accent * alpha, alpha);
         _ui.TextBig(_batch, Tutorial.Title(step), r.X + CardPadX, r.Y + CardTitleTop, UiInk.Accent * alpha, UiTypography.Body);
         var ty = r.Y + CardBodyTop;
         foreach (var line in body)
@@ -5444,9 +5446,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // enemy strip, or the boss bar — so the three read as one column rather than a toast across a
         // bar. On a menu screen there is no stack; it takes the old place under the title.
         var r = new Rectangle(ToastLeft, ToastTop, ToastWidth, ToastHeight);
-        // The quiet frame, like the stage header it sits under — gold is for modals (UiKit.PanelQuiet).
-        _ui.PanelQuiet(_batch, r, fade);
-        var pad = UiMetrics.Space(18);
+        // THE QUIET PLATE, with an accent in the toast's own colour (UX guide §2: toasts are the QUIET
+        // tier). It wore the bronze frame of the persistent stage header above it, so a message that
+        // fades in seven seconds outweighed the fight's own enemy strip between them (release polish
+        // 2026-09-05, hunt-07).
+        _ui.Plate(_batch, r, _bootColor * fade, fade);
+        var pad = UiMetrics.Space(12);
         _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + pad, _bootColor * fade, UiTypography.OverlayTitle);
         if (parts.Length > 1)
             _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle),
@@ -5455,7 +5460,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>The two-line toast's height: its pad, a title line, a body line, a breath — it follows the rungs.</summary>
     private static int ToastHeight
-        => UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(8);
+        => UiMetrics.Space(12) + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(6);
 
     /// <summary>The WELCOME BACK panel's width at 100 % — wider with the profile so its lines keep their length.</summary>
     private const int WelcomeWidth = 720;
@@ -5901,7 +5906,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             PlayCue(_training.ConsumeCue());
             if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
-        else _expedition.Draw(_batch, ChromeMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
+        else
+        {
+            // The overlays' foot, for the fight's floating words (HuntScreen.OverlayFloor, hunt-01): this
+            // frame's boot toast or lesson card hangs under the header stack, and a callout must not rise
+            // behind it.
+            _expedition.OverlayFloor = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive
+                ? ToastTop + ToastHeight + UiMetrics.Space(8)
+                : HuntLessonShowing() is { } lessonUp ? HuntLessonRect(lessonUp).Bottom + UiMetrics.Space(8) : 0;
+            _expedition.Draw(_batch, ChromeMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
+        }
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
         // overlay a player opens to think rather than to act.
