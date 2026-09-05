@@ -8,6 +8,8 @@ using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Warrens;
 
 using IdleXIdle.Core.Progression;
+using IdleXIdle.Core.Expeditions;
+
 namespace IdleXIdle.Game;
 
 /// <summary>
@@ -519,11 +521,14 @@ public sealed class WarrenScreen
     private WelcomeSummary? _awayFrom;
     // Seeded with the never-been-away line: both fields start null, so a cache keyed on "did it
     // change?" would never build the first string and the row would draw empty.
-    private string _awayLine = AwayNever;
+    private string _awayLine = "";
     private bool _awayBuilt;
 
-    private static readonly string AwayNever =
-        $"THE WARREN KEEPS EARNING WHILE THE GAME IS CLOSED — UP TO {SaveSystem.MaxOfflineSeconds / 3600:0} HOURS AWAY";
+    // THE CAMP'S CAPACITY, in the Warren's own words (OfflineCamp, 2026-09-06): what an absence holds
+    // now, and what one more facility level buys — the offline dimension every upgrade improves.
+    private string AwayNever =>
+        $"THE CAMP HOLDS {OfflineCamp.HoursText(OfflineCamp.HoursFor(Warren))} OF HUNTING WHILE THE GAME IS CLOSED — "
+        + $"EACH FACILITY LEVEL HOLDS {OfflineCamp.HoursPerFacilityLevel * 60f:0} MINUTES MORE, UP TO {OfflineCamp.MaxHours:0} HOURS";
 
     // ── THE WHEEL. The host latches the wheel once a frame and hands it to the screens whose Update
     //    takes it; this screen's entry point predates any of them and takes only the cursor and the
@@ -781,7 +786,7 @@ public sealed class WarrenScreen
                 ? $"WHILE YOU WERE AWAY {WelcomeSummary.AwayText(w.AwaySeconds)} THE WARREN MADE {string.Join("  ·  ", w.WarrenParts())}"
                 : AwayNever;
         }
-        _ui.TextBig(b, _ui.ShortenBig(_awayLine, iw, UiTypography.Secondary), ix, strip.Y + StripAwayY, Bone, UiTypography.Secondary);
+        _ui.TextBig(b, _ui.ShortenBig(_awayLine.Length > 0 ? _awayLine : AwayNever, iw, UiTypography.Secondary), ix, strip.Y + StripAwayY, Bone, UiTypography.Secondary);
     }
 
     // ── THE GRID. Eight cards, each answering "can I upgrade this one?" without being clicked. ──

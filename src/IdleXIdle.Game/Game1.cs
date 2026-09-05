@@ -1075,8 +1075,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         //
         // Gated like the live tick — a player who has not taken a region has no Warren, awake or asleep.
         _warren.ConqueredRegions = _world.ConqueredIds.Count;
-        var wOffline = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts())
-            ? _warren.Tick((float)credited)
+        // THE CAMP HOLDS SO MANY HOURS (OfflineCamp, 2026-09-06): the absence is paid for the hours the
+        // camp holds — two on a fresh account, more for every facility level bought — at the camp's
+        // efficiency; the Warren produces for the same held hours. A day away used to pay a full day
+        // at half rate from minute one, which is what made an unbuilt Warren pointless.
+        var warrenOpen = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts());
+        var camp = warrenOpen ? _warren : null;
+        var held = OfflineCamp.CreditedSeconds(credited, camp);
+        var wOffline = warrenOpen
+            ? _warren.Tick((float)held)
             : default;
         _hunter.AddGleam((int)wOffline.Gleam);
         _dust.AddDust((int)wOffline.Dust);
@@ -1097,9 +1104,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var (obh, obd) = EnemyBaselineFor(_activeRegion);
             offline = OfflineHunt.Simulate(
                 ComposeBuild(),
-                _hunter, credited, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
+                _hunter, held, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
                 seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
-            champOffline = offline.Gleam;
+            champOffline = OfflineCamp.HuntCredit(offline, camp, credited);
             if (champOffline > 0) _hunter.AddGleam((int)Math.Min(int.MaxValue, champOffline));
         }
 
@@ -1115,7 +1122,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // what the hunt did (Gleam, waves, falls, deepest), what the Warren produced (all four outputs) —
         // with CONTINUE, because the largest single payment in the game deserves more than a seven-second
         // toast that named one number and dropped the rest. A short trip keeps the toast.
-        var summary = new WelcomeSummary(credited, offline, wOffline, Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts()));
+        var summary = new WelcomeSummary(credited, offline, wOffline, warrenOpen, CampSeconds: held, HuntGleamPaid: champOffline);
         if (summary.ShowsPanel)
         {
             _welcome = summary;
@@ -2313,11 +2320,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         const double away = 6 * 3600 + 42 * 60;
                         var (obh, obd) = EnemyBaselineFor(_activeRegion);
-                        var offline = OfflineHunt.Simulate(ComposeBuild(),
-                            _hunter, away, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd, seed: 42);
                         _warren.ConqueredRegions = _world.ConqueredIds.Count;
                         var warrenOpen = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts());
-                        _welcome = new WelcomeSummary(away, offline, warrenOpen ? _warren.Tick((float)away) : default, warrenOpen);
+                        var camp = warrenOpen ? _warren : null;
+                        var held = OfflineCamp.CreditedSeconds(away, camp);
+                        var offline = OfflineHunt.Simulate(ComposeBuild(),
+                            _hunter, held, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd, seed: 42);
+                        _welcome = new WelcomeSummary(away, offline, warrenOpen ? _warren.Tick((float)held) : default, warrenOpen,
+                                                      CampSeconds: held, HuntGleamPaid: OfflineCamp.HuntCredit(offline, camp, away));
                         _showWelcome = true;
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
@@ -5527,8 +5537,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         int RowH(IReadOnlyList<string> lines) => lines.Count == 0 ? 0
             : UiTypography.Pitch(UiTypography.Secondary) + lines.Count * UiTypography.Pitch(UiTypography.Body) + rowGap;
         var button = UiMetrics.Control(56);
+        // THE CAMP'S SENTENCE, when the absence outran what the camp holds — the one line that says why
+        // a long night paid like a short one, and what buys more (OfflineCamp, 2026-09-06).
+        var campLines = w.CampLine() is { } campLine ? _ui.WrapBig(campLine, cw, UiTypography.Secondary) : Array.Empty<string>();
+        var campH = campLines.Count == 0 ? 0 : campLines.Count * UiTypography.Pitch(UiTypography.Secondary) + rowGap;
         var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14)
-                + RowH(huntLines) + RowH(warrenLines) + UiMetrics.Space(16) + button + pad;
+                + RowH(huntLines) + RowH(warrenLines) + campH + UiMetrics.Space(16) + button + pad;
         var r = new Rectangle(UiKit.PageCenterX - width / 2, (UiKit.Page.Height - h) / 2 - UiMetrics.Space(40), width, h);
 
         _ui.Fill(_batch, UiKit.Page, new Color(0x0A, 0x08, 0x10) * 0.55f);
@@ -5550,7 +5564,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             y += rowGap;
         }
         Row("HUNT", huntLines);
+        void CampRow()
+        {
+            foreach (var line in campLines) { _ui.TextBig(_batch, line, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+            if (campLines.Count > 0) y += rowGap;
+        }
         Row("WARREN", warrenLines);
+        CampRow();
 
         var btn = new Rectangle(x, r.Bottom - pad - button, cw, button);
         if (_ui.Button(_batch, btn, "CONTINUE", ChromeMouse, _clicked, true, ButtonStyle.Primary)) _showWelcome = false;

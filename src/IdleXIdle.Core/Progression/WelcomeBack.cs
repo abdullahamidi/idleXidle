@@ -26,7 +26,8 @@ namespace IdleXIdle.Core.Progression;
 /// <param name="Hunt">What the hunter earned and did while away.</param>
 /// <param name="Warren">What the Warren produced while away — default when it is not open yet.</param>
 /// <param name="WarrenOpen">Whether the Warren exists for this player; a closed Warren has no row.</param>
-public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Result Hunt, WarrenYield Warren, bool WarrenOpen)
+public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Result Hunt, WarrenYield Warren, bool WarrenOpen,
+                                             double CampSeconds = -1, long HuntGleamPaid = -1)
 {
     /// <summary>Below this the trip is short: a toast, not a panel.</summary>
     public const double PanelFromSeconds = 60;
@@ -55,7 +56,7 @@ public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Res
     public IReadOnlyList<string> HuntParts()
     {
         var parts = new List<string>(4);
-        if (Hunt.Gleam > 0) parts.Add($"+{N(Hunt.Gleam)} GLEAM");
+        if (PaidGleam > 0) parts.Add($"+{N(PaidGleam)} GLEAM");
         if (Hunt.WavesCleared > 0) parts.Add($"{N(Hunt.WavesCleared)} WAVE{(Hunt.WavesCleared == 1 ? "" : "S")} CLEARED");
         if (Hunt.Falls > 0) parts.Add($"FELL {N(Hunt.Falls)} TIME{(Hunt.Falls == 1 ? "" : "S")}");
         if (Hunt.DeepestWave > 0) parts.Add($"DEEPEST WAVE {N(Hunt.DeepestWave)}");
@@ -75,5 +76,17 @@ public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Res
     }
 
     /// <summary>Thousands-grouped, invariant — the screen speaks one language whatever the machine's locale.</summary>
+    /// <summary>What the hunt actually paid — the camp's credit when the host gave one, else the simulation's own figure.</summary>
+    public long PaidGleam => HuntGleamPaid >= 0 ? HuntGleamPaid : Hunt.Gleam;
+
+    /// <summary>True when the absence outran the camp — the sentence below is owed.</summary>
+    public bool CampHeldLess => CampSeconds >= 0 && AwaySeconds > CampSeconds + 60;
+
+    /// <summary>"THE CAMP HELD 2H OF THE 9H 40M AWAY — EACH WARREN LEVEL HOLDS MORE", or null when nothing was lost.</summary>
+    public string? CampLine()
+        => CampHeldLess
+            ? $"THE CAMP HELD {OfflineCamp.HoursText((float)(CampSeconds / 3600.0))} OF THE {AwayText(AwaySeconds)} AWAY — EACH WARREN LEVEL HOLDS MORE"
+            : null;
+
     private static string N(long v) => v.ToString("N0", CultureInfo.InvariantCulture);
 }
