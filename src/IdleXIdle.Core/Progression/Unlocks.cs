@@ -74,7 +74,17 @@ public readonly record struct UnlockFacts(
     /// something to SPEND, on a screen where nothing is spent any more. It opens on having something to
     /// SEE instead, which is what the screen is for.
     /// </summary>
-    int TraitsDiscovered = 0);
+    int TraitsDiscovered = 0,
+    /// <summary>Mastery points the career has paid so far (<c>MasteryPoints.Total</c> over the regions' best depths).</summary>
+    int MasteryPointsEarned = 0,
+    /// <summary>Skills the hunter may weave right now: the signature plus every road the tree has taught.</summary>
+    int SkillsKnown = 0,
+    /// <summary>Keystones the world has taught — the conquest gift is the first.</summary>
+    int KeystonesDiscovered = 0,
+    /// <summary>Vows the account has found by playing.</summary>
+    int VowsKnown = 0,
+    /// <summary>Hunters on the roster, the starter included.</summary>
+    int CharactersUnlocked = 0);
 
 /// <summary>
 /// Which of the game's activities are open yet, and what each one is for.
@@ -103,14 +113,29 @@ public readonly record struct UnlockFacts(
 /// </remarks>
 public static class Unlocks
 {
+    /// <summary>Waves cleared before TRAINING opens. The guide's SPEND GLEAM rung waits for the same number.</summary>
+    public const int TrainingOpensAtWaves = 3;
+
+    /// <summary>Mastery points earned before the tree opens — the trunk and the first step of a route.</summary>
+    public const int MasteryOpensAtPoints = 3;
+
     /// <summary>Is this activity open to the player yet?</summary>
+    /// <remarks>
+    /// <b>THE NEW-PLAYER JOURNEY (2026-09-06): PLAY → NEED → REVEAL → EXPLAIN → USE.</b> Every gate
+    /// below names the need that opens it, and nothing opens before that need is real: the Map when
+    /// there is somewhere else to go, the Build when there is a real choice to make, the Roster when
+    /// there is a second hunter to meet. The Map and the Roster were open from the first frame for
+    /// window-shopping (playtest nine); the journey brief closed them again — a screen with one
+    /// thing on it and nine locks teaches the locks. What a fresh save sees is the Hunt, alone.
+    /// </remarks>
     public static bool IsOpen(Activity activity, UnlockFacts f) => activity switch
     {
         // The game. If this is ever gated, the player is looking at a locked screen on launch.
         Activity.Hunt => true,
 
-        // The first wave pays Gleam, so the first wave is when spending it becomes a real thought.
-        Activity.Training => f.WavesCleared >= 1,
+        // AFTER SEVERAL WAVES, not the first: the first wave's Gleam is a number going up, and that
+        // is the whole lesson of the first minute. By the third the purse is worth a decision.
+        Activity.Training => f.WavesCleared >= TrainingOpensAtWaves,
 
         // Opens the moment there is something to wear. Gated on OWNING, not on a wave count — a Gear
         // screen with an empty bag teaches a new player that gear is not part of this game.
@@ -132,26 +157,22 @@ public static class Unlocks
         // half of it and a player with junk and no chest still has a reason to be here.
         Activity.Forge => f.ChestsEverHeld >= 1 || f.ItemsOwned >= 2,
 
-        // The build is the deepest system in the game and the least self-explanatory, so it waits until
-        // the player has watched enough fights to have seen skills actually fire. Asking someone to
-        // choose four skills before they have seen one go off is asking them to guess.
-        Activity.Build => f.DeepestWave >= 5,
+        // WHEN THERE IS A REAL CHOICE. A hunter starts with one skill — its signature — and one slot;
+        // a Build screen then is a page with one row and nothing to put in it. The screen opens the
+        // moment the world hands over something to choose BETWEEN: a second skill taught by the tree,
+        // the keystone a conquest gives, or a vow found by playing. (It was wave 5, which opened a
+        // second slot with nothing to fill it.)
+        Activity.Build => f.SkillsKnown >= 2 || f.KeystonesDiscovered >= 1 || f.VowsKnown >= 1,
 
-        // A BEAT AFTER THE BUILD, not with it. Mastery points arrive one per five waves of first-time
-        // depth, so a player at wave 5 has exactly one and no sense yet of what a Form does. Opening the
-        // tree at 8 means it arrives when there is something to spend and a fight to spend it on, and it
-        // arrives SECOND — you choose your skills, then you shape how they behave.
-        // Wave 25 — the fifth boss. It was wave 8; the tree is a mid-game workbench, not a first
-        // errand (playtest 2026-08-25: "mastery is not a starting thing"), and MasteryPoints pays
-        // four points by then, enough to walk in and buy something.
-        Activity.Mastery => f.DeepestWave >= 25,
+        // ON THE FIRST MEANINGFUL POINTS. Three buys the trunk and the first step of a route — a
+        // walk in, a purchase, and a fork to stand at — which the curve pays at depth 12. (It was
+        // wave 25, a depth many first sessions never reach; the tree waited past its own reason.)
+        Activity.Mastery => f.MasteryPointsEarned >= MasteryOpensAtPoints,
 
-        // OPEN FROM THE START (playtest nine, item 11: "let the player look around"). It used to open
-        // on the first conquest, but the Map already locks its regions individually INSIDE — so a new
-        // player sees the whole six-region chain with exactly one door open, which teaches the shape
-        // of the game better than a dimmed tile ever did. Window-shopping is the point: the internal
-        // locks stay, and travelling anywhere still requires conquering the way there.
-        Activity.Map => true,
+        // WHEN THERE IS SOMEWHERE TO GO: the first conquest opens the next region, and the Map is how
+        // you travel there. Before that it is a chart with one door and five locks. (It was open from
+        // the start for window-shopping; the journey brief closed it — see the class remarks.)
+        Activity.Map => f.RegionsConquered >= 1,
 
         // The idle economy. STILL GATED on the first conquest while the Map and the Roster opened for
         // window-shopping, and deliberately so: the Warren's PRODUCTION is gated on this very rule
@@ -166,12 +187,10 @@ public static class Unlocks
         // screen exists exactly when the player has just been told there is something in it.
         Activity.Traits => f.TraitsDiscovered >= 1,
 
-        // OPEN FROM THE START (playtest nine, item 11 — same reasoning as the Map). A fresh save
-        // renders the starter champion plus the locked cast, and every locked card already explains
-        // its own price, so the screen is a promise rather than a wall. (Its history is instructive:
-        // the gate was `>= 2` while the first earned champion arrived on conquest ONE, then `>= 1` —
-        // always one tuning pass behind the reward it gated. An always-open gallery cannot lag.)
-        Activity.Roster => true,
+        // WHEN THERE IS SOMEONE TO MEET. The first conquest brings the second hunter, so the two
+        // clauses coincide in the shipping game; the second is there so a quest-earned hunter can never
+        // arrive on a save whose Roster is still shut (the lag this gate has shipped twice before).
+        Activity.Roster => f.RegionsConquered >= 1 || f.CharactersUnlocked >= 2,
 
         // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
         // opens is the failure this whole file exists to prevent.
@@ -186,25 +205,42 @@ public static class Unlocks
     public static string Requirement(Activity activity) => activity switch
     {
         Activity.Hunt => "",
-        Activity.Training => "Clear your first wave",
+        Activity.Training => "Clear three waves",
         Activity.Gear => "Find your first item",
         Activity.Vault => "Earn a chest from a boss",
         // BOTH CLAUSES, because the gate has two. It opens on a chest ever held OR two items owned,
         // and naming only the chest sent a player who already had the Forge open looking for a boss.
         Activity.Forge => "Earn a chest, or find two items",
-        Activity.Build => "Reach wave 5",
-        Activity.Mastery => "Reach wave 25",
-        // Open from the start, like the Hunt — nothing to require, so nothing to say. A price line on
-        // a door that is never shut would read as a lock that opened early, i.e. as a bug.
-        Activity.Map => "",
+        Activity.Build => "Learn a second skill, or find a keystone or a vow",
+        Activity.Mastery => "Earn three mastery points by going deeper",
+        Activity.Map => "Conquer a region",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Discover a characteristic by how you fight",
-        // Open from the start too (it was "Conquer a region" when the gate was; the caption follows
-        // the rule — this file has already shipped one caption that drifted from its gate).
-        Activity.Roster => "",
+        Activity.Roster => "Conquer a region, and a second hunter joins",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.
+        _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
+    };
+
+    /// <summary>
+    /// The one line the notice says when an activity has just opened: the NEED that opened it, and
+    /// what to do about it. Past tense for the need, imperative for the use — the reveal is an answer
+    /// to something the player just did, never an announcement.
+    /// </summary>
+    public static string OpenedLine(Activity activity) => activity switch
+    {
+        Activity.Hunt => "",
+        Activity.Training => "Your waves paid Gleam. Spend it on your hunter's stats.",
+        Activity.Gear => "An item dropped. Wear it, or read it first.",
+        Activity.Vault => "A boss left a chest. Read it before you crack it.",
+        Activity.Forge => "Crack chests, refine and reforge what you find.",
+        Activity.Build => "You have a real choice now. Weave it.",
+        Activity.Mastery => "Your depth paid mastery points. Spend them on the tree.",
+        Activity.Map => "The next region is open. Travel there when you are ready.",
+        Activity.Warren => "A conquered region works for you while you are away.",
+        Activity.Traits => "How you fight woke a characteristic. Read what it does.",
+        Activity.Roster => "Another hunter joined you. Meet them.",
         _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
 

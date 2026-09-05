@@ -289,6 +289,18 @@ public sealed record SaveGame
     /// </remarks>
     public List<string> ExplainedScreens { get; init; } = new();
 
+    /// <summary>
+    /// Screens the rail has REVEALED, as <c>Activity</c> names — the minimal explicit onboarding state.
+    /// </summary>
+    /// <remarks>
+    /// Everything else about the journey is derived from facts the save already carries; this list is
+    /// the one thing that has to be remembered, because a reveal must be MONOTONE and one gate is not
+    /// (GEAR reads items owned, and a bag can be salvaged empty). Default-empty means an older save
+    /// loads clean and <c>Reveal.Restore</c> seeds it from the gates, so a returning player keeps every
+    /// screen they had. Written by the host; read once, on load.
+    /// </remarks>
+    public List<string> RevealedScreens { get; init; } = new();
+
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
 

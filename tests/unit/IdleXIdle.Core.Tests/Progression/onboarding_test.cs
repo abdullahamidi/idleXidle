@@ -74,7 +74,7 @@ public class OnboardingTest
             (TourTarget.RightColumn, "REWARDS AND ERRANDS",
                 "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, or you earn mastery points, the buttons here take you there."),
             (TourTarget.NavRail, "THE OTHER SCREENS",
-                "The other screens. Most are closed for now. They open as you play — a gold NEW mark shows what just opened."),
+                "Only the screens you can use are on this rail. New ones appear as you play — a notice says what opened and why, and a gold NEW mark stays on it until you look."),
             (TourTarget.LessonSlot, "LESSONS",
                 "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. The fight's own lessons appear here. Close one with the ×."),
         };
@@ -221,19 +221,19 @@ public class OnboardingTest
     [Fact]
     public void test_a_player_who_saw_the_intro_keeps_exactly_what_the_save_says()
     {
-        // The Map and Roster are open from the first frame; a player who finished the intro and never
-        // visited them still has both tours waiting — the list is honoured as saved.
-        var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3);
+        // TRAINING and GEAR are open (three waves, an item); a player who finished the intro and read
+        // TRAINING but never visited GEAR still has that tour waiting — the list is honoured as saved.
+        var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3, ItemsOwned: 1);
         // An OLD save says "Stats"; the host reads it forward through ModernScreenKey before seeding
         // (the screen became TRAINING 2026-09-01), so the returning player keeps what they learned.
         var seeded = Onboarding.SeedExplained(facts, introSeen: true,
             explained: new[] { Onboarding.ModernScreenKey("Stats") });
 
         Assert.Equal(new[] { "Training" }, seeded.OrderBy(s => s));
-        Assert.True(Onboarding.IsNew(Activity.Map, facts, seeded));
-        Assert.True(Onboarding.IsNew(Activity.Roster, facts, seeded));
+        Assert.True(Onboarding.IsNew(Activity.Gear, facts, seeded));
+        Assert.False(Onboarding.IsNew(Activity.Map, facts, seeded));       // not open yet — nothing to be new
         Assert.False(Onboarding.IsNew(Activity.Training, facts, seeded));
-        Assert.NotNull(Onboarding.TourDue(Activity.Map, seeded));
+        Assert.NotNull(Onboarding.TourDue(Activity.Gear, seeded));
         Assert.Null(Onboarding.TourDue(Activity.Training, seeded));
     }
 
@@ -293,9 +293,9 @@ public class OnboardingTest
     [Fact]
     public void test_a_later_slot_marks_the_build_tile_new_again()
     {
-        // Wave 12 opens the third slot. The Build screen is long explained; the tile still lights,
-        // because there is something unread on it.
-        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12);
+        // Wave 12 opens the third slot. The Build screen is open (a keystone made the first choice)
+        // and long explained; the tile still lights, because there is something unread on it.
+        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12, KeystonesDiscovered: 1);
         var explained = new[] { Onboarding.ScreenKey(Activity.Build), Onboarding.SlotKey(2) };
 
         Assert.True(Onboarding.IsNew(Activity.Build, facts, explained));

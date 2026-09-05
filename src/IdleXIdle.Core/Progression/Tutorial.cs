@@ -56,7 +56,13 @@ public readonly record struct TutorialFacts(
     int ChestsHeld = 0,
     int SkillsWoven = 0,
     int DeepestWave = 0,
-    int RegionsConquered = 0);
+    int RegionsConquered = 0,
+    /// <summary>
+    /// How many things the BUILD screen has to choose between beyond the signature: taught skills,
+    /// keystones, vows. Zero means the screen is not open yet (Unlocks gates it on the same facts),
+    /// and the CHOOSE BUILD rung waits rather than name a door the game has not opened.
+    /// </summary>
+    int BuildChoices = 0);
 
 /// <summary>
 /// The first-run guide: one sentence at a time, and only once the player can act on it.
@@ -121,11 +127,13 @@ public static class Tutorial
     /// <summary>The rungs a player can be shown, in the ladder's (the career's) order.</summary>
     private static readonly TutorialStep[] Ladder =
     {
-        // Conquer is LAST since conquest moved to wave 20 (2026-08-26): a chest, a worn item and a
-        // woven build all arrive well before the twentieth wave, so any earlier seat would let the
-        // rungs after it be satisfied before they were ever shown.
+        // Conquer sat LAST since conquest moved to wave 20 (2026-08-26). CHOOSE BUILD moved behind it
+        // on 2026-09-06: the BUILD screen opens on a real choice now — a second skill, a keystone or a
+        // vow — and in the shipping game the first of those is the keystone the first conquest
+        // teaches. A build lesson seated before the conquest would wait, silent, and hide the
+        // conquest lesson behind it.
         TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss,
-        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.ChooseBuild, TutorialStep.Conquer,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.Conquer, TutorialStep.ChooseBuild,
     };
 
     /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
@@ -208,8 +216,11 @@ public static class Tutorial
     /// </remarks>
     public static bool IsReady(TutorialStep step, TutorialFacts f) => step switch
     {
-        TutorialStep.SpendGleam => f.Gleam >= FirstRankCost,
+        // AND THE SCREEN IT SENDS TO IS OPEN: TRAINING opens after several waves (Unlocks), and a
+        // lesson naming a door the game has not opened is worse than silence.
+        TutorialStep.SpendGleam => f.Gleam >= FirstRankCost && f.WavesCleared >= Unlocks.TrainingOpensAtWaves,
         TutorialStep.EquipItem => f.ItemsOwned >= 1,
+        TutorialStep.ChooseBuild => f.BuildChoices >= 1,
         TutorialStep.Done => false,
         _ => true,
     };

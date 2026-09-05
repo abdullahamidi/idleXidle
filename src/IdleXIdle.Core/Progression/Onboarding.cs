@@ -237,8 +237,8 @@ public static class Onboarding
                 + "or you earn mastery points, the buttons here take you there."),
 
             new TourStep(TourTarget.NavRail, "THE OTHER SCREENS",
-                "The other screens. Most are closed for now. They open as you play — "
-                + "a gold NEW mark shows what just opened."),
+                "Only the screens you can use are on this rail. New ones appear as you play — "
+                + "a notice says what opened and why, and a gold NEW mark stays on it until you look."),
 
             new TourStep(TourTarget.LessonSlot, "LESSONS",
                 "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. "

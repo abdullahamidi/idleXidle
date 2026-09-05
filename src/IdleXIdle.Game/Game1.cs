@@ -228,6 +228,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Screens opened this session. A visited tile drops its NEW mark even while its tour is still running.</summary>
     private readonly HashSet<Activity> _visited = new();
 
+    /// <summary>
+    /// The rail's REVEALED set — the screens the player has been shown, ever (the journey, 2026-09-06).
+    /// Persisted as names; seeded in <see cref="SeedExplained"/> from the save and the gates
+    /// (<see cref="Reveal.Restore"/>), grown once per frame by <see cref="Reveal.Newly"/>, which is
+    /// where the notice fires. THE HUNT is always in it. A revealed tile whose gate has since closed
+    /// (GEAR after the bag is salvaged empty) stays on the rail, dimmed, with its price — the
+    /// restrained locked state; a tile that was never revealed is not drawn at all.
+    /// </summary>
+    private HashSet<Activity> _revealed = new() { Activity.Hunt };
+
+    /// <summary>The save's revealed names, parked until the bag is real (see <see cref="_pendingExplained"/>).</summary>
+    private List<string>? _pendingRevealed;
+
+    /// <summary>Set once the revealed set has been seeded, so no frame announces a screen the save already had.</summary>
+    private bool _revealSeeded;
+
     /// <summary>A champion joined and the roster has not been looked at since. Session-only.</summary>
     private bool _rosterNews;
 
@@ -1007,6 +1023,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Seeded in SeedExplained, from ApplyRestoredState, once the bag is real.
         _introSeen = save.IntroSeen;
         _pendingExplained = save.ExplainedScreens.Select(Onboarding.ModernScreenKey).ToList();
+        _pendingRevealed = save.RevealedScreens.ToList();
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
         // This line was `_forge.RestoreChestsOpened(...)`, and _forge is a ForgeScreen built in
         // LoadContent — which has not run yet. It threw a NullReferenceException and took the game down
@@ -1278,6 +1295,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             DismissedGuideRungs = _dismissedGuide.OrderBy(s => s).ToList(),
             IntroSeen = _introSeen,
             ExplainedScreens = _explained.OrderBy(s => s).ToList(),
+            RevealedScreens = Reveal.Names(_revealed),
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
             UnopenedChests = _forge.UnopenedChests
                 .Select(c => new SavedChest
@@ -1391,6 +1409,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _introDecided = false;
         _introSeen = false;
         _pendingExplained = null;
+        _pendingRevealed = null;
+        _revealed = new HashSet<Activity> { Activity.Hunt };
+        _revealSeeded = false;
         _explained.Clear();
         _visited.Clear();
         _rosterNews = false;
@@ -1607,6 +1628,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void SeedExplained()
     {
+        // THE RAIL'S REVEALED SET, seeded from the save and from the gates — never announced: a
+        // returning player has used these screens, and an older save (no list) keeps every screen its
+        // facts open. From here on Update grows it through Reveal.Newly, which is where the notice is.
+        _revealed = Reveal.Restore(_pendingRevealed ?? new List<string>(), GuideUnlockFacts());
+        _pendingRevealed = null;
+        _revealSeeded = true;
+
         _explained.Clear();
         if (Environment.GetEnvironmentVariable("RH_SHOT") is not null)
         {
@@ -3203,6 +3231,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
         // Notice toasts: one at a time, each for NoticeSeconds, the next one only once the last has
         // gone. Ticks here, past the title return, so only seconds of actual play count.
+        // THE RAIL GROWS (the journey, 2026-09-06): a screen whose need has just become real is
+        // revealed once — its tile appears, this notice says what opened and why, and the gold NEW
+        // waits on the tile until the player looks (Onboarding.IsNew). Read every frame from the
+        // same facts the gates read; Reveal.Newly returns nothing on nearly every one of them.
+        // UNDER THE CAPTURE RIG a fixture dresses its facts after the seed, so every screen it opens
+        // would toast over the thing being photographed; the rail still grows, silently, and
+        // RH_SHOT_REVEAL=<Activity> names the one reveal a capture wants to see announced.
+        if (_revealSeeded)
+            foreach (var opened in Reveal.Newly(_revealed, GuideUnlockFacts()))
+                if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
+                    PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
+
         if (_noticeTimer > 0f) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
         {
@@ -3843,6 +3883,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private TutorialFacts GuideFacts() => new(
         WavesCleared: _deepestEver,
         Gleam: _hunter.Gleam,
+        BuildChoices: BuildChoicesNow(),
         StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
         ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
         ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
@@ -4183,7 +4224,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // — which is what stops the Vault re-announcing itself every time the pile refills from empty.
         ChestsEverHeld: (_forge?.ChestsOpened ?? 0) + (_forge?.UnopenedChests.Count ?? 0),
         RegionsConquered: _world.ConqueredIds.Count,
-        TraitsDiscovered: _traitLedger.DiscoveredCount);
+        TraitsDiscovered: _traitLedger.DiscoveredCount,
+        // THE JOURNEY'S FACTS (2026-09-06): the tree opens on points, the Build on a real choice, the
+        // Roster on a second hunter. Every one is derived from state the save already carries.
+        MasteryPointsEarned: SkillPointsEarned(),
+        SkillsKnown: 1 + (_mastery?.AvailableSkills().Count ?? 0),
+        KeystonesDiscovered: _discoveredKeystones.Count,
+        VowsKnown: _discoveredVows.Count,
+        CharactersUnlocked: _characters.SaveUnlocked().Count);
+
+    /// <summary>What the BUILD screen has to choose between beyond the signature — the guide's CHOOSE BUILD rung waits on it.</summary>
+    private int BuildChoicesNow()
+        => (_mastery?.AvailableSkills().Count ?? 0) + _discoveredKeystones.Count + _discoveredVows.Count;
 
 
     /// <summary>
@@ -4785,7 +4837,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Rectangle[] TourSpotlights(Activity screen, TourTarget target)
     {
         if (target == TourTarget.MasteryTile)
-            return new[] { NavHexRect(Array.IndexOf(NavActivity, Activity.Mastery)) };
+        {
+            // The tile, where it stands on the rail — or, while the tree is not revealed yet, the
+            // rail's next empty slot: the card says when the tile appears, and that is where.
+            var slots = NavSlots();
+            var slot = slots.IndexOf(Array.IndexOf(NavActivity, Activity.Mastery));
+            return new[] { NavHexRect(slot >= 0 ? slot : slots.Count) };
+        }
 
         var own = screen switch
         {
@@ -8024,17 +8082,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var navFacts = GuideUnlockFacts();
         var navGuide = GuideFacts();   // once per frame, not once per tile   // once per frame, not once per tile
         var navGems = GemsHeld();            // the first-gem lesson marks the FORGE tile the same way
-        for (var i = 0; i < Nav.Length; i++)
+        // ONLY THE REVEALED TILES, stacked from the top in the rail's own order (the journey,
+        // 2026-09-06). A tile the player has never had a reason to use is not drawn: a fresh save's
+        // rail is THE HUNT and nothing else, and each screen arrives — with its notice and its NEW —
+        // when the need that opens it is real. Tiles keep their size (NavTileHeight is the full
+        // rail's), so the rail fills downward as the game opens rather than re-spacing. A revealed
+        // tile whose gate has since closed still draws, dimmed, with its price on hover.
+        var slots = NavSlots();
+        for (var slot = 0; slot < slots.Count; slot++)
         {
-            var r = NavHexRect(i);
+            var i = slots[slot];
+            var r = NavHexRect(slot);
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
-            // A LOCKED TILE STILL DRAWS, dimmed. Hiding it would make the rail change length as the game
-            // opens up, which moves every tile under the player's cursor and hides the shape of what is
-            // still to come — the promise of the locked tile is half of why unlocking it lands.
             var unlocked = NavUnlocked(i);
             // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
-            if (i > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
+            if (slot > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
 
             if (on)
             {
@@ -8147,8 +8210,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void HandleNavClick()
     {
         if (!MouseClicked || _showSettings || _showHelp) return;
-        // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor.
+        // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor — slot by slot, the
+        // same mapping the drawing used, so what lights up is what takes the click.
+        var slots = NavSlots();
+        for (var slot = 0; slot < slots.Count; slot++)
+            if (NavHexRect(slot).Contains(ChromeMouse)) { OpenNav(slots[slot]); return; }
+    }
+
+    /// <summary>The rail's tiles, top to bottom: the indices into <see cref="Nav"/> of every revealed activity.</summary>
+    private List<int> NavSlots()
+    {
+        var slots = new List<int>(Nav.Length);
         for (var i = 0; i < Nav.Length; i++)
-            if (NavHexRect(i).Contains(ChromeMouse)) { OpenNav(i); return; }
+            if (_revealed.Contains(NavActivity[i])) slots.Add(i);
+        return slots;
     }
 }

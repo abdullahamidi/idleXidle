@@ -62,7 +62,8 @@ public class onboarding_hints_test
     {
         // Everything open, everything explained: without a rung no tile is NEW.
         var facts = new UnlockFacts(WavesCleared: 999, DeepestWave: 999, ItemsOwned: 99, ChestsEverHeld: 9,
-                                    RegionsConquered: 9, TraitsDiscovered: 99);
+                                    RegionsConquered: 9, TraitsDiscovered: 99, MasteryPointsEarned: 40,
+                                    SkillsKnown: 6, KeystonesDiscovered: 3, VowsKnown: 2, CharactersUnlocked: 4);
         // Every tour given, every slot note read, the gem lesson had: nothing but a rung can mark a tile.
         var explained = System.Enum.GetValues<Activity>().Select(Onboarding.ScreenKey)
             .Concat(System.Linq.Enumerable.Range(1, 8).Select(Onboarding.SlotKey)).Append(Onboarding.GemTourKey).ToList();
