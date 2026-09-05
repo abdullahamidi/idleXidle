@@ -1529,6 +1529,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _traitScreen = new TraitCollectionScreen(_ui);
         _roster = new RosterScreen(_ui);
         _vault = new VaultScreen(_ui);
+        _vault.DrawItem = (sb, item, box) => _forge.DrawItemIcon(sb, item, box);   // one item renderer for every screen
         _loadoutScreen = new LoadoutScreen(_ui);
         _loadoutScreen.Sound = _sound;   // the weave's pick, and the seal a bound Vow presses
         _expedition = new HuntScreen(_ui);
@@ -1859,7 +1860,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash"
-                or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti"
+                or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
@@ -2161,7 +2162,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog"
-                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "vfxdebug")
+                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug")
                 {
                     // `vfxdebug` is `fightshield` PLUS the VFX contract's own overlay (brief §70): the
                     // standing barrier is the acceptance case, so the mode that photographs the contract
@@ -2182,7 +2183,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // exactly that reason. One skill also cannot show the thing the rework is for: two
                     // actives leaving the plain swing most of its beats.
                     if (sm is "fight" or "fightswing" or "fightflash" or "fightshield"
-                        or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "vfxdebug")
+                        or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
                         // The roads, or every skill but the champion's own is refused and the fixture
@@ -2240,6 +2241,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                     // `fightshieldbroken` cannot carry JAWS: it answers every bite by STOPPING it, so the
                     // shield only ever met one leaked point. MIRE (a field) takes its passive slot.
+                    // `fightinspect` — the ENEMY INSPECTOR's fixture: a Mark (CALL), a slow (MIRE) and an
+                    // attack break (WILT) on the wave, so a hover over a creature has statuses to read.
+                    // RH_SHOT_PAGE_MOUSE puts the pointer on a creature; RH_SHOT_T seeks into the wave.
+                    if (sm == "fightinspect")
+                    {
+                        if (_loadout.IndexOfSkill("volley_spray") is var sp && sp >= 0) { _loadout.SetSource(sp, Source.Mind); _loadout.SetSkill(sp, "sign_call"); }
+                        if (_loadout.IndexOfSkill("hammer_press") is var pr && pr >= 0) { _loadout.SetSource(pr, Source.Nature); _loadout.SetSkill(pr, "field_mire"); }
+                        if (_loadout.IndexOfSkill("snare_jaws") is var jw && jw >= 0) { _loadout.SetSource(jw, Source.Shadow); _loadout.SetSkill(jw, "drain_wilt"); }
+                    }
                     if (sm == "fightshieldbroken" && _loadout.IndexOfSkill("snare_jaws") is var jawsSlot && jawsSlot >= 0)
                     {
                         _loadout.SetSource(jawsSlot, Source.Nature);
@@ -2391,7 +2401,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fight` (and the shield / multi-hit poses) with RH_SHOT_T: seconds into the wave to
                     // pose (capture.sh's third argument), so the bars can be photographed after the fight
                     // has moved them — and a bite or a burst caught at its instant.
-                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus" or "fightfive" or "vfxdebug"
+                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "fightstatus" or "fightfive" or "vfxdebug"
                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))

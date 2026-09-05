@@ -277,6 +277,28 @@ public enum BattleEventKind
     /// event exists to put a state badge over the one being broken.
     /// </remarks>
     Break,
+
+    // ── THE ENEMY INSPECTOR'S EVENTS (2026-09-06). The fight screen shows a hovered creature's
+    //    BASE → CURRENT stats and its standing statuses, and it may not re-derive the sim's rules; so
+    //    the sim SAYS each change as it makes it, and WaveReplay keeps the standing value. ──
+
+    /// <summary>A creature's defence after a break: Slot = the creature, Amount = its defence now, rounded.</summary>
+    DefenceNow,
+
+    /// <summary>
+    /// An attack break deepened: Amount = the standing reduction in whole percent (negative). Slot = -1
+    /// for every creature (WILT), 0 for the front creature only, 1 for the second (SHRIVEL's reach).
+    /// </summary>
+    AttackBreak,
+
+    /// <summary>The wave's bite clock stretched: Amount = the standing slow in whole percent (MIRE / NUMB).</summary>
+    Slowed,
+
+    /// <summary>The next bite was pushed back: Amount = the milliseconds added (a stun / stagger).</summary>
+    Staggered,
+
+    /// <summary>A Mark opened on the wave: Amount = its window in ms; Slot = the amplify percent at opening.</summary>
+    Marked,
 }
 
 /// <summary>

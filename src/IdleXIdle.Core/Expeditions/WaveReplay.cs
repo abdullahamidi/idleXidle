@@ -84,6 +84,91 @@ public sealed class WaveReplay
     /// <summary>How many defence breaks this creature is carrying right now. 0 for an untouched one.</summary>
     public int CreatureBreaks(int index) => _creatureBreak.GetValueOrDefault(index);
 
+    // ── THE INSPECTOR'S STANDING STATE (2026-09-06): what a hovered creature's base and current
+    //    numbers are, and which statuses stand at the playhead. Fed by the sim's own events
+    //    (DefenceNow, AttackBreak, Slowed, Staggered, Marked), never re-derived from its rules. ──
+
+    private readonly Dictionary<int, float> _baseDamage = new();
+    private readonly Dictionary<int, float> _baseDefence = new();
+    private readonly Dictionary<int, float> _defenceNow = new();
+    private int _breakAll, _breakFront, _breakSecond;   // whole percent, <= 0
+    private int _slowPercent;
+    private int _staggerUntilMs = -1;
+    private int _staggerMs;
+    private int _markUntilMs = -1;
+    private int _markPercent;
+
+    /// <summary>The wave's own bite clock, before any slow — set with the composition.</summary>
+    public int EnemyIntervalMs { get; private set; }
+
+    /// <summary>
+    /// The composition WITH its base numbers, so the inspector can say BASE → CURRENT. Replaces the
+    /// health-only overload's data and resets every standing status for the new wave.
+    /// </summary>
+    public void SetComposition(IReadOnlyList<Builds.WaveCreature> creatures, int enemyIntervalMs)
+    {
+        ArgumentNullException.ThrowIfNull(creatures);
+        SetComposition(creatures.Select(c => c.MaxHealth).ToList());
+        _baseDamage.Clear();
+        _baseDefence.Clear();
+        _defenceNow.Clear();
+        for (var i = 0; i < creatures.Count; i++)
+        {
+            _baseDamage[i] = creatures[i].Damage;
+            _baseDefence[i] = creatures[i].Defense;
+            _defenceNow[i] = creatures[i].Defense;
+        }
+        EnemyIntervalMs = Math.Max(1, enemyIntervalMs);
+        _breakAll = _breakFront = _breakSecond = 0;
+        _slowPercent = 0;
+        _staggerUntilMs = _markUntilMs = -1;
+        _staggerMs = _markPercent = 0;
+    }
+
+    /// <summary>This creature's health as it stands, and its ceiling — the inspector's HEALTH line.</summary>
+    public float CreatureHealth(int index) => _creatureHealth.GetValueOrDefault(index);
+    public float CreatureMaxHealth(int index) => _creatureMax.GetValueOrDefault(index);
+
+    public float CreatureBaseDamage(int index) => _baseDamage.GetValueOrDefault(index);
+    public float CreatureBaseDefence(int index) => _baseDefence.GetValueOrDefault(index);
+    public float CreatureDefenceNow(int index)
+        => _defenceNow.TryGetValue(index, out var d) ? d : _baseDefence.GetValueOrDefault(index);
+
+    /// <summary>The standing attack break on this creature, in whole percent (<= 0): the wave-wide break, or the front/second creature's own if deeper.</summary>
+    public int CreatureAttackBreakPercent(int index)
+    {
+        var order = AliveOrder(index);
+        var own = order == 0 ? _breakFront : order == 1 ? _breakSecond : 0;
+        return Math.Min(_breakAll, own);
+    }
+
+    /// <summary>What this creature's bite does now: its base damage under its standing attack break.</summary>
+    public float CreatureDamageNow(int index)
+        => CreatureBaseDamage(index) * MathF.Max(0f, 1f + CreatureAttackBreakPercent(index) / 100f);
+
+    /// <summary>The standing slow on the wave's bite clock, in whole percent (>= 0).</summary>
+    public int SlowPercent => _slowPercent;
+
+    /// <summary>The bite clock as it stands: the base interval stretched by the slow.</summary>
+    public int BiteEveryMsNow => (int)MathF.Round(EnemyIntervalMs * (1f + _slowPercent / 100f));
+
+    /// <summary>Milliseconds of stagger still standing at the playhead, or 0.</summary>
+    public int StaggerLeftMs => _staggerUntilMs > _playheadMs ? (int)(_staggerUntilMs - _playheadMs) : 0;
+    public int StaggerMs => _staggerMs;
+
+    /// <summary>Milliseconds of the open Mark still standing at the playhead, or 0.</summary>
+    public int MarkLeftMs => _markUntilMs > _playheadMs ? (int)(_markUntilMs - _playheadMs) : 0;
+    public int MarkPercent => _markPercent;
+
+    /// <summary>This creature's place among the living, front first — the sim's own FirstAlive / SecondAlive order.</summary>
+    private int AliveOrder(int index)
+    {
+        var order = 0;
+        for (var i = 0; i < index; i++)
+            if (CreatureAlive(i)) order++;
+        return CreatureAlive(index) ? order : -1;
+    }
+
     public int CreatureCount => _creatureMax.Count;
 
     public bool CreatureAlive(int index)
@@ -363,6 +448,28 @@ public sealed class WaveReplay
 
             case BattleEventKind.ShieldBroken:
                 CurrentShield = 0;
+                break;
+
+            // THE INSPECTOR'S STANDING STATE — each event carries the value as it stands, so the replay
+            // assigns rather than accumulates and can never drift from the sim by a rounding.
+            case BattleEventKind.DefenceNow:
+                _defenceNow[e.Slot] = e.Amount;
+                break;
+            case BattleEventKind.AttackBreak:
+                if (e.Slot < 0) _breakAll = Math.Min(0, e.Amount);
+                else if (e.Slot == 0) _breakFront = Math.Min(0, e.Amount);
+                else _breakSecond = Math.Min(0, e.Amount);
+                break;
+            case BattleEventKind.Slowed:
+                _slowPercent = Math.Max(0, e.Amount);
+                break;
+            case BattleEventKind.Staggered:
+                _staggerMs = e.Amount;
+                _staggerUntilMs = e.AtMs + e.Amount;
+                break;
+            case BattleEventKind.Marked:
+                _markPercent = e.Slot;
+                _markUntilMs = e.AtMs + e.Amount;
                 break;
         }
     }

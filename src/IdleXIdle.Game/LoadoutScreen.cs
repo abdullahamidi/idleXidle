@@ -1129,10 +1129,19 @@ public sealed class LoadoutScreen
     private int _vowListTop;
     private bool _respecShown;
 
+    /// <summary>
+    /// The live build's Vow-power multiplier — mastery's PLEDGE / ZEALOT and THE OATHBOUND's TWICE
+    /// SWORN — read once per frame, so every "x1.30" this screen prints is the FINAL resolved value
+    /// the fight will pay, not the catalogue's number (2026-09-06: the OATHBOUND's card promised
+    /// "Vows pay far more" and the BUILD screen showed no change at all).
+    /// </summary>
+    private float _vowPower = 1f;
+
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
         var hit = mouse;
         _tip = null;
+        _vowPower = Live().Build.Shape.VowPowerMultiplier;
         LayoutRows();
         LayoutSkills();
 
@@ -1242,7 +1251,7 @@ public sealed class LoadoutScreen
                 // 150 % a full chip shortened HARD HANDS to "H…" (fix3_weave_vowcomplete_150.png).
                 var nameNeed = _ui.MeasureBig(def.Name, UiTypography.Headline) + UiMetrics.Space(12);
                 var roomForChip = right - tx - nameNeed - sealEdge - UiMetrics.Space(6);
-                var pill = live ? $"HOLDS  x{Vows.Multiplier(vow):0.00}" : "BROKEN";
+                var pill = live ? $"HOLDS  x{Vows.ResolvedMultiplier(vow, _vowPower):0.00}" : "BROKEN";
                 var chipW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2;
                 if (chipW > roomForChip && live) { pill = "HOLDS"; chipW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2; }
                 if (chipW > roomForChip) { pill = ""; chipW = 0; }
@@ -1258,7 +1267,7 @@ public sealed class LoadoutScreen
                     _ui.TextBig(b, pill, pr.X + UiTypography.ChipPadX, pr.Y + UiTypography.ChipPadY, live ? Gold : Ember, UiTypography.Caption);
                     hot = Rectangle.Union(sealBox, pr);
                 }
-                Tip(In(hot, region), hit, live ? $"{vow.Name.ToUpperInvariant()} holds — {DemandText(vow)} — every skill x{Vows.Multiplier(vow):0.00}." : $"{vow.Name.ToUpperInvariant()} is broken: {DemandText(vow)} — it pays nothing until it holds.");
+                Tip(In(hot, region), hit, live ? $"{vow.Name.ToUpperInvariant()} holds — {DemandText(vow)} — every skill x{Vows.ResolvedMultiplier(vow, _vowPower):0.00}." : $"{vow.Name.ToUpperInvariant()} is broken: {DemandText(vow)} — it pays nothing until it holds.");
             }
             _ui.TextBig(b, _ui.ShortenBig(def.Name, right - pillW - pad - tx, UiTypography.Headline), tx, line1, on ? Gold : Bone, UiTypography.Headline);
             // Line 2: STYLE · LEVEL · the style factor.
@@ -2016,7 +2025,7 @@ public sealed class LoadoutScreen
                             VowSeal(b, v, sealBox, holds, _insAlpha);
 
                             var ly = card.Y + UiMetrics.Space(10);
-                            var mult = $"x{Vows.Multiplier(v):0.00}";
+                            var mult = $"x{Vows.ResolvedMultiplier(v, _vowPower):0.00}";
                             var multW = _ui.MeasureBig(mult, UiTypography.Headline);
                             _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), tw - multW - UiMetrics.Space(10), UiTypography.Headline), tx0, ly, Ins(holds ? Gold : Bone), UiTypography.Headline);
                             _ui.TextRightBig(b, mult, x + w - pad, ly, Ins(holds ? Gold : Slate), UiTypography.Headline);
@@ -2049,7 +2058,7 @@ public sealed class LoadoutScreen
                         // WHAT THEY PAY TOGETHER — one number, because that is how the fight bills them:
                         // every kept vow's bonus summed under one ceiling, and a broken one adds nothing.
                         if (sworn.Count > 1)
-                            Pair("TOGETHER", $"x{Vows.CombinedFactor(sworn, ctx):0.00} ON EVERY SKILL");
+                            Pair("TOGETHER", $"x{Vows.CombinedFactor(sworn, ctx, _vowPower):0.00} ON EVERY SKILL");
                     }
                     if (Known.Count > 0)
                     {
@@ -2153,7 +2162,7 @@ public sealed class LoadoutScreen
             var nameRoom = row.Width - textX - tail;
             _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), nameRoom, UiTypography.Body), row.X + textX, nameY, Ins(on ? Gold : barred ? Dim : Bone), UiTypography.Body);
             _ui.TextBig(b, _ui.ShortenBig("ASKS  " + DemandText(v), nameRoom, UiTypography.Caption), row.X + textX, subY, Ins(barred ? Dim : Slate), UiTypography.Caption);
-            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - pad, nameY, Ins(live ? Gold : Slate), UiTypography.Body);
+            _ui.TextRightBig(b, $"x{Vows.ResolvedMultiplier(v, _vowPower):0.00}", row.Right - pad, nameY, Ins(live ? Gold : Slate), UiTypography.Body);
             _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - pad, subY, Ins(live ? Met : Ember), UiTypography.Caption);
             Tip(shown, hit, barred ? $"{v.Description} YOU MAY HOLD {Loadout.VowCapacity} VOW{(Loadout.VowCapacity == 1 ? "" : "S")} AT ONCE." : v.Description);
         }

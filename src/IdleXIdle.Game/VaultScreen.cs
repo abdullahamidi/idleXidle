@@ -76,6 +76,12 @@ public sealed class VaultScreen
 
     public VaultScreen(UiKit ui) => _ui = ui;
 
+    /// <summary>
+    /// The game's ONE item renderer (ForgeScreen.DrawItemIcon), lent by the host so a trader's offer
+    /// wears the same art, frame and gem it wears in GEAR and the FORGE. Null draws a rarity swatch.
+    /// </summary>
+    public Action<SpriteBatch, ItemInstance, Rectangle>? DrawItem { get; set; }
+
     private int _cursor;     // which SORTED chest a click chose — the host reads it via SelectedIndex
     private int _scroll;     // first visible card, in steps of a row
     private float _anim;
@@ -1217,7 +1223,7 @@ public sealed class VaultScreen
 
     /// <summary>An offer card's height at 100 %, and the stall's room under the cards.</summary>
     private static int TraderCardH => UiMetrics.Control(470);
-    private static int TraderFoot => UiMetrics.Space(134);
+    private static int TraderFoot => TraderFootMin;   // the cards are the panel; nothing lived in a 134 px foot
 
     /// <summary>
     /// The least room the stall keeps under its cards: the frame's own bottom clearance. The 100 %
@@ -1293,17 +1299,26 @@ public sealed class VaultScreen
             var over = card.Contains(hit);
             if (over) hoverOffer = offer;
 
-            _ui.Fill(b, card, new Color(0x12, 0x0E, 0x18, 0xF0));
-            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 6), grade);
-            Outline(b, card, over ? Bone : Dim, 2);
+            // THE HOUSE PLATE with the rarity as its accent rule, lifting under the pointer — not a
+            // hand-filled rectangle with a bar on top (2026-09-06).
+            _ui.Plate(b, card, grade);
+            if (over) { _ui.Fill(b, card, Color.White * 0.04f); Outline(b, card, Bone, 1); }
 
             // The card's rows, one under the other: the grade, the name, the level, (a gem's face,)
             // the price. Each step is the line above's pitch plus a breath, so the rows keep their
             // order at every profile instead of meeting in the middle.
-            var y = card.Y + UiMetrics.Space(22);
+            // THE ITEM'S OWN ART, the same renderer GEAR, the FORGE and the VAULT's chest reveal use:
+            // an offer used to be a column of words, and a gem the only card with a picture. The same
+            // item looks the same everywhere, so the trader cannot sell a stranger.
+            var y = card.Y + UiMetrics.Space(18);
+            var art = UiMetrics.Control(96);
+            var artBox = new Rectangle(card.Center.X - art / 2, y, art, art);
+            if (DrawItem is { } draw) draw(b, offer, artBox);
+            else _ui.Fill(b, artBox, grade * 0.5f);
+            y += art + UiMetrics.Space(10);
             _ui.TextCenterBig(b, offer.Rarity.ToString().ToUpperInvariant(), card.Center.X, y,
-                              grade, UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+                              grade, UiTypography.Caption);
+            y += UiTypography.Pitch(UiTypography.Caption) + UiMetrics.Space(2);
 
             // THE NAME WRAPS RATHER THAN SHRINKS. A loop used to take a long name down toward the
             // Caption floor to fit the column; the profile exists to make text bigger, so a name that
@@ -1317,23 +1332,14 @@ public sealed class VaultScreen
                 y += UiTypography.Pitch(UiTypography.Body);
             }
             y += UiMetrics.Space(8);
-            _ui.TextCenterBig(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, y, Slate,
-                              UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary);
-
-            // THE STALL'S GEM HAD NO PICTURE. Every other offer at least reads as a shape from its
-            // name; a gem is a stone whose whole identity is its stat, so a card with a price, a name
-            // and no face was the one offer you could not recognise. The medallion is the same art the
-            // Forge draws for it (AssetLibrary's gem_<stat> aliases), so the two screens agree. A gem
-            // card's price starts below the picture rather than through it.
-            if (GemCraft.IsGem(offer))
-            {
-                var face = UiMetrics.Control(68);
-                if (_ui.Assets.Get(GemMedallion(offer)) is { } medallion)
-                    b.Draw(medallion, new Rectangle(card.Center.X - face / 2, y, face, face), Color.White);
-                y += face + UiMetrics.Space(10);
-            }
-            else y += UiMetrics.Space(28);
+            // Level, and the element where the item has one — a Source colour as an accent, never as prose.
+            var levelLine = offer.Element is { } el
+                ? $"LEVEL {offer.ItemLevel}  ·  {el.ToString().ToUpperInvariant()}"
+                : $"LEVEL {offer.ItemLevel}";
+            _ui.TextCenterBig(b, levelLine, card.Center.X, y, Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
+            _ui.Fill(b, new Rectangle(card.X + UiMetrics.Space(16), y, card.Width - UiMetrics.Space(32), 1), Dim);
+            y += UiMetrics.Space(10);
 
             // The price, line by line, each in the wallet's verdict colour.
             _ui.TextCenterBig(b, "PRICE", card.Center.X, y, Slate, UiTypography.SectionLabel);

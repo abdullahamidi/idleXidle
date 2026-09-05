@@ -89,6 +89,9 @@ public sealed class SoloExpedition
     /// <summary>The composition the last resolved wave held — the report reads this.</summary>
     public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
 
+    /// <summary>The bite clock the last wave was resolved on, before any slow — what the enemy inspector measures a slow against.</summary>
+    public int LastWaveIntervalMs { get; private set; } = EnemyIntervalMs;
+
     /// <summary>
     /// Per-wave measurements for this descent, which the post-run report reads.
     /// </summary>
@@ -330,6 +333,7 @@ public sealed class SoloExpedition
         var scale = WaveScaling.EnemyScale(next, _tuning);
         var bonus = new WaveBonus();
         var (interval, dmgMult) = BiasTempo();   // the region's combat character bends the enemy's tempo
+        LastWaveIntervalMs = interval;
 
         // Health takes the boss spike; damage does not. They used to be the same number — see
         // WaveScaling.EnemyDamageScale.

@@ -362,7 +362,7 @@ public sealed class TraitCollectionScreen
             _ui.Plate(b, slot, id is null ? null : Gold);
             if (id is not null && TraitCatalogue.Find(id) is { } def)
             {
-                Sigil(b, slot, def.Id, Gold, lit: true);
+                Face(b, slot, def.Id, Gold);
                 var nameY = slot.Bottom + UiMetrics.Space(4);
                 _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, slot.Width + Gap, UiTypography.Caption),
                                   slot.Center.X, nameY, Bone, UiTypography.Caption);
@@ -430,7 +430,7 @@ public sealed class TraitCollectionScreen
             if (hot && !picked) _ui.Fill(b, tile, Color.White * 0.05f);
             if (known)
             {
-                Sigil(b, tile, def.Id, isWorn ? Gold : Bone, lit: true);
+                Face(b, tile, def.Id, isWorn ? Gold : Bone);
                 // The name WRAPS to the two Caption lines the cell reserves — at 125/150 half the awakened
                 // names were cut to stubs, and the name is the tile's only identifier (traits-02).
                 var ny = tile.Bottom + UiMetrics.Space(4);
@@ -446,7 +446,6 @@ public sealed class TraitCollectionScreen
                 // word — the same reading the BUILD library gives an unreached skill (traits-05). Its own
                 // constellation stays behind the seal, faint, so a player who awakens it recognises the
                 // shape that was there all along.
-                Sigil(b, tile, def.Id, Unknown * 0.4f, lit: false);
                 var sealSide = tile.Width * 3 / 4;
                 var seal = new Rectangle(tile.Center.X - sealSide / 2, tile.Center.Y - sealSide / 2, sealSide, sealSide);
                 if (!_ui.Icon(b, "icon_unknown_seal", seal, Color.White * (hot ? 0.9f : 0.75f))) _ui.Diamond(b, seal, Unknown * 0.6f);
@@ -547,7 +546,7 @@ public sealed class TraitCollectionScreen
         {
             var hero = new Rectangle(left, y, heroSide, heroSide);
             _ui.Plate(b, hero, isWorn ? Gold : null);
-            Sigil(b, hero, def.Id, isWorn ? Gold : Bone, lit: true);
+            Face(b, hero, def.Id, isWorn ? Gold : Bone);
             y += heroSide + UiMetrics.Space(12);
         }
 
@@ -627,6 +626,21 @@ public sealed class TraitCollectionScreen
     /// the shape must not encode the condition.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// A DISCOVERED trait's face: its authored icon (assets/art/UI/icons/traits, PixelLab 2026-09-06 —
+    /// one family, bone-white etched on black stone), or the drawn constellation while an icon is missing.
+    /// </summary>
+    /// <remarks>
+    /// The icon is drawn in its own colours: the WORN state is said by the plate's gold accent around
+    /// it, not by tinting the art gold, which only muddied the etching. An UNDISCOVERED trait never
+    /// reaches this method — it wears the unknown seal and nothing of its own.
+    /// </remarks>
+    private void Face(SpriteBatch b, Rectangle box, string id, Color ink)
+    {
+        if (_ui.Icon(b, $"icon_trait_{id}", box)) return;
+        Sigil(b, box, id, ink, lit: true);
+    }
+
     private void Sigil(SpriteBatch b, Rectangle box, string id, Color ink, bool lit)
     {
         if (box.Width <= 0 || box.Height <= 0) return;

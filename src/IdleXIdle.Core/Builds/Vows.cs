@@ -740,6 +740,19 @@ public static class Vows
     /// build in the game is one bounded number rather than a stack nobody can measure.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// What ONE kept Vow pays THIS build: its catalogue multiplier with the build's Vow-power
+    /// (mastery's PLEDGE and ZEALOT, THE OATHBOUND's TWICE SWORN) applied to the bonus.
+    /// </summary>
+    /// <remarks>
+    /// The screens printed <see cref="Multiplier"/> — the catalogue's own number — so THE OATHBOUND
+    /// switched in and every "HOLDS x1.30" on the BUILD screen stayed x1.30 while the sim paid x1.45.
+    /// A displayed value is the FINAL resolved value or it is a lie (2026-09-06). The same arithmetic
+    /// <see cref="CombinedFactor"/> applies to the summed bonus, applied to one Vow's bonus alone.
+    /// </remarks>
+    public static float ResolvedMultiplier(Vow? vow, float vowPowerMultiplier, VowTuning? tuning = null)
+        => vow is null ? 1f : 1f + (Multiplier(vow, tuning) - 1f) * MathF.Max(0f, vowPowerMultiplier);
+
     public static float CombinedFactor(
         IEnumerable<Vow?>? sworn, BuildContext ctx, float vowPowerMultiplier = 1f, VowTuning? tuning = null)
     {

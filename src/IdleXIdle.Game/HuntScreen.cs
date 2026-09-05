@@ -511,6 +511,64 @@ public sealed class HuntScreen
     {
         public string Text; public Color Color; public int X, Y; public float Life; public int Px;
         public CalloutLane Lane;
+        /// <summary>A tag for a callout that may be ADDED TO after it is posted — the hunter's own damage number.</summary>
+        public int Id;
+    }
+
+    // ── THE HUNTER'S OWN DAMAGE NUMBER (2026-09-06). ─────────────────────────────────────────────────
+    //    Enemy damage has read as a number since the first build; Health the HUNTER lost never did — a
+    //    bite was a lunge, a thud and a red flash. The number is the FIRST reading a player has of "how
+    //    hard does this wave hit me", and its rule is strict: a number only for Health actually lost.
+    //    Shield absorption keeps its own barrier feedback (ShieldAbsorbed), and a bite the build stopped
+    //    outright shows nothing — the sim reports those as a strike with Amount 0.
+    //
+    //    COALESCED, not spammed: five creatures bite as one wave clock, and a pack of eight at 150 ms
+    //    would be eight numbers a second. Hits inside HunterHitMergeSeconds add into the number already
+    //    rising, which then reads "-118" for the pack's bite rather than "-14 -16 -15 -13 …".
+    private int _nextCalloutId = 1;
+    private int _hunterHitId;
+    private int _hunterHitTotal;
+    private float _hunterHitAt = -10f;
+    private const float HunterHitMergeSeconds = 0.35f;
+
+    /// <summary>
+    /// What the hunter's floating number says for an enemy strike, or null for no number: only Health
+    /// actually lost prints — never Shield absorption, never a bite the build prevented.
+    /// </summary>
+    internal static string? HunterHitText(BattleEvent e)
+        => e.Kind == BattleEventKind.EnemyStrike && e.Amount > 0 ? $"-{e.Amount}" : null;
+
+    private void HunterHit(BattleEvent e)
+    {
+        if (!ShowDamageNumbers || HunterHitText(e) is null) return;
+        if (_anim - _hunterHitAt <= HunterHitMergeSeconds)
+        {
+            for (var i = 0; i < _callouts.Count; i++)
+            {
+                if (_callouts[i].Id != _hunterHitId) continue;
+                var c = _callouts[i];
+                _hunterHitTotal += e.Amount;
+                c.Text = $"-{_hunterHitTotal}";
+                c.Life = MathF.Max(c.Life, 0.9f);
+                _callouts[i] = c;
+                _hunterHitAt = _anim;
+                return;
+            }
+        }
+        _hunterHitTotal = e.Amount;
+        _hunterHitId = _nextCalloutId++;
+        _hunterHitAt = _anim;
+        _callouts.Add(new Callout
+        {
+            Text = $"-{e.Amount}",
+            Color = Ember,
+            X = ChampBox.Center.X + ChampBox.Width / 5,   // off the centre line, so it never sits on a SAY
+            Y = ChampBox.Y + ChampBox.Height / 3 - StackSlot(CalloutLane.Champion) * CalloutLineHeight,
+            Life = 1f,
+            Px = DamagePx,
+            Lane = CalloutLane.Champion,
+            Id = _hunterHitId,
+        });
     }
 
     /// <summary>
@@ -1046,7 +1104,7 @@ public sealed class HuntScreen
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
         // beat. Without this a wave of five reads as one bar going down, which hides the single most
         // useful fact in a Swarm band: how many of them you actually got through.
-        _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
+        _replay.SetComposition(_run.LastWaveCreatures, _run.LastWaveIntervalMs);   // with base damage and defence, for the enemy inspector
         _playheadMs = 0f;
         _chargeNow = 0;   // the sim's pool is per-wave; the pill must not carry one over
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
@@ -1324,7 +1382,7 @@ public sealed class HuntScreen
             _replay = new WaveReplay(_run.LastWaveEvents,
                 new Dictionary<int, int> { [0] = _waveStartHealth },
                 new Dictionary<int, int> { [0] = _champ.MaxHealth }, _waveEnemyHp);
-            _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
+            _replay.SetComposition(_run.LastWaveCreatures, _run.LastWaveIntervalMs);   // with base damage and defence, for the enemy inspector
             _diedAt.Clear();
             _actors.Clear();
             _callouts.Clear();      // the pose shows THIS instant, not the second before it
@@ -1475,6 +1533,7 @@ public sealed class HuntScreen
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f, vary: 0.06f);   // same thud pitched down: taking, not giving
                     PlayFx(VfxProfiles.ImpactBite, VfxSubject.Champion, Ember);
+                    HunterHit(e);   // the Health the hunter lost, as a number — nothing for a shielded or prevented bite
                     break;
                 case BattleEventKind.Skill:
                 {
@@ -1791,6 +1850,7 @@ public sealed class HuntScreen
         HeaderStackBottom = StageHeaderBottomY;                   // the strip or the boss bar lowers it
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         DrawEnemyLine(b);                                          // the wave's live strip under the header
+        if (!_logOpen) DrawEnemyInspector(b, hit);                 // the hovered creature's live numbers and statuses
         if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit, clicked && !_logOpen);
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
@@ -1806,6 +1866,157 @@ public sealed class HuntScreen
     }
 
     /// <summary>Arena figures + effects, drawn inside the scissor clip so no actor/VFX/bar/number escapes it.</summary>
+    // ── THE ENEMY INSPECTOR (2026-09-06). Rest the pointer on a creature and its live numbers appear:
+    //    health, its bite and its defence as BASE → CURRENT, the wave's bite clock, and every status
+    //    standing on it. Every figure is READ from WaveReplay, which replays the sim's own events —
+    //    nothing here re-derives a combat rule. Colour says the direction FOR THE HUNTER (green when
+    //    the creature is worse off, red when it is better off), and the arrow, the label and the
+    //    status line say it in words, so the reading never depends on colour alone. ──
+
+    /// <summary>The creature under the pointer, topmost last — or -1.</summary>
+    private int HoveredCreature(Point hit)
+    {
+        if (_replay is null || _run is null) return -1;
+        var found = -1;
+        foreach (var (slot, box) in _creatureBoxes)
+            if (box.Contains(hit) && _replay.CreatureAlive(slot)) found = slot;
+        return found;
+    }
+
+    /// <summary>One line of the inspector: a label, and the base → current pair for it.</summary>
+    private readonly record struct InspectorRow(string Label, string Base, string Now, int Direction);
+
+    private static string Whole(float v) => ((int)MathF.Round(v)).ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Secs(int ms) => (ms / 1000f).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "s";
+
+    private void DrawEnemyInspector(SpriteBatch b, Point hit)
+    {
+        var slot = HoveredCreature(hit);
+        if (slot < 0 || _replay is null || _run is null) return;
+        var r = _replay;
+
+        // ── THE READINGS ──
+        var health = r.CreatureHealth(slot);
+        var maxHealth = r.CreatureMaxHealth(slot);
+        var baseBite = r.CreatureBaseDamage(slot);
+        var biteNow = r.CreatureDamageNow(slot);
+        var breakPct = r.CreatureAttackBreakPercent(slot);
+        var baseDef = r.CreatureBaseDefence(slot);
+        var defNow = r.CreatureDefenceNow(slot);
+        var baseEvery = r.EnemyIntervalMs;
+        var everyNow = r.BiteEveryMsNow;
+        var kind = _isBossWave ? "BOSS" : _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
+
+        // Direction: +1 = favourable to the hunter (green), -1 = unfavourable (red), 0 = unchanged.
+        var rows = new List<InspectorRow>
+        {
+            new("ATTACK", Whole(baseBite), Whole(biteNow), biteNow < baseBite - 0.5f ? 1 : biteNow > baseBite + 0.5f ? -1 : 0),
+            new("DEFENCE", Whole(baseDef), Whole(defNow), defNow < baseDef - 0.5f ? 1 : defNow > baseDef + 0.5f ? -1 : 0),
+            new("BITES EVERY", Secs(baseEvery), Secs(everyNow), everyNow > baseEvery ? 1 : everyNow < baseEvery ? -1 : 0),
+        };
+        var statuses = new List<(string Text, int Direction)>();
+        if (defNow < baseDef - 0.5f) statuses.Add(($"DEFENCE BREAK   {Whole(defNow - baseDef)}", 1));
+        if (breakPct < 0) statuses.Add(($"ATTACK BREAK   {breakPct}%", 1));
+        if (r.SlowPercent > 0) statuses.Add(($"SLOWED   +{r.SlowPercent}% BETWEEN BITES", 1));
+        if (r.StaggerLeftMs > 0) statuses.Add(($"STAGGERED   {Secs(r.StaggerLeftMs)} LEFT", 1));
+        if (r.MarkLeftMs > 0) statuses.Add(($"MARKED   YOUR SKILLS +{r.MarkPercent}% FOR {Secs(r.MarkLeftMs)}", 1));
+
+        // ── THE PLATE: sized from its lines, beside the creature, on the page and off the dock. ──
+        var pad = UiMetrics.Space(12);
+        var w = UiMetrics.Control(284);
+        var lineS = UiTypography.Pitch(UiTypography.Caption);
+        var lineB = UiTypography.Pitch(UiTypography.Secondary);
+        var h = pad + lineB + lineS + UiMetrics.Space(8)                       // name, kind line, rule
+                + lineB + rows.Count * lineS + UiMetrics.Space(6)              // health and the three pairs
+                + (statuses.Count > 0 ? UiMetrics.Space(2) + lineS + statuses.Count * lineS : lineS)
+                + pad;
+        // RIGHT of the creature when the page has room; else ABOVE the pack (never over the hunter);
+        // else to the left. Always under the header stack and above the skill dock.
+        var box = _creatureBoxes[slot];
+        var ceiling = HeaderStackBottom + UiMetrics.Space(8);
+        var floor = Math.Min(s_dockRect.Height > 0 ? s_dockRect.Y : UiKit.PageBottom(UiMetrics.Space(12)), UiKit.PageBottom(UiMetrics.Space(12)));
+        var gap = UiMetrics.Space(12);
+        int x, y;
+        if (box.Right + gap + w <= UiKit.PageRight(gap))
+        {
+            x = box.Right + gap;
+            y = Math.Clamp(box.Y + UiMetrics.Space(8), ceiling, Math.Max(ceiling, floor - gap - h));
+        }
+        else if (box.Y - gap - h >= ceiling)
+        {
+            x = Math.Clamp(box.Center.X - w / 2, ArenaClip.X + UiMetrics.Space(8), UiKit.PageRight(gap) - w);
+            y = box.Y - gap - h;
+        }
+        else
+        {
+            x = Math.Max(ArenaClip.X + UiMetrics.Space(8), box.X - gap - w);
+            y = Math.Clamp(box.Y + UiMetrics.Space(8), ceiling, Math.Max(ceiling, floor - gap - h));
+        }
+        var plate = new Rectangle(x, y, w, h);
+        _ui.Fill(b, plate, Color.Black * 0.45f);
+        _ui.Plate(b, plate, EnemySource is { } src ? SourceGlow(src) : null);
+
+        var left = plate.X + pad + 5;
+        var right = plate.Right - pad;
+        var ty = plate.Y + pad;
+        _ui.TextBig(b, kind, left, ty, Bone, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{Whole(health)} / {Whole(maxHealth)}", right, ty + (UiTypography.Secondary - UiTypography.Caption) / 2, Bone, UiTypography.Caption);
+        ty += lineB;
+        var kindLine = affixes.Count > 0 ? string.Join("  ·  ", affixes.Take(2).Select(AffixWords)) : "NO AFFIX";
+        _ui.TextBig(b, _ui.ShortenBig(kindLine, right - left, UiTypography.Caption), left, ty, Slate, UiTypography.Caption);
+        ty += lineS + UiMetrics.Space(4);
+        _ui.Fill(b, new Rectangle(left, ty, right - left, 1), UiInk.Rule);
+        ty += UiMetrics.Space(4);
+
+        // HEALTH as the slim bar — the pip's own reading, larger.
+        _ui.TextBig(b, "HEALTH", left, ty + (lineB - UiTypography.Caption) / 2, Slate, UiTypography.Caption);
+        var barW = UiMetrics.Control(120);
+        _ui.Bar(b, right - barW, ty + (lineB - UiMetrics.Control(8)) / 2, barW, UiMetrics.Control(8),
+                maxHealth <= 0f ? 0f : Math.Clamp(health / maxHealth, 0f, 1f), Ember);
+        ty += lineB;
+
+        // BASE → CURRENT, one pair a row: the base muted, the arrow only when something moved, the
+        // current in the direction's ink. A pair that has not moved prints one figure in Primary.
+        var arrowW = _ui.MeasureBig("→", UiTypography.Caption);
+        foreach (var row in rows)
+        {
+            _ui.TextBig(b, row.Label, left, ty, Slate, UiTypography.Caption);
+            if (row.Direction == 0)
+            {
+                _ui.TextRightBig(b, row.Now, right, ty, Bone, UiTypography.Caption);
+            }
+            else
+            {
+                var ink = row.Direction > 0 ? UiInk.Good : Ember;
+                var nowW = _ui.MeasureBig(row.Now, UiTypography.Caption);
+                _ui.TextRightBig(b, row.Now, right, ty, ink, UiTypography.Caption);
+                var ax = right - nowW - UiMetrics.Space(8) - arrowW;
+                _ui.TextBig(b, "→", ax, ty, Slate, UiTypography.Caption);
+                _ui.TextRightBig(b, row.Base, ax - UiMetrics.Space(8), ty, UiInk.Disabled, UiTypography.Caption);
+            }
+            ty += lineS;
+        }
+        ty += UiMetrics.Space(6);
+
+        if (statuses.Count == 0)
+        {
+            _ui.TextBig(b, "NO STATUS ON IT", left, ty, UiInk.Disabled, UiTypography.Caption);
+            return;
+        }
+        _ui.TextBig(b, "STATUS", left, ty, Slate, UiTypography.Caption);
+        ty += lineS + UiMetrics.Space(2);
+        var pip = UiMetrics.Control(8);
+        foreach (var (text, dir) in statuses)
+        {
+            // A diamond in the direction's ink beside the words — the icon the reading has, at every profile.
+            _ui.Diamond(b, new Rectangle(left, ty + (UiTypography.Caption - pip) / 2 + 1, pip, pip), dir > 0 ? UiInk.Good : Ember);
+            _ui.TextBig(b, _ui.ShortenBig(text, right - left - pip - UiMetrics.Space(8), UiTypography.Caption),
+                        left + pip + UiMetrics.Space(8), ty, dir > 0 ? UiInk.Good : Ember, UiTypography.Caption);
+            ty += lineS;
+        }
+    }
+
     private void DrawArena(SpriteBatch b, HuntOverlay overlay)
     {
         // EVERY FIGURE IS PLACED BEFORE ANY OF THEM IS DRAWN. The effects pass resolves against what

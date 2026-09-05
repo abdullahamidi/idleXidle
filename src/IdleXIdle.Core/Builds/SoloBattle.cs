@@ -1558,6 +1558,8 @@ public static class SoloBattle
                             if (c.Defense < before)
                                 events.Add(new BattleEvent(BattleEventKind.Break, ci,
                                                           breaks[ci] = breaks.GetValueOrDefault(ci) + 1, atMs));
+                            if (c.Defense < before)
+                                events.Add(new BattleEvent(BattleEventKind.DefenceNow, ci, (int)MathF.Round(c.Defense), atMs));
                         }
                 }
 
@@ -1989,6 +1991,7 @@ public static class SoloBattle
                         else if (!staggeredThisBite)
                         {
                             nextBite += def.StunMs;
+                            events.Add(new BattleEvent(BattleEventKind.Staggered, -1, def.StunMs, ms));
                             staggeredThisBite = true;
                         }
                         // NO UNCONDITIONAL `continue`. PIN is the one variation that stuns INSTEAD of
@@ -2017,6 +2020,8 @@ public static class SoloBattle
                             if (c.Defense < before)
                                 events.Add(new BattleEvent(BattleEventKind.Break, ci,
                                                           breaks[ci] = breaks.GetValueOrDefault(ci) + 1, ms));
+                            if (c.Defense < before)
+                                events.Add(new BattleEvent(BattleEventKind.DefenceNow, ci, (int)MathF.Round(c.Defense), ms));
                             want--;
                         }
                         continue;
@@ -2045,6 +2050,7 @@ public static class SoloBattle
                         // enemy, and CLOG's 10% of one enemy and TEEMING's 6% of one enemy rounded to
                         // the same millisecond on the bite clock.
                         slowFactor = Math.Max(slowFactor, want);
+                        events.Add(new BattleEvent(BattleEventKind.Slowed, -1, (int)MathF.Round(slowFactor * 100f), ms));
                         slowTicks++;
                     }
 
@@ -2057,14 +2063,21 @@ public static class SoloBattle
                         if (def.FrontEnemyOnly)
                         {
                             frontBreak = Math.Max(def.AttackBreakFloor, frontBreak - def.AttackBreakPerTick);
+                            events.Add(new BattleEvent(BattleEventKind.AttackBreak, 0, (int)MathF.Round(frontBreak * 100f), ms));
                             // HOLLOW — the same break on the one behind it, at its own fraction, and
                             // floored the same way so two reinforcements cannot silence a wave.
                             if (def.BreakSecondEnemy > 0f)
+                            {
                                 secondBreak = Math.Max(def.AttackBreakFloor,
                                                        secondBreak - def.AttackBreakPerTick * def.BreakSecondEnemy);
+                                events.Add(new BattleEvent(BattleEventKind.AttackBreak, 1, (int)MathF.Round(secondBreak * 100f), ms));
+                            }
                         }
                         else
+                        {
                             attackBreak = Math.Max(def.AttackBreakFloor, attackBreak - def.AttackBreakPerTick);
+                            events.Add(new BattleEvent(BattleEventKind.AttackBreak, -1, (int)MathF.Round(attackBreak * 100f), ms));
+                        }
 
                         // SUP — the pulse also returns a share of the champion's pool. Through Heal so
                         // the per-wave healing ceiling and BLOOD MAGIC's refusal both still apply.
@@ -2081,6 +2094,7 @@ public static class SoloBattle
                         var standing = (int)(auraTick * shape.AmplifyWindowMultiplier);
                         if (triggers.Contains(BuildTrigger.Linger)) standing = standing * 9 / 5;
                         ampUntil = Math.Max(ampUntil, abs + standing);
+                        events.Add(new BattleEvent(BattleEventKind.Marked, (int)MathF.Round(ampBonus * 100f), standing, ms));
 
                         // HOW DEEP the mark is. ETCH deepens it every tick to its own ceiling; SPRAWL
                         // trades depth for reach and the whole wave carries it. Held as a bonus over
@@ -2261,6 +2275,7 @@ public static class SoloBattle
                     ampBonus *= signMagnitude;
 
                     ampUntil = abs + window;
+                    events.Add(new BattleEvent(BattleEventKind.Marked, (int)MathF.Round(ampBonus * 100f), window, ms));
                     mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
                     // A SIGN cast is a real CAST — cooldown, its own Skill event — so it stores
                     // CHARGE like any other cast, and a SPIRIT one primes the next other-Source cast.
@@ -2490,6 +2505,7 @@ public static class SoloBattle
                             var pi = IndexOf(peened);
                             events.Add(new BattleEvent(BattleEventKind.Break, pi,
                                                       breaks[pi] = breaks.GetValueOrDefault(pi) + 1, ms));
+                            events.Add(new BattleEvent(BattleEventKind.DefenceNow, pi, (int)MathF.Round(peened.Defense), ms));
                         }
                     }
 
@@ -2698,6 +2714,8 @@ public static class SoloBattle
                 // difference: that damage never arrives rather than arriving later.
                 nextBite += (int)MathF.Round(enemyIntervalMs * (1f + slowFactor));
                 pinArmed = 0;
+                // The pinned bite is lost outright: the wave stands staggered for one whole interval.
+                events.Add(new BattleEvent(BattleEventKind.Staggered, -1, (int)MathF.Round(enemyIntervalMs * (1f + slowFactor)), ms));
                 staggeredThisBite = false;
             }
             else if (ms >= nextBite)
@@ -3003,6 +3021,7 @@ public static class SoloBattle
                         ampCountsHits = sk.Def.Rule.AmplifyHits > 0;
                         ampCritKeeps = sk.Def.Rule.CritKeepsAmplifyCharge;
                         ampUntil = abs + markWindow;
+                        events.Add(new BattleEvent(BattleEventKind.Marked, (int)MathF.Round(markDepth * 100f), markWindow, ms));
                         events.Add(new BattleEvent(BattleEventKind.Skill, idx, 0, ms));
                         continue;
                     }
@@ -3016,6 +3035,12 @@ public static class SoloBattle
                     trapRaw *= vowFactor
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
+                    // THE STYLE'S POWER REACHES THE TRAP (2026-09-06). A Reaction's answer never went
+                    // through Amp(), so StylePower — THE THORNWALL's "every trap you set does more",
+                    // and a set's style bonus from GearShape — multiplied every Snare skill except the
+                    // ones that ARE traps. The character's card was half a lie; its liveness test is
+                    // what found it.
+                    trapRaw *= shape.StylePowerFor(sk.Def.Style);
 
                     // NARROWS — the answer that does not read the bite at all, and grows with how long
                     // the wall has stood. Counted per SLOT and per WAVE, and read against the answers
