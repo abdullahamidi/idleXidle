@@ -47,8 +47,8 @@ public sealed class HuntScreen
     private static readonly Color Bloom = new(0x8A, 0x6A, 0xB0);
     private static readonly Color Steel = new(0x7A, 0x9A, 0xC0);
     private static readonly Color Verdant = new(0x5A, 0x9A, 0x4A);
-    private static readonly Color Shadow = new(0x10, 0x0E, 0x14);
-    private static readonly Color PanelBg = new(0x14, 0x11, 0x1A, 0xC8);
+    private static readonly Color Shadow = new(0x11, 0x0E, 0x0D);
+    private static readonly Color PanelBg = new(0x15, 0x10, 0x0F, 0xC8);
     private static readonly Color GroundShade = new(0x00, 0x00, 0x00, 0x64);   // soft translucent contact shadow
     private static readonly Color OnScene = UiKit.Vellum;
 
@@ -1931,29 +1931,19 @@ public sealed class HuntScreen
                 + lineB + rows.Count * lineS + UiMetrics.Space(6)              // health and the three pairs
                 + (statuses.Count > 0 ? UiMetrics.Space(2) + lineS + statuses.Count * lineS : lineS)
                 + pad;
-        // RIGHT of the creature when the page has room; else ABOVE the pack (never over the hunter);
-        // else to the left. Always under the header stack and above the skill dock.
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the side AWAY FROM THE HUNTER
+        // first, then the other sides; the hunter's own rectangle is avoided, the header stack and the
+        // skill dock bound the viewport. At 150 % a creature near the centre used to put this plate
+        // over the hunter — the hand-rolled right/above/left never asked where the hunter was.
         var box = _creatureBoxes[slot];
         var ceiling = HeaderStackBottom + UiMetrics.Space(8);
         var floor = Math.Min(s_dockRect.Height > 0 ? s_dockRect.Y : UiKit.PageBottom(UiMetrics.Space(12)), UiKit.PageBottom(UiMetrics.Space(12)));
-        var gap = UiMetrics.Space(12);
-        int x, y;
-        if (box.Right + gap + w <= UiKit.PageRight(gap))
-        {
-            x = box.Right + gap;
-            y = Math.Clamp(box.Y + UiMetrics.Space(8), ceiling, Math.Max(ceiling, floor - gap - h));
-        }
-        else if (box.Y - gap - h >= ceiling)
-        {
-            x = Math.Clamp(box.Center.X - w / 2, ArenaClip.X + UiMetrics.Space(8), UiKit.PageRight(gap) - w);
-            y = box.Y - gap - h;
-        }
-        else
-        {
-            x = Math.Max(ArenaClip.X + UiMetrics.Space(8), box.X - gap - w);
-            y = Math.Clamp(box.Y + UiMetrics.Space(8), ceiling, Math.Max(ceiling, floor - gap - h));
-        }
-        var plate = new Rectangle(x, y, w, h);
+        var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
+        var awayFromHunter = box.Center.X >= ChampBox.Center.X;
+        var order = awayFromHunter
+            ? new[] { PopoverSide.Right, PopoverSide.Above, PopoverSide.Below, PopoverSide.Left }
+            : new[] { PopoverSide.Left, PopoverSide.Above, PopoverSide.Below, PopoverSide.Right };
+        var plate = PopoverPlacement.Place(box, new Point(w, h), viewport, new[] { ChampBox }, order);
         _ui.Fill(b, plate, Color.Black * 0.45f);
         _ui.Plate(b, plate, EnemySource is { } src ? SourceGlow(src) : null);
 
@@ -2910,7 +2900,7 @@ public sealed class HuntScreen
         // inset transform.
         var hit = mouse;
 
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xE6));
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0B, 0x09, 0x08, 0xE6));
 
         var panel = LogPanel;
         _ui.Panel(b, panel);   // the gold nine-slice: this IS a modal, the one PRIMARY surface on screen
@@ -3565,7 +3555,7 @@ public sealed class HuntScreen
         if (!_ui.Icon(b, "icon_log", box, tint))
         {
             // No medallion on disk: a plain page so the door still shows.
-            _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
+            _ui.Fill(b, box, new Color(0x16, 0x11, 0x10, 0xE0));
             _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
         }
         // THE TIP IS DEFERRED TO THE TOP OF THE HUD PASS. Drawn here it went under the idle/rewards
@@ -4167,7 +4157,7 @@ public sealed class HuntScreen
         else _ui.Diamond(b, glyphBox, sc * wake);
         // The cooldown ring at the rim, over everything; the gold halo is the cast itself.
         if (t.Flash <= 0f)
-            _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, t.Swept, new Color(0x0C, 0x09, 0x16, 0xE0), Gold * 0.95f);
+            _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, t.Swept, new Color(0x0F, 0x0B, 0x0B, 0xE0), Gold * 0.95f);
         else
         {
             var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);

@@ -63,9 +63,21 @@ public sealed class UiKit
     /// </remarks>
     public static int PageTop { get; internal set; } = 150;
 
-    private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
-    private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
-    private static readonly Color PanelEdge = new(0x39, 0x33, 0x44);
+    /// <summary>
+    /// THE NOTICE LANE (2026-09-06): the height a menu screen's page notice takes above the body, in
+    /// page pixels — zero while none is showing. The host sets it every frame and the screens lay out
+    /// from <see cref="PageTop"/>, which already includes it, so a notice pushes the body down rather
+    /// than sitting on its first row. It opens and shuts over a Transition (at once under Reduced
+    /// Motion), so the body slides rather than jumps.
+    /// </summary>
+    public static int NoticeLane { get; internal set; }
+
+    /// <summary>Where the page starts with no notice showing — the lane's own anchor.</summary>
+    public static int PageTopBase { get; internal set; } = 150;
+
+    private static readonly Color VoidInk = UiInk.Void;
+    private static readonly Color PanelBg = UiInk.Raised;
+    private static readonly Color PanelEdge = UiInk.Rule;
     private static readonly Color Dim = UiInk.Rule;
 
     // ── TEXT COLOURS live in UiInk (UX V2 P0.3). The block that stood here described PARCHMENT panels
@@ -73,7 +85,7 @@ public sealed class UiKit
     //    below are aliases kept for their remaining callers. ───────────────────────────────────────
 
     /// <summary>The near-black of the letterbox and the deepest wells. Not a text colour on today's panels.</summary>
-    public static readonly Color Ink = new(0x14, 0x10, 0x1A);
+    public static readonly Color Ink = new(0x16, 0x11, 0x10);
 
     /// <summary>Text on the scene — the same Primary ink every panel uses; the second name is kept for its callers.</summary>
     public static readonly Color Vellum = UiInk.Primary;
@@ -872,7 +884,7 @@ public sealed class UiKit
     public void PanelQuiet(SpriteBatch b, Rectangle r, float alpha = 1f, string? artKey = null) => PanelAt(b, r, QuietFrame * alpha, false, artKey);
 
     /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
-    private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
+    private static readonly Color QuietFrame = UiInk.Bronze;
 
     /// <summary>
     /// Tier 3, the QUIET surface: a dark translucent plate with a one-pixel rule — for lists, grids,
@@ -1205,7 +1217,7 @@ public sealed class UiKit
     private static readonly Color SlimBarEdge = new(0x5A, 0x4A, 0x36);
 
     /// <summary>The slim bar's well — the depleted part.</summary>
-    private static readonly Color SlimBarWell = new(0x12, 0x0C, 0x14);
+    private static readonly Color SlimBarWell = UiInk.Ground;
 
     /// <summary>
     /// The SLIM bar: a dark well with a one-pixel bronze frame (corner pixels knocked out, so it reads as
@@ -1442,7 +1454,7 @@ public sealed class UiKit
     }
 
     /// <summary>The primary's face: the panel ground lifted a fifth of the way to the accent — warm, dark enough for a Bone label at 8:1.</summary>
-    private static readonly Color PrimaryFace = Color.Lerp(new Color(0x1A, 0x14, 0x1E), UiInk.Accent, 0.18f);
+    private static readonly Color PrimaryFace = Color.Lerp(new Color(0x1C, 0x16, 0x14), UiInk.Accent, 0.18f);
 
     /// <summary>
     /// How wide the button art's end ornament lands at a given control height — the inset a caller
@@ -1710,15 +1722,17 @@ public sealed class UiKit
         var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
         if (lines.Count == 0) return;
         var h = pad * 2 + lines.Count * lineH;
-        var x = anchor.X + 26;
-        if (x + width > PageRight(8)) x = anchor.X - width - 12;
-        var y = anchor.Y + 30;
-        // Flips ABOVE the anchor when it would reach the page's ACTION BAND — the bottom rows where every
-        // inspector keeps its refusal line and its one primary button — not only at the page's edge: a
-        // tip that lands on the button it explains is a tip nobody can act on (release polish 2026-09-05).
-        var actionBand = PageBottom(UiMetrics.Space(36)) - UiMetrics.ButtonHeightPrimary - UiMetrics.Space(24);
-        if (y + h > actionBand) y = anchor.Y - h - 14;
-        if (y < 8) y = Math.Max(8, anchor.Y + 30);
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): under and to the right of the
+        // pointer first, above it before the page's ACTION BAND — the bottom rows where every inspector
+        // keeps its refusal line and its one primary button — and never off the page on any side. It
+        // used to flip left at the right edge with no left clamp, so a tip near the rail went negative.
+        var actionBand = new Rectangle(0, PageBottom(UiMetrics.Space(36)) - UiMetrics.ButtonHeightPrimary - UiMetrics.Space(24),
+                                       Page.Width, UiMetrics.ButtonHeightPrimary + UiMetrics.Space(60));
+        var cursor = new Rectangle(anchor.X, anchor.Y, 26, 30);
+        var tip = PopoverPlacement.Place(cursor, new Point(width, h), Page, new[] { actionBand },
+                                         new[] { PopoverSide.Below, PopoverSide.Above, PopoverSide.Right, PopoverSide.Left }, 4);
+        var x = tip.X;
+        var y = tip.Y;
         // THE HOUSE PLATE (§2 QUIET), not a private purple box with a gold rule: a tip is furniture, and
         // furniture wears the tier every list and chip on the page wears. The 4 px shadow stays, so the tip
         // still lifts off what it covers.
@@ -1773,7 +1787,7 @@ public sealed class UiKit
         }
     }
 
-    private static readonly Color NavInk = new(0x57, 0x61, 0x6F);
+    private static readonly Color NavInk = new(0x6E, 0x68, 0x62);
 
     /// <summary>
     /// The shared navigation legend — every destination, one line, at the canvas foot.

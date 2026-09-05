@@ -57,13 +57,13 @@ public sealed class LoadoutScreen
     // whole cell for exactly as long as the mouse is down, the acknowledgement UiKit.Button already gives its
     // own face. The tile / card / chip surfaces are the quiet plates they always were, named instead of
     // repeated at six call sites.
-    private static readonly Color Selected = new(0x2C, 0x25, 0x44);
+    private static readonly Color Selected = new(0x2E, 0x24, 0x20);
     private static readonly Color HoverWash = new Color(0x8A, 0x7A, 0xC0) * 0.22f;
     private static readonly Color PressWash = Color.Black * 0.30f;
     private static readonly Color PressLip = Color.Black * 0.40f;
-    private static readonly Color TileBg = new Color(0x0E, 0x0B, 0x16) * 0.8f;
-    private static readonly Color CardBg = new Color(0x0E, 0x0B, 0x16) * 0.85f;
-    private static readonly Color ChipBg = new Color(0x0E, 0x0B, 0x16) * 0.7f;
+    private static readonly Color TileBg = new Color(0x10, 0x0C, 0x0B) * 0.8f;
+    private static readonly Color CardBg = new Color(0x10, 0x0C, 0x0B) * 0.85f;
+    private static readonly Color ChipBg = new Color(0x10, 0x0C, 0x0B) * 0.7f;
 
     private static readonly Dictionary<Source, Color> SourceColor = new()
     {
@@ -1145,7 +1145,7 @@ public sealed class LoadoutScreen
         LayoutRows();
         LayoutSkills();
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC8));
         _ui.TextCenterBig(b, "BUILD", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
 
@@ -1908,16 +1908,34 @@ public sealed class LoadoutScreen
             if (ownSignature && Character is { } owner)
                 Line($"ONLY {owner.Name.ToUpperInvariant()} CAN USE THIS SKILL — IT NEEDS NO MASTERY ROAD", Gold, UiTypography.Secondary, 2);
             Gap(); Rule();
-            Head("WHAT IT DOES");
+            // THE TREE OWNS THE CHOICE; THE INSPECTOR OWNS THE SELECTION'S DETAIL (2026-09-06). This
+            // column used to print both variations' whole sentences while the same two sentences stood
+            // on the choice cards beside it. Now: the base rule (above), the CURRENT variation in one
+            // line, its reinforcements as short rows — the owned ones in the good ink with their effect,
+            // the rest named as what they are. Nothing mechanical is lost: a card's hover still carries
+            // the full sentence, and picking a card opens its own reading here.
             if (chosen is null)
             {
-                foreach (var v in def.Variations.Take(2)) Line($"{v.Name.ToUpperInvariant()} · {SourceName(v.Source)} — {v.Line.ToUpperInvariant()}", Bone, UiTypography.Body, 2);
-                if (have) Line("A VARIATION IS CHOSEN IN THE SKILL TREE — IT GIVES THE SKILL ITS SOURCE.", Slate, UiTypography.Secondary, 2);
+                Head("VARIATION");
+                var names = string.Join("  OR  ", def.Variations.Take(2).Select(v => v.Name.ToUpperInvariant()));
+                Line(have ? $"NONE CHOSEN YET — {names}, IN THE TREE" : $"{names} — CHOSEN IN THE TREE ONCE THE SKILL IS YOURS",
+                     Slate, UiTypography.Secondary, 2);
             }
             else
             {
-                Line($"{chosen.Name.ToUpperInvariant()} · {SourceName(chosen.Source)} — {chosen.Line.ToUpperInvariant()}", Bone, UiTypography.Body, 2);
-                foreach (var r in chosen.Reinforcements.Where(r => SkillLevels.HasReinforcement(def.Id, r.Name))) Line($"{r.Name.ToUpperInvariant()} — {r.Line.ToUpperInvariant()}", Met, UiTypography.Body, 2);
+                Head($"VARIATION · {SourceName(chosen.Source)}");
+                Line($"{chosen.Name.ToUpperInvariant()} — {chosen.Line.ToUpperInvariant()}", Bone, UiTypography.Body, 2);
+                if (chosen.Reinforcements.Count > 0)
+                {
+                    Gap();
+                    Head("REINFORCEMENTS");
+                    foreach (var r in chosen.Reinforcements.Take(3))
+                    {
+                        var ownedR = SkillLevels.HasReinforcement(def.Id, r.Name);
+                        Line(ownedR ? $"{r.Name.ToUpperInvariant()} — {r.Line.ToUpperInvariant()}" : $"{r.Name.ToUpperInvariant()} — NOT YET",
+                             ownedR ? Met : Slate, ownedR ? UiTypography.Body : UiTypography.Secondary, ownedR ? 2 : 1);
+                    }
+                }
             }
             Gap(); Rule();
             if (!have)

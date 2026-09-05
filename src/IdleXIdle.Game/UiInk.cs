@@ -3,51 +3,71 @@ using Microsoft.Xna.Framework;
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// THE INKS. One owner for every text and rule colour in the game.
+/// THE INK TOKENS — the one place a text colour or a surface colour is named.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The 2026-09-01 UX audit found the palette copied privately into thirteen files — and disagreeing:
-/// <c>Dim</c> was <c>#2C2C36</c> on HUNT and MASTERY, <c>#3A3A44</c> on seven other screens and
-/// <c>#5E5A6E</c> on TRAITS; gold was <c>#F0A830</c> on the screens but <c>#F0B24A</c> on the rail, the
-/// titles and the style ring; the Forge had its own second "faint" grey. Worse, the SECONDARY ink and
-/// the DISABLED ink shared a luminance band (6.45:1 vs 4.4–5:1 on the panel), so "less important" and
-/// "unavailable" read as the same grey. The screens keep their short local names as aliases of these
-/// tokens — so no call site moved — but the VALUE lives here, once.
+/// UX V2 P0.3 gave the text its tokens; the follow-up polish of 2026-09-06 gave the SURFACES theirs
+/// and warmed the whole set. The menus read noticeably colder than the arena — every ground was a
+/// violet-black spelt eight ways across the screens (#0A0810, #0C0916, #0E0B16, #100D18, #14101A,
+/// #14111A, #14111C, #14111E) under a cold blue-grey Secondary — and the arena is earth, moss and
+/// stone. The grounds are charcoal / brown-black now, the hairlines and passive ornament aged bronze,
+/// the active gold a step brighter: bronze is structure, gold is importance and interaction.
 /// </para>
 /// <para>
-/// Contrast ratios are measured on the panel interior (<c>#100C16</c>). The rule the audit set:
-/// Secondary never falls below 6:1 (a 720p player needs it more than a 1080p one); Disabled is the ONLY
-/// ink allowed under 4:1, and it is always paired with a second cue — a lock glyph, a strike, a
-/// requirement line — because colour alone must never carry a state.
+/// Contrast, measured against <see cref="Ground"/> (#15100F): Primary 15.6:1, Secondary 8.0:1,
+/// Accent 9.7:1, Disabled 2.9:1 (the one ink under 4:1, by design — it is the disabled state), Good
+/// 9.0:1, Danger 4.4:1. Secondary was 6.4:1 on the old ground; it is brighter, not as bright as
+/// Primary, so the hierarchy PRIMARY / SECONDARY / DISABLED stands.
 /// </para>
 /// </remarks>
 public static class UiInk
 {
-    /// <summary>Names, values, sentences — anything the player must read. 14.6:1.</summary>
+    /// <summary>Body and headline text — the art bible's Bone Parchment.</summary>
     public static readonly Color Primary = new(0xE8, 0xDF, 0xC8);
 
-    /// <summary>Labels, units, category names, metadata. 6.45:1 — readable, quieter, never disabled.</summary>
-    public static readonly Color Secondary = new(0x8A, 0x96, 0xA8);
+    /// <summary>
+    /// Secondary ink — captions, labels, the second line. Brighter and warmer since 2026-09-06 (it
+    /// was #8A96A8, a cold blue-grey): a warm stone-grey, comfortably readable at monitor distance and
+    /// still clearly under Primary.
+    /// </summary>
+    public static readonly Color Secondary = new(0xA9, 0xA5, 0x9E);
 
-    /// <summary>Hearth Gold: earned, selected, active, the primary action. Never decoration. 9.5:1.</summary>
-    public static readonly Color Accent = new(0xF0, 0xA8, 0x30);
+    /// <summary>The active gold — selected, affordable, important. A step brighter than the Hearth Gold it was (#F0A830).</summary>
+    public static readonly Color Accent = new(0xF6, 0xB2, 0x3A);
 
-    /// <summary>The only ink under 4:1. Off buttons, locked rows, actions you cannot take right now.</summary>
-    public static readonly Color Disabled = new(0x5A, 0x56, 0x64);
+    /// <summary>The one ink under 4:1, on purpose: a control that cannot be used.</summary>
+    public static readonly Color Disabled = new(0x66, 0x5E, 0x58);
 
-    /// <summary>Hairlines and dividers. Never text.</summary>
-    public static readonly Color Rule = new(0x3A, 0x3A, 0x44);
+    /// <summary>Hairlines and quiet edges — aged bronze now, not slate: structure is bronze, importance is gold.</summary>
+    public static readonly Color Rule = new(0x4A, 0x3F, 0x36);
 
-    /// <summary>A met condition, a gain, a healthy state.</summary>
+    /// <summary>Favourable to the hunter — a met requirement, a gain.</summary>
     public static readonly Color Good = new(0x6E, 0xC8, 0x7A);
 
-    /// <summary>An unmet condition, a loss, a destructive action.</summary>
+    /// <summary>Unfavourable — a shortfall, a loss, a refusal. The art bible's Ember Threat.</summary>
     public static readonly Color Danger = new(0xD8, 0x48, 0x3A);
 
-    /// <summary>The QUIET tier's surface — dark, translucent, drawn by <see cref="UiKit.Plate"/>.</summary>
-    public static readonly Color Plate = new(0x10, 0x0D, 0x18, 0xE0);
+    /// <summary>The QUIET surface — the warm charcoal-brown ground, translucent (it was a cold violet-black #100D18).</summary>
+    public static readonly Color Plate = new(0x15, 0x10, 0x0F, 0xE0);
 
-    /// <summary>An empty slot's placeholder: Secondary at 60% — distinct from Disabled by shape, never tone alone.</summary>
+    /// <summary>A placeholder's ink — an empty slot's word, a zero rate.</summary>
     public static readonly Color Empty = Secondary * 0.6f;
+
+    // ── THE GROUNDS (2026-09-06), named once so the chrome sits nearer the arena's earth and stone. ──
+
+    /// <summary>The page's own ground, opaque — what a panel's field and a well are painted.</summary>
+    public static readonly Color Ground = new(0x15, 0x10, 0x0F);
+
+    /// <summary>One readable value step above the ground — a raised panel, a card.</summary>
+    public static readonly Color Raised = new(0x22, 0x1A, 0x17);
+
+    /// <summary>A row under the pointer, a selected cell — one more step, still dark.</summary>
+    public static readonly Color Hover = new(0x2E, 0x24, 0x20);
+
+    /// <summary>The void behind everything: the canvas clear, the letterbox.</summary>
+    public static readonly Color Void = new(0x1D, 0x17, 0x14);
+
+    /// <summary>Passive ornament — the tint that turns the gold frame art to aged bronze for the quiet tier.</summary>
+    public static readonly Color Bronze = new(0x7A, 0x62, 0x44);
 }

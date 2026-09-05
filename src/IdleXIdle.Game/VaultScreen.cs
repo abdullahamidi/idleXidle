@@ -408,7 +408,10 @@ public sealed class VaultScreen
     /// ordinary actions, and this is a side door.
     /// </remarks>
     private static Rectangle PasteRect =>
-        new(UiKit.ContentLeft(Frame), UiKit.TitleTop(Frame), UiMetrics.Control(240), ToolbarH);
+        new(UiKit.ContentLeft(Frame), UiKit.TitleTop(Frame) + (ToolbarH - PasteLinkH) / 2, UiMetrics.Control(230), PasteLinkH);
+
+    /// <summary>A text link's height: the Secondary rung and a breath — a tertiary utility, not a button (2026-09-06).</summary>
+    private static int PasteLinkH => UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
 
     // THE GRID. Two columns of very large cards, not six of very small ones.
     //
@@ -712,7 +715,7 @@ public sealed class VaultScreen
         //
         // The rule sits one title line under the title and the tally one breath under the rule, so a
         // 150 % title (57 px) pushes them down rather than printing through them.
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD8));
         // VAULT, without the article — the rail says VAULT and D7 settled that the screen agrees.
         _ui.TextCenterBig(b, "VAULT", UiKit.PageCenterX, ScreenTitleTop, Gold, UiTypography.ScreenTitle, TextFace.Display);
         var ruleY = ScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
@@ -778,22 +781,16 @@ public sealed class VaultScreen
             _modalOpenedNow = true;
         }
 
-        // THE SIDE DOOR keeps to the QUIET tier: a plate, a value-step hover, the same 2 px press
-        // every button makes — and never gold, never a pulse, so it cannot outrank OPEN ALL (§60).
+        // THE SIDE DOOR IS A LINK (2026-09-06): it reads a stranger's code and shows it — a share
+        // utility, never a chest action — so it wears the tertiary tier: a Secondary line in the quiet
+        // ink, an underline on hover, no plate. The player's first scan of the VAULT is the chests.
         var pasteHot = PasteRect.Contains(hit) && !ModalOpen;
         var pasteLift = Lift(PasteKey, pasteHot);
-        var pastePressed = pasteHot && Held;
-        var pastePlate = pastePressed
-            ? new Rectangle(PasteRect.X, PasteRect.Y + 2, PasteRect.Width, PasteRect.Height)
-            : PasteRect;
-        _ui.Plate(b, pastePlate);
-        var pasteWell = new Rectangle(pastePlate.X + 1, pastePlate.Y + 1, pastePlate.Width - 2, pastePlate.Height - 2);
-        if (pasteLift > 0f) _ui.Fill(b, pasteWell, Color.White * (0.05f * pasteLift));
-        if (pastePressed) _ui.Fill(b, pasteWell, Color.Black * 0.18f);
-        Outline(b, pastePlate, Color.Lerp(Dim, Slate, pasteLift), 1);
-        _ui.TextCenterBig(b, "PASTE A CODE", pastePlate.Center.X,
-                          pastePlate.Y + (ToolbarH - UiTypography.ButtonText) / 2 - 2,
-                          Color.Lerp(Slate, Bone, pasteLift), UiTypography.ButtonText);
+        var pasteInk = Color.Lerp(Slate, Bone, pasteLift);
+        var pasteY = PasteRect.Y + (PasteRect.Height - UiTypography.Secondary) / 2;
+        _ui.TextBig(b, "READ A SHARED CODE", PasteRect.X, pasteY, pasteInk, UiTypography.Secondary);
+        var linkW = _ui.MeasureBig("READ A SHARED CODE", UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(PasteRect.X, pasteY + UiTypography.Secondary + 2, linkW, 1), pasteInk * (0.35f + 0.65f * pasteLift));
         if (UiKit.ClickedIn(PasteRect, hit, uiClicked))
         {
             PasteCode();
@@ -1282,6 +1279,8 @@ public sealed class VaultScreen
         }
 
         ItemInstance? hoverOffer = null;
+        var hoverCard = Rectangle.Empty;
+        var buyRects = new List<Rectangle>(4);
         var cardGap = UiMetrics.Space(20);
         var cardsTop = panel.Y + cardsTopOff;
         // The air under the cards gives way before the cards do: at 100 % the foot is the full 134,
@@ -1297,7 +1296,7 @@ public sealed class VaultScreen
             var card = new Rectangle(UiKit.ContentLeft(panel) + i * (cw + cardGap), cardsTop, cw, cardH);
             var grade = RarityColors[(int)offer.Rarity];
             var over = card.Contains(hit);
-            if (over) hoverOffer = offer;
+            if (over) { hoverOffer = offer; hoverCard = card; }
 
             // THE HOUSE PLATE with the rarity as its accent rule, lifting under the pointer — not a
             // hand-filled rectangle with a bar on top (2026-09-06).
@@ -1339,13 +1338,21 @@ public sealed class VaultScreen
             _ui.TextCenterBig(b, levelLine, card.Center.X, y, Slate, UiTypography.Secondary);
             y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
             _ui.Fill(b, new Rectangle(card.X + UiMetrics.Space(16), y, card.Width - UiMetrics.Space(32), 1), Dim);
-            y += UiMetrics.Space(10);
 
-            // The price, line by line, each in the wallet's verdict colour.
+            // THE PRICE AND BUY ARE ANCHORED TO THE FOOT (2026-09-06): the rows above hang from the top
+            // and these hang from the bottom, so a short name leaves its air between the two halves
+            // rather than under the price, and every card's PRICE label sits on the same line.
+            var buyBtn = new Rectangle(card.X + buyInset, card.Bottom - UiMetrics.Space(28) - buyH,
+                                       card.Width - buyInset * 2, buyH);
+            buyRects.Add(buyBtn);
+            var prices = WanderingTrader.PriceOf(offer, TraderTuning.Default).ToList();
+            var priceTop = buyBtn.Y - UiMetrics.Space(16) - prices.Count * UiTypography.Pitch(UiTypography.Body)
+                           - UiTypography.Pitch(UiTypography.SectionLabel) - UiMetrics.Space(4);
+            y = Math.Max(y + UiMetrics.Space(10), priceTop);
             _ui.TextCenterBig(b, "PRICE", card.Center.X, y, Slate, UiTypography.SectionLabel);
             y += UiTypography.Pitch(UiTypography.SectionLabel) + UiMetrics.Space(4);
             var affordable = true;
-            foreach (var (m, amount) in WanderingTrader.PriceOf(offer, TraderTuning.Default))
+            foreach (var (m, amount) in prices)
             {
                 var held = Hunter?.MaterialOf(m) ?? 0;
                 var enough = held >= amount;
@@ -1354,9 +1361,6 @@ public sealed class VaultScreen
                                   card.Center.X, y, enough ? Bone : Ember, UiTypography.Body);
                 y += UiTypography.Pitch(UiTypography.Body);
             }
-
-            var buyBtn = new Rectangle(card.X + buyInset, card.Bottom - UiMetrics.Space(28) - buyH,
-                                       card.Width - buyInset * 2, buyH);
             if (TraderBought.Contains(i))
                 // Disabled ink, correctly: it IS unavailable, and its second cue is that where every
                 // other card has a BUY button this one has none.
@@ -1367,9 +1371,17 @@ public sealed class VaultScreen
                 _traderBuy = i;
         }
 
-        // The full tooltip beside the pointer — the same card the forge would show for it.
+        // The full tooltip beside the OFFER — the same card the forge would show for it — placed
+        // through the one rule (PopoverPlacement, 2026-09-06): beside the card first, above it before
+        // below, and never on a BUY button while a side avoids them. It sat on the hovered card's own
+        // BUY at 150 %, and on its neighbour's.
         if (hoverOffer is not null)
-            ItemTooltip.Draw(_ui, b, hoverOffer, Hunter, new Point(hit.X + 26, hit.Y + 18), UiKit.Page);
+        {
+            var size = new Point(ItemTooltip.Width, ItemTooltip.HeightFor(hoverOffer, Hunter));
+            var placed = PopoverPlacement.Place(hoverCard, size, UiKit.Page, buyRects,
+                                                new[] { PopoverSide.Above, PopoverSide.Right, PopoverSide.Left, PopoverSide.Below });
+            ItemTooltip.DrawAt(_ui, b, hoverOffer, Hunter, placed);
+        }
     }
 
     /// <summary>The stat medallion key for a gem — the alias table's gem_&lt;stat&gt; names.</summary>
@@ -1721,7 +1733,7 @@ public sealed class VaultScreen
         // The same states as every control (§25): HOVER lifts the edge and the ink a value step,
         // PRESSED darkens the well while the button is held, LIT (selected) is gold and stays.
         var pressed = hot && Held;
-        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        _ui.Fill(b, r, new Color(0x16, 0x11, 0x10, 0xE0));
         if (pressed) _ui.Fill(b, r, Color.Black * 0.18f);
         Outline(b, r, lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
         _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1 + (pressed ? 1 : 0),

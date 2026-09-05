@@ -57,7 +57,7 @@ public sealed class RosterScreen
     private static readonly Color Met = UiInk.Good;
 
     // The card's own surfaces — the GearScreen cell precedent. A card is a QUIET plate with a state.
-    private static readonly Color CardLocked = new(0x12, 0x0F, 0x1A, 0xF0);
+    private static readonly Color CardLocked = new(0x14, 0x10, 0x10, 0xF0);
 
     // ── THE CARD'S STATES (UI polish §25–§29), each a number the draw reads, none a second surface.
     //
@@ -372,7 +372,7 @@ public sealed class RosterScreen
         _anim += 1f / 60f;
         var hit = mouse;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));
         _ui.TextCenterBig(b, "ROSTER", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
         // (The SWITCH FREELY banner is gone. It was the least readable line on the screen, it was drawn

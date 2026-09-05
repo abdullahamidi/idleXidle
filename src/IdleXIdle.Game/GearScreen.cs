@@ -66,8 +66,8 @@ public sealed class GearScreen
     private static readonly Color Ember = UiInk.Danger;
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
-    private static readonly Color CellBg = new(0x14, 0x11, 0x1C);
-    private static readonly Color CellHot = new(0x2C, 0x25, 0x44);
+    private static readonly Color CellBg = new(0x15, 0x10, 0x0F);
+    private static readonly Color CellHot = new(0x2E, 0x24, 0x20);
     private static readonly Color Green = UiInk.Good;
     private static readonly Color Shadow = new(0x08, 0x07, 0x0B);
 
@@ -688,7 +688,7 @@ public sealed class GearScreen
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
         var hit = mouse;
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD8));
 
         _ui.TextCenterBig(b, "GEAR", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
@@ -735,7 +735,7 @@ public sealed class GearScreen
         var rc = RarityColor(item.Rarity);
         var box = MenuRect;
         _ui.Fill(b, new Rectangle(box.X + 4, box.Y + 4, box.Width, box.Height), new Color(0, 0, 0, 0xA0));
-        _ui.Fill(b, box, new Color(0x14, 0x11, 0x1E, 0xF6));
+        _ui.Fill(b, box, new Color(0x15, 0x10, 0x0F, 0xF6));
         Ring(b, box, rc, 3);
         var hx = box.X + UiMetrics.Space(14);
         _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), box.Width - UiMetrics.Space(14) * 2, UiTypography.Secondary),
@@ -1025,7 +1025,7 @@ public sealed class GearScreen
                 // The house lock glyph in Primary over the dark veil — not a hand-built padlock in the OTHER
                 // class's colour, which scattered five untaught hues across the grid (gear-07). Who can
                 // wear it stays on the hover card and in the inspector's CANNOT WEAR line.
-                _ui.Fill(b, Shrink(cell, 5), new Color(0x0A, 0x08, 0x10, 0xB4));
+                _ui.Fill(b, Shrink(cell, 5), new Color(0x0B, 0x09, 0x08, 0xB4));
                 _ui.Icon(b, "ui_slot_locked", new Rectangle(cell.Right - UiMetrics.Space(8) - lockEdge, cell.Bottom - UiMetrics.Space(8) - lockEdge, lockEdge, lockEdge), Bone);
             }
             // BETTER: one green hairline inside the frame — a hint; the inspector makes the case. Judged by the
@@ -1034,7 +1034,7 @@ public sealed class GearScreen
                          && (bs == GearSlot.Weapon ? WeaponDps(hunter, item) > WeaponDps(hunter, wornPiece) * 1.005f
                                                     : hunter.PowerContribution(item) > hunter.PowerContribution(wornPiece));
             if (better) Ring(b, Shrink(cell, 3), new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
-            if (sel) { Ring(b, cell, Gold, 3); Ring(b, Shrink(cell, 3), new Color(0x14, 0x10, 0x1A, 0x88), 1); }   // gold = selected
+            if (sel) { Ring(b, cell, Gold, 3); Ring(b, Shrink(cell, 3), new Color(0x16, 0x11, 0x10, 0x88), 1); }   // gold = selected
             else if (lift > 0f) Ring(b, cell, Slate * lift, 2);
         }
 

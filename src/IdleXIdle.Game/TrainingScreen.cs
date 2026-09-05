@@ -452,7 +452,7 @@ public sealed class TrainingScreen
         var hit = mouse;
         _tip = null;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD8));
 
         // TRAINING, not STATS: this screen is a purchase, and the subtitle that used to sit under it
         // repeated the Gleam pill two inches above it. The exact figure moves into the list header,

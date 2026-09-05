@@ -315,7 +315,7 @@ public sealed class TraitCollectionScreen
 
         // The starfield behind it is the host's (bg_constellation) and it still works — §37 and §41
         // both say to keep it. A scrim over it, like every other menu screen, so text reads.
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD2));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD2));
 
         _ui.TextCenterBig(b, "TRAITS", UiKit.PageCenterX, ScreenTitleTop, Gold,
                           UiTypography.ScreenTitle, TextFace.Display);

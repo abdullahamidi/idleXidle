@@ -579,7 +579,7 @@ public sealed class MapScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = mouse;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xB0));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xB0));
         _ui.TextCenterBig(b, "MAP", UiKit.PageCenterX, TitleY, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
         // The rule sits one title line under the title, so a 150 % title does not run through it.
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, TitleY + UiTypography.Pitch(UiTypography.ScreenTitle) + 1, 480, 3), Gold * 0.5f);
@@ -800,7 +800,7 @@ public sealed class MapScreen
                 // AVAILABLE, not gold: it is neither earned nor where you are (D9) — except for the one
                 // pulse of its reveal, when the word is lit gold and settles back to bone (§24: gold is
                 // "just became available", for exactly as long as that is news).
-                _ui.Fill(b, band, Color.Lerp(new Color(0x14, 0x11, 0x1E, 0xE6), new Color(0x2A, 0x1E, 0x08, 0xE6), reveal));
+                _ui.Fill(b, band, Color.Lerp(new Color(0x15, 0x10, 0x0F, 0xE6), new Color(0x2A, 0x1E, 0x08, 0xE6), reveal));
                 _ui.TextCenterBig(b, "AVAILABLE", face.Center.X, bandText, Color.Lerp(Bone, Gold, reveal), body);
             }
             else
@@ -1236,7 +1236,7 @@ public sealed class MapScreen
                 var chipPressed = chipHot && Held;
                 var chipLift = UiMotion.Ease(UiMotion.KeyOf(chip), chipHot ? 1f : 0f);
                 var cf = chipPressed ? new Rectangle(chip.X, chip.Y + 1, chip.Width, chip.Height) : chip;
-                _ui.Fill(b, cf, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
+                _ui.Fill(b, cf, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x16, 0x11, 0x10, 0xE0));
                 if (chipLift > 0f) _ui.Fill(b, cf, Color.White * (0.07f * chipLift));
                 if (chipPressed) _ui.Fill(b, cf, Color.Black * 0.18f);
                 var edge = lit ? Gold : Color.Lerp(Dim, Bone, chipLift);

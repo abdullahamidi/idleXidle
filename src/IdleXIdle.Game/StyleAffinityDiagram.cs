@@ -46,8 +46,8 @@ internal static class StyleAffinityDiagram
     private static readonly Color Ember = UiInk.Danger;
 
     // ── The field: a bezel, a well, a hairline. ──
-    private static readonly Color Bezel = new(0x2E, 0x27, 0x38);
-    private static readonly Color Well = new(0x0B, 0x09, 0x11);
+    private static readonly Color Bezel = new(0x30, 0x28, 0x23);
+    private static readonly Color Well = new(0x0C, 0x0A, 0x09);
     private static readonly Color Hairline = new(0x8A, 0x6A, 0x3C);
 
     // ── The rails: every spoke is a dark bed under a lit core. ──
@@ -55,7 +55,7 @@ internal static class StyleAffinityDiagram
     private static readonly Color RingRail = new(0x6E, 0x56, 0x33);
 
     /// <summary>The stone a seal is set into, so a rail never runs visibly under an icon.</summary>
-    private static readonly Color SealBed = new(0x13, 0x0F, 0x1B);
+    private static readonly Color SealBed = new(0x14, 0x10, 0x10);
 
     /// <summary>The attuned seal's bed — the same stone, warmed, so gold has something to sit on.</summary>
     private static readonly Color NativeBed = new(0x2A, 0x1D, 0x0C);

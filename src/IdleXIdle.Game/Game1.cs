@@ -101,7 +101,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     internal static bool ReducedMotion { get; private set; }
 
     // art-bible §4.1. Hearth Gold marks EARNED states only — never decoration.
-    private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
+    private static readonly Color VoidInk = UiInk.Void;
 
     /// <summary>The letterbox bars — the backbuffer outside the canvas.</summary>
     /// <remarks>
@@ -110,7 +110,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// — a panel the content failed to fill. The bar is not game at all, and the darkest tone in the
     /// palette is the one that says so and stops the eye at the canvas edge.
     /// </remarks>
-    private static readonly Color LetterboxInk = new(0x14, 0x10, 0x1A);
+    private static readonly Color LetterboxInk = new(0x16, 0x11, 0x10);
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
     private static readonly Color Ember = UiInk.Danger;
@@ -119,7 +119,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>A soft, dark panel tone for HUD bands — lighter than the void so UI sits on a surface,
     /// not floating text on black. This is most of what "softer" means at this resolution.</summary>
-    private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
+    private static readonly Color PanelBg = UiInk.Raised;
 
     private readonly GraphicsDeviceManager _graphics;
     private SpriteBatch _batch = null!;
@@ -1632,6 +1632,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // returning player has used these screens, and an older save (no list) keeps every screen its
         // facts open. From here on Update grows it through Reveal.Newly, which is where the notice is.
         _revealed = Reveal.Restore(_pendingRevealed ?? new List<string>(), GuideUnlockFacts());
+        // RH_SHOT_RAIL=all: the whole rail, for the fixture that proves an advanced account's eleven
+        // tiles still fit at 150 % in a small window — a rig affordance, never a game path.
+        if (Environment.GetEnvironmentVariable("RH_SHOT_RAIL") == "all")
+            foreach (var a in Enum.GetValues<Activity>()) _revealed.Add(a);
         _pendingRevealed = null;
         _revealSeeded = true;
 
@@ -1804,6 +1808,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed || (RigActive && ShotHeld);
         UiMotion.Reduced = ReducedMotion;
         UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
+        ReserveNoticeLane();
+        DismissNoticeIfClosed();
         TickChromeMotion((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
@@ -2045,6 +2051,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "buildtree")
                     {
                         if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _masteryScreen.DevOpenTreeFirstVisit();
+                        else if (Environment.GetEnvironmentVariable("RH_SHOT_FRONTIER") == "1") _masteryScreen.FrameFrontier();   // the normal reopen
                         else _masteryScreen.DevOpenTree();
                     }
 
@@ -4581,7 +4588,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var wrapped = _ui.WrapBig(_lockedMsg, w - UiMetrics.Space(40), UiTypography.OverlayBody).Take(2).ToList();
         var h = wrapped.Count * UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(17) * 2 - (UiTypography.Pitch(UiTypography.OverlayBody) - UiTypography.OverlayBody);
         var box = new Rectangle(UiKit.PageCenterX - w / 2, LockedToastTop, w, h);
-        _ui.Fill(_batch, box, new Color(0x18, 0x10, 0x24) * (0.92f * fade));
+        _ui.Fill(_batch, box, new Color(0x1A, 0x13, 0x11) * (0.92f * fade));
         _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 3), UiInk.Accent * fade);
         var ly = box.Y + UiMetrics.Space(17);
         foreach (var line in wrapped)
@@ -4747,7 +4754,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_tourActive) return;
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
+        // IN THE LANE on a menu screen (ReserveNoticeLane): the toast stands where the body's first row
+        // used to start, and the body has moved down to make room; it arrives with the lane. On the
+        // hunt it stays an overlay under the header stack.
         var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
+        if (OverlayActive)
+        {
+            y = CanvasY(UiKit.PageTopBase);
+            fade *= _noticeLaneOpen;
+        }
         // THE HEIGHT FOLLOWS THE TEXT, at both shapes, so nothing can fall out of the plate.
         //
         // Two notices meet here and each fixed half of the same fault. The trait AWAKENING is three
@@ -4775,6 +4790,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // boot toast and the hint slot wear — not a framed panel (chrome-08).
         _ui.Fill(_batch, r, Color.Black * (0.35f * fade));
         _ui.Plate(_batch, r, UiInk.Accent, fade);
+        // A DISMISS, at the house close position: the toast leaves on its timer, and on a click too.
+        // Drawn here; the click is read in Update (DismissNoticeIfClosed) like the hint slot's.
+        _noticeCloseRect = UiKit.CloseRect(r);
+        _ui.CloseButton(_batch, _noticeCloseRect, ChromeMouse, false);
 
         if (_notice.Awakening)
         {
@@ -4803,6 +4822,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                               r.Center.X, bodyY, Bone * fade, UiTypography.OverlayBody);
             bodyY += UiTypography.Pitch(UiTypography.OverlayBody);
         }
+    }
+
+    /// <summary>Where the notice's close control was drawn last frame — empty while no notice shows.</summary>
+    private Rectangle _noticeCloseRect;
+
+    /// <summary>The notice's × — read where the hint slot's is, before the screens take the click.</summary>
+    private void DismissNoticeIfClosed()
+    {
+        if (_noticeTimer <= 0f || _noticeCloseRect.IsEmpty) return;
+        if (MouseClicked && _noticeCloseRect.Contains(ChromeMouse)) { _noticeTimer = 0f; _noticeCloseRect = Rectangle.Empty; _swallowInput = true; }
     }
 
     /// <summary>How many wrapped body lines a notice may grow to before it is cut.</summary>
@@ -5610,7 +5639,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 + RowH(huntLines) + RowH(warrenLines) + campH + UiMetrics.Space(16) + button + pad;
         var r = new Rectangle(UiKit.PageCenterX - width / 2, (UiKit.Page.Height - h) / 2 - UiMetrics.Space(40), width, h);
 
-        _ui.Fill(_batch, UiKit.Page, new Color(0x0A, 0x08, 0x10) * 0.55f);
+        _ui.Fill(_batch, UiKit.Page, new Color(0x0B, 0x09, 0x08) * 0.55f);
         _ui.Panel(_batch, r);   // gold: this is a modal, and the one thing on screen
         var x = r.X + pad;
         var y = r.Y + UiTypography.ModalTitleTop;
@@ -7189,7 +7218,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var p = c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 12f;
             _ui.Fill(_batch, new Rectangle((int)p.X - 2, (int)p.Y - 2, 4, 4), ink);
         }
-        _ui.Fill(_batch, new Rectangle((int)c.X - 3, (int)c.Y - 3, 6, 6), new Color(0x0C, 0x09, 0x16));
+        _ui.Fill(_batch, new Rectangle((int)c.X - 3, (int)c.Y - 3, 6, 6), new Color(0x0F, 0x0B, 0x0B));
 
         if (hover)
             _ui.TextRight(_batch, "SETTINGS — ESC", SettingsGear.Right, SettingsGear.Bottom + 8, NavGold);
@@ -7834,8 +7863,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private static readonly Color NavGold = UiInk.Accent;
     private static readonly Color NavGem = new(0x5F, 0xE0, 0xC8);
-    private static readonly Color NavIdle = new(0x1A, 0x14, 0x30);
-    private static readonly Color NavHover = new(0x2C, 0x25, 0x44);
+    private static readonly Color NavIdle = new(0x1E, 0x18, 0x16);
+    private static readonly Color NavHover = UiInk.Hover;
 
     /// <summary>
     /// Mastery points: floor(sqrt(first-time depth) × 0.9) per region, summed — see MasteryPoints.
@@ -7952,7 +7981,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // you used. What was unique to it — the taken mastery nodes — is the MASTERY tile's
             // diagram, drawn rather than listed.
             case 3: _showLoadout = true; break;
-            case 4: _showMastery = true; _masteryScreen.Disarm(); break;
+            // THE FRONTIER, on every open (2026-09-06): the camera lands on the path walked and the next
+            // decisions, not on a poster of the whole tree; the player's own moves during the visit stand.
+            case 4: _showMastery = true; _masteryScreen.Disarm(); _masteryScreen.FrameFrontier(); break;
             case 5: _showVault = true; break;
             case 6: _showForge = true; break;
             case 7: _showWarren = true; break;
@@ -8018,8 +8049,53 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // line, plus a breath — never above the 150 every screen was laid out for at 100 %. At 100 %
         // this is 150 exactly (the band holds a 41 px slot); at 150 % it is about 200, which is what
         // stops the slot landing on the VAULT's toolbar (see UiKit.PageTop).
-        UiKit.PageTop = Math.Max(PageContentTopBase,
+        UiKit.PageTopBase = Math.Max(PageContentTopBase,
             PageSubtitleBottom + (int)MathF.Ceiling(HintLineMin / OverlayScale) + UiMetrics.Space(6));
+        UiKit.PageTop = UiKit.PageTopBase + UiKit.NoticeLane;
+    }
+
+    /// <summary>The notice lane's motion key — its height eases open and shut.</summary>
+    private static readonly int NoticeLaneKey = HashCode.Combine("notice", "lane");
+
+    /// <summary>How open the lane is, 0..1 — the toast's own alpha follows it, so the two arrive together.</summary>
+    private float _noticeLaneOpen;
+
+    /// <summary>The lane's full height in canvas pixels while it opens and shuts — the last notice's, so the ease has a number to close from.</summary>
+    private int _noticeLaneFull;
+
+    /// <summary>
+    /// Reserve the page's NOTICE LANE for this frame: the notice toast's height while one is showing on
+    /// a menu screen, eased over a Transition, and nothing on the hunt (the hunt has its own overlay).
+    /// </summary>
+    /// <remarks>
+    /// Called every frame before the screens lay out. The body follows <see cref="UiKit.PageTop"/>, so
+    /// a notice pushes the first row of panels down instead of covering it (the follow-up brief §6); the
+    /// ease is what stops that from being a jump, and Reduced Motion collapses it to a fade in place.
+    /// </remarks>
+    private void ReserveNoticeLane()
+    {
+        var showing = OverlayActive && !_tourActive && !_showTitle && !_showHelp && !_showSettings && !WelcomeUp
+                      && _noticeTimer > 0f && _notice.Head.Length > 0
+                      && !(_showMastery && _masteryScreen.SpecialisationOpen);
+        if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);
+        _noticeLaneOpen = UiMotion.Ease(NoticeLaneKey, showing ? 1f : 0f, UiMotion.Transition);
+        if (!showing && _noticeLaneOpen <= 0f) _noticeLaneFull = 0;
+        UiKit.NoticeLane = (int)MathF.Ceiling(_noticeLaneFull * _noticeLaneOpen / OverlayScale);
+        UiKit.PageTop = UiKit.PageTopBase + UiKit.NoticeLane;
+    }
+
+    /// <summary>The notice toast's height for the notice showing now, from its own lines.</summary>
+    private int NoticeToastHeight()
+    {
+        var pad = UiMetrics.Space(22);
+        var room = NoticeToastWidth - UiMetrics.Space(60);
+        var body = !_notice.Awakening && _notice.Detail.Length > 0
+            ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).Count()
+            : 0;
+        var rungs = _notice.Awakening
+            ? UiTypography.Pitch(UiTypography.OverlayBody) + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody)
+            : UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body);
+        return pad + rungs + UiMetrics.Space(12);
     }
 
     /// <summary>Dev (F8 under RH_DEV): step the UI SCALE 100 → 125 → 150 → AUTO → 100 and keep it.</summary>
@@ -8074,7 +8150,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // inactive items are a quiet glyph + label at ~75% opacity.
         // Fully opaque. At 96% the rail let whatever a screen happened to draw underneath bleed through as
         // ghost shapes; chrome should never show the scene behind it.
-        _ui.Fill(_batch, new Rectangle(0, 0, NavRailWidth, 1080), new Color(0x0C, 0x09, 0x16));
+        _ui.Fill(_batch, new Rectangle(0, 0, NavRailWidth, 1080), new Color(0x0F, 0x0B, 0x0B));
         // Seam runs down the rail's trailing edge now that the rail is vertical.
         _ui.Fill(_batch, new Rectangle(NavRailWidth - 3, 0, 3, 1080), NavGem * 0.4f);
 

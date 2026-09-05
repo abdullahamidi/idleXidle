@@ -87,14 +87,25 @@ public static class ItemTooltip
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
 
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the pointer is the anchor, the
+        // card hangs to its right, flips left at the edge, and is clamped into the canvas — the same
+        // rule the enemy inspector and the hover tip obey.
         var h = HeightFor(item, hunter, wearer);
+        var anchor = new Rectangle(at.X, at.Y - UiMetrics.Space(20), 1, 1);
+        var card = PopoverPlacement.Place(anchor, new Point(Width, h), canvas, null,
+                                          new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Above },
+                                          UiMetrics.Space(24));
+        DrawAt(ui, b, item, hunter, card, wearer);
+    }
 
-        // FLIP, don't clamp. A card pinned to the edge sits ON the thing the pointer is over, which is
-        // the one thing it must never cover — you are hovering an item to see it, not to have it hidden.
-        var lift = UiMetrics.Space(24);
-        var x = at.X + Width + lift <= canvas.Right ? at.X + lift : at.X - Width - lift;
-        var y = Math.Clamp(at.Y - UiMetrics.Space(20), canvas.Top + 8, Math.Max(canvas.Top + 8, canvas.Bottom - h - 8));
-        var card = new Rectangle(x, y, Width, h);
+    /// <summary>
+    /// Draw the card in a rectangle a caller has already PLACED — the trader places its offer's card
+    /// with the BUY buttons as avoided rectangles, through the shared rule, and hands the result here.
+    /// </summary>
+    public static void DrawAt(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Rectangle card, Character? wearer = null)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
 
         // Its own dark ground rather than UiKit.Panel: the panel art's 40px inset would eat a third of a
         // card this size, and a tooltip wants to read as a floating label, not as another window.

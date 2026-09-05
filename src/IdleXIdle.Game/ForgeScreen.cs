@@ -1792,7 +1792,7 @@ public sealed class ForgeScreen
         var uiClicked = clicked;
         var uiRight = rightClicked;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));   // scrim so panels pop
         // FORGE, without the article (D7), page-centred — and WITHOUT the sentence that used to sit
         // under it telling the player to pick an item and choose a tab. That sentence named the four
         // tabs a third time (the tab strip and the deleted THE FOUR TABS legend named them twice), and
@@ -2379,7 +2379,13 @@ public sealed class ForgeScreen
                             ? UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6) + socketBox
                             : UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(30));
         var ench = item.Rarity < Enchantments.MinimumRarity ? null : Enchantments.Of(item);
-        var enchLines = ench is null ? 1 : 2 + Math.Min(2, _ui.WrapBig(ench.Blurb, w, UiTypography.Secondary).Count);
+        // THE REQUIREMENT IS RESERVED TOO (2026-09-06, the responsive text law): "NEEDS BLOODLUST —
+        // CONQUER UMBRAL REACH TO FIND IT." is the line that tells the player where to go, and at 150 %
+        // it was the line cut to "CONQUER UMBRAL REAC…" because only the blurb's lines had room kept
+        // for them. Its wrapped lines are counted here, so the band grows and the region name stays.
+        var enchNeeds = ench?.Needs is { } need0 ? RequirementLine(need0) : "";
+        var enchLines = ench is null ? 1 : 1 + Math.Min(2, _ui.WrapBig(ench.Blurb, w, UiTypography.Secondary).Count)
+                                          + (enchNeeds.Length > 0 ? Math.Min(2, _ui.WrapBig(enchNeeds, w, UiTypography.Secondary).Count) : 0);
         var enchTop = socketTop - UiMetrics.Space(12) - enchLines * UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(16);
         var flowFloor = enchTop - UiMetrics.Space(12);
 
@@ -2538,19 +2544,10 @@ public sealed class ForgeScreen
                 Band(l, Slate);
             if (ench.Needs is { } needs)
             {
+                // Wrapped, never shortened: its room was reserved above (enchLines), so both lines fit.
                 var met = needs.MetBy(ActiveDefs, ActiveTriggers, SwornVows);
-                // AND IF THE PARTNER IS A KEYSTONE THE PLAYER HAS NOT FOUND, SAY WHERE IT IS. The old
-                // line was honest and useless: it named BLOODLUST and nothing anywhere told the player
-                // where BLOODLUST was. Now that the world teaches keystones, a dead card points at a
-                // region instead of at a menu.
-                var missing = needs.Keystone is { } trig && Keystones.GrantingTrigger(trig) is { } partner
-                              && DiscoveredKeystones.All(k => k.Id != partner.Id)
-                    ? Keystones.WhereToFind(partner.Id) : "";
-                Band(met ? "WORKS WITH YOUR BUILD RIGHT NOW."
-                         : missing.Length > 0
-                             ? $"NEEDS {needs.Label.ToUpperInvariant()} — {missing}"
-                             : $"NEEDS {needs.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.",
-                     met ? Met : Slate);
+                foreach (var l in _ui.WrapBig(RequirementLine(needs), w, UiTypography.Secondary).Take(2))
+                    Band(l, met ? Met : Slate);
             }
         }
 
@@ -2682,6 +2679,22 @@ public sealed class ForgeScreen
             _ui.TextBig(b, line, Feedback.X + inset, top + i * UiTypography.Pitch(UiTypography.Secondary),
                         _msgColor, UiTypography.Secondary);
         }
+    }
+
+    /// <summary>
+    /// What an enchant's requirement says: met, or the partner it needs — and, if that partner is a
+    /// keystone the player has not found, WHERE it is. The old line was honest and useless: it named
+    /// BLOODLUST and nothing told the player where BLOODLUST was; a dead card points at a region now.
+    /// </summary>
+    private string RequirementLine(EnchantNeed needs)
+    {
+        if (needs.MetBy(ActiveDefs, ActiveTriggers, SwornVows)) return "WORKS WITH YOUR BUILD RIGHT NOW.";
+        var missing = needs.Keystone is { } trig && Keystones.GrantingTrigger(trig) is { } partner
+                      && DiscoveredKeystones.All(k => k.Id != partner.Id)
+            ? Keystones.WhereToFind(partner.Id) : "";
+        return missing.Length > 0
+            ? $"NEEDS {needs.Label.ToUpperInvariant()} — {missing}"
+            : $"NEEDS {needs.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.";
     }
 
     // ── UPGRADE ──────────────────────────────────────────────────────────────────────────────────
@@ -3263,7 +3276,7 @@ public sealed class ForgeScreen
         var box = new Rectangle(row.X, row.Y + (row.Height - edge) / 2, edge, edge);
         var inset = UiMetrics.Space(5);
         _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
-        _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A));
+        _ui.Fill(b, box, new Color(0x16, 0x11, 0x10));
         if (on) _ui.Fill(b, new Rectangle(box.X + inset, box.Y + inset, edge - 2 * inset, edge - 2 * inset), Gold);
         _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + UiMetrics.Space(12),
                     row.Y + (row.Height - UiTypography.Secondary) / 2, row.Contains(mouse) ? Bone : Slate, UiTypography.Secondary);
@@ -3789,7 +3802,7 @@ public sealed class ForgeScreen
         var icon = new Rectangle(cell.X + (cell.Width - RevealIcon) / 2, cell.Y + drop, RevealIcon, RevealIcon);
 
         DrawItemIcon(b, shown, icon);
-        if (live is null) _ui.Fill(b, icon, new Color(0x0A, 0x08, 0x10, 0xB4));   // gone: dim the picture
+        if (live is null) _ui.Fill(b, icon, new Color(0x0B, 0x09, 0x08, 0xB4));   // gone: dim the picture
 
         // THE NAME, under the picture, in its rarity colour. The card used to join every item into one
         // "EPIC RING   RARE BLADE" line, which names a rarity and a shape and no item.
