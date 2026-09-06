@@ -101,8 +101,10 @@ public enum TraitCounter
     BrinkWaves,
     /// <summary>Waves cleared without losing a point of health.</summary>
     UntouchedWaves,
-    /// <summary>Waves cleared carrying a skill that reaches three or more creatures.</summary>
+    /// <summary>Waves cleared carrying a skill that reaches three or more creatures, against three or more.</summary>
     WideWaves,
+    /// <summary>Waves whose wasted damage came to <see cref="TraitDiscovery.GreatWasteMultiple"/> pools or more.</summary>
+    GreatWasteWaves,
     /// <summary>Waves cleared with critical chance at or above <see cref="TraitDiscovery.HighCritPercent"/>.</summary>
     HighCritWaves,
     /// <summary>Creatures killed.</summary>
@@ -202,7 +204,7 @@ public static class TraitCatalogue
             // You awaken it by hitting hard enough to matter; what awakens is hitting hard enough to
             // break plate. The fight counts a heavy hit whether or not the trait is worn — the
             // threshold is SoloBattle.HeavyHitFraction, a constant, not one of the trait's own dials.
-            At(TraitCounter.HeavyHits, 250),
+            At(TraitCounter.HeavyHits, 1_000),
             Fixed(new TraitRules(HeavyHitArmourStrip: 12f))),
 
         // ── WASTE ────────────────────────────────────────────────────────────────────────────────
@@ -211,7 +213,7 @@ public static class TraitCatalogue
             "Nothing is wasted that the body is willing to keep.",
             TraitTag.Waste,
             // Waste teaches the body to keep something back.
-            At(TraitCounter.OverkillPools, 8),
+            At(TraitCounter.OverkillPools, 45),
             Fixed(new TraitRules(OverkillToShield: 0.25f))),
 
         new("t_carrion_weight", "CARRION WEIGHT",
@@ -220,7 +222,7 @@ public static class TraitCatalogue
             TraitTag.Waste,
             // The deeper rung of the same lesson: the waste stops falling on the floor and starts
             // falling on the wave.
-            At(TraitCounter.OverkillPools, 25),
+            At(TraitCounter.GreatWasteWaves, 100),
             Fixed(new TraitRules(OverkillToBleed: 0.5f))),
 
         // ── REACH ────────────────────────────────────────────────────────────────────────────────
@@ -229,7 +231,7 @@ public static class TraitCatalogue
             "A fire that has reached three has already reached the fourth.",
             TraitTag.Reach,
             // Committing to reach awakens one more creature of reach.
-            At(TraitCounter.WideWaves, 200),
+            At(TraitCounter.WideWaves, 220),
             Fixed(new TraitRules(WideCastAtTargets: 3, WideCastExtraTargets: 1))),
 
         // ── CRITICAL ─────────────────────────────────────────────────────────────────────────────
@@ -238,7 +240,7 @@ public static class TraitCatalogue
             "Once a wave, the hand does not guess.",
             TraitTag.Critical,
             // Investing in chance awakens one hit a wave where chance does not apply.
-            At(TraitCounter.HighCritWaves, 30),
+            At(TraitCounter.HighCritWaves, 150),
             Fixed(new TraitRules(FirstHitOfWaveCritMultiplier: 2f))),
 
         new("t_opened_vein", "THE OPENED VEIN",
@@ -246,7 +248,7 @@ public static class TraitCatalogue
             "The cut you meant to make goes on being made.",
             TraitTag.Critical,
             // Once criticals are your whole game, they stop being only damage.
-            At(TraitCounter.HighCritWaves, 100),
+            At(TraitCounter.HighCritWaves, 1_000),
             Fixed(new TraitRules(CritToBleed: 0.5f))),
 
         // ── SHIELD ───────────────────────────────────────────────────────────────────────────────
@@ -265,7 +267,7 @@ public static class TraitCatalogue
             // Absorbing a great deal awakens something shield-shaped. HALF the carry, not all of it:
             // ShieldRules states that a shield accumulating while nothing happens would make standing
             // still the strongest defensive play, and halving keeps that invariant nearly intact.
-            At(TraitCounter.ShieldAbsorbedPools, 20),
+            At(TraitCounter.ShieldAbsorbedPools, 220),
             Fixed(new TraitRules(ShieldCarryFraction: 0.5f))),
 
         new("t_answering_wall", "THE ANSWERING WALL",
@@ -273,7 +275,7 @@ public static class TraitCatalogue
             "A wall that has been struck long enough learns to strike.",
             TraitTag.Shield,
             // Wearing plate long enough awakens plate that answers.
-            At(TraitCounter.ShieldGainedPools, 30),
+            At(TraitCounter.ShieldGainedPools, 90),
             Fixed(new TraitRules(ShieldedReflectFraction: 0.10f))),
 
         // ── LOW HEALTH ───────────────────────────────────────────────────────────────────────────
@@ -282,7 +284,7 @@ public static class TraitCatalogue
             "Nothing is quicker than the thing that is nearly gone.",
             TraitTag.LowHealth,
             // Living at the brink teaches you to act faster there.
-            At(TraitCounter.BrinkWaves, 25),
+            At(TraitCounter.BrinkWaves, 90),
             Fixed(new TraitRules(LowHealthShare: 0.25f, LowHealthRateBonus: 0.33f))),
 
         new("t_thin_line", "THE THIN LINE",
@@ -290,7 +292,7 @@ public static class TraitCatalogue
             "There is always one blow you do not take whole.",
             TraitTag.LowHealth,
             // The deeper rung: the body stops merely acting faster and starts flinching from the blow.
-            At(TraitCounter.BrinkWaves, 60),
+            At(TraitCounter.BrinkWaves, 150),
             Fixed(new TraitRules(LethalBiteShare: 0.5f))),
 
         // ── HEALING ──────────────────────────────────────────────────────────────────────────────
@@ -299,7 +301,7 @@ public static class TraitCatalogue
             "Flesh that has been mended often mends further.",
             TraitTag.Healing,
             // Healing a great deal awakens room to be healed more.
-            At(TraitCounter.HealedPools, 25),
+            At(TraitCounter.HealedPools, 120),
             Fixed(new TraitRules(HealCeilingPerHeal: 0.01f, HealCeilingPerHealCap: 0.25f))),
 
         new("t_given_hand", "THE GIVEN HAND",
@@ -307,7 +309,7 @@ public static class TraitCatalogue
             "What you cannot hold, you give away hard.",
             TraitTag.Healing,
             // Past the point where more healing helps, healing has to go somewhere else.
-            At(TraitCounter.HealedPools, 50),
+            At(TraitCounter.HealedPools, 500),
             Fixed(new TraitRules(OverhealToDamage: 1f))),
 
         // ── REFLECT ──────────────────────────────────────────────────────────────────────────────
@@ -316,7 +318,7 @@ public static class TraitCatalogue
             "Every blow returned teaches the return.",
             TraitTag.Reflect,
             // Reflecting a great deal awakens a deeper reflection.
-            At(TraitCounter.ReflectedPools, 6),
+            At(TraitCounter.ReflectedPools, 200),
             Fixed(new TraitRules(ReflectRampPerBite: 0.15f, ReflectRampCap: 1f))),
 
         // ── KILLS ────────────────────────────────────────────────────────────────────────────────
@@ -325,7 +327,7 @@ public static class TraitCatalogue
             "The dead make the ground firmer to swing from.",
             TraitTag.Kills,
             // Emptying waves awakens a reward that grows as a wave empties.
-            At(TraitCounter.CreaturesKilled, 2_000),
+            At(TraitCounter.CreaturesKilled, 9_000),
             Fixed(new TraitRules(PowerPerDeadEnemy: 0.06f, PowerPerDeadCap: 0.33f))),
 
         new("t_last_word", "LAST WORD",
@@ -334,7 +336,7 @@ public static class TraitCatalogue
             TraitTag.Kills,
             // A boss wave is always one creature: sixty fights that were only ever the last enemy
             // alive awaken an edge against the last enemy alive.
-            At(TraitCounter.BossesFelled, 60),
+            At(TraitCounter.BossesFelled, 150),
             Fixed(new TraitRules(LastEnemyBonus: 0.30f))),
 
         // ── MARKS ────────────────────────────────────────────────────────────────────────────────
@@ -346,7 +348,7 @@ public static class TraitCatalogue
             // and NOT off StyleActivations[Sign]: that ledger is written inside LandSpread, so only a
             // cast that deals something reaches it, and every SIGN skill in the catalogue is an
             // Amplify that deals nothing — the rule would have been unsatisfiable by any build.
-            At(TraitCounter.MarkCasts, 200),
+            At(TraitCounter.MarkCasts, 1_100),
             Fixed(new TraitRules(AmplifyWindowPerEnemyMs: 1_000))),
 
         // ── VOWS ─────────────────────────────────────────────────────────────────────────────────
@@ -361,7 +363,7 @@ public static class TraitCatalogue
             // Keeping your word, descent after descent, awakens a word that keeps you when you have
             // given none. It pays only a hunter who has sworn nothing at all, so it is a real decision
             // about the build rather than a free rider on a promise already made.
-            At(TraitCounter.RunsWithVowKept, 8),
+            At(TraitCounter.RunsWithVowKept, 40),
             Fixed(new TraitRules(UnswornBuildBorrowsWeakestVow: true))),
 
         new("t_weight_of_vows", "THE WEIGHT OF VOWS",
@@ -373,7 +375,7 @@ public static class TraitCatalogue
             // this can only be earned — and only ever paid — by promises actually kept. It needs the
             // vow capacity a milestone grants before it can be earned at all, which is the point: it
             // is the trait that makes the second and third promise worth the restriction they cost.
-            At(TraitCounter.ManyVowWaves, 40),
+            At(TraitCounter.ManyVowWaves, 900),
             Fixed(new TraitRules(VowPayPerExtraKeptVow: 0.20f))),
 
         // ── ELEMENTS ─────────────────────────────────────────────────────────────────────────────
@@ -382,7 +384,7 @@ public static class TraitCatalogue
             "One voice, said twice, is louder than two.",
             TraitTag.Elements,
             // Committing to one voice awakens the voice saying it twice.
-            At(TraitCounter.PureWaves, 60),
+            At(TraitCounter.PureWaves, 120),
             Fixed(new TraitRules(OneSourceRepeatsFirstCast: true))),
 
         new("t_many_tongues", "MANY TONGUES",
@@ -390,7 +392,7 @@ public static class TraitCatalogue
             "Speak to all of them and none of them answers badly.",
             TraitTag.Elements,
             // Speaking to every element awakens every element answering well.
-            At(TraitCounter.MotleyWaves, 60),
+            At(TraitCounter.MotleyWaves, 700),
             Fixed(new TraitRules(AllMatchupsStrongAtSources: 4))),
 
         // ── SETS ─────────────────────────────────────────────────────────────────────────────────
@@ -401,7 +403,7 @@ public static class TraitCatalogue
             // The set already decided what you are; this makes your skills agree. The NARROW reading:
             // forcing every skill to the set's element would take the player's own choice away and
             // argue with PURE, THE SINGLE NOTE and all six element signatures at once.
-            At(TraitCounter.SetsCompleted, 1),
+            At(TraitCounter.SetsCompleted, 2),
             ctx => ctx.SetElement is { } element
                 ? SkillShape.None with { Traits = new TraitRules(MatchedSuitSource: element, MatchedSuitBonus: 0.20f) }
                 : SkillShape.None),
@@ -414,7 +416,7 @@ public static class TraitCatalogue
             // You are not a visitor here any more; the wave does not get its free breath.
             // REUSES SkillShape.FreeOpeningCast — the dial PREPARATION already turns, so this trait
             // adds no new field and no new read site.
-            At(TraitCounter.RegionsConquered, 2),
+            At(TraitCounter.RegionsConquered, 4),
             ctx => ctx.RegionConquered ? SkillShape.None with { FreeOpeningCast = true } : SkillShape.None),
 
         new("t_studied_place", "THE STUDIED PLACE",
@@ -422,7 +424,7 @@ public static class TraitCatalogue
             "You have learned how the things here come apart.",
             TraitTag.Regions,
             // Knowing a place is knowing how its creatures come apart.
-            At(TraitCounter.RegionsMastered, 1),
+            At(TraitCounter.RegionsMastered, 2),
             ctx => ctx.RegionsMastered <= 0
                 ? SkillShape.None
                 : SkillShape.None with
@@ -451,7 +453,7 @@ public static class TraitCatalogue
             "Whole is a thing you can stay.",
             TraitTag.Survival,
             // Going untouched awakens staying untouched.
-            At(TraitCounter.UntouchedWaves, 30),
+            At(TraitCounter.UntouchedWaves, 500),
             Fixed(new TraitRules(PreventFirstBiteAtFullHealth: true))),
     };
 

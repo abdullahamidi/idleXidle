@@ -548,6 +548,7 @@ public sealed class SoloExpedition
             CreaturesKilled: m.CreaturesKilled,
             MarkCasts: m.MarkCasts,
             CarriedWideSkill: wide,
+            CreaturesPresent: m.CreaturesPresent,
             CritPercent: ctx.CritPercent,
             OneElement: _build.Skills.Count > 0
                         && _build.Skills.All(s => s.Source == _build.Skills[0].Source),

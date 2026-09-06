@@ -36,6 +36,7 @@ public readonly record struct TraitWaveFacts(
     int CreaturesKilled,
     int MarkCasts,
     bool CarriedWideSkill,
+    int CreaturesPresent,
     float CritPercent,
     bool OneElement,
     int DistinctElements,
@@ -115,6 +116,17 @@ public static class TraitDiscovery
     /// Fold one cleared wave into the accumulators, then re-check every rule.
     /// </summary>
     /// <returns>The ids that awakened on this call, in catalogue order. Empty is the normal answer.</returns>
+    /// <summary>
+    /// How many champion pools of damage must be WASTED in one wave for it to count as great waste.
+    /// </summary>
+    /// <remarks>
+    /// Four, because a wave that throws away four whole bodies is a statement and one that throws away
+    /// half of one is Tuesday. Measured on the shipped bands, a fresh account wastes about three pools
+    /// PER WAVE in total — so this asks for waves whose killing blows are disproportionate even by the
+    /// standard of a game where every blow overkills a little.
+    /// </remarks>
+    public const float GreatWasteMultiple = 4f;
+
     public static IReadOnlyList<string> OnWaveCleared(
         TraitLedger ledger, TraitWaveFacts wave, TraitAccount account, TraitFirst first)
     {
@@ -137,7 +149,16 @@ public static class TraitDiscovery
 
         if (wave.LowestHealthFraction <= BrinkShare) ledger.Add(TraitCounter.BrinkWaves, 1);
         if (wave.HealthLost <= 0) ledger.Add(TraitCounter.UntouchedWaves, 1);
-        if (wave.CarriedWideSkill) ledger.Add(TraitCounter.WideWaves, 1);
+        // REACH MEANS THERE WAS SOMETHING TO REACH. This read a BUILD PROPERTY — true if any equipped
+        // skill CAN touch three creatures, whether three were ever present or the skill ever cast — so
+        // it measured 1.0000 per cleared wave across three careers: "waves cleared" wearing a reach
+        // costume. Asking for the creatures too makes it the circumstance the trait's own line claims.
+        if (wave.CarriedWideSkill && wave.CreaturesPresent >= WideTargets) ledger.Add(TraitCounter.WideWaves, 1);
+        // A WAVE OF GREAT WASTE, which is not the same fact as the waste itself. Every kill leaves a
+        // trickle and THE SPILL counts it; this counts a wave whose killing blows threw away several
+        // times the champion's whole body — so the two traits of the WASTE theme stop being one number
+        // line six waves apart.
+        if (wave.Overkill >= GreatWasteMultiple * pool) ledger.Add(TraitCounter.GreatWasteWaves, 1);
         if (wave.CritPercent >= HighCritPercent) ledger.Add(TraitCounter.HighCritWaves, 1);
         if (wave.OneElement) ledger.Add(TraitCounter.PureWaves, 1);
         if (wave.DistinctElements >= MotleyElements) ledger.Add(TraitCounter.MotleyWaves, 1);

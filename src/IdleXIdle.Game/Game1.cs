@@ -3146,6 +3146,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // Now the pinned one joins the awakened set, and an id no trait answers to aborts.
                     var pinnedId = Environment.GetEnvironmentVariable("RH_SHOT_TRAIT")?.Trim();
                     var toDiscover = posedTraits.ToList();
+                    // HOW FAR ALONG THE ACCOUNT IS. The eleven above are one point on the discovery
+                    // curve; RH_SHOT_AWAKENED=<n> poses the others, so the screen can be reviewed at
+                    // the pace the catalogue is actually tuned to — a first sitting's one, an early
+                    // account's three, a developed one's whole shelf — instead of only at the middle.
+                    // The order is the fixture's own, so the same n always poses the same set.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_AWAKENED")?.Trim() is { Length: > 0 } awoke)
+                    {
+                        if (!int.TryParse(awoke, out var keep) || keep < 0)
+                            throw new InvalidOperationException($"RH_SHOT_AWAKENED='{awoke}' is not a trait count.");
+                        toDiscover = keep <= posedTraits.Length
+                            ? posedTraits.Take(keep).ToList()
+                            : posedTraits.Concat(TraitCatalogue.All.Select(t => t.Id).Where(id => !posedTraits.Contains(id)))
+                                         .Take(keep).ToList();
+                    }
                     if (pinnedId is { Length: > 0 } && !string.Equals(pinnedId, "unknown", StringComparison.OrdinalIgnoreCase))
                     {
                         if (TraitCatalogue.Find(pinnedId) is null)

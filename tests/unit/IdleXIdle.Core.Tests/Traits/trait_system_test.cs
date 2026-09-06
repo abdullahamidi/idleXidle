@@ -40,7 +40,7 @@ public class trait_system_test
     private static TraitWaveFacts BusyWave() => new(
         ChampionMaxHealth: 1_000,
         HeavyHits: 3,
-        Overkill: 2_000f,
+        Overkill: 5_000f,   // five pools: enough that GREAT WASTE (four) rises too
         ShieldGained: 1_500f,
         ShieldBreaks: 2,
         ShieldAbsorbed: 1_200f,
@@ -51,6 +51,7 @@ public class trait_system_test
         CreaturesKilled: 7,
         MarkCasts: 4,
         CarriedWideSkill: true,
+        CreaturesPresent: 4,
         CritPercent: 60f,
         OneElement: true,
         DistinctElements: 4,
