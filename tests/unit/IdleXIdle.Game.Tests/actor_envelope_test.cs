@@ -42,12 +42,28 @@ public class actor_envelope_test
     private static readonly ContentBox[] Guardian = { GuardianIdle, GuardianAttack };
     private static readonly ContentBox[] Leech = { LeechIdle, LeechAttack };
 
+    /// <summary>One whole frame at the size the RENDERER resolves for this clip in this box.</summary>
+    /// <remarks>
+    /// Through <see cref="UiKit.DrawScale"/> on purpose: the tests must agree with the renderer by
+    /// consuming it, not by restating its arithmetic. The crop is the clip's own headroom, which is
+    /// what the arena passes for every actor.
+    /// </remarks>
+    private static float Unit(Rectangle box, ContentBox c) => UiKit.DrawScale(512, c.Top, box.Height) * 512;
+
+    /// <summary>The clips of one figure in one box, each carrying the unit it is drawn at.</summary>
+    private static ResolvedClip[] Clips(Rectangle box, params ContentBox[] cs)
+    {
+        var r = new ResolvedClip[cs.Length];
+        for (var i = 0; i < cs.Length; i++) r[i] = new ResolvedClip(cs[i], Unit(box, cs[i]));
+        return r;
+    }
+
     // ── What the envelope holds ───────────────────────────────────────────────────────────────────
 
     [Fact]
     public void test_the_envelope_contains_the_idle_silhouette()
     {
-        var envelope = VfxFigure.Envelope(ChampBox, Seeker);
+        var envelope = VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker));
         Assert.True(envelope.Contains(VfxFigure.VisualRect(ChampBox, SeekerIdle)));
     }
 
@@ -59,7 +75,7 @@ public class actor_envelope_test
         var swing = VfxFigure.VisualRect(ChampBox, SeekerAttack);
 
         // Act
-        var envelope = VfxFigure.Envelope(ChampBox, Seeker);
+        var envelope = VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker));
 
         // Assert: the swing escapes the body and is held by the envelope.
         Assert.False(body.Contains(swing), "the attack should reach past the idle body — that is the whole defect");
@@ -72,7 +88,7 @@ public class actor_envelope_test
     {
         var idle = VfxFigure.VisualRect(SwarmBox, GuardianIdle);
         var spear = VfxFigure.VisualRect(SwarmBox, GuardianAttack);
-        var envelope = VfxFigure.Envelope(SwarmBox, Guardian);
+        var envelope = VfxFigure.Envelope(SwarmBox, Clips(SwarmBox, Guardian));
 
         Assert.True(spear.Width > idle.Width);
         Assert.True(envelope.Contains(idle));
@@ -84,7 +100,7 @@ public class actor_envelope_test
     public void test_a_creature_whose_attack_is_narrower_than_its_idle_keeps_its_idle_width()
     {
         var idle = VfxFigure.VisualRect(SwarmBox, SentinelIdle);
-        var envelope = VfxFigure.Envelope(SwarmBox, new[] { SentinelIdle, SentinelAttack });
+        var envelope = VfxFigure.Envelope(SwarmBox, Clips(SwarmBox, SentinelIdle, SentinelAttack));
 
         Assert.Equal(idle.Width, envelope.Width);
         Assert.True(envelope.Contains(VfxFigure.VisualRect(SwarmBox, SentinelAttack)));
@@ -100,7 +116,7 @@ public class actor_envelope_test
         // where AnimSprite lands the attack's frame — is outside the envelope; the crown's headroom is
         // outside it; and it stands on the sole. (The attack's frame is WIDER than the 400-px box:
         // the swing genuinely reaches past the layout, so the box's own edge is not the measure.)
-        var envelope = VfxFigure.Envelope(ChampBox, Seeker);
+        var envelope = VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker));
         var unit = ChampBox.Height / (1f - SeekerAttack.Top);          // one attack frame, as drawn
         var inLeftPad = ChampBox.Center.X + (int)((15 / 512f - 0.5f) * unit);
         var inRightPad = ChampBox.Center.X + (int)((0.5f - 15 / 512f) * unit);
@@ -116,7 +132,7 @@ public class actor_envelope_test
     [Fact]
     public void test_a_padded_creature_is_narrower_than_its_box_on_every_clip()
     {
-        var envelope = VfxFigure.Envelope(SwarmBox, Guardian);
+        var envelope = VfxFigure.Envelope(SwarmBox, Clips(SwarmBox, Guardian));
         Assert.True(envelope.Width < SwarmBox.Width);
         Assert.True(envelope.X > SwarmBox.X && envelope.Right < SwarmBox.Right);
     }
@@ -129,9 +145,9 @@ public class actor_envelope_test
         // The envelope takes the SET of clips, so the frame on screen is not an input at all; the
         // strongest thing the arithmetic can still get wrong is to depend on the order it was told
         // them in, or on a clip being listed twice — neither may move it by a pixel.
-        var idleFirst = VfxFigure.Envelope(ChampBox, new[] { SeekerIdle, SeekerAttack, SeekerCast });
-        var attackFirst = VfxFigure.Envelope(ChampBox, new[] { SeekerAttack, SeekerCast, SeekerIdle });
-        var attackHeld = VfxFigure.Envelope(ChampBox, new[] { SeekerIdle, SeekerAttack, SeekerAttack, SeekerCast });
+        var idleFirst = VfxFigure.Envelope(ChampBox, Clips(ChampBox, SeekerIdle, SeekerAttack, SeekerCast));
+        var attackFirst = VfxFigure.Envelope(ChampBox, Clips(ChampBox, SeekerAttack, SeekerCast, SeekerIdle));
+        var attackHeld = VfxFigure.Envelope(ChampBox, Clips(ChampBox, SeekerIdle, SeekerAttack, SeekerAttack, SeekerCast));
 
         Assert.Equal(idleFirst, attackFirst);
         Assert.Equal(idleFirst, attackHeld);
@@ -141,8 +157,8 @@ public class actor_envelope_test
     public void test_the_envelope_follows_the_box_and_nothing_else()
     {
         // The lunge moves the draw box 40 px right; the envelope moves with it, unchanged in size.
-        var standing = VfxFigure.Envelope(ChampBox, Seeker);
-        var lunged = VfxFigure.Envelope(new Rectangle(ChampBox.X + 40, ChampBox.Y, ChampBox.Width, ChampBox.Height), Seeker);
+        var standing = VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker));
+        var lunged = VfxFigure.Envelope(new Rectangle(ChampBox.X + 40, ChampBox.Y, ChampBox.Width, ChampBox.Height), Clips(new Rectangle(ChampBox.X + 40, ChampBox.Y, ChampBox.Width, ChampBox.Height), Seeker));
 
         Assert.Equal(standing.Size, lunged.Size);
         Assert.Equal(standing.X + 40, lunged.X);
@@ -152,7 +168,7 @@ public class actor_envelope_test
     public void test_no_resolved_clip_is_the_draw_box_itself()
     {
         // Missing art falls back to the layout box — what the draw itself falls back to.
-        Assert.Equal(ChampBox, VfxFigure.Envelope(ChampBox, System.Array.Empty<ContentBox>()));
+        Assert.Equal(ChampBox, VfxFigure.Envelope(ChampBox, System.Array.Empty<ResolvedClip>()));
     }
 
     [Fact]
@@ -163,7 +179,7 @@ public class actor_envelope_test
         // rectangle at every point of the swing instead of sliding with it. The union is what makes
         // that safe: it holds the figure at both ends of the travel.
         const int lunge = 40;
-        var standing = VfxFigure.Envelope(ChampBox, Seeker);
+        var standing = VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker));
         var lunged = standing;
         lunged.Offset(lunge, 0);
         var published = Rectangle.Union(standing, lunged);
@@ -171,7 +187,7 @@ public class actor_envelope_test
         Assert.True(published.Contains(standing) && published.Contains(lunged));
         Assert.Equal(standing.Width + lunge, published.Width);
         // ...and it does not move when the box does, which is the whole point.
-        var mid = VfxFigure.Envelope(new Rectangle(ChampBox.X + 17, ChampBox.Y, ChampBox.Width, ChampBox.Height), Seeker);
+        var mid = VfxFigure.Envelope(new Rectangle(ChampBox.X + 17, ChampBox.Y, ChampBox.Width, ChampBox.Height), Clips(new Rectangle(ChampBox.X + 17, ChampBox.Y, ChampBox.Width, ChampBox.Height), Seeker));
         Assert.True(published.Contains(mid), "a half-lunge is inside the published keep-out");
     }
 
@@ -186,10 +202,11 @@ public class actor_envelope_test
         // so an uncapped
         // envelope would hand the pointer 34 px of frame the figure is never drawn into.
         var bruiser = new Rectangle(1200, 400, 488, 492);
-        var maxUnit = UiKit.RasterCeiling * 512;
 
-        var asked = VfxFigure.Envelope(bruiser, Leech);
-        var drawn = VfxFigure.Envelope(bruiser, Leech, maxUnit);
+        // What the box ASKED for: each clip landed at its own unclamped ask.
+        var asked = Rectangle.Union(VfxFigure.VisualRect(bruiser, LeechIdle), VfxFigure.VisualRect(bruiser, LeechAttack));
+        // What the renderer DRAWS: each clip at the unit UiKit resolved for it.
+        var drawn = VfxFigure.Envelope(bruiser, Clips(bruiser, Leech));
 
         Assert.True(drawn.Width < asked.Width, "the cap binds on this box");
         Assert.Equal(495, drawn.Width);            // 396 opaque frame-px at the 1.25 ceiling
@@ -201,9 +218,12 @@ public class actor_envelope_test
     public void test_the_ceiling_does_nothing_to_a_box_that_does_not_reach_it()
     {
         // The champion box asks 512/(512-114) = 1.08 of the seeker's attack frame — far under the
-        // ceiling — so passing it changes not one pixel. A cap must not become a second geometry.
-        Assert.Equal(VfxFigure.Envelope(ChampBox, Seeker),
-                     VfxFigure.Envelope(ChampBox, Seeker, UiKit.RasterCeiling * 512));
+        // ceiling — so resolving changes not one pixel: the envelope is the AUTHORED union exactly.
+        // A cap must not become a second geometry.
+        var authored = Rectangle.Union(Rectangle.Union(VfxFigure.VisualRect(ChampBox, SeekerIdle),
+                                                       VfxFigure.VisualRect(ChampBox, SeekerAttack)),
+                                       VfxFigure.VisualRect(ChampBox, SeekerCast));
+        Assert.Equal(authored, VfxFigure.Envelope(ChampBox, Clips(ChampBox, Seeker)));
     }
 
     // ── What the registry publishes ──────────────────────────────────────────────────────────────
@@ -217,7 +237,7 @@ public class actor_envelope_test
         // the body. The registry unions them, so every subject it holds satisfies the contract.
         var box = new Rectangle(1200, 500, 300, 302);
         var body = VfxFigure.VisualRect(box, new ContentBox(88 / 512f, 117 / 512f, 88 / 512f, 17 / 512f));   // Content's crop
-        var raw = VfxFigure.Envelope(box, new[] { SentinelIdle, SentinelAttack });                            // the exact union
+        var raw = VfxFigure.Envelope(box, Clips(box, SentinelIdle, SentinelAttack));                            // the exact union
         Assert.False(raw.Contains(body), "the fixture must pose the case the union exists for");
 
         var registry = new VfxBoundsRegistry();

@@ -2319,6 +2319,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             ? src
                             : throw new InvalidOperationException(
                                 $"RH_SHOT_SOURCE='{shotSource}' is not a Source. Known: " + string.Join(", ", Enum.GetNames<Source>()) + ".");
+                    // RH_SHOT_NOSTRIP=1 takes every animation strip away from the arena, so the STATIC
+                    // FALLBACK draws — the path no shipped asset can reach, and so the one nobody had
+                    // ever seen. The geometry falls back with it, which is the point of posing it.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_NOSTRIP")?.Trim() == "1")
+                        _expedition.DevNoStrips = true;
                     if (Environment.GetEnvironmentVariable("RH_SHOT_ARCHETYPE")?.Trim() is { Length: > 0 } shotArch)
                         _expedition.DevArchetype = Enum.TryParse<Archetype>(shotArch, ignoreCase: true, out var arch)
                             ? arch

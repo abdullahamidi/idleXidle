@@ -355,6 +355,17 @@ public static class VfxResolver
 /// The consequences the VFX contract exists to handle: the drawn figure is SHORTER than its box, and it
 /// is almost always much narrower — a 400-px-wide champion box holds a hunter who draws 162 px.
 /// </remarks>
+/// <summary>
+/// One clip of a figure, ready to place: its margins, and the size one whole frame of it is DRAWN at
+/// in the box under discussion (<c>UiKit.DrawnFrame</c> — crop resolved, ceiling applied).
+/// </summary>
+/// <remarks>
+/// The pair travels together because the unit is meaningless without the clip it was resolved for:
+/// two clips of the same figure in the same box can be drawn at different scales, since each is
+/// cropped by its own headroom and only one of them may reach the ceiling.
+/// </remarks>
+public readonly record struct ResolvedClip(ContentBox Content, float Unit);
+
 public static class VfxFigure
 {
     /// <summary>
@@ -371,23 +382,39 @@ public static class VfxFigure
     /// difference of its margins.
     /// </para>
     /// <para>
-    /// AnimSprite also REFUSES TO MAGNIFY past <c>UiKit.RasterCeiling</c>, and a box does reach that
-    /// cap: the rift guardian's idle leaves 386 px of frame under its headroom, which the 492-px box of
-    /// a multi-creature wave at Bruiser scale would draw at 1.27. <paramref name="maxUnit"/> is that
-    /// ceiling in the same units as
-    /// the frame (<c>UiKit.RasterCeiling × the strip's frame size</c>); a caller that passes it gets
-    /// the size the figure is actually DRAWN at, and one that omits it gets the size the box asked
-    /// for. The sole still lands on <c>box.Bottom</c> either way — the cap shortens the figure from
-    /// the crown down, exactly as AnimSprite's bottom-anchored draw does.
+    /// THIS IS THE AUTHORED RECTANGLE: what the box ASKED for. The renderer may answer with less — it
+    /// holds a crop to <c>UiKit.CropCeiling</c> and a magnification to <c>UiKit.RasterCeiling</c> — so
+    /// nothing that has to agree with the screen may use this. Consumers use <see cref="Land"/> with
+    /// the unit <c>UiKit.DrawnFrame</c> resolved; this stays for the diagnostic that prints the two
+    /// side by side, and for tests that state the ask.
     /// </para>
     /// </remarks>
     /// <param name="box">The layout box the strip is drawn into.</param>
     /// <param name="c">The strip's margins — the draw's symmetric crop, or the true silhouette.</param>
-    /// <param name="maxUnit">The largest a whole frame may be drawn, in box pixels. Omit for uncapped.</param>
-    public static Rectangle VisualRect(Rectangle box, ContentBox c, float maxUnit = float.PositiveInfinity)
+    public static Rectangle VisualRect(Rectangle box, ContentBox c)
+        => Land(box, c, box.Height / MathF.Max(0.01f, 1f - c.Top));
+
+    /// <summary>
+    /// Land a content box in <paramref name="box"/> at <paramref name="unit"/> — the size ONE WHOLE
+    /// FRAME is drawn at, as the renderer resolved it (<c>UiKit.DrawnFrame</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The unit is handed in rather than derived, and that is the whole point: the crop the renderer
+    /// trimmed and the ceiling it applied are decided ONCE, by <c>UiKit</c>, and this only places the
+    /// picture. A second derivation here would be a second presentation rule, and the two would
+    /// eventually disagree — which is exactly the defect this contract has now been repaired for
+    /// twice.
+    /// </para>
+    /// <para>
+    /// The sole lands on <c>box.Bottom</c> and the span sits where the opaque pixels are: centred for
+    /// the symmetric crop <c>UiKit.Content</c> reports, leaning by half the difference of the margins
+    /// for the true silhouette <c>UiKit.Silhouette</c> reports. Both are independent of the crop —
+    /// only the unit carries it — so a clip trimmed hard and one trimmed lightly land consistently.
+    /// </para>
+    /// </remarks>
+    public static Rectangle Land(Rectangle box, ContentBox c, float unit)
     {
-        var shown = MathF.Max(0.01f, 1f - c.Top);          // what is left after the top crop
-        var unit = MathF.Min(box.Height / shown, maxUnit);  // one whole frame, at the drawn scale
         var h = Math.Max(1, (int)MathF.Round(unit * (1f - c.Top - c.Bottom)));
         var w = Math.Max(1, (int)MathF.Round(unit * (1f - c.Left - c.Right)));
         var lean = (int)MathF.Round(unit * (c.Left - c.Right) * 0.5f);   // zero for a symmetric box
@@ -411,24 +438,21 @@ public static class VfxFigure
     /// The envelope keeps the stability law and fixes the escape: it is measured from every combat
     /// clip the figure can play — never from whichever one is playing — so an idle frame, an attack
     /// frame and an idle frame again produce the same rectangle, and the attack animates INSIDE it.
-    /// Each clip is landed by <see cref="VisualRect"/> with its own crop, because AnimSprite scales
-    /// each clip by its own headroom, and the union is taken in the box's pixels. It stays as close
-    /// to the silhouettes as their alpha allows: transparent padding is never inside it — which is
-    /// why <paramref name="maxUnit"/> matters here and not only in the effects' arithmetic. A clip
-    /// the renderer CAPS is drawn smaller than its box asked for, and an uncapped envelope would
-    /// hand the pointer the difference as empty space.
+    /// EACH CLIP CARRIES ITS OWN UNIT, because each is cropped by its own headroom and capped on its
+    /// own terms — the rift guardian's idle is held at the ceiling in a box where its attack is not.
+    /// The union is taken in the box's pixels. It stays as close to the silhouettes as their alpha
+    /// allows: transparent padding is never inside it, and neither is the space between what a box
+    /// asked for and what the renderer granted.
     /// </para>
     /// </remarks>
     /// <param name="box">The layout box every clip is drawn into.</param>
-    /// <param name="clips">The silhouettes of the clips the figure can play; empty means no art resolved.</param>
-    /// <param name="maxUnit">The renderer's magnification ceiling, as <see cref="VisualRect"/> takes it.</param>
-    public static Rectangle Envelope(Rectangle box, System.Collections.Generic.IReadOnlyList<ContentBox> clips,
-                                     float maxUnit = float.PositiveInfinity)
+    /// <param name="clips">The clips the figure can play, each with the unit it is drawn at; empty means no art resolved.</param>
+    public static Rectangle Envelope(Rectangle box, System.Collections.Generic.IReadOnlyList<ResolvedClip> clips)
     {
         ArgumentNullException.ThrowIfNull(clips);
         if (clips.Count == 0) return box;
-        var all = VisualRect(box, clips[0], maxUnit);
-        for (var i = 1; i < clips.Count; i++) all = Rectangle.Union(all, VisualRect(box, clips[i], maxUnit));
+        var all = Land(box, clips[0].Content, clips[0].Unit);
+        for (var i = 1; i < clips.Count; i++) all = Rectangle.Union(all, Land(box, clips[i].Content, clips[i].Unit));
         return all;
     }
 }

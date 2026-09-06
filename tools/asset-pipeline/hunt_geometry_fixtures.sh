@@ -28,8 +28,16 @@
 #                           an uncapped figure as if the pose had worked.
 #
 #                           A CAPPED pose is only honoured when its dump shows a creature `box` of
-#                           488x492 and a `CAPPED` line. `GRANTED` there means the ceiling was not
-#                           reached; if the run did not throw and did not cap, the pose is broken.
+#                           488x492 and a `MAGNIFIED` verdict. `GRANTED` there means the ceiling was
+#                           not reached; if the run did not throw and did not cap, the pose is broken.
+#
+#   FALLBACK   fight        RH_SHOT_NOSTRIP=1 takes every animation strip away, so the arena draws its
+#                           STATIC POSES — the path no shipped asset can reach and nobody had seen.
+#                           The geometry falls back WITH the draw: the dump reads `STILL`, and a still
+#                           has one silhouette, so body and envelope are the same rectangle. The
+#                           champion also reads `CROPPED`, because his base design is drawn at a fixed
+#                           0.02 crop rather than his measured headroom — the draw's own long-standing
+#                           choice, which the geometry now matches instead of contradicting.
 #
 # Usage: bash tools/asset-pipeline/hunt_geometry_fixtures.sh <tag>
 # Writes build/shots/polish/<tag>_*.png (+ .actors.txt, .events.txt) — see polish_shots.sh.
@@ -38,6 +46,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 TAG="${1:?tag}"
 G="RH_SHOT_GEOMETRY=1;RH_SHOT_DUMP=1"
 CAP="RH_SHOT_SOURCE=Spirit;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1"
+NS="RH_SHOT_NOSTRIP=1;RH_SHOT_DUMP=1"
 bash tools/asset-pipeline/polish_shots.sh "$TAG" \
   "vfxdebug:100:RH_SHOT_DUMP=1" "vfxdebug:125:RH_SHOT_DUMP=1" "vfxdebug:150:RH_SHOT_DUMP=1" \
   "vfxdebug:100:RH_SHOT_HUNTER=quiver;RH_SHOT_DUMP=1" "vfxdebug:150:RH_SHOT_HUNTER=quiver;RH_SHOT_DUMP=1" \
@@ -51,4 +60,5 @@ bash tools/asset-pipeline/polish_shots.sh "$TAG" \
   "fightinspect:150:RH_SHOT_T=7;$G;RH_SHOT_CANVAS_MOUSE=1730,700" \
   "fightinspect:150:RH_SHOT_T=7;$G;RH_SHOT_CANVAS_MOUSE=1750,700" \
   "vfxdebug:100:$CAP" "vfxdebug:125:$CAP" "vfxdebug:150:$CAP" \
-  "fight:100:$CAP;RH_SHOT_T=1.2" "fight:125:$CAP;RH_SHOT_T=1.2" "fight:150:$CAP;RH_SHOT_T=1.2"
+  "fight:100:$CAP;RH_SHOT_T=1.2" "fight:125:$CAP;RH_SHOT_T=1.2" "fight:150:$CAP;RH_SHOT_T=1.2" \
+  "fight:100:$NS;RH_SHOT_T=1.2" "fight:125:$NS;RH_SHOT_T=1.2" "fight:150:$NS;RH_SHOT_T=1.2"

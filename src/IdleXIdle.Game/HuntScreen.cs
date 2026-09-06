@@ -2253,18 +2253,107 @@ public sealed class HuntScreen
     /// </para>
     /// </remarks>
     private Rectangle VisualRect(Rectangle box, string? referenceStrip)
-        => referenceStrip is null || !_ui.Assets.Has(referenceStrip)
-            ? box
-            : VfxFigure.VisualRect(box, _ui.Content(referenceStrip), _ui.FrameCeiling(referenceStrip));
+    {
+        var (key, crop) = BodySource(referenceStrip);
+        return key is null ? box : VfxFigure.Land(box, _ui.Content(key), _ui.DrawnFrame(key, crop, box.Height));
+    }
 
     /// <summary>
-    /// The figure's rectangle AS AUTHORED — the same landing, without the renderer's ceiling. Nothing
-    /// consumes it; the geometry dump prints it beside the resolved body so a capped actor says so.
+    /// The figure's rectangle AS AUTHORED — what the box asked for, before the renderer's crop ceiling
+    /// and magnification ceiling. Nothing consumes it; the geometry dump prints it beside the resolved
+    /// body so a capped actor says so.
     /// </summary>
     private Rectangle AuthoredRect(Rectangle box, string? referenceStrip)
-        => referenceStrip is null || !_ui.Assets.Has(referenceStrip)
-            ? box
-            : VfxFigure.VisualRect(box, _ui.Content(referenceStrip));
+    {
+        var (key, _) = BodySource(referenceStrip);
+        return key is null ? box : VfxFigure.VisualRect(box, _ui.Content(key));
+    }
+
+    /// <summary>
+    /// WHICH TEXTURE THE FIGURE IS ACTUALLY DRAWN FROM, and with which crop: the animation strip, else
+    /// the single-pose fallback the draw falls back to, else nothing.
+    /// </summary>
+    /// <remarks>
+    /// THE GEOMETRY MUST FOLLOW THE DRAW DOWN ITS FALLBACK. When a strip is missing the arena draws a
+    /// static pose (<c>UiKit.SpriteGrounded</c>) — a real figure, at a real size — while the published
+    /// geometry used to give up and return the LAYOUT BOX, so every effect on that creature was sized
+    /// against a rectangle a third too wide and the pointer could hover its empty margin. Both paths
+    /// now name the same texture and the same crop, and both resolve through <c>UiKit.DrawnFrame</c>.
+    /// The crop is <see cref="MeasuredCrop"/> for both, which is what the draw sites pass.
+    /// </remarks>
+    private (string? Key, float Crop) BodySource(string? referenceStrip)
+    {
+        if (referenceStrip is null) return (null, MeasuredCrop);
+        if (StripAvailable(referenceStrip)) return (referenceStrip, MeasuredCrop);
+        var (still, crop) = StaticPoseFor(referenceStrip);
+        return still is not null && _ui.Assets.Has(still) ? (still, crop) : (null, MeasuredCrop);
+    }
+
+    /// <summary>
+    /// The single pose a strip falls back to, and the crop the draw gives it: the champion's base
+    /// design (<c>char_&lt;id&gt;_base</c>, cropped by <see cref="ChampionStillCrop"/> as
+    /// <see cref="DrawChampion"/> does), or a creature's <c>&lt;actor&gt;_idle_01</c>, measured as the
+    /// arena's other draws are. Always the IDLE pose, never the live one — the body is stable across
+    /// clips whether it comes from a strip or from a still.
+    /// </summary>
+    private static (string? Key, float Crop) StaticPoseFor(string referenceStrip)
+        => referenceStrip.StartsWith("char_", StringComparison.Ordinal)
+            ? (ChampionStillKey(referenceStrip), ChampionStillCrop)
+            : (EnemyKeyOf(referenceStrip) + "_idle_01", MeasuredCrop);
+
+    /// <summary>
+    /// EVERY still the figure can be drawn from on the fallback path, with the crop the draw gives it.
+    /// </summary>
+    /// <remarks>
+    /// The envelope must union these the way it unions a strip's clips, because the fallback draw
+    /// picks its pose the same way the animated one does: <c>DrawComposition</c> and
+    /// <c>DrawSingleEnemy</c> reach for <c>&lt;actor&gt;_attack_01</c> while the creature is biting and
+    /// <c>&lt;actor&gt;_idle_01</c> otherwise. An envelope built from the idle alone would let the
+    /// attack pose escape the rectangle it is hovered by — the very defect the strip path was
+    /// repaired for. The champion has ONE still (his base design), so his list is one long.
+    /// </remarks>
+    private static IEnumerable<(string Key, float Crop)> StaticClipsFor(string referenceStrip)
+    {
+        if (referenceStrip.StartsWith("char_", StringComparison.Ordinal))
+        {
+            yield return (ChampionStillKey(referenceStrip), ChampionStillCrop);
+            yield break;
+        }
+        var actor = EnemyKeyOf(referenceStrip);
+        yield return (actor + "_idle_01", MeasuredCrop);
+        yield return (actor + "_attack_01", MeasuredCrop);
+    }
+
+    /// <summary>The champion's base design key, from any of his strip keys.</summary>
+    private static string ChampionStillKey(string referenceStrip)
+        => referenceStrip[..referenceStrip.IndexOf("_idle_", StringComparison.Ordinal)] + "_base";
+
+    /// <summary>
+    /// THE ARENA'S ONE ANIMATED FIGURE DRAW. Every actor clip goes through here so the no-strip
+    /// fixture (<see cref="DevNoStrips"/>) can take the strips away from the DRAW and the published
+    /// GEOMETRY in the same breath — a fallback whose picture and whose rectangle disagree is the
+    /// thing this exists to make impossible.
+    /// </summary>
+    /// <returns>false when the strip did not draw, so the caller falls back exactly as before.</returns>
+    private bool ActorSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps,
+                             bool loop, Color tint, float topCrop = 0f, bool flip = false)
+        => !DevNoStrips && _ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip);
+
+    /// <summary>Will the arena DRAW from this strip? The no-strip fixture takes it from geometry and draw alike.</summary>
+    private bool StripAvailable(string key) => !DevNoStrips && _ui.Assets.Has(key);
+
+    /// <summary>A negative crop means MEASURE the art's own headroom — the arena's rule, for every actor path.</summary>
+    private const float MeasuredCrop = -1f;
+
+    /// <summary>The crop <see cref="DrawChampion"/> gives the base design when no strip resolves.</summary>
+    private const float ChampionStillCrop = 0.02f;
+
+    /// <summary>
+    /// FIXTURE ONLY (<c>RH_SHOT_NOSTRIP=1</c>): pretend every animation strip is missing, so the arena
+    /// takes its STATIC FALLBACK — the path no shipped asset can reach, and therefore the one nobody
+    /// had ever looked at. Read by the geometry and by the draw alike, so the two fall back together.
+    /// </summary>
+    public bool DevNoStrips { get; set; }
 
     /// <summary>
     /// The STABLE ENVELOPE a figure reaches when its clips <paramref name="strips"/> are drawn into
@@ -2282,26 +2371,26 @@ public sealed class HuntScreen
     /// The attack animates inside it. The death clip is deliberately not in it: a dying figure lies
     /// flat and is not hoverable, so its silhouette is not a body anyone points at.
     /// </remarks>
-    private Rectangle Envelope(Rectangle box, IReadOnlyList<string> strips)
+    private Rectangle Envelope(Rectangle box, IReadOnlyList<string> strips, string? referenceStrip)
     {
         _envelopeClips.Clear();
-        // Through the renderer's ceiling, from its one owner. A clip is drawn at most RasterCeiling
-        // times its own frame size, and the rift guardian's headroom is deep enough that a Bruiser
-        // wave's box asks 1.27 — so an unresolved envelope would hand the pointer pixels of empty
-        // frame the figure is never drawn into. Every strip here is one square frame tall and a set
-        // is one actor's clips, so the tightest ceiling of the set is the actor's.
-        var maxUnit = float.PositiveInfinity;
+        // EACH CLIP AT THE SIZE IT IS DRAWN. The crop and the ceiling are resolved once, by UiKit, per
+        // clip — they differ between clips of one figure, since each is trimmed by its own headroom
+        // and only some reach the ceiling — so the envelope holds no pixel the renderer never drew.
         foreach (var key in strips)
-        {
-            if (!_ui.Assets.Has(key)) continue;
-            _envelopeClips.Add(_ui.Silhouette(key));
-            maxUnit = MathF.Min(maxUnit, _ui.FrameCeiling(key));
-        }
-        return VfxFigure.Envelope(box, _envelopeClips, maxUnit);
+            if (StripAvailable(key))
+                _envelopeClips.Add(new ResolvedClip(_ui.Silhouette(key), _ui.DrawnFrame(key, MeasuredCrop, box.Height)));
+        // Nothing resolved: the figure is drawn from its static pose, whose one silhouette is its
+        // whole reach — the same fallback the body takes, never the layout box while art exists.
+        if (_envelopeClips.Count == 0 && referenceStrip is not null)
+            foreach (var (still, crop) in StaticClipsFor(referenceStrip))
+                if (_ui.Assets.Has(still))
+                    _envelopeClips.Add(new ResolvedClip(_ui.Silhouette(still), _ui.DrawnFrame(still, crop, box.Height)));
+        return VfxFigure.Envelope(box, _envelopeClips);
     }
 
     /// <summary>Scratch list for <see cref="Envelope"/> — one allocation for the screen's life, not one per frame.</summary>
-    private readonly List<ContentBox> _envelopeClips = new();
+    private readonly List<ResolvedClip> _envelopeClips = new();
 
     /// <summary>The champion's idle strip — the reference silhouette every champion-side effect measures.</summary>
     private string ChampionReferenceStrip => Character.StripKey("idle");
@@ -2323,7 +2412,7 @@ public sealed class HuntScreen
     {
         get
         {
-            if (_champClipStripsFor == Character.Id && ReferenceEquals(_champClipStripsSkills, _waveSkills))
+            if (_champClipStripsFor == Character.Id && ReferenceEquals(_champClipStripsSkills, _waveSkills) && _champClipStripsNoStrips == DevNoStrips)
                 return _champClipStrips;
             _champClipStrips.Clear();
             Add("idle");
@@ -2332,6 +2421,7 @@ public sealed class HuntScreen
                 Add(equipped.Def.Kind == SkillKind.Reaction ? "trap" : equipped.Def.ClipKey);
             _champClipStripsFor = Character.Id;
             _champClipStripsSkills = _waveSkills;
+            _champClipStripsNoStrips = DevNoStrips;
             return _champClipStrips;
 
             // Most specific first, exactly as the draw resolves it: the character's own strip for the
@@ -2340,7 +2430,7 @@ public sealed class HuntScreen
             void Add(string clip)
             {
                 foreach (var key in Character.StripKeys(clip))
-                    if (_ui.Assets.Has(key))
+                    if (StripAvailable(key))
                     {
                         if (!_champClipStrips.Contains(key)) _champClipStrips.Add(key);
                         return;
@@ -2352,6 +2442,7 @@ public sealed class HuntScreen
     private readonly List<string> _champClipStrips = new();
     private string? _champClipStripsFor;
     private IReadOnlyList<EquippedSkill>? _champClipStripsSkills;
+    private bool _champClipStripsNoStrips;
 
     /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
     private string? CreatureReferenceStrip
@@ -2393,7 +2484,7 @@ public sealed class HuntScreen
         // shifted by the push; no second silhouette pass is needed.
         var push = (int)(_champLunge * ChampLungePx);
         _champDrawBox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        var standing = Envelope(ChampBox, ChampionClipStrips);
+        var standing = Envelope(ChampBox, ChampionClipStrips, ChampionReferenceStrip);
         var lunged = standing;
         lunged.Offset(ChampLungePx, 0);
         _actors.Publish(VfxSubject.Champion, VisualRect(_champDrawBox, ChampionReferenceStrip),
@@ -2414,7 +2505,7 @@ public sealed class HuntScreen
         foreach (var (slot, box) in _creatureBoxes)
         {
             var vis = VisualRect(box, strip);
-            var env = Envelope(box, clips);
+            var env = Envelope(box, clips, strip);
             _actors.Publish(VfxSubject.Creature(slot), vis, env, facing: -1);
             row = row is { } r ? Rectangle.Union(r, vis) : vis;
             reach = reach is { } e ? Rectangle.Union(e, env) : env;
@@ -2546,7 +2637,7 @@ public sealed class HuntScreen
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
         _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(box.Width * 0.55f), 30, 0.5f * fade);
-        _ui.AnimSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
+        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
     }
 
     /// <summary>
@@ -2637,7 +2728,7 @@ public sealed class HuntScreen
             // a negative topCrop makes AnimSprite trim exactly the empty rows and never the figure.
             const float crop = -1f;
             var compFps = attacking ? 16f : 12f;
-            if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
+            if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
                     !attacking, creatureTint, crop))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
@@ -2719,7 +2810,7 @@ public sealed class HuntScreen
             staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
         }
 
-        if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
+        if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
                                                 !attacking, enterTint, crop))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
@@ -2775,14 +2866,14 @@ public sealed class HuntScreen
             && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            _ui.AnimSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f);
+            ActorSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f);
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
         var fps = attacking ? 10f : 8f;
         var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
         var seconds = EnemyClipSeconds(attacking, fps);
-        if (key is null || !_ui.AnimSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
+        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
         {
             _bossBodyRect = new Rectangle(BossAnchor.X - 110, BossAnchor.Y - BossTargetBodyHeight, 220, BossTargetBodyHeight);
             _bossFullRect = _bossBodyRect;
@@ -2883,20 +2974,48 @@ public sealed class HuntScreen
                 line += $"\tkeepout {R(EnemyInspectorPlacement.HunterKeepOut(vb.Envelope))}\tbox {R(_champDrawBox)}";
             else if (subject.Kind == VfxSubjectKind.Creature)
                 line += $"\tbox {R(CreatureBox(subject.Slot))}";
-            // AUTHORED beside RESOLVED, with a VERDICT EITHER WAY. Silence used to mean "the box's ask
-            // was honoured", which reads exactly like a fixture that failed to pose the capped case at
-            // all — so every actor now says which side of the renderer's ceiling it landed on.
-            var authored = subject.Kind switch
+            // AUTHORED beside RESOLVED, and a VERDICT EITHER WAY naming WHICH limit bound. Silence
+            // used to mean "the box's ask was honoured", which reads exactly like a fixture that
+            // failed to pose its case at all; and one word for two different ceilings hid which.
+            var (box, strip) = subject.Kind switch
             {
-                VfxSubjectKind.Champion => AuthoredRect(_champDrawBox, ChampionReferenceStrip),
-                VfxSubjectKind.Creature => AuthoredRect(CreatureBox(subject.Slot), creatureStrip),
-                _ => vb.Rect,
+                VfxSubjectKind.Champion => (_champDrawBox, ChampionReferenceStrip),
+                VfxSubjectKind.Creature => (CreatureBox(subject.Slot), creatureStrip),
+                _ => (Rectangle.Empty, null),
             };
-            line += authored != vb.Rect ? $"\tauthored {R(authored)}\tCAPPED" : "\tGRANTED";
+            if (strip is not null)
+            {
+                var authored = AuthoredRect(box, strip);
+                if (authored != vb.Rect) line += $"\tauthored {R(authored)}";
+                line += "\t" + Verdict(box, strip);
+            }
             yield return line;
         }
         yield return $"Hover\tat {_lastHover.At.X},{_lastHover.At.Y}\tcreature "
                      + (_lastHover.Slot < 0 ? "none" : _lastHover.Slot.ToString());
+    }
+
+    /// <summary>
+    /// Which presentation limit decided this figure's size — for the geometry dump alone.
+    /// </summary>
+    /// <remarks>
+    /// GRANTED: the box got the size it asked for. MAGNIFIED: <c>UiKit.RasterCeiling</c> bound, so the
+    /// figure is drawn smaller than the box wanted. CROPPED: the draw trimmed a different headroom
+    /// than the art's own — the static fallback's fixed crop, or <c>UiKit.CropCeiling</c> holding a
+    /// mis-measured one. STILL: the strip did not resolve and the figure is a single pose. The three
+    /// are reported apart because one word for all of them hid which ceiling a fixture had reached.
+    /// </remarks>
+    private string Verdict(Rectangle box, string referenceStrip)
+    {
+        var (key, crop) = BodySource(referenceStrip);
+        if (key is null) return "NOART";
+        var resolved = _ui.ResolveCrop(key, crop);
+        var uncapped = box.Height / MathF.Max(0.01f, 1f - resolved);
+        var words = new List<string>();
+        if (_ui.DrawnFrame(key, crop, box.Height) < uncapped - 0.5f) words.Add("MAGNIFIED");
+        if (MathF.Abs(resolved - _ui.Content(key).Top) > 0.001f) words.Add("CROPPED");
+        if (key != referenceStrip) words.Add("STILL");
+        return words.Count == 0 ? "GRANTED" : string.Join("+", words);
     }
 
     /// <summary>
@@ -4769,7 +4888,7 @@ public sealed class HuntScreen
     private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)
     {
         if (strength <= 0f || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
-        _ui.AnimSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop);
+        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop);
     }
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
@@ -5066,9 +5185,9 @@ public sealed class HuntScreen
         // stands in for. See Character.StripKeys — the art arrives a character at a time and nothing
         // may blank out while it does.
         foreach (var key in Character.StripKeys(clip))
-            if (_ui.AnimSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
+            if (ActorSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
                                flip: ChampionFacesRight)) return;
-        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
+        if (ActorSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
                            flip: ChampionFacesRight)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);

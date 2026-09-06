@@ -439,7 +439,7 @@ public sealed class UiKit
     public bool Sprite(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f)
     {
         if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
-        var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
+        var cropY = (int)(tex.Height * ResolveCrop(key, topCrop));
         var srcH = tex.Height - cropY;
         var sc = box.Height / (float)srcH;
         var w = Math.Max(1, (int)(tex.Width * sc));
@@ -671,19 +671,33 @@ public sealed class UiKit
     /// padded canvas bottom. Use for anything that stands on the ground.
     /// </summary>
     /// <returns>false if the texture is missing, so callers can fall back exactly as with <see cref="Sprite"/>.</returns>
+    /// <remarks>
+    /// THE FALLBACK RESOLVES LIKE THE STRIP IT STANDS IN FOR. Every caller of this reaches it after
+    /// <see cref="AnimSprite"/> declined, so it is the same figure drawn from a single pose — and it
+    /// used to answer two of the presentation rules differently. It clamped a negative crop to zero
+    /// where AnimSprite reads negative as "measure the headroom", so a creature that lost its strip
+    /// drew its empty sky as body and stood a fifth too small; and it had no magnification ceiling at
+    /// all, so a tall box could enlarge a pose past what <see cref="RasterCeiling"/> allows the strip
+    /// beside it. Both now come from <see cref="ResolveCrop"/> and <see cref="DrawScale"/>, the same
+    /// two owners the animated path and the published geometry use.
+    /// </remarks>
     public bool SpriteGrounded(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f, bool flip = false)
     {
         if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
-        var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
+        var crop = ResolveCrop(key, topCrop);
+        var cropY = (int)(tex.Height * crop);
         var srcH = tex.Height - cropY;
-        var sc = box.Height / (float)srcH;
+        var sc = DrawScale(tex.Height, crop, box.Height);
+        var drawnH = Math.Max(1, (int)(srcH * sc));
         var w = Math.Max(1, (int)(tex.Width * sc));
 
         // The pad fraction is of the FULL texture; the visible gap after scaling is that
         // fraction of the drawn height. Shifting down by it plants the sole on box.Bottom.
         var drop = (int)MathF.Round(BottomPadFraction(key) * tex.Height * sc);
-        UiRasterLedger.Note(key, tex.Width, srcH, w, box.Height, "UiKit.SpriteGrounded");
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height),
+        UiRasterLedger.Note(key, tex.Width, srcH, w, drawnH, "UiKit.SpriteGrounded");
+        // Bottom-anchored at the DRAWN height, like AnimSprite: at the ceiling the figure is smaller
+        // than the box asked for, and its feet must still land on the floor the box named.
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH),
             new Rectangle(0, cropY, tex.Width, srcH), tint,
             0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
@@ -725,11 +739,11 @@ public sealed class UiKit
         //
         // TopPadFraction scans the WHOLE strip and reports the LEAST headroom any frame has, so
         // cropping by it can never cut into the figure on the one frame that raises its arms.
-        if (topCrop < 0f) topCrop = TopPadFraction(stripKey);
+        topCrop = ResolveCrop(stripKey, topCrop);
         // Trim the transparent headroom (and any streak artifacts) off the top of the frame, then FILL the
         // box height with the remaining figure, anchored bottom-centre. Side padding overflows harmlessly.
         // Fitting the whole square frame instead left the figure tiny and "boxed" inside the panel.
-        var cropY = (int)(fw * Math.Clamp(topCrop, 0f, 0.6f));
+        var cropY = (int)(fw * topCrop);   // already resolved: measured if asked, held to CropCeiling
         var srcH = tex.Height - cropY;
         // ...and the same for the SIDES, symmetrically. The frame is SQUARE and the scale comes from the
         // HEIGHT, so a 430-tall box drew a 573-wide sprite — 170px of it empty margin — and on the
@@ -1240,6 +1254,41 @@ public sealed class UiKit
     public const float RasterCeiling = 1.25f;
 
     /// <summary>
+    /// The deepest transparent headroom the renderer will trim off a frame's top, as a fraction.
+    /// </summary>
+    /// <remarks>
+    /// A guard, not a design number: a measurement that says two thirds of a frame is empty is a
+    /// mis-measured or mis-authored asset, and trimming that much would blow the figure up to fill the
+    /// box. Nothing shipped comes near it — the deepest is 151 of 512 — so it exists to keep a bad
+    /// measurement from becoming a bad picture.
+    /// </remarks>
+    public const float CropCeiling = 0.6f;
+
+    /// <summary>
+    /// THE ONE PLACE A TOP CROP IS RESOLVED: a negative crop means MEASURE the strip's own headroom,
+    /// and any crop is held to <see cref="CropCeiling"/>.
+    /// </summary>
+    /// <remarks>
+    /// Every draw entry point and the published actor geometry resolve here, so the crop the renderer
+    /// trims and the crop the geometry is landed at are the same number by construction. They were
+    /// not: <see cref="AnimSprite"/> read a negative crop as "measure it" while
+    /// <see cref="SpriteGrounded"/> clamped the same −1 to zero, so a creature that fell back to its
+    /// static pose drew with its whole empty sky included — a fifth smaller than the strip beside it.
+    /// </remarks>
+    public float ResolveCrop(string key, float topCrop)
+        => HoldCrop(topCrop < 0f ? TopPadFraction(key) : topCrop);
+
+    /// <summary>The crop ceiling itself: any crop, measured or asked, held to <see cref="CropCeiling"/>.</summary>
+    /// <remarks>
+    /// Static and pure so the boundary can be STATED AS A TEST. <see cref="ResolveCrop"/> needs the
+    /// asset library to measure, and <see cref="UiKit"/> needs a GraphicsDevice, so a rule that lived
+    /// only in there was a rule no headless test could reach — and one no shipped asset reaches
+    /// either, which is the pair of facts that lets a guard rot unnoticed. This is its one
+    /// implementation; <see cref="ResolveCrop"/> is its only caller.
+    /// </remarks>
+    public static float HoldCrop(float crop) => Math.Clamp(crop, 0f, CropCeiling);
+
+    /// <summary>
     /// THE ONE PLACE THE MAGNIFICATION CEILING IS APPLIED: the scale a strip is actually drawn at when
     /// its frame is cropped by <paramref name="topCrop"/> and fitted to a box of
     /// <paramref name="boxHeight"/> — the box's ask, or <see cref="RasterCeiling"/>, whichever is less.
@@ -1254,29 +1303,39 @@ public sealed class UiKit
     /// the defect, not the fix — measure through this function or pass its answer along.
     /// </para>
     /// <para>
-    /// Pure and static so the geometry contract can resolve without a GraphicsDevice; the strip-shaped
-    /// caller wants <see cref="FrameCeiling"/>, which turns a key into the same limit in box pixels.
+    /// Pure and static so the geometry contract can resolve without a GraphicsDevice. It takes an
+    /// ALREADY-RESOLVED crop — <see cref="ResolveCrop"/> owns the "measure it" rule and the
+    /// <see cref="CropCeiling"/> — so the two limits are applied once each, in one place each.
+    /// The strip-shaped caller wants <see cref="DrawnFrame"/>, which does both and answers in box pixels.
     /// </para>
     /// </remarks>
     /// <param name="frameHeight">One frame's height in the strip's own pixels (its square edge).</param>
-    /// <param name="topCrop">The transparent headroom trimmed off the top, as a fraction of the frame.</param>
+    /// <param name="resolvedCrop">The headroom actually trimmed, from <see cref="ResolveCrop"/>.</param>
     /// <param name="boxHeight">The destination box's height.</param>
-    public static float DrawScale(int frameHeight, float topCrop, int boxHeight)
+    public static float DrawScale(int frameHeight, float resolvedCrop, int boxHeight)
     {
         var fh = Math.Max(1, frameHeight);
-        var cropY = (int)(fh * Math.Clamp(topCrop, 0f, 0.6f));
+        var cropY = (int)(fh * resolvedCrop);
         var srcH = Math.Max(1, fh - cropY);
         return MathF.Min(boxHeight / (float)srcH, RasterCeiling);
     }
 
     /// <summary>
-    /// The largest ONE WHOLE FRAME of <paramref name="stripKey"/> may be drawn, in box pixels — the
-    /// renderer's ceiling expressed the way the geometry contract takes it
-    /// (<c>VfxFigure.VisualRect</c>'s <c>maxUnit</c>). Infinite when the strip has no art, so a
-    /// missing asset constrains nothing rather than collapsing to zero.
+    /// ONE WHOLE FRAME of <paramref name="key"/> at the size the renderer will actually draw it in a box
+    /// of <paramref name="boxHeight"/> — crop resolved, ceiling applied. This is the number the actor
+    /// geometry is landed at (<c>VfxFigure.Land</c>), so the published figure is the drawn figure.
     /// </summary>
-    public float FrameCeiling(string stripKey)
-        => Assets.Get(stripKey) is { Height: > 0 } t ? RasterCeiling * t.Height : float.PositiveInfinity;
+    /// <remarks>
+    /// Zero for missing art, which no caller lands with: a figure with no texture has no geometry, and
+    /// the screen falls back to its layout box exactly as the draw does.
+    /// </remarks>
+    /// <param name="key">The strip or single-pose texture the actor is drawn from.</param>
+    /// <param name="topCrop">The caller's crop; negative means measure the art's own headroom.</param>
+    /// <param name="boxHeight">The destination box's height.</param>
+    public float DrawnFrame(string key, float topCrop, int boxHeight)
+        => Assets.Get(key) is { Height: > 0 } t
+            ? DrawScale(t.Height, ResolveCrop(key, topCrop), boxHeight) * t.Height
+            : 0f;
 
     /// <summary>
     /// The frame slicer every panel goes through. The corner size argument is HISTORY: the corner is

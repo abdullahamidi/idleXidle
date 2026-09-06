@@ -40,6 +40,22 @@ public class actor_scale_test
 
     private static float Ceiling => UiKit.RasterCeiling * Frame;
 
+    /// <summary>One whole frame at the size the RENDERER resolves for this clip in this box.</summary>
+    /// <remarks>
+    /// Through <see cref="UiKit.DrawScale"/> on purpose: the tests must agree with the renderer by
+    /// consuming it, not by restating its arithmetic. The crop is the clip's own headroom, which is
+    /// what the arena passes for every actor.
+    /// </remarks>
+    private static float Unit(Rectangle box, ContentBox c) => UiKit.DrawScale(512, c.Top, box.Height) * 512;
+
+    /// <summary>The clips of one figure in one box, each carrying the unit it is drawn at.</summary>
+    private static ResolvedClip[] Clips(Rectangle box, params ContentBox[] cs)
+    {
+        var r = new ResolvedClip[cs.Length];
+        for (var i = 0; i < cs.Length; i++) r[i] = new ResolvedClip(cs[i], Unit(box, cs[i]));
+        return r;
+    }
+
     // ── The ceiling has one owner ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -56,7 +72,7 @@ public class actor_scale_test
                 var clip = new ContentBox(0f, top, 0f, 0f);
 
                 // Act
-                var geometry = VfxFigure.VisualRect(box, clip, Ceiling).Height;
+                var geometry = VfxFigure.Land(box, clip, Unit(box, clip)).Height;
                 var renderer = UiKit.DrawScale(Frame, top, box.Height) * Frame * (1f - top);
 
                 // Assert
@@ -86,7 +102,7 @@ public class actor_scale_test
                      (ChampBox, SeekerIdleDrawn), (ChampBox, SeekerAttack),
                      (BruiserBox, SentinelIdleDrawn), (SwarmBox, GuardianIdleDrawn),
                  })
-            Assert.Equal(VfxFigure.VisualRect(box, clip), VfxFigure.VisualRect(box, clip, Ceiling));
+            Assert.Equal(VfxFigure.VisualRect(box, clip), VfxFigure.Land(box, clip, Unit(box, clip)));
     }
 
     [Fact]
@@ -96,7 +112,7 @@ public class actor_scale_test
         var authored = VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn);
 
         // Act
-        var resolved = VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn, Ceiling);
+        var resolved = VfxFigure.Land(BruiserBox, GuardianIdleDrawn, Unit(BruiserBox, GuardianIdleDrawn));
 
         // Assert: the measured mismatch, gone — and the sole still on the box's floor.
         Assert.Equal(new Point(268, 470), new Point(authored.Width, authored.Height));
@@ -112,7 +128,7 @@ public class actor_scale_test
         // subject's height resolves from the figure that is drawn, not from the one the box asked for.
         var profile = VfxProfiles.DeathCreature;
         var authored = new VisualBounds(VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn), -1);
-        var resolved = new VisualBounds(VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn, Ceiling), -1);
+        var resolved = new VisualBounds(VfxFigure.Land(BruiserBox, GuardianIdleDrawn, Unit(BruiserBox, GuardianIdleDrawn)), -1);
 
         var before = VfxResolver.Resolve(profile, authored, ContentBox.Full, Frame, Frame);
         var after = VfxResolver.Resolve(profile, resolved, ContentBox.Full, Frame, Frame);
@@ -128,10 +144,10 @@ public class actor_scale_test
     {
         // Each clip is capped on its own terms — the guardian's idle is, its attack is not — and the
         // envelope holds both at the size the renderer gives them.
-        var envelope = VfxFigure.Envelope(BruiserBox, new[] { GuardianIdleDrawn, GuardianAttack }, Ceiling);
+        var envelope = VfxFigure.Envelope(BruiserBox, Clips(BruiserBox, GuardianIdleDrawn, GuardianAttack));
 
-        Assert.True(envelope.Contains(VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn, Ceiling)));
-        Assert.True(envelope.Contains(VfxFigure.VisualRect(BruiserBox, GuardianAttack, Ceiling)));
+        Assert.True(envelope.Contains(VfxFigure.Land(BruiserBox, GuardianIdleDrawn, Unit(BruiserBox, GuardianIdleDrawn))));
+        Assert.True(envelope.Contains(VfxFigure.Land(BruiserBox, GuardianAttack, Unit(BruiserBox, GuardianAttack))));
     }
 
     [Fact]
@@ -140,9 +156,11 @@ public class actor_scale_test
         // The previous pass's law, guarded against this one: the seeker's swing genuinely leaves the
         // 400-px box, and resolving through the ceiling must not pull it back in. Nothing about his
         // clips reaches the ceiling, so the envelope is the authored one exactly.
-        var resolved = VfxFigure.Envelope(ChampBox, new[] { SeekerIdleDrawn, SeekerAttack }, Ceiling);
+        var resolved = VfxFigure.Envelope(ChampBox, Clips(ChampBox, SeekerIdleDrawn, SeekerAttack));
+        var authored = Rectangle.Union(VfxFigure.VisualRect(ChampBox, SeekerIdleDrawn),
+                                       VfxFigure.VisualRect(ChampBox, SeekerAttack));
 
-        Assert.Equal(VfxFigure.Envelope(ChampBox, new[] { SeekerIdleDrawn, SeekerAttack }), resolved);
+        Assert.Equal(authored, resolved);   // nothing of his reaches a ceiling, so nothing is pulled in
         Assert.True(resolved.Width > ChampBox.Width, "the swing leaves the box, and stays out of it");
         Assert.True(resolved.X < ChampBox.X && resolved.Right > ChampBox.Right);
     }
@@ -154,9 +172,9 @@ public class actor_scale_test
     {
         // A figure that slides, bobs or recoils takes its body with it — that is the drawing being
         // honest, not jitter. What must not change is the SIZE.
-        var still = VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn, Ceiling);
-        var moved = VfxFigure.VisualRect(new Rectangle(BruiserBox.X + 37, BruiserBox.Y - 11, BruiserBox.Width, BruiserBox.Height),
-                                         GuardianIdleDrawn, Ceiling);
+        var shifted = new Rectangle(BruiserBox.X + 37, BruiserBox.Y - 11, BruiserBox.Width, BruiserBox.Height);
+        var still = VfxFigure.Land(BruiserBox, GuardianIdleDrawn, Unit(BruiserBox, GuardianIdleDrawn));
+        var moved = VfxFigure.Land(shifted, GuardianIdleDrawn, Unit(shifted, GuardianIdleDrawn));
 
         Assert.Equal(still.Size, moved.Size);
         Assert.Equal(still.X + 37, moved.X);
@@ -169,9 +187,9 @@ public class actor_scale_test
         // No pulsing: the resolution takes the strip's measured crop and the box, and an animation
         // frame is neither. The same clip resolves to the same rectangle however many times it is
         // asked, and a clip set resolves the same whichever order it is given.
-        var a = VfxFigure.Envelope(BruiserBox, new[] { GuardianIdleDrawn, GuardianAttack }, Ceiling);
-        var b = VfxFigure.Envelope(BruiserBox, new[] { GuardianAttack, GuardianIdleDrawn }, Ceiling);
-        var c = VfxFigure.Envelope(BruiserBox, new[] { GuardianAttack, GuardianAttack, GuardianIdleDrawn }, Ceiling);
+        var a = VfxFigure.Envelope(BruiserBox, Clips(BruiserBox, GuardianIdleDrawn, GuardianAttack));
+        var b = VfxFigure.Envelope(BruiserBox, Clips(BruiserBox, GuardianAttack, GuardianIdleDrawn));
+        var c = VfxFigure.Envelope(BruiserBox, Clips(BruiserBox, GuardianAttack, GuardianAttack, GuardianIdleDrawn));
 
         Assert.Equal(a, b);
         Assert.Equal(a, c);
