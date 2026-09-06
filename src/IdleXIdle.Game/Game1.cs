@@ -2308,6 +2308,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(jawsSlot, Source.Nature);
                         _loadout.SetSkill(jawsSlot, "field_mire");
                     }
+                    // THE CAPPED CREATURE'S POSE. Which figure the arena draws is the region's THEME, and
+                    // how big its box is is the wave's ARCHETYPE — a seeded roll. Only a Bruiser box asks
+                    // the renderer for more magnification than it will give, and only of a deeply
+                    // letterboxed idle (the rift guardian's, in the Spirit region), so the one case where
+                    // the drawn figure and its geometry could disagree could not be photographed at all.
+                    // Both dials move presentation and nothing else: the art key and a layout scale.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_SOURCE")?.Trim() is { Length: > 0 } shotSource)
+                        _expedition.DevEnemySource = Enum.TryParse<Source>(shotSource, ignoreCase: true, out var src)
+                            ? src
+                            : throw new InvalidOperationException(
+                                $"RH_SHOT_SOURCE='{shotSource}' is not a Source. Known: " + string.Join(", ", Enum.GetNames<Source>()) + ".");
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_ARCHETYPE")?.Trim() is { Length: > 0 } shotArch)
+                        _expedition.DevArchetype = Enum.TryParse<Archetype>(shotArch, ignoreCase: true, out var arch)
+                            ? arch
+                            : throw new InvalidOperationException(
+                                $"RH_SHOT_ARCHETYPE='{shotArch}' is not an Archetype. Known: " + string.Join(", ", Enum.GetNames<Archetype>()) + ".");
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
                     if (sm == "fightswing")

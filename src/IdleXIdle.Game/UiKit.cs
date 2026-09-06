@@ -747,7 +747,10 @@ public sealed class UiKit
         // RasterCeiling and the figure is simply drawn at the largest honest size, still centred and
         // still grounded. Shrinking a box to fit its art is a layout number; capping the magnification
         // is the rule, and it holds for every caller rather than for the one that was noticed.
-        var sc = MathF.Min(box.Height / (float)srcH, RasterCeiling);
+        // THROUGH DrawScale, which is the one owner of the cap: the actor geometry the effects and the
+        // pointer are measured against resolves with the same call, so a figure and the effects on it
+        // can never be sized by two different rules again.
+        var sc = DrawScale(fw, topCrop, box.Height);
         // TRUNCATE, never round: at the ceiling exactly, rounding up puts the drawn height one
         // pixel PAST the budget and the ledger correctly reports the cap itself as a violation.
         var drawnH = Math.Max(1, (int)(srcH * sc));
@@ -1235,6 +1238,45 @@ public sealed class UiKit
     /// answer to "it looks small" is a bigger ASSET, never a bigger number — see LAW 16.
     /// </remarks>
     public const float RasterCeiling = 1.25f;
+
+    /// <summary>
+    /// THE ONE PLACE THE MAGNIFICATION CEILING IS APPLIED: the scale a strip is actually drawn at when
+    /// its frame is cropped by <paramref name="topCrop"/> and fitted to a box of
+    /// <paramref name="boxHeight"/> — the box's ask, or <see cref="RasterCeiling"/>, whichever is less.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="AnimSprite"/> draws with this, and the actor geometry the effects and the pointer read
+    /// resolves with this, so the two cannot drift. They did: the geometry took the box's ask and the
+    /// renderer took the cap, so a rift guardian in a 488 x 492 box (a wave of two or more at Bruiser
+    /// scale) was DRAWN 262 x 461 while every effect on it was sized against 268 x 470. A second
+    /// "almost the same" clamp beside this one is
+    /// the defect, not the fix — measure through this function or pass its answer along.
+    /// </para>
+    /// <para>
+    /// Pure and static so the geometry contract can resolve without a GraphicsDevice; the strip-shaped
+    /// caller wants <see cref="FrameCeiling"/>, which turns a key into the same limit in box pixels.
+    /// </para>
+    /// </remarks>
+    /// <param name="frameHeight">One frame's height in the strip's own pixels (its square edge).</param>
+    /// <param name="topCrop">The transparent headroom trimmed off the top, as a fraction of the frame.</param>
+    /// <param name="boxHeight">The destination box's height.</param>
+    public static float DrawScale(int frameHeight, float topCrop, int boxHeight)
+    {
+        var fh = Math.Max(1, frameHeight);
+        var cropY = (int)(fh * Math.Clamp(topCrop, 0f, 0.6f));
+        var srcH = Math.Max(1, fh - cropY);
+        return MathF.Min(boxHeight / (float)srcH, RasterCeiling);
+    }
+
+    /// <summary>
+    /// The largest ONE WHOLE FRAME of <paramref name="stripKey"/> may be drawn, in box pixels — the
+    /// renderer's ceiling expressed the way the geometry contract takes it
+    /// (<c>VfxFigure.VisualRect</c>'s <c>maxUnit</c>). Infinite when the strip has no art, so a
+    /// missing asset constrains nothing rather than collapsing to zero.
+    /// </summary>
+    public float FrameCeiling(string stripKey)
+        => Assets.Get(stripKey) is { Height: > 0 } t ? RasterCeiling * t.Height : float.PositiveInfinity;
 
     /// <summary>
     /// The frame slicer every panel goes through. The corner size argument is HISTORY: the corner is

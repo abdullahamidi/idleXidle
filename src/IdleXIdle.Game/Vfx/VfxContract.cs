@@ -372,8 +372,9 @@ public static class VfxFigure
     /// </para>
     /// <para>
     /// AnimSprite also REFUSES TO MAGNIFY past <c>UiKit.RasterCeiling</c>, and a box does reach that
-    /// cap: the rift guardian's idle leaves 386 px of frame under its headroom, which a Bruiser wave's
-    /// 492-px box would draw at 1.27. <paramref name="maxUnit"/> is that ceiling in the same units as
+    /// cap: the rift guardian's idle leaves 386 px of frame under its headroom, which the 492-px box of
+    /// a multi-creature wave at Bruiser scale would draw at 1.27. <paramref name="maxUnit"/> is that
+    /// ceiling in the same units as
     /// the frame (<c>UiKit.RasterCeiling × the strip's frame size</c>); a caller that passes it gets
     /// the size the figure is actually DRAWN at, and one that omits it gets the size the box asked
     /// for. The sole still lands on <c>box.Bottom</c> either way — the cap shortens the figure from

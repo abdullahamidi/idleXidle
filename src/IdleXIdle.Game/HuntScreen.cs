@@ -836,6 +836,22 @@ public sealed class HuntScreen
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
     public Source? EnemySource { get; set; }
+
+    /// <summary>
+    /// FIXTURE ONLY (<c>RH_SHOT_SOURCE</c>): draw another region's creature without conquering to it.
+    /// </summary>
+    /// <remarks>
+    /// The Source decides WHICH figure the arena draws, and the figures differ enormously in how
+    /// deeply their idle is letterboxed — which is what decides whether a box's ask for magnification
+    /// is one the renderer will grant. Only the rift guardian's idle (the Spirit region's) is
+    /// letterboxed deeply enough to be capped, and reaching that region legitimately means conquering
+    /// four. <see cref="EnemySource"/> itself cannot be posed: the host rewrites it from the active
+    /// region every frame. This overrides the ART, nothing else — no baseline, no roll, no reward.
+    /// </remarks>
+    public Source? DevEnemySource { get; set; }
+
+    /// <summary>Which creature the arena DRAWS: the rig's override, else the region's own Source.</summary>
+    private Source? ArtSource => DevEnemySource ?? EnemySource;
     /// <summary>The active region id — picks the boss creature (boss_&lt;region&gt;) on boss waves. Set by the host.</summary>
     public string RegionId { get; set; } = "";
     /// <summary>The active region's combat character — handed to the run so the enemy's bite tempo matches it.</summary>
@@ -1967,7 +1983,7 @@ public sealed class HuntScreen
         var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
         var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampionPresentation.Envelope, _utilityPanel);
         _ui.Fill(b, plate, Color.Black * 0.45f);
-        _ui.Plate(b, plate, EnemySource is { } src ? SourceGlow(src) : null);
+        _ui.Plate(b, plate, ArtSource is { } src ? SourceGlow(src) : null);
 
         var left = plate.X + pad + 5;
         var right = plate.Right - pad;
@@ -2076,6 +2092,53 @@ public sealed class HuntScreen
     };
 
     /// <summary>
+    /// The archetype the arena LAYS OUT for — the wave's, or the rig's override.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// FIXTURE ONLY (<c>RH_SHOT_ARCHETYPE</c>), and it reaches ONLY A WAVE OF TWO OR MORE: a single
+    /// creature is laid out by <see cref="LayoutSingleEnemy"/>, which fills the unscaled enemy box and
+    /// never reads this. That is the whole reason the dial exists AND the reason it can do nothing —
+    /// the box that asks the renderer for more magnification than it will give is the 488 x 492 one,
+    /// which is a MULTI-CREATURE wave at Bruiser scale, not a Bruiser wave. A Bruiser rolls one
+    /// creature by shape (<c>Archetypes.Shapes</c>, min 1 max 1) and only the NUMBERS affix adds
+    /// another, so that box is a Numbers band's Bruiser roll — reachable in play, and reachable in a
+    /// fixture only by luck of a seeded roll, which is why <see cref="RequireArchetypeReached"/>
+    /// refuses to photograph a pose the dial did not actually change.
+    /// </para>
+    /// <para>
+    /// It moves a layout number and nothing else: no gameplay value, no Core call, no roll.
+    /// </para>
+    /// </remarks>
+    private Archetype WaveArchetype => DevArchetype ?? _run?.LastWaveArchetype ?? Archetype.Bruiser;
+
+    /// <summary>FIXTURE ONLY: force the laid-out archetype (RH_SHOT_ARCHETYPE). Null = the wave's own.</summary>
+    public Archetype? DevArchetype { get; set; }
+
+    /// <summary>Is this run under the capture rig? A fixture that cannot pose its state must fail, not photograph.</summary>
+    private static readonly bool UnderRig = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
+    /// <summary>
+    /// Under the rig, refuse to photograph a wave <see cref="DevArchetype"/> could not reach.
+    /// </summary>
+    /// <remarks>
+    /// The dial is read only by the multi-creature layout, so on a single creature or a boss it is
+    /// inert — and an inert dial produces a perfectly ordinary picture of the WRONG state, which is
+    /// the failure this project keeps paying for. The composition is a seeded roll no fixture pins,
+    /// so this is checked at the moment of use rather than assumed.
+    /// </remarks>
+    private void RequireArchetypeReached(int creatureCount)
+    {
+        if (DevArchetype is not { } forced || !UnderRig) return;
+        if (creatureCount > 1 && !_isBossWave) return;
+        throw new InvalidOperationException(
+            $"RH_SHOT_ARCHETYPE={forced} changed nothing: this wave lays out "
+            + (_isBossWave ? "a BOSS" : $"{creatureCount} creature(s)")
+            + ", and the archetype's scale reaches only a wave of two or more. Seek to a wave whose "
+            + "band carries NUMBERS (its roll adds a creature) before posing the capped-actor case.");
+    }
+
+    /// <summary>
     /// Draw a wave of several creatures: laid out across the arena's right half, scaled by archetype,
     /// each with its own health pip, each vanishing as it dies.
     /// </summary>
@@ -2175,10 +2238,30 @@ public sealed class HuntScreen
     /// clip-invariant (412 against 411), so taking it from the reference too costs nothing.
     /// </para>
     /// <para>
+    /// RESOLVED, not authored: the rectangle is landed at the scale <c>UiKit.AnimSprite</c> will
+    /// actually draw at, which is the box's ask THROUGH the renderer's magnification ceiling
+    /// (<c>UiKit.DrawScale</c>, reached here as <c>UiKit.FrameCeiling</c>). A box may ask for more
+    /// than the ceiling allows — a wave of two or more at Bruiser scale gives a 488 x 492 box, which
+    /// asks 1.27 of the rift guardian's deeply letterboxed idle — and the renderer answers 1.25, so
+    /// an authored rectangle would size every
+    /// effect on that creature against a figure 6 px wider and 9 px taller than the one on screen.
+    /// See <see cref="AuthoredRect"/> for the pre-ceiling rectangle, which is a diagnostic and not a
+    /// consumer's geometry.
+    /// </para>
+    /// <para>
     /// Missing art falls back to the layout box, which is what the draw itself falls back to.
     /// </para>
     /// </remarks>
     private Rectangle VisualRect(Rectangle box, string? referenceStrip)
+        => referenceStrip is null || !_ui.Assets.Has(referenceStrip)
+            ? box
+            : VfxFigure.VisualRect(box, _ui.Content(referenceStrip), _ui.FrameCeiling(referenceStrip));
+
+    /// <summary>
+    /// The figure's rectangle AS AUTHORED — the same landing, without the renderer's ceiling. Nothing
+    /// consumes it; the geometry dump prints it beside the resolved body so a capped actor says so.
+    /// </summary>
+    private Rectangle AuthoredRect(Rectangle box, string? referenceStrip)
         => referenceStrip is null || !_ui.Assets.Has(referenceStrip)
             ? box
             : VfxFigure.VisualRect(box, _ui.Content(referenceStrip));
@@ -2202,17 +2285,17 @@ public sealed class HuntScreen
     private Rectangle Envelope(Rectangle box, IReadOnlyList<string> strips)
     {
         _envelopeClips.Clear();
-        // The renderer's magnification ceiling, in this box's pixels. A clip is drawn at most
-        // RasterCeiling times its own frame size, and the rift guardian's headroom is deep enough that
-        // a Bruiser wave's box asks for 1.27 — so an uncapped envelope would hand the pointer ten
-        // pixels of empty frame the figure is never drawn into. Every strip here is one square frame
-        // tall, and a set is one actor's clips, so the tightest ceiling of the set is the actor's.
+        // Through the renderer's ceiling, from its one owner. A clip is drawn at most RasterCeiling
+        // times its own frame size, and the rift guardian's headroom is deep enough that a Bruiser
+        // wave's box asks 1.27 — so an unresolved envelope would hand the pointer pixels of empty
+        // frame the figure is never drawn into. Every strip here is one square frame tall and a set
+        // is one actor's clips, so the tightest ceiling of the set is the actor's.
         var maxUnit = float.PositiveInfinity;
         foreach (var key in strips)
         {
-            if (_ui.Assets.Get(key) is not { Height: > 0 } tex) continue;
+            if (!_ui.Assets.Has(key)) continue;
             _envelopeClips.Add(_ui.Silhouette(key));
-            maxUnit = MathF.Min(maxUnit, UiKit.RasterCeiling * tex.Height);
+            maxUnit = MathF.Min(maxUnit, _ui.FrameCeiling(key));
         }
         return VfxFigure.Envelope(box, _envelopeClips, maxUnit);
     }
@@ -2272,7 +2355,7 @@ public sealed class HuntScreen
 
     /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
     private string? CreatureReferenceStrip
-        => EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
+        => ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
 
     /// <summary>
     /// The clips a standing creature plays — its idle and its attack — for the wave's art key, or
@@ -2317,6 +2400,7 @@ public sealed class HuntScreen
                         Rectangle.Union(standing, lunged), facing: 1);
 
         var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+        RequireArchetypeReached(comp.Count);
         if (_isBossWave) LayoutBoss();
         else if (comp.Count > 1) LayoutComposition(comp);
         else LayoutSingleEnemy();
@@ -2370,7 +2454,7 @@ public sealed class HuntScreen
     /// </remarks>
     private void LayoutComposition(IReadOnlyList<WaveCreature> comp)
     {
-        var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
+        var scale = ArchetypeScale(WaveArchetype);
         // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
         // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
         var enter = (int)(_enemyEnter * 150f);
@@ -2505,13 +2589,13 @@ public sealed class HuntScreen
     {
         // The geometry is LayoutComposition's — computed before anything drew, so the effects landed on
         // these exact rectangles rather than on the ones this method used to work out for itself.
-        var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
+        var scale = ArchetypeScale(WaveArchetype);
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var w = (int)(EnemyBox.Width * scale);
         var h = (int)(EnemyBox.Height * scale);
 
         string? stripKey = null, staticKey = null;
-        if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
+        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
             var act = attacking ? "attack" : "idle";
             stripKey = $"{en}_{act}_strip8_512";
@@ -2618,7 +2702,7 @@ public sealed class HuntScreen
         var figTop = _rowTopY;
         if (_replay is not null && !_replay.CreatureAlive(0))
         {
-            var deadKey = EnemySource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
+            var deadKey = ArtSource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
             DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), deadKey);
             return;
         }
@@ -2628,7 +2712,7 @@ public sealed class HuntScreen
         // a second, which is not long enough to see a creature wind up and commit. Held above ~9 so the
         // frames still read as motion rather than as a slideshow.
         var fps = attacking ? 11f : 9f;
-        if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
+        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
             var act = attacking ? "attack" : "idle";
             stripKey = $"{en}_{act}_strip8_512";
@@ -2660,7 +2744,7 @@ public sealed class HuntScreen
         _ui.BarArt(b, ebar, Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f), "health");
         // The creature was never named on screen — the player fought an anonymous sprite for the whole run.
         if (stripKey is not null || staticKey is not null)
-            _ui.TextCenterBig(b, PrettyName(EnemySource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
+            _ui.TextCenterBig(b, PrettyName(ArtSource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
 
     /// <summary>
@@ -2791,6 +2875,7 @@ public sealed class HuntScreen
     public IEnumerable<string> DevActorGeometry()
     {
         static string R(Rectangle r) => $"{r.X},{r.Y},{r.Width},{r.Height}";
+        var creatureStrip = _isBossWave ? BossReferenceStrip : CreatureReferenceStrip;
         foreach (var (subject, vb) in _actors.All.OrderBy(kv => kv.Key.Kind).ThenBy(kv => kv.Key.Slot))
         {
             var line = $"{subject}\tbody {R(vb.Rect)}\tenvelope {R(vb.Envelope)}";
@@ -2798,6 +2883,16 @@ public sealed class HuntScreen
                 line += $"\tkeepout {R(EnemyInspectorPlacement.HunterKeepOut(vb.Envelope))}\tbox {R(_champDrawBox)}";
             else if (subject.Kind == VfxSubjectKind.Creature)
                 line += $"\tbox {R(CreatureBox(subject.Slot))}";
+            // AUTHORED beside RESOLVED, with a VERDICT EITHER WAY. Silence used to mean "the box's ask
+            // was honoured", which reads exactly like a fixture that failed to pose the capped case at
+            // all — so every actor now says which side of the renderer's ceiling it landed on.
+            var authored = subject.Kind switch
+            {
+                VfxSubjectKind.Champion => AuthoredRect(_champDrawBox, ChampionReferenceStrip),
+                VfxSubjectKind.Creature => AuthoredRect(CreatureBox(subject.Slot), creatureStrip),
+                _ => vb.Rect,
+            };
+            line += authored != vb.Rect ? $"\tauthored {R(authored)}\tCAPPED" : "\tGRANTED";
             yield return line;
         }
         yield return $"Hover\tat {_lastHover.At.X},{_lastHover.At.Y}\tcreature "
@@ -3782,19 +3877,19 @@ public sealed class HuntScreen
         // THE HOUSE PLATE with the wave's Source as its accent — it was a hand-drawn fill with a 2 px
         // bronze outline no other surface wears, so the one QUIET surface in the header stack competed
         // with the frame above it instead of sitting under it (release polish 2026-09-05, hunt-06).
-        _ui.Plate(b, strip, EnemySource is { } accent ? SourceGlow(accent) : null);
+        _ui.Plate(b, strip, ArtSource is { } accent ? SourceGlow(accent) : null);
         HeaderStackBottom = strip.Bottom;
 
         // LEFT: the wave's Source glyph, then its kind. Everything on the strip is centred on its height,
         // which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
         var glyphEdge = UiMetrics.Control(30);
         var glyph = new Rectangle(strip.X + 5 + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
-        if (EnemySource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
+        if (ArtSource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
             b.Draw(g, glyph, Color.White);
         else
         {
             var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
-            _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), EnemySource is { } s2 ? SourceGlow(s2) : Slate);
+            _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), ArtSource is { } s2 ? SourceGlow(s2) : Slate);
         }
         var x = glyph.Right + UiMetrics.Space(10);
         var kind = _run.LastWaveArchetype.ToString().ToUpperInvariant();

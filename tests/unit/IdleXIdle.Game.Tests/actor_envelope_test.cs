@@ -181,8 +181,9 @@ public class actor_envelope_test
     public void test_a_capped_clip_reports_the_size_it_is_drawn_at_not_the_size_the_box_asked_for()
     {
         // UiKit.AnimSprite refuses to magnify past RasterCeiling (1.25). The soul leech's ATTACK is
-        // letterboxed hard — 144 px of the frame is sky — so a Bruiser wave's 492-px box asks for
-        // 1.34 and the renderer draws 1.25. That clip is also the creature's widest, so an uncapped
+        // letterboxed hard — 144 px of the frame is sky — so the 492-px box of a multi-creature wave
+        // at Bruiser scale asks 1.34 and the renderer draws 1.25. That clip is the creature's widest,
+        // so an uncapped
         // envelope would hand the pointer 34 px of frame the figure is never drawn into.
         var bruiser = new Rectangle(1200, 400, 488, 492);
         var maxUnit = UiKit.RasterCeiling * 512;
