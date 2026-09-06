@@ -163,6 +163,62 @@ public sealed class HuntScreen
     // ArenaClip.X + 259 = 445.
     // A PROPERTY, not a static readonly: the ground line follows the profile, and a static readonly is
     // frozen at class load — it would stand on the 100 % floor whatever the setting said.
+    /// <summary>
+    /// THE ARENA'S GROUND PLANE: the one y an actor's base pose stands on.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ChampBox"/> and <see cref="EnemyBox"/> are both laid out to END here, so every draw
+    /// path plants its visible sole on this line — a strip, a still, a capped figure alike. It is
+    /// named so that nothing has to spell it as "some box's bottom, less a few pixels" again.
+    /// </remarks>
+    private static int ArenaGround => GroundY;
+
+    /// <summary>
+    /// The creatures the arena LAYS OUT and DRAWS this frame — the wave's, or the first
+    /// <see cref="DevCreatureCount"/> of them.
+    /// </summary>
+    /// <remarks>
+    /// FIXTURE ONLY (<c>RH_SHOT_CREATURES</c>), and PRESENTATION ONLY: the wave has already been
+    /// fought, so trimming the list changes what is drawn and nothing that was decided. It exists for
+    /// one comparison the seeded rolls cannot pose — a LONE creature beside a wave of several — because
+    /// a lone creature is laid out by <see cref="LayoutSingleEnemy"/> at the unscaled enemy box while a
+    /// wave of two or more is laid out at its archetype's scale, and the two have never been put side
+    /// by side. It composes nothing: the creatures are the wave's own, in the wave's own order.
+    /// </remarks>
+    private IReadOnlyList<WaveCreature> LaidOutCreatures
+    {
+        get
+        {
+            var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+            return DevCreatureCount is { } n && n > 0 && n < comp.Count
+                ? comp.Take(n).ToList()
+                : comp;
+        }
+    }
+
+    /// <summary>FIXTURE ONLY: draw only the first N of the wave's creatures (RH_SHOT_CREATURES).</summary>
+    public int? DevCreatureCount { get; set; }
+
+    /// <summary>The plane the PACK stands on — the enemy box's floor, which is the arena's.</summary>
+    /// <remarks>
+    /// Read instead of the live creature box on purpose: a creature BOBS, and a shadow that bobs with
+    /// it is not a shadow. The figure rises off its shade and settles back onto it, which is what the
+    /// bob is for; the shade stays where the floor is.
+    /// </remarks>
+    private static int CreatureGround => EnemyBox.Bottom;
+
+    /// <summary>
+    /// An actor's contact shadow, centred ON the plane its feet land on.
+    /// </summary>
+    /// <remarks>
+    /// Every call site used to lift this by a literal — ten pixels for the pack and the hunter, eight
+    /// for the boss — so the darkest part of the blob sat at the ankles and each figure read as
+    /// hovering a few pixels over its own shade. There is one plane, the actors stand on it, and the
+    /// shade is centred on it: the blob's own falloff is what makes the contact soft, not an offset.
+    /// </remarks>
+    private void ActorShadow(SpriteBatch b, int centreX, int groundY, int width, int height, float strength)
+        => _ui.GroundShadow(b, centreX, groundY, width, height, strength);
+
     /// <summary>Where the hunter stands. PUBLIC because the VFX contract's tests measure against it.</summary>
     public static Rectangle ChampBox => new(620 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
@@ -1963,8 +2019,10 @@ public sealed class HuntScreen
         var w = UiMetrics.Control(284);
         var lineS = UiTypography.Pitch(UiTypography.Caption);
         var lineB = UiTypography.Pitch(UiTypography.Secondary);
+        var barH = UiMetrics.Control(8);
         var h = pad + lineB + lineS + UiMetrics.Space(8)                       // name, kind line, rule
-                + lineB + rows.Count * lineS + UiMetrics.Space(6)              // health and the three pairs
+                + lineB + UiMetrics.Space(4) + barH + UiMetrics.Space(8)       // the HEALTH block: figure, then its bar
+                + rows.Count * lineS + UiMetrics.Space(6)                      // the three pairs
                 + (statuses.Count > 0 ? UiMetrics.Space(2) + lineS + statuses.Count * lineS : lineS)
                 + pad;
         // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06), as EnemyInspectorPlacement
@@ -1988,8 +2046,11 @@ public sealed class HuntScreen
         var left = plate.X + pad + 5;
         var right = plate.Right - pad;
         var ty = plate.Y + pad;
+        // THE NAME LINE IS THE NAME. The health figure used to hang in this line's right corner,
+        // three rows above the bar that quantifies it, so reading "how hurt is this thing" meant
+        // crossing the card twice. The corner is left empty rather than filled with something
+        // invented for it: the archetype is already the line, and the affixes are the line below.
         _ui.TextBig(b, kind, left, ty, Bone, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{Whole(health)} / {Whole(maxHealth)}", right, ty + (UiTypography.Secondary - UiTypography.Caption) / 2, Bone, UiTypography.Caption);
         ty += lineB;
         var kindLine = affixes.Count > 0 ? string.Join("  ·  ", affixes.Take(2).Select(AffixWords)) : "NO AFFIX";
         _ui.TextBig(b, _ui.ShortenBig(kindLine, right - left, UiTypography.Caption), left, ty, Slate, UiTypography.Caption);
@@ -1997,12 +2058,20 @@ public sealed class HuntScreen
         _ui.Fill(b, new Rectangle(left, ty, right - left, 1), UiInk.Rule);
         ty += UiMetrics.Space(4);
 
-        // HEALTH as the slim bar — the pip's own reading, larger.
+        // ── THE HEALTH BLOCK: one label, one figure, one bar, in that order and touching. ──
+        // The bar spans the whole block so it reads as the picture OF the figure above it rather than
+        // as a third column, and it is what makes a boss's four-digit pool legible — the number can
+        // take whatever width it needs without squeezing the bar into a stub.
         _ui.TextBig(b, "HEALTH", left, ty + (lineB - UiTypography.Caption) / 2, Slate, UiTypography.Caption);
-        var barW = UiMetrics.Control(120);
-        _ui.Bar(b, right - barW, ty + (lineB - UiMetrics.Control(8)) / 2, barW, UiMetrics.Control(8),
+        var hpFigure = $"{Whole(health)} / {Whole(maxHealth)}";
+        var hpRung = UiTypography.Secondary;
+        var hpRoom = right - left - _ui.MeasureBig("HEALTH", UiTypography.Caption) - UiMetrics.Space(10);
+        while (hpRung > UiTypography.Caption && _ui.MeasureBig(hpFigure, hpRung) > hpRoom) hpRung--;
+        _ui.TextRightBig(b, hpFigure, right, ty + (lineB - hpRung) / 2, Bone, hpRung);
+        ty += lineB + UiMetrics.Space(4);
+        _ui.Bar(b, left, ty, right - left, barH,
                 maxHealth <= 0f ? 0f : Math.Clamp(health / maxHealth, 0f, 1f), Ember);
-        ty += lineB;
+        ty += barH + UiMetrics.Space(8);
 
         // BASE → CURRENT, one pair a row: the base muted, the arrow only when something moved, the
         // current in the direction's ink. A pair that has not moved prints one figure in Primary.
@@ -2490,7 +2559,7 @@ public sealed class HuntScreen
         _actors.Publish(VfxSubject.Champion, VisualRect(_champDrawBox, ChampionReferenceStrip),
                         Rectangle.Union(standing, lunged), facing: 1);
 
-        var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+        var comp = LaidOutCreatures;
         RequireArchetypeReached(comp.Count);
         if (_isBossWave) LayoutBoss();
         else if (comp.Count > 1) LayoutComposition(comp);
@@ -2636,7 +2705,7 @@ public sealed class HuntScreen
         var life = 8f / DeathFps + DeathHoldSeconds;
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
-        _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(box.Width * 0.55f), 30, 0.5f * fade);
+        ActorShadow(b, box.Center.X, CreatureGround, (int)(box.Width * 0.55f), 30, 0.5f * fade);
         ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
     }
 
@@ -2708,7 +2777,7 @@ public sealed class HuntScreen
                 continue;
             }
 
-            _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
+            ActorShadow(b, box.Center.X, CreatureGround, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
 
             // ── WHAT IS ON THIS CREATURE. A STATE, not a flourish (designer, 2026-08-30: "düşmanın
             //    üstünde olan efektin ikonu ve kaç X stack olduğu kalıcı olarak görünse de olur").
@@ -2776,7 +2845,7 @@ public sealed class HuntScreen
 
     private void DrawNormalEnemy(SpriteBatch b, bool attacking)
     {
-        var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+        var comp = LaidOutCreatures;
         if (comp.Count > 1)
         {
             DrawComposition(b, attacking, comp);
@@ -2787,7 +2856,7 @@ public sealed class HuntScreen
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var ab = CreatureBox(0);
         var ebox = new Rectangle(ab.X, EnemyBox.Y, ab.Width, ab.Height);
-        _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
+        ActorShadow(b, ebox.Center.X, CreatureGround, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
         const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = _rowTopY;
@@ -2858,7 +2927,7 @@ public sealed class HuntScreen
         if (epithet.Length > 0) _bossName = epithet + " " + _bossName;
 
         var box = CreatureBox(0);   // LayoutBoss's, so the effects and the figure share one rectangle
-        _ui.GroundShadow(b, box.Center.X, BossAnchor.Y - 8, (int)(box.Width * 0.62f), 44, 0.6f);
+        ActorShadow(b, box.Center.X, BossAnchor.Y, (int)(box.Width * 0.62f), 44, 0.6f);
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
@@ -3690,10 +3759,36 @@ public sealed class HuntScreen
 
     /// <summary>
     /// THE PORTRAIT IS A PICTURE, NOT AN ICON BESIDE A ROW. The card's width is fixed by the header beside
-    /// it, so the picture keeps its 96 px at every profile and the room goes to the text the profile grew:
-    /// at 150 % a portrait at the control rate would leave the name 80 px to live in.
+    /// it, so the picture keeps its 96 px wherever the card is tall enough to hold it, and the room goes to
+    /// the text the profile grew: at 150 % a portrait at the control rate would leave the name 80 px to live in.
     /// </summary>
+    /// <remarks>
+    /// A CAP, NOT A SIZE — see <see cref="PortraitBox"/>. It was a flat 96 with a flat top offset, and when
+    /// the reserved chip row came off the card (2026-09-05) the card lost about a third of its height while
+    /// the picture kept all of its own: at 100 % a 96-px portrait hung 13 px BELOW a 105-px card. That is
+    /// the "portrait has drifted downward" regression — the picture did not move, the frame shrank out from
+    /// under it.
+    /// </remarks>
     private const int PortraitEdge = 96;
+
+    /// <summary>
+    /// Where the portrait sits inside a card <paramref name="height"/> tall: as large as the card can hold
+    /// up to <see cref="PortraitEdge"/>, and OPTICALLY CENTRED on the card's own axis.
+    /// </summary>
+    /// <remarks>
+    /// Both numbers come from the card, so the picture can never outlive its frame again — a card that
+    /// reflows taller re-centres it, and one that loses a row shrinks it instead of pushing it out of the
+    /// bottom. No character-specific offset: every hunter's portrait is the same square in the same place,
+    /// which is what makes silhouettes of different visual mass read as one row.
+    /// </remarks>
+    private static Rectangle PortraitBox(Rectangle frame, int height)
+    {
+        var edge = Math.Min(PortraitEdge, Math.Max(1, height - PortraitBreath * 2));
+        return new Rectangle(frame.X + UiMetrics.Space(18), frame.Y + (height - edge) / 2, edge, edge);
+    }
+
+    /// <summary>The breath between the portrait and the card's border, at the card's own rate.</summary>
+    private static int PortraitBreath => UiMetrics.Space(10);
 
     /// <summary>The card's bottom as last drawn — the tour's spotlight follows the reflowed card, not the base one.</summary>
     private static int s_hunterCardBottom = HunterCard.Bottom;
@@ -3712,7 +3807,10 @@ public sealed class HuntScreen
     private void DrawHunterHud(SpriteBatch b)
     {
         var frame = HunterCard;
-        var por = new Rectangle(frame.X + UiMetrics.Space(18), frame.Y + UiMetrics.Space(22), PortraitEdge, PortraitEdge);
+        // The picture is laid out against the card's BASE height so the text column's width is known
+        // before the card can reflow taller; its final Y comes from the card that is actually drawn,
+        // below. Sizing it against the base is what guarantees it fits every taller variant too.
+        var por = PortraitBox(frame, HunterCardBaseHeight);
         var x = por.Right + UiMetrics.Space(16);
         var right = frame.Right - UiMetrics.Space(24);
         var full = right - x;   // the text column's width
@@ -3797,6 +3895,10 @@ public sealed class HuntScreen
         _ui.PanelQuiet(b, panel);
         s_hunterCardBottom = panel.Bottom;
 
+        // Re-centred on the card that was actually drawn: a card that reflowed taller carries the
+        // portrait down its own axis rather than leaving it clinging to the top edge. The SIZE stays
+        // the one the text column was measured against, so nothing beside it moves.
+        por.Y = panel.Y + (height - por.Height) / 2;
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
@@ -5151,8 +5253,8 @@ public sealed class HuntScreen
         }
 
         var shadowEase = hasDeathClip ? 0f : ease;
-        _ui.GroundShadow(b, box.Center.X, box.Bottom - 10,
-                         (int)(box.Width * (0.62f - 0.18f * shadowEase)), 46, 0.6f - 0.25f * shadowEase);
+        ActorShadow(b, box.Center.X, box.Bottom,
+                    (int)(box.Width * (0.62f - 0.18f * shadowEase)), 46, 0.6f - 0.25f * shadowEase);
 
         var tint = dead && !hasDeathClip
             ? Color.Lerp(new Color(0x6A, 0x60, 0x5C), new Color(0x2A, 0x26, 0x24), ease) * (1f - 0.45f * ease)

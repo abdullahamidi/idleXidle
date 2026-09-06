@@ -2324,6 +2324,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // ever seen. The geometry falls back with it, which is the point of posing it.
                     if (Environment.GetEnvironmentVariable("RH_SHOT_NOSTRIP")?.Trim() == "1")
                         _expedition.DevNoStrips = true;
+                    // RH_SHOT_CREATURES=<n> draws only the first n of the wave's creatures, so the LONE
+                    // creature layout and the multi-creature one can be photographed side by side. The
+                    // seeded roll cannot pose that pair: a Bruiser always rolls exactly one, so its
+                    // archetype scale is never seen beside a lone figure of the same art.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_CREATURES")?.Trim() is { Length: > 0 } shotCount)
+                        _expedition.DevCreatureCount = int.TryParse(shotCount, out var n) && n > 0
+                            ? n
+                            : throw new InvalidOperationException(
+                                $"RH_SHOT_CREATURES='{shotCount}' is not a positive creature count.");
                     if (Environment.GetEnvironmentVariable("RH_SHOT_ARCHETYPE")?.Trim() is { Length: > 0 } shotArch)
                         _expedition.DevArchetype = Enum.TryParse<Archetype>(shotArch, ignoreCase: true, out var arch)
                             ? arch

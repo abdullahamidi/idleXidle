@@ -38,4 +38,16 @@ public readonly record struct ActorPresentation(Rectangle DrawRect, Rectangle Bo
 
     /// <summary>Is the pointer on the drawn actor?</summary>
     public bool Hovers(Point p) => HoverRect.Contains(p);
+
+    /// <summary>
+    /// WHERE THE ACTOR TOUCHES THE FLOOR: the middle of its visible sole.
+    /// </summary>
+    /// <remarks>
+    /// The one anchor anything about the ground may read. Every draw path plants the visible sole on
+    /// its box's bottom edge — the crop and the magnification ceiling change the figure's SIZE, never
+    /// where its feet land — so the body's bottom IS the contact, whether the figure came from a strip
+    /// or from a single pose. A contact shadow belongs here; a shadow placed a fixed number of pixels
+    /// above it reads as the figure hovering over its own shade.
+    /// </remarks>
+    public Point Feet => new(Body.Center.X, Body.Bottom);
 }

@@ -39,6 +39,15 @@
 #                           0.02 crop rather than his measured headroom — the draw's own long-standing
 #                           choice, which the geometry now matches instead of contradicting.
 #
+#   BRUISER    fight        THE LONE-VS-MULTI COMPARISON, for design review only. A lone creature is
+#              x2           laid out by LayoutSingleEnemy at the UNSCALED 436x440 enemy box whatever its
+#                           archetype; a wave of two or more is laid out at its archetype's scale. So
+#                           the archetype's size language reaches only the multi-creature case, and the
+#                           two have never been seen side by side because a Bruiser always rolls one.
+#                           RH_SHOT_CREATURES=<n> draws the first n of the wave's creatures — nothing is
+#                           composed, the wave is the wave — so the pair can be photographed at one
+#                           camera. NO SCALE IS TUNED by this fixture; it exists to be looked at.
+#
 # Usage: bash tools/asset-pipeline/hunt_geometry_fixtures.sh <tag>
 # Writes build/shots/polish/<tag>_*.png (+ .actors.txt, .events.txt) — see polish_shots.sh.
 set -u
@@ -61,4 +70,6 @@ bash tools/asset-pipeline/polish_shots.sh "$TAG" \
   "fightinspect:150:RH_SHOT_T=7;$G;RH_SHOT_CANVAS_MOUSE=1750,700" \
   "vfxdebug:100:$CAP" "vfxdebug:125:$CAP" "vfxdebug:150:$CAP" \
   "fight:100:$CAP;RH_SHOT_T=1.2" "fight:125:$CAP;RH_SHOT_T=1.2" "fight:150:$CAP;RH_SHOT_T=1.2" \
-  "fight:100:$NS;RH_SHOT_T=1.2" "fight:125:$NS;RH_SHOT_T=1.2" "fight:150:$NS;RH_SHOT_T=1.2"
+  "fight:100:$NS;RH_SHOT_T=1.2" "fight:125:$NS;RH_SHOT_T=1.2" "fight:150:$NS;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=1;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=2;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1;RH_SHOT_T=1.2"
