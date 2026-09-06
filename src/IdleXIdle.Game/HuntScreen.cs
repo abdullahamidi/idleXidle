@@ -399,6 +399,14 @@ public sealed class HuntScreen
     private int _chargeCap = SoloBattle.ChargeCap;
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
+
+    /// <summary>How far the champion's swing carries his draw box to the right, at full lunge.</summary>
+    /// <remarks>
+    /// Named because two things read it and they must not drift: the draw box, which follows the
+    /// lunge, and the published envelope, which spans the whole travel so the inspector's keep-out
+    /// does not slide with it (see <see cref="LayoutActors"/>).
+    /// </remarks>
+    private const int ChampLungePx = 40;   // ui-size-ok: arena travel in canvas pixels, not type
     /// <summary>Where DrawComposition last put the creature row — what its labels anchor to.</summary>
     /// <remarks>
     /// Published rather than recomputed because the row's position is the product of an archetype
@@ -1878,11 +1886,22 @@ public sealed class HuntScreen
     {
         if (_replay is null || _run is null) return -1;
         var found = -1;
-        // The VISIBLE body takes the pointer (CreaturePresentation), a creature that is still standing.
+        // The stable ENVELOPE takes the pointer (ActorPresentation) — a creature that is still standing.
         foreach (var slot in _creatureBoxes.Keys)
             if (Presentation(slot).Hovers(hit) && _replay.CreatureAlive(slot)) found = slot;
+        _lastHover = (hit, found);
         return found;
     }
+
+    /// <summary>
+    /// The last pointer the arena hit-tested and what it found — for the geometry dump alone.
+    /// </summary>
+    /// <remarks>
+    /// A hover proof used to be read off the pixels, which cannot tell a plate from the debug
+    /// overlay's own text; this makes the answer a number beside the rectangles it was tested
+    /// against. Written by <see cref="HoveredCreature"/>, which is the one hit-test there is.
+    /// </remarks>
+    private (Point At, int Slot) _lastHover = (Point.Zero, -1);
 
     /// <summary>One line of the inspector: a label, and the base → current pair for it.</summary>
     private readonly record struct InspectorRow(string Label, string Base, string Now, int Direction);
@@ -1933,15 +1952,20 @@ public sealed class HuntScreen
                 + (statuses.Count > 0 ? UiMetrics.Space(2) + lineS + statuses.Count * lineS : lineS)
                 + pad;
         // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06), as EnemyInspectorPlacement
-        // asks it: the side AWAY FROM THE HUNTER first, then the other sides; the hunter's rectangle
+        // asks it: the side AWAY FROM THE HUNTER first, then the other sides; the hunter's envelope
         // and the IDLE panel are avoided, the header stack and the skill dock bound the viewport. At
         // 150 % a creature near the centre used to put this plate over the hunter, and at 125 % one
-        // near the right edge put it over OPEN VAULT. The anchor is the creature's VISIBLE body.
+        // near the right edge put it over OPEN VAULT. The anchor is the creature's stable envelope.
+        //
+        // THE HUNTER IS HIS ENVELOPE, NOT HIS BOX. The keep-out used to be ChampBox — 400 x 430 of
+        // layout that the hunter fills only where his clips reach — so the plate refused margin the
+        // art never used. Now it is the same published geometry the pointer reads, plus one small
+        // clearance the placement owns (EnemyInspectorPlacement.HunterClearance).
         var box = Presentation(slot).InspectorAnchor;
         var ceiling = HeaderStackBottom + UiMetrics.Space(8);
         var floor = Math.Min(s_dockRect.Height > 0 ? s_dockRect.Y : UiKit.PageBottom(UiMetrics.Space(12)), UiKit.PageBottom(UiMetrics.Space(12)));
         var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
-        var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampBox, _utilityPanel);
+        var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampionPresentation.Envelope, _utilityPanel);
         _ui.Fill(b, plate, Color.Black * 0.45f);
         _ui.Plate(b, plate, EnemySource is { } src ? SourceGlow(src) : null);
 
@@ -2109,16 +2133,21 @@ public sealed class HuntScreen
         => _creatureBoxes.TryGetValue(slot, out var r) ? r : EnemyBox;
 
     /// <summary>
-    /// Creature <paramref name="slot"/>'s geometry this frame: its draw box, and the visible body the
-    /// arena published for it (falling back to the box only where no art resolved, which is what the
-    /// draw itself falls back to). The hover and the inspector's anchor read this, nothing else.
+    /// Creature <paramref name="slot"/>'s geometry this frame: its draw box, the visible body the
+    /// arena published for it and the stable envelope its clips reach (falling back to the box only
+    /// where no art resolved, which is what the draw itself falls back to). The hover and the
+    /// inspector's anchor read this, nothing else.
     /// </summary>
-    private CreaturePresentation Presentation(int slot)
-    {
-        var box = CreatureBox(slot);
-        var body = _actors.TryBounds(VfxSubject.Creature(slot), out var vb) ? vb.Rect : box;
-        return new CreaturePresentation(box, body);
-    }
+    private ActorPresentation Presentation(int slot) => Presentation(VfxSubject.Creature(slot), CreatureBox(slot));
+
+    /// <summary>The champion's geometry this frame — what the inspector keeps clear of.</summary>
+    private ActorPresentation ChampionPresentation => Presentation(VfxSubject.Champion, _champDrawBox);
+
+    /// <summary>One actor's geometry, as LayoutActors published it into the registry this frame.</summary>
+    private ActorPresentation Presentation(VfxSubject subject, Rectangle box)
+        => _actors.TryBounds(subject, out var vb)
+            ? new ActorPresentation(box, vb.Rect, vb.Envelope)
+            : new ActorPresentation(box, box, box);
 
     /// <summary>The right column's IDLE panel as the column laid it out this frame — the inspector keeps clear of it.</summary>
     private Rectangle _utilityPanel;
@@ -2154,12 +2183,112 @@ public sealed class HuntScreen
             ? box
             : VfxFigure.VisualRect(box, _ui.Content(referenceStrip));
 
+    /// <summary>
+    /// The STABLE ENVELOPE a figure reaches when its clips <paramref name="strips"/> are drawn into
+    /// <paramref name="box"/>: the union of every clip's opaque silhouette, landed the way AnimSprite
+    /// lands it (<see cref="VfxFigure.Envelope"/>). Strips that do not resolve are skipped; none at
+    /// all is the box, the draw's own fallback.
+    /// </summary>
+    /// <remarks>
+    /// This is the rectangle the pointer and the inspector read, and the one the inspector keeps
+    /// clear of on the hunter's side. It is NOT the body the effects measure (<see cref="VisualRect"/>,
+    /// the idle reference) — the asset orders and the LAW 16 ratios were written from that, and a
+    /// wider envelope would resize every effect. Both are constant across the clips: measured from
+    /// what the figure CAN play, never from what it is playing, so an idle frame, an attack frame and
+    /// an idle frame again leave the hover, the anchor and the keep-out exactly where they were.
+    /// The attack animates inside it. The death clip is deliberately not in it: a dying figure lies
+    /// flat and is not hoverable, so its silhouette is not a body anyone points at.
+    /// </remarks>
+    private Rectangle Envelope(Rectangle box, IReadOnlyList<string> strips)
+    {
+        _envelopeClips.Clear();
+        // The renderer's magnification ceiling, in this box's pixels. A clip is drawn at most
+        // RasterCeiling times its own frame size, and the rift guardian's headroom is deep enough that
+        // a Bruiser wave's box asks for 1.27 — so an uncapped envelope would hand the pointer ten
+        // pixels of empty frame the figure is never drawn into. Every strip here is one square frame
+        // tall, and a set is one actor's clips, so the tightest ceiling of the set is the actor's.
+        var maxUnit = float.PositiveInfinity;
+        foreach (var key in strips)
+        {
+            if (_ui.Assets.Get(key) is not { Height: > 0 } tex) continue;
+            _envelopeClips.Add(_ui.Silhouette(key));
+            maxUnit = MathF.Min(maxUnit, UiKit.RasterCeiling * tex.Height);
+        }
+        return VfxFigure.Envelope(box, _envelopeClips, maxUnit);
+    }
+
+    /// <summary>Scratch list for <see cref="Envelope"/> — one allocation for the screen's life, not one per frame.</summary>
+    private readonly List<ContentBox> _envelopeClips = new();
+
     /// <summary>The champion's idle strip — the reference silhouette every champion-side effect measures.</summary>
     private string ChampionReferenceStrip => Character.StripKey("idle");
+
+    /// <summary>
+    /// Every clip the champion can be drawn in while standing THIS WAVE: the idle, the basic swing,
+    /// and the clip each equipped skill commits — resolved the way <see cref="DrawChampion"/> resolves
+    /// it (the character's own strip for the Form, else the generic one it stands in for).
+    /// </summary>
+    /// <remarks>
+    /// THE BUILD, NOT THE ROSTER'S WHOLE VOCABULARY. <see cref="UpdateChampionClip"/> can only ever
+    /// commit a clip a skill in <c>_waveSkills</c> names (plus the basic attack, and a trap for a
+    /// Reaction), so unioning every Form's clip would keep the inspector off room this hunter cannot
+    /// occupy — and the widest clip is a Form clip for eight of the ten: the thornwall's projectile
+    /// reaches 515 px where his idle and swing reach 372. A build without a Projectile never throws
+    /// it, and the plate should have that space.
+    /// </remarks>
+    private IReadOnlyList<string> ChampionClipStrips
+    {
+        get
+        {
+            if (_champClipStripsFor == Character.Id && ReferenceEquals(_champClipStripsSkills, _waveSkills))
+                return _champClipStrips;
+            _champClipStrips.Clear();
+            Add("idle");
+            Add("attack");
+            foreach (var equipped in _waveSkills)
+                Add(equipped.Def.Kind == SkillKind.Reaction ? "trap" : equipped.Def.ClipKey);
+            _champClipStripsFor = Character.Id;
+            _champClipStripsSkills = _waveSkills;
+            return _champClipStrips;
+
+            // Most specific first, exactly as the draw resolves it: the character's own strip for the
+            // clip, then the generic attack/cast it stands in for. A clip with no art contributes
+            // nothing rather than falling through to a strip the draw would not use.
+            void Add(string clip)
+            {
+                foreach (var key in Character.StripKeys(clip))
+                    if (_ui.Assets.Has(key))
+                    {
+                        if (!_champClipStrips.Contains(key)) _champClipStrips.Add(key);
+                        return;
+                    }
+            }
+        }
+    }
+
+    private readonly List<string> _champClipStrips = new();
+    private string? _champClipStripsFor;
+    private IReadOnlyList<EquippedSkill>? _champClipStripsSkills;
 
     /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
     private string? CreatureReferenceStrip
         => EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
+
+    /// <summary>
+    /// The clips a standing creature plays — its idle and its attack — for the wave's art key, or
+    /// nothing. Rebuilt only when the key changes (a wave's creatures share one key).
+    /// </summary>
+    private IReadOnlyList<string> CreatureClipStrips(string? key)
+    {
+        if (key == _creatureClipStripsFor) return _creatureClipStrips;
+        _creatureClipStrips.Clear();
+        if (key is not null) { _creatureClipStrips.Add($"{key}_idle_strip8_512"); _creatureClipStrips.Add($"{key}_attack_strip8_512"); }
+        _creatureClipStripsFor = key;
+        return _creatureClipStrips;
+    }
+
+    private readonly List<string> _creatureClipStrips = new();
+    private string? _creatureClipStripsFor;
 
     /// <summary>
     /// Lay every figure out and publish its visible bounds, before one pixel of the arena is drawn.
@@ -2173,9 +2302,19 @@ public sealed class HuntScreen
         _creatureBoxes.Clear();
 
         // The champion, WITH his lunge. The draw used to apply this push and the effects never saw it.
-        var push = (int)(_champLunge * 40f);
+        // The BODY rides the lunge, because the effects are supposed to: a hit lands where the figure
+        // is. The ENVELOPE does not, because the inspector is supposed not to — it is the union of
+        // where the figure stands and where the swing carries it, so the plate's keep-out is the same
+        // rectangle at rest and at full extension instead of sliding forty pixels twice a second.
+        // VisualRect is purely additive in the box's x, so the lunged envelope is the resting one
+        // shifted by the push; no second silhouette pass is needed.
+        var push = (int)(_champLunge * ChampLungePx);
         _champDrawBox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        _actors.Publish(VfxSubject.Champion, VisualRect(_champDrawBox, ChampionReferenceStrip), facing: 1);
+        var standing = Envelope(ChampBox, ChampionClipStrips);
+        var lunged = standing;
+        lunged.Offset(ChampLungePx, 0);
+        _actors.Publish(VfxSubject.Champion, VisualRect(_champDrawBox, ChampionReferenceStrip),
+                        Rectangle.Union(standing, lunged), facing: 1);
 
         var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
         if (_isBossWave) LayoutBoss();
@@ -2186,14 +2325,17 @@ public sealed class HuntScreen
         // and the pack is nine hundred pixels wide and one creature tall — which is why it is the one
         // profile measured against a width.
         var strip = _isBossWave ? BossReferenceStrip : CreatureReferenceStrip;
-        Rectangle? row = null;
+        var clips = CreatureClipStrips(strip is null ? null : EnemyKeyOf(strip));
+        Rectangle? row = null, reach = null;
         foreach (var (slot, box) in _creatureBoxes)
         {
             var vis = VisualRect(box, strip);
-            _actors.Publish(VfxSubject.Creature(slot), vis, facing: -1);
+            var env = Envelope(box, clips);
+            _actors.Publish(VfxSubject.Creature(slot), vis, env, facing: -1);
             row = row is { } r ? Rectangle.Union(r, vis) : vis;
+            reach = reach is { } e ? Rectangle.Union(e, env) : env;
         }
-        if (row is { } union) _actors.Publish(VfxSubject.EnemyRow, union, facing: -1);
+        if (row is { } union && reach is { } envelope) _actors.Publish(VfxSubject.EnemyRow, union, envelope, facing: -1);
     }
 
     /// <summary>
@@ -2641,6 +2783,28 @@ public sealed class HuntScreen
     }
 
     /// <summary>
+    /// The actor geometry of the last laid-out frame as text — one line per subject: the body the
+    /// effects measure, the envelope the pointer reads, and for the hunter the inspector's keep-out
+    /// beside the layout box it replaced. Canvas pixels. The capture rig writes it beside a shot
+    /// under <c>RH_SHOT_DUMP</c>, so a hover can be aimed from numbers rather than from a guess.
+    /// </summary>
+    public IEnumerable<string> DevActorGeometry()
+    {
+        static string R(Rectangle r) => $"{r.X},{r.Y},{r.Width},{r.Height}";
+        foreach (var (subject, vb) in _actors.All.OrderBy(kv => kv.Key.Kind).ThenBy(kv => kv.Key.Slot))
+        {
+            var line = $"{subject}\tbody {R(vb.Rect)}\tenvelope {R(vb.Envelope)}";
+            if (subject.Kind == VfxSubjectKind.Champion)
+                line += $"\tkeepout {R(EnemyInspectorPlacement.HunterKeepOut(vb.Envelope))}\tbox {R(_champDrawBox)}";
+            else if (subject.Kind == VfxSubjectKind.Creature)
+                line += $"\tbox {R(CreatureBox(subject.Slot))}";
+            yield return line;
+        }
+        yield return $"Hover\tat {_lastHover.At.X},{_lastHover.At.Y}\tcreature "
+                     + (_lastHover.Slot < 0 ? "none" : _lastHover.Slot.ToString());
+    }
+
+    /// <summary>
     /// FIXTURE / DEV ONLY (F9, or <c>RH_SHOT_MODE=vfxdebug</c>): draw the VFX contract's own arithmetic.
     /// </summary>
     /// <remarks>
@@ -2668,13 +2832,21 @@ public sealed class HuntScreen
         // effect's. Their labels are STACKED in the reading block rather than floated over each box:
         // a swarm's creature rectangles overlap by more than half, so per-box labels wrote over each
         // other and the row's label over the first creature's.
+        // The BODY bright and the ENVELOPE dim around it: the body is what the effects measure, the
+        // envelope is what the pointer and the inspector read, and seeing the two apart is what makes
+        // "the attack reaches past the idle" a picture. The hunter's KEEP-OUT (his envelope plus the
+        // inspector's clearance) is dashed in the inspector's own colour, so a capture can show that
+        // the plate stops at the art and not at the layout box.
         var sizes = new List<string>();
         foreach (var (subject, vb) in _actors.All.OrderBy(kv => kv.Key.Kind).ThenBy(kv => kv.Key.Slot))
         {
+            DebugRect(b, vb.Envelope, UiKit.Vellum * 0.45f, 1);
             DebugRect(b, vb.Rect, UiKit.Vellum, 1);
+            if (subject.Kind == VfxSubjectKind.Champion)
+                DebugRect(b, EnemyInspectorPlacement.HunterKeepOut(vb.Envelope), Ember * 0.8f, 1);
             if (subject.Kind != VfxSubjectKind.Creature || subject.Slot == 0)
                 sizes.Add($"{(subject.Kind == VfxSubjectKind.Creature ? "creature" : subject.ToString().ToLowerInvariant())}"
-                          + $" {vb.Rect.Width}x{vb.Rect.Height}");
+                          + $" {vb.Rect.Width}x{vb.Rect.Height} reach {vb.Envelope.Width}x{vb.Envelope.Height}");
         }
 
         // EVERY EFFECT'S MARKS, and its reading line built at the same time. The line carries the

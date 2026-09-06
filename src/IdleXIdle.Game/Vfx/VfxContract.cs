@@ -120,6 +120,14 @@ public readonly record struct VfxSubject(VfxSubjectKind Kind, int Slot)
 /// (<c>HuntScreen.ArtFacesLeft</c> is const false). Its single job is the sign of an offset under
 /// <see cref="VfxFacing.Forward"/>.
 /// </para>
+/// <para>
+/// <see cref="Envelope"/> is the figure's REACH: one stable rectangle that every combat clip's opaque
+/// silhouette lands inside (see <see cref="VfxFigure.Envelope"/>). <see cref="Rect"/> is what the
+/// effects measure against and is read off the idle strip alone; the envelope is what the pointer
+/// and the inspector read, and it holds the attack's full extension too. Both are constant across
+/// the clips, which is the law the whole contract rests on: an idle frame, an attack frame and an
+/// idle frame again must not move an anchor, pulse a hover or resize an effect.
+/// </para>
 /// </remarks>
 public readonly record struct VisualBounds(Rectangle Rect, int Facing)
 {
@@ -130,6 +138,12 @@ public readonly record struct VisualBounds(Rectangle Rect, int Facing)
     /// this project keeps finding, so they are gone; add one back with the site that needs it.
     /// </remarks>
     public int CenterX => Rect.Center.X;
+
+    /// <summary>
+    /// The stable rectangle the figure's clips reach — the union of every combat silhouette, never
+    /// smaller than <see cref="Rect"/>. A figure published without one reaches exactly its body.
+    /// </summary>
+    public Rectangle Envelope { get; init; } = Rect;
 }
 
 /// <summary>A strip frame's transparent margins as fractions of the FRAME, union across all frames.</summary>
@@ -343,13 +357,78 @@ public static class VfxResolver
 /// </remarks>
 public static class VfxFigure
 {
-    /// <summary>The visible rectangle a strip with content box <paramref name="c"/> fills in <paramref name="box"/>.</summary>
-    public static Rectangle VisualRect(Rectangle box, ContentBox c)
+    /// <summary>
+    /// The visible rectangle a strip with content box <paramref name="c"/> fills in <paramref name="box"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The scale is the box height over what the top crop leaves, and the sole lands on the box bottom;
+    /// those two facts place every pixel of the frame, so a content box measured on EITHER rule lands
+    /// correctly: the symmetric one <c>UiKit.Content</c> reports (the draw's own crop, left equal to
+    /// right by construction) and the true, asymmetric one <c>UiKit.Silhouette</c> reports. A
+    /// symmetric box gives exactly the rectangle it always did — its span is centred on the box; an
+    /// asymmetric one puts its span where the opaque pixels actually are, off-centre by half the
+    /// difference of its margins.
+    /// </para>
+    /// <para>
+    /// AnimSprite also REFUSES TO MAGNIFY past <c>UiKit.RasterCeiling</c>, and a box does reach that
+    /// cap: the rift guardian's idle leaves 386 px of frame under its headroom, which a Bruiser wave's
+    /// 492-px box would draw at 1.27. <paramref name="maxUnit"/> is that ceiling in the same units as
+    /// the frame (<c>UiKit.RasterCeiling × the strip's frame size</c>); a caller that passes it gets
+    /// the size the figure is actually DRAWN at, and one that omits it gets the size the box asked
+    /// for. The sole still lands on <c>box.Bottom</c> either way — the cap shortens the figure from
+    /// the crown down, exactly as AnimSprite's bottom-anchored draw does.
+    /// </para>
+    /// </remarks>
+    /// <param name="box">The layout box the strip is drawn into.</param>
+    /// <param name="c">The strip's margins — the draw's symmetric crop, or the true silhouette.</param>
+    /// <param name="maxUnit">The largest a whole frame may be drawn, in box pixels. Omit for uncapped.</param>
+    public static Rectangle VisualRect(Rectangle box, ContentBox c, float maxUnit = float.PositiveInfinity)
     {
         var shown = MathF.Max(0.01f, 1f - c.Top);          // what is left after the top crop
-        var h = Math.Max(1, (int)MathF.Round(box.Height * (1f - c.Top - c.Bottom) / shown));
-        var w = Math.Max(1, (int)MathF.Round((1f - 2f * c.Left) * box.Height / shown));
-        return new Rectangle(box.Center.X - w / 2, box.Bottom - h, w, h);
+        var unit = MathF.Min(box.Height / shown, maxUnit);  // one whole frame, at the drawn scale
+        var h = Math.Max(1, (int)MathF.Round(unit * (1f - c.Top - c.Bottom)));
+        var w = Math.Max(1, (int)MathF.Round(unit * (1f - c.Left - c.Right)));
+        var lean = (int)MathF.Round(unit * (c.Left - c.Right) * 0.5f);   // zero for a symmetric box
+        return new Rectangle(box.Center.X + lean - w / 2, box.Bottom - h, w, h);
+    }
+
+    /// <summary>
+    /// ONE STABLE RECTANGLE for a figure whose clips are drawn into <paramref name="box"/>: the union of
+    /// where each clip's opaque silhouette lands. Empty <paramref name="clips"/> — no art resolved — is
+    /// the box itself, which is what the draw falls back to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The body the effects measure is read off the idle strip alone, and that is load-bearing: a
+    /// size read off the LIVE clip would make every effect jump on every cast. But an idle-only
+    /// rectangle is too narrow for the pointer and the inspector — a swing reaches well past it
+    /// (the seeker's idle silhouette is 246 frame-px wide, his attack's 450; the rift guardian's
+    /// spear goes from 207 to 381), so a wide pose visibly escaped the body it was hovered by.
+    /// </para>
+    /// <para>
+    /// The envelope keeps the stability law and fixes the escape: it is measured from every combat
+    /// clip the figure can play — never from whichever one is playing — so an idle frame, an attack
+    /// frame and an idle frame again produce the same rectangle, and the attack animates INSIDE it.
+    /// Each clip is landed by <see cref="VisualRect"/> with its own crop, because AnimSprite scales
+    /// each clip by its own headroom, and the union is taken in the box's pixels. It stays as close
+    /// to the silhouettes as their alpha allows: transparent padding is never inside it — which is
+    /// why <paramref name="maxUnit"/> matters here and not only in the effects' arithmetic. A clip
+    /// the renderer CAPS is drawn smaller than its box asked for, and an uncapped envelope would
+    /// hand the pointer the difference as empty space.
+    /// </para>
+    /// </remarks>
+    /// <param name="box">The layout box every clip is drawn into.</param>
+    /// <param name="clips">The silhouettes of the clips the figure can play; empty means no art resolved.</param>
+    /// <param name="maxUnit">The renderer's magnification ceiling, as <see cref="VisualRect"/> takes it.</param>
+    public static Rectangle Envelope(Rectangle box, System.Collections.Generic.IReadOnlyList<ContentBox> clips,
+                                     float maxUnit = float.PositiveInfinity)
+    {
+        ArgumentNullException.ThrowIfNull(clips);
+        if (clips.Count == 0) return box;
+        var all = VisualRect(box, clips[0], maxUnit);
+        for (var i = 1; i < clips.Count; i++) all = Rectangle.Union(all, VisualRect(box, clips[i], maxUnit));
+        return all;
     }
 }
 
@@ -377,9 +456,21 @@ public sealed class VfxBoundsRegistry : IVfxBoundsSource
     /// <summary>Forget every subject. Only for a wave/replay rebuild — a frame REPLACES, it does not clear.</summary>
     public void Clear() => _bounds.Clear();
 
-    /// <summary>Publish (or replace) one subject's visible rectangle for this frame.</summary>
-    public void Publish(VfxSubject subject, Rectangle visible, int facing)
-        => _bounds[subject] = new VisualBounds(visible, facing);
+    /// <summary>
+    /// Publish (or replace) one subject's geometry for this frame: the visible body the effects
+    /// measure, and the stable envelope its clips reach (see <see cref="VisualBounds.Envelope"/>).
+    /// </summary>
+    /// <remarks>
+    /// The envelope is UNIONED WITH THE BODY here, so "the envelope holds the body" is true of every
+    /// subject the registry holds rather than true of most of them. The two are measured on different
+    /// rules and the difference is a pixel or two: the body comes from the draw's own crop, which is
+    /// symmetric and keeps a pixel of slack on each side (<c>UiKit.SidePadFraction</c>), while the
+    /// envelope comes from the exact per-side silhouette. So an actor whose other clips never
+    /// out-reach its idle — the stone sentinel, the forge colossus — would otherwise publish an
+    /// envelope one pixel INSIDE the body it is supposed to contain.
+    /// </remarks>
+    public void Publish(VfxSubject subject, Rectangle visible, Rectangle envelope, int facing)
+        => _bounds[subject] = new VisualBounds(visible, facing) { Envelope = Rectangle.Union(visible, envelope) };
 
     public bool TryBounds(VfxSubject subject, out VisualBounds bounds)
         => _bounds.TryGetValue(subject, out bounds);

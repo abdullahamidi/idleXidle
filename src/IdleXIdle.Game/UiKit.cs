@@ -116,6 +116,7 @@ public sealed class UiKit
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
+    private readonly System.Collections.Generic.Dictionary<string, Vfx.ContentBox> _silhouetteCache = new();
     private readonly System.Collections.Generic.Dictionary<Texture2D, FrameSpec> _frameSpecs = new();
 
     // ── FRAME SPECS: where a frame's ornaments are, measured off the art, so the slicer never stretches one ──
@@ -573,6 +574,56 @@ public sealed class UiKit
         if (Assets.Get(key) is null) return Vfx.ContentBox.Full;
         var side = SidePadFraction(key, declaredFrames);
         return new Vfx.ContentBox(side, TopPadFraction(key), side, BottomPadFraction(key));
+    }
+
+    /// <summary>
+    /// Where a strip's opaque pixels actually are, as margins of one FRAME — the union across every
+    /// frame, each side measured on its own. Cached per key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Content"/> is the DRAW's crop and is symmetric on purpose (cropping each side to its
+    /// own content would re-centre the figure). This is the SILHOUETTE: the tightest rectangle every
+    /// frame of the clip stays inside, which is what a pointer or an inspector wants to know and
+    /// what <c>VfxFigure.Envelope</c> unions across a figure's clips. It is measured exactly — no
+    /// pixel of slack either way — on the same alpha rule as the pad scans (A &gt; 8), so a soft
+    /// anti-aliased edge counts and fully transparent padding never does.
+    /// </para>
+    /// <para>
+    /// The top and bottom agree with <see cref="TopPadFraction"/> and <see cref="BottomPadFraction"/>
+    /// by construction (same scan, same rule), so a silhouette landed by <c>VfxFigure.VisualRect</c>
+    /// stands on the same sole the draw plants. Missing art measures as <see cref="Vfx.ContentBox.Full"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="declaredFrames">The strip's frame count when the caller knows it; zero infers square frames.</param>
+    public Vfx.ContentBox Silhouette(string key, int declaredFrames = 0)
+    {
+        var cacheKey = declaredFrames > 0 ? $"{key}#{declaredFrames}" : key;
+        if (_silhouetteCache.TryGetValue(cacheKey, out var cached)) return cached;
+        var box = Vfx.ContentBox.Full;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var frames = declaredFrames > 0 ? declaredFrames : Math.Max(1, t.Width / t.Height);
+            var fw = Math.Max(1, t.Width / frames);
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            int left = fw, right = -1, top = t.Height, bottom = -1;
+            for (var f = 0; f < frames; f++)
+                for (var y = 0; y < t.Height; y++)
+                    for (var x = 0; x < fw; x++)
+                        if (data[y * t.Width + f * fw + x].A > 8)
+                        {
+                            if (x < left) left = x;
+                            if (x > right) right = x;
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                        }
+            if (right >= 0)   // an entirely empty strip measures as full rather than as a negative width
+                box = new Vfx.ContentBox(left / (float)fw, top / (float)t.Height,
+                                         (fw - 1 - right) / (float)fw, (t.Height - 1 - bottom) / (float)t.Height);
+        }
+        _silhouetteCache[cacheKey] = box;
+        return box;
     }
 
     /// <summary>

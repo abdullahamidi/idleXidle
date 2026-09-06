@@ -2217,6 +2217,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // standing barrier is the acceptance case, so the mode that photographs the contract
                     // has to be the mode that raises one.
                     if (sm == "vfxdebug") _expedition.DevVfxDebug = true;
+                    // RH_SHOT_GEOMETRY=1 draws the same overlay on ANY fight fixture — the actor bodies,
+                    // their envelopes and the hunter's keep-out — so a hover pose (`fightinspect`) can
+                    // be photographed with the geometry it was hit-tested against.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_GEOMETRY")?.Trim() == "1") _expedition.DevVfxDebug = true;
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
                     // `fightaura` slots a NATURE AURA beside the starter Strike, so the always-on pulse
@@ -6231,7 +6235,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // RH_SHOT_DUMP: the wave's events beside the shot, so a fight pose can be checked against
             // what the wave actually contained rather than against a guess about the timeline.
             if (Environment.GetEnvironmentVariable("RH_SHOT_DUMP") is not null)
+            {
                 System.IO.File.WriteAllLines(shotPath + ".events.txt", _expedition.DevWaveEvents());
+                // ...and the actor geometry the photographed frame hit-tested with: each figure's body,
+                // its envelope and the hunter's keep-out, in canvas pixels — the numbers a hover pose
+                // is aimed from, and the proof that a rectangle did not move between two frames.
+                System.IO.File.WriteAllLines(shotPath + ".actors.txt", _expedition.DevActorGeometry());
+            }
 
             using var fs = System.IO.File.Create(shotPath);
             _canvas.SaveAsPng(fs, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
