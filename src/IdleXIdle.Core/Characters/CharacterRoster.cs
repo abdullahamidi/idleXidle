@@ -71,11 +71,14 @@ public static class CharacterRoster
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Resonance,
             PassiveName = "DEADWEIGHT",
-            PassiveText = "A third of the damage left over from a kill hits the next enemy.",
-            // A heavy hitter's structural weakness is a swarm: an enormous hit on a small
-            // creature throws most of itself away. This does not fix that — it refunds a third,
-            // the most a character passive should do to a playstyle's actual price.
-            Shape = new SkillShape { OverkillCarry = 0.33f },
+            PassiveText = "A hit that leaves an enemy standing leaves a third of its damage in them. Your next hit on that enemy lands it too.",
+            // REDESIGNED 2026-09-07. It was a third of a kill's overkill carried into the next enemy —
+            // a CARRY, on the same generic field BODY's fourth rung, BREAKTHROUGH and CLEAN CUT write,
+            // combined by MAX, so the innate contributed nothing beside any of them and nothing at all
+            // against a lone enemy. A heavy hitter's other structural fact is the enemy that does NOT
+            // go down in one blow: DEADWEIGHT is what that enemy keeps of the blow, and pays on the
+            // next. Its own typed dial (SkillShape.DeadweightShare), its own state on the creature.
+            Shape = new SkillShape { DeadweightShare = 0.33f },
             Unlock = CharacterUnlock.Conquest("cinderworks"),
         },
         new()

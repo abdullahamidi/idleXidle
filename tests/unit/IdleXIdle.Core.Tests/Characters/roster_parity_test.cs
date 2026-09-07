@@ -576,7 +576,11 @@ public class RosterParityTest
     /// </remarks>
     private static readonly (string Name, string Why)[] KnownDecoration =
     {
-        ("THE ANVIL", "DEADWEIGHT measured inside the 2% floor on both of HARDFACE's single-Source pairs: 0.0% as UPSET beside BLOW FLATTEN, +1.1% as PLANISH beside DRINK SIPHON"),
+        // THE ANVIL left this list on 2026-09-07: DEADWEIGHT was redesigned from an overkill carry (a
+        // third of a kill's spill, shadowed by every other carry rule and worth nothing against a lone
+        // enemy) into a share of a primary hit that a surviving enemy keeps and suffers on the next
+        // hit. On the same gauntlet it measures +15.1% faster on HARDFACE's parity pair — see the
+        // remark above for what the old rule measured, and AnvilDeadweightDiagnosticTest for the new.
     };
 
     /// <summary>Which axis a character's passive text actually promises.</summary>

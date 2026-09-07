@@ -5,6 +5,8 @@ using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Loot;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Tests.Builds;
 using Xunit;
 using Xunit.Abstractions;
@@ -12,45 +14,33 @@ using Xunit.Abstractions;
 namespace IdleXIdle.Core.Tests.Characters;
 
 /// <summary>
-/// WHY does THE ANVIL measure as dead weight? The mechanic, measured directly, on builds a player can weave.
+/// What is THE ANVIL's DEADWEIGHT worth? The redesigned mechanic, measured directly, on builds a player can weave.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The roster-parity gauntlet (2026-09-07) found DEADWEIGHT inside the 2% floor on both of HARDFACE's
-/// reachable single-Source pairs — 0.0% as UPSET beside BLOW FLATTEN, +1.1% as PLANISH beside DRINK
-/// SIPHON — and pinned the finding without a mechanism. Two weak pairs do not say WHICH mechanic is
-/// wrong: the passive, the signature, the pairing, or the clock the gauntlet reads. This file asks the
-/// sim the question the clear-time delta cannot answer, through the carry counters
-/// <see cref="WaveMetrics"/> grew for it: how often a kill left overkill a carry could ride, how much
-/// of that spill the rule was entitled to, how often the carry actually landed, what it sent, and
-/// what it killed.
+/// The first version of this file (2026-09-07) measured DEADWEIGHT as the overkill carry it then was
+/// and found it live, small and zero in a boss room — and shadowed outright by any other carry rule,
+/// since all of them wrote one field combined by MAX. The passive is its own rule now: a primary direct
+/// hit (a skill's or the swing) that leaves its target standing leaves a share of its damage in it, and the next such hit lands
+/// it too (<see cref="SkillShape.DeadweightShare"/>, <see cref="WaveCreature.StoredDeadweight"/>).
+/// This file measures THAT — stores, releases, the released damage, its share of everything dealt —
+/// on the parity gauntlet, beside every carry rule it must live with, and against the lone durable
+/// enemy it was redesigned for.
 /// </para>
 /// <para>
 /// <b>Reachable only.</b> Every row composes through <see cref="Reachable.Compose"/> — the shipped
-/// loadout, the shipped composer, a real <c>SkillProgress</c> — so no per-slot Source, no impossible
-/// variation, no foreign signature and no fixture-only state can reach a row. The "no HARDFACE" rows
-/// are reachable because the weave screen lets a player clear any slot, the signature's included
-/// (<c>LoadoutScreen</c> → <c>PlayerLoadout.RemoveSkill</c>). What a relaunch or a champion switch
-/// does next is <c>LoadoutRepair.EnsureSignature</c>: it re-weaves HARDFACE into the first EMPTY slot,
-/// and if none is empty it OPENS one while the loadout is under capacity — so a HARDFACE-free loadout
-/// persists only when it is FULL. The rows say which they are, and the reachability test runs the
-/// repair on each to prove it. The control is THE ANVIL with the passive removed and nothing else
-/// changed — same class, same signature, same skills — so the delta between the two IS DEADWEIGHT.
-/// Gear is bare on both, for every row.
+/// loadout, composer and skill progress — so no impossible variation, foreign signature or
+/// fixture-only state can reach a row; gear rows wear real items of no class, which anyone may wear.
+/// The control is THE ANVIL with the passive removed and nothing else changed, so the delta between
+/// the two IS DEADWEIGHT. The rows say whether a relaunch's signature repair leaves them alone (a
+/// HARDFACE-free loadout persists only when FULL) and the reachability test runs that repair.
 /// </para>
 /// <para>
-/// <b>Seed-invariant.</b> On bare gear the fight draws no random number that moves this gauntlet
-/// (the parity file measured the same: forty seeds, one number), so the forty seeds here are forty
-/// identical runs and the "2% floor" is not sampling noise — it is one beat of the cast cadence. The
-/// measurement asserts the invariance rather than assuming it, so a fixture that starts to roll dice
-/// is noticed the day it does.
-/// </para>
-/// <para>
-/// <b>Diagnostic, not balance.</b> The numbers are printed; the assertions hold the counters to their
-/// own arithmetic (a carry never lands more often than a kill leaves spill, never more than the
-/// carry rule's share of it, never on a control that wears no carry rule) and hold the mechanic to
-/// being LIVE on a reachable build. No threshold here says what DEADWEIGHT should be worth — that is
-/// the decision this file exists to inform.
+/// <b>Seed-invariant, asserted.</b> On bare gear the fight draws no random number that moves this
+/// gauntlet, so the forty seeds are forty identical runs and the "2% floor" is one beat of the cast
+/// cadence, not sampling noise. <b>Diagnostic, not balance:</b> the numbers are printed, the
+/// assertions hold the counters to their own arithmetic and the mechanic to being LIVE where its
+/// rule says it must be. No threshold here says what the passive should be worth.
 /// </para>
 /// </remarks>
 public class AnvilDeadweightDiagnosticTest
@@ -75,57 +65,62 @@ public class AnvilDeadweightDiagnosticTest
 
     /// <summary>
     /// One matrix row. <paramref name="Capacity"/> is the account's slot count (null = as many as woven,
-    /// i.e. a FULL loadout); <paramref name="Persists"/> says whether the composed loadout survives a
-    /// relaunch unchanged (a HARDFACE-free loadout only does when it is full); <paramref name="SkillCarry"/>
-    /// marks a row whose SKILL carries its own overkill, where the passive is shadowed by the max rule.
+    /// a FULL loadout); <paramref name="Persists"/> says whether the composed loadout survives a relaunch
+    /// unchanged; <paramref name="BodyPieces"/> dresses both arms in that many BODY pieces (four = the
+    /// set's carry, 0.35); <paramref name="BossOnly"/> fights the gauntlet's boss wave alone — the lone
+    /// durable enemy the passive was redesigned for.
     /// </summary>
     private sealed record Row(string Label, Reachable.Slot[] Slots, int? Capacity = 4, bool Vow = false,
-                              bool Persists = true, bool SkillCarry = false);
+                              bool Persists = true, int BodyPieces = 0, bool BossOnly = false);
 
-    /// <summary>The matrix: the parity pairs, each HARDFACE variation alone and crossed, DEADWEIGHT with no HARDFACE, and a skill that carries by itself.</summary>
+    private static Reachable.Slot Blow(params string[] reinforcements) => new("hammer_blow", "FLATTEN", Reinforcements: reinforcements.Length == 0 ? null : reinforcements);
+
+    /// <summary>The matrix: the parity pairs, the passive beside every carry rule, and the lone boss.</summary>
     private static readonly Row[] Matrix =
     {
         new("HARDFACE unchosen — a fresh Anvil", new[] { new Reachable.Slot(Hardface) }, Capacity: 1),
         new("UPSET alone", new[] { new Reachable.Slot(Hardface, "UPSET") }, Capacity: 1),
         new("PLANISH alone", new[] { new Reachable.Slot(Hardface, "PLANISH") }, Capacity: 1),
-        new("UPSET + BLOW FLATTEN", new[] { new Reachable.Slot(Hardface, "UPSET"), new Reachable.Slot("hammer_blow", "FLATTEN") }),
+        new("UPSET + BLOW FLATTEN", new[] { new Reachable.Slot(Hardface, "UPSET"), Blow() }),
         new("PLANISH + DRINK SIPHON", new[] { new Reachable.Slot(Hardface, "PLANISH"), new Reachable.Slot("drain_drink", "SIPHON") }),
-        new("PLANISH + BLOW FLATTEN", new[] { new Reachable.Slot(Hardface, "PLANISH"), new Reachable.Slot("hammer_blow", "FLATTEN") }),
-        new("UPSET + DRINK SIPHON", new[] { new Reachable.Slot(Hardface, "UPSET"), new Reachable.Slot("drain_drink", "SIPHON") }),
-        // A one-slot account whose one slot holds BLOW: full, so a relaunch cannot re-weave HARDFACE.
-        new("BLOW FLATTEN — no HARDFACE (full one-slot loadout)", new[] { new Reachable.Slot("hammer_blow", "FLATTEN") }, Capacity: null),
-        // Two actives need three slots; the third stands empty, so this build lasts the session and
-        // a relaunch puts HARDFACE back into the empty slot. Measured as what the player fights with
-        // in the meantime.
-        new("BLOW FLATTEN + SPRAY CLUSTER — no HARDFACE (in-session: a relaunch re-weaves it)",
-            new[] { new Reachable.Slot("hammer_blow", "FLATTEN"), new Reachable.Slot("volley_spray", "CLUSTER") }, Capacity: 3, Persists: false),
-        // The same pair with the third slot filled by a passive field: full, so it persists.
-        new("BLOW FLATTEN + SPRAY CLUSTER + MIRE NUMB — no HARDFACE (full loadout)",
-            new[] { new Reachable.Slot("hammer_blow", "FLATTEN"), new Reachable.Slot("volley_spray", "CLUSTER"), new Reachable.Slot("field_mire", "NUMB") }, Capacity: null),
-        // BLOW reinforced with BREAKTHROUGH carries half its own overkill: on BLOW's kills the carry
-        // is max(0.33, 0.5) = 0.5 with or without the passive, so DEADWEIGHT pays only on UPSET's kills.
-        new("UPSET + BLOW FLATTEN with BREAKTHROUGH — the skill carries by itself",
-            new[] { new Reachable.Slot(Hardface, "UPSET"), new Reachable.Slot("hammer_blow", "FLATTEN", Reinforcements: new[] { "BREAKTHROUGH" }) },
-            SkillCarry: true),
         new("UPSET + BLOW FLATTEN, VOW OF THE PURE kept (the parity row)",
-            new[] { new Reachable.Slot(Hardface, "UPSET", PureVow), new Reachable.Slot("hammer_blow", "FLATTEN") }, Vow: true),
+            new[] { new Reachable.Slot(Hardface, "UPSET", PureVow), Blow() }, Vow: true),
         new("PLANISH + DRINK SIPHON, VOW OF THE PURE kept (the parity row)",
             new[] { new Reachable.Slot(Hardface, "PLANISH", PureVow), new Reachable.Slot("drain_drink", "SIPHON") }, Vow: true),
+        new("BLOW FLATTEN — no HARDFACE (full one-slot loadout)", new[] { Blow() }, Capacity: null),
+        // Beside every carry rule: the set's, BREAKTHROUGH's, CLEAN CUT's.
+        new("UPSET + BLOW FLATTEN — four BODY pieces worn (the set's carry, 0.35)", new[] { new Reachable.Slot(Hardface, "UPSET"), Blow() }, BodyPieces: 4),
+        new("UPSET + BLOW FLATTEN with BREAKTHROUGH (the blow's own carry, 0.5)", new[] { new Reachable.Slot(Hardface, "UPSET"), Blow("BREAKTHROUGH") }),
+        new("UPSET + BLOW FINISH with CLEAN CUT (the execute's carry, 1.0)",
+            new[] { new Reachable.Slot(Hardface, "UPSET"), new Reachable.Slot("hammer_blow", "FINISH", Reinforcements: new[] { "CLEAN CUT" }) }),
+        // The lone durable enemy — the case the redesign is for.
+        new("HARDFACE unchosen — the boss alone", new[] { new Reachable.Slot(Hardface) }, Capacity: 1, BossOnly: true),
+        new("PLANISH + DRINK SIPHON — the boss alone", new[] { new Reachable.Slot(Hardface, "PLANISH"), new Reachable.Slot("drain_drink", "SIPHON") }, BossOnly: true),
     };
 
-    /// <summary>One character's totals over every seed and wave of the gauntlet, plus per-wave detail.</summary>
+    /// <summary>One character's totals over every seed and wave of the row's gauntlet, plus per-wave detail.</summary>
     private sealed class Tally
     {
-        public double ClearMs, HpLost, Delivered, Overkill, EligibleOverkill, Carried;
-        public long OverkillKills, Carries, CarryKills, Killed;
-        /// <summary>The largest carry rule in the build — the passive's, or a skill's own where one carries.</summary>
-        public float MaxCarry;
-        public readonly double[] WaveMs = new double[3], WaveDelivered = new double[3], WaveOverkill = new double[3], WaveCarried = new double[3];
-        public readonly long[] WaveOverkillKills = new long[3], WaveCarries = new long[3], WaveCarryKills = new long[3];
+        public double ClearMs, HpLost, Delivered, Carried, DeadweightDamage;
+        public long Carries, Stores, Releases, Killed;
+        public readonly double[] WaveMs = new double[3], WaveDelivered = new double[3], WaveDeadweight = new double[3];
+        public readonly long[] WaveStores = new long[3], WaveReleases = new long[3];
 
-        /// <summary>The carry's share of everything that landed — the carry's direct contribution.</summary>
-        public double CarriedShare => Delivered <= 0 ? 0 : Carried / Delivered;
+        /// <summary>The passive's direct contribution — released damage as a share of everything landed.</summary>
+        public double DeadweightShare => Delivered <= 0 ? 0 : DeadweightDamage / Delivered;
     }
+
+    private static Hunter Dressed(int bodyPieces)
+    {
+        var hunter = new Hunter();
+        var types = new[] { ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves, ItemBaseType.Boots, ItemBaseType.Ring };
+        for (var i = 0; i < bodyPieces; i++)
+            hunter.Equip(new ItemInstance { InstanceId = $"body{i}", BaseType = types[i], Rarity = Rarity.Common, SellValue = 1, Element = Source.Body, ItemLevel = 1 });
+        return hunter;
+    }
+
+    private static (string Name, Func<List<WaveCreature>> Make)[] WavesOf(Row row)
+        => row.BossOnly ? new[] { ParityGauntlet.Waves[2] } : ParityGauntlet.Waves;
 
     private static Build Compose(Character c, Row row)
     {
@@ -136,57 +131,48 @@ public class AnvilDeadweightDiagnosticTest
             Assert.True(Vows.IsActive(vow, SoloBattle.DescribeBuild(build, new Hunter())),
                         $"{row.Label}: the pair does not keep VOW OF THE PURE — the fixture, not the design.");
         }
-        // The passive is the ONLY carry on a plain row, and not the only one on a SkillCarry row: the
-        // shares below are read as the passive's on the first kind and as the max rule's on the second.
-        var skillCarry = build.Skills.Max(s => s.Def.Rule.OverkillCarry);
-        Assert.True(row.SkillCarry == skillCarry > 0f,
-                    $"{row.Label}: a skill carries {skillCarry:0.00} of its own overkill — the row is mislabelled.");
         return build;
     }
 
     private static Tally Measure(Character c, Row row, int seeds = ParityGauntlet.Seeds)
     {
         var build = Compose(c, row);
-        var t = new Tally { MaxCarry = MathF.Max(c.Shape.OverkillCarry, build.Skills.Max(s => s.Def.Rule.OverkillCarry)) };
-        double firstCarried = double.NaN, firstClear = double.NaN;
+        var waves = WavesOf(row);
+        var t = new Tally();
+        double firstDeadweight = double.NaN, firstClear = double.NaN;
         for (var s = 0; s < seeds; s++)
         {
             var champ = ParityGauntlet.FreshChampion();
-            var hunter = new Hunter();
+            var hunter = Dressed(row.BodyPieces);
             var rng = new Random(ParityGauntlet.Seed(s));
-            double seedCarried = 0, seedClear = 0;
-            for (var w = 0; w < ParityGauntlet.Waves.Length; w++)
+            double seedDeadweight = 0, seedClear = 0;
+            for (var w = 0; w < waves.Length; w++)
             {
                 var metrics = new WaveMetrics();
-                var (outcome, _) = SoloBattle.ResolveWave(champ, build, hunter, ParityGauntlet.Waves[w].Make(),
+                var (outcome, _) = SoloBattle.ResolveWave(champ, build, hunter, waves[w].Make(),
                                                           ParityGauntlet.EnemyIntervalMs, ParityGauntlet.Tuning, rng,
                                                           metrics: metrics);
-                Assert.True(outcome == WaveOutcome.Cleared, $"{row.Label} / {ParityGauntlet.Waves[w].Name}: stalled — the clock saturates");
+                Assert.True(outcome == WaveOutcome.Cleared, $"{row.Label} / {waves[w].Name}: stalled — the clock saturates");
                 t.ClearMs += metrics.DurationMs;
                 t.Delivered += metrics.DeliveredDamage;
-                t.Overkill += metrics.Overkill;
-                t.EligibleOverkill += metrics.EligibleOverkill;
                 t.Carried += metrics.CarriedDamage;
-                t.OverkillKills += metrics.OverkillKills;
                 t.Carries += metrics.CarriesLanded;
-                t.CarryKills += metrics.CarryKills;
+                t.Stores += metrics.DeadweightStores;
+                t.Releases += metrics.DeadweightReleases;
+                t.DeadweightDamage += metrics.DeadweightDamage;
                 t.Killed += metrics.CreaturesKilled;
                 t.WaveMs[w] += metrics.DurationMs;
                 t.WaveDelivered[w] += metrics.DeliveredDamage;
-                t.WaveOverkill[w] += metrics.Overkill;
-                t.WaveCarried[w] += metrics.CarriedDamage;
-                t.WaveOverkillKills[w] += metrics.OverkillKills;
-                t.WaveCarries[w] += metrics.CarriesLanded;
-                t.WaveCarryKills[w] += metrics.CarryKills;
-                seedCarried += metrics.CarriedDamage;
+                t.WaveDeadweight[w] += metrics.DeadweightDamage;
+                t.WaveStores[w] += metrics.DeadweightStores;
+                t.WaveReleases[w] += metrics.DeadweightReleases;
+                seedDeadweight += metrics.DeadweightDamage;
                 seedClear += metrics.DurationMs;
             }
             t.HpLost += ParityGauntlet.ChampionHealth - champ.Health;
 
-            // SEED-INVARIANT, asserted: the day a passive starts rolling dice this fails, and the
-            // averages above stop being one number wearing forty coats.
-            if (double.IsNaN(firstCarried)) { firstCarried = seedCarried; firstClear = seedClear; }
-            Assert.True(seedCarried == firstCarried && seedClear == firstClear,
+            if (double.IsNaN(firstDeadweight)) { firstDeadweight = seedDeadweight; firstClear = seedClear; }
+            Assert.True(seedDeadweight == firstDeadweight && seedClear == firstClear,
                         $"{row.Label}: seed {s} differs from seed 0 — the gauntlet is no longer seed-invariant on bare gear; read the spread before reading the table.");
         }
         return t;
@@ -195,16 +181,16 @@ public class AnvilDeadweightDiagnosticTest
     [Fact]
     public void test_the_deadweight_matrix_is_measured_directly()
     {
-        var carry = Anvil.Shape.OverkillCarry;
-        Assert.True(carry > 0f, "THE ANVIL's passive is no longer an overkill carry — this diagnostic measures the wrong thing");
+        var share = Anvil.Shape.DeadweightShare;
+        Assert.True(share > 0f, "THE ANVIL's passive is no longer DEADWEIGHT — this diagnostic measures the wrong thing");
+        Assert.Equal(0f, Anvil.Shape.OverkillCarry);
         var seeds = ParityGauntlet.Seeds;
-        var roster = ParityGauntlet.Waves.Sum(w => w.Make().Count);
 
-        _out.WriteLine($"DEADWEIGHT DIAGNOSTIC — THE ANVIL against THE ANVIL-WITHOUT-DEADWEIGHT on the parity gauntlet");
-        _out.WriteLine($"(swarm 10x320 · pack 4x1,600/45 def · boss 14,000/70 def; {seeds} seeds, all identical; bare gear; passive carry {carry:0.00})");
+        _out.WriteLine("DEADWEIGHT DIAGNOSTIC — THE ANVIL against THE ANVIL-WITHOUT-DEADWEIGHT on the parity gauntlet");
+        _out.WriteLine($"(swarm 10x320 · pack 4x1,600/45 def · boss 14,000/70 def; {seeds} seeds, all identical; bare gear unless the row dresses; share {share:0.00})");
         _out.WriteLine("");
-        _out.WriteLine($"{"ROW",-84} {"FASTER",7} {"HP Δ",6} {"ELIG a/c",10} {"CARRIES",8} {"CARRIED",9} {"OF DEALT",8} {"C.KILLS",7} {"OF ENTITLED",11}");
-        _out.WriteLine(new string('-', 158));
+        _out.WriteLine($"{"ROW",-74} {"FASTER",7} {"HP Δ",6} {"STORES",7} {"RELEASE",7} {"DW DMG",8} {"OF DEALT",8} {"CARRIES a/c",12} {"CARRIED a/c",14}");
+        _out.WriteLine(new string('-', 154));
 
         var results = new List<(Row Row, Tally Anvil, Tally Control)>();
         foreach (var row in Matrix)
@@ -215,107 +201,93 @@ public class AnvilDeadweightDiagnosticTest
 
             var faster = a.ClearMs <= 0 ? 0 : 100.0 * (c.ClearMs / a.ClearMs - 1.0);
             var hpDelta = c.HpLost <= 0 ? 0 : 100.0 * (a.HpLost / c.HpLost - 1.0);
-            // How much of the rule's ENTITLEMENT landed: its share of the spill on the kills it may
-            // ride, against what it actually sent. The shortfall is spill with no living enemy left.
-            var ofEntitled = a.EligibleOverkill <= 0 ? 0 : a.Carried / (a.EligibleOverkill * a.MaxCarry);
-            _out.WriteLine($"{row.Label,-84} {faster,6:+0.0;-0.0;0.0}% {hpDelta,5:+0;-0;0}% " +
-                           $"{a.OverkillKills / (double)seeds,4:0.0}/{c.OverkillKills / (double)seeds,-4:0.0} " +
-                           $"{a.Carries / (double)seeds,8:0.0} {a.Carried / seeds,9:N0} {a.CarriedShare,7:0.0%} " +
-                           $"{a.CarryKills / (double)seeds,7:0.00} {ofEntitled,10:0%}" +
-                           (row.SkillCarry ? $"   (control carried {c.Carried / seeds:N0} on its own rule; the passive adds {(a.Carried - c.Carried) / seeds:N0})" : ""));
+            _out.WriteLine($"{row.Label,-74} {faster,6:+0.0;-0.0;0.0}% {hpDelta,5:+0;-0;0}% " +
+                           $"{a.Stores / (double)seeds,7:0.0} {a.Releases / (double)seeds,7:0.0} {a.DeadweightDamage / seeds,8:N0} {a.DeadweightShare,7:0.0%} " +
+                           $"{a.Carries / (double)seeds,5:0.0}/{c.Carries / (double)seeds,-6:0.0} {a.Carried / seeds,6:N0}/{c.Carried / seeds,-7:N0}");
         }
 
         _out.WriteLine("");
-        _out.WriteLine("(ELIG a/c: skill kills per run that left overkill — the Anvil's, the control's. CARRIES: of those, the ones");
-        _out.WriteLine(" that had a living enemy to land on. CARRIED: damage the carry sent per run. OF DEALT: that as a share of");
-        _out.WriteLine(" everything the Anvil landed. C.KILLS: creatures a carried hit finished, per run. OF ENTITLED: what the");
-        _out.WriteLine(" carry sent against the rule's share of the spill on the kills it may ride — 100% means every eligible");
-        _out.WriteLine(" spill found a living enemy; the rest died with nobody left, the boss room above all.)");
+        _out.WriteLine("(STORES / RELEASE: hits (skill or swing) per run that left DEADWEIGHT in a standing enemy / that landed it. DW DMG: the");
+        _out.WriteLine(" released damage per run. OF DEALT: that as a share of everything the Anvil landed. CARRIES / CARRIED: the");
+        _out.WriteLine(" overkill carry the build wears, both arms — unchanged by the passive, which is no longer a carry.)");
         _out.WriteLine("");
-        _out.WriteLine("PER WAVE — where the carry lives. (Cooldowns persist across the three waves, so a wave's clear time carries");
-        _out.WriteLine(" the previous wave's phase; the counters do not.)");
+        _out.WriteLine("PER WAVE — where the weight lives. (Cooldowns persist across waves, so a wave's clear time carries the");
+        _out.WriteLine(" previous wave's phase; the counters do not.)");
         foreach (var (row, a, c) in results)
         {
             _out.WriteLine($"  {row.Label}");
-            for (var w = 0; w < ParityGauntlet.Waves.Length; w++)
+            var waves = WavesOf(row);
+            for (var w = 0; w < waves.Length; w++)
             {
-                var share = a.WaveDelivered[w] <= 0 ? 0 : a.WaveCarried[w] / a.WaveDelivered[w];
+                var name = waves[w].Name;
                 var fasterW = a.WaveMs[w] <= 0 ? 0 : 100.0 * (c.WaveMs[w] / a.WaveMs[w] - 1.0);
-                _out.WriteLine($"    {ParityGauntlet.Waves[w].Name,-6} clear {a.WaveMs[w] / seeds,8:N0} ms ({fasterW,5:+0.0;-0.0;0.0}%)  " +
-                               $"eligible {a.WaveOverkillKills[w] / (double)seeds,4:0.0}  carries {a.WaveCarries[w] / (double)seeds,4:0.0}  " +
-                               $"carried {a.WaveCarried[w] / seeds,7:N0} ({share,5:0.0%} of dealt)  carry kills {a.WaveCarryKills[w] / (double)seeds,4:0.00}  " +
-                               $"spill {a.WaveOverkill[w] / seeds,7:N0}");
+                var shareW = a.WaveDelivered[w] <= 0 ? 0 : a.WaveDeadweight[w] / a.WaveDelivered[w];
+                _out.WriteLine($"    {name,-6} clear {a.WaveMs[w] / seeds,8:N0} ms ({fasterW,5:+0.0;-0.0;0.0}%)  stores {a.WaveStores[w] / (double)seeds,5:0.0}  " +
+                               $"releases {a.WaveReleases[w] / (double)seeds,5:0.0}  released {a.WaveDeadweight[w] / seeds,7:N0} ({shareW,5:0.0%} of dealt)");
             }
         }
 
-        // ── STRUCTURAL — the counter site's shape. These cannot fail without the site being rewritten;
-        //    they are here so a rewrite is noticed, not as findings. ──
+        // ── STRUCTURAL — the counter site's shape. ──
         foreach (var (row, a, c) in results)
         {
-            if (!row.SkillCarry)
-                Assert.True(c.Carries == 0 && c.Carried == 0 && c.CarryKills == 0,
-                            $"{row.Label}: the control carried — it wears no carry rule");
-            else
-                Assert.True(a.Carried >= c.Carried, $"{row.Label}: the passive took carry away from a skill that carries by itself");
-            Assert.True(a.Carries <= a.OverkillKills, $"{row.Label}: more carries than kills with spill");
-            Assert.True(a.EligibleOverkill <= a.Overkill * 1.001 + 1.0, $"{row.Label}: eligible spill exceeds all spill");
-            Assert.True(a.Carried <= a.EligibleOverkill * a.MaxCarry * 1.001 + 1.0,
-                        $"{row.Label}: carried {a.Carried:N0} exceeds the rule's share of the eligible spill {a.EligibleOverkill * a.MaxCarry:N0}");
-            Assert.True(a.CarryKills <= a.Carries, $"{row.Label}: more carry kills than carries");
-            // Both arms cleared the same roster every run — the counters above are over the same kills.
-            Assert.True(a.Killed == roster * seeds && c.Killed == roster * seeds,
-                        $"{row.Label}: {a.Killed} / {c.Killed} kills for a roster of {roster} x {seeds} runs");
+            Assert.True(c.Stores == 0 && c.Releases == 0 && c.DeadweightDamage == 0, $"{row.Label}: the control stored or released — it wears no share");
+            Assert.True(a.Releases <= a.Stores, $"{row.Label}: more releases than stores");
+            Assert.True(a.DeadweightDamage <= a.Delivered * share * 1.001 + 1.0,
+                        $"{row.Label}: released {a.DeadweightDamage:N0} — more than the share of everything dealt");
+            // The carry is nobody's passive now: the RULE is the same on both arms (the Anvil's shape
+            // writes no carry), so a row that wears no carry rule carries on neither arm. Where one is
+            // worn the two arms' carried totals may differ — the releases change which hit kills and
+            // how much spills — which is the passive changing the fight, not writing the field.
+            if (row.BodyPieces == 0 && !row.Slots.Any(s => s.Reinforcements is { Count: > 0 }))
+                Assert.True(a.Carries == 0 && c.Carries == 0, $"{row.Label}: a carry landed on a build that wears no carry rule");
         }
 
-        // ── THE MECHANIC IS LIVE on a reachable build: the passive has kills to ride and rides them. ──
-        var lone = results.Single(r => r.Row.Label.StartsWith("BLOW FLATTEN — no HARDFACE", StringComparison.Ordinal));
-        Assert.True(lone.Anvil.Carries > 0, "DEADWEIGHT never carried on BLOW FLATTEN alone — the passive is not reaching the fight");
-        var parity = results.Single(r => r.Row.Label.StartsWith("UPSET + BLOW FLATTEN,", StringComparison.Ordinal));
-        Assert.True(parity.Anvil.Carries > 0, "DEADWEIGHT never carried on the parity pair — the 0.0% is a dead trigger, not a small one");
-        // And where a skill carries by itself, the passive's own delta is what the max rule leaves it: never negative.
-        var shadowed = results.Single(r => r.Row.SkillCarry);
-        Assert.True(shadowed.Anvil.Carried >= shadowed.Control.Carried, "the passive reduced a skill's own carry");
+        // ── THE MECHANIC IS LIVE where its rule says it must be. ──
+        foreach (var (row, a, _) in results.Where(r => r.Row.BossOnly))
+            Assert.True(a.Releases > 0 && a.DeadweightDamage > 0,
+                        $"{row.Label}: a lone boss took no DEADWEIGHT — the passive is not reaching the fight it was redesigned for");
+        foreach (var (row, a, c) in results.Where(r => r.Row.BodyPieces > 0 || r.Row.Slots.Any(s => s.Reinforcements is { Count: > 0 })))
+        {
+            Assert.True(a.Releases > 0, $"{row.Label}: DEADWEIGHT vanished beside a carry rule");
+            Assert.True(c.Carries > 0, $"{row.Label}: the carry rule the row wears never carried — the fixture is not posing coexistence");
+        }
     }
 
     [Fact]
-    public void test_the_carry_counters_are_deterministic()
+    public void test_the_deadweight_counters_are_deterministic()
     {
-        // Licenses reading the matrix as effects: the same row gives the same counters twice over.
         var row = Matrix.Single(r => r.Label == "UPSET + BLOW FLATTEN");
         var once = Measure(Anvil, row, seeds: 3);
         var twice = Measure(Anvil, row, seeds: 3);
-        Assert.Equal(once.Carried, twice.Carried);
-        Assert.Equal(once.Carries, twice.Carries);
-        Assert.Equal(once.CarryKills, twice.CarryKills);
+        Assert.Equal(once.DeadweightDamage, twice.DeadweightDamage);
+        Assert.Equal(once.Stores, twice.Stores);
+        Assert.Equal(once.Releases, twice.Releases);
         Assert.Equal(once.ClearMs, twice.ClearMs);
     }
 
     [Fact]
     public void test_every_matrix_row_is_a_build_a_player_can_weave()
     {
-        // The whole point. A row the composer refuses throws with the reason; a row it silently
-        // trims is caught by Reachable's slot-by-slot check. Both champions must be able to make it.
         foreach (var row in Matrix)
         {
             var a = Compose(Anvil, row);
             var c = Compose(Control, row);
             Assert.Equal(row.Slots.Length, a.Skills.Count);
             Assert.Equal(row.Slots.Length, c.Skills.Count);
-            Assert.Equal(a.Skills.Select(s => (s.Def.Id, s.Variation?.Name, s.Source)),
-                         c.Skills.Select(s => (s.Def.Id, s.Variation?.Name, s.Source)));
+            Assert.Equal(a.Skills.Select(s => (s.Def.Id, s.Variation?.Name, s.Source, s.Def.Rule.OverkillCarry)),
+                         c.Skills.Select(s => (s.Def.Id, s.Variation?.Name, s.Source, s.Def.Rule.OverkillCarry)));
 
-            // WHAT A RELAUNCH DOES TO IT. The repair the host runs on load and on a champion switch
-            // re-weaves the signature into an empty slot, or opens one while there is capacity. A row
-            // that says it persists must come through untouched; one that says it does not must get
-            // HARDFACE back — so the label tells the truth about how long the build lasts.
+            // WHAT A RELAUNCH DOES TO IT: the repair the host runs on load re-weaves the signature into
+            // an empty slot, or opens one while there is capacity — a row's claim about surviving that
+            // must be true.
             var loadout = new PlayerLoadout { SkillCapacity = row.Capacity ?? row.Slots.Length, VowCapacity = 1 };
             foreach (var s in row.Slots) Assert.True(loadout.SetSkill(loadout.AddSkill(), s.SkillId));
             var placed = LoadoutRepair.EnsureSignature(loadout, Anvil);
             Assert.True(row.Persists == (placed < 0),
                         $"{row.Label}: EnsureSignature returned {placed} — the row's claim about surviving a relaunch is wrong");
         }
-        // And the control really is the Anvil minus the passive: the shape is the only difference.
-        Assert.Equal(0f, Control.Shape.OverkillCarry);
+        // The control really is the Anvil minus the passive: the shape is the only difference.
+        Assert.Equal(0f, Control.Shape.DeadweightShare);
         Assert.Equal(Anvil.SignatureSkillId, Control.SignatureSkillId);
         Assert.Equal(Anvil.Class, Control.Class);
         Assert.Equal(Anvil.Mods, Control.Mods);

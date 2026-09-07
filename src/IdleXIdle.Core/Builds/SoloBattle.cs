@@ -165,10 +165,67 @@ public sealed class Champion
 /// picking a Source is a bet on the wave's weighting rather than a lookup with one correct answer.
 /// </para>
 /// </remarks>
+/// <summary>
+/// Where a landed hit came from — the provenance every rule that asks "may this hit do X" reads.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The fight used to carry this as two booleans (<c>fromSkill</c>, <c>swing</c>) and a third for the
+/// one derived hit that needed counting, and a rule that read the wrong one could not be told apart
+/// from a rule that read the right one: the shared overkill carry's gate was "a skill hit, or any hit
+/// while an IMPACT swing is in flight", so a CARRIED hit that killed during an IMPACT swing satisfied
+/// it again and carried again, down the wave, against the site's own "one level only" (2026-09-07).
+/// A hit now says what it is, and a derived hit — a carry, a DEADWEIGHT release, a bleed, a reflect —
+/// can never pass for the original hit that produced it.
+/// </para>
+/// <para>
+/// <b>Primary</b> and <b>Swing</b> are the champion's own hits and the only two that can GENERATE
+/// anything: a carry (the Primary hit's spill, or the IMPACT swing's), or a DEADWEIGHT store (a
+/// Primary hit that leaves its target standing). Everything else is derived, deals its damage, may
+/// kill, and generates nothing.
+/// </para>
+/// </remarks>
+public enum HitSource
+{
+    /// <summary>A skill's own direct hit: a cast, a field tick, a trap's answer, a volley's arrow, an execute.</summary>
+    Primary,
+
+    /// <summary>The champion's basic attack.</summary>
+    Swing,
+
+    /// <summary>Overkill carried out of a kill by a carry rule — derived, and it generates no second carry.</summary>
+    Carry,
+
+    /// <summary>DEADWEIGHT released onto the target that stored it — derived: it stores nothing and releases nothing.</summary>
+    Deadweight,
+
+    /// <summary>The standing poison pool bleeding out.</summary>
+    Bleed,
+
+    /// <summary>Damage sent back at a biter (THORNS, a trap's reflect).</summary>
+    Reflect,
+
+    /// <summary>Any other derived damage — overheal turned to damage, ASSASSINATE's deletion.</summary>
+    Other,
+}
+
 public sealed class WaveCreature
 {
     public required float MaxHealth { get; init; }
     public float Health { get; set; }
+
+    /// <summary>
+    /// DEADWEIGHT — the force a primary hit left in this creature, waiting for the next primary hit to
+    /// land it (THE ANVIL, <see cref="SkillShape.DeadweightShare"/>). Zero when nothing is stored.
+    /// </summary>
+    /// <remarks>
+    /// Combat state, not a counter: one amount per creature, replaced (never added to) by the next
+    /// storing hit, consumed whole by the next primary hit, cleared by death, and gone with the wave
+    /// because creatures are minted per wave. A screen that opens mid-fight can read it here rather
+    /// than reconstruct it from the damage numbers; the sim also says each change as it makes it
+    /// (<see cref="Expeditions.BattleEventKind.DeadweightStored"/> / <see cref="Expeditions.BattleEventKind.DeadweightReleased"/>).
+    /// </remarks>
+    public float StoredDeadweight { get; set; }
 
     /// <summary>What this creature deals per bite, before the champion's mitigation.</summary>
     public required float Damage { get; init; }
@@ -323,6 +380,19 @@ public sealed class WaveMetrics
 
     /// <summary>Creatures a CARRIED hit finished — the kills the carry produced, not merely fed.</summary>
     public int CarryKills { get; set; }
+
+    // ── DEADWEIGHT (THE ANVIL, 2026-09-07). The passive's own counters, beside the carry's, so the
+    //    two identities are measured apart: a carry is a dead enemy's excess moving forward, DEADWEIGHT
+    //    is a surviving enemy keeping a hit's weight until the next one. ──────────────────────────────
+
+    /// <summary>Primary direct hits (a skill's or a swing) that left their target standing and stored DEADWEIGHT in it.</summary>
+    public int DeadweightStores { get; set; }
+
+    /// <summary>Primary hits that found DEADWEIGHT waiting in their target and released it.</summary>
+    public int DeadweightReleases { get; set; }
+
+    /// <summary>Damage the releases dealt — the passive's whole contribution, in one figure.</summary>
+    public float DeadweightDamage { get; set; }
 
     /// <summary>Shield GRANTED, after the cap clamped it.</summary>
     /// <remarks>
@@ -1407,18 +1477,24 @@ public static class SoloBattle
             }
         }
 
-        // `swing` is PROVENANCE — was this the champion's basic attack — and it is what the event carries.
-        // `fromSkill` stays what it always was: does this hit obey the SKILL rules (crit, venom, the
-        // hit-size nodes). The two are not the same, and conflating them told the screen that VENOM's
-        // poison bleed, THORNS' reflect, BREAKER's overkill spill and ASSASSINATE's execution were all
-        // basic attacks — so the champion's swing clip committed to a poison tick every 500 ms and the
-        // cooldown dial ran four times fast (review 2026-08-30).
-        // `carried`: this hit IS a carried overkill — counted so the diagnostic can tell a kill the carry
-        // produced from one it merely fed. It changes nothing about how the hit lands.
-        void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false,
-                    bool swing = false, bool carried = false)
+        // `source` is the hit's PROVENANCE (HitSource): what it is, said once, read by every rule that
+        // asks. `fromSkill` — does this hit obey the SKILL rules (crit, venom, the hit-size nodes) — is
+        // exactly "it is a Primary hit"; `swing` — the champion's basic attack, which is what the Strike
+        // event carries — is exactly "it is a Swing". The two were separate booleans, and conflating
+        // them told the screen that VENOM's poison bleed, THORNS' reflect, BREAKER's overkill spill and
+        // ASSASSINATE's execution were all basic attacks (review 2026-08-30); a third boolean for the
+        // one derived hit that needed counting was the last straw (2026-09-07). Derived sources —
+        // Carry, Deadweight, Bleed, Reflect, Other — deal their damage and generate nothing.
+        void LandOn(WaveCreature? target, float dmg, int atMs, HitSource source, bool ignoresArmour = false)
         {
             if (target is null || !target.Alive) return;
+            var fromSkill = source == HitSource.Primary;
+            var swing = source == HitSource.Swing;
+
+            // DEADWEIGHT waiting in this target is consumed by the champion's next primary hit — a
+            // skill's or the swing — and by nothing derived. Read BEFORE the hit lands and released
+            // AFTER it, so a hit never lands the weight it is itself about to leave.
+            var owedDeadweight = source is HitSource.Primary or HitSource.Swing ? target.StoredDeadweight : 0f;
 
             // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
             // call this with fromSkill:false). Applied first, so a crit stings with more poison too.
@@ -1533,13 +1609,16 @@ public static class SoloBattle
             if (metrics is not null && target.Health <= 0f)
             {
                 metrics.CreaturesKilled++;
-                if (carried) metrics.CarryKills++;
+                if (source == HitSource.Carry) metrics.CarryKills++;
             }
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: !swing));
             if (!target.Alive)
             {
                 alive--;
+                // Death clears what was stored: DEADWEIGHT is a debt the creature owed, and a dead one
+                // owes nothing. It never moves to another enemy — that is a carry's job, not this one's.
+                target.StoredDeadweight = 0f;
                 // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
@@ -1718,9 +1797,16 @@ public static class SoloBattle
                 }
 
                 var carry = MathF.Max(shape.OverkillCarry, castCarry);
-                // BODY 5p — an IMPACT is the one basic attack whose waste carries. Everywhere else the
-                // carry is a direct-SKILL rule, which is what keeps a bleed or a thorn from feeding it.
-                if ((fromSkill || impactSwing) && spill > 0f)
+                // ONE LEVEL, BY PROVENANCE. A carry is generated by an ORIGINAL hit — a Primary hit, or
+                // the basic swing while it is an IMPACT (BODY 5p, the one swing whose waste carries) —
+                // and by nothing derived: the carried hit lands as HitSource.Carry, so a carried kill
+                // never re-enters this gate whatever flags are still up around it. It used to be
+                // "fromSkill or impactSwing", and under an IMPACT swing the flag stayed up through the
+                // nested landing, so a carried kill carried again at castCarry 1f and chained down the
+                // wave (2026-09-07). Every consumer of the carry — the BODY set's, BREAKTHROUGH's,
+                // CLEAN CUT's, the IMPACT's — is bounded here, at the one site, by what the hit IS.
+                var original = source == HitSource.Primary || (source == HitSource.Swing && impactSwing);
+                if (original && spill > 0f)
                 {
                     // Counted BEFORE the carry rule and the next-enemy test, so a build with no carry
                     // still records how often one would have had something to ride (the control's row).
@@ -1728,12 +1814,41 @@ public static class SoloBattle
                     if (carry > 0f && FirstAlive() is { } next)
                     {
                         if (metrics is not null) { metrics.CarriesLanded++; metrics.CarriedDamage += spill * carry; }
-                        // fromSkill:false on the carried hit is what bounds a SKILL's carry — it cannot
-                        // carry again. Under an IMPACT swing the `impactSwing` flag stays up through
-                        // this nested landing, so a carried kill there re-enters the gate at castCarry
-                        // 1f and chains down the wave; BODY's fifth rung, noted 2026-09-07, not changed.
-                        LandOn(next, spill * carry, atMs, fromSkill: false, ignoresArmour: true, carried: true);
+                        LandOn(next, spill * carry, atMs, HitSource.Carry, ignoresArmour: true);
                     }
+                }
+            }
+            else if (source is HitSource.Primary or HitSource.Swing)
+            {
+                // ── DEADWEIGHT (THE ANVIL). A surviving enemy keeps a share of the primary direct hit
+                //    that struck it — a skill's or the basic swing, the two provenances that are neither
+                //    carried nor supplemental — and suffers it on the champion's next such hit. The
+                //    OTHER identity to the carry above: a carry is a dead enemy's excess moving on to
+                //    the next, this is a live enemy retaining force — so it is worth most against what
+                //    does not die in one blow, and nothing at all against what does. Order is the rule:
+                //    what was owed was read before this hit landed; the store is cleared, THEN this hit
+                //    leaves its own share, THEN the old debt is released — so a hit never lands the
+                //    weight it is itself leaving, a release (HitSource.Deadweight) can neither store nor
+                //    release, and a carried hit (HitSource.Carry) arms nothing. One amount per creature,
+                //    replaced not added; MAX keeps the bound if a store ever meets a leftover. ──
+                target.StoredDeadweight = 0f;
+                if (shape.DeadweightShare > 0f)
+                {
+                    var stored = dmg * shape.DeadweightShare;
+                    if (stored > 0f)
+                    {
+                        target.StoredDeadweight = MathF.Max(target.StoredDeadweight, stored);
+                        if (metrics is not null) metrics.DeadweightStores++;
+                        events.Add(new BattleEvent(BattleEventKind.DeadweightStored, idx, (int)MathF.Round(target.StoredDeadweight), atMs));
+                    }
+                }
+                if (owedDeadweight > 0f)
+                {
+                    if (metrics is not null) { metrics.DeadweightReleases++; metrics.DeadweightDamage += owedDeadweight; }
+                    events.Add(new BattleEvent(BattleEventKind.DeadweightReleased, idx, (int)MathF.Round(owedDeadweight), atMs));
+                    // Armour-free: the weight was measured AFTER armour when it was stored, and the
+                    // target already carries the first-hit mark, so what is sent is what lands.
+                    LandOn(target, owedDeadweight, atMs, HitSource.Deadweight, ignoresArmour: true);
                 }
             }
         }
@@ -1743,10 +1858,11 @@ public static class SoloBattle
         /// total dealt, which is what leech reads.
         /// </summary>
         float LandSpread(float raw, int atMs, int targets, Source? skillSource, SkillDef? skillDef, int absMs,
-                         bool fromSkill = true, bool swing = false, bool countsAsActivation = true,
+                         HitSource source = HitSource.Primary, bool countsAsActivation = true,
                          bool ignoresArmour = false, int hitsPerTarget = 1)
         {
             if (targets <= 0) return 0f;
+            var fromSkill = source == HitSource.Primary;
 
             // SPREADING FIRE — a fire that has reached three has already reached the fourth. Reads the
             // reach the cast ALREADY has, so it pays a build that committed to spread and does
@@ -1805,7 +1921,7 @@ public static class SoloBattle
                     //    and pays EVERY skill hit; laying happens after the landing, so a hit never
                     //    feeds itself. ──
                     if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
-                    LandOn(c, hit, atMs, fromSkill, swing: swing, ignoresArmour: ignoresArmour);
+                    LandOn(c, hit, atMs, source, ignoresArmour: ignoresArmour);
                     if (fromSkill) SignatureLay(c, skillSource);
                     dealt += hit;
                 }
@@ -1884,7 +2000,7 @@ public static class SoloBattle
             // has returned — so there is no recursion.
             if (traits.OverhealToDamage > 0f && amount > room && FirstAlive() is { } spare)
                 LandOn(spare, (amount - room) * traits.OverhealToDamage, atMs,
-                       fromSkill: false, ignoresArmour: true);
+                       HitSource.Other, ignoresArmour: true);
 
             if (underCeiling) landed = Math.Min(landed, healBudget - healedThisWave);
             if (landed <= 0) return;
@@ -1937,7 +2053,7 @@ public static class SoloBattle
                 poison -= bite;
                 // Poison bleeds into the front of the wave. It is a single pool, not per creature — a
                 // build that poisons then watches its target die keeps the standing damage.
-                LandOn(FirstAlive(), bite, ms, ignoresArmour: true);   // not fromSkill — must not re-poison
+                LandOn(FirstAlive(), bite, ms, HitSource.Bleed, ignoresArmour: true);   // not Primary — must not re-poison
                 if (alive == 0) return Kill(ms);
             }
 
@@ -2459,7 +2575,7 @@ public static class SoloBattle
                         && mark.Health < mark.MaxHealth * shape.AssassinateThreshold)
                     {
                         assassinated = true;
-                        LandOn(mark, mark.Health, ms, fromSkill: false, ignoresArmour: true);
+                        LandOn(mark, mark.Health, ms, HitSource.Other, ignoresArmour: true);
                         if (alive == 0) return Kill(ms);
                     }
 
@@ -2598,7 +2714,7 @@ public static class SoloBattle
                         {
                             executes++;
                             castCarry = vdef.Rule.OverkillCarry;
-                            LandOn(weak, MathF.Max(raw, weak.Health), ms, fromSkill: true, ignoresArmour: true);
+                            LandOn(weak, MathF.Max(raw, weak.Health), ms, HitSource.Primary, ignoresArmour: true);
                             castCarry = 0f;
                             if (alive == 0) return Kill(ms);
                         }
@@ -2725,7 +2841,7 @@ public static class SoloBattle
                 var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage
                                        * (impact ? 1f + shape.ImpactSwingBonus : 1f)
                                        * (1f + swingPower),
-                                       ms, 1, null, null, abs, fromSkill: false, swing: true,
+                                       ms, 1, null, null, abs, source: HitSource.Swing,
                                        ignoresArmour: swingIgnoresArmour || trailArmed);
                 impactSwing = false;
                 castCarry = 0f;
@@ -3023,7 +3139,7 @@ public static class SoloBattle
                         if (!biter.Alive) continue;
                         var sentBack = biter.Damage * traitReflect;
                         if (metrics is not null) metrics.ReflectedDamage += sentBack;
-                        LandOn(biter, sentBack, ms, fromSkill: false, ignoresArmour: true);
+                        LandOn(biter, sentBack, ms, HitSource.Reflect, ignoresArmour: true);
                     }
                     // A wave the thorns finished is a clear — unless this same bite finished the
                     // champion too, in which case the death handling below still has to run.

@@ -299,6 +299,16 @@ public enum BattleEventKind
 
     /// <summary>A Mark opened on the wave: Amount = its window in ms; Slot = the amplify percent at opening.</summary>
     Marked,
+
+    // ── DEADWEIGHT (THE ANVIL, 2026-09-07). The sim says each store and each release as it makes it,
+    //    so a screen can show the state without inferring it from the damage numbers; the standing
+    //    figure is state on the creature (Builds.WaveCreature.StoredDeadweight). ──────────────────────
+
+    /// <summary>A primary hit left DEADWEIGHT in a surviving creature: Slot = the creature, Amount = what it now holds, rounded.</summary>
+    DeadweightStored,
+
+    /// <summary>The next primary hit released it: Slot = the creature, Amount = the damage released, rounded. The release lands as its own Strike.</summary>
+    DeadweightReleased,
 }
 
 /// <summary>

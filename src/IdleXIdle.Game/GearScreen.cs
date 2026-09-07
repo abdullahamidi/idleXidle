@@ -1148,7 +1148,7 @@ public sealed class GearScreen
         var whyNot = ItemClasses.WhyNot(Character, item);
 
         // CATEGORY, with the class line beside it while both fit the row — under it once they do not (150 %).
-        var cat = $"{RarityShort(item.Rarity)} {SlotWord(item.BaseType)}  ·  {item.Element?.ToString().ToUpperInvariant() ?? "PLAIN"}  ·  LEVEL {item.ItemLevel}";
+        var cat = $"{RarityShort(item.Rarity)} {ItemNaming.SlotWord(item.BaseType)}  ·  {item.Element?.ToString().ToUpperInvariant() ?? "PLAIN"}  ·  LEVEL {item.ItemLevel}";
         var cls = ItemClasses.ClassLine(item);
         var clsInk = item.Class is { } dc && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(dc) : Slate;
         var catH = UiTypography.Pitch(UiTypography.Secondary);
@@ -1208,34 +1208,47 @@ public sealed class GearScreen
 
         // WHAT IT DOES: power, affixes, the prefix's numbers, the enchant and whether it works with the build.
         Head("WHAT IT DOES");
-        Pair("ITEM POWER", $"{hunter.PowerContribution(item):N0}", Bone);
-        // EVERY NUMBER THROUGH THE ONE FORMATTER (ItemModifiers, 2026-09-07): the stat's word in the
-        // label column, its signed figure in the value column, in the stat's own unit. The built-in
-        // first — the item card printed it as "GLOVES  +2%" and this panel not at all, so the same
-        // helm read "NO STATS" here and "+2 DEFENCE" under the pointer.
-        foreach (var m in ItemModifiers.BuiltIn(item)) Pair($"{ItemModifiers.Word(m.Stat)}  ·  BUILT IN", ItemModifiers.Value(m), Gold);
-        foreach (var m in ItemModifiers.Affixes(item)) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m), Green);
-        if (GearTraits.TraitOf(item) is { } tr)
+        // THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07): every fact about the piece — its power,
+        // its built-in, its rolls, its gems, both sides of its prefix's trade, its enchant's sentence
+        // and need — arrives with its words decided, and this panel only lays them out. It used to
+        // compose the words itself (and once printed "GLOVES  +2%" for a built-in, and "NO STATS" over a
+        // helm carrying +2 DEFENCE); a screen that composes nothing cannot compose that again.
+        // The verdict and the set rows are drawn elsewhere on this panel (the head, the ladder).
+        // THE BUILD'S FACTS for the enchant's verdict — the weave, the sockets and the sworn vows — from
+        // the same Build the DPS bench composes. Passing the weave alone let a keystone combo read
+        // WORKS WITH YOUR BUILD on a build with no such keystone (2026-09-07); a wrongly gilded item is
+        // a player who equips it and wonders why nothing changed. Composed only when the item has a
+        // need to judge.
+        var judged = Enchantments.Of(item)?.Needs is not null && Loadout is not null && Mastery is not null;
+        var triggers = judged ? Loadout!.ToBuild(Mastery!, Character, SkillLevels, DiscoveredKeystones, KnownVows).Triggers(hunter).ToList() : null;
+        var rows = ItemPresentation.Rows(item, hunter, Character, Loadout?.EquippedDefs(), triggers, judged ? Loadout!.SwornVows.Count : null);
+        var prefixSides = rows.Count(r => r.Kind == ItemRowKind.PrefixSide);
+        foreach (var row in rows)
         {
-            // THE TRADE, BOTH SIDES, one stat to a row — never the whole trade right-aligned into a
-            // value column it could not fit at 150 %. The cost rows wear the cost colour.
-            var trade = ItemModifiers.Prefix(item);
-            Line($"PREFIX · {GearTraits.NameOf(tr).ToUpperInvariant()}", Gold, UiTypography.Body, 1);
-            if (trade.Count == 0) Line(GearTraits.BlurbOf(tr), Bone, UiTypography.Body, 2);
-            foreach (var m in trade) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m), m.IsDrawback ? Ember : Gold);
-        }
-        if (Enchantments.Of(item) is { } ench)
-        {
-            // One row — the name and its sentence, wrapped to up to four lines — rather than a head row
-            // and a body row, so the set ladder under it keeps a rung at 150 % (gear-10). Four lines'
-            // room, because the sentence says what its number is OF and a cut sentence would put the
-            // number back beside nothing; the column scrolls, so a rung the sentence pushes down is a
-            // wheel away, not gone.
-            Line($"ENCHANT · {ench.Name.ToUpperInvariant()} — {ench.Blurb}", Bone, UiTypography.Body, 4);
-            if (ench.Needs is { } need && Loadout is not null)
+            switch (row.Kind)
             {
-                var met = need.Keystone is not null || need.AnyVow || need.MetBySkills(Loadout.EquippedDefs());
-                Line(met ? "WORKS WITH YOUR BUILD" : $"NEEDS {need.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING", met ? Green : Ember, UiTypography.Secondary, 2);
+                case ItemRowKind.Power: Pair(row.Label, row.Value, Bone); break;
+                case ItemRowKind.BuiltIn: Pair($"{row.Label}  ·  {ItemPresentation.BuiltInCaption}", row.Value, Gold); break;
+                case ItemRowKind.Affix: Pair(row.Label, row.Value, Green); break;
+                case ItemRowKind.GemCount: Pair(row.Label, row.Value, Slate); break;
+                case ItemRowKind.Gem: Pair(row.Label, row.Line, Green); break;
+                case ItemRowKind.Family: Line(row.Label, Slate, UiTypography.Secondary, 2); break;
+                case ItemRowKind.Prefix:
+                    // THE TRADE, BOTH SIDES, one stat to a row — never the whole trade right-aligned into a
+                    // value column it could not fit at 150 %. The cost rows wear the cost colour.
+                    Line($"PREFIX · {row.Label}", Gold, UiTypography.Body, 1);
+                    if (prefixSides == 0) Line(row.Note, Bone, UiTypography.Body, 2);
+                    break;
+                case ItemRowKind.PrefixSide: Pair(row.Label, row.Value, row.IsDrawback ? Ember : Gold); break;
+                case ItemRowKind.Enchant:
+                    // One row — the name and its sentence, wrapped to up to four lines — rather than a head
+                    // row and a body row, so the set ladder under it keeps a rung at 150 % (gear-10). Four
+                    // lines' room, because the sentence says what its number is OF and a cut sentence would
+                    // put the number back beside nothing; the column scrolls, so a rung the sentence pushes
+                    // down is a wheel away, not gone.
+                    Line($"ENCHANT · {row.Label} — {row.Note}", Bone, UiTypography.Body, 4);
+                    break;
+                case ItemRowKind.EnchantNeed: Line(row.Label, row.Tone == ItemRowTone.Bonus ? Green : Ember, UiTypography.Secondary, 2); break;
             }
         }
 
@@ -1423,13 +1436,6 @@ public sealed class GearScreen
         }
     }
 
-    /// <summary>A small padlock from rectangles, in the locking class's colour.</summary>
-    private static string SlotWord(ItemBaseType t) => t switch
-    {
-        ItemBaseType.Weapon => "WEAPON", ItemBaseType.Charm => "CHARM", ItemBaseType.AbilityFocus => "FOCUS",
-        ItemBaseType.Helm => "HELM", ItemBaseType.Chest => "CHEST", ItemBaseType.Gloves => "GLOVES",
-        ItemBaseType.Boots => "BOOTS", ItemBaseType.Ring => "RING", _ => "ITEM",
-    };
     private static string RarityShort(Rarity r) => r switch
     {
         Rarity.Common => "COMMON", Rarity.Uncommon => "UNCOMMON", Rarity.Rare => "RARE",

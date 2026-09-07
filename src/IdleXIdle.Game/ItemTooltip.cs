@@ -197,21 +197,18 @@ public static class ItemTooltip
         if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
         cy += UiMetrics.Space(6);
 
-        // ITEM POWER and the verdict against what is worn, ON ONE ROW — the same call the full card
-        // makes (2026-09-06: the compact card is composed for the room beside an offer at 150 %).
-        if (hunter is not null && slot is { } s)
+        // THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07); this card lays out the buyer's subset —
+        // the power verdict on one row, the rolls, the built-in, the prefix and enchant names, both
+        // sides of the trade, the enchant's sentence — and composes no words of its own.
+        var rows = ItemPresentation.Rows(item, hunter, null);
+        if (rows.FirstOrDefault(r => r.Kind == ItemRowKind.Power) is { } power)
         {
-            var mine = hunter.PowerContribution(item);
-            L($"ITEM POWER  {mine:N0}", Ink);
-            var worn = hunter.Worn(s);
-            if (worn is not null && worn.InstanceId != item.InstanceId)
-            {
-                var delta = mine - hunter.PowerContribution(worn);
-                var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
-                var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
-                R($"{word}  {delta:+#,0;-#,0;0}", tone);
-            }
-            else R(worn is null ? "SLOT EMPTY" : "WORN", worn is null ? Good : Gold);
+            // ITEM POWER and the verdict against what is worn, ON ONE ROW (2026-09-06: the compact
+            // card is composed for the room beside an offer at 150 %).
+            L($"{power.Label}  {power.Value}", Ink);
+            var verdict = rows.First(r => r.Kind == ItemRowKind.Verdict);
+            var tone = verdict.Tone switch { ItemRowTone.Bonus => Good, ItemRowTone.Cost => Bad, ItemRowTone.Accent => Gold, _ => Dim };
+            R(verdict.Value.Length > 0 ? $"{verdict.Label}  {verdict.Value}" : verdict.Label == ItemPresentation.SlotEmptyCaption ? "SLOT EMPTY" : verdict.Label, tone);
             cy += LineH + UiMetrics.Space(6);
         }
         else if (GemCraft.IsGem(item))
@@ -226,7 +223,6 @@ public static class ItemTooltip
         // margin, the second right-aligned on the same rung — the two columns a stat sheet has, so a
         // legendary's four rolls take two rows, not four. A roll too long to share keeps its own row;
         // the same measure decides in the height pass, so the placed card is the drawn card.
-        // EVERY figure through the one formatter (ItemModifiers): a stat word beside every number.
         void Packed(IReadOnlyList<(string Text, Color Ink)> lines)
         {
             for (var k = 0; k < lines.Count;)
@@ -239,36 +235,35 @@ public static class ItemTooltip
                 k += pair ? 2 : 1;
             }
         }
-        var affixes = ItemModifiers.Affixes(item);
-        Packed(affixes.Take(4).Select(a => (ItemModifiers.Line(a), Good)).ToList());
+        var affixes = rows.Where(r => r.Kind == ItemRowKind.Affix).ToList();
+        Packed(affixes.Take(4).Select(r => (r.Line, Good)).ToList());
         if (affixes.Count > 4) { L($"AND {affixes.Count - 4} MORE — READ IT ON THE GEAR SCREEN ONCE IT IS YOURS", Dim); cy += LineH; }
         // THE BUILT-IN — the stat the item carries by birth, NAMED. It read "GLOVES  +2%" (the slot
         // word where the stat belongs) until 2026-09-07; the stat is data on the item and is what prints.
-        foreach (var m in ItemModifiers.BuiltIn(item))
+        foreach (var row in rows.Where(r => r.Kind == ItemRowKind.BuiltIn))
         {
-            L(ItemModifiers.Line(m), Gold);
-            R("BUILT IN", Dim);
+            L(row.Line, Gold);
+            R(ItemPresentation.BuiltInCaption, Dim);
             cy += LineH;
         }
         // THE PREFIX AND THE ENCHANT SHARE A ROW: "GREEDY · COILED", labelled with the item system's
         // own words. Two rows said the same two names with a label each.
-        var prefixName = GearTraits.TraitOf(item) is { } trait ? GearTraits.NameOf(trait) : null;
-        var enchant = Enchantments.Of(item);
-        var enchantName = enchant?.Name;
-        if (prefixName is not null || enchantName is not null)
+        var prefix = rows.FirstOrDefault(r => r.Kind == ItemRowKind.Prefix);
+        var enchant = rows.FirstOrDefault(r => r.Kind == ItemRowKind.Enchant);
+        if (prefix is not null || enchant is not null)
         {
-            L(string.Join("  ·  ", new[] { prefixName, enchantName }.Where(n => n is not null)), Gold);
-            R(prefixName is not null && enchantName is not null ? "PREFIX · ENCHANT" : prefixName is not null ? "PREFIX" : "ENCHANT", Dim);
+            L(string.Join("  ·  ", new[] { prefix?.Label, enchant?.Label }.Where(n => n is not null)), Gold);
+            R(prefix is not null && enchant is not null ? "PREFIX · ENCHANT" : prefix is not null ? "PREFIX" : "ENCHANT", Dim);
             cy += LineH;
         }
         // THE PREFIX'S TRADE, BOTH SIDES, before the price: a buyer reading "HEAVY" is owed the slower
         // skill clock as plainly as the harder hit (2026-09-07). Packed like the rolls; the cost side
         // in the cost colour, so the trade reads as one at a glance.
-        Packed(ItemModifiers.Prefix(item).Select(m => (ItemModifiers.Line(m), m.IsDrawback ? Bad : Ink)).ToList());
+        Packed(rows.Where(r => r.Kind == ItemRowKind.PrefixSide).Select(r => (r.Line, r.IsDrawback ? Bad : Ink)).ToList());
         // AND WHAT THE ENCHANT DOES, in its one sentence, wrapped: "LINGER" beside a price is a name,
         // not a thing a buyer can want. Measured in the height pass too (the kit is present in both).
         if (enchant is not null)
-            foreach (var wrapped in ui.WrapBig(enchant.Blurb.ToUpperInvariant(), innerW, UiTypography.Label))
+            foreach (var wrapped in ui.WrapBig(enchant.Note.ToUpperInvariant(), innerW, UiTypography.Label))
             {
                 L(wrapped, Ink);
                 cy += LineH;
@@ -331,14 +326,8 @@ public static class ItemTooltip
         {
             L(ItemClasses.ClassLine(item), item.Class is { } ic && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(ic) : Dim);
             cy += LineH;
-            if (wearer is not null && !Gear.CanWear(wearer, item) && item.Class is { } locked)
-            {
-                // Two lines: the slot, then the two champions who can.
-                L($"A {ItemClasses.NameOf(locked)}'S {ItemNaming.TypeWord(item)} —", Bad);
-                cy += LineH;
-                if (draw) ui!.Text(b!, ui.Shorten($"{ItemClasses.ChampionNames(locked)} CAN WEAR IT", innerW), lx, cy, Bad);
-                cy += LineH;
-            }
+            // Who can wear a piece this champion cannot is the verdict row's business below (NOT FOR
+            // THE SEEKER / … CAN WEAR IT) — the card said it twice until 2026-09-07.
         }
 
         // ONE LINE, not a left run and a right-aligned element. Right-aligning the source put "NATURE"
@@ -353,33 +342,41 @@ public static class ItemTooltip
         if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), new Color(0x2A, 0x26, 0x34));
         cy += UiMetrics.Space(14);
 
-        // ── ITEM POWER, and what swapping would do to yours ──
-        if (hunter is not null && slot is { } s)
+        // ── THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07): power and the verdict, the rolls, the
+        //    gems, the built-in and the family's line, the prefix and both sides of its trade, the
+        //    enchant's sentence, the set. This card lays them out — a left run, a right-aligned value,
+        //    a wrapped sentence — and composes no words of its own. It once composed the slot word
+        //    beside the built-in's figure ("GLOVES  +2%"), a line that cannot be written from a list
+        //    whose labels are stats. Group gaps follow the card's old grid, so nothing moved. ──
+        var rows = ItemPresentation.Rows(item, hunter, wearer);
+        Color ToneInk(ItemRowTone t) => t switch
         {
-            var mine = hunter.PowerContribution(item);
-            L("ITEM POWER", Dim);
-            R($"{mine:N0}", Ink);
-            cy += LineH + UiMetrics.Space(6);
+            ItemRowTone.Bonus => Good, ItemRowTone.Cost => Bad, ItemRowTone.Accent => Gold, ItemRowTone.Muted => Dim, _ => Ink,
+        };
 
-            var worn = hunter.Worn(s);
-            if (wearer is not null && !Gear.CanWear(wearer, item))
+        if (rows.Any(r => r.Kind == ItemRowKind.Power))
+        {
+            var power = rows.First(r => r.Kind == ItemRowKind.Power);
+            L(power.Label, Dim);
+            R(power.Value, Ink);
+            cy += LineH + UiMetrics.Space(6);
+            var verdict = rows.First(r => r.Kind == ItemRowKind.Verdict);
+            if (verdict.Value.Length > 0)
             {
-                // No UPGRADE verdict on a piece this champion cannot put on — a "+21" they cannot
-                // collect is a promise the EQUIP button then breaks. The same block, so the height holds.
-                if (draw) ui!.Text(b!, ui.Shorten($"NOT FOR {wearer.Name} — SWITCH HUNTER ON THE ROSTER", innerW), lx, cy, Bad);
-            }
-            else if (worn is not null && worn.InstanceId != item.InstanceId)
-            {
-                var delta = mine - hunter.PowerContribution(worn);
-                var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
-                var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
-                var deltaText = $"{delta:+#,0;-#,0;0}";
                 // The verdict clears the value beside it — a long worn name is shortened, never overprinted.
-                if (draw) ui!.Text(b!, ui.Shorten($"{word}  ·  REPLACES {ItemNaming.FullName(worn)}", innerW - ui.Measure(deltaText) - UiMetrics.Space(12)), lx, cy, tone);
-                R(deltaText, tone);
+                if (draw) ui.Text(b!, ui.Shorten($"{verdict.Label}  ·  {verdict.Note}", innerW - ui.Measure(verdict.Value) - UiMetrics.Space(12)), lx, cy, ToneInk(verdict.Tone));
+                R(verdict.Value, ToneInk(verdict.Tone));
             }
-            else if (worn is not null) L("WORN", Gold);
-            else L("THE SLOT IS EMPTY", Good);
+            else
+            {
+                // A refusal says who can wear it on the line beneath — Core's words, said once.
+                if (draw) ui.Text(b!, ui.Shorten(verdict.Label, innerW), lx, cy, ToneInk(verdict.Tone));
+                if (verdict.Note.Length > 0)
+                {
+                    cy += LineH;
+                    if (draw) ui.Text(b!, ui.Shorten(verdict.Note, innerW), lx, cy, ToneInk(verdict.Tone));
+                }
+            }
             cy += LineH + UiMetrics.Space(18);
         }
         else if (GemCraft.IsGem(item))
@@ -398,94 +395,70 @@ public static class ItemTooltip
             cy += LineH + UiMetrics.Space(6);
         }
 
-        // ── AFFIXES — the rolled numbers. Every figure on this card goes through the one formatter
-        //    (ItemModifiers): the number first, then the STAT it moves, in the stat's own unit. ──
-        var affixes = ItemModifiers.Affixes(item);
-        foreach (var a in affixes)
+        for (var i = 0; i < rows.Count; i++)
         {
-            L(ItemModifiers.Line(a), Good);
-            cy += LineH;
-        }
-        if (affixes.Count > 0) cy += UiMetrics.Space(10);
-
-        // ── THE GEMS SET INTO IT — the player's own investment, and the card was blind to it. ──
-        if (item.Gems.Count > 0)
-        {
-            L($"SET GEMS  {item.Gems.Count} OF {GemCraft.SocketCount(item.Rarity)}", Dim);
-            cy += LineH;
-            foreach (var gem in item.Gems)
+            var row = rows[i];
+            var next = i + 1 < rows.Count ? rows[i + 1].Kind : (ItemRowKind?)null;
+            switch (row.Kind)
             {
-                L(GemCraft.NameOf(gem), Violet);
-                R(GemCraft.Grant(gem), Good);
-                cy += LineH;
+                case ItemRowKind.Affix:
+                    L(row.Line, Good);
+                    cy += LineH;
+                    if (next != ItemRowKind.Affix) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.GemCount:
+                    L($"{row.Label}  {row.Value}", Dim);
+                    cy += LineH;
+                    break;
+                case ItemRowKind.Gem:
+                    L(row.Label, Violet);
+                    R(row.Line, Good);
+                    cy += LineH;
+                    if (next != ItemRowKind.Gem) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.BuiltIn:
+                    // NAMED by its stat, never by its slot or shape — the line that read "GLOVES  +2%".
+                    L(row.Line, Gold);
+                    R(ItemPresentation.BuiltInCaption, Dim);
+                    cy += LineH;
+                    if (next != ItemRowKind.Family) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.Family:
+                    L(row.Label, Ink);
+                    cy += LineH + UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.Prefix:
+                    L(row.Label, Gold);
+                    R("PREFIX", Dim);
+                    cy += LineH;
+                    if (next != ItemRowKind.PrefixSide) { L(row.Note.ToUpperInvariant(), Ink); cy += LineH + UiMetrics.Space(8); }
+                    break;
+                case ItemRowKind.PrefixSide:
+                    // BOTH SIDES OF THE TRADE, one to a line: the cost in the cost colour.
+                    L(row.Line, row.IsDrawback ? Bad : Ink);
+                    cy += LineH;
+                    if (next != ItemRowKind.PrefixSide) cy += UiMetrics.Space(8);
+                    break;
+                case ItemRowKind.Enchant:
+                    L(row.Label, Violet);
+                    R("ENCHANT", Dim);
+                    cy += LineH;
+                    // WRAPPED, never cut: the sentence says what its number is of, and the height pass
+                    // measures the same lines the draw does (the kit is present in both).
+                    foreach (var wrapped in ui.WrapBig(row.Note.ToUpperInvariant(), innerW, UiTypography.Label))
+                    {
+                        L(wrapped, Ink);
+                        cy += LineH;
+                    }
+                    cy += UiMetrics.Space(8);
+                    break;
+                case ItemRowKind.Set:
+                    cy += UiMetrics.Space(10);
+                    L($"{row.Label}  ·  {row.Value}", row.Tone == ItemRowTone.Muted ? Dim : Ink);
+                    R("SET", Dim);
+                    cy += LineH;
+                    break;
             }
-            cy += UiMetrics.Space(10);
-        }
-
-        // ── BUILT IN — what the item IS by birth (item-system redesign): the built-in channel every
-        //    copy of this shape carries, in its stat's own unit — and NAMED. This line read
-        //    "GLOVES  +2%" / "BLADE  +12%" until 2026-09-07: the slot or family word beside a bare
-        //    number, a line no player could finish ("+2% what?"). The stat is data on the item
-        //    (ItemFamilies.BonusOf); nothing here infers it from the slot. ──
-        foreach (var m in ItemModifiers.BuiltIn(item))
-        {
-            L(ItemModifiers.Line(m), Gold);
-            R("BUILT IN", Dim);
-            cy += LineH;
-            if (item.BaseType == ItemBaseType.Weapon)
-            {
-                L(ItemFamilies.Blurb(item).ToUpperInvariant(), Ink);
-                cy += LineH;
-            }
-            cy += UiMetrics.Space(10);
-        }
-
-        // ── PREFIX and ENCHANT — the NAME AND WHAT IT DOES. The half that was missing. ──
-        if (GearTraits.TraitOf(item) is { } trait)
-        {
-            L(GearTraits.NameOf(trait), Gold);
-            R("PREFIX", Dim);
-            cy += LineH;
-            // The REAL numbers, not the blurb: the prefix already scales with item level
-            // (GearTraits.ModsFor folds ItemLevelFactor in), but a fixed sentence made it read as
-            // flat — playtest: "prefix statları sabit kalmasın." An upgrade now visibly deepens it.
-            // BOTH SIDES OF THE TRADE, one to a line, each through the one formatter: HEAVY's slower
-            // skill clock is printed in the same words as its harder hit, and in the cost colour.
-            var trade = ItemModifiers.Prefix(item);
-            if (trade.Count == 0) { L(GearTraits.BlurbOf(trait).ToUpperInvariant(), Ink); cy += LineH; }
-            foreach (var m in trade)
-            {
-                L(ItemModifiers.Line(m), m.IsDrawback ? Bad : Ink);
-                cy += LineH;
-            }
-            cy += UiMetrics.Space(8);
-        }
-
-        if (Enchantments.Of(item) is { } ench)
-        {
-            L(ench.Name, Violet);
-            R("ENCHANT", Dim);
-            cy += LineH;
-            // WRAPPED, never cut: the sentence says what the number is of, and the height pass
-            // measures the same lines the draw does (the kit is present in both).
-            foreach (var wrapped in ui.WrapBig(ench.Blurb.ToUpperInvariant(), innerW, UiTypography.Label))
-            {
-                L(wrapped, Ink);
-                cy += LineH;
-            }
-            cy += UiMetrics.Space(8);
-        }
-
-        // ── THE SET — one line. "NATURE SET  ·  3 OF 5 WORN": the element decides something in a fight
-        //    now, and this is the fact that says whether wearing the piece moves a rung. The rungs
-        //    themselves are on the ITEM DETAIL panel, which has the room to list them. ──
-        if (hunter is not null && item.Element is { } setElement)
-        {
-            var worn = ElementSets.WornCount(hunter, setElement);
-            cy += UiMetrics.Space(10);
-            L($"{ElementSets.Name(setElement)}  ·  {ElementSets.Progress(worn)}", worn >= ElementSets.Rungs[0] ? Ink : Dim);
-            R("SET", Dim);
-            cy += LineH;
         }
 
         return cy - card.Y + PadBottom;

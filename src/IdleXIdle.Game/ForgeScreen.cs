@@ -57,15 +57,8 @@ public sealed class ForgeScreen
     /// <summary>Rarity for the item NAME. The panels are dark glass now, so it is just the bright ramp —
     /// the old dark-ink version was there for a parchment panel that no longer exists.</summary>
 
-    private static readonly Dictionary<ItemBaseType, string> ItemNames = new()
-    {
-        // No CreatureCore and no Material row: neither type can reach a bag (Bag() filters to
-        // Gear.IsWearable and MergeRecipe cannot produce them), and "CORE" as an item word collided
-        // with CORE the material.
-        [ItemBaseType.Weapon] = "WEAPON", [ItemBaseType.Charm] = "CHARM", [ItemBaseType.AbilityFocus] = "FOCUS",
-        [ItemBaseType.Helm] = "HELM", [ItemBaseType.Chest] = "CHESTPLATE", [ItemBaseType.Gloves] = "GLOVES",
-        [ItemBaseType.Boots] = "BOOTS", [ItemBaseType.Ring] = "RING", [ItemBaseType.Gem] = "GEM",
-    };
+    // The slot word is Core's (ItemNaming.SlotWord) — this screen kept its own eight-word table until
+    // 2026-09-07, one drift away from the Gear screen's.
     // package_05 rarity frames (also present in package_01 under the same names).
     private static readonly string[] FrameKey =
         ["ui_frame_rarity_common", "ui_frame_rarity_uncommon", "ui_frame_rarity_rare", "ui_frame_rarity_epic", "ui_frame_rarity_legendary"];
@@ -1697,7 +1690,7 @@ public sealed class ForgeScreen
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
         var names = items.Count == 0
             ? "SOLD ON SIGHT (FILTER)"
-            : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNames[i.BaseType]}"));
+            : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNaming.SlotWord(i.BaseType)}"));
         Say($"{names}   +{mat} MATERIALS",
             items.Count > 0 ? RarityColors[items.Max(i => (int)i.Rarity)] : Slate);
     }
@@ -2042,7 +2035,7 @@ public sealed class ForgeScreen
             // cannot describe a merge the button would not perform.
             var type = MergeRecipe.TypeOf(tr.Trio);
             var el = MergeRecipe.ElementOf(tr.Trio);
-            var kind = ItemNames.TryGetValue(type, out var kn) ? kn : type.ToString().ToUpperInvariant();
+            var kind = ItemNaming.SlotWord(type);
             var line = $"NEXT: 3 {RarityNames[(int)tr.Rarity]} INTO 1 {RarityNames[(int)tr.Rarity + 1]} {kind}"
                        + (el is { } e ? $" · {e.ToString().ToUpperInvariant()}" : "")
                        + $" · LEVEL {tr.Trio.Max(i => i.ItemLevel)} · A NEW RANDOM PREFIX";
@@ -2273,6 +2266,7 @@ public sealed class ForgeScreen
         // A tab that draws no walked rows (a locked state, a question) reports none, so no bar can
         // outlive the table it described.
         _compareShown = _compareTotal = 0;
+        _tabBodyGrown = 0;
         var hasOption = _tab is Tab.Upgrade or Tab.BreakDown;
         switch (_tab)
         {
@@ -2285,6 +2279,7 @@ public sealed class ForgeScreen
         // under the button. The rows drew narrower this frame if the last frame overflowed.
         _compareOverflow = _compareTotal > _compareShown;
         var body = TabBody(hasOption);
+        body.Height += _tabBodyGrown;   // the track ends where the rows did, not where the anatomy said
         _ui.ScrollBar(b, new Rectangle(body.Right - UiMetrics.ScrollbarWidth, body.Y, UiMetrics.ScrollbarWidth, body.Height),
                       _compareScroll, _compareShown, _compareTotal);
         DrawFeedback(b);
@@ -2292,6 +2287,9 @@ public sealed class ForgeScreen
 
     /// <summary>Did the compare overflow on the last frame? Its rows leave the bar its lane when it did.</summary>
     private bool _compareOverflow;
+
+    /// <summary>How much a tight tab grew its row region this frame (the RE-ROLL list reclaiming an uncertainty line), so the bar's track follows.</summary>
+    private int _tabBodyGrown;
 
     /// <summary>A question's bottom edge this frame, or 0 — the feedback plate stands aside for a question that runs into it.</summary>
     private int _questionBottom;
@@ -2402,7 +2400,7 @@ public sealed class ForgeScreen
             _ui.TextBig(b, _ui.ShortenBig(s, w, size), x, y, ink, size);
             y += UiTypography.Pitch(size);
         }
-        var kind = ItemNames.TryGetValue(item.BaseType, out var kn) ? kn : item.BaseType.ToString().ToUpperInvariant();
+        var kind = ItemNaming.SlotWord(item.BaseType);
         // LEVEL ticks: an upgrade lands +1 and a GREATER UPGRADE +5, and the line brightens once as it does.
         Header($"{RarityNames[(int)item.Rarity]}  ·  {kind}  ·  LEVEL {TickedWholeFor(item, LevelFeel, item.ItemLevel)}" + (worn ? "  ·  WORN" : ""),
                TickInkFor(item, LevelFeel, worn ? Gold : rc), UiTypography.Secondary);
@@ -2424,18 +2422,26 @@ public sealed class ForgeScreen
         // above it does not. It steps down, to a floor, by exactly what the list under it is short of —
         // measured, not guessed from the column's height — and what the smaller picture still cannot
         // buy, the list scrolls (brief §18: a long inspector may).
-        var affixes = ItemAffixes.Of(item);
-        var builtIn = ItemModifiers.BuiltIn(item);
-        var trait = GearTraits.TraitOf(item);
-        // The prefix's trade, BOTH sides, one stat to a row (ItemModifiers, 2026-09-07) — a row per
-        // modifier rather than the whole trade in one value column it could not fit at 150 %.
-        var trade = ItemModifiers.Prefix(item);
+        // THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07): this column lays out the piece's facts
+        // — power, rolls, gems, the built-in, both sides of the prefix's trade — with their words
+        // already decided; the enchant has its own reserved band below and the verdict and the set
+        // belong to other screens. It once composed the rows itself and listed no built-in at all, so
+        // a Common helm read "NO STATS" here and "+2 DEFENCE" under the pointer.
+        var rows = ItemPresentation.Rows(item, hunter, null, ActiveDefs, ActiveTriggers, SwornVows)
+                   .Where(r => r.Kind is not (ItemRowKind.Verdict or ItemRowKind.Enchant or ItemRowKind.EnchantNeed or ItemRowKind.Set
+                                              or ItemRowKind.GemCount or ItemRowKind.Gem))   // the SOCKETS band at the foot is the gems' one surface here
+                   .ToList();
+        var affixCount = rows.Count(r => r.Kind == ItemRowKind.Affix);
+        var prefixSides = rows.Count(r => r.Kind == ItemRowKind.PrefixSide);
         var ruleH = UiMetrics.Space(16);
-        var need = ruleH + UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body)
-                   + builtIn.Count * UiTypography.Pitch(UiTypography.Body)
-                   + (affixes.Count == 0 ? UiTypography.Pitch(UiTypography.Secondary) : affixes.Count * UiTypography.Pitch(UiTypography.Body))
-                   + (trait is null ? 0 : ruleH + UiTypography.Pitch(UiTypography.Body) + trade.Count * UiTypography.Pitch(UiTypography.Body)
-                                          + (trade.Count == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0));
+        int RowH(ItemDisplayRow r) => r.Kind switch
+        {
+            ItemRowKind.Family => UiTypography.Pitch(UiTypography.Secondary),
+            ItemRowKind.Prefix => ruleH + UiTypography.Pitch(UiTypography.Body) + (prefixSides == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0),
+            _ => UiTypography.Pitch(UiTypography.Body),
+        };
+        var need = ruleH + UiTypography.Pitch(UiTypography.Secondary) + rows.Sum(RowH)
+                   + (affixCount == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0);
         var artGap = UiMetrics.Space(6) + UiMetrics.Space(10);
         var roomAtFull = flowFloor - (y + ItemArtMax + artGap);
         var art = Math.Clamp(ItemArtMax - Math.Max(0, need - roomAtFull), ItemArtMin, ItemArtMax);
@@ -2517,27 +2523,32 @@ public sealed class ForgeScreen
 
         Rule();
         Head("WHAT IT DOES");
-        Pair("ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}", PowerFeel);
-        // THE BUILT-IN FIRST — the stat the piece carries by being what it is, NAMED (the card printed
-        // it as "GLOVES  +2%" and this panel not at all, so a Common helm read "NO STATS" here and
-        // "+2 DEFENCE" under the pointer). Every figure below goes through the one formatter.
-        foreach (var m in builtIn) Pair(ItemModifiers.Word(m.Stat) + BuiltInSuffix, ItemModifiers.Value(m));
-        if (affixes.Count == 0) Line("NO ROLLED STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
-        // THE CHANGED STATS HIGHLIGHT (§53). Each row ticks in its own stat's unit, through the same
-        // Core label the resting row uses — so a stat that did not move prints exactly as it always did.
-        for (var i = 0; i < affixes.Count; i++)
+        foreach (var row in rows)
         {
-            var a = affixes[i];
-            Pair(ItemModifiers.Word(a.Stat),
-                 ItemModifiers.Value(a.Stat, TickedFor(item, AffixFeel(i), a.Magnitude)), AffixFeel(i));
-        }
-
-        if (trait is { } tr)
-        {
-            Rule();
-            Line($"PREFIX · {GearTraits.NameOf(tr)}", Bone, UiTypography.Body);
-            if (trade.Count == 0) Line(GearTraits.BlurbOf(tr), Slate, UiTypography.Secondary);
-            foreach (var m in trade) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m));
+            switch (row.Kind)
+            {
+                case ItemRowKind.Power:
+                    Pair(row.Label, $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}", PowerFeel);
+                    if (affixCount == 0) Line("NO ROLLED STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
+                    break;
+                case ItemRowKind.Affix:
+                {
+                    // THE CHANGED STATS HIGHLIGHT (§53). Each row ticks in its own stat's unit, through the
+                    // same Core formatter the resting row uses — so a stat that did not move prints exactly
+                    // as it always did.
+                    var m = row.Modifier!.Value;
+                    Pair(row.Label, ItemModifiers.Value(m.Stat, TickedFor(item, AffixFeel(row.Index), m.Magnitude)), AffixFeel(row.Index));
+                    break;
+                }
+                case ItemRowKind.BuiltIn: Pair(row.Label + BuiltInSuffix, row.Value); break;
+                case ItemRowKind.Family: Line(row.Label, Slate, UiTypography.Secondary); break;
+                case ItemRowKind.Prefix:
+                    Rule();
+                    Line($"PREFIX · {row.Label}", Bone, UiTypography.Body);
+                    if (prefixSides == 0) Line(row.Note, Slate, UiTypography.Secondary);
+                    break;
+                case ItemRowKind.PrefixSide: Pair(row.Label, row.Value); break;
+            }
         }
 
         _itemShown = walk.Shown;
@@ -2687,7 +2698,7 @@ public sealed class ForgeScreen
     }
 
     /// <summary>The caption a built-in row wears after its stat word — one spelling for the inspector and the preview.</summary>
-    private const string BuiltInSuffix = "  ·  BUILT IN";
+    private const string BuiltInSuffix = "  ·  " + ItemPresentation.BuiltInCaption;
 
     /// <summary>
     /// A compare row's label in the room it has: the stat word is never cut — a built-in row drops its
@@ -2787,21 +2798,29 @@ public sealed class ForgeScreen
                       FeelOf(item, LevelFeel));
             ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
                       $"{hunter.PowerContribution(r.Product):N0}", Met, b, FeelOf(item, PowerFeel));
-            var cur = ItemAffixes.Of(item);
-            var nxt = ItemAffixes.Of(r.Product);
+            // THE SAME ROWS THE INSPECTOR SHOWS, for this piece and for the piece it becomes, paired by
+            // kind and index (ItemPresentation, 2026-09-07) — the labels are the rows' own; only the
+            // figures are printed to the decimal, because a step that moves +10.4% to +10.9% must not
+            // read "+10% -> +10%". THE BUILT-IN CLIMBS WITH THE LEVEL TOO (ItemFamilies.BonusOf reads
+            // ItemLevel), so it is a row here — a refine of a plain Common helm moves nothing else, and
+            // a preview that hid the one number it moves read as "changes nothing". It follows the
+            // rolled stats: on a Legendary it is the smallest mover.
+            static IReadOnlyList<ItemDisplayRow> Movers(ItemInstance piece)
+                => ItemPresentation.Rows(piece).Where(x => x.Modifier is not null && x.Kind is ItemRowKind.Affix or ItemRowKind.BuiltIn)
+                                   .OrderBy(x => x.Kind == ItemRowKind.BuiltIn).ThenBy(x => x.Index).ToList();
+            var cur = Movers(item);
+            var nxt = Movers(r.Product);
             for (var i = 0; i < cur.Count && i < nxt.Count; i++)
-                ChangeRow(ref rows, ItemModifiers.Word(cur[i].Stat),
-                          ItemModifiers.Value(cur[i].Stat, TickedFor(item, AffixFeel(i), cur[i].Magnitude), precise: true),
-                          ItemModifiers.Value(nxt[i].Stat, nxt[i].Magnitude, precise: true), Met, b, FeelOf(item, AffixFeel(i)));
-            // THE BUILT-IN CLIMBS WITH THE LEVEL TOO (ItemFamilies.BonusOf reads ItemLevel), so the
-            // preview shows it — a refine of a plain Common helm moves nothing else, and a preview
-            // that hid the one number it moves read as "changes nothing". AFTER the rolled stats: on a
-            // Legendary it is the smallest mover, and the four rolls are what the decimal was added for.
-            var curBuilt = ItemModifiers.BuiltIn(item);
-            var nxtBuilt = ItemModifiers.BuiltIn(r.Product);
-            for (var i = 0; i < curBuilt.Count && i < nxtBuilt.Count; i++)
-                ChangeRow(ref rows, ItemModifiers.Word(curBuilt[i].Stat) + BuiltInSuffix,
-                          ItemModifiers.Value(curBuilt[i], precise: true), ItemModifiers.Value(nxtBuilt[i], precise: true), Met, b);
+            {
+                var (was, becomes) = (cur[i].Modifier!.Value, nxt[i].Modifier!.Value);
+                if (cur[i].Kind == ItemRowKind.Affix)
+                    ChangeRow(ref rows, cur[i].Label,
+                              ItemModifiers.Value(was.Stat, TickedFor(item, AffixFeel(cur[i].Index), was.Magnitude), precise: true),
+                              ItemModifiers.Value(becomes, precise: true), Met, b, FeelOf(item, AffixFeel(cur[i].Index)));
+                else
+                    ChangeRow(ref rows, cur[i].Label + BuiltInSuffix,
+                              ItemModifiers.Value(was, precise: true), ItemModifiers.Value(becomes, precise: true), Met, b);
+            }
             EndRows(rows);
 
             // ── WHAT IS UNCERTAIN — the step count and the risk, in one line. (The progress bar that
@@ -2868,28 +2887,55 @@ public sealed class ForgeScreen
         // your build satisfy what it needs? There is deliberately NO better/worse word and no per-
         // candidate percentage: Core has no ordering over enchants, and printing one would invent it.
         // The list is walked like the compare, so a pool the column cannot hold scrolls on the wheel.
+        // EACH CANDIDATE SAYS WHAT IT DOES (2026-09-07): the name, the build's verdict and the
+        // enchant's one canonical sentence (ItemPresentation — the same words the card and the
+        // inspector print). A list of names alone asked the player to spend materials on a word. A
+        // candidate is ONE line when its name, its sentence and the verdict share the rung, and two or
+        // more when the sentence must wrap beneath — the whole candidate is claimed at once, so a
+        // sentence never straddles the fold, and the column scrolls past what it cannot hold.
+        var candidates = ItemPresentation.EnchantCandidates(item, ActiveDefs, ActiveTriggers, SwornVows);
+        var right = body.Right - (_compareOverflow ? ScrollLane : 0);
+        (bool OneLine, IReadOnlyList<string> Lines, int H) Shape(ItemDisplayRow c)
+        {
+            var verdictW = c.Value.Length == 0 ? 0 : _ui.MeasureBig(c.Value, UiTypography.Secondary) + UiMetrics.Space(16);
+            if (_ui.MeasureBig($"{c.Label} — {c.Note}", UiTypography.Body) + verdictW <= right - FX)
+                return (true, Array.Empty<string>(), UiTypography.Pitch(UiTypography.Body));
+            var lines = _ui.WrapBig(c.Note, right - FX, UiTypography.Secondary);
+            return (false, lines, UiTypography.Pitch(UiTypography.Body) + lines.Count * UiTypography.Pitch(UiTypography.Secondary));
+        }
+        // A TIGHT COLUMN (150 %) could not hold the header row AND one candidate — the list showed a
+        // header over nothing, which reads as "no candidates". The list then reclaims the first
+        // uncertainty line: "ONE OF THESE" in the header already says the pick is random, and the
+        // line that is kept says what is kept. Nothing is dropped at 100 %.
+        var tight = candidates.Count > 0 && body.Height < CompareRowH + Shape(candidates[0]).H;
+        if (tight) { _tabBodyGrown = UiTypography.Pitch(UiTypography.Body); body.Height += _tabBodyGrown; }
+
         var rows = BeginRows(body);
         ChangeRow(ref rows, "ENCHANT", ench?.Name ?? "NONE", "ONE OF THESE", Gold, b, FeelOf(item, EnchantFeel));
-        var slot = Gear.SlotFor(item.BaseType);
-        if (slot is { } sl)
-            foreach (var kind in Enchantments.PoolFor(sl).Where(k => ench is null || k != ench.Kind))
+        foreach (var cand in candidates)
+        {
+            var (oneLine, lines, rowH) = Shape(cand);
+            if (!rows.Take(rowH)) continue;
+            var verdict = cand.Value;
+            var vw = verdict.Length == 0 ? 0 : _ui.MeasureBig(verdict, UiTypography.Secondary) + UiMetrics.Space(16);
+            var nameW = _ui.MeasureBig(cand.Label, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(cand.Label, rows.Right - FX - vw, UiTypography.Body), FX, rows.Y, Bone, UiTypography.Body);
+            if (oneLine)
+                _ui.TextBig(b, $" — {cand.Note}", FX + nameW, rows.Y, Slate, UiTypography.Body);
+            if (verdict.Length > 0)
+                _ui.TextRightBig(b, verdict, rows.Right, rows.Y + UiMetrics.Space(2),
+                                 cand.Tone == ItemRowTone.Bonus ? Met : Slate, UiTypography.Secondary);
+            var ly = rows.Y + UiTypography.Pitch(UiTypography.Body);
+            foreach (var l in lines)
             {
-                if (!rows.Take(UiTypography.Pitch(UiTypography.Body))) continue;
-                var cand = new Enchantment(kind, Enchantments.MagnitudeFor(kind, item.Rarity));
-                var verdict = cand.Needs is { } nd
-                    ? nd.MetBy(ActiveDefs, ActiveTriggers, SwornVows) ? "WORKS WITH YOUR BUILD" : $"NEEDS {nd.Label.ToUpperInvariant()}"
-                    : "";
-                var vw = verdict.Length == 0 ? 0 : _ui.MeasureBig(verdict, UiTypography.Secondary);
-                _ui.TextBig(b, _ui.ShortenBig(cand.Name, rows.Right - FX - vw - UiMetrics.Space(16), UiTypography.Body),
-                            FX, rows.Y, Bone, UiTypography.Body);
-                if (verdict.Length > 0)
-                    _ui.TextRightBig(b, verdict, rows.Right, rows.Y + UiMetrics.Space(2),
-                                     verdict[0] == 'W' ? Met : Slate, UiTypography.Secondary);
-                rows.Y += UiTypography.Pitch(UiTypography.Body);
+                _ui.TextBig(b, l, FX, ly, Slate, UiTypography.Secondary);
+                ly += UiTypography.Pitch(UiTypography.Secondary);
             }
+            rows.Y += rowH;
+        }
         EndRows(rows);
 
-        ColumnLine(b, "WHICH OF THESE YOU GET IS RANDOM.", UncertainY(false), Slate, UiTypography.Body);
+        if (!tight) ColumnLine(b, "WHICH OF THESE YOU GET IS RANDOM.", UncertainY(false), Slate, UiTypography.Body);
         ColumnLine(b, "LEVEL, STATS, GEMS AND THE PREFIX DO NOT CHANGE.",
                    UncertainY(false) + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Body);
 

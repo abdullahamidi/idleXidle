@@ -160,7 +160,8 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     /// fixed column and a longer one for the card — and the fragments had lost the half the number
     /// was about: "BLOODLUST +50%" and "ZEAL +50%" said a keystone's name beside a percentage of
     /// nothing, "PER VOW: +10%" named no stat at all, "SKILLS POISON +62%" read as a stat called
-    /// POISON (2026-09-07). The Forge's RE-ROLL list still prints candidates by name alone.
+    /// POISON (2026-09-07). The Forge's RE-ROLL list prints it under each candidate's name
+    /// (<c>ItemPresentation.EnchantCandidates</c>).
     /// </para>
     /// <para>
     /// Each numeric line names the mechanic its figure moves, and the figure is THE ONE THE FIGHT

@@ -250,6 +250,28 @@ public sealed record SkillShape
     /// </summary>
     public float ImpactSwingBonus { get; init; }
 
+    /// <summary>
+    /// DEADWEIGHT (THE ANVIL) — the share of a primary direct hit (a skill's or the basic swing) that a
+    /// SURVIVING target keeps, to suffer on the champion's next such hit against it. 0 = off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own dial, deliberately NOT <see cref="OverkillCarry"/>. It was written as a carry — a third
+    /// of a kill's spill into the next enemy — and a carry is a field three other rules already write
+    /// (BODY's fourth rung, BREAKTHROUGH, CLEAN CUT) and combine by MAX, so the character's innate
+    /// contributed nothing beside any of them and nothing at all in a boss room (diagnosed 2026-09-07:
+    /// live, 1.5-4.5% of damage, zero against a lone enemy). A character innate must not vanish because
+    /// another subsystem writes the same generic field.
+    /// </para>
+    /// <para>
+    /// The two are different identities and stay different mechanics: a CARRY is a dead enemy's
+    /// excess moving forward; DEADWEIGHT is a live enemy retaining force — worth most against what
+    /// does not die in one blow. State lives on the creature (<see cref="WaveCreature.StoredDeadweight"/>);
+    /// the rule is applied at the one landing site in <see cref="SoloBattle"/> by hit provenance.
+    /// </para>
+    /// </remarks>
+    public float DeadweightShare { get; init; }
+
     /// <summary>NATURE 3p — how much stronger combat healing lands. Never applied to shield.</summary>
     public float HealingMultiplier { get; init; } = 1f;
 
@@ -518,6 +540,7 @@ public sealed record SkillShape
             FocusCapPercent = Math.Max(a.FocusCapPercent, b.FocusCapPercent),
             CertaintyAtFocusCap = a.CertaintyAtFocusCap || b.CertaintyAtFocusCap,
             ImpactSwingBonus = a.ImpactSwingBonus + b.ImpactSwingBonus,
+            DeadweightShare = Math.Max(a.DeadweightShare, b.DeadweightShare),
             HealingMultiplier = a.HealingMultiplier * b.HealingMultiplier,
             HealCeilingBonus = a.HealCeilingBonus + b.HealCeilingBonus,
             OverhealToShield = Math.Max(a.OverhealToShield, b.OverhealToShield),

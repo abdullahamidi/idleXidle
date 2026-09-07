@@ -115,14 +115,16 @@ public class character_innate_liveness_test
     }
 
     [Fact]
-    public void test_the_anvil_carries_overkill_into_the_next_enemy()
+    public void test_the_anvil_leaves_weight_in_a_standing_enemy()
     {
-        // Small creatures against a heavy hit: the third of the overkill lands on the next one, so the
-        // pack goes down sooner and less of the swing is wasted.
-        var (with, without) = Pair("anvil", new[] { "hammer_blow" }, Wave(6, 40f, 1f));
-        Assert.True(with.Metrics.DeliveredDamage > without.Metrics.DeliveredDamage
-                    || Clear(with) < Clear(without),
-                    $"DEADWEIGHT: delivered {with.Metrics.DeliveredDamage} vs {without.Metrics.DeliveredDamage}, cleared at {Clear(with)} vs {Clear(without)}");
+        // An enemy nothing kills in one blow: a third of every hit stays in it and the next hit lands
+        // it too, so the same window deals more — and the sim says each store and release as it goes.
+        var (with, without) = Pair("anvil", new[] { "hammer_blow" }, Wave(1, 1_000_000f, 1f));
+        Assert.True(with.Metrics.DeadweightReleases > 0, "DEADWEIGHT never released");
+        Assert.Contains(with.Events, e => e.Kind == BattleEventKind.DeadweightStored);
+        Assert.Contains(with.Events, e => e.Kind == BattleEventKind.DeadweightReleased);
+        Assert.True(with.Metrics.DeliveredDamage > without.Metrics.DeliveredDamage,
+                    $"DEADWEIGHT: delivered {with.Metrics.DeliveredDamage} vs {without.Metrics.DeliveredDamage}");
     }
 
     [Fact]
