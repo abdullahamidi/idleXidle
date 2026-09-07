@@ -2139,6 +2139,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             Rarity = rar[i % rar.Length], SellValue = 20 + i * 9, Element = Source.Nature,
                             ItemLevel = 8 + i * 6,
                             Class = ItemClasses.IsClassLocked(types[i]) ? ItemClass.Wanderer : null,
+                            // A TRADE on the worn gloves and boots (2026-09-07): a fixture item is minted
+                            // without a prefix, so no capture had ever shown a prefix's cost line on the
+                            // doll's own pieces — FOCUSED (skills faster, hits softer) and SWIFT.
+                            TraitOverride = types[i] switch
+                            {
+                                ItemBaseType.Gloves => GearTrait.Focused,
+                                ItemBaseType.Boots => GearTrait.Swift,
+                                _ => null,
+                            },
                         });
                     // Two superior UNEQUIPPED drops, added first so they sit at the top of the bag — they
                     // pose the green UP badge and the hover tooltip's "UPGRADE +N PWR" verdict (with
@@ -2148,7 +2157,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // The weapon is the starter's class, so the UPGRADE verdict still poses on the
                         // first card; the chestplate is a WARDEN's, so the second card poses the dimmed
                         // lock and, under RH_SHOT_MOUSE, the "who can wear it" lines of the hover card.
-                        new() { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62, Class = ItemClass.Wanderer, Family = 1 },
+                        // HEAVY, so the first card — the one RH_SHOT_MOUSE hovers and the detail panel
+                        // opens on — carries a trade with both sides on it (2026-09-07). A bow, so its
+                        // built-in is the longest stat word, CRITICAL CHANCE.
+                        new() { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62, Class = ItemClass.Wanderer, Family = 1, TraitOverride = GearTrait.Heavy },
                         new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55, Class = ItemClass.Warden },
                     });
                     _forge.AddLoot(seed);
@@ -2667,6 +2679,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         InstanceId = "dev_hero", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
                         SellValue = 200, Element = Source.Shadow, ItemLevel = 8,
                         EnchantOverride = EnchantKind.Fervour,
+                        // HEAVY (2026-09-07): the bench's hero carries a trade, so the WHAT IT DOES column
+                        // and the upgrade preview pose a prefix's cost row beside its bonus.
+                        TraitOverride = GearTrait.Heavy,
+                    });
+                    // A pair of armour pieces with a trade, for RH_SHOT_ITEM (2026-09-07): the two slots
+                    // whose built-in line read "GLOVES +2%" / "BOOTS +4%" — a Legendary FOCUSED glove
+                    // (skill rate up, damage down) and an Epic GREEDY boot (loot up, health down).
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_glove", BaseType = ItemBaseType.Gloves, Rarity = Rarity.Legendary,
+                        SellValue = 180, Element = Source.Body, ItemLevel = 40, Class = ItemClass.Wanderer,
+                        TraitOverride = GearTrait.Focused,
+                    });
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_boot", BaseType = ItemBaseType.Boots, Rarity = Rarity.Epic,
+                        SellValue = 120, Element = Source.Spirit, ItemLevel = 24, Class = ItemClass.Wanderer,
+                        TraitOverride = GearTrait.Greedy,
                     });
                     // THE THREE STATES §95 ASKS FOR AND NO FIXTURE COULD POSE. dev_hero has Upgrades = 0,
                     // so the slip branch, the at-cap state and every below-Rare locked state were

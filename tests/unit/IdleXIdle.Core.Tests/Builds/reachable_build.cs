@@ -32,8 +32,13 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 internal static class Reachable
 {
-    /// <summary>One woven slot: the skill, the variation it is taken as (null = still unchosen), the vow sworn on it.</summary>
-    internal sealed record Slot(string SkillId, string? Variation = null, string? VowId = null);
+    /// <summary>
+    /// One woven slot: the skill, the variation it is taken as (null = still unchosen), the vow sworn
+    /// on it, and the reinforcements bought under that variation — each earned the way play earns it,
+    /// a level at a time, so a reinforced row is as reachable as a chosen one.
+    /// </summary>
+    internal sealed record Slot(string SkillId, string? Variation = null, string? VowId = null,
+                                IReadOnlyList<string>? Reinforcements = null);
 
     /// <summary>
     /// Compose the slots into the build a player with these skills, choices and vows would fight with.
@@ -79,7 +84,25 @@ internal static class Reachable
                 for (var i = progress.UsesOf(def.Id); i < SkillProgress.UsesForLevel(1); i++) progress.RecordWave(def.Id);
                 if (!progress.ChooseVariation(def, wanted))
                     throw Reject($"{def.Name} offers no variation '{wanted}' (it has {string.Join(", ", def.Variations.Select(v => v.Name))}).");
+
+                // Reinforcements: each is bought with the next level's point, so the waves are earned
+                // until the purchase goes through — never past the top level, which is the one way a
+                // name the variation does not offer can be told from a point not yet earned.
+                foreach (var name in s.Reinforcements ?? Array.Empty<string>())
+                {
+                    var variation = progress.VariationOf(def)!;
+                    if (variation.Reinforcements.All(r => r.Name != name))
+                        throw Reject($"{def.Name} as {wanted} offers no reinforcement '{name}' (it has {string.Join(", ", variation.Reinforcements.Select(r => r.Name))}).");
+                    while (!progress.TakeReinforcement(def, name))
+                    {
+                        if (progress.UsesOf(def.Id) >= SkillProgress.UsesForLevel(SkillProgress.MaxLevel))
+                            throw Reject($"{def.Name} could not buy '{name}' with every level earned.");
+                        progress.RecordWave(def.Id);
+                    }
+                }
             }
+            else if (s.Reinforcements is { Count: > 0 })
+                throw Reject($"{def.Name} cannot be reinforced with no variation chosen.");
         }
 
         var build = loadout.ToBuild(mastery, character, progress, discoveredKeystones: null, knownVows: vows);

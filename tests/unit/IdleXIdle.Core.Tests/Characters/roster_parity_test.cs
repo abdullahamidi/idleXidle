@@ -54,9 +54,11 @@ public class RosterParityTest
     // flatter whoever it happens to suit. THE CHORUS scales with head-count and evaporates in a boss
     // room; THE ANVIL only refunds overkill when hits overshoot small creatures. A gauntlet of one
     // shape would rank those two by the shape chosen rather than by their worth.
-    private static List<WaveCreature> Swarm() => Wave(10, health: 320f, damage: 14f, defense: 0f);
-    private static List<WaveCreature> Pack() => Wave(4, health: 1_600f, damage: 34f, defense: 45f);
-    private static List<WaveCreature> Boss() => Wave(1, health: 14_000f, damage: 90f, defense: 70f);
+    // THE GAUNTLET LIVES IN ParityGauntlet (2026-09-07), so the diagnostic that investigates a parity
+    // finding fights the very fixture the finding came from. These are its rows, by their old names.
+    private static List<WaveCreature> Swarm() => ParityGauntlet.Swarm();
+    private static List<WaveCreature> Pack() => ParityGauntlet.Pack();
+    private static List<WaveCreature> Boss() => ParityGauntlet.Boss();
 
     /// <summary>
     /// The game's tuning with the anti-hang ceiling lifted.
@@ -79,17 +81,7 @@ public class RosterParityTest
     /// enough not to clip the slowest build; lifting the ceiling is what buys both at once.
     /// </para>
     /// </remarks>
-    private static readonly ExpeditionTuning Tuning =
-        ExpeditionTuning.Default with { TickCeilingMs = 1_800_000 };
-
-    private static List<WaveCreature> Wave(int count, float health, float damage, float defense)
-        => Enumerable.Range(0, count).Select(_ => new WaveCreature
-        {
-            MaxHealth = health,
-            Health = health,
-            Damage = damage,
-            Defense = defense,
-        }).ToList();
+    private static readonly ExpeditionTuning Tuning = ParityGauntlet.Tuning;
 
     /// <summary>
     /// Health large enough that the gauntlet does not kill anyone.
@@ -100,7 +92,7 @@ public class RosterParityTest
     /// measures identical. A metric that saturates cannot rank the thing it is measuring. Survivability
     /// is read as health lost against a pool nobody exhausts.
     /// </remarks>
-    private const int ChampionHealth = 400_000;
+    private const int ChampionHealth = ParityGauntlet.ChampionHealth;
 
     /// <summary>One measured run of the whole gauntlet.</summary>
     /// <remarks>
@@ -301,7 +293,7 @@ public class RosterParityTest
     /// it is noise wearing one. <see cref="test_the_measurement_is_deterministic"/>
     /// keeps this number honest by measuring the floor rather than assuming it.
     /// </remarks>
-    private const int Seeds = 40;
+    private const int Seeds = ParityGauntlet.Seeds;
 
     /// <summary>Average the gauntlet over <see cref="Seeds"/> seeds.</summary>
     private static Score Measure(Character? c, SkillDef skill, Vow? vow)
@@ -310,7 +302,7 @@ public class RosterParityTest
         var stalls = 0;
         for (var s = 0; s < Seeds; s++)
         {
-            var one = Run(c, skill, vow, seed: 20260814 + s * 7919);
+            var one = Run(c, skill, vow, seed: ParityGauntlet.Seed(s));
             clear += one.ClearMs;
             lost += one.HealthLost;
             stalls += one.Stalls;
@@ -338,7 +330,7 @@ public class RosterParityTest
             var metrics = new WaveMetrics();
             var (outcome, _) = SoloBattle.ResolveWave(
                 champ, build, hunter, wave,
-                enemyIntervalMs: 900, Tuning, rng, metrics: metrics);
+                enemyIntervalMs: ParityGauntlet.EnemyIntervalMs, Tuning, rng, metrics: metrics);
             clearMs += metrics.DurationMs;
             if (outcome != WaveOutcome.Cleared) stalls++;
         }
@@ -393,9 +385,9 @@ public class RosterParityTest
                 new() { MaxHealth = 1e9f, Health = 1e9f, Damage = 0f, Defense = 40f },
             };
             SoloBattle.ResolveWave(champ, BuildFor(null, def, vow), new Hunter(), target,
-                                   enemyIntervalMs: 900,
+                                   enemyIntervalMs: ParityGauntlet.EnemyIntervalMs,
                                    ExpeditionTuning.Default with { TickCeilingMs = windowMs },
-                                   new Random(20260814), metrics: metrics);
+                                   new Random(ParityGauntlet.Seed(0)), metrics: metrics);
             perSkill.Add((def, metrics.DeliveredDamage / (windowMs / 1000f)));
         }
 
@@ -440,7 +432,7 @@ public class RosterParityTest
                 var metrics = new WaveMetrics();
                 var (outcome, _) = SoloBattle.ResolveWave(
                     champ, BuildFor(null, def, vow), new Hunter(), make(),
-                    enemyIntervalMs: 900, Tuning, new Random(20260814), metrics: metrics);
+                    enemyIntervalMs: ParityGauntlet.EnemyIntervalMs, Tuning, new Random(ParityGauntlet.Seed(0)), metrics: metrics);
                 cells.Add(outcome == WaveOutcome.Cleared ? $"{metrics.DurationMs,10:N0}ms" : "     STALL");
                 if (outcome != WaveOutcome.Cleared) failures.Add($"{def.Name}/{name}");
             }
@@ -470,7 +462,7 @@ public class RosterParityTest
                      .Select(SkillCatalogue.ById))
         {
             var samples = Enumerable.Range(0, Seeds)
-                                    .Select(s => (double)Run(null, skill, vow, 20260814 + s * 7919).ClearMs)
+                                    .Select(s => (double)Run(null, skill, vow, ParityGauntlet.Seed(s)).ClearMs)
                                     .ToList();
             var mean = samples.Average();
             var spread = mean <= 0 ? 0 : (samples.Max() - samples.Min()) / mean;
@@ -572,6 +564,14 @@ public class RosterParityTest
     /// finding says is exactly this: on the two builds measured, DEADWEIGHT is not measurable. Whether
     /// that is the passive, the gauntlet or the pairing is the design decision; until it is made the
     /// finding lives here, in the measurement that produced it.
+    /// </para>
+    /// <para>
+    /// MEASURED DIRECTLY since (<see cref="AnvilDeadweightDiagnosticTest"/>, the same gauntlet): the
+    /// carry is LIVE — most of the spill the rule may ride finds a living enemy — but SMALL, 1.5-4.5%
+    /// of everything the Anvil deals with at most one carry kill a run, and ZERO in the boss room. The
+    /// clear clock is quantised to the cast cadence and carries phase across waves, so the same share
+    /// reads 0.0% on one pair and +5% on another. The passive itself is the owner; the design decision
+    /// is still open, and this pin stays until it is made.
     /// </para>
     /// </remarks>
     private static readonly (string Name, string Why)[] KnownDecoration =

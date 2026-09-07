@@ -704,7 +704,11 @@ public sealed class GearScreen
         if (_hovered is { } hov && _menuItemId is null)
             // The card's canvas stops above the doll's footer strip, so a hovered bag cell never blanks the
             // EQUIPPED buttons or the strip beside the doll (gear-11).
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), FooterStrip.Y - UiMetrics.Space(8)), Character);
+            // THE WHOLE PAGE'S HEIGHT (2026-09-07): the card is clamped into this canvas, and a canvas
+            // that stopped at the footer strip was shorter than the card at 150 % — the plate was cut
+            // to the canvas while the walk drew every line, so the last three hung off the plate over
+            // the doll's footer. The strip is inside the EQUIPPED panel the card already floats over.
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), UiKit.Page.Height), Character);
         else if (_tip is { } tip && _menuItemId is null) _ui.HoverTip(b, tip, _tipAt);
         if (DevGearDebug) DrawDebug(b, hunter);
     }
@@ -1101,9 +1105,14 @@ public sealed class GearScreen
         {
             if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
             var h = UiTypography.Pitch(px);
-            foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
+            var lines = _ui.WrapBig(s, w, px).Take(maxLines).ToList();
+            // ONE CLAIM FOR THE WHOLE SENTENCE (2026-09-07). Claimed a line at a time, a wrapped row
+            // could straddle the fold — "ON KILL: 38% CHANCE OF A" on the last visible line and the
+            // rest a wheel away — which reads as a sentence cut, not as a panel that scrolls. A row
+            // that does not fit whole goes below the fold whole, where the scroll finds it.
+            if (lines.Count == 0 || !Take(h * lines.Count)) return;
+            foreach (var l in lines)
             {
-                if (!Take(h)) continue;
                 _ui.TextBig(b, l, x, y, c, px); y += h;
             }
         }
@@ -1200,18 +1209,29 @@ public sealed class GearScreen
         // WHAT IT DOES: power, affixes, the prefix's numbers, the enchant and whether it works with the build.
         Head("WHAT IT DOES");
         Pair("ITEM POWER", $"{hunter.PowerContribution(item):N0}", Bone);
-        foreach (var af in ItemAffixes.Of(item)) Pair(ItemAffixes.StatWord(af.Stat), AffixVal(af.Stat, af.Magnitude), Green);
+        // EVERY NUMBER THROUGH THE ONE FORMATTER (ItemModifiers, 2026-09-07): the stat's word in the
+        // label column, its signed figure in the value column, in the stat's own unit. The built-in
+        // first — the item card printed it as "GLOVES  +2%" and this panel not at all, so the same
+        // helm read "NO STATS" here and "+2 DEFENCE" under the pointer.
+        foreach (var m in ItemModifiers.BuiltIn(item)) Pair($"{ItemModifiers.Word(m.Stat)}  ·  BUILT IN", ItemModifiers.Value(m), Gold);
+        foreach (var m in ItemModifiers.Affixes(item)) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m), Green);
         if (GearTraits.TraitOf(item) is { } tr)
         {
-            var effect = GearTraits.EffectOf(item);
-            Pair($"PREFIX · {GearTraits.NameOf(tr).ToUpperInvariant()}", effect.Length > 0 ? effect : "", Gold);
-            if (effect.Length == 0) Line(GearTraits.BlurbOf(tr), Bone, UiTypography.Body, 2);
+            // THE TRADE, BOTH SIDES, one stat to a row — never the whole trade right-aligned into a
+            // value column it could not fit at 150 %. The cost rows wear the cost colour.
+            var trade = ItemModifiers.Prefix(item);
+            Line($"PREFIX · {GearTraits.NameOf(tr).ToUpperInvariant()}", Gold, UiTypography.Body, 1);
+            if (trade.Count == 0) Line(GearTraits.BlurbOf(tr), Bone, UiTypography.Body, 2);
+            foreach (var m in trade) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m), m.IsDrawback ? Ember : Gold);
         }
         if (Enchantments.Of(item) is { } ench)
         {
-            // One wrapped line — the name and its effect — rather than a head row and a body row, so the
-            // set ladder under it keeps a rung at 150 % (gear-10).
-            Line($"ENCHANT · {ench.Name.ToUpperInvariant()} — {ench.LongBlurb}", Bone, UiTypography.Body, 2);
+            // One row — the name and its sentence, wrapped to up to four lines — rather than a head row
+            // and a body row, so the set ladder under it keeps a rung at 150 % (gear-10). Four lines'
+            // room, because the sentence says what its number is OF and a cut sentence would put the
+            // number back beside nothing; the column scrolls, so a rung the sentence pushes down is a
+            // wheel away, not gone.
+            Line($"ENCHANT · {ench.Name.ToUpperInvariant()} — {ench.Blurb}", Bone, UiTypography.Body, 4);
             if (ench.Needs is { } need && Loadout is not null)
             {
                 var met = need.Keystone is not null || need.AnyVow || need.MetBySkills(Loadout.EquippedDefs());
@@ -1264,11 +1284,14 @@ public sealed class GearScreen
                 // sentence the player cannot finish is a rung they cannot evaluate, which is the whole
                 // job of this list. Continuation lines hang under the sentence, past the number and the
                 // capstone name, so the column still reads as one row per rung.
+                // ONE CLAIM FOR THE WHOLE RUNG (2026-09-07), as Line makes for a sentence: claimed a line
+                // at a time, a wrapped rung could leave its first line above the fold and its rule below it.
                 var first = true;
-                foreach (var wrapped in _ui.WrapBig(t.Line, x + w - rightW - textX - capW, UiTypography.Body))
+                var rungLines = _ui.WrapBig(t.Line, x + w - rightW - textX - capW, UiTypography.Body);
+                if (!Take(rowH * rungLines.Count)) continue;
+                foreach (var wrapped in rungLines)
                 {
                     var lx = first ? textX + capW : textX;
-                    if (Take(rowH))
                     {
                         if (first)
                         {
@@ -1406,12 +1429,6 @@ public sealed class GearScreen
         ItemBaseType.Weapon => "WEAPON", ItemBaseType.Charm => "CHARM", ItemBaseType.AbilityFocus => "FOCUS",
         ItemBaseType.Helm => "HELM", ItemBaseType.Chest => "CHEST", ItemBaseType.Gloves => "GLOVES",
         ItemBaseType.Boots => "BOOTS", ItemBaseType.Ring => "RING", _ => "ITEM",
-    };
-    private static string AffixVal(AffixStat s, float m) => s switch
-    {
-        AffixStat.Crit => $"+{m:0.0}%",
-        AffixStat.Defense => $"+{m:0}",
-        _ => $"+{m * 100f:0}%",
     };
     private static string RarityShort(Rarity r) => r switch
     {

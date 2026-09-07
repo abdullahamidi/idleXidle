@@ -1472,7 +1472,7 @@ public sealed class VaultScreen
             // The tooltip sits one caption line and a breath under the caption; the card is as tall
             // as the tooltip needs, never shorter than its 100 % height, never past the page.
             var tipTop = UiTypography.PanelCaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(24);
-            var need = tipTop + ItemTooltip.HeightFor(item, Hunter) + InspectButtonPad + InspectButtonH + InspectButtonPad;
+            var need = tipTop + ItemTooltip.HeightFor(_ui, item, Hunter) + InspectButtonPad + InspectButtonH + InspectButtonPad;
             var pw = Math.Min(UiMetrics.Control(680), UiKit.Page.Width - 80);
             var ph = Math.Min(Math.Max(need, ItemCardMinH), UiKit.PageBottom(40) - ModalCeiling);
             var panel = new Rectangle(UiKit.PageCenterX - pw / 2, Math.Max(ModalCeiling, (UiKit.Page.Height - ph) / 2),

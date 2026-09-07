@@ -294,6 +294,36 @@ public sealed class WaveMetrics
     /// </remarks>
     public float Overkill { get; set; }
 
+    // ── THE CARRY, COUNTED (2026-09-07). DEADWEIGHT (THE ANVIL), BODY's fourth rung and the HAMMER
+    //    carries all pay from one site — a skill kill's spill into the next living enemy — and until
+    //    these four fields nothing recorded whether that site ever fired. A roster-parity row that
+    //    read 0.0% could not say whether the carry never triggered, triggered into nobody, or
+    //    triggered and moved nothing; the diagnostic that answers it reads these. Counters only: no
+    //    number the fight reads is written here. ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Kills that left overkill on the corpse by a skill hit, or by any hit landing while an IMPACT
+    /// swing is in flight — every kill a carry could ride, counted before the carry rule and the
+    /// next-enemy test, so a build with no carry records how often one would have had a kill to ride.
+    /// </summary>
+    public int OverkillKills { get; set; }
+
+    /// <summary>The spill those kills left — the overkill a carry rule was entitled to. <see cref="Overkill"/> also holds the swing's, the bleed's and the thorns' spill, which no carry may ride.</summary>
+    public float EligibleOverkill { get; set; }
+
+    /// <summary>Of <see cref="OverkillKills"/>, the kills whose overkill actually carried: a carry rule was worn AND a living enemy was left to take it.</summary>
+    public int CarriesLanded { get; set; }
+
+    /// <summary>
+    /// Damage the carry rule SENT — its share of the spill, dispatched armour-free into the next enemy.
+    /// What lands is the same figure except under ENTRENCHED, whose first-hit rule can quarter a carried
+    /// hit after this is written; the diagnostic runs no ENTRENCHED wave, so there the two are equal.
+    /// </summary>
+    public float CarriedDamage { get; set; }
+
+    /// <summary>Creatures a CARRIED hit finished — the kills the carry produced, not merely fed.</summary>
+    public int CarryKills { get; set; }
+
     /// <summary>Shield GRANTED, after the cap clamped it.</summary>
     /// <remarks>
     /// <see cref="ShieldAbsorbed"/> is what the shield SPENT. A shield granted and never bitten
@@ -1383,8 +1413,10 @@ public static class SoloBattle
         // poison bleed, THORNS' reflect, BREAKER's overkill spill and ASSASSINATE's execution were all
         // basic attacks — so the champion's swing clip committed to a poison tick every 500 ms and the
         // cooldown dial ran four times fast (review 2026-08-30).
+        // `carried`: this hit IS a carried overkill — counted so the diagnostic can tell a kill the carry
+        // produced from one it merely fed. It changes nothing about how the hit lands.
         void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false,
-                    bool swing = false)
+                    bool swing = false, bool carried = false)
         {
             if (target is null || !target.Alive) return;
 
@@ -1426,7 +1458,8 @@ public static class SoloBattle
                 else dmg *= critFactor;
             }
 
-            // VENOM poisons on SKILL hits only (the blurb says "SKILLS POISON") — never on the auto-attack,
+            // VENOM poisons on SKILL hits only (the card says "SKILL HITS POISON FOR N% OF THE HIT",
+            // and N is the larger of VenomBasePoison and the worn magnitude) — never on the auto-attack,
             // and never on the poison's own bleed, or it would feed itself. Fed from the hit's RAW force,
             // before armour: poison is a fraction of how hard you swung, not of how much got through,
             // otherwise armour would shrink the pool AND the bleed and "poison answers armour" would be
@@ -1497,7 +1530,11 @@ public static class SoloBattle
             target.Health -= dmg;
             if (fromSkill) struckOnce.Add(target);
 
-            if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
+            if (metrics is not null && target.Health <= 0f)
+            {
+                metrics.CreaturesKilled++;
+                if (carried) metrics.CarryKills++;
+            }
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: !swing));
             if (!target.Alive)
@@ -1683,9 +1720,21 @@ public static class SoloBattle
                 var carry = MathF.Max(shape.OverkillCarry, castCarry);
                 // BODY 5p — an IMPACT is the one basic attack whose waste carries. Everywhere else the
                 // carry is a direct-SKILL rule, which is what keeps a bleed or a thorn from feeding it.
-                if ((fromSkill || impactSwing) && carry > 0f && spill > 0f && FirstAlive() is { } next)
-                    // fromSkill:false on the carried hit is what bounds it — a carry cannot carry again.
-                    LandOn(next, spill * carry, atMs, fromSkill: false, ignoresArmour: true);
+                if ((fromSkill || impactSwing) && spill > 0f)
+                {
+                    // Counted BEFORE the carry rule and the next-enemy test, so a build with no carry
+                    // still records how often one would have had something to ride (the control's row).
+                    if (metrics is not null) { metrics.OverkillKills++; metrics.EligibleOverkill += spill; }
+                    if (carry > 0f && FirstAlive() is { } next)
+                    {
+                        if (metrics is not null) { metrics.CarriesLanded++; metrics.CarriedDamage += spill * carry; }
+                        // fromSkill:false on the carried hit is what bounds a SKILL's carry — it cannot
+                        // carry again. Under an IMPACT swing the `impactSwing` flag stays up through
+                        // this nested landing, so a carried kill there re-enters the gate at castCarry
+                        // 1f and chains down the wave; BODY's fifth rung, noted 2026-09-07, not changed.
+                        LandOn(next, spill * carry, atMs, fromSkill: false, ignoresArmour: true, carried: true);
+                    }
+                }
             }
         }
 

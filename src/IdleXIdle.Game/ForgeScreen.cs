@@ -663,12 +663,24 @@ public sealed class ForgeScreen
     private struct RowWalk
     {
         public int Y, Floor, Right, First, Index, Shown;
+        private bool _overflow;
+
+        /// <summary>Would a row of this height land on screen right now? Claims nothing.</summary>
+        public bool Fits(int h) => Index >= First && !_overflow && Y + h <= Floor;
 
         /// <summary>Claim the next row of this height: true when it is on screen, and the caller draws it at <see cref="Y"/>.</summary>
+        /// <remarks>
+        /// ONCE A ROW DOES NOT FIT, NOTHING AFTER IT DOES (2026-09-07). Without the latch a tall row
+        /// (a head with its first line) was refused at the floor and the shorter row after it was
+        /// drawn in its place — at 150 % the item column showed "DAMAGE · BUILT IN" as its first line
+        /// with ITEM POWER nowhere, a list out of order. A row that misses the floor now takes every
+        /// later row below the fold with it, where the wheel finds them in the order they were claimed.
+        /// </remarks>
         public bool Take(int h)
         {
             var i = Index++;
-            if (i < First || Y + h > Floor) return false;
+            if (i < First) return false;
+            if (_overflow || Y + h > Floor) { _overflow = true; return false; }
             Shown++;
             return true;
         }
@@ -1403,13 +1415,6 @@ public sealed class ForgeScreen
             + (chart ? "  (YOUR SALVAGE CHART DOUBLED IT)." : "."), Gold);
     }
 
-
-    /// <summary>A multiplier as a signed percentage: 1.35 → "+35%", 0.8 → "-20%".</summary>
-    private static string Pct(float mult)
-    {
-        var pct = (int)MathF.Round((mult - 1f) * 100f);
-        return pct >= 0 ? $"+{pct}%" : $"{pct}%";
-    }
 
     /// <summary>SELL, via the confirmation. Worn gear is allowed now — it comes off first, and it ALWAYS asks.</summary>
     private void Sell(Hunter hunter, ItemInstance? item)
@@ -2420,21 +2425,35 @@ public sealed class ForgeScreen
         // measured, not guessed from the column's height — and what the smaller picture still cannot
         // buy, the list scrolls (brief §18: a long inspector may).
         var affixes = ItemAffixes.Of(item);
+        var builtIn = ItemModifiers.BuiltIn(item);
         var trait = GearTraits.TraitOf(item);
-        var effect = trait is null ? "" : GearTraits.EffectOf(item);
+        // The prefix's trade, BOTH sides, one stat to a row (ItemModifiers, 2026-09-07) — a row per
+        // modifier rather than the whole trade in one value column it could not fit at 150 %.
+        var trade = ItemModifiers.Prefix(item);
         var ruleH = UiMetrics.Space(16);
         var need = ruleH + UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body)
+                   + builtIn.Count * UiTypography.Pitch(UiTypography.Body)
                    + (affixes.Count == 0 ? UiTypography.Pitch(UiTypography.Secondary) : affixes.Count * UiTypography.Pitch(UiTypography.Body))
-                   + (trait is null ? 0 : ruleH + UiTypography.Pitch(UiTypography.Body)
-                                          + (effect.Length == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0));
+                   + (trait is null ? 0 : ruleH + UiTypography.Pitch(UiTypography.Body) + trade.Count * UiTypography.Pitch(UiTypography.Body)
+                                          + (trade.Count == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0));
         var artGap = UiMetrics.Space(6) + UiMetrics.Space(10);
         var roomAtFull = flowFloor - (y + ItemArtMax + artGap);
         var art = Math.Clamp(ItemArtMax - Math.Max(0, need - roomAtFull), ItemArtMin, ItemArtMax);
-        var iconBox = new Rectangle(ItemPanel.Center.X - art / 2, y + UiMetrics.Space(6), art, art);
-        DrawItemIcon(b, item, iconBox);
-        ForgeFlash(b, iconBox);
-        if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
-        y = iconBox.Bottom + UiMetrics.Space(10);
+        // AND GIVES WAY ENTIRELY when even its floor would leave the list no room for its first row
+        // (2026-09-07: at 150 % a five-line enchant band — a two-line sentence and a two-line
+        // requirement — left WHAT IT DOES a bare rule and a scrollbar over nothing). The picture says
+        // nothing the category line does not; the list is what the column is for.
+        var minFlow = ruleH + UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body);
+        if (flowFloor - (y + art + artGap) < minFlow) art = 0;
+        if (art > 0)
+        {
+            var iconBox = new Rectangle(ItemPanel.Center.X - art / 2, y + UiMetrics.Space(6), art, art);
+            DrawItemIcon(b, item, iconBox);
+            ForgeFlash(b, iconBox);
+            if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
+            y = iconBox.Bottom + UiMetrics.Space(10);
+        }
+        else y += UiMetrics.Space(6);
 
         // THE FLOW. Walked, so the wheel can bring the rows the floor cut off into view.
         var flowTop = y;
@@ -2455,6 +2474,14 @@ public sealed class ForgeScreen
             var head = pendingHead;
             pendingHead = null;
             var rows = UiTypography.Pitch(size) + (head is null ? 0 : UiTypography.Pitch(UiTypography.Secondary));
+            // A column too short for the head AND its row (150 %, a four-line enchant band under it)
+            // keeps the row and drops the head: the number with its word is the fact, the head is
+            // its caption. Probed, not claimed, so the walk's row count stays one per row.
+            if (head is not null && !walk.Fits(rows) && walk.Fits(UiTypography.Pitch(size)))
+            {
+                head = null;
+                rows = UiTypography.Pitch(size);
+            }
             if (!walk.Take(rows)) return false;
             if (head is not null)
             {
@@ -2491,21 +2518,26 @@ public sealed class ForgeScreen
         Rule();
         Head("WHAT IT DOES");
         Pair("ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}", PowerFeel);
-        if (affixes.Count == 0) Line("NO STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
+        // THE BUILT-IN FIRST — the stat the piece carries by being what it is, NAMED (the card printed
+        // it as "GLOVES  +2%" and this panel not at all, so a Common helm read "NO STATS" here and
+        // "+2 DEFENCE" under the pointer). Every figure below goes through the one formatter.
+        foreach (var m in builtIn) Pair(ItemModifiers.Word(m.Stat) + BuiltInSuffix, ItemModifiers.Value(m));
+        if (affixes.Count == 0) Line("NO ROLLED STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
         // THE CHANGED STATS HIGHLIGHT (§53). Each row ticks in its own stat's unit, through the same
         // Core label the resting row uses — so a stat that did not move prints exactly as it always did.
         for (var i = 0; i < affixes.Count; i++)
         {
             var a = affixes[i];
-            Pair(ItemAffixes.StatWord(a.Stat),
-                 ItemAffixes.GrantLabel(a.Stat, TickedFor(item, AffixFeel(i), a.Magnitude)), AffixFeel(i));
+            Pair(ItemModifiers.Word(a.Stat),
+                 ItemModifiers.Value(a.Stat, TickedFor(item, AffixFeel(i), a.Magnitude)), AffixFeel(i));
         }
 
         if (trait is { } tr)
         {
             Rule();
-            Pair($"PREFIX · {GearTraits.NameOf(tr)}", effect);
-            if (effect.Length == 0) Line(GearTraits.BlurbOf(tr), Slate, UiTypography.Secondary);
+            Line($"PREFIX · {GearTraits.NameOf(tr)}", Bone, UiTypography.Body);
+            if (trade.Count == 0) Line(GearTraits.BlurbOf(tr), Slate, UiTypography.Secondary);
+            foreach (var m in trade) Pair(ItemModifiers.Word(m.Stat), ItemModifiers.Value(m));
         }
 
         _itemShown = walk.Shown;
@@ -2649,9 +2681,36 @@ public sealed class ForgeScreen
             _ui.TextRightBig(b, before, beforeRight, y, feel is null ? Slate : TickInk(feel, Slate), UiTypography.Headline);
             used = edge - beforeRight + _ui.MeasureBig(before, UiTypography.Headline);
         }
-        _ui.TextBig(b, _ui.ShortenBig(label, edge - FX - used - UiMetrics.Space(16), UiTypography.Body),
+        _ui.TextBig(b, FitLabel(label, edge - FX - used - UiMetrics.Space(16)),
                     FX, y + (UiTypography.Headline - UiTypography.Body) / 2 + 2, Slate, UiTypography.Body);
         w.Y += CompareRowH;
+    }
+
+    /// <summary>The caption a built-in row wears after its stat word — one spelling for the inspector and the preview.</summary>
+    private const string BuiltInSuffix = "  ·  BUILT IN";
+
+    /// <summary>
+    /// A compare row's label in the room it has: the stat word is never cut — a built-in row drops its
+    /// caption first (2026-09-07: "CRITICAL CHANCE · BUILT IN" ended "CRITICAL CHA…" at 150 %, a
+    /// modifier row with its stat half gone), and only a label with no caption to give up is shortened.
+    /// </summary>
+    private string FitLabel(string label, int room)
+    {
+        if (_ui.MeasureBig(label, UiTypography.Body) <= room) return label;
+        if (label.EndsWith(BuiltInSuffix, StringComparison.Ordinal))
+        {
+            var bare = label[..^BuiltInSuffix.Length];
+            if (_ui.MeasureBig(bare, UiTypography.Body) <= room) return bare;
+        }
+        return _ui.ShortenBig(label, room, UiTypography.Body);
+    }
+
+    /// <summary>The gem's name and grant on one line, the NAME giving way first: the grant is the modifier and is never cut.</summary>
+    private string GemLine(ItemInstance gem, int room)
+    {
+        var tail = "  —  " + GemCraft.Grant(gem);
+        var name = _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}", room - _ui.MeasureBig(tail, UiTypography.Body), UiTypography.Body);
+        return name + tail;
     }
 
     /// <summary>The one-line verdict of the last act, on a quiet plate right under the button that caused it.</summary>
@@ -2731,9 +2790,18 @@ public sealed class ForgeScreen
             var cur = ItemAffixes.Of(item);
             var nxt = ItemAffixes.Of(r.Product);
             for (var i = 0; i < cur.Count && i < nxt.Count; i++)
-                ChangeRow(ref rows, ItemAffixes.StatWord(cur[i].Stat),
-                          ItemAffixes.GrantLabelPrecise(cur[i].Stat, TickedFor(item, AffixFeel(i), cur[i].Magnitude)),
-                          AffixValPrecise(nxt[i]), Met, b, FeelOf(item, AffixFeel(i)));
+                ChangeRow(ref rows, ItemModifiers.Word(cur[i].Stat),
+                          ItemModifiers.Value(cur[i].Stat, TickedFor(item, AffixFeel(i), cur[i].Magnitude), precise: true),
+                          ItemModifiers.Value(nxt[i].Stat, nxt[i].Magnitude, precise: true), Met, b, FeelOf(item, AffixFeel(i)));
+            // THE BUILT-IN CLIMBS WITH THE LEVEL TOO (ItemFamilies.BonusOf reads ItemLevel), so the
+            // preview shows it — a refine of a plain Common helm moves nothing else, and a preview
+            // that hid the one number it moves read as "changes nothing". AFTER the rolled stats: on a
+            // Legendary it is the smallest mover, and the four rolls are what the decimal was added for.
+            var curBuilt = ItemModifiers.BuiltIn(item);
+            var nxtBuilt = ItemModifiers.BuiltIn(r.Product);
+            for (var i = 0; i < curBuilt.Count && i < nxtBuilt.Count; i++)
+                ChangeRow(ref rows, ItemModifiers.Word(curBuilt[i].Stat) + BuiltInSuffix,
+                          ItemModifiers.Value(curBuilt[i], precise: true), ItemModifiers.Value(nxtBuilt[i], precise: true), Met, b);
             EndRows(rows);
 
             // ── WHAT IS UNCERTAIN — the step count and the risk, in one line. (The progress bar that
@@ -2910,8 +2978,8 @@ public sealed class ForgeScreen
             var rows = BeginRows(body);
             ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
                       product is null ? "—" : $"{hunter.PowerContribution(product):N0}", Met, b, FeelOf(item, PowerFeel));
-            ChangeRow(ref rows, $"ADDS {ItemAffixes.StatWord(GemCraft.StatOf(gem))}", null,
-                      ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem)), Met, b);
+            var adds = ItemModifiers.Gem(gem);
+            ChangeRow(ref rows, $"ADDS {ItemModifiers.Word(adds.Stat)}", null, ItemModifiers.Value(adds), Met, b);
             ChangeRow(ref rows, "SOCKETS USED", $"{item.Gems.Count} OF {slots}", $"{item.Gems.Count + 1} OF {slots}", Bone, b);
             EndRows(rows);
         }
@@ -2980,7 +3048,7 @@ public sealed class ForgeScreen
         FeelPurse(purse, hunter);          // a free first gem moves no balance, so no chip flashes
         Cue("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
         var paid = wasFree ? "YOUR FIRST GEM WAS FREE" : $"{cost} ESSENCE SPENT";
-        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({paid}).", Gold);
+        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {GemCraft.Grant(gem)}  ({paid}).", Gold);
     }
 
     /// <summary>
@@ -3026,7 +3094,7 @@ public sealed class ForgeScreen
         QuestionPlate(b, x, y, w, btnY + btnH, new Color(0x1C, 0x1A, 0x2A, 0xC0));
         _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
-        _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - q.NameX, UiTypography.Body),
+        _ui.TextBig(b, GemLine(gem, w - q.NameX),
                     x + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
         for (var i = 0; i < into.Count; i++)
             _ui.TextBig(b, into[i], x, line1 + i * UiTypography.Pitch(UiTypography.Secondary),
@@ -3064,7 +3132,7 @@ public sealed class ForgeScreen
         QuestionPlate(b, x, y, w, btnY + btnH, new Color(0x2A, 0x16, 0x1C, 0xC0));
         _ui.TextBig(b, "CRUSH THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
-        _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - q.NameX, UiTypography.Body),
+        _ui.TextBig(b, GemLine(gem, w - q.NameX),
                     x + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
         for (var i = 0; i < warn.Count; i++)
             _ui.TextBig(b, warn[i], x, line1 + i * UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.Secondary);
@@ -3417,18 +3485,11 @@ public sealed class ForgeScreen
         for (var i = 0; i < h; i++) _ui.Fill(b, new Rectangle(x + i, cy - (h - i), 2, (h - i) * 2), c);
     }
 
-    /// <summary>The stat's word. Core owns it — see <see cref="ItemAffixes.StatWord"/> for why.</summary>
-    private static string AffixName(AffixStat s) => ItemAffixes.StatWord(s);
-
-    /// <summary>The magnitude in the stat's own unit. Core owns it — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
-    private static string AffixVal(ItemAffix a) => ItemAffixes.GrantLabel(a.Stat, a.Magnitude);
-
-    /// <summary>One decimal, for the before → after rows only. Playtest 2026-08-23: "why does UPGRADE
-    /// not raise the stats?" — it does, ~2% relative a rung, but "+11.2% → +11.4%" both rounded to
-    /// "+11%", so the card showed the same number on both sides of the arrow and the growth looked
-    /// like a lie. Everywhere else keeps the round figure; the comparison is where precision earns
-    /// its clutter.</summary>
-    private static string AffixValPrecise(ItemAffix a) => ItemAffixes.GrantLabelPrecise(a.Stat, a.Magnitude);
+    // The affix word / value / precise-value helpers that stood here are gone (2026-09-07): every
+    // figure on this screen prints through ItemModifiers (Core), which owns the word, the unit and
+    // the sign in one place. One decimal on the before → after rows only — playtest 2026-08-23: "why
+    // does UPGRADE not raise the stats?" — it does, ~2% relative a rung, but "+11.2% → +11.4%" both
+    // rounded to "+11%", so the card showed the same number on both sides of the arrow.
 
     private void DrawDebug(SpriteBatch b)
     {

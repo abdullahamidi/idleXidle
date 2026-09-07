@@ -189,27 +189,7 @@ public static class GearTraits
     /// question the blurb raises rather than repeating it.
     /// </para>
     /// </remarks>
-    public static string EffectOf(ItemInstance? item)
-    {
-        if (item is null || TraitOf(item) is not { } trait) return "";
-
-        var m = ModsFor(trait, item.Rarity, item.ItemLevel);
-        var parts = new List<string>(4);
-
-        void Channel(string label, float value)
-        {
-            var pct = (value - 1f) * 100f;
-            if (MathF.Abs(pct) < 0.5f) return;                    // a rounding artefact is not an effect
-            parts.Add($"{(pct > 0 ? "+" : "")}{pct:0}% {label}");
-        }
-
-        Channel(Channels[0], m.Damage);
-        Channel(Channels[1], m.Health);
-        Channel(Channels[2], m.SkillRate);
-        Channel(Channels[3], m.Haul);
-
-        return parts.Count == 0 ? "" : string.Join("  ", parts);
-    }
+    public static string EffectOf(ItemInstance? item) => ItemModifiers.Join(ItemModifiers.Prefix(item));
 
     /// <summary>The four channels a trait can move, in the order <see cref="EffectOf"/> prints them.</summary>
     /// <remarks>
@@ -225,8 +205,17 @@ public static class GearTraits
     /// "haul" especially, which is not a word for loot outside games. The words cost about twenty
     /// pixels each in a condensed face and the panel wraps.
     /// </para>
+    /// <para>
+    /// The words themselves are <see cref="ItemAffixes.StatWord"/>'s — the one owner every item line
+    /// prints through (<see cref="ItemModifiers"/>) — read here in the channel order rather than
+    /// retyped, so a prefix line and an affix line cannot name one stat two ways.
+    /// </para>
     /// </remarks>
-    public static readonly string[] Channels = { "DAMAGE", "HEALTH", "SKILL RATE", "LOOT" };
+    public static readonly string[] Channels =
+    {
+        ItemAffixes.StatWord(AffixStat.Damage), ItemAffixes.StatWord(AffixStat.Health),
+        ItemAffixes.StatWord(AffixStat.SkillRate), ItemAffixes.StatWord(AffixStat.Haul),
+    };
 
     /// <summary>One line, player-facing. States the cost as plainly as the benefit.</summary>
     /// <remarks>The DIRECTION of the trade. <see cref="EffectOf"/> gives the size, per item.</remarks>

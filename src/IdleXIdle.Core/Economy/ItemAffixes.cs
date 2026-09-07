@@ -39,28 +39,26 @@ public static class ItemAffixes
     /// multiplicative channels are percentages.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The Forge's gem and family lines multiplied everything by 100 with a "%" — so a WARD gem
     /// granting +5.6 flat defense advertised "+560% DEFENCE" (adversarial review, pass five). One
-    /// formatter, beside the magnitudes it formats, so a new display site cannot re-invent the bug.
+    /// formatter, so a new display site cannot re-invent the bug.
+    /// </para>
+    /// <para>
+    /// THE NUMBER HALF ONLY. It is <see cref="ItemModifiers.Value(AffixStat, float, bool)"/> under its
+    /// older name, kept for the callers that put the word in a label column; a screen printing this
+    /// alone beside anything but <see cref="StatWord"/> is the "GLOVES +2%" bug (2026-09-07). Prefer
+    /// <see cref="Describe"/> / <see cref="ItemModifiers.Line(AffixStat, float, bool)"/>.
+    /// </para>
     /// </remarks>
-    public static string GrantLabel(AffixStat stat, float magnitude) => stat switch
-    {
-        AffixStat.Crit => $"+{magnitude:0.0}%",
-        AffixStat.Defense => $"+{magnitude:0}",
-        _ => $"+{magnitude * 100f:0}%",
-    };
+    public static string GrantLabel(AffixStat stat, float magnitude) => ItemModifiers.Value(stat, magnitude);
 
     /// <summary>
     /// <see cref="GrantLabel"/> at one extra decimal, for before → after comparisons. A single upgrade
     /// rung moves an affix by ~2% of itself, which the round figure swallows whole — both sides of the
     /// arrow printed the same number and the growth looked fake (playtest 2026-08-23).
     /// </summary>
-    public static string GrantLabelPrecise(AffixStat stat, float magnitude) => stat switch
-    {
-        AffixStat.Crit => $"+{magnitude:0.00}%",
-        AffixStat.Defense => $"+{magnitude:0.0}",
-        _ => $"+{magnitude * 100f:0.0}%",
-    };
+    public static string GrantLabelPrecise(AffixStat stat, float magnitude) => ItemModifiers.Value(stat, magnitude, precise: true);
 
     /// <summary>
     /// The stat's player-facing WORD — the other half of <see cref="GrantLabel"/>.
@@ -175,8 +173,8 @@ public static class ItemAffixes
         return affixes;
     }
 
-    /// <summary>A one-line, player-facing description of an affix (its sign and unit).</summary>
-    public static string Describe(ItemAffix a) => $"{GrantLabel(a.Stat, a.Magnitude)} {StatWord(a.Stat)}";
+    /// <summary>A one-line, player-facing description of an affix — "+4% DAMAGE" — through the one formatter (<see cref="ItemModifiers.Line(AffixStat, float, bool)"/>).</summary>
+    public static string Describe(ItemAffix a) => ItemModifiers.Line(a.Stat, a.Magnitude);
 
     private static uint Fnv1a(string s)
     {

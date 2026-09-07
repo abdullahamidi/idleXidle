@@ -255,17 +255,58 @@ public class EnchantmentsTests
             new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, swornVows: 0));
     }
 
+    /// <summary>
+    /// The room the narrowest consumer gives a sentence: the FORGE inspector's enchant band at UI
+    /// SCALE 150 %, two Secondary lines of about 31 characters (the p17 captures show the 42-character
+    /// FERVOUR line wrapping to two full lines there — build/shots/polish/p17d_forge_item_dev_hero_150.png).
+    /// A poor word break can waste a third of a line, so the cap sits well under the 62 the two lines
+    /// hold; a sentence past the band's two lines is cut, which puts its number back beside nothing.
+    /// </summary>
+    public const int BlurbBudget = 50;
+
     [Fact]
-    public void test_every_enchantment_blurb_fits_the_forge_row()
+    public void test_every_enchantment_blurb_fits_its_narrowest_column()
     {
-        // The Forge gives the blurb a fixed column, x=344 to the panel edge: 21 characters. Right-
-        // aligning it instead let a long name meet the blurb in the middle and render as one word
-        // ("SPLINTERON A KILL"), which is why the column is fixed and this cap exists.
+        // It used to be 21 characters for a fixed Forge column that no longer exists — every screen
+        // wraps the sentence now — and the fragments that fit 21 had lost the half that said what the
+        // number was OF ("BLOODLUST +50%"). The cap is the wrapped budget, and the sentence is whole.
+        foreach (var kind in System.Enum.GetValues<EnchantKind>())
+        foreach (var rarity in new[] { Rarity.Rare, Rarity.Legendary })
+        {
+            var blurb = new Enchantment(kind, Enchantments.MagnitudeFor(kind, rarity)).Blurb;
+            Assert.False(string.IsNullOrWhiteSpace(blurb));
+            Assert.True(blurb.Length <= BlurbBudget,
+                        $"{kind}'s blurb at {rarity} is {blurb.Length} chars — the Forge band at 150 % holds {BlurbBudget}: \"{blurb}\"");
+        }
+    }
+
+    [Fact]
+    public void test_every_numeric_enchantment_line_says_what_its_number_is_of()
+    {
+        // "BLOODLUST +50%" and "PER VOW: +10%" were a keystone's name, or no name at all, beside a
+        // percentage of nothing — the enchant version of "GLOVES +2%". A sentence that carries a
+        // number must carry the mechanic the number moves: one of the item stats, or the effect
+        // noun the sim's own rule is about (poison, a spare core, healing).
+        // A COARSE NET, not the guard: it asks that a mechanic word appear somewhere in a numeric
+        // sentence, so "ZEAL +50% AT FULL HEALTH" would pass it. The sentences themselves are pinned
+        // verbatim in item_modifier_presentation_test; this catches a new kind shipped as a fragment.
+        var stats = System.Enum.GetValues<AffixStat>().Select(ItemAffixes.StatWord).ToArray();
+        var effects = new[] { "POISON", "CORE", "HEALS" };
+        var numeric = 0;
         foreach (var kind in System.Enum.GetValues<EnchantKind>())
         {
-            var blurb = new Enchantment(kind, Enchantments.MagnitudeFor(kind, Rarity.Legendary)).Blurb;
-            Assert.False(string.IsNullOrWhiteSpace(blurb));
-            Assert.True(blurb.Length <= 21, $"{kind}'s blurb is {blurb.Length} chars — the Forge column fits 21: \"{blurb}\"");
+            var e = new Enchantment(kind, Enchantments.MagnitudeFor(kind, Rarity.Legendary));
+            if (!e.BlurbIsNumeric) continue;
+            numeric++;
+            Assert.True(stats.Any(s => e.Blurb.Contains(s, StringComparison.Ordinal))
+                        || effects.Any(w => e.Blurb.Contains(w, StringComparison.Ordinal)),
+                        $"{kind}: \"{e.Blurb}\" carries a number and names nothing it modifies.");
+            // Not a bare "NAME +N%": the number must not be the sentence's only claim.
+            var stripped = new string(e.Blurb.Where(c => !char.IsDigit(c) && c is not '%' and not '+' and not '.').ToArray()).Trim();
+            Assert.True(stripped.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 3,
+                        $"{kind}: \"{e.Blurb}\" is a name and a number.");
         }
+        // The magnitude-bearing kinds: HARVEST, VENOM, DESPERATION, SIPHON, FERVOUR, REVERB, BULWARK, TITHE.
+        Assert.Equal(8, numeric);
     }
 }

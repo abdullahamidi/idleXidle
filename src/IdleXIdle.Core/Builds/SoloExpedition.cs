@@ -627,9 +627,9 @@ public sealed class SoloExpedition
         if (_build.Triggers(_hunter).Contains(BuildTrigger.Desperation)
             && _champion.Health <= _champion.MaxHealth / 3)
         {
-            // Read the WORN magnitude so a rarer Desperation charm pays more and its "HAUL +N%" blurb is
-            // honest (it read a rarity-scaled % but the kick was a flat +50%). A mastery-notable source, with
-            // no worn enchant, keeps the base bonus.
+            // Read the WORN magnitude so a rarer Desperation charm pays more and its card ("BELOW A THIRD
+            // HEALTH: +N% LOOT") is honest (it read a rarity-scaled % but the kick was a flat +50%). A
+            // mastery-notable source, with no worn enchant, keeps the base bonus.
             var despMag = Economy.Enchantments.MagnitudeOf(_hunter.WornEnchantments, Economy.EnchantKind.Desperation);
             haul *= 1f + (despMag > 0f ? despMag : DesperationHaulBonus);
         }
