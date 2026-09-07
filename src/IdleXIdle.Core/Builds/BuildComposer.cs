@@ -210,8 +210,10 @@ public static class BuildComposer
                     if (progress!.HasReinforcement(def.Id, r.Name) && r.Modify is { } rm)
                         resolved = rm(resolved);
 
-            // The chosen variation owns the element; the woven element is the fallback before it.
-            build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
+            // The chosen variation owns the element; the woven element is the fallback before it. The
+            // variation itself rides along so a reader can tell a chosen Source from a default one
+            // (Build.PureSource does; the fight never looks).
+            build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow, variation));
         }
 
         // THE KEPT WORD — a build that has sworn NOTHING is held by the weakest promise it has found.

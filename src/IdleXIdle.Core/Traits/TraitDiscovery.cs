@@ -38,8 +38,12 @@ public readonly record struct TraitWaveFacts(
     bool CarriedWideSkill,
     int CreaturesPresent,
     float CritPercent,
-    bool OneElement,
-    int DistinctElements,
+    // A build COMMITTED to one Source — Builds.Build.PureSource's one reading: at least two woven
+    // skills, every one with its Source CHOSEN (a variation taken), all on the same Source. Not
+    // "every woven skill agrees", which a one-skill starter satisfies from its first wave and a
+    // fresh pair satisfies on the BODY default before anyone has decided anything.
+    bool PureSourceBuild,
+    int DistinctSources,
     int VowsKept);
 
 /// <summary>
@@ -101,8 +105,8 @@ public static class TraitDiscovery
     /// <summary>The reach at which a woven skill makes the wave a WIDE one.</summary>
     public const int WideTargets = 3;
 
-    /// <summary>The number of distinct elements at which a wave counts as a motley one.</summary>
-    public const int MotleyElements = 4;
+    /// <summary>The number of distinct Sources at which a wave counts as a motley one.</summary>
+    public const int MotleySources = 4;
 
     /// <summary>How many promises must be kept at once for a wave to count towards THE WEIGHT OF VOWS.</summary>
     /// <remarks>
@@ -160,8 +164,14 @@ public static class TraitDiscovery
         // line six waves apart.
         if (wave.Overkill >= GreatWasteMultiple * pool) ledger.Add(TraitCounter.GreatWasteWaves, 1);
         if (wave.CritPercent >= HighCritPercent) ledger.Add(TraitCounter.HighCritWaves, 1);
-        if (wave.OneElement) ledger.Add(TraitCounter.PureWaves, 1);
-        if (wave.DistinctElements >= MotleyElements) ledger.Add(TraitCounter.MotleyWaves, 1);
+        // A PURE wave is one fought by a build COMMITTED to a Source, and the commitment is decided
+        // in one place (Build.PureSource: two or more woven skills, each with a CHOSEN Source — the
+        // clause VOW OF THE PURE's proof uses — all on it). The fact used to be "every woven skill
+        // agrees", which the one-skill starter satisfies before the player has been offered a second
+        // slot — so a fresh account banked THE SINGLE NOTE's counter from wave one, and the pacing
+        // retune priced the threshold around that instead of fixing the fact.
+        if (wave.PureSourceBuild) ledger.Add(TraitCounter.PureWaves, 1);
+        if (wave.DistinctSources >= MotleySources) ledger.Add(TraitCounter.MotleyWaves, 1);
         // KEPT, not merely sworn, and counted the same way the fight counts them — one promise per
         // vow, however many times it was named, and only while its rule holds. What earns THE WEIGHT
         // OF VOWS is therefore the very thing it later pays for.

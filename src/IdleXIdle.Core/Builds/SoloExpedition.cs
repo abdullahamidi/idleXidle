@@ -550,9 +550,12 @@ public sealed class SoloExpedition
             CarriedWideSkill: wide,
             CreaturesPresent: m.CreaturesPresent,
             CritPercent: ctx.CritPercent,
-            OneElement: _build.Skills.Count > 0
-                        && _build.Skills.All(s => s.Source == _build.Skills[0].Source),
-            DistinctElements: ctx.DistinctSources,
+            // COMMITTED, not merely agreeing. Build.PureSource is the one reading of a pure-Source
+            // build (two or more woven skills, each with a chosen Source, all the same); the old
+            // inline "every woven skill matches the first" was true of the one-skill starter from
+            // its first wave, which is a fact no player had decided.
+            PureSourceBuild: _build.PureSource is not null,
+            DistinctSources: ctx.DistinctSources,
             // The promises this build is KEEPING, asked of the whole build and counted once per vow —
             // the same call the fight makes when it decides what those promises pay.
             VowsKept: Vows.KeptCount(_build.Vows, ctx));

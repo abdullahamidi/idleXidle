@@ -53,8 +53,8 @@ public class trait_system_test
         CarriedWideSkill: true,
         CreaturesPresent: 4,
         CritPercent: 60f,
-        OneElement: true,
-        DistinctElements: 4,
+        PureSourceBuild: true,
+        DistinctSources: 4,
         VowsKept: 2);
 
     // ── DETERMINISTIC, AND NEVER A LOTTERY (§29, §30, LAW 8) ──────────────────────────────────────

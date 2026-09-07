@@ -113,9 +113,9 @@ public enum TraitCounter
     MarkCasts,
     /// <summary>Waves cleared while keeping two or more vows at once.</summary>
     ManyVowWaves,
-    /// <summary>Waves cleared with every woven skill on one element.</summary>
+    /// <summary>Waves cleared by a build COMMITTED to one Source — <see cref="Build.PureSourceMinimumSkills"/> or more woven skills, all on it (<see cref="Build.PureSource"/>).</summary>
     PureWaves,
-    /// <summary>Waves cleared carrying four or more distinct elements.</summary>
+    /// <summary>Waves cleared carrying four or more distinct Sources.</summary>
     MotleyWaves,
 
     // ── Read off the account, which already keeps them (TraitDiscovery evaluates on every pass) ──
@@ -378,17 +378,22 @@ public static class TraitCatalogue
             At(TraitCounter.ManyVowWaves, 900),
             Fixed(new TraitRules(VowPayPerExtraKeptVow: 0.20f))),
 
-        // ── ELEMENTS ─────────────────────────────────────────────────────────────────────────────
+        // ── SOURCES ──────────────────────────────────────────────────────────────────────────────
         new("t_single_note", "THE SINGLE NOTE",
-            "If every skill you carry shares one element, your first cast each wave strikes twice.",
+            "If every skill you carry shares one source, your first cast each wave strikes twice.",
             "One voice, said twice, is louder than two.",
             TraitTag.Elements,
-            // Committing to one voice awakens the voice saying it twice.
+            // Committing to one voice awakens the voice saying it twice. A voice is at least two
+            // skills, each with its Source CHOSEN — a variation taken, the clause VOW OF THE PURE's
+            // proof already lives by — and all on one Source (Build.PureSource). So the lone signature
+            // a new game hands out banks nothing here, and neither does a fresh pair sitting on the
+            // BODY default: the threshold is priced in waves of an actual commitment, measured by
+            // trait_pacing_benchmark_test's FIRST CHOICE age.
             At(TraitCounter.PureWaves, 120),
             Fixed(new TraitRules(OneSourceRepeatsFirstCast: true))),
 
         new("t_many_tongues", "MANY TONGUES",
-            "Carrying four different elements makes every matchup a strong one.",
+            "Carrying four different sources makes every matchup a strong one.",
             "Speak to all of them and none of them answers badly.",
             TraitTag.Elements,
             // Speaking to every element awakens every element answering well.
@@ -492,7 +497,10 @@ public static class TraitCatalogue
         TraitTag.Kills => "KILLS",
         TraitTag.Marks => "MARKS",
         TraitTag.Vows => "VOWS",
-        TraitTag.Elements => "ELEMENTS",
+        // The enum member keeps its name (nothing in a save reads it, but nothing needs to move); the
+        // LABEL says what the weave screen says, because both traits under it are about the Source a
+        // SKILL is made of, and "element" is the word the forge and the chests use for ITEMS.
+        TraitTag.Elements => "SOURCES",
         TraitTag.Sets => "GEAR SETS",
         TraitTag.Regions => "REGIONS",
         TraitTag.Failure => "FAILURE",

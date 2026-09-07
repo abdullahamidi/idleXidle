@@ -93,15 +93,44 @@ public class trait_pacing_benchmark_test
     /// The four shapes of build one account walks through, in the order it walks them.
     /// </summary>
     /// <remarks>
-    /// A bench that fights all six ages with one weave cannot awaken the shield, reflect or critical
+    /// <para>
+    /// A bench that fights all seven ages with one weave cannot awaken the shield, reflect or critical
     /// families at all, and would report their silence as a fact about the catalogue's pacing rather
-    /// than about its own fixture. These four are the honest reading of "multiple builds": a first
-    /// element, a spread of elements once matchups matter, a defensive rebuild, and a critical one.
+    /// than about its own fixture. These six are the honest reading of "multiple builds": the one
+    /// skill a new game hands you, that skill with its variation chosen, the first skill you pair with
+    /// it, a spread of sources once matchups matter, a defensive rebuild, and a critical one.
+    /// </para>
+    /// <para>
+    /// <b>The first three are the onboarding as shipped, not a simplification of it.</b> A champion
+    /// starts with ONE slot and its signature in it (<c>PlayerLoadout.Starter</c>). The signature's own
+    /// variation is choosable at level 1 — four waves — and it is the only Source decision a one-skill
+    /// player can make. The second slot opens at wave 5, but every shared skill sits behind a mastery
+    /// road that costs SEVEN points (three trunk minors and the road itself, <c>MasteryCatalog</c>), and
+    /// depth pays points as <c>floor(0.9 * sqrt(depth))</c> per region: the first conquest (wave 20) is
+    /// worth four, so the first road — and with it the first PAIR — arrives early in the SECOND region,
+    /// after the first conquest, not at wave 5. This bench used to fight the FRESH age with a four-skill
+    /// quartet, which meant the one state the PURE counter's semantics turn on — a build with nothing to
+    /// have chosen between — was never posed at all, and the counter's "a lone skill agrees with itself"
+    /// reading measured as pacing rather than as the fact bug it was.
+    /// </para>
+    /// <para>
+    /// <b>The pair is CHOSEN, not merely woven.</b> The weave screen sets no Source; every slot is seeded
+    /// BODY and the variation is the only Source lever there is. A pair with nothing chosen fights as
+    /// BODY+BODY and is not a commitment (<c>Build.PureSource</c>, the rule VOW OF THE PURE's proof
+    /// uses), so the FIRST CHOICE age takes both variations — HARD HANDS as OPEN HAND and BLOW as
+    /// FLATTEN, both BODY — exactly as a player who has decided would.
+    /// </para>
     /// </remarks>
     private enum Weave
     {
-        /// <summary>One element, the whole quartet. What a new player picks and stays on.</summary>
-        Mono,
+        /// <summary>The champion's own signature, alone and unchosen — the one skill a new game hands you.</summary>
+        Starter,
+
+        /// <summary>The signature alone, its variation chosen — the one Source decision a one-skill player can make.</summary>
+        Signature,
+
+        /// <summary>The signature and the first road's skill, both chosen to the same source — the first thing a player can commit to.</summary>
+        FirstPair,
 
         /// <summary>Four elements across the quartet — the weave of a player who has learned matchups.</summary>
         Motley,
@@ -114,7 +143,7 @@ public class trait_pacing_benchmark_test
     }
 
     /// <summary>
-    /// The six ages, in the order one account lives them.
+    /// The seven ages, in the order one account lives them.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -124,11 +153,17 @@ public class trait_pacing_benchmark_test
     /// measurement rather than trusted.
     /// </para>
     /// <list type="bullet">
-    /// <item><b>FRESH</b> — a first sitting. Nothing trained, no gear, the starting region, and three
-    ///   descents, which is about what a first session is before the player stops to spend anything.</item>
+    /// <item><b>FRESH</b> — a first sitting. Nothing trained, no gear, the starting region, the one
+    ///   skill the game hands you, and three descents, which is about what a first session is before
+    ///   the player stops to spend anything.</item>
     /// <item><b>EARLY</b> — around the first region conquest. Ten ranks in the three stats a new player
-    ///   buys first, the first gear worth wearing, still the starting region, and the conquest itself
-    ///   granted at the end of the age.</item>
+    ///   buys first, the first gear worth wearing, still the starting region, the signature's variation
+    ///   chosen (the only Source decision on offer), and the conquest itself granted at the end of the
+    ///   age. Still ONE skill: the slots have opened, but the first road is seven points away.</item>
+    /// <item><b>FIRST CHOICE</b> — the second region, the first road bought, its skill woven beside the
+    ///   signature and its variation chosen to the SAME source. The first decision about sources an
+    ///   account can make, and the earliest a PURE wave can honestly exist. Fifteen ranks, better gear,
+    ///   twelve descents — about the stretch between the first road and the second.</item>
     /// <item><b>EARLY-MID</b> — "multiple regions and builds". The weave changes here: the player has
     ///   learned matchups and moves off one element onto four, which is a different account of the same
     ///   character, and hunts the second region.</item>
@@ -150,13 +185,17 @@ public class trait_pacing_benchmark_test
     /// </remarks>
     private static IReadOnlyList<Stage> Career() => new[]
     {
-        new Stage("FRESH", "first sitting: untrained, no gear, one element, 3 descents",
-                  Ranks: 0, GearDamage: 1f, GearHealth: 1f, Weave: Weave.Mono, GearCritPercent: 0f, Vows: false,
+        new Stage("FRESH", "first sitting: untrained, no gear, the signature alone and unchosen, 3 descents",
+                  Ranks: 0, GearDamage: 1f, GearHealth: 1f, Weave: Weave.Starter, GearCritPercent: 0f, Vows: false,
                   RegionIndex: 0, Runs: 3, Conquered: 0, Mastered: 0, Sets: 0),
 
-        new Stage("EARLY", "around the first conquest: 10 ranks, first gear, still region 1",
-                  Ranks: 10, GearDamage: 1.2f, GearHealth: 1.1f, Weave: Weave.Mono, GearCritPercent: 0f, Vows: false,
+        new Stage("EARLY", "around the first conquest: 10 ranks, first gear, still region 1, the signature alone with OPEN HAND chosen",
+                  Ranks: 10, GearDamage: 1.2f, GearHealth: 1.1f, Weave: Weave.Signature, GearCritPercent: 0f, Vows: false,
                   RegionIndex: 0, Runs: 12, Conquered: 1, Mastered: 0, Sets: 0),
+
+        new Stage("FIRST CHOICE", "the second region and the first road: BLOW as FLATTEN beside OPEN HAND, 15 ranks, 12 descents",
+                  Ranks: 15, GearDamage: 1.35f, GearHealth: 1.15f, Weave: Weave.FirstPair, GearCritPercent: 0f, Vows: false,
+                  RegionIndex: 1, Runs: 12, Conquered: 1, Mastered: 0, Sets: 0),
 
         new Stage("EARLY-MID", "multiple regions and builds: 20 ranks, the weave moves to four elements",
                   Ranks: 20, GearDamage: 1.5f, GearHealth: 1.2f, Weave: Weave.Motley, GearCritPercent: 0f, Vows: false,
@@ -194,6 +233,18 @@ public class trait_pacing_benchmark_test
 
     /// <summary>The four skills a woven account fights with — three actives and the MIRE field.</summary>
     private static readonly string[] Quartet = { "hammer_blow", "volley_spray", "field_mire", "sign_call" };
+
+    /// <summary>The seeker's own skill — the one a new game hands out, and the only one that needs no road.</summary>
+    private const string Signature = "sig_seeker_hard_hands";
+
+    /// <summary>The signature's BODY variation — the first Source decision a one-skill player can make.</summary>
+    private const string SignatureVariation = "OPEN HAND";
+
+    /// <summary>The first shared skill of the career: what the hammer road teaches, an active.</summary>
+    private const string FirstShared = "hammer_blow";
+
+    /// <summary>BLOW's BODY variation — chosen to match the signature, which is what makes the pair a commitment.</summary>
+    private const string FirstSharedVariation = "FLATTEN";
 
     /// <summary>The four elements a player who has learned matchups spreads across the quartet.</summary>
     private static readonly Source[] FourElements =
@@ -241,7 +292,12 @@ public class trait_pacing_benchmark_test
                 : SkillShape.None,
         };
 
-        for (var i = 0; i < 4; i++)
+        // How many skills this age actually has to weave: one until the first road is bought, two once
+        // it is, and the full four from the second region's build onward (the quartet ages deliberately
+        // keep their four-shared-skill shape — the curve was re-paced against it).
+        var skills = stage.Weave switch { Weave.Starter or Weave.Signature => 1, Weave.FirstPair => 2, _ => 4 };
+
+        for (var i = 0; i < skills; i++)
         {
             Vow? vow = null;
             if (stage.Vows && i == 0) vow = Vows.ById("vow_complete");
@@ -249,6 +305,16 @@ public class trait_pacing_benchmark_test
 
             b.Equip(stage.Weave switch
             {
+                // THE ONBOARDING AS SHIPPED. The champion's own signature at the starter loadout's woven
+                // seed (PlayerLoadout.Starter weaves it BODY, unchosen); then the same skill with its
+                // variation taken; then the first road's skill beside it, chosen to the SAME source.
+                // Both actives — the first road teaches an active, and two actives fit the four-slot
+                // budget the first conquest has opened by then.
+                Weave.Starter => TestBuilds.Skill(Signature, Source.Body, vow),
+                Weave.Signature => TestBuilds.Chosen(Signature, SignatureVariation, vow),
+                Weave.FirstPair => i == 0
+                    ? TestBuilds.Chosen(Signature, SignatureVariation, vow)
+                    : TestBuilds.Chosen(FirstShared, FirstSharedVariation, vow),
                 // The DEFENSIVE rebuild. BANKED turns REPAY's banked total into shield and NET doubles
                 // JAWS's reflect — both taken through the real variation, so the fight sees the content
                 // the catalogue actually ships rather than a hand-set field.
@@ -260,7 +326,6 @@ public class trait_pacing_benchmark_test
                                           _ => TestBuilds.Resolved("snare_jaws", "NET")),
                     _ => TestBuilds.Skill(Quartet[i], FourElements[i], vow),
                 },
-                Weave.Mono => TestBuilds.Skill(Quartet[i], Source.Spirit, vow),
                 _ => TestBuilds.Skill(Quartet[i], FourElements[i], vow),
             });
         }
@@ -288,9 +353,12 @@ public class trait_pacing_benchmark_test
     /// zero here is read as a broken fixture rather than as a fact about the design.</param>
     /// <param name="CritPercent">The build's critical chance, printed for the same reason: the
     /// HighCritWaves counter reads this number and nothing else.</param>
+    /// <param name="PureWaves">The PURE accumulator at the END of this age — cumulative, like the
+    /// ledger it is read from. Printed so the one-skill starter's zero and the first pair's climb are
+    /// both visible, rather than inferred from which age THE SINGLE NOTE happened to land in.</param>
     private sealed record Checkpoint(
         Stage Stage, int Runs, int Waves, int CumulativeWaves,
-        IReadOnlyList<string> NewIds, int Total, int VowsKept, float CritPercent);
+        IReadOnlyList<string> NewIds, int Total, int VowsKept, float CritPercent, double PureWaves);
 
     /// <summary>
     /// Live one whole career, checkpointing at the end of each age.
@@ -377,7 +445,8 @@ public class trait_pacing_benchmark_test
             cumulativeWaves += wavesThisAge;
             checkpoints.Add(new Checkpoint(
                 stage, stage.Runs, wavesThisAge, cumulativeWaves,
-                newIds, ledger.DiscoveredCount, keptThisAge, ctx.CritPercent));
+                newIds, ledger.DiscoveredCount, keptThisAge, ctx.CritPercent,
+                ledger.Of(TraitCounter.PureWaves)));
         }
 
         return checkpoints;
@@ -392,12 +461,12 @@ public class trait_pacing_benchmark_test
     {
         var curve = RunCareer();
 
-        _out.WriteLine("THE DISCOVERY CURVE — one account, six ages, real cleared waves");
+        _out.WriteLine("THE DISCOVERY CURVE — one account, seven ages, real cleared waves");
         _out.WriteLine("");
-        _out.WriteLine($"{"AGE",-11} {"WEAVE",-8} {"RUNS",4} {"WAVES",6} {"CUM.WAVES",9} {"VOWS",4} {"CRIT%",6} {"NEW",4} {"TOTAL",5}   OF {TraitCatalogue.All.Count}");
+        _out.WriteLine($"{"AGE",-13} {"WEAVE",-9} {"RUNS",4} {"WAVES",6} {"CUM.WAVES",9} {"VOWS",4} {"CRIT%",6} {"PURE",5} {"NEW",4} {"TOTAL",5}   OF {TraitCatalogue.All.Count}");
         foreach (var c in curve)
-            _out.WriteLine($"{c.Stage.Name,-11} {c.Stage.Weave,-8} {c.Runs,4} {c.Waves,6} {c.CumulativeWaves,9} " +
-                           $"{c.VowsKept,4} {c.CritPercent,6:0.0} {c.NewIds.Count,4} {c.Total,5}");
+            _out.WriteLine($"{c.Stage.Name,-13} {c.Stage.Weave,-9} {c.Runs,4} {c.Waves,6} {c.CumulativeWaves,9} " +
+                           $"{c.VowsKept,4} {c.CritPercent,6:0.0} {c.PureWaves,5:0} {c.NewIds.Count,4} {c.Total,5}");
 
         _out.WriteLine("");
         foreach (var c in curve)
@@ -425,15 +494,16 @@ public class trait_pacing_benchmark_test
         // rewrite this block to the new measurement. A failure here after a catalogue change is the
         // point of the file — it means the pacing moved and somebody has to say by how much.
         //
-        //   AGE          CURRENT (asserted)      TARGET (the brief)
-        //   FRESH        see below               0-1
-        //   EARLY        see below               about 2-4 total
-        //   EARLY-MID    see below               about 5-8 total
-        //   MID / LATE   see below               keeps unfolding gradually
-        //   DEVELOPED    see below               substantial breadth, not reached early
+        //   AGE           CURRENT (asserted)      TARGET (the brief)
+        //   FRESH         see below               0-1
+        //   EARLY         see below               about 2-4 total
+        //   FIRST CHOICE  see below               (the first road; the first sources decision)
+        //   EARLY-MID     see below               about 5-8 total
+        //   MID / LATE    see below               keeps unfolding gradually
+        //   DEVELOPED     see below               substantial breadth, not reached early
         var by = curve.ToDictionary(c => c.Stage.Name, StringComparer.Ordinal);
 
-        Assert.Equal(6, curve.Count);
+        Assert.Equal(7, curve.Count);
         Assert.All(curve, c => Assert.True(c.Waves > 0, $"{c.Stage.Name}: cleared no waves — the fixture, not the design."));
         Assert.All(curve, c => Assert.True(c.Waves < DepthCap * c.Runs,
             $"{c.Stage.Name}: hit the depth cap, so this row measures the cap and not the career."));
@@ -452,40 +522,90 @@ public class trait_pacing_benchmark_test
         Assert.True(by["MID"].CritPercent < TraitDiscovery.HighCritPercent,
             "a MID account with no crit gear should NOT be banking critical waves.");
 
+        // THE PURE COUNTER'S OWN SEMANTIC, posed at both ends. A build of ONE skill has never decided
+        // anything about sources — not even with its own variation chosen — so the first two ages must
+        // bank nothing. FRESH is the assertion that failed under the old "a lone skill agrees with
+        // itself" reading, which had the starter banking a commitment from its first wave. And the first
+        // PAIR, both variations chosen to one source, is the earliest honest commitment there is, so it
+        // must bank every wave it clears from there on.
+        Assert.Equal(TestBuilds.SourceOf(Signature, SignatureVariation), TestBuilds.SourceOf(FirstShared, FirstSharedVariation));
+        Assert.Equal(0d, by["FRESH"].PureWaves);
+        Assert.Equal(0d, by["EARLY"].PureWaves);
+        Assert.Equal(by["FIRST CHOICE"].Waves, by["FIRST CHOICE"].PureWaves);
+
+        // WHERE THE SINGLE NOTE LANDS — pinned by name, because the age totals below would hold for any
+        // trio of traits and the whole point of this measurement was this one trait's placement.
+        Assert.Equal(CurrentFirstChoicePure, by["FIRST CHOICE"].PureWaves);
+        Assert.Contains("t_single_note", by[CurrentSingleNoteAge].NewIds);
+
         // CURRENT — the curve, as measured today. Each is a total, not a delta.
         Assert.Equal(CurrentFresh, by["FRESH"].Total);
         Assert.Equal(CurrentEarly, by["EARLY"].Total);
+        Assert.Equal(CurrentFirstChoice, by["FIRST CHOICE"].Total);
         Assert.Equal(CurrentEarlyMid, by["EARLY-MID"].Total);
         Assert.Equal(CurrentMid, by["MID"].Total);
         Assert.Equal(CurrentLate, by["LATE"].Total);
         Assert.Equal(CurrentDeveloped, by["DEVELOPED"].Total);
 
-        // CURRENT — the named traits of the first sitting. These are the burst the brief is about.
+        // CURRENT — the named traits of the first two ages. These are the burst the brief is about.
         Assert.Equal(CurrentFreshIds, by["FRESH"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+        Assert.Equal(CurrentEarlyIds, by["EARLY"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
     }
 
-    // ── THE CURVE (measured 2026-09-06, AFTER the pacing retune) ─────────────────────────────────
+    // ── THE CURVE (measured 2026-09-07, AFTER the PURE semantic correction) ──────────────────────
     //
     // These constants are the ONLY place the discovery curve is written down. A retune edits exactly
     // this block and nothing else in the file, and a failure here means the pacing moved and somebody
     // has to say by how much.
     //
-    //   AGE          BEFORE   AFTER   TARGET
-    //   FRESH          2        1     0-1        the WASTE pair was two names for one number line
-    //   EARLY          5        3     about 2-4
-    //   EARLY-MID     13        5     about 5-8  it had been half the catalogue, eight in one age
-    //   MID           20       13     gradual
-    //   LATE          24       22
-    //   DEVELOPED     26       26     substantial breadth — 120 descents and 7,988 cleared waves
-    private const int CurrentFresh = 1;
-    private const int CurrentEarly = 3;
-    private const int CurrentEarlyMid = 5;
-    private const int CurrentMid = 13;
+    //   AGE           RETUNE   NOW    TARGET
+    //   FRESH           1       0     0-1        the honest starter (one skill) wastes too little for
+    //                                            THE SPILL, which moves one age on
+    //   EARLY           3       2     about 2-4  THE SPILL, WHAT KILLED YOU — still one skill, the
+    //                                            signature with OPEN HAND chosen
+    //   FIRST CHOICE    —       3                new age: THE SINGLE NOTE lands here, and only here
+    //   EARLY-MID       5       4     about 5-8  CARRION WEIGHT moved to MID
+    //   MID            13      12     gradual
+    //   LATE           22      22
+    //   DEVELOPED      26      26     substantial breadth — 120 descents and 8,099 cleared waves
+    //
+    // NOTHING BUT THE FIXTURE MOVED THE OTHER ROWS. The retune fought FRESH and EARLY with a four-skill
+    // quartet the ladder cannot produce; the honest one-skill ages clear about as many waves (127
+    // against 131 in EARLY) but with one skill's overkill, and the twelve added descents re-roll every
+    // later age's band stream (runIndex is one counter across the career). No threshold but PURE's was
+    // re-examined, and PURE's did not move.
+    //
+    // THE PURE COLUMN, which is what this measurement was for. Under the old "a lone skill agrees
+    // with itself" reading the FRESH age banked 12 PURE waves it had never decided on; under a reading
+    // that counted RESOLVED sources a wave-5 pair banked on the BODY default before anyone had chosen
+    // anything. Under Build.PureSource (two or more skills, each with its variation chosen, all one
+    // source) FRESH and EARLY bank 0 and the FIRST CHOICE pair banks every wave it clears: THE SINGLE
+    // NOTE (120) awakens 120 committed waves in, ten of the age's twelve descents — inside the stretch
+    // between the first road and the second, on the build that earned it. The threshold stayed where
+    // the retune put it: the correction moved the counter's START, and the age with it, not the count.
+    private const int CurrentFresh = 0;
+    private const int CurrentEarly = 2;
+    private const int CurrentFirstChoice = 3;
+    private const int CurrentEarlyMid = 4;
+    private const int CurrentMid = 12;
     private const int CurrentLate = 22;
     private const int CurrentDeveloped = 26;
 
-    /// <summary>The first sitting's one discovery. It was TWO, and both off the same counter.</summary>
-    private static readonly string[] CurrentFreshIds = { "t_spill" };
+    /// <summary>The PURE accumulator at the end of the FIRST CHOICE age — every wave that age cleared.</summary>
+    private const double CurrentFirstChoicePure = 145;
+
+    /// <summary>The age THE SINGLE NOTE awakens in.</summary>
+    private const string CurrentSingleNoteAge = "FIRST CHOICE";
+
+    /// <summary>
+    /// The first sitting's discoveries: NONE. With the one skill a new game actually hands out, the
+    /// first three descents awaken nothing at all — THE SPILL, the retune's one first-sitting
+    /// discovery, moves one age on, into EARLY.
+    /// </summary>
+    private static readonly string[] CurrentFreshIds = Array.Empty<string>();
+
+    /// <summary>EARLY's two discoveries, pinned by name so the prose above and the table cannot drift apart.</summary>
+    private static readonly string[] CurrentEarlyIds = { "t_spill", "t_what_killed_you" };
 
     // ── DETERMINISM ──────────────────────────────────────────────────────────────────────────────
 
@@ -497,7 +617,7 @@ public class trait_pacing_benchmark_test
         // above are opinions rather than measurements.
         static string Flatten(IReadOnlyList<Checkpoint> c) =>
             string.Join(" | ", c.Select(x =>
-                $"{x.Stage.Name}:{x.Runs}:{x.Waves}:{x.Total}:{string.Join(",", x.NewIds)}"));
+                $"{x.Stage.Name}:{x.Runs}:{x.Waves}:{x.Total}:{x.PureWaves}:{string.Join(",", x.NewIds)}"));
 
         Assert.Equal(Flatten(RunCareer()), Flatten(RunCareer()));
     }

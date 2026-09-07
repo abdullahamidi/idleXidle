@@ -213,8 +213,16 @@ public sealed record Keystone
 /// variation owns it, the woven element is the fallback before that choice — so one def can be
 /// woven as two different elements by two players.
 /// </para>
+/// <para>
+/// <see cref="Variation"/> is WHICH variation the skill was taken as, or null while it is unchosen.
+/// The fight never reads it (the def is already resolved); it is here so a reader that needs to know
+/// whether <see cref="Source"/> was a DECISION or a default can tell — the only Source lever the
+/// player has is a variation (<c>PlayerLoadout</c> seeds every woven slot BODY and the weave screen
+/// sets no Source of its own), which is the rule VOW OF THE PURE's proof already lives by
+/// (<see cref="VowTemptation.EveryWovenSourceChosen"/>) and <see cref="Build.PureSource"/> now shares.
+/// </para>
 /// </remarks>
-public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null)
+public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null, SkillVariation? Variation = null)
 {
     /// <summary>Does this skill cost the champion its action? The def's own kind decides.</summary>
     public bool TakesABeat => Def.TakesABeat;
@@ -385,6 +393,79 @@ public sealed class Build
 
     public IReadOnlyList<EquippedSkill> Skills => _skills;
     public IReadOnlyList<Keystone> Keystones => _keystones;
+
+    /// <summary>
+    /// How many woven skills it takes before "every one of them draws the same Source" describes a
+    /// decision about the build rather than the one skill that happens to be in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two, read off the unlock ladder rather than picked. A champion starts with ONE slot and its own
+    /// signature in it (<c>Unlocks.SkillSlots</c>, <c>PlayerLoadout.Starter</c>); the signature's own
+    /// variation, choosable at level 1, is the first Source decision a player can make, and one decided
+    /// skill still agrees with itself. The second skill is the first thing there is to agree WITH — and
+    /// on the shipped ladder it arrives late: the second slot opens at wave 5, but every shared skill is
+    /// behind a mastery road costing seven points (three trunk minors and the road, <c>MasteryCatalog</c>),
+    /// which is around the first conquest and the start of the second region, not the first sitting.
+    /// </para>
+    /// </remarks>
+    public const int PureSourceMinimumSkills = 2;
+
+    /// <summary>
+    /// The one Source this build is COMMITTED to, or null when it is not committed to any.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Committed means three things at once: at least <see cref="PureSourceMinimumSkills"/> woven
+    /// skills; every woven skill's Source CHOSEN, which is to say its variation taken
+    /// (<see cref="EquippedSkill.Variation"/> not null); and every woven skill on the same Source.
+    /// </para>
+    /// <para>
+    /// <b>Chosen, not merely resolved.</b> The composer resolves a skill's Source as "the variation's,
+    /// else the woven pick's" — and the woven pick is BODY on every slot the shipped game ever weaves,
+    /// because <c>PlayerLoadout.AddSkill</c> seeds it and the weave screen offers no lever on it. So a
+    /// signature and a fresh shared skill agree on BODY before the player has decided anything, and a
+    /// reading that counted resolved Sources would call that pre-decision window a commitment — the
+    /// same fact-without-a-decision this property exists to refuse, one rung up. The game already has
+    /// one rule for when a single Source was a decision and not a default: VOW OF THE PURE's proof
+    /// demands <see cref="VowTemptation.EveryWovenSourceChosen"/>, every woven skill with a chosen
+    /// variation. This borrows exactly that clause and adds the two-skill minimum on top — the vow's
+    /// proof has no minimum and a one-skill build with its variation chosen does prove it, so the two
+    /// are NOT interchangeable: never route the vow's temptation through this property.
+    /// </para>
+    /// <para>
+    /// Every woven skill takes part, whatever its kind. A Field or a Reaction draws its Source exactly as
+    /// an Active does — the Source riders and the matchup read it on every hit it lands — and a
+    /// champion's own signature is a woven skill like the shared twelve. An empty slot is not in
+    /// <see cref="Skills"/> and neither is a skill the composer refused (a road the mastery no longer
+    /// reaches, another champion's signature, an id the catalogue does not know), so none of those can
+    /// count as a skill here or invent a Source. A skill woven and not yet chosen is in the build and
+    /// fights at its default Source, and it holds the commitment open until it is chosen: the vow's rule,
+    /// and the honest one, since the player has not yet said what that skill is made of.
+    /// </para>
+    /// <para>
+    /// This is the ONE reading of "a pure-Source build" for anything that wants to RECOGNISE the choice
+    /// — the trait ledger's PURE waves read it and nothing else may re-derive it. It is deliberately not
+    /// the predicate the fight PAYS: THE SINGLE NOTE's payout and the mastery PURE node read "do all
+    /// woven skills agree", defaults included, which a lone skill satisfies. Recognition is the stricter
+    /// of the two by construction — every build this names is one the payout fires on — so a player can
+    /// never awaken the trait on a build it would refuse to pay.
+    /// </para>
+    /// </remarks>
+    public Source? PureSource
+    {
+        get
+        {
+            if (_skills.Count < PureSourceMinimumSkills) return null;
+            var source = _skills[0].Source;
+            foreach (var s in _skills)
+            {
+                if (s.Variation is null) return null;   // a default, not a decision
+                if (s.Source != source) return null;
+            }
+            return source;
+        }
+    }
 
     /// <summary>
     /// The Vows this build has sworn — each one ONCE, however many times it was named.
