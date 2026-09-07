@@ -31,7 +31,7 @@ namespace IdleXIdle.Core.Tests.Builds;
 public class VowCapacityTest
 {
     private static BuildContext Met => new(
-        DistinctStyles: 1, DistinctSources: 1, DistinctChosenSources: 1, SkillsWoven: 4, SkillSlots: 4,
+        DistinctStyles: 1, DistinctSources: 1, DistinctChosenSources: 1, ChosenSingleSource: true, SkillsWoven: 4, SkillSlots: 4,
         CritPercent: 0f, BaseCritPercent: 0f, SkillRate: 1f, Defence: 0,
         KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
 
@@ -73,7 +73,7 @@ public class VowCapacityTest
     {
         // Restriction buys power. A promise you are not keeping is not a restriction.
         var broken = new BuildContext(
-            DistinctStyles: 3, DistinctSources: 3, DistinctChosenSources: 3, SkillsWoven: 2, SkillSlots: 4,
+            DistinctStyles: 3, DistinctSources: 3, DistinctChosenSources: 3, ChosenSingleSource: false, SkillsWoven: 2, SkillSlots: 4,
             CritPercent: 0f, BaseCritPercent: 0f, SkillRate: 1f, Defence: 9,
             KeystonesWorn: 2, WornSlots: new HashSet<BareSlot> { BareSlot.Boots });
 
@@ -250,7 +250,9 @@ public class VowCapacityTest
     {
         var hunter = new Hunter();
         var build = new Build { SlotCapacity = 1 };
-        build.Equip(TestBuilds.Skill("hammer_blow", Source.Body, sworn));
+        // Taken AS a variation: VOW OF THE PURE is kept by a CHOSEN single Source (2026-09-07), and a
+        // skill still on its Source seed cannot pose it — the guard below would blame the content.
+        build.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN", sworn));
 
         // THE TWO CADENCE DEMANDS ARE THE ONLY ONES A PLAIN BUILD CANNOT POSE, so the fixture buys the
         // skill rate they ask for — measured against the build's own rate rather than assumed, because

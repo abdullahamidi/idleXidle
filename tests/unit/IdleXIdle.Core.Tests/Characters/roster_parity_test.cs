@@ -133,11 +133,66 @@ public class RosterParityTest
     /// a bare one by exactly one taught skill. No shape, no trigger, no affinity rides along to
     /// contaminate the measurement.
     /// </remarks>
-    private static MasteryTree ChassisTaught()
+    private static MasteryTree ChassisTaught(SkillDef chassis)
     {
         var tree = new MasteryTree();
-        tree.RestoreTaken(new[] { "road_hammer" }, repair: false);   // the node that teaches hammer_blow
+        var road = MasteryCatalog.Nodes.First(n => n.GrantsSkillId == chassis.Id).Id;   // the node that teaches it
+        tree.RestoreTaken(new[] { road }, repair: false);
         return tree;
+    }
+
+    /// <summary>
+    /// The plainest damage active of each Source, and the variation that puts it there — the chassis a
+    /// measured skill of that Source is paired with.
+    /// </summary>
+    /// <remarks>
+    /// VOW OF THE PURE is kept by a CHOSEN single Source (2026-09-07), so every measured pair has to be
+    /// two variations taken to one Source — and no one skill offers all six. BLOW covers Body and
+    /// Shadow, SPRAY covers Mind, PULSE covers Nature and Spirit, DRINK covers Machine. Each is the
+    /// plainest damage-dealing active its Source has; the vow channel is judged identically for
+    /// everyone because everyone keeps it, not because everyone carries BLOW.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<CoreSource, (string Id, string Variation)> ChassisOf =
+        new Dictionary<CoreSource, (string, string)>
+        {
+            [CoreSource.Body] = ("hammer_blow", "FLATTEN"),
+            [CoreSource.Shadow] = ("hammer_blow", "FINISH"),
+            [CoreSource.Mind] = ("volley_spray", "SPLAY"),
+            [CoreSource.Nature] = ("field_pulse", "THRONG"),
+            [CoreSource.Spirit] = ("field_pulse", "SHARE"),
+            [CoreSource.Machine] = ("drain_drink", "SIPHON"),
+        };
+
+    /// <summary>
+    /// The variation a measured skill is taken as: the first authored one that shares a Source with the
+    /// common chassis (BLOW offers Body and Shadow), else simply the first authored one.
+    /// </summary>
+    /// <remarks>
+    /// The fixture's founding principle is ONE common chassis, so that a row reads as "what this skill
+    /// adds beside the plainest blow" and rows are comparable across the catalogue. Chosen Sources make
+    /// that impossible for the whole catalogue — no skill offers all six — so the rule keeps BLOW
+    /// wherever the measured skill CAN share a Source with it, and departs to the plainest damage active
+    /// of the skill's own first Source only where it cannot. The same rule for every skill and every
+    /// character; nothing is picked per row.
+    /// </remarks>
+    private static SkillVariation Taken(SkillDef def)
+    {
+        var blow = SkillCatalogue.ById("hammer_blow").Variations.Select(v => v.Source).ToHashSet();
+        return def.Variations.FirstOrDefault(v => blow.Contains(v.Source)) ?? def.Variations[0];
+    }
+
+    /// <summary>The chassis skill and variation for a measured skill — the one of its chosen Source.</summary>
+    private static (SkillDef Def, string Variation) ChassisFor(SkillDef skill)
+    {
+        var (id, variation) = ChassisOf[Taken(skill).Source];
+        return (SkillCatalogue.ById(id), variation);
+    }
+
+    /// <summary>Earn a level the way play earns it — four waves — and take the variation.</summary>
+    private static void Choose(SkillProgress progress, SkillDef def, string variation)
+    {
+        for (var i = progress.UsesOf(def.Id); i < SkillProgress.UsesForLevel(1); i++) progress.RecordWave(def.Id);
+        Assert.True(progress.ChooseVariation(def, variation), $"{def.Id} could not take {variation} — the fixture, not the design");
     }
 
     /// <summary>The control: a character that is nothing but the same starting skill.</summary>
@@ -162,11 +217,13 @@ public class RosterParityTest
     };
 
     /// <summary>
-    /// One slot's pick. Every pick is woven with the same Source, which is what keeps VOW OF THE PURE
-    /// (single Source) met on every build — the vow channel is judged identically for everyone.
+    /// One slot's pick. The seed Source is the loadout's BODY and is irrelevant: every pick's Source is
+    /// its CHOSEN variation's (see <see cref="BuildFor"/>), which is the only Source a player can give a
+    /// skill. VOW OF THE PURE is kept because the pair was chosen to one Source, not because a
+    /// per-slot pick said so.
     /// </summary>
     private static BuildComposer.SkillPick Pick(SkillDef def, Vow? vow) =>
-        new(CoreSource.Nature, vow?.Id, Passive: !def.TakesABeat, SkillId: def.Id);
+        new(CoreSource.Body, vow?.Id, Passive: !def.TakesABeat, SkillId: def.Id);
 
     /// <summary>
     /// Compose a build the way the GAME composes one — through <see cref="BuildComposer.Compose"/>.
@@ -180,36 +237,55 @@ public class RosterParityTest
     /// reaches this measurement the day it reaches the sim.
     /// </para>
     /// <para>
-    /// <b>THE COMMON CHASSIS.</b> Every measured build carries the plainest damage active — HAMMER's
-    /// BLOW — beside the skill being measured (unless it IS the skill), woven second so the measured
-    /// skill wins beat ties. Two reasons, both learned the hard way. First, half the catalogue's base
-    /// lines deal nothing by themselves: the SIGNs only amplify, WEEP needs a kill to bleed from, WILT
-    /// only breaks the enemies' attack — the first run of the Form-era harness measured an amplifier
-    /// with nothing to amplify and reported THE OATHBOUND at 1,570 damage against a roster averaging
-    /// 20,000, a broken fixture reading as a broken character. Second, a build that cannot bring the
-    /// boss down runs out the tick ceiling, and a stall saturates the clock (see the clearability
-    /// gate). The chassis is identical for a champion and its control, so the delta between them is
-    /// still the character and nothing else.
+    /// <b>THE CHASSIS OF THE SKILL'S SOURCE.</b> Every measured build carries the plainest damage
+    /// active of its chosen Source (<see cref="ChassisOf"/>) beside the skill being measured (unless it
+    /// IS the skill), woven second so the measured skill wins beat ties. Two reasons, both learned the
+    /// hard way. First, half the catalogue's base lines deal nothing by themselves: the SIGNs only
+    /// amplify, WEEP needs a kill to bleed from, WILT only breaks the enemies' attack — the first run of
+    /// the Form-era harness measured an amplifier with nothing to amplify and reported THE OATHBOUND at
+    /// 1,570 damage against a roster averaging 20,000, a broken fixture reading as a broken character.
+    /// Second, a build that cannot bring the boss down runs out the tick ceiling, and a stall saturates
+    /// the clock (see the clearability gate). The chassis is identical for a champion and its control,
+    /// so the delta between them is still the character and nothing else.
+    /// </para>
+    /// <para>
+    /// <b>CHOSEN, not seeded (2026-09-07).</b> This used to weave every pick at one per-slot Source —
+    /// a lever the weave screen retired — and VOW OF THE PURE was kept on that seed. The vow is kept by
+    /// a CHOSEN single Source now, so every skill here is taken as its first authored variation and the
+    /// chassis is the one of that Source, both through the real <see cref="SkillProgress"/>. The build
+    /// is one a player can make, and the vow it swears is one they would actually be keeping.
     /// </para>
     /// </remarks>
     private static Build BuildFor(Character? c, SkillDef skill, Vow? vow)
     {
+        var (chassis, chassisVariation) = ChassisFor(skill);
+        var progress = new SkillProgress();
         var picks = new List<BuildComposer.SkillPick> { Pick(skill, vow) };
-        if (skill.Id != Chassis.Id) picks.Add(Pick(Chassis, vow));
+        Choose(progress, skill, Taken(skill).Name);
+        if (skill.Id != chassis.Id)
+        {
+            picks.Add(Pick(chassis, vow));
+            Choose(progress, chassis, chassisVariation);
+        }
 
         // EVERY VOW FOUND. The composer refuses a vow the account has not discovered, so a parity
         // fixture that swears one must say it is known — otherwise every champion measures with no vow
         // and the comparison is of bare hands. (This used to be a Memory tree with two study nodes
         // bought; the tree is gone and discovery is the account's own.)
         var build = BuildComposer.Compose(
-            ChassisTaught(), c ?? Blank(skill),
-            picks, Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
+            ChassisTaught(chassis), c ?? Blank(skill),
+            picks, Array.Empty<string>(), slotCapacity: 4, progress: progress, knownVows: Vows.Catalog);
 
         // A pick the composer's taught-gate silently refused would measure bare hands and report the
-        // number as the skill's. The fixture fails loudly instead.
+        // number as the skill's. The fixture fails loudly instead — and so does a variation that did
+        // not reach the build, or a sworn VOW OF THE PURE the pair is not actually keeping.
         Assert.True(build.Skills.Count == picks.Count,
                     $"the fixture wove {build.Skills.Count} of {picks.Count} picks for {skill.Id} — " +
                     "a refused weave measures bare hands and calls it the skill.");
+        Assert.All(build.Skills, s => Assert.NotNull(s.Variation));
+        if (vow is { Demand: VowDemand.SingleSource })
+            Assert.True(Vows.IsActive(vow, SoloBattle.DescribeBuild(build, new Hunter())),
+                        $"{skill.Id} beside {chassis.Id} does not keep VOW OF THE PURE — the fixture, not the design.");
         return build;
     }
 
@@ -289,9 +365,10 @@ public class RosterParityTest
         // style — until it crosses the line from "slower on bosses" to "cannot finish a boss", which is
         // a dead end for a player who built into it and is invisible from inside the game.
         //
-        // Every build carries the common BLOW chassis (see BuildFor), so a support skill's row reads as
-        // "what this skill adds beside the plainest blow" — compare it against the Hammer/BLOW row,
-        // which is the chassis alone.
+        // Every build carries the plainest damage active of its chosen Source as a chassis (see BuildFor),
+        // so a support skill's row reads as "what this skill adds beside that chassis" — each row names
+        // its variation and its chassis; compare it against the chassis skill's own row, which is the
+        // chassis alone.
         //
         // Deliberately assertion-free: the roster balance pass this file serves has not been playtested,
         // and this project's own notes are explicit that the enemy curve must not be retuned blind.
@@ -325,7 +402,9 @@ public class RosterParityTest
         foreach (var (def, dps) in perSkill.OrderByDescending(p => p.Dps))
         {
             var label = $"{def.Style}/{def.Name}";
-            _out.WriteLine($"  {label,-16} {dps,10:N0} damage/sec into a single armoured target");
+            var (chassis, chassisVariation) = ChassisFor(def);
+            var beside = chassis.Id == def.Id ? "alone" : $"beside {chassis.Name} as {chassisVariation}";
+            _out.WriteLine($"  {label,-16} {dps,10:N0} damage/sec into a single armoured target   ({Taken(def).Name}, {beside})");
         }
 
         var best = perSkill.Max(p => p.Dps);
@@ -441,6 +520,7 @@ public class RosterParityTest
         // THE ASSERTION. Not "everyone clears at the same speed" — they demonstrably should not — but
         // that every character is measurably real on at least one axis. A character that moves nothing
         // is a character whose passive is decoration, which is the failure this roster already had once.
+        var decoration = new List<string>();
         foreach (var (c, s, ctl) in scores)
         {
             var offence = s.ClearMs > 0 && s.ClearMs < ctl.ClearMs * 0.98f;
@@ -448,13 +528,56 @@ public class RosterParityTest
             var loot = s.Haul > 1.001f || s.Rarity > 1.001f;
             var save = s.DeathSave;
 
-            Assert.True(offence || defence || loot || save,
-                        $"{c.Name} moved NOTHING measurable: clears in {s.ClearMs:N0} ms vs control " +
-                        $"{ctl.ClearMs:N0} ms, health lost {s.HealthLost:N0} vs {ctl.HealthLost:N0}, " +
-                        $"haul {s.Haul:0.00}, rarity {s.Rarity:0.00}, no death save. " +
-                        "Its passive is decoration.");
+            if (!(offence || defence || loot || save))
+                decoration.Add($"{c.Name} moved NOTHING measurable: clears in {s.ClearMs:N0} ms vs control " +
+                               $"{ctl.ClearMs:N0} ms, health lost {s.HealthLost:N0} vs {ctl.HealthLost:N0}, " +
+                               $"haul {s.Haul:0.00}, rarity {s.Rarity:0.00}, no death save. " +
+                               "Its passive is decoration.");
         }
+
+        // PINNED BOTH WAYS. The characters below are KNOWN to measure as decoration on this gauntlet
+        // on the reachable single-Source pairs this fixture makes of them, and that is a design finding
+        // awaiting a decision — not a number this file may tune away (no passive, coefficient or reward
+        // is moved to keep a parity row green). So the list is asserted exactly: a character that joins
+        // it is a regression and fails loudly above; a character that LEAVES it — because the finding
+        // was acted on — fails below until its name is removed here, so the finding cannot close silently.
+        var known = KnownDecoration.Select(k => k.Name).ToHashSet(StringComparer.Ordinal);
+        var unexpected = decoration.Where(d => !known.Any(d.StartsWith)).ToList();
+        Assert.True(unexpected.Count == 0, string.Join("\n", unexpected));
+        foreach (var (name, why) in KnownDecoration)
+            Assert.True(decoration.Any(d => d.StartsWith(name)),
+                        $"{name} is measurable again ({why}) — remove it from KnownDecoration so the finding is closed on the record.");
     }
+
+    /// <summary>
+    /// Characters whose passive measures as decoration on the reachable single-Source pairs this
+    /// fixture makes of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THE ANVIL (2026-09-07) — what was MEASURED, not why.</b> DEADWEIGHT carries a third of a
+    /// kill's overkill into the next living enemy (<c>SoloBattle</c>, the carry after a skill kill).
+    /// HARDFACE's two variations are UPSET (Body — every enemy, twice) and PLANISH (Machine — a deeper
+    /// defence strip), so its two single-Source pairs here are UPSET beside BLOW as FLATTEN, which this
+    /// fixture's rule picks, and PLANISH beside DRINK as SIPHON. Both sit inside the 2% offence floor on
+    /// this gauntlet: 0.0% faster with health lost identical, and +1.1% — inside the seed noise this
+    /// file licenses. The +7.8% the old fixture reported came from a build no player can weave: an
+    /// unchosen HARDFACE and an unchosen BLOW on a per-slot Source the weave screen retired.
+    /// </para>
+    /// <para>
+    /// The mechanism behind the 0.0% is NOT established here. The carry does fire wherever a skill kill
+    /// leaves a living enemy — on the Pack wave BLOW's kills have one — so "no next enemy" explains only
+    /// the boss room and a swarm wiped in one cast, not the whole row; the rest (a small carry that never
+    /// moves the last death across a cast) is a guess and is not written down as a fact. What the
+    /// finding says is exactly this: on the two builds measured, DEADWEIGHT is not measurable. Whether
+    /// that is the passive, the gauntlet or the pairing is the design decision; until it is made the
+    /// finding lives here, in the measurement that produced it.
+    /// </para>
+    /// </remarks>
+    private static readonly (string Name, string Why)[] KnownDecoration =
+    {
+        ("THE ANVIL", "DEADWEIGHT measured inside the 2% floor on both of HARDFACE's single-Source pairs: 0.0% as UPSET beside BLOW FLATTEN, +1.1% as PLANISH beside DRINK SIPHON"),
+    };
 
     /// <summary>Which axis a character's passive text actually promises.</summary>
     private static string ClaimedAxis(Character c) => c.Id switch

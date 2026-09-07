@@ -116,13 +116,13 @@ public class WeavingTests
         // Two extremes of the build space. Nothing in between is needed: a demand that is true in both
         // or false in both is broken whichever way it leans.
         var wide = new BuildContext(
-            DistinctStyles: 4, DistinctSources: 4, DistinctChosenSources: 4, SkillsWoven: 4, SkillSlots: 4,
+            DistinctStyles: 4, DistinctSources: 4, DistinctChosenSources: 4, ChosenSingleSource: false, SkillsWoven: 4, SkillSlots: 4,
             CritPercent: 40f, BaseCritPercent: 5f, SkillRate: 2.0f, Defence: 60,
             KeystonesWorn: 3, WornSlots: new HashSet<BareSlot>
                 { BareSlot.Boots, BareSlot.Gloves, BareSlot.Helm, BareSlot.Ring, BareSlot.Charm });
 
         var narrow = new BuildContext(
-            DistinctStyles: 1, DistinctSources: 1, DistinctChosenSources: 1, SkillsWoven: 1, SkillSlots: 4,
+            DistinctStyles: 1, DistinctSources: 1, DistinctChosenSources: 1, ChosenSingleSource: true, SkillsWoven: 1, SkillSlots: 4,
             CritPercent: 5f, BaseCritPercent: 5f, SkillRate: 0.6f, Defence: 0,
             KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
 

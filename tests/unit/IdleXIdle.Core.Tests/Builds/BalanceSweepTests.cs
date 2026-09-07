@@ -412,6 +412,16 @@ public class BalanceSweepTests
             return b;
         }
 
+        // VOW OF THE PURE is kept by a CHOSEN single Source (Build.ChosenSingleSource, 2026-09-07): four
+        // variations taken to BODY — the four skills that have one, two actives and two fields. A quartet
+        // left on its Source seed would swear the vow and measure it inert.
+        Build EquipChosen(SkillShape shape, params (string Id, string Variation)[] picks)
+        {
+            var b = new Build { PassiveMods = geared, Shape = shape };
+            foreach (var (id, variation) in picks) b.Equip(TestBuilds.Chosen(id, variation, v));
+            return b;
+        }
+
         switch (v.Demand)
         {
             // Static-cost Vows demand nothing, so any build measures them honestly.
@@ -426,7 +436,9 @@ public class BalanceSweepTests
                 return (Equip(SkillShape.None, new[] { "hammer_blow", "hammer_blow" }, mods: geared with { Damage = 0.4f }), hunter);
 
             case VowDemand.SingleSource:
-                return (Equip(SkillShape.None, quartet), hunter);
+                return (EquipChosen(SkillShape.None,
+                            ("hammer_blow", "FLATTEN"), ("volley_spray", "CLUSTER"),
+                            ("hammer_press", "CRUSHING"), ("drain_wilt", "SUP")), hunter);
 
             case VowDemand.EverySlotFilled:
                 return (Equip(SkillShape.None, quartet), hunter);

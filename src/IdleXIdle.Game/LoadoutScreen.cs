@@ -735,7 +735,7 @@ public sealed class LoadoutScreen
     private static string DemandText(Vow v) => v.Demand switch
     {
         VowDemand.SingleStyle => "EVERY SKILL THE SAME STYLE",
-        VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
+        VowDemand.SingleSource => "EVERY SKILL CHOSEN TO ONE SOURCE",
         VowDemand.EverySlotFilled => "NO EMPTY SKILL SLOT",
         VowDemand.NoCritInvestment => "NO CRITICAL BONUS",
         VowDemand.CadenceAtOrBelow => $"SKILL RATE MAX {v.Threshold:0.##}x",
@@ -755,8 +755,15 @@ public sealed class LoadoutScreen
                 var styles = Loadout.EquippedDefs().Select(d => StyleName(d.Style)).Distinct().ToList();
                 return styles.Count == 0 ? "NO SKILLS" : $"{styles.Count} STYLE{(styles.Count == 1 ? "" : "S")}: {string.Join(", ", styles)}";
             case VowDemand.SingleSource:
-                var sources = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
-                return sources.Count == 0 ? "NO SKILLS" : $"{sources.Count} SOURCE{(sources.Count == 1 ? "" : "S")}: {string.Join(", ", sources)}";
+                // CHOSEN Sources only. The vow is kept by Build.ChosenSingleSource, so a skill whose
+                // variation is not chosen yet is named as the reason the vow is broken, rather than
+                // shown as one more BODY — the seed it sits on is not a Source the player picked.
+                var woven = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows).Skills;
+                if (woven.Count == 0) return "NO SKILLS";
+                var unchosen = woven.Where(s => s.Variation is null).Select(s => s.Def.Name).ToList();
+                if (unchosen.Count > 0) return $"NO VARIATION CHOSEN YET: {string.Join(", ", unchosen)}";
+                var sources = woven.Select(s => SourceName(s.Source)).Distinct().ToList();
+                return $"{sources.Count} SOURCE{(sources.Count == 1 ? "" : "S")}: {string.Join(", ", sources)}";
             case VowDemand.EverySlotFilled: return $"{ctx.SkillsWoven} OF {ctx.SkillSlots} SLOTS FILLED";
             case VowDemand.NoCritInvestment: return $"CRITICAL {ctx.CritPercent:0.#}% (BASE {ctx.BaseCritPercent:0.#}%)";
             case VowDemand.CadenceAtOrBelow:

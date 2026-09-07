@@ -57,7 +57,7 @@ public class pure_source_commitment_test
         return b;
     }
 
-    /// <summary>The fight's RESOLVED count of Sources, defaults included — what VOW OF THE PURE's demand reads.</summary>
+    /// <summary>The fight's RESOLVED count of Sources, defaults included — what the riders and matchups cast, and what no vow reads.</summary>
     private static int DistinctSourcesOf(Build b) => SoloBattle.DescribeBuild(b, new Hunter()).DistinctSources;
 
     // ── THE QUERY: Build.PureSource ─────────────────────────────────────────────────────────────
@@ -200,10 +200,10 @@ public class pure_source_commitment_test
     [Fact]
     public void test_pure_source_recognition_is_never_wider_than_what_the_fight_pays()
     {
-        // THE SINGLE NOTE's payout and the mastery PURE node read Build.ChosenSingleSource — chosen,
-        // defaults excluded. Every build the commitment names must be one the payout fires on, or a
-        // player could awaken the trait on a build it refuses to pay. (VOW OF THE PURE's demand reads
-        // the RESOLVED count and holds on these too; that is a separate promise, checked separately.)
+        // THE SINGLE NOTE's payout, the mastery PURE node and VOW OF THE PURE's kept state all read
+        // Build.ChosenSingleSource — chosen, defaults excluded. Every build the commitment names must be
+        // one the payout fires on, or a player could awaken the trait on a build it refuses to pay.
+        // (The resolved count is what the riders cast; it agrees here, and nothing pays on it.)
         var committed = new[]
         {
             Woven(TestBuilds.Chosen(Signature, "OPEN HAND"), TestBuilds.Chosen(SharedField, "CRUSHING")),
@@ -216,17 +216,17 @@ public class pure_source_commitment_test
         {
             Assert.NotNull(b.PureSource);
             Assert.Equal(b.PureSource, b.ChosenSingleSource);   // the payout predicate, and the same Source
-            Assert.Equal(1, DistinctSourcesOf(b));                // and the vow's resolved demand holds as well
+            Assert.Equal(1, DistinctSourcesOf(b));                // and the fight casts one Source as well
         });
     }
 
     [Fact]
     public void test_pure_source_is_stricter_than_vow_of_the_pures_proof_by_exactly_the_minimum()
     {
-        // VOW OF THE PURE's proof is the demand (one Source) held while every woven Source is chosen —
-        // and it has NO minimum: a lone signature with its variation taken proves it. The commitment
-        // borrows the chosen clause and adds the two-skill floor, so the two are not interchangeable,
-        // and this pins the one build class they disagree on.
+        // VOW OF THE PURE's demand IS the chosen single Source (2026-09-07) and its proof adds the
+        // temptation clause — and neither has a minimum: a lone signature with its variation taken
+        // keeps the vow and proves it. The commitment borrows the same clause and adds the two-skill
+        // floor, so the two are not interchangeable, and this pins the one build class they disagree on.
         var vow = Vows.ById("vow_pure");
         Assert.NotNull(vow);
         var tempted = new VowTemptationFacts(EveryWovenSourceChosen: true);

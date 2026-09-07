@@ -48,12 +48,14 @@ public class WeaveInBattleTests
     [Fact]
     public void test_the_sim_describes_a_build_the_vows_can_read()
     {
+        // CHOSEN variations: VOW OF THE PURE is kept by Build.ChosenSingleSource (2026-09-07), so a
+        // skill still on its Source seed keeps nothing. THE SINGULAR reads styles and does not care.
         var mono = new Build();
-        mono.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
+        mono.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));            // Body
 
         var broad = new Build();
-        broad.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
-        broad.Equip(TestBuilds.Skill("field_mire", Source.Mind));
+        broad.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));           // Body
+        broad.Equip(TestBuilds.Chosen("field_mire", "NUMB"));               // Nature
 
         var monoCtx = SoloBattle.DescribeBuild(mono, new Hunter());
         var broadCtx = SoloBattle.DescribeBuild(broad, new Hunter());

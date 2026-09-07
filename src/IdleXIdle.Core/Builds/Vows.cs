@@ -63,7 +63,7 @@ public enum VowDemand
     /// </remarks>
     SingleStyle,
 
-    /// <summary>Every woven skill draws the same Source. Costs you the Source matchup wheel.</summary>
+    /// <summary>Every woven skill was CHOSEN to draw the same Source — its variation taken, not its seed. Costs you the Source matchup wheel.</summary>
     SingleSource,
 
     /// <summary>No skill slot is empty. A real cost only while slots are scarce.</summary>
@@ -350,15 +350,19 @@ public sealed record VowTuning
 /// </remarks>
 public readonly record struct BuildContext(
     int DistinctStyles,
-    // RESOLVED Sources — what the woven skills actually cast, defaults included. VOW OF THE PURE's
-    // demand reads it: the promise is about what the fight USES ("every skill must use one source"),
-    // and a skill still on its BODY seed does cast Body. The vow's DISCOVERY is where defaults are
-    // refused (VowTemptation.EveryWovenSourceChosen).
+    // RESOLVED Sources — what the woven skills actually cast, defaults included. A readout of the
+    // build as the fight sees it; no vow demand reads it any more (2026-09-07), because a skill
+    // still on its BODY seed casts Body without anyone having decided so.
     int DistinctSources,
     // CHOSEN Sources — only skills whose variation is taken count, one per distinct Source. MANY
     // TONGUES' payout reads it: "carrying four different sources" is four decisions, and a slot on its
     // default is not a voice however different that default is from the other three.
     int DistinctChosenSources,
+    // Was every woven skill CHOSEN to draw one Source — Build.ChosenSingleSource, as a fact the vow
+    // layer can read without knowing what a variation is. VOW OF THE PURE's demand reads it: a vow is
+    // a restriction the player is KEEPING, and a default nobody chose is not a restriction. One chosen
+    // skill keeps it; the trait's two-skill floor is the trait's own and not the vow's.
+    bool ChosenSingleSource,
     int SkillsWoven,
     int SkillSlots,
     float CritPercent,
@@ -377,7 +381,7 @@ public readonly record struct BuildContext(
 {
     /// <summary>A build that satisfies nothing — the safe default for a caller with no build to hand.</summary>
     public static BuildContext Empty { get; } =
-        new(0, 0, 0, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
+        new(0, 0, 0, false, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
 }
 
 public static class Vows
@@ -449,7 +453,7 @@ public static class Vows
             Id = "vow_pure", Name = "VOW OF THE PURE", Kind = VowKind.Demand,
             Demand = VowDemand.SingleSource, Severity = 0.6f,
             Short = "ONE SOURCE ONLY",
-            Description = "EVERY SKILL MUST USE ONE SOURCE. NO PICKING WHAT THE ENEMY IS WEAK TO.",
+            Description = "CHOOSE ONE SOURCE FOR EVERY SKILL. NO PICKING WHAT THE ENEMY IS WEAK TO.",
             Proof = VowProof.Demand, ProofWaves = 12,
             Temptation = VowTemptation.EveryWovenSourceChosen,
             ProofLine = "YOU CLEARED 12 WAVES WITH EVERY SKILL DRAWING ONE SOURCE, AND YOU CHOSE EACH "
@@ -622,13 +626,13 @@ public static class Vows
         return vow.Demand switch
         {
             VowDemand.SingleStyle => ctx.DistinctStyles <= 1,
-            // RESOLVED, on purpose (audit 2026-09-07): "EVERY SKILL MUST USE ONE SOURCE" is a promise
-            // about combat use, judged against what the build casts. A default-BODY skill casts Body.
-            // Defaults cannot DISCOVER this vow (its temptation clause), and whether a KEPT promise
-            // should also refuse them is a vow decision that would move the roster parity fixtures —
-            // deliberately not made here. The readers that ask what the player CHOSE are
-            // Build.ChosenSingleSource and DistinctChosenSources.
-            VowDemand.SingleSource => ctx.DistinctSources <= 1,
+            // CHOSEN, not resolved (2026-09-07). A vow is a conscious restriction bought as power, and
+            // a slot still on its BODY seed — a Source nobody picked, because the weave screen offers
+            // no lever but the variation — is implementation state, not a restriction being kept. The
+            // vow's DISCOVERY already refused defaults (VowTemptation.EveryWovenSourceChosen); its kept
+            // state now refuses them too, through the one reading Build.ChosenSingleSource owns. One
+            // chosen skill keeps it; a build with any unchosen skill, or two chosen Sources, breaks it.
+            VowDemand.SingleSource => ctx.ChosenSingleSource,
             VowDemand.EverySlotFilled => ctx.SkillsWoven >= ctx.SkillSlots,
             VowDemand.NoCritInvestment => ctx.CritPercent <= ctx.BaseCritPercent + 0.01f,
             VowDemand.CadenceAtOrBelow => ctx.SkillRate <= vow.Threshold + 0.001f,

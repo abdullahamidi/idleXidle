@@ -60,7 +60,7 @@ A demand is checked once per wave against a description of the build. It is:
 
 | Family | Reads | Examples |
 |---|---|---|
-| **Build shape** | The woven skills | one Style, one Source, every weave filled |
+| **Build shape** | The woven skills | one Style, one CHOSEN Source (every skill's variation taken, all alike), every weave filled |
 | **Stat shape** | The character sheet | no crit training, cadence ≤ 1.00×, cadence ≥ 1.40×, no defence, no keystone |
 | **Sacrifice** | The worn gear | a named slot left bare — boots, gloves, helm |
 
@@ -160,8 +160,17 @@ free is not a Vow.
 - **Cadence thresholds** compare against the *resolved* skill rate, which includes
   the Skill Tree's shape — so taking QUICK HANDS can silently break THE DELIBERATE.
   This is intended: it is the tree and the Vow having the argument out loud.
-- **A build with no skills** satisfies SINGLE STYLE and SINGLE SOURCE trivially, and
-  has nothing to apply the multiplier to. Harmless.
+- **A build with no skills** satisfies SINGLE STYLE trivially and has nothing to apply
+  the multiplier to. Harmless. It does NOT satisfy SINGLE SOURCE: that demand reads
+  the Sources the player CHOSE (each woven skill's variation — `Build.ChosenSingleSource`),
+  and an empty build has chosen nothing.
+- **A woven skill whose variation is not yet chosen** breaks SINGLE SOURCE even when its
+  seed Source matches every other skill's (2026-09-07). A slot is seeded BODY before its
+  variation is taken and the weave screen offers no other Source lever, so that BODY is
+  implementation state, not a restriction the player is keeping. The Weave screen names
+  the skill ("NO VARIATION CHOSEN YET: BLOW") so the BROKEN verdict explains itself. One
+  chosen skill keeps the vow; the two-skill floor belongs to THE SINGLE NOTE's awakening,
+  not to the vow.
 - **Breaking a Vow mid-session** costs nothing beyond the lost multiplier. There is
   no punishment state; the Vow simply stops paying.
 

@@ -3238,6 +3238,7 @@ public static class SoloBattle
             DistinctStyles: build.Skills.Select(s => s.Def.Style).Distinct().Count(),
             DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
             DistinctChosenSources: build.DistinctChosenSources,
+            ChosenSingleSource: build.ChosenSingleSource is not null,
             SkillsWoven: build.Skills.Count,
             // The BUILD's capacity, not the type's floor. VOW OF COMPLETION demands "no skill slot is
             // empty", and against a hard 4 a player who had bought the fifth weave met it with four
