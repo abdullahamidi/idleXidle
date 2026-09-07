@@ -31,7 +31,7 @@ namespace IdleXIdle.Core.Tests.Builds;
 public class VowCapacityTest
 {
     private static BuildContext Met => new(
-        DistinctStyles: 1, DistinctSources: 1, SkillsWoven: 4, SkillSlots: 4,
+        DistinctStyles: 1, DistinctSources: 1, DistinctChosenSources: 1, SkillsWoven: 4, SkillSlots: 4,
         CritPercent: 0f, BaseCritPercent: 0f, SkillRate: 1f, Defence: 0,
         KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
 
@@ -73,7 +73,7 @@ public class VowCapacityTest
     {
         // Restriction buys power. A promise you are not keeping is not a restriction.
         var broken = new BuildContext(
-            DistinctStyles: 3, DistinctSources: 3, SkillsWoven: 2, SkillSlots: 4,
+            DistinctStyles: 3, DistinctSources: 3, DistinctChosenSources: 3, SkillsWoven: 2, SkillSlots: 4,
             CritPercent: 0f, BaseCritPercent: 0f, SkillRate: 1f, Defence: 9,
             KeystonesWorn: 2, WornSlots: new HashSet<BareSlot> { BareSlot.Boots });
 

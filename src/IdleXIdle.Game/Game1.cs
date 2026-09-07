@@ -2324,10 +2324,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // ever seen. The geometry falls back with it, which is the point of posing it.
                     if (Environment.GetEnvironmentVariable("RH_SHOT_NOSTRIP")?.Trim() == "1")
                         _expedition.DevNoStrips = true;
-                    // RH_SHOT_CREATURES=<n> draws only the first n of the wave's creatures, so the LONE
-                    // creature layout and the multi-creature one can be photographed side by side. The
-                    // seeded roll cannot pose that pair: a Bruiser always rolls exactly one, so its
-                    // archetype scale is never seen beside a lone figure of the same art.
+                    // RH_SHOT_CREATURES=<n> draws only the first n of the wave's creatures, so a LONE
+                    // creature and its pack can be photographed at one camera and their bodies compared
+                    // — the proof that the archetype scale is population-independent (both go through
+                    // HuntScreen.CreatureRow). The seeded roll cannot pose that pair on its own: a
+                    // Bruiser always rolls exactly one.
                     if (Environment.GetEnvironmentVariable("RH_SHOT_CREATURES")?.Trim() is { Length: > 0 } shotCount)
                         _expedition.DevCreatureCount = int.TryParse(shotCount, out var n) && n > 0
                             ? n

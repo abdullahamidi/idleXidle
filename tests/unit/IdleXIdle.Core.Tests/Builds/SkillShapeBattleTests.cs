@@ -99,8 +99,22 @@ public class SkillShapeBattleTests
     {
         var armoured = () => Wave(2, 3000f, 40f, defense: 60f, archetype: Archetype.Armoured);
 
-        var neutral = Fight(SkillShape.None, armoured());
-        var weight = Fight(WholeBranch(Branch.Resonance), armoured());
+        // A player who walked the whole branch carries PURE, and PURE pays a CHOSEN source only
+        // (Build.ChosenSingleSource, 2026-09-07): a skill still on its Source seed is a default, not a
+        // decision. The build is posed the way that player's is — its variation taken — because the
+        // old unchosen fixture was being paid PURE's +35% for agreeing with itself.
+        WaveMetrics Fought(SkillShape shape)
+        {
+            var metrics = new WaveMetrics();
+            var b = new Build { Shape = shape };
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));
+            SoloBattle.ResolveWave(Champ(), b, new Hunter(), armoured(), enemyIntervalMs: 900,
+                                   ExpeditionTuning.Default, new Random(11), metrics: metrics);
+            return metrics;
+        }
+
+        var neutral = Fought(SkillShape.None);
+        var weight = Fought(WholeBranch(Branch.Resonance));
 
         Assert.True(weight.AbsorbedFraction < neutral.AbsorbedFraction,
             $"Armour ate {weight.AbsorbedFraction:P0} of the Weight build and {neutral.AbsorbedFraction:P0} " +

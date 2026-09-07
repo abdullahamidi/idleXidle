@@ -350,7 +350,15 @@ public sealed record VowTuning
 /// </remarks>
 public readonly record struct BuildContext(
     int DistinctStyles,
+    // RESOLVED Sources — what the woven skills actually cast, defaults included. VOW OF THE PURE's
+    // demand reads it: the promise is about what the fight USES ("every skill must use one source"),
+    // and a skill still on its BODY seed does cast Body. The vow's DISCOVERY is where defaults are
+    // refused (VowTemptation.EveryWovenSourceChosen).
     int DistinctSources,
+    // CHOSEN Sources — only skills whose variation is taken count, one per distinct Source. MANY
+    // TONGUES' payout reads it: "carrying four different sources" is four decisions, and a slot on its
+    // default is not a voice however different that default is from the other three.
+    int DistinctChosenSources,
     int SkillsWoven,
     int SkillSlots,
     float CritPercent,
@@ -369,7 +377,7 @@ public readonly record struct BuildContext(
 {
     /// <summary>A build that satisfies nothing — the safe default for a caller with no build to hand.</summary>
     public static BuildContext Empty { get; } =
-        new(0, 0, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
+        new(0, 0, 0, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
 }
 
 public static class Vows
@@ -614,6 +622,12 @@ public static class Vows
         return vow.Demand switch
         {
             VowDemand.SingleStyle => ctx.DistinctStyles <= 1,
+            // RESOLVED, on purpose (audit 2026-09-07): "EVERY SKILL MUST USE ONE SOURCE" is a promise
+            // about combat use, judged against what the build casts. A default-BODY skill casts Body.
+            // Defaults cannot DISCOVER this vow (its temptation clause), and whether a KEPT promise
+            // should also refuse them is a vow decision that would move the roster parity fixtures —
+            // deliberately not made here. The readers that ask what the player CHOSE are
+            // Build.ChosenSingleSource and DistinctChosenSources.
             VowDemand.SingleSource => ctx.DistinctSources <= 1,
             VowDemand.EverySlotFilled => ctx.SkillsWoven >= ctx.SkillSlots,
             VowDemand.NoCritInvestment => ctx.CritPercent <= ctx.BaseCritPercent + 0.01f,

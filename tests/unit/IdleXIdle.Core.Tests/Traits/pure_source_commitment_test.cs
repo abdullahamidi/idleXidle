@@ -57,7 +57,7 @@ public class pure_source_commitment_test
         return b;
     }
 
-    /// <summary>The fight's own count of Sources — what the payout and the vow demand read.</summary>
+    /// <summary>The fight's RESOLVED count of Sources, defaults included — what VOW OF THE PURE's demand reads.</summary>
     private static int DistinctSourcesOf(Build b) => SoloBattle.DescribeBuild(b, new Hunter()).DistinctSources;
 
     // ── THE QUERY: Build.PureSource ─────────────────────────────────────────────────────────────
@@ -200,9 +200,10 @@ public class pure_source_commitment_test
     [Fact]
     public void test_pure_source_recognition_is_never_wider_than_what_the_fight_pays()
     {
-        // THE SINGLE NOTE's payout and VOW OF THE PURE's demand read the fight's own Source count, defaults
-        // included. Every build the commitment names must be one of those, or a player could awaken the
-        // trait on a build it refuses to pay.
+        // THE SINGLE NOTE's payout and the mastery PURE node read Build.ChosenSingleSource — chosen,
+        // defaults excluded. Every build the commitment names must be one the payout fires on, or a
+        // player could awaken the trait on a build it refuses to pay. (VOW OF THE PURE's demand reads
+        // the RESOLVED count and holds on these too; that is a separate promise, checked separately.)
         var committed = new[]
         {
             Woven(TestBuilds.Chosen(Signature, "OPEN HAND"), TestBuilds.Chosen(SharedField, "CRUSHING")),
@@ -214,7 +215,8 @@ public class pure_source_commitment_test
         Assert.All(committed, b =>
         {
             Assert.NotNull(b.PureSource);
-            Assert.Equal(1, DistinctSourcesOf(b));
+            Assert.Equal(b.PureSource, b.ChosenSingleSource);   // the payout predicate, and the same Source
+            Assert.Equal(1, DistinctSourcesOf(b));                // and the vow's resolved demand holds as well
         });
     }
 
@@ -447,7 +449,7 @@ public class pure_source_commitment_test
         HeavyHits: 0, Overkill: 0f, ShieldGained: 0f, ShieldBreaks: 0, ShieldAbsorbed: 0f, Healed: 0,
         ReflectedDamage: 0f, LowestHealthFraction: 1f, HealthLost: 1, CreaturesKilled: 0, MarkCasts: 0,
         CarriedWideSkill: false, CreaturesPresent: 1, CritPercent: 0f,
-        PureSourceBuild: committed, DistinctSources: 1, VowsKept: 0);
+        PureSourceBuild: committed, DistinctChosenSources: 1, VowsKept: 0);
 
     private static double Threshold => TraitCatalogue.ById_("t_single_note").Discovery.Threshold;
 

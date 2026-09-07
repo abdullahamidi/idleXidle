@@ -555,7 +555,7 @@ public sealed class SoloExpedition
             // inline "every woven skill matches the first" was true of the one-skill starter from
             // its first wave, which is a fact no player had decided.
             PureSourceBuild: _build.PureSource is not null,
-            DistinctSources: ctx.DistinctSources,
+            DistinctChosenSources: ctx.DistinctChosenSources,
             // The promises this build is KEEPING, asked of the whole build and counted once per vow —
             // the same call the fight makes when it decides what those promises pay.
             VowsKept: Vows.KeptCount(_build.Vows, ctx));

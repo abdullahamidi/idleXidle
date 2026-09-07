@@ -43,7 +43,10 @@ public readonly record struct TraitWaveFacts(
     // "every woven skill agrees", which a one-skill starter satisfies from its first wave and a
     // fresh pair satisfies on the BODY default before anyone has decided anything.
     bool PureSourceBuild,
-    int DistinctSources,
+    // How many different Sources the woven skills were CHOSEN to draw (Build.DistinctChosenSources).
+    // A slot still on its BODY default is not a voice, so it cannot be the fourth that MANY TONGUES
+    // hears — the resolved count used to let it be.
+    int DistinctChosenSources,
     int VowsKept);
 
 /// <summary>
@@ -171,7 +174,10 @@ public static class TraitDiscovery
         // slot — so a fresh account banked THE SINGLE NOTE's counter from wave one, and the pacing
         // retune priced the threshold around that instead of fixing the fact.
         if (wave.PureSourceBuild) ledger.Add(TraitCounter.PureWaves, 1);
-        if (wave.DistinctSources >= MotleySources) ledger.Add(TraitCounter.MotleyWaves, 1);
+        // A MOTLEY wave carries four CHOSEN Sources. Four skills is the whole build, so this is four
+        // variations taken to four different Sources — not three chosen and one BODY seed that
+        // happened to be the missing colour.
+        if (wave.DistinctChosenSources >= MotleySources) ledger.Add(TraitCounter.MotleyWaves, 1);
         // KEPT, not merely sworn, and counted the same way the fight counts them — one promise per
         // vow, however many times it was named, and only while its rule holds. What earns THE WEIGHT
         // OF VOWS is therefore the very thing it later pays for.

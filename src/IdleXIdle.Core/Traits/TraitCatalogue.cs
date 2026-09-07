@@ -115,7 +115,7 @@ public enum TraitCounter
     ManyVowWaves,
     /// <summary>Waves cleared by a build COMMITTED to one Source — <see cref="Build.PureSourceMinimumSkills"/> or more woven skills, all on it (<see cref="Build.PureSource"/>).</summary>
     PureWaves,
-    /// <summary>Waves cleared carrying four or more distinct Sources.</summary>
+    /// <summary>Waves cleared carrying four or more distinct CHOSEN Sources — four variations taken to four Sources (<see cref="Build.DistinctChosenSources"/>).</summary>
     MotleyWaves,
 
     // ── Read off the account, which already keeps them (TraitDiscovery evaluates on every pass) ──
@@ -396,7 +396,9 @@ public static class TraitCatalogue
             "Carrying four different sources makes every matchup a strong one.",
             "Speak to all of them and none of them answers badly.",
             TraitTag.Elements,
-            // Speaking to every element awakens every element answering well.
+            // Speaking to every element awakens every element answering well. Four voices are four
+            // variations CHOSEN to four Sources — a slot still on its BODY seed is not one of them,
+            // here or in the payout (Build.DistinctChosenSources).
             At(TraitCounter.MotleyWaves, 700),
             Fixed(new TraitRules(AllMatchupsStrongAtSources: 4))),
 

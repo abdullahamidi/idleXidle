@@ -17,15 +17,12 @@
 #                           idle as deeply letterboxed as the rift guardian's (126 px of sky): it asks
 #                           1.275 and is drawn at 1.25.
 #
-#                           THAT BOX IS A WAVE OF TWO OR MORE at Bruiser scale — NOT a Bruiser wave.
-#                           A Bruiser rolls exactly one creature (Archetypes.Shapes, min 1 max 1) and
-#                           a lone creature is laid out by LayoutSingleEnemy at the UNSCALED 436x440,
-#                           which never caps. In play the box comes from a NUMBERS band's Bruiser roll;
-#                           here RH_SHOT_ARCHETYPE forces the scale and RH_SHOT_SOURCE the figure, but
-#                           NEITHER FORCES THE COUNT — that is the wave's own seeded roll. So the game
-#                           REFUSES the capture (HuntScreen.RequireArchetypeReached throws) when the
-#                           wave it landed on is a single creature or a boss, rather than photographing
-#                           an uncapped figure as if the pose had worked.
+#                           THAT BOX IS EVERY BRUISER WAVE since 2026-09-07: a Bruiser rolls exactly one
+#                           creature (Archetypes.Shapes, min 1 max 1) and a lone creature now wears its
+#                           archetype's scale like a pack does. RH_SHOT_ARCHETYPE forces the scale and
+#                           RH_SHOT_SOURCE the figure on any normal wave; only a BOSS wave refuses it
+#                           (HuntScreen.RequireArchetypeReached throws), because a boss has its own
+#                           presentation law and the dial would change nothing.
 #
 #                           A CAPPED pose is only honoured when its dump shows a creature `box` of
 #                           488x492 and a `MAGNIFIED` verdict. `GRANTED` there means the ceiling was
@@ -39,14 +36,18 @@
 #                           0.02 crop rather than his measured headroom — the draw's own long-standing
 #                           choice, which the geometry now matches instead of contradicting.
 #
-#   BRUISER    fight        THE LONE-VS-MULTI COMPARISON, for design review only. A lone creature is
-#              x2           laid out by LayoutSingleEnemy at the UNSCALED 436x440 enemy box whatever its
-#                           archetype; a wave of two or more is laid out at its archetype's scale. So
-#                           the archetype's size language reaches only the multi-creature case, and the
-#                           two have never been seen side by side because a Bruiser always rolls one.
-#                           RH_SHOT_CREATURES=<n> draws the first n of the wave's creatures — nothing is
-#                           composed, the wave is the wave — so the pair can be photographed at one
-#                           camera. NO SCALE IS TUNED by this fixture; it exists to be looked at.
+#   SCALE      fight        ARCHETYPE SCALE IS POPULATION-INDEPENDENT (2026-09-07). A lone creature used
+#              x6           to be laid out at the UNSCALED 436x440 enemy box whatever its archetype, so
+#                           the one archetype that always rolls alone — the Bruiser — never wore its own
+#                           size (360x421 alone against 403x471 in a pair, on the same art). Every normal
+#                           wave goes through HuntScreen.CreatureRow now: the same archetype box for one
+#                           creature as for each of a pack, and population decides only room, placement
+#                           and spacing. RH_SHOT_CREATURES=<n> draws the first n of the wave's creatures
+#                           — nothing is composed, the wave is the wave — so LONE and PACK of one
+#                           archetype can be photographed at one camera: Bruiser, Swarm, and Armoured as
+#                           the near-neutral reference. Read each pair's .actors.txt: the creature BODY
+#                           sizes must agree lone-vs-pack (the pack's own x drifts ±10 px). NO SCALE IS
+#                           TUNED by this fixture; the table is the design's.
 #
 # Usage: bash tools/asset-pipeline/hunt_geometry_fixtures.sh <tag>
 # Writes build/shots/polish/<tag>_*.png (+ .actors.txt, .events.txt) — see polish_shots.sh.
@@ -71,5 +72,9 @@ bash tools/asset-pipeline/polish_shots.sh "$TAG" \
   "vfxdebug:100:$CAP" "vfxdebug:125:$CAP" "vfxdebug:150:$CAP" \
   "fight:100:$CAP;RH_SHOT_T=1.2" "fight:125:$CAP;RH_SHOT_T=1.2" "fight:150:$CAP;RH_SHOT_T=1.2" \
   "fight:100:$NS;RH_SHOT_T=1.2" "fight:125:$NS;RH_SHOT_T=1.2" "fight:150:$NS;RH_SHOT_T=1.2" \
-  "fight:100:RH_SHOT_CREATURES=1;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
-  "fight:100:RH_SHOT_CREATURES=2;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1;RH_SHOT_T=1.2"
+  "fight:100:RH_SHOT_CREATURES=1;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=2;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=1;RH_SHOT_ARCHETYPE=Swarm;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_ARCHETYPE=Swarm;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=1;RH_SHOT_ARCHETYPE=Armoured;RH_SHOT_DUMP=1;RH_SHOT_T=1.2" \
+  "fight:100:RH_SHOT_CREATURES=2;RH_SHOT_ARCHETYPE=Armoured;RH_SHOT_DUMP=1;RH_SHOT_T=1.2"

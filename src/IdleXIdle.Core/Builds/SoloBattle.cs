@@ -912,8 +912,13 @@ public static class SoloBattle
         var bleedRate = 1f;
         var bleedShed = VenomBleedPerHalfSecond;
         var bleedFromHits = 0f;
-        // PURE (RESONANCE) — does every woven skill share one Source? Read once, at the wave's start.
-        var oneSource = skills.Count > 0 && skills.All(x => x.Source == skills[0].Source);
+        // PURE (RESONANCE) and THE SINGLE NOTE — was every woven skill CHOSEN to draw one Source? Read
+        // once, at the wave's start. Chosen, not resolved: this used to ask whether every resolved
+        // Source agreed, and a fresh pair agrees on the BODY seed before the player has decided
+        // anything, so the node and the trait paid a coincidence of defaults. Build.ChosenSingleSource
+        // is the one reading — a lone skill with its variation taken counts, a slot on its default
+        // never does (the trait's DISCOVERY is stricter still: Build.PureSource wants two).
+        var oneSource = build.ChosenSingleSource is not null;
         foreach (var wsk in skills)
         {
             if (wsk.Def.BleedRate > 1f) bleedRate = Math.Max(bleedRate, wsk.Def.BleedRate);
@@ -1143,11 +1148,12 @@ public static class SoloBattle
                 // stack the same promise twice.
                 // MANY TONGUES joins CHORD on the same line rather than beside it: both say "every
                 // matchup counts as strong", and a build carrying the keystone and the trait must not
-                // be able to claim it twice. Reads the build's own distinct element count, which
-                // DescribeBuild already computes once per wave.
+                // be able to claim it twice. Reads the build's count of CHOSEN Sources, which
+                // DescribeBuild already computes once per wave — four voices are four decisions, and
+                // a slot still on its BODY default is not one of them.
                 var match = shape.AllMatchupsStrong
                             || (traits.AllMatchupsStrongAtSources > 0
-                                && weaveCtx.DistinctSources >= traits.AllMatchupsStrongAtSources)
+                                && weaveCtx.DistinctChosenSources >= traits.AllMatchupsStrongAtSources)
                     ? SourceMatchup.Strong
                     : SourceMatchup.Effectiveness(s, target);
                 if (match > 1f) match += (match - 1f) * shape.StrongMatchupBonus;
@@ -3231,6 +3237,7 @@ public static class SoloBattle
         return new BuildContext(
             DistinctStyles: build.Skills.Select(s => s.Def.Style).Distinct().Count(),
             DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
+            DistinctChosenSources: build.DistinctChosenSources,
             SkillsWoven: build.Skills.Count,
             // The BUILD's capacity, not the type's floor. VOW OF COMPLETION demands "no skill slot is
             // empty", and against a hard 4 a player who had bought the fifth weave met it with four

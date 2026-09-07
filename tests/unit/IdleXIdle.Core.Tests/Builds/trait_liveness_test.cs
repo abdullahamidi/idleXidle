@@ -694,24 +694,40 @@ public class trait_liveness_test
 
     // ── ELEMENTS ──────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>THE SINGLE NOTE — one element, and the wave's first cast lands twice.</summary>
+    /// <summary>THE SINGLE NOTE — one CHOSEN source, and the wave's first cast lands twice.</summary>
     [Fact]
     public void test_the_single_note_repeats_the_first_cast_of_a_pure_build()
     {
         List<WaveCreature> Crowd() => Wave(4, 900_000f, 20f);
 
+        // CHOSEN, not merely agreeing: the payout reads Build.ChosenSingleSource, so every skill here
+        // is taken AS a variation. A pair left on the BODY seed agrees by implementation, and that is
+        // the third case below — the one the old resolved-Source reading paid.
         Build Pure(SkillShape shape)
         {
             var b = new Build { Shape = shape, SlotCapacity = 2 };
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Machine));
-            b.Equip(TestBuilds.Skill("volley_spray", Source.Machine));
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));     // Body
+            b.Equip(TestBuilds.Chosen("volley_spray", "CLUSTER"));    // Body
             return b;
         }
         Build Mixed(SkillShape shape)
         {
             var b = new Build { Shape = shape, SlotCapacity = 2 };
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Machine));
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));     // Body
+            b.Equip(TestBuilds.Chosen("volley_spray", "SPLAY"));      // Mind
+            return b;
+        }
+        Build Defaulted(SkillShape shape)
+        {
+            var b = new Build { Shape = shape, SlotCapacity = 2 };
+            b.Equip(TestBuilds.Skill("hammer_blow", Source.Body));    // the seed, nothing chosen
             b.Equip(TestBuilds.Skill("volley_spray", Source.Body));
+            return b;
+        }
+        Build Lone(SkillShape shape)
+        {
+            var b = new Build { Shape = shape, SlotCapacity = 1 };
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));
             return b;
         }
         WaveMetrics Go(Func<SkillShape, Build> make, SkillShape shape)
@@ -723,14 +739,22 @@ public class trait_liveness_test
         }
 
         Up(Go(Pure, SkillShape.None).DeliveredDamage, Go(Pure, Trait("t_single_note")).DeliveredDamage,
-           0.02f, "THE SINGLE NOTE", "damage from a one-element build");
+           0.02f, "THE SINGLE NOTE", "damage from a one-source build");
 
-        // NEGATIVE CONTROL: one slot on another element and the whole thing is off.
+        // A LONE chosen skill is a source decision too, and the awakened trait pays it — the trait's
+        // DISCOVERY is what waits for a second skill, not its effect.
+        Up(Go(Lone, SkillShape.None).DeliveredDamage, Go(Lone, Trait("t_single_note")).DeliveredDamage,
+           0.02f, "THE SINGLE NOTE", "damage from a one-skill build whose source was chosen");
+
+        // NEGATIVE CONTROLS: one slot on another source and the whole thing is off — and so is a pair
+        // that merely agrees on the default, because nobody chose that.
         Same(Go(Mixed, SkillShape.None).DeliveredDamage, Go(Mixed, Trait("t_single_note")).DeliveredDamage,
-             "THE SINGLE NOTE", "damage from a two-element build");
+             "THE SINGLE NOTE", "damage from a two-source build");
+        Same(Go(Defaulted, SkillShape.None).DeliveredDamage, Go(Defaulted, Trait("t_single_note")).DeliveredDamage,
+             "THE SINGLE NOTE", "damage from a pair sitting on the BODY default");
     }
 
-    /// <summary>MANY TONGUES — four elements, and every matchup counts as a strong one.</summary>
+    /// <summary>MANY TONGUES — four CHOSEN sources, and every matchup counts as a strong one.</summary>
     [Fact]
     public void test_many_tongues_makes_every_matchup_strong_at_four_elements()
     {
@@ -738,22 +762,34 @@ public class trait_liveness_test
         // skills are answering badly, and with it none of them are.
         List<WaveCreature> Themed() => Wave(4, 900_000f, 20f, source: Source.Machine);
 
+        // Four voices are four variations CHOSEN to four sources (Build.DistinctChosenSources).
         Build Motley(SkillShape shape)
         {
             var b = new Build { Shape = shape, SlotCapacity = 4 };
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
-            b.Equip(TestBuilds.Skill("volley_spray", Source.Mind));
-            b.Equip(TestBuilds.Skill("field_pulse", Source.Spirit));
-            b.Equip(TestBuilds.Skill("snare_repay", Source.Nature));
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));     // Body
+            b.Equip(TestBuilds.Chosen("volley_spray", "SPLAY"));      // Mind
+            b.Equip(TestBuilds.Chosen("field_pulse", "SHARE"));       // Spirit
+            b.Equip(TestBuilds.Chosen("snare_repay", "VENGEANCE"));   // Shadow
             return b;
         }
         Build Three(SkillShape shape)
         {
             var b = new Build { Shape = shape, SlotCapacity = 4 };
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
-            b.Equip(TestBuilds.Skill("volley_spray", Source.Mind));
-            b.Equip(TestBuilds.Skill("field_pulse", Source.Spirit));
-            b.Equip(TestBuilds.Skill("snare_repay", Source.Spirit));
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));     // Body
+            b.Equip(TestBuilds.Chosen("volley_spray", "CLUSTER"));    // Body again
+            b.Equip(TestBuilds.Chosen("field_pulse", "SHARE"));       // Spirit
+            b.Equip(TestBuilds.Chosen("snare_repay", "VENGEANCE"));   // Shadow
+            return b;
+        }
+        // Three chosen and one slot still on a seed that happens to be the missing colour: the
+        // RESOLVED count says four, the CHOSEN count says three, and only the chosen count is a voice.
+        Build ThreeAndADefault(SkillShape shape)
+        {
+            var b = new Build { Shape = shape, SlotCapacity = 4 };
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));     // Body
+            b.Equip(TestBuilds.Chosen("volley_spray", "SPLAY"));      // Mind
+            b.Equip(TestBuilds.Chosen("field_pulse", "SHARE"));       // Spirit
+            b.Equip(TestBuilds.Skill("snare_repay", Source.Nature));  // a default, not a decision
             return b;
         }
         WaveMetrics Go(Func<SkillShape, Build> make, SkillShape shape)
@@ -765,11 +801,14 @@ public class trait_liveness_test
         }
 
         Up(Go(Motley, SkillShape.None).DeliveredDamage, Go(Motley, Trait("t_many_tongues")).DeliveredDamage,
-           0.02f, "MANY TONGUES", "damage from a four-element build");
+           0.02f, "MANY TONGUES", "damage from a four-source build");
 
-        // NEGATIVE CONTROL: three elements is not four.
+        // NEGATIVE CONTROLS: three sources is not four — and three chosen plus a default is not four.
         Same(Go(Three, SkillShape.None).DeliveredDamage, Go(Three, Trait("t_many_tongues")).DeliveredDamage,
-             "MANY TONGUES", "damage from a three-element build");
+             "MANY TONGUES", "damage from a three-source build");
+        Assert.Equal(4, SoloBattle.DescribeBuild(ThreeAndADefault(SkillShape.None), new Hunter()).DistinctSources);
+        Same(Go(ThreeAndADefault, SkillShape.None).DeliveredDamage, Go(ThreeAndADefault, Trait("t_many_tongues")).DeliveredDamage,
+             "MANY TONGUES", "damage from three chosen sources and one default");
     }
 
     // ── GEAR SETS ─────────────────────────────────────────────────────────────────────────────────

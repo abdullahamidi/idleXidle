@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Sources;
+using IdleXIdle.Core.Tests.Builds;
 using IdleXIdle.Core.Traits;
 using Xunit;
 using Xunit.Abstractions;
@@ -176,11 +178,20 @@ public class trait_pacing_benchmark_test
     ///   the row the "FULL/NEAR-FULL is substantial breadth of play" benchmark is about.</item>
     /// </list>
     /// <para>
-    /// <b>Deliberately conservative.</b> No mastery-tree walk is applied at any age — the only shape
-    /// carried is the critical chance the DEVELOPED row's gear rolls, which stands in for the crit
-    /// affixes an endgame account wears (<c>BuildContext.CritPercent</c> reads exactly those three
-    /// terms). A real account of each age has also spent mastery points. That makes every count below
-    /// a LOWER BOUND on the real curve: the true pacing is at least this fast.
+    /// <b>Deliberately conservative.</b> No mastery-tree walk is applied at any age — the tree grants
+    /// skill ACCESS only (every road, no minors or notables), and the only shapes carried are the
+    /// seeker's own passive (EVEN HAND, +8%) and the critical chance the DEVELOPED row's gear rolls,
+    /// which stands in for the crit affixes an endgame account wears (<c>BuildContext.CritPercent</c>
+    /// reads exactly those three terms). A real account of each age has also spent mastery points.
+    /// That makes every count below a LOWER BOUND on the real curve: the true pacing is at least this
+    /// fast.
+    /// </para>
+    /// <para>
+    /// <b>Every build is one the player can make</b> (<see cref="Reachable"/>): composed through the
+    /// loadout, the progress and the composer, with every Source a CHOSEN variation's. The bench used to
+    /// hand its quartets a Source per slot — a lever the weave screen retired — and three of their four
+    /// skills were actives, which the composer's two-active budget refuses; the curve had been tuned
+    /// against builds nobody could weave.
     /// </para>
     /// </remarks>
     private static IReadOnlyList<Stage> Career() => new[]
@@ -231,9 +242,6 @@ public class trait_pacing_benchmark_test
         HunterStat.AttackPower, HunterStat.MaxHealth, HunterStat.Vitality,
     };
 
-    /// <summary>The four skills a woven account fights with — three actives and the MIRE field.</summary>
-    private static readonly string[] Quartet = { "hammer_blow", "volley_spray", "field_mire", "sign_call" };
-
     /// <summary>The seeker's own skill — the one a new game hands out, and the only one that needs no road.</summary>
     private const string Signature = "sig_seeker_hard_hands";
 
@@ -246,10 +254,36 @@ public class trait_pacing_benchmark_test
     /// <summary>BLOW's BODY variation — chosen to match the signature, which is what makes the pair a commitment.</summary>
     private const string FirstSharedVariation = "FLATTEN";
 
-    /// <summary>The four elements a player who has learned matchups spreads across the quartet.</summary>
-    private static readonly Source[] FourElements =
+    /// <summary>
+    /// The four-source quartet: four variations CHOSEN to four different Sources, two actives and two
+    /// fields — the slot split a four-slot account actually has.
+    /// </summary>
+    /// <remarks>
+    /// BLOW as FLATTEN (Body) and CALL as STEADY (Spirit) — the two actives, CALL being the MARK caster
+    /// THE LINGERING MARK reads — beside MIRE as NUMB (Nature) and BRAND as SPRAWL (Mind), the two
+    /// fields. This used to be four skills handed a Source per slot — a lever the weave screen retired
+    /// when variations took ownership of a skill's Source — and three of the four were actives, which
+    /// the composer's two-active budget would have refused. A player cannot make that build; this one
+    /// they can.
+    /// </remarks>
+    private static readonly Reachable.Slot[] Motley =
     {
-        Source.Body, Source.Mind, Source.Shadow, Source.Nature,
+        new("hammer_blow", "FLATTEN"), new("sign_call", "STEADY"), new("field_mire", "NUMB"), new("sign_brand", "SPRAWL"),
+    };
+
+    /// <summary>
+    /// The defensive rebuild, still four sources: BANKED repay for shield (Machine) and NET jaws for
+    /// reflect (Shadow), beside BLOW (Body) and MIRE (Nature) — two actives, a reaction and a field.
+    /// </summary>
+    /// <remarks>
+    /// MIRE rather than a second SIGN field on purpose: a wave slowed by MIRE bites less and lasts
+    /// longer, which is the shape the shield family's counters are fed by. With BRAND in that slot the
+    /// career never reached STANDING PLATE at all — a fixture that could not pose the condition, not a
+    /// fact about the catalogue.
+    /// </remarks>
+    private static readonly Reachable.Slot[] Defence =
+    {
+        new("hammer_blow", "FLATTEN"), new("snare_repay", "BANKED"), new("snare_jaws", "NET"), new("field_mire", "NUMB"),
     };
 
     private static Hunter Trained(Stage stage)
@@ -284,52 +318,35 @@ public class trait_pacing_benchmark_test
     /// </remarks>
     private static Build BuildFor(Stage stage)
     {
-        var b = new Build
+        // THE ONBOARDING AS SHIPPED, then the builds a player can make. The champion's own signature
+        // at the starter loadout's seed (unchosen); then the same skill with its variation taken; then
+        // the first road's skill beside it, chosen to the SAME source (both actives — the first road
+        // teaches an active, and two actives fit the four-slot budget the first conquest has opened by
+        // then); then the four-source quartets, every Source a chosen variation's.
+        var slots = stage.Weave switch
         {
-            PassiveMods = new BuildMods(stage.GearDamage, stage.GearHealth, 1f, 1f, 1f),
-            Shape = stage.GearCritPercent > 0f
-                ? SkillShape.None with { BonusCritPercent = stage.GearCritPercent }
-                : SkillShape.None,
+            Weave.Starter => new[] { new Reachable.Slot(Signature) },
+            Weave.Signature => new[] { new Reachable.Slot(Signature, SignatureVariation) },
+            Weave.FirstPair => new[] { new Reachable.Slot(Signature, SignatureVariation), new Reachable.Slot(FirstShared, FirstSharedVariation) },
+            Weave.Defence => Defence,
+            _ => Motley,
         };
+        if (stage.Vows)
+            slots = slots.Select((s, i) => s with { VowId = i == 0 ? "vow_complete" : i == 1 ? "vow_fragility" : null }).ToArray();
 
-        // How many skills this age actually has to weave: one until the first road is bought, two once
-        // it is, and the full four from the second region's build onward (the quartet ages deliberately
-        // keep their four-shared-skill shape — the curve was re-paced against it).
-        var skills = stage.Weave switch { Weave.Starter or Weave.Signature => 1, Weave.FirstPair => 2, _ => 4 };
+        // COMPOSED THE WAY PLAY COMPOSES IT (see Reachable): the loadout, the progress, the vows, the
+        // composer. A slot the shipped model could not fill throws here instead of fighting anyway.
+        var build = Reachable.Compose(
+            CharacterRoster.Get(CharacterId), slots,
+            slotCapacity: stage.Conquered >= 1 ? Build.SkillSlots : slots.Length,
+            knownVows: new[] { Vows.ById("vow_complete")!, Vows.ById("vow_fragility")! },
+            vowCapacity: stage.Vows ? 2 : 1);
 
-        for (var i = 0; i < skills; i++)
-        {
-            Vow? vow = null;
-            if (stage.Vows && i == 0) vow = Vows.ById("vow_complete");
-            if (stage.Vows && i == 1) vow = Vows.ById("vow_fragility");
-
-            b.Equip(stage.Weave switch
-            {
-                // THE ONBOARDING AS SHIPPED. The champion's own signature at the starter loadout's woven
-                // seed (PlayerLoadout.Starter weaves it BODY, unchosen); then the same skill with its
-                // variation taken; then the first road's skill beside it, chosen to the SAME source.
-                // Both actives — the first road teaches an active, and two actives fit the four-slot
-                // budget the first conquest has opened by then.
-                Weave.Starter => TestBuilds.Skill(Signature, Source.Body, vow),
-                Weave.Signature => TestBuilds.Chosen(Signature, SignatureVariation, vow),
-                Weave.FirstPair => i == 0
-                    ? TestBuilds.Chosen(Signature, SignatureVariation, vow)
-                    : TestBuilds.Chosen(FirstShared, FirstSharedVariation, vow),
-                // The DEFENSIVE rebuild. BANKED turns REPAY's banked total into shield and NET doubles
-                // JAWS's reflect — both taken through the real variation, so the fight sees the content
-                // the catalogue actually ships rather than a hand-set field.
-                Weave.Defence => i switch
-                {
-                    1 => TestBuilds.Skill("snare_repay", TestBuilds.SourceOf("snare_repay", "BANKED"), vow,
-                                          _ => TestBuilds.Resolved("snare_repay", "BANKED")),
-                    2 => TestBuilds.Skill("snare_jaws", TestBuilds.SourceOf("snare_jaws", "NET"), vow,
-                                          _ => TestBuilds.Resolved("snare_jaws", "NET")),
-                    _ => TestBuilds.Skill(Quartet[i], FourElements[i], vow),
-                },
-                _ => TestBuilds.Skill(Quartet[i], FourElements[i], vow),
-            });
-        }
-        return b;
+        // THE GEAR OF THE AGE rides on the composed build beside the character's own numbers.
+        build.PassiveMods = build.PassiveMods.Combine(new BuildMods(stage.GearDamage, stage.GearHealth, 1f, 1f, 1f));
+        if (stage.GearCritPercent > 0f)
+            build.Shape = build.Shape with { BonusCritPercent = build.Shape.BonusCritPercent + stage.GearCritPercent };
+        return build;
     }
 
     /// <summary>The enemy baseline of a region — the same arithmetic the economy bench uses.</summary>
@@ -550,49 +567,68 @@ public class trait_pacing_benchmark_test
         // CURRENT — the named traits of the first two ages. These are the burst the brief is about.
         Assert.Equal(CurrentFreshIds, by["FRESH"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
         Assert.Equal(CurrentEarlyIds, by["EARLY"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+        Assert.Equal(CurrentEarlyMidIds, by["EARLY-MID"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+        Assert.Equal(CurrentMidIds, by["MID"].NewIds.OrderBy(x => x, StringComparer.Ordinal).ToArray());
     }
 
-    // ── THE CURVE (measured 2026-09-07, AFTER the PURE semantic correction) ──────────────────────
+    // ── THE CURVE (measured 2026-09-07, on builds the player can make) ───────────────────────────
     //
     // These constants are the ONLY place the discovery curve is written down. A retune edits exactly
     // this block and nothing else in the file, and a failure here means the pacing moved and somebody
     // has to say by how much.
     //
-    //   AGE           RETUNE   NOW    TARGET
-    //   FRESH           1       0     0-1        the honest starter (one skill) wastes too little for
-    //                                            THE SPILL, which moves one age on
-    //   EARLY           3       2     about 2-4  THE SPILL, WHAT KILLED YOU — still one skill, the
-    //                                            signature with OPEN HAND chosen
-    //   FIRST CHOICE    —       3                new age: THE SINGLE NOTE lands here, and only here
-    //   EARLY-MID       5       4     about 5-8  CARRION WEIGHT moved to MID
-    //   MID            13      12     gradual
-    //   LATE           22      22
-    //   DEVELOPED      26      26     substantial breadth — 120 descents and 8,099 cleared waves
+    //   AGE           RETUNE   PASS 14   NOW    TARGET
+    //   FRESH           1        0        0     0-1        the honest starter (one skill) wastes too
+    //                                                      little for THE SPILL, which moves one age on
+    //   EARLY           3        2        2     about 2-4  THE SPILL, WHAT KILLED YOU — still one skill,
+    //                                                      the signature with OPEN HAND chosen
+    //   FIRST CHOICE    —        3        3                THE SINGLE NOTE lands here, and only here
+    //   EARLY-MID       5        4        6     about 5-8  the reachable quartet clears 663 waves where
+    //                                                      the impossible one cleared 503
+    //   MID            13       12       13     gradual    MANY TONGUES lands here (700 CHOSEN four-source waves)
+    //   LATE           22       22       22
+    //   DEVELOPED      26       26       26     substantial breadth — 120 descents and 9,696 cleared waves
     //
-    // NOTHING BUT THE FIXTURE MOVED THE OTHER ROWS. The retune fought FRESH and EARLY with a four-skill
-    // quartet the ladder cannot produce; the honest one-skill ages clear about as many waves (127
-    // against 131 in EARLY) but with one skill's overkill, and the twelve added descents re-roll every
-    // later age's band stream (runIndex is one counter across the career). No threshold but PURE's was
-    // re-examined, and PURE's did not move.
+    // WHAT MOVED THE ROWS, AND WHY IT IS THE FIXTURE. Pass 14 made the early ages honest (one skill
+    // until the first road). This pass makes every quartet a build the player can make (Reachable):
+    // four variations CHOSEN through the loadout and the composer, two actives and two passives, the
+    // seeker's own passive on top. The old Motley quartet was three actives on unchosen per-slot
+    // Sources — the composer would have refused its third active and the weave screen cannot set a
+    // slot's Source at all. Against the pass-14 printout SEVEN traits changed age, every one by a
+    // single age and every one for a fixture reason: the reachable quartet fights harder (663 waves
+    // against 503 in EARLY-MID) and its variations do more of the things the counters read —
+    //   CARRION WEIGHT     MID       -> EARLY-MID   (more waste per wave from FLATTEN and STEADY)
+    //   LAST WORD          MID       -> EARLY-MID
+    //   THE LINGERING MARK LATE      -> MID         (CALL is woven from EARLY-MID on; the old Defence
+    //                                                age carried the only mark caster)
+    //   PRACTISED FLESH    LATE      -> MID
+    //   THE GIVEN HAND     DEVELOPED -> LATE
+    //   LAST BREATH        MID       -> LATE        (a stronger build reaches the brink less often)
+    //   THE THIN LINE      LATE      -> DEVELOPED   (likewise)
+    // The other nineteen kept their age. No threshold was re-examined for any of this: 6 is inside
+    // "about 5-8", MID and LATE are unchanged, and a stronger real build awakening a little sooner —
+    // or a sturdier one reaching the brink a little later — is the design, not a defect.
     //
-    // THE PURE COLUMN, which is what this measurement was for. Under the old "a lone skill agrees
-    // with itself" reading the FRESH age banked 12 PURE waves it had never decided on; under a reading
-    // that counted RESOLVED sources a wave-5 pair banked on the BODY default before anyone had chosen
+    // THE PURE COLUMN, which the FIRST CHOICE age exists for. Under the old "a lone skill agrees with
+    // itself" reading the FRESH age banked PURE waves it had never decided on; under a reading that
+    // counted RESOLVED sources a wave-5 pair banked on the BODY default before anyone had chosen
     // anything. Under Build.PureSource (two or more skills, each with its variation chosen, all one
     // source) FRESH and EARLY bank 0 and the FIRST CHOICE pair banks every wave it clears: THE SINGLE
     // NOTE (120) awakens 120 committed waves in, ten of the age's twelve descents — inside the stretch
     // between the first road and the second, on the build that earned it. The threshold stayed where
     // the retune put it: the correction moved the counter's START, and the age with it, not the count.
+    // MOTLEY waves are CHOSEN four-source waves now (Build.DistinctChosenSources): the quartet ages
+    // bank them because their four variations really are four Sources, not because four seeds differ.
     private const int CurrentFresh = 0;
     private const int CurrentEarly = 2;
     private const int CurrentFirstChoice = 3;
-    private const int CurrentEarlyMid = 4;
-    private const int CurrentMid = 12;
+    private const int CurrentEarlyMid = 6;
+    private const int CurrentMid = 13;
     private const int CurrentLate = 22;
     private const int CurrentDeveloped = 26;
 
     /// <summary>The PURE accumulator at the end of the FIRST CHOICE age — every wave that age cleared.</summary>
-    private const double CurrentFirstChoicePure = 145;
+    private const double CurrentFirstChoicePure = 149;
 
     /// <summary>The age THE SINGLE NOTE awakens in.</summary>
     private const string CurrentSingleNoteAge = "FIRST CHOICE";
@@ -606,6 +642,57 @@ public class trait_pacing_benchmark_test
 
     /// <summary>EARLY's two discoveries, pinned by name so the prose above and the table cannot drift apart.</summary>
     private static readonly string[] CurrentEarlyIds = { "t_spill", "t_what_killed_you" };
+
+    /// <summary>EARLY-MID's discoveries, pinned by name for the same reason — this is the row the reachable quartet moved.</summary>
+    private static readonly string[] CurrentEarlyMidIds = { "t_carrion_weight", "t_deep_cut", "t_last_word" };
+
+    /// <summary>MID's discoveries, pinned by name: MANY TONGUES lands here on CHOSEN four-source waves.</summary>
+    private static readonly string[] CurrentMidIds =
+    {
+        "t_kept_word", "t_lingering_mark", "t_many_tongues", "t_practised_flesh",
+        "t_spreading_fire", "t_unbroken_thread", "t_weight_of_vows",
+    };
+
+    // ── REACHABILITY ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_trait_pacing_every_age_is_a_build_the_player_can_make()
+    {
+        // BuildFor composes through Reachable, which THROWS for anything the shipped loadout model
+        // cannot produce — so composing every age is the proof, and the reads below pin what each
+        // age's build actually says about its sources, which is what the PURE and MOTLEY counters
+        // measure.
+        foreach (var stage in Career())
+        {
+            var build = BuildFor(stage);
+            switch (stage.Weave)
+            {
+                case Weave.Starter:
+                    Assert.Single(build.Skills);
+                    Assert.Null(build.Skills[0].Variation);
+                    Assert.Null(build.ChosenSingleSource);
+                    break;
+                case Weave.Signature:
+                    Assert.Single(build.Skills);
+                    Assert.NotNull(build.ChosenSingleSource);
+                    Assert.Null(build.PureSource);           // one decision is not yet a commitment
+                    break;
+                case Weave.FirstPair:
+                    Assert.Equal(2, build.Skills.Count);
+                    Assert.Equal(TestBuilds.SourceOf(Signature, SignatureVariation), build.PureSource);
+                    break;
+                default:
+                    Assert.Equal(Build.SkillSlots, build.Skills.Count);
+                    Assert.All(build.Skills, s => Assert.NotNull(s.Variation));
+                    Assert.Equal(TraitDiscovery.MotleySources, build.DistinctChosenSources);
+                    Assert.Equal(2, build.ActiveCount);
+                    Assert.Equal(2, build.PassiveCount);
+                    break;
+            }
+            Assert.All(build.Skills, s => Assert.True(s.Variation is null || s.Variation.Source == s.Source,
+                $"{stage.Name}: {s.Def.Name}'s Source is not its variation's — a Source was injected"));
+        }
+    }
 
     // ── DETERMINISM ──────────────────────────────────────────────────────────────────────────────
 

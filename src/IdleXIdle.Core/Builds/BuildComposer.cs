@@ -211,8 +211,9 @@ public static class BuildComposer
                         resolved = rm(resolved);
 
             // The chosen variation owns the element; the woven element is the fallback before it. The
-            // variation itself rides along so a reader can tell a chosen Source from a default one
-            // (Build.PureSource does; the fight never looks).
+            // variation itself rides along so a reader can tell a chosen Source from a default one —
+            // Build.PureSource (the trait ledger), and ChosenSingleSource / DistinctChosenSources, which
+            // the fight reads once a wave for THE SINGLE NOTE, the PURE node and MANY TONGUES.
             build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow, variation));
         }
 

@@ -180,10 +180,11 @@ public sealed class HuntScreen
     /// <remarks>
     /// FIXTURE ONLY (<c>RH_SHOT_CREATURES</c>), and PRESENTATION ONLY: the wave has already been
     /// fought, so trimming the list changes what is drawn and nothing that was decided. It exists for
-    /// one comparison the seeded rolls cannot pose — a LONE creature beside a wave of several — because
-    /// a lone creature is laid out by <see cref="LayoutSingleEnemy"/> at the unscaled enemy box while a
-    /// wave of two or more is laid out at its archetype's scale, and the two have never been put side
-    /// by side. It composes nothing: the creatures are the wave's own, in the wave's own order.
+    /// one comparison the seeded rolls cannot pose — a LONE creature beside a wave of several. That
+    /// comparison is what showed a lone creature laid out at the unscaled enemy box while its pack
+    /// wore the archetype's scale; both go through <see cref="CreatureRow"/> now, and the fixture
+    /// stays so the invariant can be photographed. It composes nothing: the creatures are the wave's
+    /// own, in the wave's own order.
     /// </remarks>
     private IReadOnlyList<WaveCreature> LaidOutCreatures
     {
@@ -737,7 +738,15 @@ public sealed class HuntScreen
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.Champion => new[] { new Rectangle(ChampBox.X + 50, ChampBox.Y - 10, ChampBox.Width + 60, ChampBox.Height + 20) },
-        TourTarget.Enemies => new[] { new Rectangle(940, EnemyBox.Y, 680, EnemyBox.Height + 10), Inflated(StageHeader, 10) },
+        // Lit from the TALLEST normal box, not the neutral one: a lone creature wears its archetype's
+        // scale now (CreatureRow), so a first wave that rolls a Bruiser stands 52 px taller than the
+        // enemy box, and a light sized to the neutral box would cut the top off the creature the
+        // card is pointing at. The Bruiser box is the table's ceiling, so it is the honest static bound.
+        TourTarget.Enemies => new[]
+        {
+            new Rectangle(940, EnemyBox.Bottom - ArchetypeBox(Archetype.Bruiser).Y - 10, 680, ArchetypeBox(Archetype.Bruiser).Y + 20),
+            Inflated(StageHeader, 10),
+        },
         TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
         TourTarget.Skills => new[] { Inflated(s_dockRect, 10) },
@@ -2145,14 +2154,24 @@ public sealed class HuntScreen
     }
 
     /// <summary>
-    /// How big each archetype draws, relative to the enemy box.
+    /// How big each archetype draws, relative to the enemy box — WHATEVER THE POPULATION.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Scale is the fastest read in the arena. A Swarm is small and there are several; a Bruiser fills
     /// the box alone. Together with the archetype name above the wave's bar, this is how a player learns
     /// what beat them without being told.
+    /// </para>
+    /// <para>
+    /// <b>Population-independent (2026-09-07).</b> A lone creature used to be laid out at the unscaled
+    /// enemy box whatever its archetype, so the one archetype that ALWAYS rolls alone — the Bruiser —
+    /// never once wore its own size, and a lone Swarm stood taller than its pack. Measured on the same
+    /// art: 360 x 421 alone against 403 x 471 in a Bruiser pair. The multiplier now reaches both
+    /// layouts through <see cref="CreatureRow"/>; population decides room, placement and spacing, and
+    /// never whether the archetype's size language applies. The table itself is unchanged.
+    /// </para>
     /// </remarks>
-    private static float ArchetypeScale(Archetype a) => a switch
+    public static float ArchetypeScale(Archetype a) => a switch
     {
         Archetype.Swarm => 0.58f,
         Archetype.Caster => 0.78f,
@@ -2160,20 +2179,82 @@ public sealed class HuntScreen
         _ => 1.12f,   // Bruiser
     };
 
+    /// <summary>The box one creature of this archetype is laid out in — the enemy box at the archetype's scale.</summary>
+    public static Point ArchetypeBox(Archetype a)
+        => new((int)(EnemyBox.Width * ArchetypeScale(a)), (int)(EnemyBox.Height * ArchetypeScale(a)));
+
+    /// <summary>The boxes of one row of creatures, and where the row stands — the ONE creature layout.</summary>
+    /// <param name="Boxes">One rectangle per creature, in slot order, bob included.</param>
+    /// <param name="CentreX">The row's resting centre, for the labels — deliberately not lunge-shifted.</param>
+    /// <param name="TopY">The row's resting top: the plane minus the box height.</param>
+    public readonly record struct CreatureRowLayout(Rectangle[] Boxes, int CentreX, int TopY);
+
+    /// <summary>
+    /// Lay out <paramref name="count"/> creatures of one archetype across the arena's right half:
+    /// the same box for a lone creature as for each of a pack, the row compressed to fit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PURE ARITHMETIC over the arena's static geometry, so the population invariant can be tested
+    /// rather than photographed: a creature's box is <see cref="ArchetypeBox"/> whether it stands alone
+    /// or in a row of five. Population reaches only the spacing, the room the row may occupy and the
+    /// bob phase of each figure.
+    /// </para>
+    /// <para>
+    /// The row's resting centre is the enemy box's, clamped so the row stays inside the arena and off
+    /// the champion; the slide-in and the lunge are added AFTER the clamp (see the note on the old
+    /// LayoutComposition: a clamp applied to the moved position saturated and swallowed both). Each
+    /// creature bobs on its own phase — five sprites bobbing in unison read as one animated object.
+    /// </para>
+    /// </remarks>
+    /// <param name="archetype">The archetype every creature in the row is laid out as.</param>
+    /// <param name="count">How many creatures. At least one.</param>
+    /// <param name="enter01">The slide-in, 1 at the start of the wave and 0 at rest.</param>
+    /// <param name="lunge01">The lunge, 1 at full extension.</param>
+    /// <param name="anim">The bob clock, in seconds.</param>
+    public static CreatureRowLayout CreatureRow(Archetype archetype, int count, float enter01, float lunge01, float anim)
+    {
+        count = Math.Max(1, count);
+        var (w, h) = (ArchetypeBox(archetype).X, ArchetypeBox(archetype).Y);
+        var half = w / 2;
+        // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
+        // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
+        var enter = (int)(enter01 * 150f);
+        var lunge = (int)(lunge01 * -40f);
+
+        var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
+        var spacing = (int)(w * 0.54f);        // overlap slightly; a row of five must still fit
+        if (count > 1 && room > 0) spacing = Math.Min(spacing, room / (count - 1));
+        var wanted = Math.Max(0, spacing) * (count - 1);
+
+        var lo = ArenaRect.X + half + 20 + wanted / 2;
+        var hi = ArenaRect.Right - half - 20 - wanted / 2;
+        lo = Math.Min(hi, Math.Max(lo, ChampBox.Right + 80 + wanted / 2));
+
+        var resting = lo > hi ? ArenaRect.Center.X : Math.Clamp(EnemyBox.Center.X, lo, hi);
+        var centre = resting + enter + lunge;
+        var left = centre - wanted / 2;
+
+        var boxes = new Rectangle[count];
+        for (var i = 0; i < count; i++)
+        {
+            var cx = left + spacing * i;
+            var bob = (int)(MathF.Sin(anim * 2f + i * 1.7f) * 7f);
+            boxes[i] = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
+        }
+        return new CreatureRowLayout(boxes, resting, EnemyBox.Bottom - h);
+    }
+
     /// <summary>
     /// The archetype the arena LAYS OUT for — the wave's, or the rig's override.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// FIXTURE ONLY (<c>RH_SHOT_ARCHETYPE</c>), and it reaches ONLY A WAVE OF TWO OR MORE: a single
-    /// creature is laid out by <see cref="LayoutSingleEnemy"/>, which fills the unscaled enemy box and
-    /// never reads this. That is the whole reason the dial exists AND the reason it can do nothing —
-    /// the box that asks the renderer for more magnification than it will give is the 488 x 492 one,
-    /// which is a MULTI-CREATURE wave at Bruiser scale, not a Bruiser wave. A Bruiser rolls one
-    /// creature by shape (<c>Archetypes.Shapes</c>, min 1 max 1) and only the NUMBERS affix adds
-    /// another, so that box is a Numbers band's Bruiser roll — reachable in play, and reachable in a
-    /// fixture only by luck of a seeded roll, which is why <see cref="RequireArchetypeReached"/>
-    /// refuses to photograph a pose the dial did not actually change.
+    /// FIXTURE ONLY (<c>RH_SHOT_ARCHETYPE</c>). It reaches every normal wave — a lone creature and a
+    /// pack are laid out by the same <see cref="CreatureRow"/> at the same archetype scale — and only a
+    /// BOSS ignores it, because a boss has its own presentation law (<see cref="LayoutBoss"/>). The box
+    /// that asks the renderer for more magnification than it will give is the 488 x 492 Bruiser box,
+    /// which a Bruiser now wears alone as well as in a NUMBERS band's pair.
     /// </para>
     /// <para>
     /// It moves a layout number and nothing else: no gameplay value, no Core call, no roll.
@@ -2191,20 +2272,20 @@ public sealed class HuntScreen
     /// Under the rig, refuse to photograph a wave <see cref="DevArchetype"/> could not reach.
     /// </summary>
     /// <remarks>
-    /// The dial is read only by the multi-creature layout, so on a single creature or a boss it is
-    /// inert — and an inert dial produces a perfectly ordinary picture of the WRONG state, which is
-    /// the failure this project keeps paying for. The composition is a seeded roll no fixture pins,
-    /// so this is checked at the moment of use rather than assumed.
+    /// The dial reaches every normal wave — lone or packed, both go through <see cref="CreatureRow"/>
+    /// at the archetype's scale — and only a BOSS ignores it, because a boss has its own presentation
+    /// law (<see cref="LayoutBoss"/>). On a boss the dial is inert, and an inert dial produces a
+    /// perfectly ordinary picture of the WRONG state, which is the failure this project keeps paying
+    /// for. Whether a wave is a boss is the seeded roll's to decide, so this is checked at the moment
+    /// of use rather than assumed.
     /// </remarks>
-    private void RequireArchetypeReached(int creatureCount)
+    private void RequireArchetypeReached()
     {
         if (DevArchetype is not { } forced || !UnderRig) return;
-        if (creatureCount > 1 && !_isBossWave) return;
+        if (!_isBossWave) return;   // every normal wave, lone or packed, lays out at the archetype's scale
         throw new InvalidOperationException(
-            $"RH_SHOT_ARCHETYPE={forced} changed nothing: this wave lays out "
-            + (_isBossWave ? "a BOSS" : $"{creatureCount} creature(s)")
-            + ", and the archetype's scale reaches only a wave of two or more. Seek to a wave whose "
-            + "band carries NUMBERS (its roll adds a creature) before posing the capped-actor case.");
+            $"RH_SHOT_ARCHETYPE={forced} changed nothing: this wave lays out a BOSS, which has its own "
+            + "presentation law and never reads the archetype scale. Seek to a normal wave.");
     }
 
     /// <summary>
@@ -2310,7 +2391,7 @@ public sealed class HuntScreen
     /// RESOLVED, not authored: the rectangle is landed at the scale <c>UiKit.AnimSprite</c> will
     /// actually draw at, which is the box's ask THROUGH the renderer's magnification ceiling
     /// (<c>UiKit.DrawScale</c>, reached here as <c>UiKit.FrameCeiling</c>). A box may ask for more
-    /// than the ceiling allows — a wave of two or more at Bruiser scale gives a 488 x 492 box, which
+    /// than the ceiling allows — a Bruiser wave, lone or packed, gives a 488 x 492 box, which
     /// asks 1.27 of the rift guardian's deeply letterboxed idle — and the renderer answers 1.25, so
     /// an authored rectangle would size every
     /// effect on that creature against a figure 6 px wider and 9 px taller than the one on screen.
@@ -2560,10 +2641,9 @@ public sealed class HuntScreen
                         Rectangle.Union(standing, lunged), facing: 1);
 
         var comp = LaidOutCreatures;
-        RequireArchetypeReached(comp.Count);
+        RequireArchetypeReached();
         if (_isBossWave) LayoutBoss();
-        else if (comp.Count > 1) LayoutComposition(comp);
-        else LayoutSingleEnemy();
+        else LayoutComposition(comp.Count);   // one or many: the same row, the same archetype scale
 
         // The row: the union of the bodies standing in it. A trap ring is a statement about the PACK,
         // and the pack is nine hundred pixels wide and one creature tall — which is why it is the one
@@ -2583,7 +2663,7 @@ public sealed class HuntScreen
     }
 
     /// <summary>
-    /// The row's geometry for a multi-creature wave — compression, clamp, motion, bob.
+    /// The row's geometry for a wave of one or more creatures — compression, clamp, motion, bob.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -2612,55 +2692,17 @@ public sealed class HuntScreen
     /// scissor, which is already active for exactly this kind of transient overshoot.
     /// </para>
     /// </remarks>
-    private void LayoutComposition(IReadOnlyList<WaveCreature> comp)
+    private void LayoutComposition(int count)
     {
-        var scale = ArchetypeScale(WaveArchetype);
-        // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
-        // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
-        var enter = (int)(_enemyEnter * 150f);
-        var lunge = (int)(_enemyLunge * -40f);
-        var w = (int)(EnemyBox.Width * scale);
-        var h = (int)(EnemyBox.Height * scale);
-        var half = w / 2;
-
-        var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
-        var spacing = (int)(w * 0.54f);        // overlap slightly; a row of five must still fit
-        if (comp.Count > 1 && room > 0) spacing = Math.Min(spacing, room / (comp.Count - 1));
-        var wanted = Math.Max(0, spacing) * (comp.Count - 1);
-
-        var lo = ArenaRect.X + half + 20 + wanted / 2;
-        var hi = ArenaRect.Right - half - 20 - wanted / 2;
-        lo = Math.Min(hi, Math.Max(lo, ChampBox.Right + 80 + wanted / 2));
-
-        var resting = lo > hi ? ArenaRect.Center.X : Math.Clamp(EnemyBox.Center.X, lo, hi);
-        var centre = resting + enter + lunge;
-        var left = centre - wanted / 2;
-
+        // ONE LAYOUT FOR ONE OR MANY. The lone creature used to have its own method at the unscaled
+        // enemy box, which is how a Bruiser — the archetype that always rolls alone — never wore its
+        // own size. The row function is the single owner of the box; this only publishes its answer.
+        var row = CreatureRow(WaveArchetype, count, _enemyEnter, _enemyLunge, _anim);
         // WHERE THE ROW ACTUALLY IS, published for the labels. Deliberately NOT the lunge-shifted
         // centre: a nameplate that slides 40 px every time the row shoves forward reads as jitter.
-        _rowCentreX = resting;
-        _rowTopY = EnemyBox.Bottom - h;
-
-        for (var i = 0; i < comp.Count; i++)
-        {
-            // Back-to-front by index so the row overlaps consistently, and each creature bobs on its own
-            // phase — five sprites bobbing in unison read as one animated object, not as five creatures.
-            var cx = left + spacing * i;
-            var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
-            _creatureBoxes[i] = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
-        }
-    }
-
-    /// <summary>One creature, filling the enemy box, with its slide-in, its lunge and its bob.</summary>
-    private void LayoutSingleEnemy()
-    {
-        var elunge = (int)(_enemyLunge * -40f);
-        var enter = (int)(_enemyEnter * 150f);   // shorter + faded, see LayoutComposition
-        var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
-        var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
-        _creatureBoxes[0] = new Rectangle(ebox.X, ebox.Bottom - ebox.Height + bob, ebox.Width, ebox.Height);
-        _rowCentreX = EnemyBox.Center.X;   // resting, like the composition's
-        _rowTopY = ebox.Bottom - ebox.Height;
+        _rowCentreX = row.CentreX;
+        _rowTopY = row.TopY;
+        for (var i = 0; i < row.Boxes.Length; i++) _creatureBoxes[i] = row.Boxes[i];
     }
 
     /// <summary>The boss: a square figure standing on its own anchor, with the same lunge as any creature.</summary>
@@ -2751,8 +2793,7 @@ public sealed class HuntScreen
         // these exact rectangles rather than on the ones this method used to work out for itself.
         var scale = ArchetypeScale(WaveArchetype);
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
-        var w = (int)(EnemyBox.Width * scale);
-        var h = (int)(EnemyBox.Height * scale);
+        var (w, h) = (ArchetypeBox(WaveArchetype).X, ArchetypeBox(WaveArchetype).Y);
 
         string? stripKey = null, staticKey = null;
         if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
@@ -2852,11 +2893,15 @@ public sealed class HuntScreen
             return;
         }
 
-        // The geometry is LayoutSingleEnemy's, computed before anything drew.
+        // The geometry is the row's (LayoutComposition, count 1), computed before anything drew: the
+        // lone creature's box is its archetype's, bottom-anchored on the plane, bob included.
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var ab = CreatureBox(0);
-        var ebox = new Rectangle(ab.X, EnemyBox.Y, ab.Width, ab.Height);
-        ActorShadow(b, ebox.Center.X, CreatureGround, (int)(ebox.Width * 0.60f), 42, 0.6f);
+        // The resting box — the same rectangle without the bob — for what must not bob: the shade,
+        // the fallback fill, the health bar. Its top is the plane minus the box height, which is
+        // where the row's TopY already is.
+        var ebox = new Rectangle(ab.X, CreatureGround - ab.Height, ab.Width, ab.Height);
+        ActorShadow(b, ebox.Center.X, CreatureGround, (int)(ebox.Width * 0.60f), (int)(42 * ArchetypeScale(WaveArchetype)), 0.6f);
 
         const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = _rowTopY;
@@ -3214,8 +3259,7 @@ public sealed class HuntScreen
         _budgetLedgerWritten = true;
 
         var champ = VisualRect(ChampBox, ChampionReferenceStrip);
-        var swarmBox = new Rectangle(0, 0, (int)(EnemyBox.Width * ArchetypeScale(Archetype.Swarm)),
-                                     (int)(EnemyBox.Height * ArchetypeScale(Archetype.Swarm)));
+        var swarmBox = new Rectangle(Point.Zero, ArchetypeBox(Archetype.Swarm));
         var swarm = VisualRect(swarmBox, CreatureReferenceStrip);
         var boss = VisualRect(new Rectangle(0, 0, BossTargetBodyHeight, BossTargetBodyHeight), BossReferenceStrip);
         var row = new Rectangle(0, 0, swarm.Width * 3, swarm.Height);   // a four-creature row, compressed

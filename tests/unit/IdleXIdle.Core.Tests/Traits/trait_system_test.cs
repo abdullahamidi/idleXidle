@@ -54,7 +54,7 @@ public class trait_system_test
         CreaturesPresent: 4,
         CritPercent: 60f,
         PureSourceBuild: true,
-        DistinctSources: 4,
+        DistinctChosenSources: 4,
         VowsKept: 2);
 
     // ── DETERMINISTIC, AND NEVER A LOTTERY (§29, §30, LAW 8) ──────────────────────────────────────

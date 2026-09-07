@@ -81,25 +81,52 @@ public class MasteryNodeLivenessTests
     /// holds and PLEDGE has something to pay on) — two actives and two passives, a skill in every slot.
     /// </summary>
     /// <param name="oneSource">
-    /// PURE only pays while the whole weave shares a Source, and every other node wants the matchup
-    /// variety a mixed weave gives. Neither build alone can measure all sixteen, so both are run and a
-    /// node has to move ONE of them — the same two-contexts rule the reinforcement file uses for depth.
+    /// PURE only pays while the whole weave was CHOSEN to share a Source, and every other node wants
+    /// the matchup variety a mixed weave gives. Neither build alone can measure all sixteen, so both
+    /// are run and a node has to move ONE of them — the same two-contexts rule the reinforcement file
+    /// uses for depth. The one-source build takes four variations to BODY (the weave screen offers no
+    /// other Source lever, and a slot left on its BODY seed is a default PURE no longer pays), which
+    /// means four skills that HAVE a Body variation: BLOW, SPRAY, PRESS and WILT — two actives, two
+    /// fields. The mixed build is the old quartet, unchosen, exactly as before.
     /// </param>
     private static Build Compose(MasteryTree mastery, bool oneSource)
     {
-        Source Src(Source mixed) => oneSource ? Source.Body : mixed;
         // The sworn vow must be FOUND — the composer refuses one the account has not discovered, and
         // PLEDGE/ZEALOT liveness depends on the vow actually paying.
+        if (!oneSource)
+            return BuildComposer.Compose(
+                mastery, character: null,
+                skills: new[]
+                {
+                    new BuildComposer.SkillPick(Source.Body, "vow_complete", SkillId: "hammer_blow"),
+                    new BuildComposer.SkillPick(Source.Mind, null, SkillId: "volley_spray"),
+                    new BuildComposer.SkillPick(Source.Nature, null, SkillId: "field_mire"),
+                    new BuildComposer.SkillPick(Source.Shadow, null, SkillId: "snare_jaws"),
+                },
+                keystoneIds: Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
+
+        var progress = new SkillProgress();
+        foreach (var (id, variation) in new[]
+                 {
+                     ("hammer_blow", "FLATTEN"), ("volley_spray", "CLUSTER"),
+                     ("hammer_press", "CRUSHING"), ("drain_wilt", "SUP"),
+                 })
+        {
+            var def = SkillCatalogue.ById(id);
+            for (var i = 0; i < SkillProgress.UsesForLevel(1); i++) progress.RecordWave(id);
+            if (!progress.ChooseVariation(def, variation))
+                throw new InvalidOperationException($"{id} could not take {variation} — the fixture, not the design");
+        }
         return BuildComposer.Compose(
             mastery, character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Src(Source.Body), "vow_complete", SkillId: "hammer_blow"),
-                new BuildComposer.SkillPick(Src(Source.Mind), null, SkillId: "volley_spray"),
-                new BuildComposer.SkillPick(Src(Source.Nature), null, SkillId: "field_mire"),
-                new BuildComposer.SkillPick(Src(Source.Shadow), null, SkillId: "snare_jaws"),
+                new BuildComposer.SkillPick(Source.Body, "vow_complete", SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_press"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "drain_wilt"),
             },
-            keystoneIds: Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress, knownVows: Vows.Catalog);
     }
 
     private static (long Dealt, int Kept, int Reached) Fight(Build build, MasteryTree mastery)

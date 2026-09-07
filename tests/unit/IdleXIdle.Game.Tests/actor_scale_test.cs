@@ -16,15 +16,15 @@ public class actor_scale_test
 {
     private const int Frame = 512;                     // every shipped actor strip is 8 square frames
 
-    // The boxes the arena lays out: EnemyBox 436x440 at the archetype's scale (a wave of two or more),
-    // the unscaled 436x440 for a lone creature, and ChampBox.
+    // The boxes the arena lays out: EnemyBox 436x440 at the archetype's scale — lone or packed, the
+    // same box since 2026-09-07 (HuntScreen.CreatureRow) — and ChampBox.
     private static readonly Rectangle SwarmBox = new(1200, 500, 252, 255);      // 0.58
     private static readonly Rectangle BruiserBox = new(1200, 400, 488, 492);    // 1.12
     private static readonly Rectangle ChampBox = new(420, 451, 400, 430);
 
     // THE RIFT GUARDIAN, the one actor whose IDLE is letterboxed deeply enough (126 px of sky) that the
-    // 488 x 492 box asks 1.275 and the renderer answers 1.25. That box is a wave of TWO OR MORE at
-    // Bruiser scale (a Bruiser rolls one creature; the NUMBERS affix adds the second), never a lone one.
+    // 488 x 492 box asks 1.275 and the renderer answers 1.25. That box is every Bruiser wave now — a
+    // Bruiser rolls one creature, and a lone creature wears its archetype's scale like a pack does.
     private const float GuardianTop = 126 / (float)Frame;
     private static readonly ContentBox GuardianIdleDrawn = new(151 / (float)Frame, GuardianTop, 151 / (float)Frame, 17 / (float)Frame);
     private static readonly ContentBox GuardianAttack = new(65 / (float)Frame, 117 / (float)Frame, 66 / (float)Frame, 17 / (float)Frame);
