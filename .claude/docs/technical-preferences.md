@@ -73,7 +73,8 @@ only be added here once actually integrated:
 ## Architecture Decisions Log
 
 <!-- Quick reference linking to full ADRs in docs/architecture/ -->
-- [No ADRs yet — use /architecture-decision to create one]
+- ADR-001 pure-logic Core (Accepted) · ADR-002 cutout animation rig (Accepted) · ADR-003 pixel-perfect render path (Superseded) · ADR-004 warren economy (Superseded)
+- ADR-005 UI SCALE is a density profile, the cursor is mapped once, motion has one vocabulary (Accepted 2026-09-01) — `docs/architecture/ADR-005-ui-density-profile-and-one-cursor.md`
 
 ## Engine Specialists
 

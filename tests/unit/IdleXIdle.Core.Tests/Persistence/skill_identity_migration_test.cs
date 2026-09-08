@@ -154,7 +154,7 @@ public class SkillIdentityMigrationTest
         var loadout = Restored(SaveSystem.Deserialize(json, Now).Save!);
 
         // Act
-        var build = loadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null);
+        var build = loadout.ToBuild(Taught.Everything(), character: null);
 
         // Assert — the resolved def carries the id: the only identity a skill has left (P3-final).
         Assert.Equal(2, build.Skills.Count);
@@ -163,10 +163,13 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_three()
+    public void test_the_current_save_version_is_four()
     {
-        // The bump is what makes an OLDER build refuse a new file as FromNewerVersion instead of
-        // reporting it Corrupt (required members) — quarantining the player's live save by mistake.
-        Assert.Equal(3, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-03 (was three). The bump is what makes an OLDER build refuse a new file as
+        // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
+        // player's live save by mistake. It is also what makes SnapshotBeforeUpgrade copy the old file
+        // aside: its guard is `if (fileVersion >= CurrentVersion) return null;`, so without a bump the
+        // keystone/Vow migration and the fifth-slot removal would have no undo at all.
+        Assert.Equal(4, SaveGame.CurrentVersion);
     }
 }

@@ -10,6 +10,13 @@ session stopped. Everything after that is history, newest first, and it is writt
 searched rather than read start to finish — most sections exist because something took a
 long time to work out and would cost the same again.
 
+> **History, not current design.** Entries below describe the game as it was on their own date.
+> The largest thing they will mislead you about: the **Memory tree (a.k.a. the trait tree) and
+> TRAIT POINTS were deleted on 2026-09-04.** Anything below about buying nodes, road terminals,
+> THE SPINE, `weave_5`, `socket_2`, or spending trait points is describing a system that no
+> longer exists. Traits are now hidden discoveries with three equipped per character; keystones
+> and Vows come from the world; capacities come from `Unlocks`; Memory Dust is a material only.
+
 **Keeping it current.** `active.md` stays the live scratchpad. Re-snapshot this file at the
 end of a session that produced knowledge worth keeping:
 

@@ -29,7 +29,7 @@ public class SourceSignatureTest
     private static Build OneSkill(Source source)
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow", source));
+        b.Equip(TestBuilds.Skill("hammer_blow", source));
         return b;
     }
 
@@ -124,11 +124,13 @@ public class SourceSignatureTest
         var target = EqualTarget(Source.Spirit, Source.Shadow);
         var huge = () => WaveCreature.Single(5_000_000f, 1f, 0f, target);
 
+        // The second slot is a DIFFERENT active (a build holds a skill once — LAW 13); it is the same
+        // skill on both sides, which is all the control needs.
         Build Pair(Source first)
         {
             var b = new Build();
-            b.Weave(TestBuilds.Skill("hammer_blow", first));
-            b.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
+            Assert.True(b.Equip(TestBuilds.Skill("hammer_blow", first)));
+            Assert.True(b.Equip(TestBuilds.Skill("volley_spray", Source.Body)));
             return b;
         }
 
@@ -152,13 +154,13 @@ public class SourceSignatureTest
         Build MarkAnd(Source caster)
         {
             var b = new Build();
-            b.Weave(TestBuilds.Skill("sign_call", Source.Nature));
+            b.Equip(TestBuilds.Skill("sign_call", Source.Nature));
             // TWO casters, so the stretches ROLL: the first cast inside a window pushes its edge
             // far enough that the second cast still lands lit, and that cast pushes it again. A
             // single caster at these cadences always misses the edge it just moved — which is the
             // realistic shape too: the signature pays in rotations, not in a one-skill vacuum.
-            b.Weave(TestBuilds.Skill("hammer_blow", caster));
-            b.Weave(TestBuilds.Skill("hammer_blow", caster));
+            b.Equip(TestBuilds.Skill("hammer_blow", caster));
+            b.Equip(TestBuilds.Skill("hammer_blow", caster));
             // DESYNC. The casts must land at a cadence where the window's edge matters, so the
             // stretch has something to convert. Set via Shape — the sim recomputes cooldowns from
             // each def's Beats and the build's SkillRate; an EquippedSkill carries no cooldown of

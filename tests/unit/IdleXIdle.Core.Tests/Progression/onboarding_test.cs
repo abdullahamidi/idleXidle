@@ -42,7 +42,7 @@ public class OnboardingTest
     public void test_a_save_that_has_cleared_a_wave_is_not_due_the_intro()
     {
         // A save written before the intro existed carries IntroSeen = false and real progress. Teaching
-        // that player where the champion stands is the interruption the intro replaced.
+        // that player where the hunter stands is the interruption the intro replaced.
         Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 1), introSeen: false));
         Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 400), introSeen: false));
     }
@@ -61,22 +61,22 @@ public class OnboardingTest
         // playtest called "much clearer".
         var expected = new (TourTarget Target, string Title, string Body)[]
         {
-            (TourTarget.Champion, "YOUR CHAMPION",
-                "This is your champion. It fights on its own. You never press attack."),
+            (TourTarget.Champion, "YOUR HUNTER",
+                "This is your hunter. It fights on its own. You never press attack."),
             (TourTarget.Enemies, "THE ENEMIES",
                 "Enemies come in waves. Every fifth wave is a boss. The banner at the top counts the waves and the conquest."),
-            (TourTarget.HunterHud, "YOUR CHAMPION'S LIFE",
-                "This is your champion's life. When it reaches zero the descent ends — then it gets back up and starts again. Nothing is lost."),
+            (TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
+                "This is your hunter's life. When it reaches zero the descent ends — then it gets back up and starts again. Nothing is lost."),
             (TourTarget.CurrencyPills, "GLEAM",
-                "Every cleared wave pays Gleam. Spend Gleam on the STATS screen to train your champion."),
+                "Every cleared wave pays Gleam. Spend Gleam on the TRAINING screen to make your hunter stronger."),
             (TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
             (TourTarget.RightColumn, "REWARDS AND ERRANDS",
                 "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, or you earn mastery points, the buttons here take you there."),
             (TourTarget.NavRail, "THE OTHER SCREENS",
-                "The other screens. Most are closed for now. They open as you play — a gold NEW mark shows what just opened."),
-            (TourTarget.GuideStrip, "LESSONS",
-                "When there is something new to do, a short lesson appears down here. Close it with the ×. That is all — go and watch the first wave."),
+                "Only the screens you can use are on this rail. New ones appear as you play — a notice says what opened and why, and a gold NEW mark stays on it until you look."),
+            (TourTarget.LessonSlot, "LESSONS",
+                "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. The fight's own lessons appear here. Close one with the ×."),
         };
 
         var intro = Onboarding.Intro;
@@ -147,27 +147,33 @@ public class OnboardingTest
     }
 
     [Fact]
-    public void test_the_traits_tour_states_purpose_sources_roads_and_permanence()
+    public void test_the_traits_tour_says_what_a_trait_is_and_never_offers_to_sell_one()
     {
-        // Playtest, 2026-08-25: the first explanation of traits must say what they are FOR. Three
-        // things a new player has to leave with — what a trait is, where the points come from, and
-        // that nothing resets — and the sources must be the TRUE ones (Game1.TraitPointsEarned:
-        // conquests, corruption tiers, region mastery levels). Memory Dust no longer buys traits, so
-        // the word may not appear. The paragraph that used to hold this is now three cards, read together.
+        // REWRITTEN 2026-09-03 (P4, BRIEF §22-§27). This test used to demand the tour teach a spine,
+        // four roads, a capstone and where TRAIT POINTS come from. Every one of those is now false:
+        // there is no tree, no currency and nothing to buy on this screen (LAW 5). What replaces them
+        // is the three things a new player must leave with — what a trait IS, that it awakens from
+        // what you have done rather than being bought, and that each hunter wears exactly three.
+        // The old assertions are kept below as prohibitions, so the dead vocabulary cannot come back.
         var text = string.Join(" ", Onboarding.TourFor(Activity.Traits).Select(s => s.Body));
-        var headline = Unlocks.Headline(Activity.Traits);
 
-        Assert.Contains("permanent", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("TRAIT POINTS", text);
-        Assert.Contains("conquer", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("corruption", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("mastery", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("four roads", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("capstone", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("never resets", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("characteristic", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("awakens", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("three", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("???", text);
+        // Free and reversible is the whole of §27, and the card has to say it.
+        Assert.Contains("costs nothing", text, StringComparison.OrdinalIgnoreCase);
+        // Account-wide discovery, per-character loadout (§25, §26) — the player is told the second
+        // hunter does not start the collection again.
+        Assert.Contains("Every hunter", text, StringComparison.OrdinalIgnoreCase);
+
+        // THE DEAD VOCABULARY. A trait is not bought, so no card may name a price, a point, a road or
+        // a node — and Memory Dust never bought one even under the tree.
+        Assert.DoesNotContain("TRAIT POINT", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("capstone", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("four roads", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dust", text, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("dust", headline, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("PERMANENT", headline);
+        Assert.DoesNotContain("LEARN", text, StringComparison.Ordinal);
         // The old text named the wrong faucet — "going deeper than you ever have" is the mastery
         // tree's income, not this one's.
         Assert.DoesNotContain("deeper than you ever have", text);
@@ -215,17 +221,20 @@ public class OnboardingTest
     [Fact]
     public void test_a_player_who_saw_the_intro_keeps_exactly_what_the_save_says()
     {
-        // The Map and Roster are open from the first frame; a player who finished the intro and never
-        // visited them still has both tours waiting — the list is honoured as saved.
-        var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3);
-        var seeded = Onboarding.SeedExplained(facts, introSeen: true, explained: new[] { "Stats" });
+        // TRAINING and GEAR are open (three waves, an item); a player who finished the intro and read
+        // TRAINING but never visited GEAR still has that tour waiting — the list is honoured as saved.
+        var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3, ItemsOwned: 1);
+        // An OLD save says "Stats"; the host reads it forward through ModernScreenKey before seeding
+        // (the screen became TRAINING 2026-09-01), so the returning player keeps what they learned.
+        var seeded = Onboarding.SeedExplained(facts, introSeen: true,
+            explained: new[] { Onboarding.ModernScreenKey("Stats") });
 
-        Assert.Equal(new[] { "Stats" }, seeded.OrderBy(s => s));
-        Assert.True(Onboarding.IsNew(Activity.Map, facts, seeded));
-        Assert.True(Onboarding.IsNew(Activity.Roster, facts, seeded));
-        Assert.False(Onboarding.IsNew(Activity.Stats, facts, seeded));
-        Assert.NotNull(Onboarding.TourDue(Activity.Map, seeded));
-        Assert.Null(Onboarding.TourDue(Activity.Stats, seeded));
+        Assert.Equal(new[] { "Training" }, seeded.OrderBy(s => s));
+        Assert.True(Onboarding.IsNew(Activity.Gear, facts, seeded));
+        Assert.False(Onboarding.IsNew(Activity.Map, facts, seeded));       // not open yet — nothing to be new
+        Assert.False(Onboarding.IsNew(Activity.Training, facts, seeded));
+        Assert.NotNull(Onboarding.TourDue(Activity.Gear, seeded));
+        Assert.Null(Onboarding.TourDue(Activity.Training, seeded));
     }
 
     [Fact]
@@ -284,9 +293,9 @@ public class OnboardingTest
     [Fact]
     public void test_a_later_slot_marks_the_build_tile_new_again()
     {
-        // Wave 12 opens the third slot. The Build screen is long explained; the tile still lights,
-        // because there is something unread on it.
-        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12);
+        // Wave 12 opens the third slot. The Build screen is open (a keystone made the first choice)
+        // and long explained; the tile still lights, because there is something unread on it.
+        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12, KeystonesDiscovered: 1);
         var explained = new[] { Onboarding.ScreenKey(Activity.Build), Onboarding.SlotKey(2) };
 
         Assert.True(Onboarding.IsNew(Activity.Build, facts, explained));
@@ -300,7 +309,7 @@ public class OnboardingTest
         // Every other screen's whole first explanation is its tour. A banner elsewhere would be the
         // "too crowded and too small" paragraph coming back.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
         foreach (var screen in Enum.GetValues<Activity>().Where(a => a != Activity.Build))
             Assert.Null(Onboarding.BannerFor(screen, everything, Array.Empty<string>()));
     }

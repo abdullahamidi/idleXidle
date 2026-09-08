@@ -42,11 +42,23 @@ public static class TestBuilds
     public static Source SourceOf(string id, string variation)
         => SkillCatalogue.ById(id).Variations.Single(x => x.Name == variation).Source;
 
+    /// <summary>
+    /// A skill taken AS a variation, exactly as the composer would equip it: the resolved def, the
+    /// variation's Source, and the variation itself — so <see cref="Build.PureSource"/> can tell the
+    /// Source was chosen. <see cref="Skill"/> with a tweak is a skill whose Source was never decided.
+    /// </summary>
+    public static EquippedSkill Chosen(string id, string variation, Vow? vow = null, params string[] reinforcements)
+    {
+        var def = SkillCatalogue.ById(id);
+        var v = def.Variations.Single(x => x.Name == variation);
+        return new EquippedSkill(Resolved(id, variation, reinforcements), v.Source, vow, v);
+    }
+
     /// <summary>A build carrying the named skills, in slot order, at their base line.</summary>
     public static Build Of(params string[] ids)
     {
         var b = new Build();
-        foreach (var id in ids) b.Weave(Skill(id));
+        foreach (var id in ids) b.Equip(Skill(id));
         return b;
     }
 }

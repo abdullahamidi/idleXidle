@@ -26,12 +26,6 @@ public sealed record GiftChestDef
     /// <summary>The headline on its dossier — "A WELCOME GIFT".</summary>
     public required string Title { get; init; }
 
-    /// <summary>The card's first line, where a boss's chest prints its rarity floor — "a welcome gift".</summary>
-    public required string CardPromise { get; init; }
-
-    /// <summary>The card's second line, where a boss's chest prints its region's lean — "one plain blade".</summary>
-    public required string CardContents { get; init; }
-
     /// <summary>The dossier's lines, in reading order. Every one is true of the contents below.</summary>
     public required IReadOnlyList<string> Lines { get; init; }
 
@@ -82,8 +76,6 @@ public static class GiftChests
         {
             Key = WelcomeKey,
             Title = "A WELCOME GIFT",
-            CardPromise = "a welcome gift",
-            CardContents = $"one plain {shape.ToLowerInvariant()}",
             Lines = new[]
             {
                 $"One plain {shape} for {starter.Name}.",

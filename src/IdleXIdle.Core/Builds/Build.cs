@@ -213,8 +213,18 @@ public sealed record Keystone
 /// variation owns it, the woven element is the fallback before that choice — so one def can be
 /// woven as two different elements by two players.
 /// </para>
+/// <para>
+/// <see cref="Variation"/> is WHICH variation the skill was taken as, or null while it is unchosen.
+/// The def is already resolved, so nothing reads the variation's deltas twice; it is here so a
+/// reader that needs to know whether <see cref="Source"/> was a DECISION or a default can tell — the
+/// only Source lever the player has is a variation (<c>PlayerLoadout</c> seeds every woven slot BODY
+/// and the weave screen sets no Source of its own), which is the rule VOW OF THE PURE's proof already
+/// lives by (<see cref="VowTemptation.EveryWovenSourceChosen"/>). The fight reads it once a wave, through
+/// <see cref="Build.ChosenSingleSource"/> (THE SINGLE NOTE, the mastery PURE node) and
+/// <see cref="Build.DistinctChosenSources"/> (MANY TONGUES); the trait ledger through <see cref="Build.PureSource"/>.
+/// </para>
 /// </remarks>
-public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null)
+public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null, SkillVariation? Variation = null)
 {
     /// <summary>Does this skill cost the champion its action? The def's own kind decides.</summary>
     public bool TakesABeat => Def.TakesABeat;
@@ -243,19 +253,17 @@ public sealed class Build
     /// carries everything and the Form axis collapses — the same way an unbounded gear budget collapsed
     /// "which item" into "the biggest number".
     ///
-    /// This is the FLOOR, not the rule. The trait spine sells a fifth (<c>weave_5</c>); see
-    /// <see cref="SlotCapacity"/>, which is what <see cref="Weave"/> actually enforces.
+    /// This is also the CEILING. It was once only a floor: the trait tree sold a fifth slot
+    /// (<c>weave_5</c>), and that slot bought a THIRD ACTIVE — <c>ActiveSlotsFor(5)</c> is 3 — which
+    /// pushed beat demand back toward the number the slot rework existed to bring down. The fifth slot
+    /// is removed, and it is the one capability this refactor deliberately takes away.
     /// </remarks>
     public const int SkillSlots = 4;
 
-    /// <summary>How many skills THIS build may weave — four, or five once the spine has sold the fifth.</summary>
+    /// <summary>How many skills THIS build may weave. Never more than <see cref="SkillSlots"/>.</summary>
     /// <remarks>
-    /// An instance value rather than the const above, because the const was the whole bug. FIFTH WEAVE
-    /// is a three-point node on the trait spine; <c>DustEffects.SkillSlots</c> returned 5 for a player
-    /// who owned it, the host wrote that into <c>PlayerLoadout.SkillCapacity</c>, and then <c>AddSkill</c>
-    /// took <c>Math.Min(MaxSkills, SkillCapacity)</c> against a hard 4 and threw it away. The node was
-    /// bought, persisted, resolved, displayed — and clamped off at the last step, which is this
-    /// codebase's signature failure wearing a different hat.
+    /// An instance value rather than the const above, because a champion EARNS its slots one at a time
+    /// and a build must be able to report one, two or three of them honestly.
     ///
     /// <b>The floor is WHAT IS ALREADY WOVEN, not <see cref="SkillSlots"/>.</b> It used to be the
     /// constant 4, on the reasoning that a build handed a smaller capacity would silently unweave skills
@@ -273,7 +281,10 @@ public sealed class Build
     public int SlotCapacity
     {
         get => Math.Max(_slotCapacity, _skills.Count);
-        set => _slotCapacity = Math.Max(1, value);
+        // CLAMPED AT FOUR, both ends. A build is two skills that take an action and two that do not;
+        // there is no longer anything in the game that sells a fifth, and a stale save that asks for
+        // one is answered with four rather than quietly re-opening a slot that has been removed.
+        set => _slotCapacity = Math.Clamp(value, 1, SkillSlots);
     }
 
     private int _slotCapacity = SkillSlots;
@@ -385,11 +396,185 @@ public sealed class Build
     public IReadOnlyList<EquippedSkill> Skills => _skills;
     public IReadOnlyList<Keystone> Keystones => _keystones;
 
-    /// <summary>Equip a skill. Returns false when the slots are full — a bounded budget is the point.</summary>
-    public bool Weave(EquippedSkill skill)
+    /// <summary>
+    /// How many woven skills it takes before "every one of them draws the same Source" describes a
+    /// decision about the build rather than the one skill that happens to be in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two, read off the unlock ladder rather than picked. A champion starts with ONE slot and its own
+    /// signature in it (<c>Unlocks.SkillSlots</c>, <c>PlayerLoadout.Starter</c>); the signature's own
+    /// variation, choosable at level 1, is the first Source decision a player can make, and one decided
+    /// skill still agrees with itself. The second skill is the first thing there is to agree WITH — and
+    /// on the shipped ladder it arrives late: the second slot opens at wave 5, but every shared skill is
+    /// behind a mastery road costing seven points (three trunk minors and the road, <c>MasteryCatalog</c>),
+    /// which is around the first conquest and the start of the second region, not the first sitting.
+    /// </para>
+    /// </remarks>
+    public const int PureSourceMinimumSkills = 2;
+
+    /// <summary>
+    /// The one Source this build is COMMITTED to, or null when it is not committed to any.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Committed means three things at once: at least <see cref="PureSourceMinimumSkills"/> woven
+    /// skills; every woven skill's Source CHOSEN, which is to say its variation taken
+    /// (<see cref="EquippedSkill.Variation"/> not null); and every woven skill on the same Source.
+    /// The last two are <see cref="ChosenSingleSource"/>; this adds the floor. The difference is the
+    /// difference between PAYING a choice and DISCOVERING a trait from it: a lone chosen skill is a
+    /// Source decision and the fight may pay it, but it is not yet a commitment between skills, and
+    /// the trait's counter waits for one.
+    /// </para>
+    /// <para>
+    /// <b>Chosen, not merely resolved.</b> The composer resolves a skill's Source as "the variation's,
+    /// else the woven pick's" — and the woven pick is BODY on every slot the shipped game ever weaves,
+    /// because <c>PlayerLoadout.AddSkill</c> seeds it and the weave screen offers no lever on it. So a
+    /// signature and a fresh shared skill agree on BODY before the player has decided anything, and a
+    /// reading that counted resolved Sources would call that pre-decision window a commitment — the
+    /// same fact-without-a-decision this property exists to refuse, one rung up. The game already has
+    /// one rule for when a single Source was a decision and not a default: VOW OF THE PURE's proof
+    /// demands <see cref="VowTemptation.EveryWovenSourceChosen"/>, every woven skill with a chosen
+    /// variation. This borrows exactly that clause and adds the two-skill minimum on top — the vow's
+    /// proof has no minimum and a one-skill build with its variation chosen does prove it, so the two
+    /// are NOT interchangeable: never route the vow's temptation through this property.
+    /// </para>
+    /// <para>
+    /// Every woven skill takes part, whatever its kind. A Field or a Reaction draws its Source exactly as
+    /// an Active does — the Source riders and the matchup read it on every hit it lands — and a
+    /// champion's own signature is a woven skill like the shared twelve. An empty slot is not in
+    /// <see cref="Skills"/> and neither is a skill the composer refused (a road the mastery no longer
+    /// reaches, another champion's signature, an id the catalogue does not know), so none of those can
+    /// count as a skill here or invent a Source. A skill woven and not yet chosen is in the build and
+    /// fights at its default Source, and it holds the commitment open until it is chosen: the vow's rule,
+    /// and the honest one, since the player has not yet said what that skill is made of.
+    /// </para>
+    /// <para>
+    /// This is the ONE reading of "a pure-Source build" for anything that wants to RECOGNISE the choice
+    /// — the trait ledger's PURE waves read it and nothing else may re-derive it. It is deliberately not
+    /// the predicate the fight PAYS: THE SINGLE NOTE's payout and the mastery PURE node read
+    /// <see cref="ChosenSingleSource"/> — chosen, defaults excluded, and a lone chosen skill counts.
+    /// Recognition is that predicate behind the two-skill floor, so it is the stricter of the two by
+    /// construction — every build this names is one the payout fires on — and a player can never
+    /// awaken the trait on a build it would refuse to pay.
+    /// </para>
+    /// </remarks>
+    public Source? PureSource
+        => _skills.Count >= PureSourceMinimumSkills ? ChosenSingleSource : null;
+
+    /// <summary>
+    /// The one Source every woven skill was CHOSEN to draw — or null: no skills, a skill whose Source
+    /// is still the default, or two skills chosen apart.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is what "every skill you carry shares one source" means when the game PAYS for it</b> —
+    /// THE SINGLE NOTE's first-cast echo and the mastery PURE node — and it is deliberately looser than
+    /// <see cref="PureSource"/>: one skill whose variation is taken is a build committed to a Source
+    /// on purpose, and it may be paid for that purpose. It is deliberately stricter than "every
+    /// resolved Source agrees": a slot is seeded BODY before its variation is chosen and the weave
+    /// screen offers no lever on it, so a fresh pair agrees on BODY by implementation, not by decision.
+    /// A default proves nothing about a Source, so a build with any unchosen skill draws from no single
+    /// chosen Source at all.
+    /// </para>
+    /// <para>
+    /// CHOSEN SOURCE != RESOLVED DEFAULT SOURCE. The resolved Source (<see cref="EquippedSkill.Source"/>)
+    /// is what a hit actually carries — the riders and the matchup read it, and a default-BODY skill
+    /// really does lay a wound. The readers here are the ones that ask what the PLAYER decided.
+    /// </para>
+    /// </remarks>
+    public Source? ChosenSingleSource
+    {
+        get
+        {
+            if (_skills.Count == 0) return null;
+            var source = _skills[0].Source;
+            foreach (var s in _skills)
+            {
+                if (s.Variation is null) return null;   // a default, not a decision
+                if (s.Source != source) return null;
+            }
+            return source;
+        }
+    }
+
+    /// <summary>
+    /// How many different Sources the woven skills were CHOSEN to draw. A skill whose Source is still
+    /// the default counts for none of them.
+    /// </summary>
+    /// <remarks>
+    /// The reading for "carrying four different sources" — MANY TONGUES' payout and the MOTLEY waves
+    /// that awaken it. Four voices means four decisions; a slot still sitting on the BODY seed is not a
+    /// fourth voice however different its default happens to be from the other three.
+    /// </remarks>
+    public int DistinctChosenSources
+    {
+        get
+        {
+            var seen = 0;   // a bit per Source — six of them, and no allocation on the fight's path
+            foreach (var s in _skills)
+                if (s.Variation is not null) seen |= 1 << (int)s.Source;
+            return System.Numerics.BitOperations.PopCount((uint)seen);
+        }
+    }
+
+    /// <summary>
+    /// The Vows this build has sworn — each one ONCE, however many times it was named.
+    /// </summary>
+    /// <remarks>
+    /// A Vow is a promise about the BUILD, and a promise made twice is one promise. The workbench
+    /// records it against the skill the hunter swore it at — that is the save shape — but nothing
+    /// downstream counts it twice and nothing judges it a skill at a time: the bonus, the fragility
+    /// bill, the health price and the TITHE enchantment all read this list, and every one of them is
+    /// answered against the whole build. Vow CAPACITY (<c>Unlocks.VowCapacity</c>) counts exactly
+    /// these, which is what makes it a number a milestone can grant.
+    /// </remarks>
+    public IReadOnlyList<Vow> Vows
+    {
+        get
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var list = new List<Vow>();
+            foreach (var sk in _skills)
+                if (sk.Vow is { } v && seen.Add(v.Id)) list.Add(v);
+            if (BorrowedVow is { } lent && seen.Add(lent.Id)) list.Add(lent);
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// A vow this build did not swear and is paid for anyway — THE KEPT WORD's loan.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It joins <see cref="Vows"/>, so every consumer bills and pays it exactly like a sworn one: the
+    /// combined factor, the fragility, the health price, TITHE. A trait that needed its own parallel
+    /// path through four price sites would be four chances for them to disagree.
+    /// </para>
+    /// <para>
+    /// A vow is a promise about the BUILD, so the loan is a build-level fact: <c>BuildComposer</c>
+    /// decides it once, at compose time, where both halves of the question are in scope — the vows
+    /// the account has FOUND, and whether the hunter has sworn any. The fight never asks.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// Settable, like <see cref="Equip"/> beside it: a build is assembled by whoever is composing it,
+    /// and the liveness suite composes builds by hand precisely so it can pose one state against
+    /// another. <c>BuildComposer</c> is the only production writer.
+    /// </remarks>
+    public Vow? BorrowedVow { get; set; }
+
+    /// <summary>
+    /// Equip a skill. Returns false when the slots are full — a bounded budget is the point — or when
+    /// the same skill is already equipped (LAW 13: one slot per skill; <see cref="Unequip"/> removes by
+    /// id and has always assumed it).
+    /// </summary>
+    public bool Equip(EquippedSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
         if (_skills.Count >= SlotCapacity) return false;
+        foreach (var worn in _skills)
+            if (worn.Def.Id == skill.Def.Id) return false;
         // PER-KIND CAPACITY. An active costs the champion an action and a passive never does, so they
         // are two different budgets and a build cannot spend one on the other. Enforced from the
         // moment the field exists rather than left switched off, because a capacity nothing checks is
@@ -405,25 +590,26 @@ public sealed class Build
     }
 
     /// <summary>Unequip a skill by its catalogue id — the only name a skill has left.</summary>
-    public bool Unweave(string skillId) => _skills.RemoveAll(s => s.Def.Id == skillId) > 0;
+    public bool Unequip(string skillId) => _skills.RemoveAll(s => s.Def.Id == skillId) > 0;
 
     /// <summary>
     /// How many keystones a build may socket at once.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Three, and this number is the only thing keeping the passive tree honest.</b> The Dust tree is
-    /// COMPLETABLE by design — a player can buy every node and see the horizon. That is a promise worth
-    /// keeping, but it collides head-on with keystones: if owning a keystone meant wearing it, then a
-    /// finished tree would wear all ten, and since the catalog is built from opposed pairs they would
-    /// very nearly cancel. Every completed build would arrive at the same mediocre generalist, and
-    /// <c>test_every_keystone_costs_something</c> would be guarding a door with no wall around it.
+    /// <b>Three, and this number is the only thing keeping the keystone catalogue honest.</b> The world
+    /// teaches all NINETEEN — one for taking a region, one for knowing it, one for mastering it, and one
+    /// past the end of the world — so a player who walks the whole map ends up knowing every doctrine in
+    /// the game. If knowing one meant wearing it they would wear all nineteen, and since the catalogue is
+    /// built from opposed pairs they would very nearly cancel: every finished build would arrive at the
+    /// same mediocre generalist, and <c>test_every_keystone_costs_something</c> would be guarding a door
+    /// with no wall around it.
     /// </para>
     /// <para>
-    /// So the tree TEACHES and the build CHOOSES — the split this codebase already uses for Vows, where
-    /// <c>vow_study_1</c> buys knowledge of Patience and each ability still picks its own Vow. Dust buys
-    /// access; the refusal happens here, permanently, every time the player looks at three sockets and
-    /// ten keystones.
+    /// So the WORLD teaches and the BUILD chooses — the split this codebase also uses for Vows. Conquest
+    /// buys knowledge; the refusal happens here, permanently, every time the player looks at three
+    /// sockets and nineteen keystones. The sockets themselves are earned from the world too
+    /// (<c>Unlocks.KeystoneSockets</c>), never bought with a choice-currency.
     /// </para>
     /// </remarks>
     public const int KeystoneSlots = 3;
@@ -474,19 +660,18 @@ public sealed class Build
     }
 
     /// <summary>
-    /// What the bought passive-tree attribute nodes are worth. Set by whoever owns the Dust tree.
+    /// The CHARACTER's own passive multipliers.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A plain property rather than a <c>Resolve(hunter, tree)</c> parameter, because Core's build layer
-    /// has no business knowing what a <c>MemoryDustTree</c> is — the dependency points one way, from
-    /// Prestige into Builds, and this keeps it there.
+    /// This used to carry the retired Memory tree's twelve attribute nodes as well, combined with the
+    /// character's. The tree is deleted and those modifiers went with it — raw numbers are Training and
+    /// Gear's, specialisation is Mastery's, behaviour is Traits'. What is left is the champion's own,
+    /// which is authored on the roster and visible on its card.
     /// </para>
     /// <para>
-    /// Fed by <c>DustEffects.TreeMods</c>. Left at <see cref="BuildMods.None"/> it changes nothing, which
-    /// is the correct reading for a character who has bought no nodes — and, less comfortably, also the
-    /// reading for a wire someone forgot to connect. <c>test_the_passive_tree_reaches_the_fight</c> is
-    /// what tells those two apart.
+    /// Left at <see cref="BuildMods.None"/> it changes nothing, which is the correct reading for a
+    /// character with no passive of its own.
     /// </para>
     /// </remarks>
     public BuildMods PassiveMods { get; set; } = BuildMods.None;

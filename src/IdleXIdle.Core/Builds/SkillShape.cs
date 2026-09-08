@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
+using IdleXIdle.Core.Traits;
 
 namespace IdleXIdle.Core.Builds;
 
@@ -159,18 +160,6 @@ public sealed record SkillShape
     /// <summary>This STYLE's damage multiplier, or 1 when nothing favours it.</summary>
     public float StylePowerFor(Style style) => StylePower.TryGetValue(style, out var f) && f > 0f ? f : 1f;
 
-    /// <summary>
-    /// MOMENTUM — every kill takes this many milliseconds off every skill's remaining cooldown.
-    /// </summary>
-    /// <remarks>
-    /// Action economy that is FED BY KILLS, which is what makes it a Spread node and not a rate node: a
-    /// Swarm of eight is eight refunds and a single Bruiser is one, so the same node is a torrent in the
-    /// band the branch answers and a trickle in the band it does not. The sim reads it in LandOn at the
-    /// moment a creature falls — any kill, skill or poison or carried overkill, because the card says
-    /// EVERY KILL and a rule with an unstated exception is the kind this project keeps finding dormant.
-    /// </remarks>
-    public int CooldownRefundOnKillMs { get; init; }
-
     // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
 
     /// <summary>Multiplier on the first hit each creature takes (FOLLOW THROUGH, OPENER, ALPHA).</summary>
@@ -219,6 +208,116 @@ public sealed record SkillShape
     public bool FreeOpeningCast { get; init; }
 
     /// <summary>FOCUS — added to the champion's critical chance, in percentage points.</summary>
+    // ── SHIELD (combat-v2). Three dials, because three set rungs need them and nothing else does.
+
+    /// <summary>MACHINE 3p — Shield granted at the start of every wave, as a share of maximum health.</summary>
+    public float WaveStartShieldFraction { get; init; }
+
+    /// <summary>MACHINE 4p — incoming damage multiplier while any Shield is held. 1 = no change.</summary>
+    public float ShieldedDamageTaken { get; init; } = 1f;
+
+    /// <summary>MACHINE 5p — once a wave, prevent the first bite that would actually deal damage.</summary>
+    public bool PreventFirstDamagingBite { get; init; }
+
+    /// <summary>MIND 3p — percentage points added to critical damage.</summary>
+    public float BonusCritDamagePercent { get; init; }
+
+    /// <summary>
+    /// MIND 4p FOCUS — percentage points of critical chance a direct damaging hit that did not crit
+    /// adds, and the ceiling those additions stack to.
+    /// </summary>
+    /// <remarks>
+    /// Crit in this simulation is an EXPECTED VALUE, not a rolled event (see <c>critFactor</c>), so
+    /// "a hit that does not crit" cannot be a branch. FOCUS counts the NON-CRIT SHARE of each hit —
+    /// one whole hit at zero crit chance, half a hit at fifty percent — which is the expectation of
+    /// the rule as written, is deterministic, and keeps the property the set is selling: the less you
+    /// have been critting, the closer the next one is.
+    /// </remarks>
+    public float FocusPerHitPercent { get; init; }
+
+    /// <summary>MIND 4p FOCUS — the ceiling, in percentage points.</summary>
+    public float FocusCapPercent { get; init; }
+
+    /// <summary>
+    /// MIND 5p CERTAINTY — at the FOCUS ceiling the next direct damaging hit crits for certain, and
+    /// FOCUS empties.
+    /// </summary>
+    public bool CertaintyAtFocusCap { get; init; }
+
+    /// <summary>
+    /// BODY 5p MOMENTUM — how much harder the basic attack lands when an Active has just resolved.
+    /// The IMPACT swing also carries all of its overkill. One pending at a time.
+    /// </summary>
+    public float ImpactSwingBonus { get; init; }
+
+    /// <summary>
+    /// DEADWEIGHT (THE ANVIL) — the share of a primary direct hit (a skill's or the basic swing) that a
+    /// SURVIVING target keeps, to suffer on the champion's next such hit against it. 0 = off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own dial, deliberately NOT <see cref="OverkillCarry"/>. It was written as a carry — a third
+    /// of a kill's spill into the next enemy — and a carry is a field three other rules already write
+    /// (BODY's fourth rung, BREAKTHROUGH, CLEAN CUT) and combine by MAX, so the character's innate
+    /// contributed nothing beside any of them and nothing at all in a boss room (diagnosed 2026-09-07:
+    /// live, 1.5-4.5% of damage, zero against a lone enemy). A character innate must not vanish because
+    /// another subsystem writes the same generic field.
+    /// </para>
+    /// <para>
+    /// The two are different identities and stay different mechanics: a CARRY is a dead enemy's
+    /// excess moving forward; DEADWEIGHT is a live enemy retaining force — worth most against what
+    /// does not die in one blow. State lives on the creature (<see cref="WaveCreature.StoredDeadweight"/>);
+    /// the rule is applied at the one landing site in <see cref="SoloBattle"/> by hit provenance.
+    /// </para>
+    /// </remarks>
+    public float DeadweightShare { get; init; }
+
+    /// <summary>NATURE 3p — how much stronger combat healing lands. Never applied to shield.</summary>
+    public float HealingMultiplier { get; init; } = 1f;
+
+    /// <summary>NATURE 4p — how much wider the wave's healing ceiling opens.</summary>
+    public float HealCeilingBonus { get; init; }
+
+    /// <summary>
+    /// NATURE 5p OVERGROWTH — the share of healing wasted at full health that becomes shield instead.
+    /// Shield is not healing: it does not spend the ceiling again, and nothing that reads health reads it.
+    /// </summary>
+    public float OverhealToShield { get; init; }
+
+    /// <summary>SHADOW 3p SHADE — how much harder the Active that spends a shade lands.</summary>
+    public float ShadeActiveBonus { get; init; }
+
+    /// <summary>SHADOW 4p — how many shades may be held at once.</summary>
+    public int ShadeMax { get; init; }
+
+    /// <summary>
+    /// SHADOW 5p AFTERIMAGE — the share of a shade-spent Active's resolved direct damage that falls a
+    /// second time on the same targets. It costs no beat, starts no cooldown, is not a cast, spends no
+    /// shade, makes no shade, and cannot make another afterimage.
+    /// </summary>
+    public float AfterimageFraction { get; init; }
+
+    /// <summary>
+    /// SPIRIT 3p — how much stronger each skill's FIRST activation of a wave is. Narrow by design:
+    /// direct damage, direct healing, a shield grant, and the bonus part of an amplify. Never a stun
+    /// length, a slow ceiling or a defence-break floor.
+    /// </summary>
+    public float FirstActivationMagnitude { get; init; } = 1f;
+
+    /// <summary>SPIRIT 4p RESONANCE — skill rate gained the first time each distinct skill activates.</summary>
+    public float ResonanceRatePerSkill { get; init; }
+
+    /// <summary>SPIRIT 4p RESONANCE — the ceiling that gain stacks to.</summary>
+    public float ResonanceRateCap { get; init; }
+
+    /// <summary>
+    /// SPIRIT 5p HARMONY — once all four equipped skills have activated in a wave, each is given one
+    /// charge: its next activation takes the 3p magnitude a second time. Needs four filled slots, so a
+    /// Vow that asks for an empty one is a real conflict rather than a special case.
+    /// </summary>
+    public bool HarmonyCharges { get; init; }
+
+    /// <summary>MIND 2p — percentage points added to critical chance.</summary>
     public float BonusCritPercent { get; init; }
 
     /// <summary>MARK MASTERY — stretches the amplify window and deepens it.</summary>
@@ -237,12 +336,6 @@ public sealed record SkillShape
 
     /// <summary>The basic attack's hit, multiplied — the BODY set's fifth piece. Skills never read it.</summary>
     public float AutoAttackDamage { get; init; } = 1f;
-
-    /// <summary>
-    /// Extra damage for skills of a given SOURCE, additive per source (0.08 = +8%) — the element sets'
-    /// 2- and 4-piece rungs. Read in SoloBattle.Amp for the skill's own Source; the swing has none.
-    /// </summary>
-    public IReadOnlyDictionary<Source, float> SourceBonus { get; init; } = new Dictionary<Source, float>();
 
     /// <summary>
     /// RHYTHM — every cast since the last bite raises skill rate by this fraction, up to
@@ -270,9 +363,6 @@ public sealed record SkillShape
 
     // ── ENDURE. ───────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Fraction of damage dealt returned as health.</summary>
-    public float Leech { get; init; }
-
     /// <summary>FEEDBACK — health healed per creature struck, as a fraction of maximum.</summary>
     public float HealPerTargetStruck { get; init; }
 
@@ -284,9 +374,6 @@ public sealed record SkillShape
 
     /// <summary>ABSORB — extra mitigation as health falls, up to this fraction at death's door.</summary>
     public float AbsorbAtLowHealth { get; init; }
-
-    /// <summary>FORTIFY — the first bite of each wave deals nothing.</summary>
-    public bool FirstBiteFree { get; init; }
 
     /// <summary>
     /// THORNS — every creature that bites the champion takes this fraction of its own bite back.
@@ -343,6 +430,24 @@ public sealed record SkillShape
     /// <summary>Multiplier on maximum health, applied at champion mint.</summary>
     public float MaxHealth { get; init; } = 1f;
 
+    /// <summary>
+    /// THE TRAITS a champion is wearing, as one typed group rather than thirty more fields here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This record was already about ninety fields, and <c>SkillCatalogue.cs</c> records the same
+    /// answer for <c>SkillRules</c>: past the width where a reader stops reading, a related group gets
+    /// a nested record instead of another column. Every read site in <see cref="SoloBattle"/> says
+    /// <c>shape.Traits.X</c>, and <see cref="Combine"/> keeps it in step in one line.
+    /// </para>
+    /// <para>
+    /// <see cref="TraitRules.None"/> is neutral on every dial, so a champion wearing no trait
+    /// composes exactly as a build from before traits existed. The rule this whole record obeys
+    /// applies inside it too: a trait dial that stops being read must be deleted with its trait.
+    /// </para>
+    /// </remarks>
+    public TraitRules Traits { get; init; } = TraitRules.None;
+
     /// <summary>Targets this SKILL reaches, after the shape's general and per-style additions.</summary>
     public int TargetsFor(SkillDef def) => TargetsFor(def, def.Targets);
 
@@ -381,10 +486,6 @@ public sealed record SkillShape
         foreach (var (style, f) in b.StylePower)
             power[style] = power.TryGetValue(style, out var had) ? had * f : f;
 
-        var sourceBonus = new Dictionary<Source, float>(a.SourceBonus);
-        foreach (var (src, bonus) in b.SourceBonus)
-            sourceBonus[src] = sourceBonus.GetValueOrDefault(src) + bonus;
-
         return new SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
@@ -414,7 +515,6 @@ public sealed record SkillShape
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
             StyleTargets = targets,
             StylePower = power,
-            CooldownRefundOnKillMs = a.CooldownRefundOnKillMs + b.CooldownRefundOnKillMs,
 
             FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
             LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
@@ -432,23 +532,45 @@ public sealed record SkillShape
             SkillRate = a.SkillRate * b.SkillRate,
             FreeOpeningCast = a.FreeOpeningCast || b.FreeOpeningCast,
             BonusCritPercent = a.BonusCritPercent + b.BonusCritPercent,
+
+            // ── THE SIX SET LADDERS. Each rung is one of these, and the fold is chosen per dial:
+            //    percentage points add, multipliers multiply, ceilings and rules take the stronger. ──
+            BonusCritDamagePercent = a.BonusCritDamagePercent + b.BonusCritDamagePercent,
+            FocusPerHitPercent = a.FocusPerHitPercent + b.FocusPerHitPercent,
+            FocusCapPercent = Math.Max(a.FocusCapPercent, b.FocusCapPercent),
+            CertaintyAtFocusCap = a.CertaintyAtFocusCap || b.CertaintyAtFocusCap,
+            ImpactSwingBonus = a.ImpactSwingBonus + b.ImpactSwingBonus,
+            DeadweightShare = Math.Max(a.DeadweightShare, b.DeadweightShare),
+            HealingMultiplier = a.HealingMultiplier * b.HealingMultiplier,
+            HealCeilingBonus = a.HealCeilingBonus + b.HealCeilingBonus,
+            OverhealToShield = Math.Max(a.OverhealToShield, b.OverhealToShield),
+            ShadeActiveBonus = a.ShadeActiveBonus + b.ShadeActiveBonus,
+            ShadeMax = Math.Max(a.ShadeMax, b.ShadeMax),
+            AfterimageFraction = Math.Max(a.AfterimageFraction, b.AfterimageFraction),
+            FirstActivationMagnitude = a.FirstActivationMagnitude * b.FirstActivationMagnitude,
+            ResonanceRatePerSkill = a.ResonanceRatePerSkill + b.ResonanceRatePerSkill,
+            ResonanceRateCap = Math.Max(a.ResonanceRateCap, b.ResonanceRateCap),
+            HarmonyCharges = a.HarmonyCharges || b.HarmonyCharges,
+
+            // SHIELD: the wave-start grants add, the shielded-damage multipliers multiply, and
+            // prevention is a rule either half may carry.
+            WaveStartShieldFraction = a.WaveStartShieldFraction + b.WaveStartShieldFraction,
+            ShieldedDamageTaken = a.ShieldedDamageTaken * b.ShieldedDamageTaken,
+            PreventFirstDamagingBite = a.PreventFirstDamagingBite || b.PreventFirstDamagingBite,
             AmplifyWindowMultiplier = a.AmplifyWindowMultiplier * b.AmplifyWindowMultiplier,
             AmplifyPowerBonus = a.AmplifyPowerBonus + b.AmplifyPowerBonus,
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
             AutoAttackRate = a.AutoAttackRate * b.AutoAttackRate,
             AutoAttackDamage = a.AutoAttackDamage * b.AutoAttackDamage,
-            SourceBonus = sourceBonus,
             CastRampPerCast = a.CastRampPerCast + b.CastRampPerCast,
             CastRampMax = Math.Max(a.CastRampMax, b.CastRampMax),
             FirstCastMultiplier = a.FirstCastMultiplier * b.FirstCastMultiplier,
             LaterCastMultiplier = a.LaterCastMultiplier * b.LaterCastMultiplier,
 
-            Leech = a.Leech + b.Leech,
             HealPerTargetStruck = a.HealPerTargetStruck + b.HealPerTargetStruck,
             FlatDamageReduction = a.FlatDamageReduction + b.FlatDamageReduction,
             DamageTaken = a.DamageTaken * b.DamageTaken,
             AbsorbAtLowHealth = Math.Max(a.AbsorbAtLowHealth, b.AbsorbAtLowHealth),
-            FirstBiteFree = a.FirstBiteFree || b.FirstBiteFree,
             ReflectFraction = a.ReflectFraction + b.ReflectFraction,
             HealOnClear = a.HealOnClear + b.HealOnClear,
             RegenFraction = a.RegenFraction + b.RegenFraction,
@@ -458,6 +580,10 @@ public sealed record SkillShape
             BetweenWaveRegen = a.BetweenWaveRegen + b.BetweenWaveRegen,
             FullHealBetweenWaves = a.FullHealBetweenWaves || b.FullHealBetweenWaves,
             MaxHealth = a.MaxHealth * b.MaxHealth,
+
+            // THE TRAITS, folded by their own rule. One line here and one record there, which is the
+            // whole cost of keeping thirty dials out of this one's field list.
+            Traits = TraitRules.Combine(a.Traits, b.Traits),
         };
     }
 

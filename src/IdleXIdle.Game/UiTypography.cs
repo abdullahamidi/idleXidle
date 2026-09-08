@@ -2,7 +2,9 @@ namespace IdleXIdle.Game;
 
 /// <summary>
 /// THE HOUSE STANDARD for type and spacing. Every drawn size and every panel margin in the game comes
-/// from here, so no two panels can differ by an accident nobody meant.
+/// from here, so no two panels can differ by an accident nobody meant — and since 2026-09-01 every
+/// rung FOLLOWS THE UI SCALE PROFILE through <see cref="UiMetrics"/>, so a screen that reads
+/// <see cref="Body"/> is already right at 100, 125 and 150 %.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,8 +23,13 @@ namespace IdleXIdle.Game;
 /// fails the build on a bare numeric size passed to a text call.
 /// </para>
 /// <para>
-/// Values are LOGICAL pixel heights in the 1920×1080 authoring space, which is the space every menu
-/// screen and the arena HUD are drawn in (<c>UiKit.Scale == 1</c>).
+/// <b>THE PROFILE.</b> The ladder's numbers below are the 100 % values, in LOGICAL pixels of the
+/// 1920×1080 page. Each public rung is a PROPERTY that returns the profile's version of its base
+/// (<see cref="UiMetrics.Text"/>), and the panel grid is DERIVED from the rungs it stacks, so a bigger
+/// title pushes its caption down rather than overprinting it. A rung was a <c>const</c> until the UI
+/// polish pass; the ~930 call sites that read one did not change, which is the whole point of a
+/// ladder. (A <c>const</c> cannot follow a setting; the handful of <c>const int X = UiTypography.Y</c>
+/// and default-parameter sites became expressions on the same day.)
 /// </para>
 /// </remarks>
 public static class UiTypography
@@ -31,17 +38,25 @@ public static class UiTypography
     //
     // Eight rungs, each with one job. Read it top to bottom as "how loud is this line?".
     //
-    //   36  ScreenTitle      the screen's own name, in the ceremony face
-    //   30  PrimaryValue     a headline number
-    //   26  PanelTitle       the title of a panel
-    //   24  Headline         the biggest thing INSIDE a panel — an item's name, a rank
-    //   21  NavigationLabel  a thing you click: a nav tile, a button label
-    //   19  Body             prose, list rows, and the default an unsized call draws at
-    //   16  Secondary        captions, column heads, gold sub-headings
-    //   14  Caption          chips, badges, the tightest columns — never a sentence
+    //   38  ScreenTitle      the screen's own name, in the ceremony face
+    //   32  PrimaryValue     a headline number
+    //   28  PanelTitle       the title of a panel
+    //   26  Headline         the biggest thing INSIDE a panel — an item's name, a rank
+    //   24  NavigationLabel  a thing you click: a nav tile, a button label
+    //   22  Body             prose, list rows, and the default an unsized call draws at
+    //   19  Secondary        captions, column heads, gold sub-headings
+    //   16  Caption          chips, badges, the tightest columns — never a sentence
     //
-    // The weight follows the size on its own (see SmoothFont.WeightFor): ≤19 Regular, 21–26 SemiBold,
-    // ≥30 Bold. The rungs were chosen so that boundary lands where the meaning changes.
+    // THE LADDER MOVED UP on 2026-09-01 (UX V2 P0.6, typography audit §6). The game is presented at
+    // 1280×720 on the smaller half of its players' monitors, and there Body 19 landed at 12.7 physical
+    // px and Caption 14 at 9.3 — under the 12 px floor the brief sets for anything a player must read.
+    // Every rung is one step louder; Body 22 is 14.7 px at 720p. Rows follow through Pitch(), so the
+    // move cost no re-auditing of row heights — that is what P0.4 was for.
+    //
+    // The weight follows the size on its own (see SmoothFont.WeightFor): under NavigationLabel Regular,
+    // NavigationLabel..Headline SemiBold, PrimaryValue and up Bold. SmoothFont reads the thresholds FROM
+    // these two rungs, so the boundary moves with the ladder — and with the profile — and always lands
+    // where the meaning changes.
     //
     // The combat callouts are a FAMILY BESIDE the ladder, not rungs on it — see below.
 
@@ -49,13 +64,13 @@ public static class UiTypography
     /// The screen's own name in the top strip — HUNT, THE FORGE, TRAITS. Always the ceremony face
     /// (<see cref="TextFace.Display"/>), always centred at the top, never more than one per screen.
     /// </summary>
-    public const int ScreenTitle = 36;
+    public static int ScreenTitle => UiMetrics.Text(38);
 
     /// <summary>A banner over the arena — the region's name, BOSS INCOMING. The screen title's rung.</summary>
-    public const int RegionTitle = ScreenTitle;
+    public static int RegionTitle => ScreenTitle;
 
     /// <summary>A headline number: GEAR POWER's figure, MASTERY POINTS' figure, the idle rate.</summary>
-    public const int PrimaryValue = 30;
+    public static int PrimaryValue => UiMetrics.Text(32);
 
     // ── THE COMBAT CALLOUTS — a family, not rungs ─────────────────────────────────────────────────
     //
@@ -64,20 +79,21 @@ public static class UiTypography
     // fight, they never sit beside prose, and they have to be told apart from each other at speed —
     // which is the whole reason there are three of them rather than one.
     //
-    // THEY LIVED IN SoloExpeditionScreen AS A SECOND LADDER (DamagePx 34 / SkillHitPx 40 / CritPx 46)
+    // THEY LIVED IN HuntScreen AS A SECOND LADDER (DamagePx 34 / SkillHitPx 40 / CritPx 46)
     // while the DamageNormal and DamageCritical named here were 30 and 40 and used by NOTHING. Two
     // ladders, one of them dead, is exactly the shape the drift takes: the file that draws the thing
     // quietly grows its own copy, and the shared one stops describing the game. The values below are
-    // the arena's real ones; the arena reads them from here now.
+    // the arena's real ones; the arena reads them from here now. They follow the profile too: a player
+    // who asked for bigger text asked for bigger damage numbers.
 
     /// <summary>An ordinary hit's number, floating over the creature it landed on.</summary>
-    public const int DamageNormal = 34;
+    public static int DamageNormal => UiMetrics.Text(34);
 
     /// <summary>A skill's hit — louder than a basic attack, so a cast reads as a cast.</summary>
-    public const int DamageSkill = 40;
+    public static int DamageSkill => UiMetrics.Text(40);
 
     /// <summary>A CRITICAL. The loudest text in the game, and the only thing allowed to be.</summary>
-    public const int DamageCritical = 46;
+    public static int DamageCritical => UiMetrics.Text(46);
 
     /// <summary>
     /// THE TITLE OF A PANEL — LOADOUT, TRAINING, YOUR MATERIALS, VOWS.
@@ -88,19 +104,19 @@ public static class UiTypography
     /// than documented around: a name that lies is how the next drift starts. The value did not change,
     /// so nothing moved a pixel when the rename landed.
     /// </remarks>
-    public const int PanelTitle = 26;
+    public static int PanelTitle => UiMetrics.Text(28);
 
     /// <summary>The arena's wave line — "WAVE 12 — RECOVERING". A panel title's rung, in the ceremony face.</summary>
-    public const int StageLabel = PanelTitle;
+    public static int StageLabel => PanelTitle;
 
     /// <summary>
-    /// The biggest thing INSIDE a panel: an item's name, a rank, a chest's tier, a champion's name.
+    /// The biggest thing INSIDE a panel: an item's name, a rank, a chest's tier, a hunter's name.
     /// One rung under the panel's own title, so the panel still wins its own header.
     /// </summary>
-    public const int Headline = 24;
+    public static int Headline => UiMetrics.Text(26);
 
     /// <summary>A toast's or a tour card's title. The in-panel headline rung.</summary>
-    public const int OverlayTitle = Headline;
+    public static int OverlayTitle => Headline;
 
     /// <summary>
     /// A THING YOU CLICK — a nav-rail tile, a button's label, a dropdown's value.
@@ -111,10 +127,10 @@ public static class UiTypography
     /// pixel under a rung nothing else in the game used. One size for every control; it shrinks only when
     /// the label genuinely does not fit, and never below <see cref="Caption"/>.
     /// </remarks>
-    public const int NavigationLabel = 21;
+    public static int NavigationLabel => UiMetrics.Text(24);
 
     /// <inheritdoc cref="NavigationLabel"/>
-    public const int ButtonText = NavigationLabel;
+    public static int ButtonText => NavigationLabel;
 
     /// <summary>
     /// Prose, list rows, an explanation. The paragraph size.
@@ -124,7 +140,7 @@ public static class UiTypography
     /// for body text; this clears it. Three separate values — Label 18, Body 19, OverlayBody 18 — used to
     /// do this one job, which is a distinction no reader can see and every author has to guess at.
     /// </remarks>
-    public const int Body = 19;
+    public static int Body => UiMetrics.Text(22);
 
     /// <summary>
     /// The size an UNSIZED <c>_ui.Text</c> draws at. The default for a label.
@@ -135,30 +151,23 @@ public static class UiTypography
     /// stylistic quibble; it inverted the hierarchy of half the game. 146 call sites use the unsized
     /// proxies, and they are almost all labels and captions, so the biggest text on a screen was
     /// routinely its least important line: on GEAR an affix row outsized the item's own name, on ROSTER
-    /// the word "READY" was twice the size of the champion it belonged to, on HELP every body row
+    /// the word "READY" was twice the size of the hunter it belonged to, on HELP every body row
     /// outsized the panel title above it.
     /// </para>
     /// <para>
-    /// Changed in ONE place rather than at 146 call sites, deliberately. A sweep of that size cannot be
-    /// verified by reading it — this can be verified by looking at every screen, which is what was done.
-    /// A site that genuinely wants to shout can still say so with the sized <c>*Big</c> proxies.
-    /// </para>
-    /// <para>
-    /// It is now simply <see cref="Body"/>. An unsized call is a paragraph until it says otherwise; it
-    /// used to be a paragraph MINUS ONE PIXEL, which is a difference the eye cannot see and the code
-    /// cannot justify.
+    /// It is now simply <see cref="Body"/>. An unsized call is a paragraph until it says otherwise.
     /// </para>
     /// </remarks>
-    public const int Label = Body;
+    public static int Label => Body;
 
     /// <summary>A toast's or a tour card's body. The paragraph rung.</summary>
-    public const int OverlayBody = Body;
+    public static int OverlayBody => Body;
 
     /// <summary>
     /// A caption, a column head, a secondary value, a gold sub-heading inside a panel (SET BONUSES,
     /// WHAT IT DOES, COST TO UPGRADE).
     /// </summary>
-    public const int Secondary = 16;
+    public static int Secondary => UiMetrics.Text(19);
 
     /// <summary>
     /// A sub-heading inside a panel. Deliberately the SAME size as the caption it heads.
@@ -168,7 +177,7 @@ public static class UiTypography
     /// the heading on COLOUR and CAPS, not on size. Giving it a rung of its own would have added a fourth
     /// value between 16 and 19 doing nothing the gold ink was not already doing.
     /// </remarks>
-    public const int SectionLabel = Secondary;
+    public static int SectionLabel => Secondary;
 
     /// <summary>
     /// The floor: chips, badges, a slot label under an icon, the arena's tightest columns.
@@ -179,7 +188,28 @@ public static class UiTypography
     /// narrow and the fix is the column. It exists because the arena had drifted to 12 and 13 px in its
     /// skill rail and its chest filter; naming the floor at 14 raises those and stops the next one.
     /// </remarks>
-    public const int Caption = 14;
+    public static int Caption => UiMetrics.Text(16);
+
+    /// <summary>
+    /// THE LINE PITCH for text drawn at <paramref name="rung"/>: the distance from one baseline to the
+    /// next in a list, a paragraph, a table. 13/10 of the rung — Body 22 → 28, Secondary 19 → 24.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The 2026-09-01 UX audit counted ~110 hand-set pitches (<c>y += 26</c>, <c>lineH = 28</c>,
+    /// <c>px * 3 / 2</c>) across thirteen files, for the SAME 19 px text at 26, 28, 30 and 32 — four row
+    /// heights for one voice, chosen by whoever wrote the screen. Worse, none of them knew about the
+    /// ladder: a rung could grow and every row it sat in would silently overlap the next. This ties the
+    /// pitch to the rung, so the ladder can move (and UI SCALE does scale it) and the rows follow.
+    /// </para>
+    /// <para>
+    /// A pitch is NOT a gap. The space between a caption and the block under it, or between two
+    /// sections, is a layout offset and stays a named literal on the screen; this is only the step from
+    /// one line of the same text to the next. <c>tools/check_ui_type.py</c> refuses a bare number in a
+    /// <c>lineH</c> / <c>rowH</c> / <c>pitch</c> slot for the same reason it refuses one in a size slot.
+    /// </para>
+    /// </remarks>
+    public static int Pitch(int rung) => rung * 13 / 10;
 
     // ── THE PANEL GRID ────────────────────────────────────────────────────────────────────────────
     //
@@ -195,132 +225,84 @@ public static class UiTypography
     //              │       PanelPadBottom     the last row clears the bottom frame by this
     //     panel.Bottom ────────────────────────
     //
-    // The numbers are StatsScreen's, unchanged — it is the screen the 2026-08-28 captures show behaving,
-    // and picking a screen that already works beats inventing a fashion.
+    // The numbers are TrainingScreen's at 100 %, unchanged — it is the screen the 2026-08-28 captures
+    // show behaving. They are DERIVED, not written: the caption sits one title line under the title
+    // and the first row one caption line under that, so at 150 % (title 42, caption 29) the stack is
+    // 22 → 76 → 128 and nothing overprints. What the frame's ART dictates (the corner's reach, the
+    // square crest's drop) stays a constant: it does not grow with the type.
 
     /// <summary>
     /// Where a panel's TITLE sits: this far below the panel's top edge.
     /// </summary>
     /// <remarks>
-    /// StatsScreen (HUNTER, TRAINING), WarrenScreen (WARREN OVERVIEW, the facility detail) and
+    /// TrainingScreen (HUNTER, TRAINING), WarrenScreen (WARREN OVERVIEW, the facility detail) and
     /// ForgeScreen (WHAT TO DO WITH IT, YOUR MATERIALS) all already used 22, which is the largest
-    /// agreement in the codebase and reads correctly against the frame's top rail. Everything else was
-    /// pulled to it: the FORGE's bag (40), the ROSTER's grid (44), the BUILD screen's three columns
-    /// (44 / 66 / 66) and the mastery overview's passives (62).
+    /// agreement in the codebase and reads correctly against the frame's top rail.
     /// </remarks>
-    public const int PanelTitleTop = 22;
+    public static int PanelTitleTop => UiMetrics.Space(22);
 
     /// <summary>
     /// How much lower everything sits on a panel wearing the SQUARE frame, whose crest is 51 source px
-    /// deep against the medium frame's 20 and the vertical frame's 21.
+    /// deep against the medium frame's 20 and the vertical frame's 21. Art geometry — unscaled.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Not a taste; the art measures this way. The square frame hangs a diamond finial from the middle
-    /// of its top rail and a second one from the middle of each side; measured off the ROSTER capture
-    /// they reach 40 px down and 64 px in, against roughly 20 for the other two frames. 22 + 28 = 50
-    /// puts a title ten pixels clear of the finial, and 40 + 28 = 68 puts a column four pixels clear of
-    /// the side diamond.
-    /// </para>
-    /// <para>
-    /// Both screens that own a square panel had already found this the hard way and landed on different
-    /// numbers — StatsScreen's PROGRESS wrote +40 and inset 60, RosterScreen's detail column wrote +74
-    /// and inset 74 with a comment beginning "DERIVED FROM THE PANEL'S INTERIOR, not a hand-picked +44".
-    /// Applied by <see cref="UiKit.FrameDrop"/> now, so no screen has to know which frame its own
-    /// rectangle happens to select — which is a thing a screen cannot know, since the frame is chosen
-    /// by aspect ratio and changes when the panel is resized.
-    /// </para>
-    /// </remarks>
     public const int SquareFrameDrop = 28;
 
     /// <summary>
-    /// Where a panel's one-line CAPTION sits, under its title. Exactly one <see cref="PanelTitle"/> line
-    /// below <see cref="PanelTitleTop"/>. StatsScreen's TRAINING caption is the precedent.
+    /// Where a panel's one-line CAPTION sits, under its title: one <see cref="PanelTitle"/> line below
+    /// <see cref="PanelTitleTop"/>. 56 at 100 % — TrainingScreen's TRAINING caption is the precedent.
     /// </summary>
-    public const int PanelCaptionTop = 56;
+    public static int PanelCaptionTop => PanelTitleTop + Pitch(PanelTitle) - 2;
 
     /// <summary>
-    /// Where a panel's first content row starts when it has BOTH a title and a caption.
-    /// StatsScreen's TRAINING rows are the precedent.
+    /// Where a panel's first content row starts when it has BOTH a title and a caption: one caption
+    /// line plus a breath under <see cref="PanelCaptionTop"/>. 92 at 100 %.
     /// </summary>
-    public const int PanelBodyTop = 92;
+    public static int PanelBodyTop => PanelCaptionTop + Pitch(Secondary) + UiMetrics.Space(12);
 
     /// <summary>
     /// Where a panel's first content row starts when it has a title and NO caption — one title line plus
-    /// the same breathing room a caption would have had above it.
+    /// the same breathing room a caption would have had above it. 62 at 100 %.
     /// </summary>
-    public const int PanelBodyTopBare = 62;
+    public static int PanelBodyTopBare => PanelTitleTop + Pitch(PanelTitle) + UiMetrics.Space(4);
 
     /// <summary>
     /// A MODAL's title — a panel that takes the screen and can be closed. It sits lower than a plain
     /// panel's title because it shares its row with the close icon, which <see cref="UiKit.CloseRect"/>
     /// places clear of the frame's corner ornament.
     /// </summary>
-    /// <remarks>
-    /// This is the one place two title heights are correct, and it is caused by the icon rather than by
-    /// taste. The EXPEDITION LOG (44) and the CONTROLS sheet (46) already agreed; the settings panel and
-    /// the vault's popovers were pulled to them.
-    /// </remarks>
-    public const int ModalTitleTop = 44;
+    public static int ModalTitleTop => UiMetrics.Space(44);
 
     /// <summary>
     /// The left and right inset for content inside a panel wide enough to afford it (roughly 480 px and
-    /// up).
+    /// up). It is <see cref="UiKit.PanelCorner"/>: the frame's corner ornament reaches exactly this far
+    /// in, so content at this inset can never sit on the filigree. Art geometry — unscaled.
     /// </summary>
-    /// <remarks>
-    /// It is <see cref="UiKit.PanelCorner"/>: the frame's corner ornament reaches exactly this far in, so
-    /// content at this inset can never sit on the filigree even level with a corner. StatsScreen's
-    /// TRAINING rows and every RosterScreen column already used it.
-    /// </remarks>
     public const int PanelPadX = 40;
 
     /// <summary>
-    /// The left and right inset for a NARROW plate — the arena's 326 px rail, a detail card — where 40
-    /// each side would eat a quarter of the column.
+    /// The left and right inset for a NARROW plate — the arena's rail, a detail card — where 40 each
+    /// side would eat a quarter of the column. Clears the vertical frame's 24 px side rail. Art
+    /// geometry — unscaled.
     /// </summary>
-    /// <remarks>
-    /// The frame's ornament is only about 18 px deep along a straight EDGE; the 40 of
-    /// <see cref="PanelPadX"/> is what the CORNER needs. A narrow plate has no room to honour the corner
-    /// and nothing sitting beside one, so it honours the edge. The arena's rail (RailInset) and
-    /// StatsScreen's hunter card and the arena's rail already used 24, and WARREN, MAP and TRAITS
-    /// already used 28 — 28 across 20 call sites is the single largest agreement on a left margin in
-    /// the codebase, and it clears the vertical frame's 24 px side rail where 24 sits flush on it.
-    /// </remarks>
     public const int PanelPadNarrow = 28;
 
-    /// <summary>
-    /// The width at which a panel is wide enough to afford <see cref="PanelPadX"/> rather than
-    /// <see cref="PanelPadNarrow"/>.
-    /// </summary>
-    /// <remarks>
-    /// Chosen off the roster of panels this game actually has: the arena's 326 px rail and the 366–500 px
-    /// detail columns (GEAR's item detail, MAP's region card, WARREN's facility card, TRAITS' trait card,
-    /// the FORGE's bag and item cards) stay narrow, while the 514 px and wider content panels take the
-    /// house margin. Every one of the narrow group had already written 24–30 by hand and every one of the
-    /// wide group 36–40, so this threshold is where the codebase had already drawn the line.
-    /// </remarks>
+    /// <summary>The width at which a panel is wide enough to afford <see cref="PanelPadX"/> rather than <see cref="PanelPadNarrow"/>.</summary>
     public const int WidePanelFrom = 512;
 
     /// <summary>How far a panel's last row clears its bottom frame.</summary>
-    public const int PanelPadBottom = 32;
+    public static int PanelPadBottom => UiMetrics.Space(32);
 
     /// <summary>
     /// The room a button's label leaves at each end, on top of the button art's own end ornament.
     /// </summary>
-    /// <remarks>
-    /// <c>UiKit.Button</c> reserved a flat 12 px per side, which is less than the ornament the 256×96
-    /// button art draws at its ends — so long labels printed straight onto the scrollwork ("MERGE THREES
-    /// INTO BETTER", "SALVAGE ALL THE JUNK"). The reserve is now this OR the ornament, whichever is
-    /// larger, so the label clears the art at every button height.
-    /// </remarks>
-    public const int ButtonPadX = 16;
+    public static int ButtonPadX => UiMetrics.Space(16);
 
     /// <summary>The ink inset inside a chip — a bordered plate with one short word in it.</summary>
-    public const int ChipPadX = 8;
+    public static int ChipPadX => UiMetrics.Space(8);
 
     /// <summary>How far a chip's text sits below the chip's top edge.</summary>
-    public const int ChipPadY = 4;
+    public static int ChipPadY => UiMetrics.Space(4);
 
     /// <summary>The gap a hairline rule leaves above and below itself.</summary>
-    public const int HairlineGap = 12;
+    public static int HairlineGap => UiMetrics.Space(12);
 }

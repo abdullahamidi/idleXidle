@@ -26,17 +26,17 @@ public class TraitGatesTest
     }
 
     [Fact]
-    public void test_an_untaught_vow_composes_as_no_vow_and_a_taught_one_pays()
+    public void test_an_undiscovered_vow_composes_as_no_vow_and_a_found_one_pays()
     {
-        // Arrange — the same loadout against a tree that never studied, and one that did.
+        // Arrange — the same loadout against an account that has found nothing, and one that has found
+        // this vow. (This used to be two Memory trees, one with the study node bought; the tree is
+        // deleted and a Vow is FOUND by keeping its rule once without it.)
         var loadout = BlowWithVow("vow_complete");
-        var ignorant = new MemoryDustTree();
-        var studied = new MemoryDustTree();
-        studied.Restore(0, new[] { "vow_study_1" });   // teaches VOW OF COMPLETION
+        var found = Vows.Catalog.Where(v => v.Id == "vow_complete").ToList();
 
         // Act
-        var stripped = loadout.ToBuild(ignorant, Taught.Everything(), character: null);
-        var sworn = loadout.ToBuild(studied, Taught.Everything(), character: null);
+        var stripped = loadout.ToBuild(Taught.Everything(), character: null);
+        var sworn = loadout.ToBuild(Taught.Everything(), character: null, knownVows: found);
 
         // Assert — the SKILL survives either way; only the unpaid promise is refused.
         Assert.Null(stripped.Skills.Single().Vow);
@@ -57,12 +57,12 @@ public class TraitGatesTest
             },
             new[] { "glass_cannon", "ironclad", "echo" });
 
-        // Assert — the sockets the spine sold are the sockets the build wears.
+        // Assert — the capacity the account has earned is the capacity the build wears.
         Assert.Single(l.KeystoneIds);
     }
 
     [Fact]
-    public void test_the_perfected_tier_pays_the_third_trait_point()
+    public void test_a_conquered_region_can_reach_the_perfected_mastery_tier()
     {
         // Arrange — one region conquered and fought to PERFECTED.
         var world = new World();
@@ -70,9 +70,9 @@ public class TraitGatesTest
         world.Conquer(region);
         world.RegionFarm(region).RestoreMasteryPoints(AutomationTuning.Default.RmpThreshold3);
 
-        // Act/Assert — 1 conquest + 3 mastery levels. Before P7 the third level was unreachable
-        // and this world could only ever pay 3.
+        // Act/Assert — the top tier is reachable at all. This used to also assert the four TRAIT POINTS
+        // that world paid; trait points were the retired Memory tree's currency and are deleted with it.
+        // Region mastery itself is progression and survives untouched, which is what this now pins.
         Assert.Equal(MasteryLevel.Perfected, world.RegionFarm(region).MasteryLevel);
-        Assert.Equal(4, Career.TraitPointsEarned(world));
     }
 }

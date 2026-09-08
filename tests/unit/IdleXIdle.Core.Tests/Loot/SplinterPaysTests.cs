@@ -47,7 +47,7 @@ public class SplinterPaysTests
             ExtraTriggers = new HashSet<BuildTrigger>(triggers),
         };
         foreach (var id in new[] { "hammer_blow", "volley_spray" })
-            b.Weave(TestBuilds.Skill(id, Source.Nature));
+            b.Equip(TestBuilds.Skill(id, Source.Nature));
         return b;
     }
 

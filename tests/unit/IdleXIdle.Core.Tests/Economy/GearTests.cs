@@ -107,7 +107,7 @@ public class GearTests
         static long Damage(Hunter hunter)
         {
             var build = new Build();
-            build.Weave(TestBuilds.Skill("hammer_blow", source: Source.Nature));
+            build.Equip(TestBuilds.Skill("hammer_blow", source: Source.Nature));
             return DamageBench.Measure(build, hunter).TotalDamage;
         }
 

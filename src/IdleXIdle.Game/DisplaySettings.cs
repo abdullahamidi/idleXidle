@@ -125,13 +125,9 @@ public static class Display
         return new Rectangle(r.X, r.Y, r.Width, r.Height);
     }
 
-    /// <summary>Screen point → canvas point, accounting for the letterbox origin.</summary>
-    public static Point ToCanvas(Point screen, Rectangle present)
-    {
-        var (x, y) = CanvasFit.ToCanvas(screen.X, screen.Y,
-            new FitRect(present.X, present.Y, present.Width, present.Height));
-        return new Point(x, y);
-    }
+    // ToCanvas(Point, Rectangle) — the 480-space cursor mapping — was deleted 2026-09-01: the cursor is
+    // mapped once in Game1.ReadCursor through Core.Presentation.PageFrame, in floating point, and no
+    // second cursor space exists to disagree with it.
 
     /// <summary>
     /// Display prefs live in their OWN file, not in the save.
@@ -153,9 +149,41 @@ public static class Display
     /// save for the same reason the display mode does: it is a preference about how the player wants to
     /// be treated, and starting a new game must not resurrect a dialog they turned off.
     /// </remarks>
+    /// <param name="UiScalePercent">
+    /// UI SCALE: 100, 125 or 150, or 0 for AUTO (125 in a window under 1600 px wide, else 100). A DENSITY
+    /// profile (<see cref="UiMetrics"/>): the page stays 1920×1080 and the type, rows, buttons, icons and
+    /// paddings grow — on every screen, the chrome and the fight included. Written as
+    /// <c>uiscale=100|125|150|auto</c>; an old build never reads the line, a new build reads 100 when it
+    /// is absent.
+    /// </param>
     public readonly record struct GamePrefs(
         DisplayMode Mode, WindowSize Window, int SfxVolume, int MusicVolume, bool AskBeforeScrap,
-        bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true);
+        bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true,
+        int UiScalePercent = 100, bool ReducedMotion = false);
+
+    /// <summary>
+    /// The UI SCALE steps the game OFFERS. 0 is AUTO.
+    /// </summary>
+    /// <remarks>
+    /// <b>150 IS OFFERED AGAIN (UI polish, 2026-09-01), because the scale stopped being a zoom.</b> The
+    /// first UI SCALE shrank the page to 1920/s × 1080/s, so 150 % handed every screen 720 px of height it
+    /// had laid out against 1080, and the step was withdrawn after every converted screen overflowed. The
+    /// profile is a DENSITY now (<see cref="UiMetrics"/>): the page stays 1920×1080 and the type, rows,
+    /// buttons and paddings grow, with each screen reflowing or scrolling where that no longer fits.
+    /// </remarks>
+    public static readonly int[] UiScaleSteps = { 100, 125, 150, 0 };
+
+    /// <summary>What a UI SCALE preference resolves to for a present rect this wide: AUTO picks 125 under 1600 px.</summary>
+    public static int ResolveUiScale(int percent, int presentWidth)
+        => percent is 100 or 125 or 150 ? percent : presentWidth < 1600 ? 125 : 100;
+
+    /// <summary>The preference's name in the settings: "100%", "150%", or "AUTO".</summary>
+    public static string UiScaleLabel(int percent) => percent is 100 or 125 or 150 ? $"{percent}%" : "AUTO";
+
+    private const string UiScaleKey = "uiscale=";
+
+    /// <summary>REDUCED MOTION, written as <c>motion=0|1</c>. Absent in an older file means off.</summary>
+    private const string MotionKey = "reducedmotion=";
 
     // ── FILE FORMAT ────────────────────────────────────────────────────────────────────────────
     // One value per line: Mode, Window, SfxVolume, MusicVolume, AskBeforeScrap, then the four
@@ -180,7 +208,9 @@ public static class Display
             System.IO.File.WriteAllText(PrefsPath,
                 $"{p.Mode}\n{p.Window.Width}x{p.Window.Height}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n"
                 + $"{(p.ShowDamageNumbers ? 1 : 0)}\n{(p.ShowSkillCallouts ? 1 : 0)}\n{(p.ShowHitEffects ? 1 : 0)}\n{(p.ShowScreenFlash ? 1 : 0)}\n"
-                + PercentMarker + "\n");
+                + PercentMarker + "\n"
+                + UiScaleKey + (p.UiScalePercent is 100 or 125 or 150 ? p.UiScalePercent.ToString() : "auto") + "\n"
+                + MotionKey + (p.ReducedMotion ? "1" : "0") + "\n");
         }
         catch (System.IO.IOException) { /* prefs are a convenience; never block the game on them */ }
         catch (UnauthorizedAccessException) { }
@@ -233,10 +263,25 @@ public static class Display
                 ? (percent ? Math.Clamp(mu, 0, 100) : Math.Clamp(mu, 0, 10) * 10)
                 : Default.MusicVolume;
             var ask = At(4) != "0";
+            // A keyed line (2026-09-01), found wherever it sits, so the positional lines above never move.
+            var uiScale = 100;
+            var reduced = false;
+            foreach (var l in lines)
+                if (l.Trim().StartsWith(MotionKey, StringComparison.Ordinal))
+                    reduced = l.Trim()[MotionKey.Length..] == "1";
+            foreach (var l in lines)
+            {
+                if (!l.Trim().StartsWith(UiScaleKey, StringComparison.Ordinal)) continue;
+                var v = l.Trim()[UiScaleKey.Length..];
+                // Every offered step round-trips; anything else is 100 — a preference must never resolve
+                // to a state the game cannot draw. (150 came back as 125 while the step was withdrawn.)
+                uiScale = v == "auto" ? 0 : int.TryParse(v, out var pct) && pct is 100 or 125 or 150 ? pct : 100;
+            }
             // Lines 6-9 (2026-08-23): the fight's text and effects. Absent in an older file = on.
             return new GamePrefs(mode, window, sfx, music, ask,
                 ShowDamageNumbers: At(5) != "0", ShowSkillCallouts: At(6) != "0",
-                ShowHitEffects: At(7) != "0", ShowScreenFlash: At(8) != "0");
+                ShowHitEffects: At(7) != "0", ShowScreenFlash: At(8) != "0",
+                UiScalePercent: uiScale, ReducedMotion: reduced);
         }
         catch (System.IO.IOException) { return Default; }
         catch (UnauthorizedAccessException) { return Default; }

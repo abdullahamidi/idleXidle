@@ -17,12 +17,13 @@ public class OneDisciplineTest
     [Fact]
     public void test_mastery_tree_refuses_a_second_specialisation_and_frees_it_on_refund()
     {
-        // Arrange: walk Weight's lower rings legitimately, then attune to STRIKE (Style.Hammer).
+        // Arrange: walk RESONANCE's trunk and both routes to their last notables legitimately, then
+        // attune to STRIKE (Style.Hammer) — the leaf off DEEP. TRAP is the leaf off NARROW.
         var tree = new MasteryTree();
         tree.SetEarned(80);
-        foreach (var kind in new[] { MasteryKind.Minor, MasteryKind.Notable })
-            foreach (var n in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Resonance && x.Kind == kind))
-                Assert.True(tree.Take(n.Id), $"fixture could not take {n.Id}");
+        foreach (var id in new[] { "chime", "tone", "steep", "road_hammer", "keyed", "deep",
+                                   "clarity_res", "road_snare", "pledge", "narrow" })
+            Assert.True(tree.Take(id), $"fixture could not take {id}");
         Assert.True(tree.Take("spec_strike"));
         Assert.Equal(Style.Hammer, tree.Affinity());
 

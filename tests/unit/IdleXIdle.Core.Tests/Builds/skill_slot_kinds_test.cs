@@ -75,9 +75,9 @@ public class SkillSlotKindTests
     public void test_actives_and_passives_are_counted_separately()
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow"));
-        b.Weave(TestBuilds.Skill("volley_spray"));
-        b.Weave(TestBuilds.Skill("field_mire"));
+        b.Equip(TestBuilds.Skill("hammer_blow"));
+        b.Equip(TestBuilds.Skill("volley_spray"));
+        b.Equip(TestBuilds.Skill("field_mire"));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(1, b.PassiveCount);
@@ -88,15 +88,15 @@ public class SkillSlotKindTests
     public void test_a_full_active_budget_does_not_block_a_passive()
     {
         var b = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")));
-        Assert.True(b.Weave(TestBuilds.Skill("volley_spray")));
+        Assert.True(b.Equip(TestBuilds.Skill("hammer_blow")));
+        Assert.True(b.Equip(TestBuilds.Skill("volley_spray")));
 
         // Actives are full; a third active is refused...
-        Assert.False(b.Weave(TestBuilds.Skill("sign_call")));
+        Assert.False(b.Equip(TestBuilds.Skill("sign_call")));
         // ...but the passive budget is untouched, which is the entire point of splitting them.
-        Assert.True(b.Weave(TestBuilds.Skill("field_mire")));
-        Assert.True(b.Weave(TestBuilds.Skill("snare_jaws")));
-        Assert.False(b.Weave(TestBuilds.Skill("drain_wilt")));
+        Assert.True(b.Equip(TestBuilds.Skill("field_mire")));
+        Assert.True(b.Equip(TestBuilds.Skill("snare_jaws")));
+        Assert.False(b.Equip(TestBuilds.Skill("drain_wilt")));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(2, b.PassiveCount);
@@ -105,13 +105,17 @@ public class SkillSlotKindTests
     [Fact]
     public void test_an_unset_capacity_is_the_whole_budget()
     {
-        // Today's behaviour, preserved exactly: until stage 2b sets the per-kind caps, a build's
-        // budget is undivided. A fifth slot sold by the trait spine must not be clamped off by a
-        // per-kind cap frozen at the old constant.
-        var b = new Build { SlotCapacity = 5 };
-        for (var i = 0; i < 5; i++)
-            Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")), $"slot {i + 1} of 5 was refused");
-        Assert.Equal(5, b.Skills.Count);
+        // With no per-kind cap set, a build's budget is undivided and the whole of it is spendable on
+        // one kind. UPDATED 2026-09-03: it used to ask for FIVE, because the trait spine sold a fifth
+        // slot and a per-kind cap frozen at the old constant would have clamped it off. The fifth slot
+        // is removed, so the whole budget is four — the rule under test is unchanged, only its size.
+        // Four DIFFERENT actives: a build holds a skill once (LAW 13), so the budget is filled with
+        // four of the six styles' actives rather than four copies of one.
+        var b = new Build { SlotCapacity = Build.SkillSlots };
+        var actives = new[] { "hammer_blow", "snare_repay", "sign_call", "volley_spray" };
+        for (var i = 0; i < actives.Length; i++)
+            Assert.True(b.Equip(TestBuilds.Skill(actives[i])), $"slot {i + 1} of 4 was refused");
+        Assert.Equal(4, b.Skills.Count);
     }
 
     [Fact]
@@ -120,19 +124,19 @@ public class SkillSlotKindTests
         // Four beat-taking skills is the state that made the basic attack disappear: the swing only
         // lands when no skill claimed the beat, so ~0.8 demand leaves ~1 beat in 5 for it.
         var four = new Build { ActiveCapacity = 4 };
-        four.Weave(TestBuilds.Skill("hammer_blow"));
-        four.Weave(TestBuilds.Skill("volley_spray"));
-        four.Weave(TestBuilds.Skill("sign_call"));
-        four.Weave(TestBuilds.Skill("drain_drink"));
+        four.Equip(TestBuilds.Skill("hammer_blow"));
+        four.Equip(TestBuilds.Skill("volley_spray"));
+        four.Equip(TestBuilds.Skill("sign_call"));
+        four.Equip(TestBuilds.Skill("drain_drink"));
         Assert.True(four.BeatDemand > 0.75f, $"four actives demanded only {four.BeatDemand:0.00}");
 
         // Two actives plus two passives: the passives add NOTHING, by construction.
         var two = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        two.Weave(TestBuilds.Skill("hammer_blow"));
-        two.Weave(TestBuilds.Skill("volley_spray"));
+        two.Equip(TestBuilds.Skill("hammer_blow"));
+        two.Equip(TestBuilds.Skill("volley_spray"));
         var withoutPassives = two.BeatDemand;
-        two.Weave(TestBuilds.Skill("field_mire"));
-        two.Weave(TestBuilds.Skill("snare_jaws"));
+        two.Equip(TestBuilds.Skill("field_mire"));
+        two.Equip(TestBuilds.Skill("snare_jaws"));
 
         Assert.Equal(withoutPassives, two.BeatDemand);
         Assert.True(two.BeatDemand < 0.5f,
@@ -145,16 +149,26 @@ public class SkillSlotKindTests
         // The two shortest cooldowns woven together is the worst case a player can build. Even that
         // must leave the champion's own swing the majority of its beats, or the rework has not
         // actually fixed the thing it exists for.
+        // ORDERED BY REALISED DEMAND, not by beat count. An Active is no longer always counted in
+        // beats — CLOCKWORK is counted in milliseconds — and a Beats-0 Active sorted as the SHORTEST
+        // cooldown in the catalogue while contributing 0.00 to Build.BeatDemand, so the "worst pair"
+        // would have been the cheapest one. Demand is 1/beats for a beat-counted skill and
+        // beat/interval for a clock-counted one, which is what each really costs per action.
+        //
+        // ACROSS THE WHOLE CATALOGUE, signatures included: a champion may weave its own signature
+        // beside any shared active, so that pair is one a player can really build.
+        static float Demand(SkillDef d)
+            => d.Beats > 0 ? 1f / d.Beats
+             : d.IntervalMs > 0 ? SoloBattle.DefaultBeatMs / (float)d.IntervalMs
+             : 0f;
+
         var shortest = SkillCatalogue.All
-            .Where(s => s.TakesABeat).OrderBy(s => s.Beats).Take(2).ToList();
+            .Where(s => s.TakesABeat).OrderByDescending(Demand).Take(2).ToList();
 
-        var b = new Build { ActiveCapacity = 2 };
-        foreach (var def in shortest)
-            b.Weave(TestBuilds.Skill(def.Id));
-
-        Assert.True(b.BeatDemand < 0.5f,
+        var demand = shortest.Sum(Demand);
+        Assert.True(demand < 0.5f,
             $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Name))}) " +
-            $"demands {b.BeatDemand:0.00} of the beats");
+            $"demands {demand:0.00} of the beats");
     }
 }
 
@@ -173,7 +187,7 @@ public class ComposedSlotSplitTests
         => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(int slots, params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
+        => BuildComposer.Compose(Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: slots);
 
     [Theory]
@@ -212,7 +226,7 @@ public class ComposedSlotSplitTests
     public void test_a_skill_the_tree_has_not_taught_cannot_be_chosen()
     {
         Build With(MasteryTree mastery) => BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 P("hammer_blow"),
@@ -228,7 +242,7 @@ public class ComposedSlotSplitTests
 
         var walked = new MasteryTree();
         walked.SetEarned(999);
-        walked.RestoreTaken(new[] { "spec_strike", "road_hammer", "road_hammer_2" });
+        walked.RestoreTaken(new[] { "spec_strike", "road_hammer", "road_hammer_2" }, repair: false);
         var b = With(walked);
         Assert.Equal(2, b.Skills.Count);
         Assert.Equal(SkillCatalogue.PassiveOf(Style.Hammer).Id, b.Skills[1].Def.Id);
@@ -320,7 +334,7 @@ public class SwingShareTests
         // to leave room, or the AFTER half proves nothing.
         var before = new Build { ActiveCapacity = 4, PassiveCapacity = 0 };
         foreach (var id in new[] { "hammer_blow", "volley_spray", "sign_call", "drain_drink" })
-            before.Weave(TestBuilds.Skill(id));
+            before.Equip(TestBuilds.Skill(id));
 
         var (beats, casts) = Cadence(before);
         var swingShare = beats == 0 ? 0f : (beats - casts) / (float)beats;
@@ -337,7 +351,7 @@ public class SwingShareTests
         // The two-and-two loadout — the same shape the restore migration hands an old four-caster
         // save (BLOW, SPRAY, and the overflow landed on BRAND and WILT).
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { P("hammer_blow"), P("volley_spray"),
                             P("sign_brand"), P("drain_wilt") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -358,7 +372,7 @@ public class SwingShareTests
         // The other half of the promise. Moving two skills into passive slots must not silence them —
         // if it did, the swing would come back only because half the build stopped working.
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { P("hammer_blow"), P("volley_spray"),
                             P("field_mire"), P("snare_jaws") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -396,7 +410,7 @@ public class PassiveEffectTests
         => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
+        => BuildComposer.Compose(Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
     /// <summary>Total damage the champion put out in one wave, summed from the event stream.</summary>
@@ -476,11 +490,16 @@ public class SkillReachabilityTests
     [Fact]
     public void test_every_skill_in_the_catalogue_can_be_selected()
     {
-        // The tree with every style road walked must know all twelve — a skill no road teaches is
-        // unreachable, since composing an untaught skill is refused.
-        var taught = Taught.Everything().LearnedSkills();
+        // The tree with every style road walked must know all twelve SHARED skills — one no road
+        // teaches is unreachable, since composing an untaught skill is refused.
+        //
+        // THE TEN SIGNATURES ARE EXCLUDED, and that is the law rather than an exemption: no mastery
+        // node teaches one (BRIEF sec.18), the composer adds the active champion's own signature to
+        // the taught set outright, and SignatureOwnershipTest asserts that a tree with EVERY node
+        // taken still cannot hand somebody else's over. A road that taught one would be the bug.
+        var taught = Taught.Everything().AvailableSkills();
 
-        var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
+        var missing = SkillCatalogue.Shared.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
         Assert.True(missing.Count == 0,
             "no style road teaches: " + string.Join(", ", missing) +
             ". A skill the player cannot learn is dead weight in the catalogue.");

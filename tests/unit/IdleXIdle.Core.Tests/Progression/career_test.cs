@@ -15,18 +15,6 @@ namespace IdleXIdle.Core.Tests.Progression;
 public class CareerTest
 {
     [Fact]
-    public void test_trait_points_pay_one_per_conquest_from_a_fresh_world()
-    {
-        // Arrange
-        var world = new World();
-
-        // Act/Assert — a fresh account has earned nothing; the first conquest pays one.
-        Assert.Equal(0, Career.TraitPointsEarned(world));
-        world.Conquer(Regions.All[0].Id);
-        Assert.Equal(1, Career.TraitPointsEarned(world));
-    }
-
-    [Fact]
     public void test_deepest_anywhere_is_the_best_of_the_ledger_and_every_region()
     {
         // Arrange — one region holds wave 12; the account ledger remembers 7.
@@ -79,9 +67,9 @@ public class CareerTest
         // meets it; the same build against a two-slot capacity does not.
         var vow = Vows.ById("vow_complete")!;
         var met = new Build { SlotCapacity = 1 };
-        met.Weave(TestBuilds.Skill("hammer_blow", Source.Body, vow));
+        met.Equip(TestBuilds.Skill("hammer_blow", Source.Body, vow));
         var unmet = new Build { SlotCapacity = 2 };
-        unmet.Weave(TestBuilds.Skill("hammer_blow", Source.Body, vow));
+        unmet.Equip(TestBuilds.Skill("hammer_blow", Source.Body, vow));
 
         // Act/Assert
         Assert.True(Career.VowWasKept(met, new Hunter()));

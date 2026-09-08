@@ -24,6 +24,28 @@ namespace IdleXIdle.Core.Expeditions;
 /// over a whole descent buries the wall under fifty waves the build handled comfortably.
 /// </para>
 /// </remarks>
+/// <summary>
+/// What ended the run, in one word — the thresholds <see cref="RunReport.Verdict"/> has always applied,
+/// exposed so the HUNT's fall plate and the log's diagnosis line can NAME the limit before the numbers.
+/// </summary>
+/// <remarks>
+/// UX V2 P1.1 (brief §22/§24): "1.0 of 3.0 creatures per cast" is a magnitude; REACH is its meaning. No new
+/// telemetry — the same four comparisons, in the same order, returning a name instead of a sentence.
+/// </remarks>
+public enum RunLimit
+{
+    /// <summary>The wave outlived the clock: damage, not health.</summary>
+    Stalled,
+    /// <summary>Armour ate too much of the damage.</summary>
+    Armour,
+    /// <summary>Casts reached too few of the creatures in the wave.</summary>
+    Reach,
+    /// <summary>Too much health lost per wave.</summary>
+    Sustain,
+    /// <summary>Nothing specific — the numbers won.</summary>
+    OutScaled,
+}
+
 public sealed record RunReport
 {
     public required string RegionId { get; init; }
@@ -52,6 +74,20 @@ public sealed record RunReport
     /// <summary>Share of the champion's pool lost per wave. Points at sustain.</summary>
     public required float HealthLostPerWaveFraction { get; init; }
 
+    /// <summary>
+    /// What SHIELD ate, as a share of everything the wave landed on the champion — absorbed plus what
+    /// reached health. Zero for a build with no shield, which is how the log knows not to draw the row.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT folded into <see cref="AbsorbedFraction"/>, which answers a different question:
+    /// that one is armour eating the champion's OUTGOING damage, this one is shield eating the wave's
+    /// INCOMING damage. One number for both would be a number for neither.
+    /// </remarks>
+    public float ShieldAbsorbedFraction { get; init; }
+
+    /// <summary>Shield absorbed per wave, as a share of the champion's pool — the figure the log shows.</summary>
+    public float ShieldAbsorbedPerWaveFraction { get; init; }
+
     /// <summary>Seconds to clear a wave. Points at throughput.</summary>
     public required float SecondsPerWave { get; init; }
 
@@ -65,22 +101,32 @@ public sealed record RunReport
     /// Names the DEMAND, not the fix. "Armour ate 61% of your damage" tells the player where to look
     /// without telling them what to do about it, which is the whole design line for this screen.
     /// </remarks>
-    public string Verdict()
+    public string Verdict() => Limit switch
     {
-        if (Outcome == WaveOutcome.Stalled)
-            return $"Stalled on wave {WallWave} — the wave outlived the clock, so this is damage, not health.";
+        RunLimit.Stalled => $"Stalled on wave {WallWave} — the wave outlived the clock, so this is damage, not health.",
+        RunLimit.Armour => $"Armour ate {AbsorbedFraction:P0} of your damage. Your hits average {AverageHitSize:F0}.",
+        RunLimit.Reach => $"You reached {TargetsPerActivation:F1} of {CreaturesPerWave:F1} creatures per cast.",
+        RunLimit.Sustain => $"You lost {HealthLostPerWaveFraction:P0} of your health per wave over the last band.",
+        _ => $"Out-scaled on wave {WallWave} — nothing specific beat you, the numbers did.",
+    };
 
-        if (AbsorbedFraction >= 0.45f)
-            return $"Armour ate {AbsorbedFraction:P0} of your damage. Your hits average {AverageHitSize:F0}.";
+    /// <summary>The one limit this run hit — the first of the verdict's thresholds that holds.</summary>
+    public RunLimit Limit =>
+        Outcome == WaveOutcome.Stalled ? RunLimit.Stalled
+        : AbsorbedFraction >= 0.45f ? RunLimit.Armour
+        : CreaturesPerWave >= 2.5f && TargetsPerActivation < CreaturesPerWave * 0.5f ? RunLimit.Reach
+        : HealthLostPerWaveFraction >= 0.18f ? RunLimit.Sustain
+        : RunLimit.OutScaled;
 
-        if (CreaturesPerWave >= 2.5f && TargetsPerActivation < CreaturesPerWave * 0.5f)
-            return $"You reached {TargetsPerActivation:F1} of {CreaturesPerWave:F1} creatures per cast.";
-
-        if (HealthLostPerWaveFraction >= 0.18f)
-            return $"You lost {HealthLostPerWaveFraction:P0} of your health per wave over the last band.";
-
-        return $"Out-scaled on wave {WallWave} — nothing specific beat you, the numbers did.";
-    }
+    /// <summary>The limit as the label a plate prints: ARMOUR · REACH · SUSTAIN · DAMAGE · OUT-SCALED.</summary>
+    public string LimitLabel() => Limit switch
+    {
+        RunLimit.Stalled => "DAMAGE",
+        RunLimit.Armour => "ARMOUR",
+        RunLimit.Reach => "REACH",
+        RunLimit.Sustain => "SUSTAIN",
+        _ => "OUT-SCALED",
+    };
 
 
     /// <summary>
@@ -169,6 +215,8 @@ public sealed class RunRecorder
         var struck = sample.Sum(m => m.TargetsStruck);
         var present = sample.Sum(m => m.CreaturesPresent);
         var lost = sample.Sum(m => m.HealthLost);
+        var shieldAte = sample.Sum(m => m.ShieldAbsorbed);
+        var healthAte = (float)sample.Sum(m => m.HealthDamage);
         var ms = sample.Sum(m => m.DurationMs);
         var n = Math.Max(1, sample.Count);
 
@@ -187,6 +235,8 @@ public sealed class RunRecorder
             TargetsPerActivation = activations <= 0 ? 0f : struck / (float)activations,
             CreaturesPerWave = present / (float)n,
             HealthLostPerWaveFraction = championMaxHealth <= 0 ? 0f : lost / (float)n / championMaxHealth,
+            ShieldAbsorbedFraction = shieldAte + healthAte <= 0f ? 0f : shieldAte / (shieldAte + healthAte),
+            ShieldAbsorbedPerWaveFraction = championMaxHealth <= 0 ? 0f : shieldAte / n / championMaxHealth,
             SecondsPerWave = ms / 1000f / n,
             SampledWaves = sample.Count,
         };

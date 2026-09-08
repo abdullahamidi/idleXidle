@@ -30,7 +30,7 @@ public class mastery_new_nodes_liveness_test
     {
         var b = new Build { Shape = shape };
         foreach (var id in skillIds.Length == 0 ? new[] { "hammer_blow" } : skillIds)
-            b.Weave(TestBuilds.Skill(id, Source.Spirit));
+            b.Equip(TestBuilds.Skill(id, Source.Spirit));
         return b;
     }
 
@@ -184,7 +184,7 @@ public class mastery_new_nodes_liveness_test
         {
             var n = MasteryCatalog.ById(id);
             Assert.NotNull(n);
-            Assert.Equal(MasteryCatalog.RingCost[n!.Ring], n.Cost);
+            Assert.Equal(MasteryCatalog.CostOf(n!.Kind), n.Cost);
             Assert.NotEqual(SkillShape.None, n.Shape);
             Assert.Contains("—", n.Label);   // NAME — WHAT IT DOES, like every card on the tree
         }

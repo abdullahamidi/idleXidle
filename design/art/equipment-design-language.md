@@ -103,8 +103,8 @@ Form, so give each a glyph that echoes its Form's icon.
 
 | Enchant | Slot pool | Effect | Accent motif |
 |---|---|---|---|
-| **Splinter** | weapon | on kill: richer loot | shattering shard, a burst of loot-glints |
-| **Harvest** | weapon | on kill: a spare core | a budding seed / spare core pip |
+| **Splinter** | weapon | on wave clear: richer loot | shattering shard, a burst of loot-glints |
+| **Harvest** | weapon | on wave clear: a spare core | a budding seed / spare core pip |
 | **Venom** | weapon | skills poison over time | dripping green ichor, a toxic sheen |
 | **Undying** | charm / ring | survive a fatal blow once | a phoenix ember / unbroken loop |
 | **Desperation** | charm / ring | near death: haul swells | a cornered, last-stand spark; cracked-but-blazing |

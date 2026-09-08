@@ -1,7 +1,8 @@
 # IDLExIDLE
 
 > Formerly **Resonance Hunter** — renamed 2026-08-24. The C# identity (folders, namespaces,
-> projects) is `IdleXIdle`; the save folder alone keeps the old name so existing saves stay intact.
+> projects) is `IdleXIdle`. The save folder followed on 2026-09-08 and adopts the old one once, so
+> nothing was lost.
 
 An **offline idle auto-battler**. Your champion fights wave after wave on its own — on every
 screen, and while the game is closed. You never swing the sword: you read what the fight is telling

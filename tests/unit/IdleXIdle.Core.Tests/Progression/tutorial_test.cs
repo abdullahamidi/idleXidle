@@ -59,22 +59,22 @@ public class TutorialTest
         }
 
         // A career, in the order the SHIPPING GAME actually produces it. Conquest is wave 20 since
-        // 2026-08-26 (it was 7), so a chest, a worn item and a woven build all arrive before it — the
-        // conquest lesson is the last rung again, and this walk says so. (The earlier order, conquest
-        // at half a minute, hid the audit's bug where the guide ended before the chest, gear and build
-        // lessons were ever shown; the guard that caused it is gone and the walk below still proves it.)
+        // 2026-08-26; a chest and a worn item arrive before it. The BUILD lesson comes LAST since
+        // 2026-09-06: the Build opens on a real choice, and the first choice the shipping game hands
+        // over is the keystone the first conquest teaches — so the build lesson follows the conquest.
+        // TRAINING opens on the third wave, so SPEND GLEAM waits through the first two.
         Step("fresh save", facts with { WavesCleared = 1, DeepestWave = 1, Gleam = 30 });
-        Step("first wave cleared, 30 Gleam", facts with { StatsTrained = 1, Gleam = 5, DeepestWave = 3 });
-        Step("trained a stat, wave 3", facts with { DeepestWave = 4, WavesCleared = 4 });
-        Step("wave 4 — boss approaching", facts with { DeepestWave = 5, WavesCleared = 5 });
-        Step("felled the first boss", facts with { DeepestWave = 9, WavesCleared = 9 });
+        Step("first wave cleared, 30 Gleam", facts with { WavesCleared = 3, DeepestWave = 3, Gleam = 60 });
+        Step("third wave — TRAINING opens", facts with { StatsTrained = 1, Gleam = 5, DeepestWave = 4, WavesCleared = 4 });
+        Step("trained a stat, wave 4", facts with { DeepestWave = 5, WavesCleared = 5 });
+        Step("wave 5 — the first boss", facts with { DeepestWave = 9, WavesCleared = 9 });
         Step("wave 9, still no chest", facts with { ChestsHeld = 1, DeepestWave = 10 });
         Step("a chest dropped", facts with { ItemsOwned = 1, ChestsHeld = 0, DeepestWave = 11 });
         Step("opened it — an item", facts with { ItemsWorn = 1, DeepestWave = 12 });
-        Step("equipped it", facts with { SkillsWoven = 1, DeepestWave = 14 });
-        Step("wove a skill", facts with { DeepestWave = 19, WavesCleared = 19 });
-        Step("wave 19 — conquest in reach", facts with { DeepestWave = 20, RegionsConquered = 1 });
-        Step("conquered the region — the loop is lived", facts);
+        Step("equipped it", facts with { DeepestWave = 19, WavesCleared = 19 });
+        Step("wave 19 — conquest in reach", facts with { DeepestWave = 20, RegionsConquered = 1, BuildChoices = 1 });
+        Step("conquered — the region's keystone is a first choice", facts with { SkillsWoven = 1, DeepestWave = 22 });
+        Step("wove a skill — the loop is lived", facts);
 
         _out.WriteLine("");
         _out.WriteLine("shown: " + string.Join(", ", seen));
@@ -114,8 +114,14 @@ public class TutorialTest
     {
         // A prompt that cannot be obeyed teaches the player to stop reading prompts, after which the one
         // that matters is invisible too.
-        var broke = new TutorialFacts(WavesCleared: 1, DeepestWave: 1, Gleam: 0);
+        // Three waves in, so TRAINING is open (Unlocks.TrainingOpensAtWaves) and the purse is the only
+        // thing in the way.
+        var broke = new TutorialFacts(WavesCleared: Unlocks.TrainingOpensAtWaves, DeepestWave: 3, Gleam: 0);
         Assert.Null(Tutorial.Showing(broke));
+
+        // And before the screen exists the prompt waits, however rich the purse: a lesson naming a door
+        // the game has not opened is worse than silence.
+        Assert.Null(Tutorial.Showing(new TutorialFacts(WavesCleared: 1, DeepestWave: 1, Gleam: 500)));
 
         // And one Gleam under the real price is still broke. This fired at 20 while the cheapest rank
         // cost 25, so for five Gleam the guide said "train" and every row refused.

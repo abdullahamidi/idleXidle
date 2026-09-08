@@ -115,6 +115,13 @@ public sealed class SoundBank
         ["sfx_enemy_down"] = 140,
         ["sfx_boss_down"] = 220,
         ["sfx_champ_down"] = 300,
+        // The UI polish vocabulary (brief §86–§87): a shield absorbs a swarm's bites in bursts, so its
+        // tick may repeat as fast as a hit; a break is one moment; the vault opens chests by the dozen
+        // and a rarity shimmer that restarted on every chest would be one long wash.
+        ["sfx_shield_hit"] = 60,
+        ["sfx_shield_break"] = 300,
+        ["sfx_chest_rare"] = 400,
+        ["sfx_train"] = 70,
     };
 
     // Per-play pitch variation. A one-shot heard a thousand times identically "draws attention to itself

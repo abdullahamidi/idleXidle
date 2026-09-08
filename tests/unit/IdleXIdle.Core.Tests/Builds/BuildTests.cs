@@ -150,9 +150,9 @@ public class BuildTests
         // — exactly how an unbounded gear budget collapsed "which item" into "the biggest number".
         var build = new Build();
         for (var i = 0; i < Build.SkillSlots; i++)
-            Assert.True(build.Weave(Skill(i)), "a slot inside the budget was refused");
+            Assert.True(build.Equip(Skill(i)), "a slot inside the budget was refused");
 
-        Assert.False(build.Weave(Skill(Build.SkillSlots)));
+        Assert.False(build.Equip(Skill(Build.SkillSlots)));
         Assert.Equal(Build.SkillSlots, build.Skills.Count);
     }
 
@@ -170,10 +170,10 @@ public class BuildTests
     public void test_a_skill_can_be_unwoven_to_make_room()
     {
         var build = new Build();
-        for (var i = 0; i < Build.SkillSlots; i++) build.Weave(Skill(i));
+        for (var i = 0; i < Build.SkillSlots; i++) build.Equip(Skill(i));
 
-        Assert.True(build.Unweave(SkillIds[0]));
-        Assert.True(build.Weave(Skill(4)));
+        Assert.True(build.Unequip(SkillIds[0]));
+        Assert.True(build.Equip(Skill(4)));
     }
 
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────
@@ -229,22 +229,28 @@ public class BuildTests
         Assert.Empty(new Build().Triggers(new Hunter()));
     }
 
-    // ── THE FIFTH WEAVE ───────────────────────────────────────────────────────────────────────────
+    // ── THE FIFTH WEAVE, AND ITS REMOVAL ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_a_build_weaves_up_to_its_own_capacity_not_the_types_floor()
+    public void test_a_build_weaves_up_to_its_own_capacity_and_never_past_four()
     {
-        // FIFTH WEAVE is a three-point node on the trait spine. It was bought, saved, resolved to 5 and
-        // written into the loadout's capacity by a host line whose own comment reads "without this the
-        // fifth weave is bought and never granted" — and then clamped back to 4 one call later by
-        // Math.Min against a const. Bought, carried, displayed, discarded: this codebase's signature
-        // failure. The test drives the END of the chain, which is the only place it was ever visible.
+        // CHANGED 2026-09-03, because the capability changed. This test used to pin the OPPOSITE rule —
+        // that a capacity of 5 really weaves five — because FIFTH WEAVE was a trait-spine node that was
+        // bought, saved, resolved to 5 and then clamped back to 4 by a Math.Min against a const, which
+        // is this codebase's signature failure.
+        //
+        // The fifth slot is REMOVED now rather than granted: at five slots the active/passive split
+        // gives THREE action-taking skills, which is the beat demand the slot rework existed to bring
+        // down. So a stale capacity of 5 must be ANSWERED with four rather than honoured, and this test
+        // pins the clamp that answers it — in the same place the old bug was visible.
         var build = new Build { SlotCapacity = 5 };
-        for (var i = 0; i < 5; i++)
-            Assert.True(build.Weave(Skill(i)), $"slot {i} was refused at a capacity of 5");
+        Assert.Equal(Build.SkillSlots, build.SlotCapacity);
 
-        Assert.Equal(5, build.Skills.Count);
-        Assert.False(build.Weave(Skill(5)), "capacity 5 must still refuse a sixth");
+        for (var i = 0; i < 4; i++)
+            Assert.True(build.Equip(Skill(i)), $"slot {i} was refused at a capacity of 4");
+
+        Assert.Equal(4, build.Skills.Count);
+        Assert.False(build.Equip(Skill(4)), "four slots must refuse a fifth");
     }
 
     [Fact]
@@ -261,12 +267,12 @@ public class BuildTests
         // to unweave something. That is a floor of WHAT IS WOVEN, not of a constant.
         var narrow = new Build { SlotCapacity = 1 };
         Assert.Equal(1, narrow.SlotCapacity);
-        Assert.True(narrow.Weave(Skill(0)));
-        Assert.False(narrow.Weave(Skill(1)), "a one-slot build accepted a second skill");
+        Assert.True(narrow.Equip(Skill(0)));
+        Assert.False(narrow.Equip(Skill(1)), "a one-slot build accepted a second skill");
 
         // Now shrink a build that already holds more than the new capacity: it must not lose any.
         var full = new Build { SlotCapacity = 4 };
-        for (var i = 0; i < 4; i++) Assert.True(full.Weave(Skill(i)));
+        for (var i = 0; i < 4; i++) Assert.True(full.Equip(Skill(i)));
 
         full.SlotCapacity = 1;
         Assert.Equal(4, full.SlotCapacity);
@@ -278,8 +284,8 @@ public class BuildTests
     {
         var build = new Build();
         Assert.Equal(Build.SkillSlots, build.SlotCapacity);
-        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill(i)));
-        Assert.False(build.Weave(Skill(4)), "a build nobody expanded must not grow one for free");
+        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Equip(Skill(i)));
+        Assert.False(build.Equip(Skill(4)), "a build nobody expanded must not grow one for free");
     }
 
     [Fact]
@@ -292,7 +298,7 @@ public class BuildTests
         var hunter = new Hunter();
 
         var onboarding = new Build { SlotCapacity = 1 };
-        onboarding.Weave(Skill(0));
+        onboarding.Equip(Skill(0));
 
         var ctx = SoloBattle.DescribeBuild(onboarding, hunter);
         Assert.Equal(1, ctx.SkillSlots);
@@ -304,7 +310,7 @@ public class BuildTests
 
         // And it must still REFUSE a build that genuinely has a gap.
         var gappy = new Build { SlotCapacity = 3 };
-        gappy.Weave(Skill(0));
+        gappy.Equip(Skill(0));
         Assert.False(Vows.IsActive(vow, SoloBattle.DescribeBuild(gappy, hunter)),
             "a build with two empty slots met a Vow that demands none.");
     }

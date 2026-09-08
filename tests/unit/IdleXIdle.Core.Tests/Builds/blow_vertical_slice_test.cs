@@ -60,18 +60,18 @@ public class BlowVerticalSliceTest
     [Fact]
     public void test_the_resolved_blow_carries_every_chosen_layer_as_data()
     {
-        // Arrange — BLOW, its FLATTEN variation (Source BODY, defence ignore), and TOLL (+50%).
+        // Arrange — BLOW, its FLATTEN variation (Source BODY, defence ignore), and TOLL (+40%).
         var loadout = LoadoutWithBlow();
         var progress = Chosen("TOLL");
 
         // Act — through the hunt's own composition door.
-        var build = loadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null, progress);
+        var build = loadout.ToBuild(Taught.Everything(), character: null, progress);
 
         // Assert — the fight reads ONE resolved SkillDef; every layer is a delta on it.
         var sk = Assert.Single(build.Skills);
         Assert.Equal("hammer_blow", sk.Def.Id);
         Assert.True(sk.Def.DefenceIgnore, "FLATTEN's defence ignore did not reach the resolved skill");
-        Assert.Equal(1.5f, sk.Def.DamageMultiplier, precision: 3);   // TOLL
+        Assert.Equal(1.4f, sk.Def.DamageMultiplier, precision: 3);   // TOLL
         Assert.Equal(Source.Body, sk.Source);                        // the variation OWNS the Source
         Assert.Equal(500f, sk.Def.BasePower, precision: 1);          // the skill owns its number
     }
@@ -81,7 +81,7 @@ public class BlowVerticalSliceTest
     {
         // The dormant-layer regression guard: the hunt composes with progress since P4, and if any
         // caller forgets it again, the build silently reverts to exactly this.
-        var build = LoadoutWithBlow().ToBuild(new MemoryDustTree(), Taught.Everything(), character: null);
+        var build = LoadoutWithBlow().ToBuild(Taught.Everything(), character: null);
 
         var sk = Assert.Single(build.Skills);
         Assert.False(sk.Def.DefenceIgnore);
@@ -94,13 +94,12 @@ public class BlowVerticalSliceTest
         // Arrange/Act — the same loadout fought against an ARMOURED unkillable dummy as each
         // layer joins (DamageBench's own dummy has no armour, and FLATTEN's whole purchase is
         // defence ignore — a bench that cannot see it would certify the layer dormant).
-        var tree = new MemoryDustTree();
         var mastery = Taught.Everything();
         var seeker = CharacterRoster.Get("seeker");   // EVEN HAND: HitSize 1.08
 
         float Bench(SkillProgress? progress, Character? character, Hunter hunter)
         {
-            var build = LoadoutWithBlow().ToBuild(tree, mastery, character, progress);
+            var build = LoadoutWithBlow().ToBuild(mastery, character, progress);
             var champ = new Champion { MaxHealth = 1_000_000, Health = 1_000_000 };
             var creatures = new[] { WaveCreature.Single(1e9f, 0.01f, defense: 60f) };
             var metrics = new WaveMetrics();
@@ -142,16 +141,14 @@ public class BlowVerticalSliceTest
         // VOW OF COMPLETION demands every slot filled — met by this one-slot build; then the same
         // vow judged against an empty second slot is unmet and pays nothing. Both through the real
         // composition, neither through a special case.
-        // A tree that has STUDIED the vow — the composer refuses an untaught one since P7.
-        var vowTree = new MemoryDustTree();
-        vowTree.Restore(0, new[] { "vow_study_1" });   // teaches VOW OF COMPLETION
+        // The vow must be FOUND — the composer refuses one the account has not discovered.
         var met = LoadoutWithBlow(vowId: "vow_complete")
-            .ToBuild(vowTree, Taught.Everything(), character: null, Chosen("TOLL"));
+            .ToBuild(Taught.Everything(), character: null, Chosen("TOLL"), knownVows: Vows.Catalog);
         var unmetLoadout = LoadoutWithBlow(vowId: "vow_complete");
         unmetLoadout.SkillCapacity = 2;
         unmetLoadout.AddSkill();   // an EMPTY second slot the vow can see... but an added slot is a
         unmetLoadout.RemoveSkill(1);            // woven default — remove it so the slot stays empty
-        var unmet = unmetLoadout.ToBuild(vowTree, Taught.Everything(), character: null, Chosen("TOLL"));
+        var unmet = unmetLoadout.ToBuild(Taught.Everything(), character: null, Chosen("TOLL"), knownVows: Vows.Catalog);
 
         var metDps = DamageBench.Measure(met, new Hunter()).Dps;
         var unmetDps = DamageBench.Measure(unmet, new Hunter()).Dps;

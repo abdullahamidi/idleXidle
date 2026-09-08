@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -16,13 +16,7 @@ namespace IdleXIdle.Core.Builds;
 /// <para>
 /// This is the editable, persistable half of a build: which Forms the player wove, which Source and Vow
 /// each carries, and which keystones they socketed. <see cref="ToBuild"/> turns those choices into the
-/// pure <see cref="Build"/> the sim runs, folding in the Dust tree's passive nodes.
-/// </para>
-/// <para>
-/// It lives in the GAME layer, not Core.Builds, precisely because assembling it needs the
-/// <see cref="MemoryDustTree"/> — for the tree's <see cref="DustEffects.TreeMods"/> and the keystones it
-/// has taught. Core.Builds deliberately knows nothing about Prestige, so the tree→build wiring belongs
-/// here, on the Prestige side of that one-way dependency.
+/// pure <see cref="Build"/> the sim runs.
 /// </para>
 /// </remarks>
 public sealed class PlayerLoadout
@@ -52,33 +46,102 @@ public sealed class PlayerLoadout
     /// </summary>
     public string Signature =>
         string.Join(";", _skills.Select(s => $"{s.SkillId ?? "-"}:{s.Source}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
-        + $"|{SkillCapacity}|{KeystoneCapacity}";
-    public IReadOnlyList<string> KeystoneIds => _keystoneIds;
-
-    /// <summary>The skill slots every character starts with. The FLOOR, not the rule — see <see cref="SkillCapacity"/>.</summary>
-    /// <remarks>
-    /// This const used to be the rule, and that was the bug. <c>AddSkill</c> took
-    /// <c>Math.Min(MaxSkills, SkillCapacity)</c>, so FIFTH WEAVE — three points on the trait spine —
-    /// was bought, saved, resolved to 5, written into the capacity by a host line whose own comment
-    /// reads "without this the fifth weave is bought and never granted", and then clamped straight back
-    /// to 4 one call later. Nothing reads it as a ceiling any more.
-    /// </remarks>
-    public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of Forms
-    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the tree teaches fifteen, you wear three
+        + $"|{SkillCapacity}|{KeystoneCapacity}|{VowCapacity}|{TraitStamp}";
 
     /// <summary>
-    /// How many skill slots and keystone sockets the character currently HAS, set by the host from the
-    /// trait tree's spine. The consts above are the hard ceiling; these are what is unlocked.
+    /// The shape the three traits this champion wears contribute, or <see cref="SkillShape.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One seam, not a dozen.</b> <see cref="ToBuild"/> has a dozen callers — the fight, the damage
+    /// bench, the training page, the gear readout — and every one of them must see the same build, or
+    /// a screen starts telling the player numbers the sim does not run. That has happened twice here
+    /// already (the mastery tree, then the character's aptitude), and the note on <see cref="ToBuild"/>
+    /// records both. Threading a trait argument through those call sites is the same mistake a third
+    /// time, so it is a property the host sets once instead.
+    /// </para>
+    /// <para>
+    /// It is per CHARACTER and per REGION — the loadout is already repaired on a champion switch, and
+    /// four of the twenty-six traits read the world — so the host recomputes it from
+    /// <c>TraitEffects.Compose</c> rather than caching it. Left at
+    /// <see cref="SkillShape.None"/>, nothing about the build changes at all.
+    /// </para>
+    /// </remarks>
+    public SkillShape TraitShape { get; set; } = SkillShape.None;
+
+    /// <summary>
+    /// What the traits contribute, as one short token, so <see cref="Signature"/> notices a swap.
+    /// </summary>
+    /// <remarks>
+    /// The hunt re-composes the fight's build when the signature changes. Without this a player who
+    /// swapped a trait mid-run would go on fighting with the old three until they also touched a
+    /// skill — a change made and not applied, which is this project's named failure mode in a
+    /// different coat.
+    /// </remarks>
+    private string TraitStamp => ReferenceEquals(TraitShape, SkillShape.None)
+        ? "-"
+        : TraitShape.Traits.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture)
+          + (TraitShape.FreeOpeningCast ? "+" : "");
+
+    public IReadOnlyList<string> KeystoneIds => _keystoneIds;
+
+    /// <summary>The skill slots a build may ever hold. The CEILING as well as the floor.</summary>
+    /// <remarks>
+    /// It was briefly only a floor, while the trait tree sold a fifth slot. That slot bought a THIRD
+    /// action-taking skill — <c>Build.ActiveSlotsFor(5)</c> is 3 — which is the number the slot rework
+    /// existed to bring down, so it is gone: the one capability this refactor deliberately removes.
+    /// Four is the whole ladder again, and progression alone hands it out (<c>Unlocks.SkillSlots</c>).
+    /// </remarks>
+    public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of skills
+    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the world teaches nineteen, you wear three
+
+    /// <summary>
+    /// How many skill slots and keystone sockets the character currently HAS, set by the host from
+    /// world progression. The consts above are the hard ceiling; these are what is unlocked.
     /// </summary>
     /// <remarks>
     /// Host-set rather than resolved here, like every other cross-system value the loadout reads, and
     /// defaulted to the ceiling so a caller that never sets them (a test, a bench) behaves as before.
-    /// A socket the player has not bought is the scarce thing the AVARICE and RUIN paths compete over —
-    /// with three free sockets, learning a keystone was the only decision and wearing it was automatic.
+    /// A socket is the scarce thing: the world teaches all nineteen keystones for free, so if wearing
+    /// one were free too, every finished build would wear every doctrine and the opposed pairs would
+    /// very nearly cancel.
     /// </remarks>
-    public int SkillCapacity { get; set; } = MaxSkills;
+    public int SkillCapacity
+    {
+        get => _skillCapacity;
+        // CLAMPED. A save written while the trait tree still sold a fifth slot asks for five here; it
+        // is answered with four, and the load path unweaves the fifth row and says so in a toast.
+        set => _skillCapacity = Math.Clamp(value, 1, MaxSkills);
+    }
+
+    private int _skillCapacity = MaxSkills;
 
     public int KeystoneCapacity { get; set; } = MaxKeystones;
+
+    /// <summary>
+    /// How many DIFFERENT Vows this hunter may swear at once. Set by the host from world progression.
+    /// </summary>
+    /// <remarks>
+    /// Vow capacity used to be no number at all. A Vow rode a skill slot, so "how many Vows" was
+    /// whatever the skill-slot count happened to be — impossible for a milestone to grant, and coupled
+    /// to a ceiling that belongs to a different system. It also made the workbench ask a question with
+    /// one correct answer, four times over: each skill took exactly one Vow's bonus, so four DIFFERENT
+    /// Vows paid exactly what one repeated Vow paid while charging four prices and demanding four
+    /// restrictions hold at once. The build's Vow bonuses are summed under one ceiling now, and this is
+    /// the real bound.
+    /// <para>
+    /// <b>The host ASSIGNS this every frame from <c>Unlocks.VowCapacity</c>; it is not a Math.Max.</b>
+    /// It used to default to the ceiling (3) and only ever be raised, which meant it started at the
+    /// ceiling, could never come down, and the milestone that was supposed to grant it never moved a
+    /// thing — a dial with no live consumer, tested on its own and wired to nothing. One is the honest
+    /// floor: it is what the BUILD screen opens with, and at one Vow the numbers are exactly today's.
+    /// </para>
+    /// </remarks>
+    public int VowCapacity { get; set; } = 1;
+
+    /// <summary>The distinct Vows this loadout has sworn — the list <see cref="VowCapacity"/> bounds.</summary>
+    public IReadOnlyList<string> SwornVows =>
+        _skills.Select(s => s.VowId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
 
     // ── Skill editing ───────────────────────────────────────────────────────────────────────────
 
@@ -100,6 +163,24 @@ public sealed class PlayerLoadout
     public void RemoveSkill(int slot)
     {
         if (slot >= 0 && slot < _skills.Count) _skills.RemoveAt(slot);
+    }
+
+    /// <summary>
+    /// Empty a slot without taking the slot away. Returns false when there was nothing to empty.
+    /// </summary>
+    /// <remarks>
+    /// The repair verb, and deliberately not <see cref="RemoveSkill"/>. When a respec takes a skill's
+    /// mastery node away, or a champion switch leaves somebody else's signature behind, the SLOT is
+    /// still the player's — they earned it and it is still in their capacity. Removing it would
+    /// renumber every slot after it and read as a punishment; emptying it says only "this one is free
+    /// again". Nothing here touches <see cref="SkillProgress"/>: the waves spent on the skill are its
+    /// own and survive (BRIEF sec.17, sec.19, LAW 4).
+    /// </remarks>
+    public bool ClearSkill(int slot)
+    {
+        if (!InRange(slot) || _skills[slot].SkillId is null) return false;
+        _skills[slot] = _skills[slot] with { SkillId = null, Passive = null };
+        return true;
     }
 
     /// <summary>
@@ -130,15 +211,17 @@ public sealed class PlayerLoadout
         _skills[slot] = _skills[slot] with { Source = Cycle(_skills[slot].Source, dir) };
     }
 
-    /// <summary>Cycle the Vow through the studied ones plus "no vow". Only studied Vows are offerable.</summary>
+    /// <summary>Cycle through the Vows the account has FOUND plus "no vow". Only found Vows are offerable.</summary>
     public void CycleVow(int slot, int dir, IReadOnlyList<Vow> knownVows)
     {
         ArgumentNullException.ThrowIfNull(knownVows);
         if (!InRange(slot)) return;
 
-        // The options are: no vow, then each known vow, in order. Cycle across that list.
+        // The options are: no vow, then each known vow, in order — minus any that would take the build
+        // past its Vow capacity, so the cycle-and-confirm path can never land on a refusal.
         var ids = new List<string?> { null };
-        ids.AddRange(knownVows.Select(v => (string?)v.Id));
+        ids.AddRange(knownVows.Select(v => (string?)v.Id)
+                              .Where(id => VowFitsCapacity(slot, id) || id == _skills[slot].VowId));
 
         var cur = ids.IndexOf(_skills[slot].VowId);
         if (cur < 0) cur = 0;
@@ -165,36 +248,77 @@ public sealed class PlayerLoadout
 
     /// <summary>
     /// Put a named SKILL in a slot — what picking one from the library does. The slot's kind is the
-    /// skill's own; there is nothing else to write.
-    /// </summary>
-    public void SetSkill(int slot, string skillId)
-    {
-        if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return;
-        _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };
-    }
-
-    /// <summary>
-    /// Swear a Vow on a slot, or clear it with null. Refuses a Vow that has not been studied.
+    /// skill's own; there is nothing else to write. Returns false when nothing was written.
     /// </summary>
     /// <remarks>
-    /// The guard is not defensive padding: a Vow is a permanent-feeling commitment bought from the
-    /// trait tree, and a screen that could set one the player never learned would be granting the
-    /// trait tree's reward for free.
+    /// <b>ONE SLOT PER SKILL (LAW 13).</b> A skill already worn in ANOTHER slot is refused here, at the
+    /// point of choice, rather than only on the screen: the weave screen used to refuse a pick only for
+    /// the slot it was already in, so slot 2 could take slot 1's skill, the composer equipped it twice
+    /// with two independent cooldowns (<c>Champion.ReadyAtBeat</c> is per slot) and every cleared wave
+    /// recorded two uses. Putting a skill into the slot it already holds is a no-op that returns true.
+    /// The slot that refuses keeps whatever it held.
+    /// </remarks>
+    public bool SetSkill(int slot, string skillId)
+    {
+        if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return false;
+        var elsewhere = IndexOfSkill(def.Id);
+        if (elsewhere >= 0 && elsewhere != slot) return false;
+        _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };
+        return true;
+    }
+
+    /// <summary>The slot that holds this skill, or -1 when no slot does.</summary>
+    public int IndexOfSkill(string skillId)
+    {
+        for (var i = 0; i < _skills.Count; i++)
+            if (_skills[i].SkillId == skillId) return i;
+        return -1;
+    }
+
+    /// <summary>True when some slot holds this skill.</summary>
+    public bool HasSkill(string skillId) => IndexOfSkill(skillId) >= 0;
+
+    /// <summary>
+    /// Swear a Vow, recorded at the slot the player swore it at, or clear it with null. Refuses a Vow
+    /// the account has not found, and refuses one more different Vow than <see cref="VowCapacity"/> allows.
+    /// </summary>
+    /// <remarks>
+    /// Neither guard is defensive padding. A Vow is FOUND by keeping its rule once without it, so a
+    /// screen that could set one the account never proved would hand over the reward the proof is for.
+    /// And capacity is a real bound the world grants — swearing past it has to be refused below the UI
+    /// or the number is decoration. Swearing a Vow the build ALREADY carries is always allowed: it is
+    /// one promise written down twice, not a second promise.
     /// </remarks>
     public bool SetVow(int slot, string? vowId, IReadOnlyList<Vow> knownVows)
     {
         ArgumentNullException.ThrowIfNull(knownVows);
         if (!InRange(slot)) return false;
         if (vowId is not null && knownVows.All(v => v.Id != vowId)) return false;
+        if (!VowFitsCapacity(slot, vowId)) return false;
         _skills[slot] = _skills[slot] with { VowId = vowId };
         return true;
+    }
+
+    /// <summary>Would swearing this Vow leave the BUILD inside <see cref="VowCapacity"/>? Distinct promises are counted, never rows.</summary>
+    /// <remarks>Public so the workbench can grey the choice rather than let the player click into a refusal.</remarks>
+    public bool VowFitsCapacity(int slot, string? vowId)
+    {
+        if (vowId is null) return true;
+
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < _skills.Count; i++)
+        {
+            var id = i == slot ? vowId : _skills[i].VowId;
+            if (id is not null) distinct.Add(id);
+        }
+        return distinct.Count <= Math.Max(1, VowCapacity);
     }
 
     // ── Keystone sockets ──────────────────────────────────────────────────────────────────────────
 
     public bool HasKeystone(string id) => _keystoneIds.Contains(id);
 
-    /// <summary>Socket or unsocket a keystone the tree has taught. Bounded by <see cref="MaxKeystones"/>.</summary>
+    /// <summary>Socket or unsocket a keystone the world has taught. Bounded by <see cref="MaxKeystones"/>.</summary>
     public bool ToggleKeystone(string id, IReadOnlyList<Keystone> learned)
     {
         ArgumentNullException.ThrowIfNull(learned);
@@ -228,10 +352,18 @@ public sealed class PlayerLoadout
     /// indistinguishable from a deliberate null at the call site, so the omission is no longer offered:
     /// callers that mean "no character" now have to say so.
     /// </remarks>
-    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character,
-                         SkillProgress? progress = null)
+    /// <param name="discoveredKeystones">
+    /// What the WORLD has taught this account. Null falls back to the trait tree's own keystone nodes,
+    /// which is the transitional path while the tree still stands; the host always passes the real list.
+    /// </param>
+    /// <param name="knownVows">
+    /// What the account has FOUND, by keeping a rule once without its Vow. Null falls back to the tree.
+    /// </param>
+    public Build ToBuild(MasteryTree mastery, Character? character,
+                         SkillProgress? progress = null,
+                         IReadOnlyList<Keystone>? discoveredKeystones = null,
+                         IReadOnlyList<Vow>? knownVows = null)
     {
-        ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
 
         // The capacity travels WITH the build, because the sim asks about it: VOW OF COMPLETION wants
@@ -240,9 +372,9 @@ public sealed class PlayerLoadout
 
         // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
         // only gathers the loadout's lists.
-        return BuildComposer.Compose(tree, mastery, character,
+        return BuildComposer.Compose(mastery, character,
             _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.VowId, s.Passive, s.SkillId)),
-            _keystoneIds, SkillCapacity, progress);
+            _keystoneIds, SkillCapacity, progress, discoveredKeystones, knownVows, TraitShape);
     }
 
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────
@@ -290,6 +422,20 @@ public sealed class PlayerLoadout
                     && SkillCatalogue.Find(migrated) is { } def2)
                     _skills.Add(new SkillChoice(source, vow, passive ?? !def2.TakesABeat, def2.Id));
             }
+
+            // THE DUPLICATE MIGRATION (UI polish §5, LAW 13). A save written before the one-slot-per-
+            // skill rule can carry the same skill twice — two v3 rows with one id, or two legacy Form
+            // rows that resolve to one skill (two AURA rows both mean MIRE). The FIRST occurrence wins,
+            // because slot order is the sim's tie-break priority; the later one is CLEARED to an empty
+            // slot rather than removed, so every slot behind it keeps its position and its own Source
+            // and Vow. The skill's level, variation and reinforcements live in SkillProgress, keyed by
+            // id, and are untouched. Run after resolution so the legacy collision is caught too, and
+            // after the capacity cut — which never bites on a real load, since the host floors the
+            // capacity at the saved row count before calling this.
+            var resolved = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < _skills.Count; i++)
+                if (_skills[i].SkillId is { } id && !resolved.Add(id))
+                    _skills[i] = _skills[i] with { SkillId = null, Passive = null };
         }
 
         if (keystoneIds is not null)
@@ -314,16 +460,30 @@ public sealed class PlayerLoadout
     /// nothing on screen can be attributed to anything.
     /// </para>
     /// <para>
-    /// A Body Strike, because it is the most legible thing in the game: one heavy hit, on one target,
-    /// with a visible windup. The other three slots arrive one at a time with their own explanation —
-    /// see <c>Unlocks.SkillSlots</c> for the gates and <c>Unlocks.SkillSlotNote</c> for what each says.
+    /// THE CHAMPION'S OWN SIGNATURE, and it has to be. It was <c>hammer_blow</c> — one of the twelve
+    /// shared skills — which was safe while mastery access was permanent and while a champion's own
+    /// skill was banked account-wide. Under the current rules a shared skill is available only while
+    /// its road is allocated (BRIEF sec.16) and the MASTERY screen does not open until wave 25, so a
+    /// fresh hunter stood in its first twenty-five waves with a locked slot and its bare hands.
+    /// A signature needs no road (sec.18), which is why <c>BuildComposer</c>'s own comment calls it
+    /// "what keeps a fresh champion able to fight" — the starter is where that becomes true.
+    /// </para>
+    /// <para>
+    /// The other three slots arrive one at a time with their own explanation — see
+    /// <c>Unlocks.SkillSlots</c> for the gates and <c>Unlocks.SkillSlotNote</c> for what each says.
     /// No Vow, no keystone — the refusals are for the player to make, not to inherit.
     /// </para>
     /// </remarks>
-    public static PlayerLoadout Starter()
+    /// <param name="character">
+    /// Whose weave this is. Null falls back to the roster's starter champion, for the handful of
+    /// callers that build a loadout before a save has said who is playing.
+    /// </param>
+    public static PlayerLoadout Starter(Character? character = null)
     {
+        var c = character ?? CharacterRoster.Get(CharacterRoster.StarterId);
         var l = new PlayerLoadout();
-        l._skills.Add(new SkillChoice(Source.Body, null, false, "hammer_blow"));
+        l._skills.Add(new SkillChoice(Source.Body, null, false,
+                                      c.SignatureSkillId ?? SkillCatalogue.Shared.First().Id));
         return l;
     }
 
@@ -332,7 +492,7 @@ public sealed class PlayerLoadout
     /// "your gear is waiting for a …" hint reads (the Forge's badge reads the composed build's
     /// RESOLVED defs, handed over by the host).
     /// </summary>
-    public IReadOnlyList<SkillDef> WovenDefs()
+    public IReadOnlyList<SkillDef> EquippedDefs()
         => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId))
                   .Where(d => d is not null)
                   .Select(d => d!)

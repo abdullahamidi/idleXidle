@@ -32,49 +32,48 @@ namespace IdleXIdle.Game;
 /// <see cref="Hunter.PowerContribution"/> — the marginal PowerRating of the piece — never
 /// <c>Gear.ItemScore</c>, so what the card claims and what equipping actually does can never disagree.
 /// </para>
+/// <para>
+/// ONE WALK FOR MEASURING AND DRAWING. <see cref="HeightFor"/> and <see cref="Draw"/> used to be two
+/// hand-kept lists of line advances (34, 26, 32 + 14 …), and every time one gained a line the other did
+/// not: the family block went unmeasured and every weapon card ran 62 px past its own border. Now a
+/// single <see cref="Walk"/> lays the card out — with a batch it draws, without one it only advances —
+/// and every advance is the rung's <see cref="UiTypography.Pitch"/>, so the card follows the UI SCALE
+/// profile with the text it holds.
+/// </para>
 /// </remarks>
 public static class ItemTooltip
 {
-    public const int Width = 460;
+    /// <summary>The card's width. It follows the profile with the text it holds, so a line that fits at 100 % fits at 150 %.</summary>
+    public static int Width => UiMetrics.Control(460);
 
-    private static readonly Color Ink = new(0xE8, 0xE2, 0xD4);
-    private static readonly Color Dim = new(0x8A, 0x82, 0x74);
-    private static readonly Color Gold = new(0xE8, 0xC8, 0x7A);
-    private static readonly Color Good = new(0x6E, 0xC8, 0x7A);
-    private static readonly Color Bad = new(0xC8, 0x5A, 0x5A);
-    private static readonly Color Violet = new(0xB0, 0x8A, 0xE0);
+    // THE HOUSE INKS (UiInk), under the old local names. The card spoke its own warm palette beside an
+    // inspector in the blue-grey Secondary, so the same word read in two colours 300 px apart
+    // (release polish 2026-09-05, gear-03). An enchant's name is a name, not a state: Primary.
+    private static readonly Color Ink = UiInk.Primary;
+    private static readonly Color Dim = UiInk.Secondary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Good = UiInk.Good;
+    private static readonly Color Bad = UiInk.Danger;
+    private static readonly Color Violet = UiInk.Primary;
 
     private static readonly Color[] RarityInk =
         [new(0xC8, 0xC2, 0xB4), new(0x6E, 0xC8, 0x7A), new(0x4A, 0x90, 0xD9), new(0xB0, 0x6A, 0xC8), new(0xE8, 0xC8, 0x7A)];
 
+    // The card's own grid: its side inset, its top and bottom pads, and the pitch of a plain line —
+    // <c>ui.Text</c> draws at the Label rung, which is Body, so a plain line advances by Body's pitch.
+    private static int PadX => UiMetrics.Space(20);
+    private static int PadTop => UiMetrics.Space(18);
+    private static int PadBottom => PadTop;   // symmetric, now that the card is a plate with no bottom rule (gear-03)
+    private static int LineH => UiTypography.Pitch(UiTypography.Label);
+
     /// <summary>How tall the card will be for this item — so a caller can place it before drawing.</summary>
+    /// <param name="ui">The kit that measures text: a wrapped line counts in the height pass exactly as it draws.</param>
     /// <param name="wearer">The champion reading the card; when they cannot wear it, the card says why (two lines).</param>
-    public static int HeightFor(ItemInstance item, Hunter? hunter, Character? wearer = null)
+    public static int HeightFor(UiKit ui, ItemInstance item, Hunter? hunter, Character? wearer = null)
     {
+        ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
-        var h = 96;                                             // name + the rarity/slot line
-        // THE CLASS LINE, measured. Every line the card draws is counted here — the family block once
-        // was not, and every weapon card ran past its own border for it.
-        if (Gear.SlotFor(item.BaseType) is not null) h += 26;   // "WARDEN GEAR" / "ANY CLASS"
-        if (wearer is not null && Gear.IsWearable(item) && !Gear.CanWear(wearer, item)) h += 52;   // the reason, two lines
-        h += 34;                                                // item power
-        if (GemCraft.IsGem(item)) h += 56;                      // what it gives + where it goes
-        h += ItemAffixes.Of(item).Count * 28;
-        if (ItemAffixes.Of(item).Count > 0) h += 10;
-        // The gems SET INTO this item: a header line plus one line each. They are a real slice of the
-        // item's numbers and the card said nothing about them at all.
-        if (item.Gems.Count > 0) h += 26 + item.Gems.Count * 26 + 10;
-        // THE FAMILY BLOCK WAS NEVER MEASURED. Draw prints it (one line, two on a weapon, plus a gap)
-        // and this did not count it, so every weapon card ran ~62px past its own bottom border and the
-        // ENCHANT blurb — the last and most build-relevant line — was drawn outside the card entirely.
-        if (ItemFamilies.BonusOf(item) is not null)
-            h += 26 + (item.BaseType == ItemBaseType.Weapon ? 26 : 0) + 10;
-        if (GearTraits.TraitOf(item) is not null) h += 62;
-        if (Enchantments.Of(item) is not null) h += 62;
-        if (hunter is not null && Gear.SlotFor(item.BaseType) is not null) h += 46;
-        // The set line: which element set this piece counts toward, and how far along it the hunter is.
-        if (hunter is not null && item.Element is not null) h += 36;
-        return h + 28;
+        return Walk(ui, null, item, hunter, wearer, new Rectangle(0, 0, Width, 0));
     }
 
     /// <summary>
@@ -90,30 +89,234 @@ public static class ItemTooltip
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
 
-        var h = HeightFor(item, hunter, wearer);
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the pointer is the anchor, the
+        // card hangs to its right, flips left at the edge, and is clamped into the canvas — the same
+        // rule the enemy inspector and the hover tip obey.
+        var h = HeightFor(ui, item, hunter, wearer);
+        var anchor = new Rectangle(at.X, at.Y - UiMetrics.Space(20), 1, 1);
+        var card = PopoverPlacement.Place(anchor, new Point(Width, h), canvas, null,
+                                          new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Above },
+                                          UiMetrics.Space(24));
+        DrawAt(ui, b, item, hunter, card, wearer);
+    }
 
-        // FLIP, don't clamp. A card pinned to the edge sits ON the thing the pointer is over, which is
-        // the one thing it must never cover — you are hovering an item to see it, not to have it hidden.
-        var x = at.X + Width + 24 <= canvas.Right ? at.X + 24 : at.X - Width - 24;
-        var y = Math.Clamp(at.Y - 20, canvas.Top + 8, Math.Max(canvas.Top + 8, canvas.Bottom - h - 8));
-        var card = new Rectangle(x, y, Width, h);
+    /// <summary>
+    /// Draw the card in a rectangle a caller has already PLACED — the trader places its offer's card
+    /// with the BUY buttons as avoided rectangles, through the shared rule, and hands the result here.
+    /// </summary>
+    public static void DrawAt(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Rectangle card, Character? wearer = null)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
 
         // Its own dark ground rather than UiKit.Panel: the panel art's 40px inset would eat a third of a
         // card this size, and a tooltip wants to read as a floating label, not as another window.
+        // The house QUIET plate with the rarity as its accent, over a soft shadow — not four hand-drawn
+        // edges in the rarity colour (gear-03). It still reads as a floating label, on a house surface.
         ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
-        ui.Fill(b, card, new Color(0x0E, 0x0C, 0x14, 0xF2));
+        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
+
+        Walk(ui, b, item, hunter, wearer, card);
+    }
+
+    /// <summary>
+    /// The card's lines, top to bottom. With a batch it draws them into <paramref name="card"/>; without
+    /// one it only walks, and returns the height the same lines take. Both callers share it, so the height
+    /// a caller places by and the height the card draws to are one number.
+    /// </summary>
+    // ── THE COMPACT READING (2026-09-06): what a buyer needs BEFORE the purchase — the art, the grade,
+    //    the name, the level and Source, the power verdict, the rolled numbers, the price — on the
+    //    same canonical data the full card walks (the same Core calls; nothing recomputed here). The
+    //    full card is the item's page once it is owned; at the stall it stood 700 px tall at 150 % and
+    //    could only be placed over the title or a BUY.
+
+    /// <summary>The compact card's width.</summary>
+    public static int CompactWidth => UiMetrics.Control(340);
+
+    /// <summary>A price line the compact card prints: the material, the amount, what the hunter holds.</summary>
+    public readonly record struct PriceLine(string Material, int Amount, long Held);
+
+    /// <summary>How tall the compact card will be — so a caller can place it before drawing.</summary>
+    public static int CompactHeightFor(UiKit ui, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
+        return WalkCompact(ui, null, item, hunter, prices, null, new Rectangle(0, 0, CompactWidth, 0));
+    }
+
+    /// <summary>Draw the compact card in a rectangle a caller has PLACED (through PopoverPlacement).</summary>
+    public static void DrawCompact(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices,
+                                   Action<SpriteBatch, ItemInstance, Rectangle>? drawArt, Rectangle card)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
+        ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
+        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
+        WalkCompact(ui, b, item, hunter, prices, drawArt, card);
+    }
+
+    // The kit is REQUIRED in both passes (2026-09-07): the pair packing and the enchant sentence are
+    // measured, and a height pass without a kit would count a card the draw pass then draws taller.
+    private static int WalkCompact(UiKit ui, SpriteBatch? b, ItemInstance item, Hunter? hunter, IReadOnlyList<PriceLine> prices,
+                                   Action<SpriteBatch, ItemInstance, Rectangle>? drawArt, Rectangle card)
+    {
+        var draw = b is not null;
+        var lx = card.X + PadX;
+        var rx = card.Right - PadX;
+        var innerW = card.Width - PadX * 2;
+        var cy = card.Y + PadTop;
         var edge = RarityInk[(int)item.Rarity];
-        ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 3), edge);
-        ui.Fill(b, new Rectangle(card.X, card.Bottom - 3, card.Width, 3), edge * 0.5f);
-        ui.Fill(b, new Rectangle(card.X, card.Y, 3, card.Height), edge * 0.5f);
-        ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), edge * 0.5f);
+        // A 48 thumbnail and tight rules (2026-09-06): the tallest offer — four rolls, a built-in, a
+        // prefix, an enchant, two materials and the verdict on its own row — must still end above the
+        // BUY under the next offer at 150 %, or the card cannot stand beside the offer at all.
+        var art = UiMetrics.Control(48);
+        var slot = Gear.SlotFor(item.BaseType);
 
-        var lx = card.X + 20;
-        var rx = card.Right - 20;
-        var cy = card.Y + 18;
+        void L(string s, Color c) { if (draw) ui!.Text(b!, s, lx, cy, c); }
+        void R(string s, Color c) { if (draw) ui!.TextRight(b!, s, rx, cy, c); }
 
-        ui.TextBig(b, ItemNaming.FullName(item), lx, cy, edge, UiTypography.Headline);
-        cy += 34;
+        // The art beside the name and the grade line, so the card reads as the offer it hangs off.
+        if (draw)
+        {
+            var artBox = new Rectangle(lx, cy, art, art);
+            if (drawArt is not null) drawArt(b!, item, artBox); else ui!.Fill(b!, artBox, edge * 0.5f);
+        }
+        var textX = lx + art + UiMetrics.Space(12);
+        var textW = innerW - art - UiMetrics.Space(12);
+        if (draw) ui!.TextBig(b!, ui.ShortenBig(ItemNaming.FullName(item), textW, UiTypography.Body), textX, cy + (art - UiTypography.Body) / 2, edge, UiTypography.Body);
+        cy += art + UiMetrics.Space(6);
+        // The grade line takes the card's whole width under the art row: beside the art it was cut to
+        // "LEVEL 18 · SPI…" at 150 %, and the Source is one of the reasons a buyer looks.
+        var grade = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  {(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  LEVEL {item.ItemLevel}";
+        if (item.Element is { } el) grade += $"  ·  {el.ToString().ToUpperInvariant()}";
+        // Shortened at the card's edge: "LEGENDARY · GLOVES · LEVEL 18 · MACHINE" ran a few pixels past
+        // the plate at every profile (2026-09-07). A grade line is a caption, not a modifier — the
+        // one kind of line an ellipsis may end.
+        L(ui.Shorten(grade, innerW), Dim);
+        cy += LineH + UiMetrics.Space(4);
+        if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
+        cy += UiMetrics.Space(6);
+
+        // THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07); this card lays out the buyer's subset —
+        // the power verdict on one row, the rolls, the built-in, the prefix and enchant names, both
+        // sides of the trade, the enchant's sentence — and composes no words of its own.
+        var rows = ItemPresentation.Rows(item, hunter, null);
+        if (rows.FirstOrDefault(r => r.Kind == ItemRowKind.Power) is { } power)
+        {
+            // ITEM POWER and the verdict against what is worn, ON ONE ROW (2026-09-06: the compact
+            // card is composed for the room beside an offer at 150 %).
+            L($"{power.Label}  {power.Value}", Ink);
+            var verdict = rows.First(r => r.Kind == ItemRowKind.Verdict);
+            var tone = verdict.Tone switch { ItemRowTone.Bonus => Good, ItemRowTone.Cost => Bad, ItemRowTone.Accent => Gold, _ => Dim };
+            R(verdict.Value.Length > 0 ? $"{verdict.Label}  {verdict.Value}" : verdict.Label == ItemPresentation.SlotEmptyCaption ? "SLOT EMPTY" : verdict.Label, tone);
+            cy += LineH + UiMetrics.Space(6);
+        }
+        else if (GemCraft.IsGem(item))
+        {
+            L(GemCraft.Grant(item), Good);
+            cy += LineH;
+            L("SET IT INTO RARE OR BETTER GEAR", Dim);
+            cy += LineH + UiMetrics.Space(6);
+        }
+
+        // THE ROLLED NUMBERS (up to four), TWO TO A ROW WHERE TWO FIT (2026-09-06): the first at the
+        // margin, the second right-aligned on the same rung — the two columns a stat sheet has, so a
+        // legendary's four rolls take two rows, not four. A roll too long to share keeps its own row;
+        // the same measure decides in the height pass, so the placed card is the drawn card.
+        void Packed(IReadOnlyList<(string Text, Color Ink)> lines)
+        {
+            for (var k = 0; k < lines.Count;)
+            {
+                var pair = k + 1 < lines.Count
+                           && ui.Measure(lines[k].Text) + UiMetrics.Space(24) + ui.Measure(lines[k + 1].Text) <= innerW;
+                L(lines[k].Text, lines[k].Ink);
+                if (pair) R(lines[k + 1].Text, lines[k + 1].Ink);
+                cy += LineH;
+                k += pair ? 2 : 1;
+            }
+        }
+        var affixes = rows.Where(r => r.Kind == ItemRowKind.Affix).ToList();
+        Packed(affixes.Take(4).Select(r => (r.Line, Good)).ToList());
+        if (affixes.Count > 4) { L($"AND {affixes.Count - 4} MORE — READ IT ON THE GEAR SCREEN ONCE IT IS YOURS", Dim); cy += LineH; }
+        // THE BUILT-IN — the stat the item carries by birth, NAMED. It read "GLOVES  +2%" (the slot
+        // word where the stat belongs) until 2026-09-07; the stat is data on the item and is what prints.
+        foreach (var row in rows.Where(r => r.Kind == ItemRowKind.BuiltIn))
+        {
+            L(row.Line, Gold);
+            R(ItemPresentation.BuiltInCaption, Dim);
+            cy += LineH;
+        }
+        // THE PREFIX AND THE ENCHANT SHARE A ROW: "GREEDY · COILED", labelled with the item system's
+        // own words. Two rows said the same two names with a label each.
+        var prefix = rows.FirstOrDefault(r => r.Kind == ItemRowKind.Prefix);
+        var enchant = rows.FirstOrDefault(r => r.Kind == ItemRowKind.Enchant);
+        if (prefix is not null || enchant is not null)
+        {
+            L(string.Join("  ·  ", new[] { prefix?.Label, enchant?.Label }.Where(n => n is not null)), Gold);
+            R(prefix is not null && enchant is not null ? "PREFIX · ENCHANT" : prefix is not null ? "PREFIX" : "ENCHANT", Dim);
+            cy += LineH;
+        }
+        // THE PREFIX'S TRADE, BOTH SIDES, before the price: a buyer reading "HEAVY" is owed the slower
+        // skill clock as plainly as the harder hit (2026-09-07). Packed like the rolls; the cost side
+        // in the cost colour, so the trade reads as one at a glance.
+        Packed(rows.Where(r => r.Kind == ItemRowKind.PrefixSide).Select(r => (r.Line, r.IsDrawback ? Bad : Ink)).ToList());
+        // AND WHAT THE ENCHANT DOES, in its one sentence, wrapped: "LINGER" beside a price is a name,
+        // not a thing a buyer can want. Measured in the height pass too (the kit is present in both).
+        if (enchant is not null)
+            foreach (var wrapped in ui.WrapBig(enchant.Note.ToUpperInvariant(), innerW, UiTypography.Label))
+            {
+                L(wrapped, Ink);
+                cy += LineH;
+            }
+        cy += UiMetrics.Space(6);
+
+        // THE PRICE ON ONE ROW, each material in the wallet's verdict colour, the verdict itself at the
+        // right — the one thing the full card never says.
+        if (prices.Count > 0)
+        {
+            if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), UiInk.Rule);
+            cy += UiMetrics.Space(6);
+            var x = lx;
+            var short0 = prices.FirstOrDefault(p => p.Held < p.Amount);
+            var allEnough = prices.All(p => p.Held >= p.Amount);
+            var verdict = allEnough ? "YOU CAN AFFORD IT" : $"YOU HOLD {short0.Held} {short0.Material}";
+            // The verdict shares the price's row only when both fit with a gap between them (measured
+            // in the height pass too, so the placed card is the drawn card); otherwise it takes the next row.
+            var run = string.Join("  ·  ", prices.Select(p => $"{p.Amount} {p.Material}"));
+            var sameRow = ui.Measure(run) + UiMetrics.Space(16) + ui.Measure(verdict) <= innerW;
+            for (var i = 0; i < prices.Count; i++)
+            {
+                var p = prices[i];
+                if (draw)
+                {
+                    if (i > 0) { ui!.Text(b!, "  ·  ", x, cy, Dim); x += ui.Measure("  ·  "); }
+                    ui!.Text(b!, $"{p.Amount} {p.Material}", x, cy, p.Held >= p.Amount ? Ink : Bad);
+                    x += ui.Measure($"{p.Amount} {p.Material}");
+                }
+            }
+            if (!sameRow) cy += LineH;
+            R(verdict, allEnough ? Good : Bad);
+            cy += LineH;
+        }
+
+        return cy - card.Y + PadBottom;
+    }
+
+    private static int Walk(UiKit ui, SpriteBatch? b, ItemInstance item, Hunter? hunter, Character? wearer, Rectangle card)
+    {
+        var draw = b is not null;
+        var lx = card.X + PadX;
+        var rx = card.Right - PadX;
+        var innerW = card.Width - PadX * 2;
+        var cy = card.Y + PadTop;
+        var edge = RarityInk[(int)item.Rarity];
+
+        // A left-run line and a right-aligned value on the same line — drawn only when drawing.
+        void L(string s, Color c) { if (draw) ui!.Text(b!, s, lx, cy, c); }
+        void R(string s, Color c) { if (draw) ui!.TextRight(b!, s, rx, cy, c); }
+
+        if (draw) ui!.TextBig(b!, ui.ShortenBig(ItemNaming.FullName(item), innerW, UiTypography.Headline), lx, cy, edge, UiTypography.Headline);
+        cy += UiTypography.Pitch(UiTypography.Headline);
 
         // ── WHO CAN WEAR IT — the class, under the name, before anything else. ──
         // "WARDEN GEAR" in the class's colour; "ANY CLASS" for a charm, ring or focus; "ANY CLASS ·
@@ -121,17 +324,10 @@ public static class ItemTooltip
         var slot = Gear.SlotFor(item.BaseType);
         if (slot is not null)
         {
-            ui.Text(b, ItemClasses.ClassLine(item), lx, cy,
-                    item.Class is { } ic && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(ic) : Dim);
-            cy += 26;
-            if (wearer is not null && !Gear.CanWear(wearer, item) && item.Class is { } locked)
-            {
-                // Two lines, both measured in HeightFor: the slot, then the two champions who can.
-                ui.Text(b, $"A {ItemClasses.NameOf(locked)}'S {ItemNaming.TypeWord(item)} —", lx, cy, Bad);
-                cy += 26;
-                ui.Text(b, ui.Shorten($"{ItemClasses.ChampionNames(locked)} CAN WEAR IT", card.Width - 40), lx, cy, Bad);
-                cy += 26;
-            }
+            L(ItemClasses.ClassLine(item), item.Class is { } ic && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(ic) : Dim);
+            cy += LineH;
+            // Who can wear a piece this champion cannot is the verdict row's business below (NOT FOR
+            // THE SEEKER / … CAN WEAR IT) — the card said it twice until 2026-09-07.
         }
 
         // ONE LINE, not a left run and a right-aligned element. Right-aligning the source put "NATURE"
@@ -140,152 +336,131 @@ public static class ItemTooltip
         var line = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  "
                    + $"{(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  LEVEL {item.ItemLevel}";
         if (item.Element is { } el) line += $"  ·  {el.ToString().ToUpperInvariant()}";
-        ui.Text(b, line, lx, cy, Dim);
-        cy += 32;
+        L(line, Dim);
+        cy += LineH + UiMetrics.Space(4);
 
-        ui.Fill(b, new Rectangle(lx, cy, card.Width - 40, 1), new Color(0x2A, 0x26, 0x34));
-        cy += 14;
+        if (draw) ui!.Fill(b!, new Rectangle(lx, cy, innerW, 1), new Color(0x2A, 0x26, 0x34));
+        cy += UiMetrics.Space(14);
 
-        // ── ITEM POWER, and what swapping would do to yours ──
-        if (hunter is not null && slot is { } s)
+        // ── THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07): power and the verdict, the rolls, the
+        //    gems, the built-in and the family's line, the prefix and both sides of its trade, the
+        //    enchant's sentence, the set. This card lays them out — a left run, a right-aligned value,
+        //    a wrapped sentence — and composes no words of its own. It once composed the slot word
+        //    beside the built-in's figure ("GLOVES  +2%"), a line that cannot be written from a list
+        //    whose labels are stats. Group gaps follow the card's old grid, so nothing moved. ──
+        var rows = ItemPresentation.Rows(item, hunter, wearer);
+        Color ToneInk(ItemRowTone t) => t switch
         {
-            var mine = hunter.PowerContribution(item);
-            ui.Text(b, "ITEM POWER", lx, cy, Dim);
-            ui.TextRight(b, $"{mine:N0}", rx, cy, Ink);
-            cy += 34;
+            ItemRowTone.Bonus => Good, ItemRowTone.Cost => Bad, ItemRowTone.Accent => Gold, ItemRowTone.Muted => Dim, _ => Ink,
+        };
 
-            var worn = hunter.Worn(s);
-            if (wearer is not null && !Gear.CanWear(wearer, item))
+        if (rows.Any(r => r.Kind == ItemRowKind.Power))
+        {
+            var power = rows.First(r => r.Kind == ItemRowKind.Power);
+            L(power.Label, Dim);
+            R(power.Value, Ink);
+            cy += LineH + UiMetrics.Space(6);
+            var verdict = rows.First(r => r.Kind == ItemRowKind.Verdict);
+            if (verdict.Value.Length > 0)
             {
-                // No UPGRADE verdict on a piece this champion cannot put on — a "+21" they cannot
-                // collect is a promise the EQUIP button then breaks. Same 46px slot, so the height holds.
-                ui.Text(b, $"NOT FOR {wearer.Name} — SWITCH CHAMPION ON THE ROSTER", lx, cy, Bad);
-                cy += 46;
-            }
-            else if (worn is not null && worn.InstanceId != item.InstanceId)
-            {
-                var delta = mine - hunter.PowerContribution(worn);
-                var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
-                var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
-                ui.Text(b, $"{word}  ·  REPLACES {ItemNaming.FullName(worn)}", lx, cy, tone);
-                ui.TextRight(b, $"{delta:+#,0;-#,0;0}", rx, cy, tone);
-                cy += 46;
-            }
-            else if (worn is not null)
-            {
-                ui.Text(b, "WORN", lx, cy, Gold);
-                cy += 46;
+                // The verdict clears the value beside it — a long worn name is shortened, never overprinted.
+                if (draw) ui.Text(b!, ui.Shorten($"{verdict.Label}  ·  {verdict.Note}", innerW - ui.Measure(verdict.Value) - UiMetrics.Space(12)), lx, cy, ToneInk(verdict.Tone));
+                R(verdict.Value, ToneInk(verdict.Tone));
             }
             else
             {
-                ui.Text(b, "THE SLOT IS EMPTY", lx, cy, Good);
-                cy += 46;
+                // A refusal says who can wear it on the line beneath — Core's words, said once.
+                if (draw) ui.Text(b!, ui.Shorten(verdict.Label, innerW), lx, cy, ToneInk(verdict.Tone));
+                if (verdict.Note.Length > 0)
+                {
+                    cy += LineH;
+                    if (draw) ui.Text(b!, ui.Shorten(verdict.Note, innerW), lx, cy, ToneInk(verdict.Tone));
+                }
             }
+            cy += LineH + UiMetrics.Space(18);
         }
         else if (GemCraft.IsGem(item))
         {
             // A GEM IS NOT "MATERIAL". This card printed that literal word for every gem — the one
             // fact a player needs from a stone (what it adds, and that it goes into gear) was on no
             // screen in the game. Same formatter as an affix line, so the units cannot drift.
-            ui.Text(b, GemCraft.Grant(item), lx, cy, Good);
-            cy += 30;
-            ui.Text(b, "SET IT INTO RARE OR BETTER GEAR", lx, cy, Dim);
-            cy += 60;
+            L(GemCraft.Grant(item), Good);
+            cy += LineH + UiMetrics.Space(2);
+            L("SET IT INTO RARE OR BETTER GEAR", Dim);
+            cy += LineH + UiMetrics.Space(32);
         }
         else
         {
-            ui.Text(b, "MATERIAL", lx, cy, Dim);
-            cy += 34;
+            L("MATERIAL", Dim);
+            cy += LineH + UiMetrics.Space(6);
         }
 
-        // ── AFFIXES — the rolled numbers ──
-        var affixes = ItemAffixes.Of(item);
-        foreach (var a in affixes)
+        for (var i = 0; i < rows.Count; i++)
         {
-            ui.Text(b, ItemAffixes.Describe(a), lx, cy, Good);
-            cy += 28;
-        }
-        if (affixes.Count > 0) cy += 10;
-
-        // ── THE GEMS SET INTO IT — the player's own investment, and the card was blind to it. ──
-        if (item.Gems.Count > 0)
-        {
-            ui.Text(b, $"SET GEMS  {item.Gems.Count} OF {GemCraft.SocketCount(item.Rarity)}", lx, cy, Dim);
-            cy += 26;
-            foreach (var gem in item.Gems)
+            var row = rows[i];
+            var next = i + 1 < rows.Count ? rows[i + 1].Kind : (ItemRowKind?)null;
+            switch (row.Kind)
             {
-                ui.Text(b, GemCraft.NameOf(gem), lx, cy, Violet);
-                ui.TextRight(b, GemCraft.Grant(gem), rx, cy, Good);
-                cy += 26;
+                case ItemRowKind.Affix:
+                    L(row.Line, Good);
+                    cy += LineH;
+                    if (next != ItemRowKind.Affix) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.GemCount:
+                    L($"{row.Label}  {row.Value}", Dim);
+                    cy += LineH;
+                    break;
+                case ItemRowKind.Gem:
+                    L(row.Label, Violet);
+                    R(row.Line, Good);
+                    cy += LineH;
+                    if (next != ItemRowKind.Gem) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.BuiltIn:
+                    // NAMED by its stat, never by its slot or shape — the line that read "GLOVES  +2%".
+                    L(row.Line, Gold);
+                    R(ItemPresentation.BuiltInCaption, Dim);
+                    cy += LineH;
+                    if (next != ItemRowKind.Family) cy += UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.Family:
+                    L(row.Label, Ink);
+                    cy += LineH + UiMetrics.Space(10);
+                    break;
+                case ItemRowKind.Prefix:
+                    L(row.Label, Gold);
+                    R("PREFIX", Dim);
+                    cy += LineH;
+                    if (next != ItemRowKind.PrefixSide) { L(row.Note.ToUpperInvariant(), Ink); cy += LineH + UiMetrics.Space(8); }
+                    break;
+                case ItemRowKind.PrefixSide:
+                    // BOTH SIDES OF THE TRADE, one to a line: the cost in the cost colour.
+                    L(row.Line, row.IsDrawback ? Bad : Ink);
+                    cy += LineH;
+                    if (next != ItemRowKind.PrefixSide) cy += UiMetrics.Space(8);
+                    break;
+                case ItemRowKind.Enchant:
+                    L(row.Label, Violet);
+                    R("ENCHANT", Dim);
+                    cy += LineH;
+                    // WRAPPED, never cut: the sentence says what its number is of, and the height pass
+                    // measures the same lines the draw does (the kit is present in both).
+                    foreach (var wrapped in ui.WrapBig(row.Note.ToUpperInvariant(), innerW, UiTypography.Label))
+                    {
+                        L(wrapped, Ink);
+                        cy += LineH;
+                    }
+                    cy += UiMetrics.Space(8);
+                    break;
+                case ItemRowKind.Set:
+                    cy += UiMetrics.Space(10);
+                    L($"{row.Label}  ·  {row.Value}", row.Tone == ItemRowTone.Muted ? Dim : Ink);
+                    R("SET", Dim);
+                    cy += LineH;
+                    break;
             }
-            cy += 10;
         }
 
-        // ── FAMILY — what the item IS by birth (item-system redesign): the built-in channel every
-        //    copy of this shape carries, in its stat's own unit. ──
-        if (ItemFamilies.BonusOf(item) is { } fam)
-        {
-            ui.Text(b, $"{ItemNaming.TypeWord(item)}  {ItemAffixes.GrantLabel(fam.Stat, fam.Magnitude)}", lx, cy, Gold);
-            ui.TextRight(b, "BUILT IN", rx, cy, Dim);
-            cy += 26;
-            if (item.BaseType == ItemBaseType.Weapon)
-            {
-                ui.Text(b, ItemFamilies.Blurb(item).ToUpperInvariant(), lx, cy, Ink);
-                cy += 26;
-            }
-            cy += 10;
-        }
-
-        // ── PREFIX and ENCHANT — the NAME AND WHAT IT DOES. The half that was missing. ──
-        if (GearTraits.TraitOf(item) is { } trait)
-        {
-            ui.Text(b, GearTraits.NameOf(trait), lx, cy, Gold);
-            ui.TextRight(b, "PREFIX", rx, cy, Dim);
-            cy += 26;
-            // The REAL numbers, not the blurb: the prefix already scales with item level
-            // (GearTraits.ModsFor folds ItemLevelFactor in), but a fixed sentence made it read as
-            // flat — playtest: "prefix statları sabit kalmasın." An upgrade now visibly deepens it.
-            ui.Text(b, PrefixNumbers(item), lx, cy, Ink);
-            cy += 36;
-        }
-
-        if (Enchantments.Of(item) is { } ench)
-        {
-            ui.Text(b, ench.Name, lx, cy, Violet);
-            ui.TextRight(b, "ENCHANT", rx, cy, Dim);
-            cy += 26;
-            ui.Text(b, ench.Blurb.ToUpperInvariant(), lx, cy, Ink);
-            cy += 36;
-        }
-
-        // ── THE SET — one line. "NATURE SET  ·  3 OF 5 WORN": the element decides something in a fight
-        //    now, and this is the fact that says whether wearing the piece moves a rung. The rungs
-        //    themselves are on the ITEM DETAIL panel, which has the room to list them. ──
-        if (hunter is not null && item.Element is { } setElement)
-        {
-            var worn = ElementSets.WornCount(hunter, setElement);
-            cy += 10;
-            ui.Text(b, $"{ElementSets.Name(setElement)}  ·  {ElementSets.Progress(worn)}", lx, cy,
-                    worn >= ElementSets.Rungs[0] ? Ink : Dim);
-            ui.TextRight(b, "SET", rx, cy, Dim);
-        }
-    }
-
-    /// <summary>The prefix's real trade at THIS item's level — "DAMAGE +38% · LOOT -20%".</summary>
-    private static string PrefixNumbers(ItemInstance item)
-    {
-        var m = GearTraits.ModsOf(item);
-        var parts = new System.Collections.Generic.List<string>();
-        void Add(string label, float v)
-        {
-            if (MathF.Abs(v - 1f) <= 0.005f) return;
-            var pct = (int)MathF.Round((v - 1f) * 100f);
-            parts.Add($"{label} {(pct >= 0 ? "+" : "")}{pct}%");
-        }
-        Add("DAMAGE", m.Damage);
-        Add("HEALTH", m.Health);
-        Add("SKILL RATE", m.SkillRate);
-        Add("LOOT", m.Haul);
-        return parts.Count == 0 ? "NO TRADE" : string.Join("  ·  ", parts);
+        return cy - card.Y + PadBottom;
     }
 }

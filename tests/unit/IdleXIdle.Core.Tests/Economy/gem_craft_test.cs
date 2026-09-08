@@ -172,9 +172,11 @@ public class GemCraftTest
         var defence = GemOf(AffixStat.Defense);
         var damage = GemOf(AffixStat.Damage);
 
-        Assert.Equal($"+{GemCraft.Magnitude(crit):0.0}% CRITICAL CHANCE", GemCraft.Grant(crit));
-        Assert.Equal($"+{GemCraft.Magnitude(defence):0} DEFENCE", GemCraft.Grant(defence));
-        Assert.Equal($"+{GemCraft.Magnitude(damage) * 100f:0}% DAMAGE", GemCraft.Grant(damage));
+        // Invariant on the expected side too: the formatter prints the invariant culture whatever the
+        // test host's locale is (a Turkish machine would otherwise expect "+1,5%" of a "+1.5%").
+        Assert.Equal(FormattableString.Invariant($"+{GemCraft.Magnitude(crit):0.0}% CRITICAL CHANCE"), GemCraft.Grant(crit));
+        Assert.Equal(FormattableString.Invariant($"+{GemCraft.Magnitude(defence):0} DEFENCE"), GemCraft.Grant(defence));
+        Assert.Equal(FormattableString.Invariant($"+{GemCraft.Magnitude(damage) * 100f:0}% DAMAGE"), GemCraft.Grant(damage));
 
         // The percentage sign belongs to critical chance and NOT to defence — the exact inversion.
         Assert.Contains("%", GemCraft.Grant(crit), StringComparison.Ordinal);

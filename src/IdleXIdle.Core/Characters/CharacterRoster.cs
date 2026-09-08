@@ -49,7 +49,7 @@ public static class CharacterRoster
         new()
         {
             Id = "seeker", Name = "THE SEEKER",
-            StartingSkillId = "hammer_blow",   // the plainest of the twelve, for the champion with no lean
+            SignatureSkillId = "sig_seeker_hard_hands",   // HARD HANDS — the champion with no discipline fights with its hands
             Class = ItemClass.Wanderer, Tier = ClassTier.First,
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null,
@@ -66,22 +66,25 @@ public static class CharacterRoster
         new()
         {
             Id = "anvil", Name = "THE ANVIL",
-            StartingSkillId = "hammer_press",   // a weight that sits on the front enemy — an anvil, not a hammer
+            SignatureSkillId = "sig_anvil_hardface",   // HARDFACE — every enemy that goes down leaves the next one softer
             Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Resonance,
             PassiveName = "DEADWEIGHT",
-            PassiveText = "A third of the damage left over from a kill hits the next enemy.",
-            // A heavy hitter's structural weakness is a swarm: an enormous hit on a small
-            // creature throws most of itself away. This does not fix that — it refunds a third,
-            // the most a character passive should do to a playstyle's actual price.
-            Shape = new SkillShape { OverkillCarry = 0.33f },
+            PassiveText = "A hit that leaves an enemy standing leaves a third of its damage in them. Your next hit on that enemy lands it too.",
+            // REDESIGNED 2026-09-07. It was a third of a kill's overkill carried into the next enemy —
+            // a CARRY, on the same generic field BODY's fourth rung, BREAKTHROUGH and CLEAN CUT write,
+            // combined by MAX, so the innate contributed nothing beside any of them and nothing at all
+            // against a lone enemy. A heavy hitter's other structural fact is the enemy that does NOT
+            // go down in one blow: DEADWEIGHT is what that enemy keeps of the blow, and pays on the
+            // next. Its own typed dial (SkillShape.DeadweightShare), its own state on the creature.
+            Shape = new SkillShape { DeadweightShare = 0.33f },
             Unlock = CharacterUnlock.Conquest("cinderworks"),
         },
         new()
         {
             Id = "chorus", Name = "THE CHORUS",
-            StartingSkillId = "field_mire",   // many mouths, one field
+            SignatureSkillId = "sig_chorus_grave_song",   // GRAVE SONG — the charms get louder for every enemy the wave has lost
             Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Loot,
@@ -95,7 +98,7 @@ public static class CharacterRoster
         new()
         {
             Id = "metronome", Name = "THE METRONOME",
-            StartingSkillId = "volley_spray",   // the one that fires on a count
+            SignatureSkillId = "sig_metronome_clockwork",   // CLOCKWORK — the one skill counted in seconds, which nothing can hurry
             Class = ItemClass.Mystic, Tier = ClassTier.First,
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo,
@@ -111,7 +114,7 @@ public static class CharacterRoster
         new()
         {
             Id = "unbroken", Name = "THE UNBROKEN",
-            StartingSkillId = "drain_wilt",   // it wears the wave down rather than out-hitting it
+            SignatureSkillId = "sig_unbroken_hold_fast",   // HOLD FAST — a wall put back up every two seconds, for free
             Class = ItemClass.Bulwark, Tier = ClassTier.First,
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure,
@@ -125,7 +128,7 @@ public static class CharacterRoster
         new()
         {
             Id = "tower", Name = "THE FALLING TOWER",
-            StartingSkillId = "hammer_blow",   // the falling tower IS one enormous hit
+            SignatureSkillId = "sig_tower_slow_fall",   // SLOW FALL — stones that arrive on their own clock, never on an action
             Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Resonance,
@@ -142,7 +145,7 @@ public static class CharacterRoster
         new()
         {
             Id = "quiver", Name = "THE QUIVER",
-            StartingSkillId = "volley_weep",   // what a quiver leaves behind it
+            SignatureSkillId = "sig_quiver_backdraw",   // BACKDRAW — a death sends arrows that never needed an action
             Class = ItemClass.Mystic, Tier = ClassTier.Second,
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo,
@@ -159,12 +162,12 @@ public static class CharacterRoster
             // the loot champion), wave 60 in the Hollow (the catalogue's THIRD depth quest). P10
             // finally asks for the thing this champion IS: practice with VOLLEY skills, read from
             // the same tally that levels them.
-            Unlock = CharacterUnlock.Quest("q_quiver_volleys", "Clear 150 waves with VOLLEY skills woven"),
+            Unlock = CharacterUnlock.Quest("q_quiver_volleys", "Clear 150 waves with a VOLLEY skill equipped"),
         },
         new()
         {
             Id = "thornwall", Name = "THE THORNWALL",
-            StartingSkillId = "snare_jaws",   // a wall that answers being touched
+            SignatureSkillId = "sig_thornwall_narrows",   // NARROWS — a fixed answer that grows with every bite it has answered
             Class = ItemClass.Bulwark, Tier = ClassTier.Second,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure,
@@ -191,7 +194,7 @@ public static class CharacterRoster
         new()
         {
             Id = "oathbound", Name = "THE OATHBOUND",
-            StartingSkillId = "sign_call",   // a vow-keeper opens the window for everyone else
+            SignatureSkillId = "sig_oathbound_oathmark",   // OATHMARK — the only amplifier whose price is being hit
             Class = ItemClass.Ranger, Tier = ClassTier.Second,
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null,
@@ -214,7 +217,7 @@ public static class CharacterRoster
         new()
         {
             Id = "magpie", Name = "THE MAGPIE",
-            StartingSkillId = "snare_repay",   // it collects what it is owed
+            SignatureSkillId = "sig_magpie_paying_work",   // PAYING WORK — aimed at the one wave the Magpie actually wants
             Class = ItemClass.Wanderer, Tier = ClassTier.Second,
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null,

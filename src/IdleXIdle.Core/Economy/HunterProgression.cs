@@ -451,6 +451,29 @@ public sealed class Hunter
     public bool CanTrain(HunterStat stat)
         => _ranks[stat] < _tuning.StatRankCap && Gleam >= NextRankCost(stat);
 
+    /// <summary>
+    /// What <paramref name="measure"/> would read with ONE more rank of <paramref name="stat"/>.
+    /// </summary>
+    /// <remarks>
+    /// The screen's "before → after" without a second copy of any formula. The constants that turn a
+    /// rank into a fight number are private to this class, so a screen that wanted an AFTER had only
+    /// two options: reach for them, or re-derive them — and a re-derived formula is a second
+    /// implementation, which is the one that drifts.
+    ///
+    /// Pure: it raises the rank, measures, and restores it, the way <see cref="PowerContribution"/>
+    /// already measures a worn item. NO GLEAM MOVES. At the cap it measures unchanged, so a maxed row
+    /// reads AFTER equal to NOW and the caller can show one number instead of promising a change that
+    /// will not happen.
+    /// </remarks>
+    public T Preview<T>(HunterStat stat, Func<Hunter, T> measure)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        if (_ranks[stat] >= _tuning.StatRankCap) return measure(this);
+        _ranks[stat]++;
+        try { return measure(this); }
+        finally { _ranks[stat]--; }
+    }
+
     /// <summary>Buy one rank. Returns false rather than throwing — the UI calls this speculatively.</summary>
     public bool Train(HunterStat stat)
     {

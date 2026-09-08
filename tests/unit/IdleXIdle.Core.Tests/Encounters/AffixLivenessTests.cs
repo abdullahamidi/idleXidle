@@ -39,7 +39,7 @@ public class AffixLivenessTests
     {
         var b = new Build { PassiveMods = BuildMods.None, Shape = shape };
         foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" })
-            b.Weave(TestBuilds.Skill(id, Source.Nature));
+            b.Equip(TestBuilds.Skill(id, Source.Nature));
         return b;
     }
 
@@ -93,14 +93,14 @@ public class AffixLivenessTests
     // ── ENDLESS ───────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_the_endless_affix_halves_what_leech_returns()
+    public void test_the_endless_affix_halves_what_healing_returns()
     {
         // Bands.SustainMultiplier computed 0.5 for this affix and had NO CALLER in the solution, so the
         // band that exists to pressure ENDURE did nothing to it at all.
-        var leech = SkillShape.None with { Leech = 0.25f };
-        var full = HealthAfterAWave(leech, sustain: 1f);
-        var halved = HealthAfterAWave(leech, sustain: Bands.SustainMultiplier(new[] { Affix.Endless }));
-        _out.WriteLine($"leech under a plain band {full} · under ENDLESS {halved}");
+        var heal = SkillShape.None with { HealPerTargetStruck = 0.002f };
+        var full = HealthAfterAWave(heal, sustain: 1f);
+        var halved = HealthAfterAWave(heal, sustain: Bands.SustainMultiplier(new[] { Affix.Endless }));
+        _out.WriteLine($"heal under a plain band {full} · under ENDLESS {halved}");
 
         Assert.True(halved < full,
                     $"ENDLESS must return less health than a plain band — got {halved} against {full}");
@@ -111,9 +111,9 @@ public class AffixLivenessTests
     {
         // The mirror. A multiplier applied unconditionally would be just as wrong as one applied never,
         // and would be just as invisible.
-        var leech = SkillShape.None with { Leech = 0.25f };
+        var heal = SkillShape.None with { HealPerTargetStruck = 0.002f };
         Assert.Equal(1f, Bands.SustainMultiplier(Array.Empty<Affix>()));
-        Assert.Equal(HealthAfterAWave(leech, 1f), HealthAfterAWave(leech, Bands.SustainMultiplier(Array.Empty<Affix>())));
+        Assert.Equal(HealthAfterAWave(heal, 1f), HealthAfterAWave(heal, Bands.SustainMultiplier(Array.Empty<Affix>())));
     }
 
     // ── THE BAR THE PLAYER WATCHES ────────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ public class AffixLivenessTests
         return events.Count(e => e.Kind == BattleEventKind.EnemyStrike);
     }
 
-    /// <summary>Champion health at the end of one long wave, with leech doing the healing.</summary>
+    /// <summary>Champion health at the end of one long wave, with heal doing the healing.</summary>
     private static int HealthAfterAWave(SkillShape shape, float sustain)
     {
         var champ = new Champion { MaxHealth = 200_000, Health = 100_000 };

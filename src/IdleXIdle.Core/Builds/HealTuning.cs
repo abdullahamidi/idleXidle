@@ -137,5 +137,7 @@ public sealed record HealTuning
     public string CeilingText(bool siphon = false)
         => float.IsPositiveInfinity(MaxHealFractionPerWave)
             ? "no limit"
-            : $"{MaxHealFractionPerWave * (siphon ? SiphonCeilingMultiplier : 1f):0%}";
+            // Invariant: a percent format follows the locale's sign placement ("%60" in Turkish), and
+            // this is copy a card prints — the game pins the invariant culture, and so does this.
+            : FormattableString.Invariant($"{MaxHealFractionPerWave * (siphon ? SiphonCeilingMultiplier : 1f):0%}");
 }

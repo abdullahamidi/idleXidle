@@ -71,16 +71,11 @@ public static class GemCraft
 
     /// <summary>What the gem GIVES, in the stat's own unit — "+18% DAMAGE", "+3 DEFENCE".</summary>
     /// <remarks>
-    /// The unit is <see cref="ItemAffixes.GrantLabel"/>'s job and the word is
-    /// <see cref="ItemAffixes.StatWord"/>'s, so a gem line and an affix line can never disagree about
-    /// what a magnitude means. Critical chance reads as a percentage of hits; defence reads flat.
+    /// Through <see cref="ItemModifiers.Line(ItemModifier, bool)"/>, the one formatter every item
+    /// line uses, so a gem line and an affix line can never disagree about what a magnitude means.
+    /// Critical chance reads as a percentage of hits; defence reads flat.
     /// </remarks>
-    public static string Grant(ItemInstance gem)
-    {
-        ArgumentNullException.ThrowIfNull(gem);
-        var stat = StatOf(gem);
-        return $"{ItemAffixes.GrantLabel(stat, Magnitude(gem))} {ItemAffixes.StatWord(stat)}";
-    }
+    public static string Grant(ItemInstance gem) => ItemModifiers.Line(ItemModifiers.Gem(gem));
 
     /// <summary>
     /// The whole gem in one plain line — "FURY GEM LEVEL 4 · +18% DAMAGE".

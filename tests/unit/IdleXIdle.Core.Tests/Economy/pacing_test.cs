@@ -35,15 +35,20 @@ public class PacingTest
     private static readonly ExpeditionTuning T = ExpeditionTuning.Default;
 
     /// <summary>
-    /// Four Body BLOWs, no Vows, no tree — the full four-slot baseline these probes were tuned
+    /// Four Body actives, no Vows, no tree — the full four-slot baseline these probes were tuned
     /// against. (A brand-new save now opens with a single slot and earns the rest; the probe keeps
     /// the four-slot shape so its measured bands stay comparable.)
     /// </summary>
+    /// <remarks>
+    /// It was four copies of BLOW until 2026-09-01. A build holds a skill ONCE now (LAW 13, enforced
+    /// in <c>Build.Equip</c>), so the probe fills its four slots with four different actives — the
+    /// nearest legal shape to what it measured before, and one a player can actually weave.
+    /// </remarks>
     private static Build StarterBuild()
     {
         var b = new Build();
-        for (var i = 0; i < 4; i++)
-            b.Weave(TestBuilds.Skill("hammer_blow"));
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_pulse", "drain_drink" })
+            Assert.True(b.Equip(TestBuilds.Skill(id)), $"{id} refused");
         return b;
     }
 

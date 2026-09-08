@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -24,6 +24,12 @@ public sealed record SaveGame
     // 3 = SkillId becomes a woven skill's persisted identity (2026-08-31). Source/Form are still
     // written as a legacy echo for now; an older build reading a v3 file must refuse it as
     // FromNewerVersion rather than mis-resolve the build, which is what this bump buys.
+    // 4 = keystones and Vows leave the trait tree (2026-09-03). Keystone knowledge, Vow knowledge and
+    // keystone-socket capacity get fields of their own, seeded ONCE on the first v4 load from the old
+    // MemoryDustUnlocks list (see LegacyTraitTree), and the fifth skill slot is removed so a five-row
+    // build is unwoven to four on the way in. THE BUMP IS WHAT MAKES THAT SAFE: SaveStore's
+    // SnapshotBeforeUpgrade guard is `if (fileVersion >= CurrentVersion) return null;`, so without a
+    // bump no pre-change copy is taken and the ten-second autosave overwrites the only original.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -62,6 +68,21 @@ public sealed record SaveGame
     public List<SavedItem> Inventory { get; init; } = new();
 
     public int MemoryDust { get; init; }
+
+    /// <summary>
+    /// LEGACY ONLY. The node ids an old save bought on the retired Memory tree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read exactly once per load, by <see cref="LegacyTraitTree"/>, and NEVER written back — a save
+    /// captured from here on carries an empty list, and one more load drops it for good. Normal runtime
+    /// code does not know these ids exist; the migration layer is the only thing in the game that does.
+    /// </para>
+    /// <para>
+    /// The field itself stays because deserialising an old file must not lose the ids before the
+    /// migration reads them. It is a doorway, not a store.
+    /// </para>
+    /// </remarks>
     public List<string> MemoryDustUnlocks { get; init; } = new();
 
     /// <summary>Worn gear, by item InstanceId. Losing your Legendary on reload is not an option.</summary>
@@ -152,8 +173,46 @@ public sealed record SaveGame
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 
-    /// <summary>Which learned keystones are socketed. Ids into the keystone catalog.</summary>
+    /// <summary>Which discovered keystones are socketed. Ids into the keystone catalog.</summary>
+    /// <remarks>
+    /// Doubles as the FLOOR on <see cref="KeystoneSocketsEarned"/> at load: whatever a returning player
+    /// was wearing, they keep wearing, whatever the derived rule would have said.
+    /// </remarks>
     public List<string> SocketedKeystoneIds { get; init; } = new();
+
+    /// <summary>
+    /// Keystones this account has discovered. Additive (2026-09-03) — absent means a save that predates
+    /// the field, and the world plus <see cref="MemoryDustUnlocks"/> re-derive it on that load.
+    /// </summary>
+    /// <remarks>
+    /// A stored LATCH, unioned each frame with what the world derives — never the only source. Keystone
+    /// knowledge now comes from conquest and region mastery, both of which only ever grow, so the stored
+    /// half exists purely to carry a legacy grant across and can never take anything away.
+    /// </remarks>
+    public List<string> DiscoveredKeystoneIds { get; init; } = new();
+
+    /// <summary>
+    /// Vows this account has found, by keeping a rule once without the Vow sworn. Additive (2026-09-03).
+    /// </summary>
+    /// <remarks>
+    /// Vow knowledge had NO field before: it was derived from the trait tree's study nodes, and that
+    /// producer is going away. A discovery is an event, so it has to be latched — the same shape as
+    /// QuestsDone and UnlockedCharacters. Unknown ids are dropped on read.
+    /// </remarks>
+    public List<string> DiscoveredVowIds { get; init; } = new();
+
+    /// <summary>
+    /// The high-water mark of keystone socket capacity. Additive (2026-09-03); 0 means never computed.
+    /// </summary>
+    /// <remarks>
+    /// Sockets are otherwise derived from world progression, and this file's law is "derived, never
+    /// stored". The exception is deliberate and narrow: a save could hold the old SECOND SOCKET node on
+    /// a single conquest, and pure derivation would take that socket away — which is a capability
+    /// removed by a refactor, and the one thing this migration is not allowed to do. It is a capacity
+    /// latch of the same species as HighestMasteryAwarded, monotone by construction (it is only ever
+    /// written as a maximum), not an activity gate.
+    /// </remarks>
+    public int KeystoneSocketsEarned { get; init; }
 
     /// <summary>
     /// What each skill has earned by being used, and what the player spent it on.
@@ -175,6 +234,14 @@ public sealed record SaveGame
     /// <see cref="MasteryTaken"/>'s roads, and the next save writes the union.
     /// </summary>
     public List<string> LearnedSkills { get; init; } = new();
+
+    /// <summary>
+    /// The set ladders (by Source name) whose five-piece completion has already been celebrated — the
+    /// "MACHINE SET COMPLETE · PLATING ACTIVE" moment fires once per set (UI polish §52), not every time
+    /// the fifth piece goes back on after a swap. Additive (2026-09-01): absent on an older save means
+    /// none celebrated yet, and the next completion is the first.
+    /// </summary>
+    public List<string> CompletedSets { get; init; } = new();
 
     /// <summary>Total mastery points earned over the whole game.</summary>
     public int MasteryEarned { get; init; }
@@ -221,6 +288,18 @@ public sealed record SaveGame
     /// was already open as read, so a returning player is not re-taught the game they have been playing.
     /// </remarks>
     public List<string> ExplainedScreens { get; init; } = new();
+
+    /// <summary>
+    /// Screens the rail has REVEALED, as <c>Activity</c> names — the minimal explicit onboarding state.
+    /// </summary>
+    /// <remarks>
+    /// Everything else about the journey is derived from facts the save already carries; this list is
+    /// the one thing that has to be remembered, because a reveal must be MONOTONE and one gate is not
+    /// (GEAR reads items owned, and a bag can be salvaged empty). Default-empty means an older save
+    /// loads clean and <c>Reveal.Restore</c> seeds it from the gates, so a returning player keeps every
+    /// screen they had. Written by the host; read once, on load.
+    /// </remarks>
+    public List<string> RevealedScreens { get; init; } = new();
 
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
@@ -275,6 +354,58 @@ public sealed record SaveGame
     // WarrenMasteryPool (the closed-loop INSIGHT pool) was retired 2026-08-31 (P12). The key in old
     // saves is skipped on load like any other unknown member; nothing needs migrating — the pool
     // bought only Warren upgrades, which now cost Gleam + Dust.
+
+    // ── TRAITS (2026-09-03). Four ADDITIVE fields, no version bump: an older save carries none of
+    //    them, loads with an empty trait account, and starts discovering honestly — which is exactly
+    //    what §96 asks for ("do not automatically unlock all new Traits because the old tree was
+    //    progressed"). Six traits DO awaken on an established save's first load, because they read
+    //    BossesFelled, RunsWithVowKept, CompletedSets, ConqueredRegions, RegionFarms and RunLog —
+    //    all of which are above this line and all of which every established save already carries.
+    //    That is the explicit mapping §96 allows, and the host announces those six as ONE plate
+    //    rather than six ceremonies in a second.
+    //
+    //    ALL FOUR MUST ALSO BE IN Game1.Save()'s `with` BLOCK. A field added here and forgotten there
+    //    serialises at its default for ever, and autosave fires every ten seconds. ────────────────
+
+    /// <summary>
+    /// Every trait the ACCOUNT has awakened. Account-wide, monotone, never removed (§25, LAW 6).
+    /// </summary>
+    public List<string> DiscoveredTraits { get; init; } = new();
+
+    /// <summary>
+    /// The three traits each champion is wearing — the one piece of per-character state this refactor
+    /// adds (§26, LAW 7).
+    /// </summary>
+    public List<SavedTraitLoadout> TraitLoadouts { get; init; } = new();
+
+    /// <summary>
+    /// The hidden accumulators, keyed by <c>TraitCounter</c> name.
+    /// </summary>
+    /// <remarks>
+    /// ONE dictionary with a closed key set, not sixteen fields — §29's "do not store full combat
+    /// history when a bounded counter is sufficient". A key this build does not know is dropped on
+    /// load rather than carried, so the key set cannot quietly grow an untended member.
+    /// </remarks>
+    public Dictionary<string, double> TraitTally { get; init; } = new();
+
+    /// <summary>Where each trait first awakened — one line of flavour (§33), never a history database.</summary>
+    public List<SavedTraitFirst> TraitProvenance { get; init; } = new();
+}
+
+/// <summary>What one champion is wearing. At most three ids; the ledger re-clamps on the way in.</summary>
+public sealed record SavedTraitLoadout
+{
+    public required string CharacterId { get; init; }
+    public List<string> TraitIds { get; init; } = new();
+}
+
+/// <summary>Who first awakened a trait, where, and how deep. One row per discovered trait.</summary>
+public sealed record SavedTraitFirst
+{
+    public required string TraitId { get; init; }
+    public string CharacterId { get; init; } = "";
+    public string RegionId { get; init; } = "";
+    public int Wave { get; init; }
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>
@@ -359,6 +490,12 @@ public sealed record RunReportSave
     public float TargetsPerActivation { get; init; }
     public float CreaturesPerWave { get; init; }
     public float HealthLostPerWaveFraction { get; init; }
+
+    /// <summary>What SHIELD ate, as a share of everything the wave landed. Zero on a save from before shield existed.</summary>
+    public float ShieldAbsorbedFraction { get; init; }
+
+    /// <summary>Shield absorbed per wave as a share of the pool. Zero on a save from before shield existed.</summary>
+    public float ShieldAbsorbedPerWaveFraction { get; init; }
     public float SecondsPerWave { get; init; }
     public int SampledWaves { get; init; }
 }
@@ -530,7 +667,7 @@ public static class SaveSystem
     public static SaveGame Capture(
         Hunter hunter,
         IReadOnlyList<ItemInstance> inventory, long nowMs,
-        Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
+        Prestige.MemoryDustWallet? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
         Warren? warren = null)
         => new()
@@ -556,7 +693,11 @@ public static class SaveSystem
             WornBootsId = hunter.Worn(GearSlot.Boots)?.InstanceId,
             WornRingId = hunter.Worn(GearSlot.Ring)?.InstanceId,
             MemoryDust = prestige?.MemoryDust ?? 0,
-            MemoryDustUnlocks = prestige?.OwnedIds.ToList() ?? new List<string>(),
+            // NOT WRITTEN. The retired Memory tree's ownership list is migration input, never output:
+            // LegacyTraitTree reads an old file's ids once at load, keeps the structural capabilities
+            // they stood for, discards the obsolete balance modifiers, and this capture drops them. A
+            // save written from here on has no tree ownership in it at all.
+            MemoryDustUnlocks = new List<string>(),
             HighestMasteryAwarded = highestMasteryAwarded,
             ConqueredRegions = world?.ConqueredIds.ToList() ?? new List<string>(),
             ActiveRegion = activeRegion,
@@ -758,12 +899,31 @@ public static class SaveSystem
         }
     }
 
-    public static void RestoreWarren(SaveGame save, Warren warren)
+    /// <param name="legacy">
+    /// What the old trait tree had already bought. AUTO-SELL and AUTO-MERGE are Warren facility levels
+    /// now, so a save that paid for them on the tree is floored up to the level that grants them here.
+    /// </param>
+    /// <remarks>
+    /// The floor is safe by construction: <c>Warren.Restore</c> calls <c>SetLevel</c>, which mints no
+    /// XP (only <c>Upgrade</c> does), so nothing can level the Warren sideways; <c>IsUnlocked</c>
+    /// grandfathers any facility past level 1 open under any ramp, so a migrated SCAVENGER RUNS is
+    /// reachable even for a player with one conquest; and the depth cap only gates further UPGRADES, so
+    /// a migrated level above it simply cannot be raised until depth catches up — never lowered.
+    /// </remarks>
+    public static void RestoreWarren(SaveGame save, Warren warren, LegacyTraitGrants? legacy = null)
     {
         ArgumentNullException.ThrowIfNull(warren);
         var levels = new Dictionary<FacilityKind, int>();
         foreach (var (name, lvl) in save.WarrenFacilities)
             if (Enum.TryParse<FacilityKind>(name, out var kind)) levels[kind] = lvl;
+
+        if (legacy is { } g)
+        {
+            levels[FacilityKind.ScavengerRuns] =
+                Math.Max(levels.GetValueOrDefault(FacilityKind.ScavengerRuns, 1), g.ScavengerRunsLevel);
+            levels[FacilityKind.HoardVaults] =
+                Math.Max(levels.GetValueOrDefault(FacilityKind.HoardVaults, 1), g.HoardVaultsLevel);
+        }
         warren.Restore(save.WarrenLevel, save.WarrenXp, levels);
     }
 

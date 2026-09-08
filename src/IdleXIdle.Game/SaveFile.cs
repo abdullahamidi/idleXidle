@@ -15,14 +15,20 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public static class SaveFile
 {
+    /// <summary>The app-data folder the save lives in — the product's own name.</summary>
+    /// <remarks>
+    /// It was the PRE-RENAME name until 2026-09-08, kept while there were testers whose saves would
+    /// have been orphaned by changing it. That constraint was lifted, so the last place the retired
+    /// name reached a player's machine is gone — and it did not have to cost anyone their game, because
+    /// <see cref="LegacyAppDataFolderName"/> is adopted once on the first launch after the rename.
+    /// </remarks>
+    public const string AppDataFolderName = "IDLExIDLE";
+
     /// <summary>
-    /// The app-data folder the save has ALWAYS lived in — the PRE-RENAME product name, kept on
-    /// purpose (2026-08-24 decision, reaffirmed 2026-08-31: "save dir unchanged — old saves
-    /// intact"). Every player's save.json / save.bak / display.txt sits under it. Renaming this
-    /// constant orphans every existing player's progress on their next boot; do not touch it
-    /// without a directory-adoption migration and a SaveStore test to prove it.
+    /// The folder the save used to live in. MIGRATION ONLY: read once, on a first launch that finds
+    /// no save of its own, and never written to again.
     /// </summary>
-    public const string AppDataFolderName = "ResonanceHunter";
+    public const string LegacyAppDataFolderName = "ResonanceHunter";
 
     /// <summary>
     /// Where the save lives — LocalApplicationData, unless <c>RH_SAVE_DIR</c> redirects it.
@@ -38,14 +44,24 @@ public static class SaveFile
         get
         {
             var dir = Environment.GetEnvironmentVariable("RH_SAVE_DIR");
-            if (string.IsNullOrWhiteSpace(dir))
-                dir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    AppDataFolderName);
+            if (!string.IsNullOrWhiteSpace(dir)) return dir;   // a redirected run adopts nothing
 
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            dir = System.IO.Path.Combine(local, AppDataFolderName);
+
+            // THE RENAME DOES NOT COST A GAME. Once per process, and only into a folder with no save
+            // of its own — see SaveStore.AdoptOnce, which refuses every ambiguous case.
+            if (!_adoptionTried)
+            {
+                _adoptionTried = true;
+                try { SaveStore.AdoptOnce(System.IO.Path.Combine(local, LegacyAppDataFolderName), dir); }
+                catch (Exception) { /* a launch must never fail on a migration */ }
+            }
             return dir;
         }
     }
+
+    private static bool _adoptionTried;
 
     public static long NowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 

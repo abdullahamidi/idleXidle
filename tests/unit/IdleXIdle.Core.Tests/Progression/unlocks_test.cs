@@ -20,18 +20,18 @@ public class UnlocksTest
     private static readonly UnlockFacts Fresh = new();
 
     [Fact]
-    public void test_a_brand_new_player_can_look_around_but_has_one_place_to_act()
+    public void test_a_brand_new_player_has_the_hunt_and_nothing_else()
     {
-        // THE HEADLINE, revised (playtest nine, item 11: "let the player look around"). The DOING
-        // screens still open one at a time — that is what cured "thrown straight in and confused" —
-        // but the WINDOW-SHOPPING screens, the Map and the Roster, are open from the first frame:
-        // both carry their own internal locks (locked regions, locked champions), so to a new player
-        // they read as a promise of what is coming, not as a wall of things to learn.
+        // THE HEADLINE (the journey, 2026-09-06): PLAY → NEED → REVEAL. A fresh save is the Hunt
+        // alone; every other screen arrives when the need that opens it is real. The Map and the
+        // Roster were open from the first frame for window-shopping (playtest nine) — a chart with one
+        // door and five locks, a gallery with one hunter and a locked cast — and the journey brief
+        // closed them: a screen with nothing to do on it teaches the locks.
         var open = Unlocks.Open(Fresh);
 
         _out.WriteLine("a fresh save opens with: " + string.Join(", ", open));
 
-        Assert.Equal(new[] { Activity.Hunt, Activity.Map, Activity.Roster }, open);
+        Assert.Equal(new[] { Activity.Hunt }, open);
     }
 
     [Fact]
@@ -50,11 +50,14 @@ public class UnlocksTest
         {
             ("fresh save",            new UnlockFacts()),
             ("first wave cleared",    new UnlockFacts(WavesCleared: 1, DeepestWave: 1)),
-            ("first item found",      new UnlockFacts(WavesCleared: 3, DeepestWave: 3, ItemsOwned: 1)),
+            ("third wave cleared",    new UnlockFacts(WavesCleared: 3, DeepestWave: 3)),
+            ("first item found",      new UnlockFacts(WavesCleared: 4, DeepestWave: 4, ItemsOwned: 1)),
             ("first chest earned",    new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1)),
-            ("wave 12",               new UnlockFacts(WavesCleared: 20, DeepestWave: 12, ItemsOwned: 3, ChestsEverHeld: 1, TraitPointsEarned: 2)),
-            ("first region taken",    new UnlockFacts(WavesCleared: 40, DeepestWave: 20, ItemsOwned: 5, ChestsEverHeld: 2, RegionsConquered: 1, TraitPointsEarned: 4)),
-            ("second region taken",   new UnlockFacts(WavesCleared: 90, DeepestWave: 30, ItemsOwned: 9, ChestsEverHeld: 3, RegionsConquered: 2, TraitPointsEarned: 6)),
+            ("wave 12 — three points", new UnlockFacts(WavesCleared: 20, DeepestWave: 12, ItemsOwned: 3, ChestsEverHeld: 1, TraitsDiscovered: 2, MasteryPointsEarned: 3)),
+            ("first region taken",    new UnlockFacts(WavesCleared: 40, DeepestWave: 20, ItemsOwned: 5, ChestsEverHeld: 2, RegionsConquered: 1, TraitsDiscovered: 4,
+                                                      MasteryPointsEarned: 4, KeystonesDiscovered: 1, CharactersUnlocked: 2)),
+            ("second region taken",   new UnlockFacts(WavesCleared: 90, DeepestWave: 30, ItemsOwned: 9, ChestsEverHeld: 3, RegionsConquered: 2, TraitsDiscovered: 6,
+                                                      MasteryPointsEarned: 8, SkillsKnown: 2, KeystonesDiscovered: 2, VowsKnown: 1, CharactersUnlocked: 3)),
         };
 
         UnlockFacts? previous = null;
@@ -95,7 +98,12 @@ public class UnlocksTest
                 ItemsOwned = facts.ItemsOwned + rng.Next(0, 2),
                 ChestsEverHeld = facts.ChestsEverHeld + rng.Next(0, 2),
                 RegionsConquered = facts.RegionsConquered + (rng.Next(0, 40) == 0 ? 1 : 0),
-                TraitPointsEarned = facts.TraitPointsEarned + rng.Next(0, 2),
+                TraitsDiscovered = facts.TraitsDiscovered + rng.Next(0, 2),
+                MasteryPointsEarned = facts.MasteryPointsEarned + rng.Next(0, 2),
+                SkillsKnown = facts.SkillsKnown + (rng.Next(0, 30) == 0 ? 1 : 0),
+                KeystonesDiscovered = facts.KeystonesDiscovered + (rng.Next(0, 40) == 0 ? 1 : 0),
+                VowsKnown = facts.VowsKnown + (rng.Next(0, 40) == 0 ? 1 : 0),
+                CharactersUnlocked = facts.CharactersUnlocked + (rng.Next(0, 40) == 0 ? 1 : 0),
             };
 
             var openNow = Unlocks.Open(facts).ToHashSet();
@@ -144,7 +152,7 @@ public class UnlocksTest
         // And the gate really does stop at four — past that the trait tree is the source, which is an
         // existing reward rather than a starting condition.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
         Assert.Equal(4, Unlocks.SkillSlots(everything));
     }
 

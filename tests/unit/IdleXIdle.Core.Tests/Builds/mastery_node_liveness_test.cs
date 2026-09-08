@@ -72,7 +72,7 @@ public class MasteryNodeLivenessTests
         // do with the node. The roads are held identical on both sides, so they cannot be the thing
         // that moved.
         tree.RestoreTaken(ids.Concat(MasteryCatalog.Nodes
-            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)));
+            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)), repair: false);
         return tree;
     }
 
@@ -81,27 +81,52 @@ public class MasteryNodeLivenessTests
     /// holds and PLEDGE has something to pay on) — two actives and two passives, a skill in every slot.
     /// </summary>
     /// <param name="oneSource">
-    /// PURE only pays while the whole weave shares a Source, and every other node wants the matchup
-    /// variety a mixed weave gives. Neither build alone can measure all sixteen, so both are run and a
-    /// node has to move ONE of them — the same two-contexts rule the reinforcement file uses for depth.
+    /// PURE only pays while the whole weave was CHOSEN to share a Source, and every other node wants
+    /// the matchup variety a mixed weave gives. Neither build alone can measure all sixteen, so both
+    /// are run and a node has to move ONE of them — the same two-contexts rule the reinforcement file
+    /// uses for depth. The one-source build takes four variations to BODY (the weave screen offers no
+    /// other Source lever, and a slot left on its BODY seed is a default PURE no longer pays), which
+    /// means four skills that HAVE a Body variation: BLOW, SPRAY, PRESS and WILT — two actives, two
+    /// fields. The mixed build is the old quartet, unchosen, exactly as before.
     /// </param>
     private static Build Compose(MasteryTree mastery, bool oneSource)
     {
-        Source Src(Source mixed) => oneSource ? Source.Body : mixed;
-        // A tree that has STUDIED the sworn vow — the composer refuses untaught ones (P7), and
+        // The sworn vow must be FOUND — the composer refuses one the account has not discovered, and
         // PLEDGE/ZEALOT liveness depends on the vow actually paying.
-        var studied = new MemoryDustTree();
-        studied.Restore(0, new[] { "vow_study_1" });
+        if (!oneSource)
+            return BuildComposer.Compose(
+                mastery, character: null,
+                skills: new[]
+                {
+                    new BuildComposer.SkillPick(Source.Body, "vow_complete", SkillId: "hammer_blow"),
+                    new BuildComposer.SkillPick(Source.Mind, null, SkillId: "volley_spray"),
+                    new BuildComposer.SkillPick(Source.Nature, null, SkillId: "field_mire"),
+                    new BuildComposer.SkillPick(Source.Shadow, null, SkillId: "snare_jaws"),
+                },
+                keystoneIds: Array.Empty<string>(), slotCapacity: 4, knownVows: Vows.Catalog);
+
+        var progress = new SkillProgress();
+        foreach (var (id, variation) in new[]
+                 {
+                     ("hammer_blow", "FLATTEN"), ("volley_spray", "CLUSTER"),
+                     ("hammer_press", "CRUSHING"), ("drain_wilt", "SUP"),
+                 })
+        {
+            var def = SkillCatalogue.ById(id);
+            for (var i = 0; i < SkillProgress.UsesForLevel(1); i++) progress.RecordWave(id);
+            if (!progress.ChooseVariation(def, variation))
+                throw new InvalidOperationException($"{id} could not take {variation} — the fixture, not the design");
+        }
         return BuildComposer.Compose(
-            studied, mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Src(Source.Body), "vow_complete", SkillId: "hammer_blow"),
-                new BuildComposer.SkillPick(Src(Source.Mind), null, SkillId: "volley_spray"),
-                new BuildComposer.SkillPick(Src(Source.Nature), null, SkillId: "field_mire"),
-                new BuildComposer.SkillPick(Src(Source.Shadow), null, SkillId: "snare_jaws"),
+                new BuildComposer.SkillPick(Source.Body, "vow_complete", SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_press"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "drain_wilt"),
             },
-            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress, knownVows: Vows.Catalog);
     }
 
     private static (long Dealt, int Kept, int Reached) Fight(Build build, MasteryTree mastery)
@@ -157,12 +182,13 @@ public class MasteryNodeLivenessTests
         // The plumbing the minors need, asserted on its own: a node's Stats must survive the tree,
         // the push, and Hunter.ValueOf. If this breaks, six minors go quietly inert.
         var tree = TreeWith("chime");
-        Assert.Equal(6f, tree.Stats()[HunterStat.ResonanceAffinity]);
+        var chime = MasteryCatalog.ById("chime")!.Stats![HunterStat.ResonanceAffinity];
+        Assert.Equal(chime, tree.Stats()[HunterStat.ResonanceAffinity]);
 
         var plain = new Hunter();
         var lifted = new Hunter();
         lifted.SetMasteryStats(tree.Stats());
-        Assert.Equal(plain.ValueOf(HunterStat.ResonanceAffinity) + 6f,
+        Assert.Equal(plain.ValueOf(HunterStat.ResonanceAffinity) + chime,
                      lifted.ValueOf(HunterStat.ResonanceAffinity));
 
         // And respec gives it back — the tree replaces the grant rather than accumulating it.

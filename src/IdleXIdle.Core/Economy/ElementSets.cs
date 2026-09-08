@@ -23,11 +23,24 @@ public sealed record SetTier(int Pieces, string Line, SkillShape Shape);
 /// cannot feel reads as a hidden rule.
 /// </para>
 /// <para>
-/// The shape of every set is the same so it can be learned once: the 2- and 4-piece rungs make the
-/// element's OWN skills hit harder (+8% each, +16% at four), the 3-piece rung is a plain stat in the
-/// element's character, and the 5-piece rung is the element's one special rule. A build that mixes
-/// elements gets a little from each; a build that commits gets the rule. Eight slots are worn, so a
-/// full five leaves three for anything.
+/// EVERY RUNG IS ITS OWN RULE, and none of them is "your matching-Source skills hit harder". That
+/// model — +8% at two pieces and +16% at four — is gone, and is not replaced by a bigger percentage.
+/// A set's Source is the philosophy of the EQUIPMENT, not a requirement on the skills: a BODY build
+/// may wear SHADOW plate and receive everything SHADOW offers. Source still matters enormously
+/// through the systems that are actually about Source — the variations, the matchup, the Vows — and
+/// a set that paid you for agreeing with them was paying you twice for one decision.
+/// </para>
+/// <para>
+/// The ladder climbs 2 · 3 · 4 · 5 across eight worn slots, so a hunter may run 5+3, 4+4 or 3+3+2.
+/// The 5-piece rung is the most IDENTITY-DEFINING, which is not the same as the strongest: MOMENTUM
+/// changes what a basic attack is for and CERTAINTY changes what a critical is, and either may be
+/// worth less damage than two lower ladders paid in a straight line.
+/// </para>
+/// <para>
+/// The six read from shared vocabulary — overkill, shield, critical, healing, a kill, an Active, a
+/// first activation, skill rate — rather than being six engines. The only state any of them adds to
+/// the wave is the state named in the design: the shield, MIND's focus, SHADOW's shades, BODY's
+/// pending impact, and SPIRIT's activation mask and charges.
 /// </para>
 /// </remarks>
 public static class ElementSets
@@ -35,11 +48,19 @@ public static class ElementSets
     /// <summary>The worn pieces each rung asks for.</summary>
     public static readonly IReadOnlyList<int> Rungs = new[] { 2, 3, 4, 5 };
 
-    /// <summary>How much the element's own skills gain at the 2- and 4-piece rungs, each.</summary>
-    public const float OwnSkillBonusPerRung = 0.08f;
-
     /// <summary>The set's name as a title: "SPIRIT SET".</summary>
     public static string Name(Source element) => $"{element.ToString().ToUpperInvariant()} SET";
+
+    /// <summary>The capstone's own name — the word the 5-piece rung is known by.</summary>
+    public static string CapstoneName(Source element) => element switch
+    {
+        Source.Body => "MOMENTUM",
+        Source.Machine => "PLATING",
+        Source.Mind => "CERTAINTY",
+        Source.Nature => "OVERGROWTH",
+        Source.Shadow => "AFTERIMAGE",
+        _ => "HARMONY",
+    };
 
     /// <summary>
     /// How far along the set a worn count is, for a title: "3 OF 5 WORN" up to the last rung, and
@@ -54,55 +75,77 @@ public static class ElementSets
     /// <summary>The four rungs of one element's set, in order.</summary>
     public static IReadOnlyList<SetTier> TiersOf(Source element) => Catalogue[element];
 
-    private static SkillShape Own(Source element) => new()
+    private static IReadOnlyList<SetTier> Set(
+        (string Line, SkillShape Shape) two, (string Line, SkillShape Shape) three,
+        (string Line, SkillShape Shape) four, (string Line, SkillShape Shape) five) => new[]
     {
-        SourceBonus = new Dictionary<Source, float> { [element] = OwnSkillBonusPerRung },
-    };
-
-    private static string OwnLine(Source element, int rung) =>
-        rung == 2
-            ? $"Your {element.ToString().ToUpperInvariant()} skills hit 8% harder."
-            : $"Your {element.ToString().ToUpperInvariant()} skills hit 8% harder again — 16% in all.";
-
-    private static IReadOnlyList<SetTier> Set(Source element, string three, SkillShape threeShape, string five, SkillShape fiveShape) => new[]
-    {
-        new SetTier(2, OwnLine(element, 2), Own(element)),
-        new SetTier(3, three, threeShape),
-        new SetTier(4, OwnLine(element, 4), Own(element)),
-        new SetTier(5, five, fiveShape),
+        new SetTier(2, two.Line, two.Shape),
+        new SetTier(3, three.Line, three.Shape),
+        new SetTier(4, four.Line, four.Shape),
+        new SetTier(5, five.Line, five.Shape),
     };
 
     private static readonly IReadOnlyDictionary<Source, IReadOnlyList<SetTier>> Catalogue = new Dictionary<Source, IReadOnlyList<SetTier>>
     {
-        // BODY — flesh and muscle: the pool, and the swing MIGHT owns.
-        [Source.Body] = Set(Source.Body,
-            "+10% maximum health.", new SkillShape { MaxHealth = 1.10f },
-            "Your basic attack hits 25% harder.", new SkillShape { AutoAttackDamage = 1.25f }),
+        // BODY — MOMENTUM. Weight, health, the swing, and force that does not stop at one body.
+        [Source.Body] = Set(
+            ("+10% maximum health.", new SkillShape { MaxHealth = 1.10f }),
+            ("Your basic attack hits 20% harder.", new SkillShape { AutoAttackDamage = 1.20f }),
+            // Direct hits only. The carry inside LandOn is already gated on fromSkill and lands its
+            // carried hit with fromSkill:false, so a bleed cannot feed it and a carry cannot carry again.
+            ("35% of a direct hit's overkill carries into the next enemy.",
+             new SkillShape { OverkillCarry = 0.35f }),
+            ("After a skill your next basic attack hits 75% harder and carries all its waste.",
+             new SkillShape { ImpactSwingBonus = 0.75f })),
 
-        // MACHINE — plate and pistons: what a bite gets through.
-        [Source.Machine] = Set(Source.Machine,
-            "Every bite deals 4 less.", new SkillShape { FlatDamageReduction = 4f },
-            "The first bite of every wave deals nothing.", new SkillShape { FirstBiteFree = true }),
+        // MACHINE — PLATING. Prevent first, absorb second, take the rest. It brings SHIELD to a build
+        // that has no shield skill at all, which is the point of the ladder.
+        [Source.Machine] = Set(
+            ("Every bite deals 4 less.", new SkillShape { FlatDamageReduction = 4f }),
+            ("Each wave begins with a shield worth 12% of your maximum health.",
+             new SkillShape { WaveStartShieldFraction = 0.12f }),
+            // Read BEFORE absorption, so it is not counted twice against the same bite.
+            ("While you hold a shield, bites deal 10% less.",
+             new SkillShape { ShieldedDamageTaken = 0.90f }),
+            ("Once a wave, the first bite that would hurt you is stopped and becomes shield.",
+             new SkillShape { PreventFirstDamagingBite = true })),
 
-        // MIND — the precise hit and the open window.
-        [Source.Mind] = Set(Source.Mind,
-            "+6% critical chance.", new SkillShape { BonusCritPercent = 6f },
-            "A MARK's window lasts 50% longer.", new SkillShape { AmplifyWindowMultiplier = 1.5f }),
+        // MIND — CERTAINTY. Precision, and less and less left to chance.
+        [Source.Mind] = Set(
+            ("+5% critical chance.", new SkillShape { BonusCritPercent = 5f }),
+            ("+20% critical damage.", new SkillShape { BonusCritDamagePercent = 20f }),
+            ("Every hit without a critical brings the next closer: up to +15%.",
+             new SkillShape { FocusPerHitPercent = 3f, FocusCapPercent = 15f }),
+            ("At that peak your next hit is a critical for certain, then it resets.",
+             new SkillShape { CertaintyAtFocusCap = true })),
 
-        // NATURE — growth: life that comes back.
-        [Source.Nature] = Set(Source.Nature,
-            "Regain 0.3% of maximum health every second.", new SkillShape { RegenFraction = 0.003f },
-            "Heal 2% of the damage you deal.", new SkillShape { Leech = 0.02f }),
+        // NATURE — OVERGROWTH. Recover, grow, waste nothing — including the healing itself.
+        [Source.Nature] = Set(
+            ("Regain 0.3% of maximum health every second.", new SkillShape { RegenFraction = 0.003f }),
+            ("Healing in combat is 20% stronger.", new SkillShape { HealingMultiplier = 1.20f }),
+            ("You can be healed 50% more each wave.", new SkillShape { HealCeilingBonus = 0.50f }),
+            ("Healing you cannot use at full health becomes shield, half of it.",
+             new SkillShape { OverhealToShield = 0.50f })),
 
-        // SHADOW — the finisher.
-        [Source.Shadow] = Set(Source.Shadow,
-            "+12% against creatures under 30% health.", new SkillShape { CullThreshold = 0.30f, CullBonus = 0.12f },
-            "Every kill takes a beat off your cooldowns.", new SkillShape { CooldownRefundOnKillMs = SoloBattle.DefaultBeatMs }),
+        // SHADOW — AFTERIMAGE. One death prepares the next.
+        [Source.Shadow] = Set(
+            ("+12% against creatures under 30% health.",
+             new SkillShape { CullThreshold = 0.30f, CullBonus = 0.12f }),
+            ("A kill leaves a SHADE. Your next damaging skill spends it: +25%.",
+             new SkillShape { ShadeActiveBonus = 0.25f, ShadeMax = 1 }),
+            ("You can hold two shades at once.", new SkillShape { ShadeMax = 2 }),
+            ("A skill that spends a shade strikes again for half as much.",
+             new SkillShape { AfterimageFraction = 0.50f })),
 
-        // SPIRIT — tempo and the opening word.
-        [Source.Spirit] = Set(Source.Spirit,
-            "You act 6% faster.", new SkillShape { SkillRate = 1.06f },
-            "Each skill's first cast of a wave hits 25% harder.", new SkillShape { FirstCastMultiplier = 1.25f }),
+        // SPIRIT — HARMONY. Everything you know, working together.
+        [Source.Spirit] = Set(
+            ("You act 6% faster.", new SkillShape { SkillRate = 1.06f }),
+            ("Each skill's first use of a wave is 20% stronger.",
+             new SkillShape { FirstActivationMagnitude = 1.20f }),
+            ("Each new skill used in a wave speeds you up 2% more, up to 8%.",
+             new SkillShape { ResonanceRatePerSkill = 0.02f, ResonanceRateCap = 0.08f }),
+            ("With all four slots filled: once every skill has been used, each opens again.",
+             new SkillShape { HarmonyCharges = true })),
     };
 
     /// <summary>Worn pieces per element, for every element with at least one worn.</summary>

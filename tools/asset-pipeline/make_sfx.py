@@ -14,7 +14,7 @@ name pointing at nothing.
 Synthesised rather than generated or sourced: a bell is a sum of decaying partials,
 which is nine lines of arithmetic and is exactly reproducible. There is no asset to
 license, nothing to knock out, and re-tuning it is editing a number here rather than
-rolling a generator again. Same call as PrestigeScreen.Ring — when the right asset is
+rolling a generator again. Same call as TraitsScreen.Ring — when the right asset is
 a formula, write the formula.
 
 16-bit mono PCM at 44.1 kHz, which is what SoundEffect.FromStream wants.
@@ -233,6 +233,104 @@ def bind() -> None:
     write(os.path.join(OUT_DIR, "sfx_bind.wav"), buf)
 
 
+# ── The UI POLISH vocabulary (2026-09-01, brief §86): one family per meaning, not one click ────
+
+def nav() -> None:
+    """A nav-rail tile or a tab: the softest cue in the game. Lower and shorter than the button
+    click — a page turning under a thumb, not a latch. It fires on every screen change, so it has
+    to disappear into the act of looking somewhere else."""
+    rng = Noise(0x0A71)
+    buf = [0.0] * int(0.09 * RATE)
+    air(buf, 0.0, 0.025, 0.10, rng)
+    bell(buf, 0.0, 740.00, 0.14, 0.035, partials=(1.0, 2.0))   # F#5, two partials, gone in 35 ms
+    write(os.path.join(OUT_DIR, "sfx_nav.wav"), buf)
+
+
+def error() -> None:
+    """A refusal: a locked tile, a button that cannot take the click, a code that will not paste.
+    Dull on purpose — no ring, no rise — a knuckle on a closed door. Distinct from the click by
+    being LOWER and DEADER, so "that did nothing" is heard rather than read."""
+    rng = Noise(0xE770)
+    buf = [0.0] * int(0.16 * RATE)
+    air(buf, 0.0, 0.03, 0.14, rng)
+    sweep(buf, 0.0, 0.07, 170.0, 105.0, 0.34)                  # a thud that sinks
+    bell(buf, 0.0, 220.00, 0.16, 0.05, partials=(1.0, 1.5))    # a damped low note, no shimmer
+    write(os.path.join(OUT_DIR, "sfx_error.wav"), buf)
+
+
+def train() -> None:
+    """A rank trained. Two quick notes UP a fourth, smaller and shorter than levelup's triad —
+    this fires on every TRAIN click and a player trains ten ranks in a row; it has to satisfy
+    without accumulating. The lift is the reward; the shortness is the mercy."""
+    rng = Noise(0x7241)
+    buf = [0.0] * int(0.30 * RATE)
+    air(buf, 0.0, 0.04, 0.16, rng)
+    bell(buf, 0.0, 659.25, 0.34, 0.12, partials=(1.0, 2.0, 3.0))    # E5
+    bell(buf, 0.06, 880.00, 0.30, 0.14, partials=(1.0, 2.0, 3.0))   # A5, the fourth above
+    sweep(buf, 0.0, 0.08, 330.0, 700.0, 0.10)
+    write(os.path.join(OUT_DIR, "sfx_train.wav"), buf)
+
+
+def reroll() -> None:
+    """RE-ROLL: three quick blips falling then one clean note — a shuffle that settles. Lighter than
+    the forge's anvil; this is chance, not craft."""
+    rng = Noise(0x2E20)
+    buf = [0.0] * int(0.36 * RATE)
+    for i, f in enumerate((1318.51, 1174.66, 987.77)):          # E6 D6 B5, tumbling down
+        bell(buf, i * 0.045, f, 0.16, 0.05, partials=(1.0, 2.0))
+    air(buf, 0.13, 0.05, 0.14, rng)
+    bell(buf, 0.15, 783.99, 0.30, 0.18, partials=(1.0, 2.0, 3.01))   # G5 — where it lands
+    write(os.path.join(OUT_DIR, "sfx_reroll.wav"), buf)
+
+
+def chest_open() -> None:
+    """A chest opens: a wooden lid knock, a metal latch, a breath of air — over in under half a
+    second because the VAULT opens chests by the dozen. The rarity layer (chest_rare) rides on
+    top of it for Epic and Legendary; this one is the same for every chest."""
+    rng = Noise(0xC4E5)
+    buf = [0.0] * int(0.42 * RATE)
+    sweep(buf, 0.0, 0.06, 260.0, 150.0, 0.36)                    # the lid's wooden knock
+    air(buf, 0.0, 0.05, 0.22, rng)
+    bell(buf, 0.07, 1046.50, 0.22, 0.06, partials=(1.0, 2.76))   # the latch, one bright tick
+    air(buf, 0.10, 0.22, 0.14, rng, rise=False)                  # the air that comes out
+    write(os.path.join(OUT_DIR, "sfx_chest_open.wav"), buf)
+
+
+def chest_rare() -> None:
+    """The rarity layer over chest_open for an Epic or Legendary chest: a slow glassy shimmer that
+    hangs after the latch. Restrained — the dark-and-gold direction has no fireworks (brief §58)."""
+    rng = Noise(0xC4A2)
+    buf = [0.0] * int(0.90 * RATE)
+    air(buf, 0.0, 0.20, 0.10, rng, rise=True)
+    bell(buf, 0.06, 1567.98, 0.20, 0.55, partials=(1.0, 2.32, 4.25))   # G6, glass
+    bell(buf, 0.14, 2093.00, 0.16, 0.50, partials=(1.0, 2.32))         # C7 behind it
+    bell(buf, 0.26, 2637.02, 0.10, 0.45, partials=(1.0, 2.0))          # E7, the last spark
+    write(os.path.join(OUT_DIR, "sfx_chest_rare.wav"), buf)
+
+
+def shield_gain() -> None:
+    """SHIELD gained: a cold shimmer — high glassy partials with a quick rise under them, and no
+    low body at all, so it is felt as something forming around the hunter rather than something
+    hitting them. The same glass as the gem cue, an octave up and colder."""
+    rng = Noise(0x5A1E)
+    buf = [0.0] * int(0.55 * RATE)
+    sweep(buf, 0.0, 0.14, 600.0, 1800.0, 0.14)                   # the rise as it forms
+    air(buf, 0.0, 0.12, 0.12, rng, rise=True)
+    bell(buf, 0.08, 2093.00, 0.26, 0.30, partials=(1.0, 2.32, 4.25))   # C7, glass
+    bell(buf, 0.12, 3135.96, 0.14, 0.26, partials=(1.0, 2.32))         # G7 above it
+    write(os.path.join(OUT_DIR, "sfx_shield_gain.wav"), buf)
+
+
+def shield_hit() -> None:
+    """A bite absorbed by SHIELD: a small cold tick, over in a tenth of a second. The bar's movement
+    does the telling (brief §69); this only says "that landed on the shield, not on you"."""
+    rng = Noise(0x5A17)
+    buf = [0.0] * int(0.12 * RATE)
+    air(buf, 0.0, 0.02, 0.16, rng)
+    bell(buf, 0.0, 1396.91, 0.22, 0.045, partials=(1.0, 2.32, 4.25))   # F6, glassy and short
+    write(os.path.join(OUT_DIR, "sfx_shield_hit.wav"), buf)
+
+
 if __name__ == "__main__":
     trait_lit()
     trait_terminal()
@@ -243,3 +341,11 @@ if __name__ == "__main__":
     deepen()
     weave()
     bind()
+    nav()
+    error()
+    train()
+    reroll()
+    chest_open()
+    chest_rare()
+    shield_gain()
+    shield_hit()

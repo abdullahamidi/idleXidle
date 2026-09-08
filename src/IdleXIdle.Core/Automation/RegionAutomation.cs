@@ -101,7 +101,7 @@ public sealed class Region
     /// </summary>
     /// <remarks>
     /// All three thresholds are earned by the champion's own kills. PERFECTED pays the third trait
-    /// point this region owes the tree's budget (Career.TraitPointsEarned) and — through the host's
+    /// point this region owes (region mastery is its own progression) and — through the host's
     /// region progression step — hardens the region one more notch for better loot.
     /// </remarks>
     public MasteryLevel MasteryLevel
@@ -117,13 +117,14 @@ public sealed class Region
 
     /// <summary>RMP for an active kill the player fought here — playing is what builds mastery.</summary>
     /// <param name="rate">
-    /// The trait tree's mastery-rate multiplier (<c>DustEffects.MasteryRate</c>). 1 means no trait.
+    /// A multiplier on the mastery earned. Always 1 in the shipping game.
     /// </param>
     /// <remarks>
-    /// The rate parameter is how FASTER REGION MASTERY I–IV reach the game. Before it existed the four
-    /// nodes were wired in DustEffects and read by nothing: the only live source of mastery points was
-    /// this method, and it added the flat tuning value whatever the tree said. Four nodes, eight trait
-    /// points, no effect — the house failure mode, caught in the traits pass of 2026-08-25.
+    /// It exists because the retired Memory tree sold FASTER REGION MASTERY I-IV, a permanent
+    /// +5/10/15/20 % ladder. Those nodes are deleted: mastery already EARNED is progression and
+    /// survives, but a hidden per-account speed multiplier is not, and region-mastery pacing belongs in
+    /// an explicit balance rule. The parameter stays as the one seam a future pacing rule would use
+    /// rather than being rediscovered.
     /// </remarks>
     public void RecordActiveKill(float rate = 1f)
         => RegionMasteryPoints += _tuning.RmpPerActiveKillBonus * MathF.Max(0f, rate);

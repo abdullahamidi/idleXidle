@@ -34,7 +34,7 @@ ART = os.path.join(REPO, "assets", "art")
 
 W, H = 1920, 1080
 
-# --- literal geometry from SoloExpeditionScreen.cs -------------------------
+# --- literal geometry from HuntScreen.cs -------------------------
 CURRENT = {
     "GROUND_Y": 735,                            # :48
     "CHAMP_BOX": (560 - 180, 735 - 390, 360, 390),   # :62
@@ -62,7 +62,7 @@ PROPOSED = {
     "NAV": (0, 0, 180, 1080),
 }
 
-# Mirrors SoloExpeditionScreen.Sockets: (cx, cy, h) as fractions of the champion box.
+# Mirrors HuntScreen.Sockets: (cx, cy, h) as fractions of the champion box.
 SOCKETS = {
     "chest":  (0.50, 0.47, 0.25),
     "boots":  (0.50, 0.90, 0.19),

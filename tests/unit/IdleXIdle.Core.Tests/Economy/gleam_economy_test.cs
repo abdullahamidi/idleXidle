@@ -53,7 +53,7 @@ public class GleamEconomyTest
     /// correctly for a loop the game does not run. Every figure below is now stated in REAL time at the
     /// speed the game opens on, and the sweep prints the whole range so the ceiling is visible too.
     /// </remarks>
-    // 2026-08-23 audit: the HUD's battle-speed control WAS REMOVED (SoloExpeditionScreen pins
+    // 2026-08-23 audit: the HUD's battle-speed control WAS REMOVED (HuntScreen pins
     // PlaybackSpeed = 1). This constant modelled a x2 default the player cannot reach any more, and
     // every headline figure was half its real value. The shipped speed is 1, full stop.
     private const float DefaultBattleSpeed = 1f;
@@ -76,13 +76,13 @@ public class GleamEconomyTest
     private static long WarrenGleamPerMinute(int conquered = 1)
     {
         var w = new Warren { ConqueredRegions = conquered };
-        return w.ProductionPerMinute(WarrenResource.Gleam);
+        return (long)MathF.Round(w.ProductionPerMinute(WarrenResource.Gleam));
     }
 
     private static Build StarterBuild()
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow"));
+        b.Equip(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 
@@ -119,7 +119,7 @@ public class GleamEconomyTest
             if (run.Wave == before) break;
             gleam += run.LastWaveHaul.Gleam;
             ms += run.LastWaveEvents.Count == 0 ? 0 : run.LastWaveEvents.Max(e => e.AtMs);
-            // The screen holds ~1.10s between waves (SoloExpeditionScreen.WaveBreakSeconds:
+            // The screen holds ~1.10s between waves (HuntScreen.WaveBreakSeconds:
             // 0.45 + 0.45 + 0.20). Fight-time-only income read roughly double the wall clock on short
             // waves, so the break is counted. It was 2.05s until 2026-08-28, when the transition was
             // shortened alongside the wave-length change — the two were one decision.

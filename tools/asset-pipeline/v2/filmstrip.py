@@ -4,7 +4,7 @@
     python tools/asset-pipeline/v2/filmstrip.py <outprefix> <frame_00.png> <frame_01.png> ...
         [--crop x,y,w,h] [--cols 4] [--scale 0.5] [--label "100 ms"]
 
-Default crop is the HUNT arena (SoloExpeditionScreen.ArenaRect = 492,100,1062,940) plus the HUD
+Default crop is the HUNT arena (HuntScreen.ArenaRect = 492,100,1062,940) plus the HUD
 strip above it so the skill rail and the boss bar stay in frame. Each cell is numbered; with a
 stride of 6 frames at 60 Hz the numbers read as tenths of a second.
 """

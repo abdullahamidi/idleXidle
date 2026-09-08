@@ -95,7 +95,39 @@ public sealed record ExpeditionTuning
     /// </remarks>
     public float EnemyDamageScaleBase { get; init; } = 1.04f;
 
+    /// <summary>
+    /// What a wave pays at wave ZERO, before depth has grown anything — the reward line's intercept.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WAS AN IMPLICIT 1. The playtest verdict on 2026-09-08 was that the opening hands out slightly
+    /// too much Gleam while everything deeper feels right, so the line was re-pitched rather than
+    /// scaled: a lower intercept with a fractionally steeper slope starts the descent leaner and
+    /// converges on the old curve as depth arrives. Nothing branches on a milestone — the same single
+    /// expression pays wave 1 and wave 400.
+    /// </para>
+    /// <para>
+    /// Cumulative Gleam against the old line, which is the number a player actually spends:
+    /// <code>
+    ///   through wave  5   -20 %      the opening loop
+    ///   through wave 10   -13 %      the first real build decisions
+    ///   through wave 20    -7 %      the first conquest (Checkpoints.ConquestWave)
+    ///   through wave 40    -3 %      early-mid
+    ///   through wave 80     0 %      converged
+    /// </code>
+    /// The first training rank is still affordable inside the opening minute — gleam_economy_test
+    /// bounds that directly, and it is the guard against trading generosity for a wall.
+    /// </para>
+    /// </remarks>
+    public float HaulScaleBase { get; init; } = 0.52f;
+
     /// <summary>...while reward only grows LINEARLY. The gap is the whole design.</summary>
+    /// <remarks>
+    /// UNCHANGED by the 2026-09-08 re-pitch, deliberately. Lowering the intercept alone converges on the
+    /// old curve from BELOW — (0.6 + 0.35w) / (1 + 0.35w) climbs to 1 and never passes it — so the deep
+    /// game is never quietly paid more than it was. A steeper slope reached parity sooner and then kept
+    /// going: +2.1 % by wave 160, which is a deep buff nobody asked for.
+    /// </remarks>
     public float HaulScaleSlope { get; init; } = 0.35f;
 
     /// <summary>
@@ -240,7 +272,24 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 // rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
 public enum BattleEventKind
 {
-    Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat,
+    Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Charge, Aura, Beat,
+
+    /// <summary>
+    /// SHIELD was granted. <c>Amount</c> is what was ACTUALLY added after the cap clamped it, so a
+    /// grant at the ceiling reports zero rather than what it offered.
+    /// </summary>
+    /// <remarks>
+    /// The three shield events explain CHANGES. The standing figure is state — see
+    /// <see cref="Builds.Champion.CurrentShield"/> — because a screen opened halfway through a fight
+    /// must be able to draw the bar without having witnessed the grant that filled it.
+    /// </remarks>
+    ShieldGained,
+
+    /// <summary>SHIELD ate part of a bite. <c>Amount</c> is what it absorbed, post-mitigation.</summary>
+    ShieldAbsorbed,
+
+    /// <summary>The Shield reached zero. Fires on the crossing, once, not on every bite at zero.</summary>
+    ShieldBroken,
 
     /// <summary>
     /// UNDYING caught a killing blow. <c>Amount</c> is how long the steel shows, in ms. Its own kind
@@ -260,6 +309,38 @@ public enum BattleEventKind
     /// event exists to put a state badge over the one being broken.
     /// </remarks>
     Break,
+
+    // ── THE ENEMY INSPECTOR'S EVENTS (2026-09-06). The fight screen shows a hovered creature's
+    //    BASE → CURRENT stats and its standing statuses, and it may not re-derive the sim's rules; so
+    //    the sim SAYS each change as it makes it, and WaveReplay keeps the standing value. ──
+
+    /// <summary>A creature's defence after a break: Slot = the creature, Amount = its defence now, rounded.</summary>
+    DefenceNow,
+
+    /// <summary>
+    /// An attack break deepened: Amount = the standing reduction in whole percent (negative). Slot = -1
+    /// for every creature (WILT), 0 for the front creature only, 1 for the second (SHRIVEL's reach).
+    /// </summary>
+    AttackBreak,
+
+    /// <summary>The wave's bite clock stretched: Amount = the standing slow in whole percent (MIRE / NUMB).</summary>
+    Slowed,
+
+    /// <summary>The next bite was pushed back: Amount = the milliseconds added (a stun / stagger).</summary>
+    Staggered,
+
+    /// <summary>A Mark opened on the wave: Amount = its window in ms; Slot = the amplify percent at opening.</summary>
+    Marked,
+
+    // ── DEADWEIGHT (THE ANVIL, 2026-09-07). The sim says each store and each release as it makes it,
+    //    so a screen can show the state without inferring it from the damage numbers; the standing
+    //    figure is state on the creature (Builds.WaveCreature.StoredDeadweight). ──────────────────────
+
+    /// <summary>A primary hit left DEADWEIGHT in a surviving creature: Slot = the creature, Amount = what it now holds, rounded.</summary>
+    DeadweightStored,
+
+    /// <summary>The next primary hit released it: Slot = the creature, Amount = the damage released, rounded. The release lands as its own Strike.</summary>
+    DeadweightReleased,
 }
 
 /// <summary>
@@ -306,12 +387,32 @@ public enum BattleEventKind
 /// creatures dying one at a time instead of one bar draining — which is the difference between a player
 /// being able to see "I killed two of five" and not.
 /// </remarks>
-/// <param name="FromSkill">
-/// A Strike dealt by a skill (cast, aura tick, trap bite) rather than the auto-attack. The hunt grades
-/// its damage numbers by it — an auto-swing landing on the same millisecond as a cast used to print
-/// a size up (review 2026-08-26); a timestamp is not a provenance.
+/// <param name="Hit">
+/// WHAT DEALT IT, typed — the same <see cref="Builds.HitSource"/> the fight already routes every
+/// landing through. Null on every event that is not a Strike.
 /// </param>
-public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs, bool FromSkill = false);
+/// <remarks>
+/// The Strike used to carry only <see cref="FromSkill"/>, a boolean whose doc said "a skill dealt it"
+/// while the sim set it from <c>!swing</c> — so a carry, a bleed, a reflect and THE ANVIL's DEADWEIGHT
+/// release all reported "a skill" (2026-09-08 audit). The values were right for the three consumers
+/// that read it, which all mean "not the basic swing" by it; the NAME and the doc were the lie, and a
+/// fourth consumer asking a different question would have inherited it. The provenance is on the event
+/// now and the boolean is derived from it, so nothing moved and nothing has to guess.
+/// </remarks>
+public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs, Builds.HitSource? Hit = null)
+{
+    /// <summary>
+    /// A Strike that is NOT the champion's basic swing — a cast, an aura tick, a trap bite, and equally
+    /// a carried overkill, a bleed, a reflect or a DEADWEIGHT release.
+    /// </summary>
+    /// <remarks>
+    /// The hunt grades its damage numbers by it, aims the swing clip and the lunge at its absence, and
+    /// picks the louder hit sound for it — an auto-swing landing on the same millisecond as a cast used
+    /// to print a size up (review 2026-08-26); a timestamp is not a provenance. Ask <see cref="Hit"/>
+    /// when the question is finer than "was that the swing?".
+    /// </remarks>
+    public bool FromSkill => Hit is not null and not Builds.HitSource.Swing;
+}
 
 /// <summary>Skill payouts earned mid-wave (SALVAGE quality, HARVEST/LODESTONE cores), collected at wave end.</summary>
 public sealed class WaveBonus
@@ -397,5 +498,8 @@ public static class WaveScaling
     /// on pushing, and the answer to "push into the boss?" would always be no — which is a wall, not a bet.
     /// </remarks>
     public static float HaulScale(int wave, ExpeditionTuning t)
-        => (1f + t.HaulScaleSlope * wave) * (IsBossWave(wave, t) ? t.BossHealthScale : 1f);
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        return (t.HaulScaleBase + t.HaulScaleSlope * wave) * (IsBossWave(wave, t) ? t.BossHealthScale : 1f);
+    }
 }

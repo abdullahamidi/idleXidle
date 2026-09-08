@@ -141,7 +141,7 @@ public class SkillProgressTests
         p.TakeReinforcement(Hammer, v.Reinforcements[0].Name);
 
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: Hammer.Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: p);
 
@@ -158,7 +158,7 @@ public class SkillProgressTests
     {
         // Null progress is a champion that has not fought yet, and every test that does not care.
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: Hammer.Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
@@ -183,7 +183,7 @@ public class SkillProgressLivenessTests
     {
         var progress = new SkillProgress();
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id),
@@ -222,7 +222,7 @@ public class SkillProgressLivenessTests
     {
         var progress = new SkillProgress();
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), Taught.Everything(), character: null,
+            Taught.Everything(), character: null,
             skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
 

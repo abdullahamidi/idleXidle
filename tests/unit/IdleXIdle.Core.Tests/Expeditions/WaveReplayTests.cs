@@ -126,32 +126,73 @@ public class WaveReplayTests
     }
 
     /// <summary>
-    /// A shield is visible only while it holds, and only on the slots the SIM says it covers. The view must
-    /// never re-derive that reach — a second copy of the rule is a second thing to get wrong.
+    /// SHIELD is a RUNNING TOTAL the replay keeps, so a screen that joins mid-wave draws the right bar.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The events say what CHANGED — gained, absorbed, broken — because that is what the simulation
+    /// knows at the moment it happens. The replay is where those become a standing figure, and it has
+    /// to be here rather than in the screen: a second copy of "what is the shield now" is a second
+    /// thing to get wrong, and the screen is the copy that gets opened halfway through a fight.
+    /// </para>
+    /// <para>
+    /// This replaces a test of <c>IsShielded(slot)</c>, which was fed by the UNDYING event and drew a
+    /// chip reading SHIELDED — the same word as the resource, for a different thing, beside a bar that
+    /// meant the resource. UNDYING has its own chip; the word belongs to the bar.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void test_a_shield_shows_only_on_covered_slots_and_only_while_it_holds()
+    public void test_shield_is_a_running_total_the_replay_keeps()
     {
         var events = new List<BattleEvent>
         {
-            // UNDYING, not Shield: the duration-carrying cover got its own kind when the audit
-            // found Shield's Amount meaning milliseconds for one producer and banked HEALTH for
-            // the other (D8) — one payload, two meanings, and the replay could only honour one.
-            new(BattleEventKind.Undying, 1, ShieldMs, 1000),
+            new(BattleEventKind.ShieldGained, 0, 60, 500),
+            new(BattleEventKind.ShieldAbsorbed, 0, 25, 1_000),
+            new(BattleEventKind.ShieldAbsorbed, 0, 35, 1_500),
+            new(BattleEventKind.ShieldBroken, 0, 0, 1_500),
         };
 
         var replay = new WaveReplay(
             events,
-            new Dictionary<int, int> { [0] = 100, [1] = 100, [2] = 100 },
-            new Dictionary<int, int> { [0] = 100, [1] = 100, [2] = 100 },
+            new Dictionary<int, int> { [0] = 100 },
+            new Dictionary<int, int> { [0] = 100 },
             enemyHealth: 50f);
 
-        replay.Advance(1200f);
-        Assert.True(replay.IsShielded(1));
-        Assert.False(replay.IsShielded(0));   // never told it was covered, so it isn't drawn as covered
+        // Before the grant there is nothing, and nothing is not a shield.
+        replay.Advance(400f);
+        Assert.Equal(0, replay.CurrentShield);
+        Assert.False(replay.HasShield);
 
-        replay.Advance(1000f + ShieldMs + 1);
-        Assert.False(replay.IsShielded(1));   // it lapses — WHEN it fires has to matter
+        replay.Advance(600f);
+        Assert.Equal(60, replay.CurrentShield);
+        Assert.True(replay.HasShield);
+
+        replay.Advance(1_100f);
+        Assert.Equal(35, replay.CurrentShield);   // one bite eaten
+        Assert.True(replay.HasShield);
+
+        replay.Advance(1_600f);
+        Assert.Equal(0, replay.CurrentShield);    // eaten out, and the break says so
+        Assert.False(replay.HasShield);
+    }
+
+    /// <summary>The cap the bar is drawn against is the champion's, not the shield's high-water mark.</summary>
+    /// <remarks>
+    /// A bar scaled to whatever the shield happened to reach would fill completely every time, which
+    /// tells the player nothing: the point of the strip is how much of what they COULD hold they are
+    /// holding. <see cref="ShieldRules.CapFor"/> is the one place that number is decided.
+    /// </remarks>
+    [Fact]
+    public void test_the_shield_bar_is_measured_against_the_champions_cap()
+    {
+        var replay = new WaveReplay(
+            new List<BattleEvent>(),
+            new Dictionary<int, int> { [0] = 400 },
+            new Dictionary<int, int> { [0] = 400 },   // slot 0 is the champion; its pool sets the cap
+            enemyHealth: 50f);
+
+        Assert.Equal(ShieldRules.CapFor(400), replay.MaxShield);
+        Assert.Equal(200, replay.MaxShield);
     }
 
     /// <summary>The windup ring needs to know when the next bite lands — that's the anticipation read.</summary>
@@ -190,7 +231,7 @@ public class WaveReplayTests
     /// whether "the bars drop correctly". Four DIFFERENT pools, so a strike credited to the wrong slot
     /// cannot hide behind a twin. It was written to find the bug in the report and found none here: the
     /// replay is honest, and the number that disagreed with the bars was the screen's own invention
-    /// (see SoloExpeditionScreen — the damage callouts now print the event's amount).
+    /// (see HuntScreen — the damage callouts now print the event's amount).
     /// </remarks>
     [Fact]
     public void test_each_creature_replays_to_exactly_where_the_sim_left_it()

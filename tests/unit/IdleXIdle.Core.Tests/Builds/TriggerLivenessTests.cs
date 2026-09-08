@@ -44,7 +44,7 @@ public class TriggerLivenessTests
     private static Build BuildWith(params string[] keystoneIds)
     {
         var build = new Build();
-        build.Weave(Sk());
+        build.Equip(Sk());
         foreach (var id in keystoneIds) build.Take(Keystones.ById(id)!);
         return build;
     }
@@ -98,7 +98,7 @@ public class TriggerLivenessTests
             Shape = SkillShape.None,
             ExtraTriggers = new HashSet<BuildTrigger>(triggers),
         };
-        build.Weave(TestBuilds.Skill("volley_spray", Source.Nature));
+        build.Equip(TestBuilds.Skill("volley_spray", Source.Nature));
 
         var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
         var (_, events) = SoloBattle.ResolveWave(
@@ -261,8 +261,8 @@ public class TriggerLivenessTests
         // 2026-08-30 an activation announces itself exactly once however many passes it makes, because
         // the screen starts an effect, a sound and a callout per announcement and ECHO fired all three
         // twice on the same frame.
-        var plain = new Build(); plain.Weave(Sk());
-        var echo = new Build(); echo.Weave(Sk()); echo.Take(Keystones.ById("echo")!);
+        var plain = new Build(); plain.Equip(Sk());
+        var echo = new Build(); echo.Equip(Sk()); echo.Take(Keystones.ById("echo")!);
 
         (int Blows, int Damage) Landed(Build b)
         {
@@ -294,7 +294,7 @@ public class TriggerLivenessTests
         // penalty and prove nothing about the trigger.
         float Hurt(int startingHealth)
         {
-            var build = new Build(); build.Weave(Sk());
+            var build = new Build(); build.Equip(Sk());
             build.Take(Keystones.ById("bloodlust")!);
 
             var champ = new Champion { MaxHealth = 1_000, Health = startingHealth };
@@ -314,7 +314,7 @@ public class TriggerLivenessTests
         int HealEvents(bool bloodMagic)
         {
             var build = new Build();
-            build.Weave(Sk("drain_drink"));
+            build.Equip(Sk("drain_drink"));
             if (bloodMagic) build.Take(Keystones.ById("blood_magic")!);
 
             var champ = new Champion { MaxHealth = 1_000, Health = 500 };
@@ -358,7 +358,7 @@ public class TriggerLivenessTests
     [Fact]
     public void test_splinter_pays_out_on_a_kill()
     {
-        var build = new Build(); build.Weave(Sk());
+        var build = new Build(); build.Equip(Sk());
         build.Take(Keystones.ById("reaper")!);          // grants Splinter
 
         var bonus = new WaveBonus();
@@ -460,8 +460,8 @@ public class TriggerLivenessTests
         Build TwoWoven(params string[] keystones)
         {
             var b = new Build();
-            b.Weave(Sk("hammer_blow"));
-            b.Weave(Sk("volley_spray"));
+            b.Equip(Sk("hammer_blow"));
+            b.Equip(Sk("volley_spray"));
             foreach (var id in keystones) b.Take(Keystones.ById(id)!);
             return b;
         }

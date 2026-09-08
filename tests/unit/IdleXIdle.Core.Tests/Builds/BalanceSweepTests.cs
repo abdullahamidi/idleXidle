@@ -68,7 +68,7 @@ public class BalanceSweepTests
     private static Build BuildWith(SkillShape shape, BuildMods? mods = null, Vow? vow = null)
     {
         var b = new Build { PassiveMods = mods ?? BuildMods.None, Shape = shape };
-        foreach (var id in Quartet) b.Weave(Sk(id, vow: vow));
+        foreach (var id in Quartet) b.Equip(Sk(id, vow: vow));
         return b;
     }
 
@@ -134,6 +134,31 @@ public class BalanceSweepTests
         while (!run.Over && run.Wave < DepthCap) run.PushWave();
         return run.Wave;
     }
+
+    /// <summary>One run's gleam, wave by wave, on the same seeds and cap <see cref="DepthOn"/> uses.</summary>
+    private static double HaulOn(Build build, Hunter hunter, int runIndex, string region = "verdant_hollow")
+    {
+        var hp = SoloBattle.ChampionHealth(build, hunter);
+        var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, hunter,
+                                     enemyBaseHealth: 120f, enemyBaseDamage: 9f,
+                                     ExpeditionTuning.Default, rng: new Random(9_000 + runIndex))
+        {
+            RegionId = region,
+            RunIndex = runIndex,
+        };
+        double gleam = 0;
+        while (!run.Over && run.Wave < DepthCap)
+        {
+            var before = run.Wave;
+            run.PushWave();
+            if (run.Wave == before) break;
+            gleam += run.LastWaveHaul.Gleam;
+        }
+        return gleam;
+    }
+
+    private static double MeasureHaul(Build build, Hunter hunter)
+        => Enumerable.Range(0, Seeds).Select(i => HaulOn(build, hunter, i)).Average();
 
     private readonly record struct Spread(int P25, int Median, int P75, double Mean, int Max)
     {
@@ -268,9 +293,23 @@ public class BalanceSweepTests
         // measured +0.3 at the time of writing; a branch that cannot buy a sixth of a wave on
         // average at 18 points is dormant in the sense this project polices.
         foreach (var (b, s) in rows)
+        {
+            if (b == Branch.Loot) continue;   // LOOT pays in haul — measured in its own coin below
             Assert.True(s.Mean > gearedBase.Mean + 0.15,
                         $"{b} at {Budget} points buys no visible depth over an untouched tree "
                         + $"({s.Mean:0.00} vs {gearedBase.Mean:0.00})");
+        }
+
+        // LOOT PAYS IN WHAT YOU CARRY OUT, not in depth (the path redesign, 2026-09-06). Its minors
+        // are GUILE alone now — the +5 HEALTH and +4 FOCUS the old COUNT and TALLY carried were the
+        // stat soup the redesign retired, and they were the only reason this branch ever bought a
+        // wave. The honest instrument for it is the gleam the same runs bring out.
+        var (lootBuild, lootHunter) = Walked(Branch.Loot, Budget, geared);
+        var lootHaul = MeasureHaul(lootBuild, lootHunter);
+        var baseHaul = MeasureHaul(BuildWith(SkillShape.None, geared), MidCareerHunter());
+        _out.WriteLine($"HAUL    baseline {baseHaul,9:0}   Loot @ {Budget} {lootHaul,9:0}   x{lootHaul / Math.Max(1, baseHaul):0.00}");
+        Assert.True(lootHaul > baseHaul * 1.10,
+                    $"Loot at {Budget} points buys no visible haul over an untouched tree ({lootHaul:0} vs {baseHaul:0})");
 
         var best = rows.MaxBy(kv => kv.Value.Median);
         var worst = rows.MinBy(kv => kv.Value.Median);
@@ -366,10 +405,20 @@ public class BalanceSweepTests
         var geared = new BuildMods(3.0f, 1.4f, 1f, 1f, 1f);
         var quartet = Quartet;
 
-        Build Weave(SkillShape shape, IEnumerable<string> ids, Source source = Source.Spirit, BuildMods? mods = null)
+        Build Equip(SkillShape shape, IEnumerable<string> ids, Source source = Source.Spirit, BuildMods? mods = null)
         {
             var b = new Build { PassiveMods = mods ?? geared, Shape = shape };
-            foreach (var id in ids) b.Weave(TestBuilds.Skill(id, source, v));
+            foreach (var id in ids) b.Equip(TestBuilds.Skill(id, source, v));
+            return b;
+        }
+
+        // VOW OF THE PURE is kept by a CHOSEN single Source (Build.ChosenSingleSource, 2026-09-07): four
+        // variations taken to BODY — the four skills that have one, two actives and two fields. A quartet
+        // left on its Source seed would swear the vow and measure it inert.
+        Build EquipChosen(SkillShape shape, params (string Id, string Variation)[] picks)
+        {
+            var b = new Build { PassiveMods = geared, Shape = shape };
+            foreach (var (id, variation) in picks) b.Equip(TestBuilds.Chosen(id, variation, v));
             return b;
         }
 
@@ -377,20 +426,22 @@ public class BalanceSweepTests
         {
             // Static-cost Vows demand nothing, so any build measures them honestly.
             case VowDemand.None:
-                return (Weave(SkillShape.None, quartet), hunter);
+                return (Equip(SkillShape.None, quartet), hunter);
 
             // ONE STYLE, not one skill: two BLOWs keep a rotation under the beat model (2026-08-27).
             // And UNGEARED damage: overkill is discarded, and with the ×3 gear a BLOW already killed
             // every creature it touched, so doubling it bought nothing — the harness measured 18 deep
             // with the Vow and 18 without, which is the fixture's saturation, not the Vow's worth.
             case VowDemand.SingleStyle:
-                return (Weave(SkillShape.None, new[] { "hammer_blow", "hammer_blow" }, mods: geared with { Damage = 0.4f }), hunter);
+                return (Equip(SkillShape.None, new[] { "hammer_blow", "hammer_blow" }, mods: geared with { Damage = 0.4f }), hunter);
 
             case VowDemand.SingleSource:
-                return (Weave(SkillShape.None, quartet), hunter);
+                return (EquipChosen(SkillShape.None,
+                            ("hammer_blow", "FLATTEN"), ("volley_spray", "CLUSTER"),
+                            ("hammer_press", "CRUSHING"), ("drain_wilt", "SUP")), hunter);
 
-            case VowDemand.EveryWeaveFilled:
-                return (Weave(SkillShape.None, quartet), hunter);
+            case VowDemand.EverySlotFilled:
+                return (Equip(SkillShape.None, quartet), hunter);
 
             // Crit must sit at base, so the Hunter may not have trained FOCUS.
             case VowDemand.NoCritInvestment:
@@ -403,14 +454,14 @@ public class BalanceSweepTests
                              HunterStat.Vitality, HunterStat.Defense, HunterStat.ResonanceAffinity,
                          })
                     for (var i = 0; i < 20; i++) h.Train(stat);
-                return (Weave(SkillShape.None, quartet), h);
+                return (Equip(SkillShape.None, quartet), h);
             }
 
             case VowDemand.CadenceAtOrBelow:
-                return (Weave(SkillShape.None with { SkillRate = 0.5f }, quartet), hunter);
+                return (Equip(SkillShape.None with { SkillRate = 0.5f }, quartet), hunter);
 
             case VowDemand.CadenceAtOrAbove:
-                return (Weave(SkillShape.None with { SkillRate = 2.0f }, quartet), hunter);
+                return (Equip(SkillShape.None with { SkillRate = 2.0f }, quartet), hunter);
 
             // Defence must be ZERO, which no trained Hunter has — so this one is untrained by necessity
             // and its depths are not comparable with the rest. It is still measured against its OWN
@@ -425,16 +476,16 @@ public class BalanceSweepTests
                              HunterStat.Vitality, HunterStat.ResonanceAffinity,
                          })
                     for (var i = 0; i < 20; i++) h.Train(stat);
-                return (Weave(SkillShape.None, quartet), h);
+                return (Equip(SkillShape.None, quartet), h);
             }
 
             // The Hunter wears nothing in the fixture, so every slot is already bare.
             case VowDemand.SlotLeftBare:
-                return (Weave(SkillShape.None, quartet), hunter);
+                return (Equip(SkillShape.None, quartet), hunter);
 
             // No keystones are socketed on a Build nobody socketed one into.
             case VowDemand.NoKeystone:
-                return (Weave(SkillShape.None, quartet), hunter);
+                return (Equip(SkillShape.None, quartet), hunter);
 
             default:
                 return null;
@@ -456,7 +507,7 @@ public class BalanceSweepTests
             // contribution rather than the cost of the demand.
             var bare = new Build { PassiveMods = fx.Build.PassiveMods, Shape = fx.Build.Shape };
             foreach (var s in fx.Build.Skills)
-                bare.Weave(s with { Vow = null });
+                bare.Equip(s with { Vow = null });
 
             // Prove the demand IS met before trusting the number.
             var ctx = SoloBattle.DescribeBuild(fx.Build, fx.Hunter);
@@ -491,25 +542,6 @@ public class BalanceSweepTests
                         $"{v.Name} is worth x{Vows.Multiplier(v):0.00} and "
                         + $"buys NOTHING — {s.Mean:0.00} deep with it on average, {w.Mean:0.00} without "
                         + $"(medians {s.Median} and {w.Median})");
-    }
-
-    [Fact]
-    public void test_the_four_trait_roads_are_worth_comparable_amounts()
-    {
-        // Roads are bought with the same points and two of them are unaffordable together, so the
-        // choice is only real if they are worth roughly the same.
-        var tree = new MemoryDustTree();
-        var costs = Enum.GetValues<TraitRoad>()
-            .Where(r => r != TraitRoad.Spine)
-            .ToDictionary(r => r, r => tree.All.Where(u => u.Road == r).Sum(u => u.Cost));
-
-        foreach (var (road, cost) in costs) _out.WriteLine($"{road,-9} {cost} pts");
-
-        var min = costs.Values.Min();
-        var max = costs.Values.Max();
-        Assert.True(max - min <= 2,
-                    $"the roads cost {min}..{max} points — a road that costs more must be worth more, "
-                    + "and nothing in the design says which one is meant to be dearer");
     }
 
     [Fact]

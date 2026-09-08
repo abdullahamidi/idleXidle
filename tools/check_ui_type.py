@@ -23,7 +23,11 @@ WHAT IT CHECKS. Every call to the sized text helpers --
 -- must be given a NAME, not a numeral. A UiTypography rung, a local constant, a variable, an
 expression: anything a human had to name. A literal `14` is what this refuses.
 
-It also refuses a literal in the SIZE position of a UiTypography-shaped constant declaration inside
+It also refuses a bare number in a LINE PITCH slot -- `lineH = 26`, `rowH = 22`, `pitch = 20` -- because
+a row height that does not follow its rung through UiTypography.Pitch(rung) overlaps the next row the
+day the ladder moves (UX V2 P0.4).
+
+And it refuses a literal in the SIZE position of a UiTypography-shaped constant declaration inside
 the UI assembly, so a screen cannot re-open the ladder under a private name:
 
     private const int MyTitlePx = 30;      <-- flagged
@@ -64,6 +68,11 @@ DECL = re.compile(
     r"\b(?:const|static\s+readonly)\s+int\s+(\w*(?:Px|TextSize|FontSize))\s*=\s*([^;]+);")
 
 OPT_OUT = re.compile(r"//\s*ui-size-ok\s*:\s*(.+?)\s*$")
+
+# A bare number where a LINE PITCH goes. The pitch of a list or paragraph follows its rung through
+# UiTypography.Pitch(rung); a literal here is a row height that will overlap the next row the day the
+# ladder moves (UX V2 P0.4).
+PITCH = re.compile(r"\b(?:lineH|LineH|rowH|RowH|pitch|linePitch|rowPitch)\s*=\s*(-?\d+)\b")
 
 # A name is anything that is not a plain integer. `-1` and `0` are numbers too.
 NUMERIC = re.compile(r"^-?\d+$")
@@ -203,6 +212,16 @@ def main() -> int:
                 else:
                     bad.append((path.name, ln, f"{name}(..., {size})   a bare size"))
 
+        # A hand-set line pitch.
+        for m in PITCH.finditer(text):
+            ln = line_of(m.start())
+            if path.name == "UiTypography.cs":
+                continue
+            if (why := opt_out(ln)) is not None:
+                allowed.append((path.name, ln, f"{m.group(0)}", why))
+            else:
+                bad.append((path.name, ln, f"{m.group(0)}   a bare line pitch (use UiTypography.Pitch(rung))"))
+
         # A private ladder growing beside the real one.
         for m in DECL.finditer(text):
             value = m.group(2).strip()
@@ -230,7 +249,8 @@ def main() -> int:
     for f, ln, what in bad:
         print(f"  {f}:{ln}  {what}")
     print("\nUse a UiTypography rung (ScreenTitle / PanelTitle / Headline / NavigationLabel / Body /")
-    print("Secondary / Caption ...), or name the exception on the same line with")
+    print("Secondary / Caption ...) — or UiTypography.Pitch(rung) for a line pitch — or name the exception")
+    print("on the same line with")
     print("  // ui-size-ok: <why this size is not a screen-pixel rung>")
     return 1
 

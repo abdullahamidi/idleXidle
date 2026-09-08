@@ -12,8 +12,8 @@ Sources of truth, all verified against the code:
   Role       5  Creature.cs        Attacker Defender Support Crafter Producer
   GearSlot   8  Gear.cs            Weapon Charm Focus Helm Chest Gloves Boots Ring
   GearTrait 10  GearTraits.cs      Keen Heavy Swift Savage Warding Vital Greedy Attuned Focused Wild
-  enemies    6  SoloExpeditionScreen.EnemyForSource
-  bosses     6  SoloExpeditionScreen.BossForRegion
+  enemies    6  HuntScreen.EnemyForSource
+  bosses     6  HuntScreen.BossForRegion
   bar types  5  UiKit.BarArt        health mana progress boss xp
 
 Run:  python3 tools/asset-pipeline/build_spec.py
@@ -43,7 +43,7 @@ SOURCE_ART = {
     "spirit":  ("pale lavender white", "soft dissolving contours tapering into wisps"),
 }
 
-# One enemy per Source (SoloExpeditionScreen.EnemyForSource). The attack clip is
+# One enemy per Source (HuntScreen.EnemyForSource). The attack clip is
 # "slam" for stone_sentinel and "attack" for everyone else.
 ENEMIES = {
     "bonecrawler":    ("body",    "a skittering crimson bone crawler with many clawed legs", "attack"),
@@ -54,7 +54,7 @@ ENEMIES = {
     "rift_guardian":  ("spirit",  "a tall pale armoured rift guardian wreathed in wisps",     "attack"),
 }
 
-# One boss per region (SoloExpeditionScreen.BossForRegion).
+# One boss per region (HuntScreen.BossForRegion).
 BOSSES = {
     "thorn_regent":   ("nature",  "a towering antlered thorn regent crowned in brambles"),
     "forge_colossus": ("machine", "a massive rust-iron forge colossus with molten seams"),
@@ -240,7 +240,7 @@ def stills() -> list[dict]:
     def add(key, dest, style, subject, **kw):
         a.append({"key": key, "dest": dest, "style": style, "subject": subject, **kw})
 
-    # --- Source medallions: source_<element> (MapScreen/CharacterScreen/BuildScreen/ForgeScreen)
+    # --- Source medallions: source_<element> (MapScreen/GearScreen/MasteryScreen/ForgeScreen)
     for s in SOURCES:
         col, edge = SOURCE_ART[s]
         add(f"source_{s}", "assets/art/UI/icons/sources", "medallion",
@@ -609,7 +609,7 @@ def stills() -> list[dict]:
                   "NO characters, NO icons, NO markers, NO pins, NO text, NO labels, NO UI, NO frame",
     })
 
-    # --- Memory-Dust blessing category icons: icon_blessing_<category> (PrestigeScreen)
+    # --- Memory-Dust blessing category icons: icon_blessing_<category> (TraitsScreen)
     #
     # Every one of the 44 blessing cards drew the SAME ui_memory_dust blob, recoloured by state — so the
     # grid gave the player no way to tell an Amplifier from an Expansion without reading the label. Three
@@ -621,7 +621,7 @@ def stills() -> list[dict]:
     }.items():
         add(f"icon_blessing_{cat}", "assets/art/UI/icons/blessings", "medallion", motif)
 
-    # --- MASTERY TREE node art: icon_branch_<branch> + ui_node_<kind> (BuildScreen.DrawNode)
+    # --- MASTERY TREE node art: icon_branch_<branch> + ui_node_<kind> (MasteryScreen.DrawNode)
     #
     # A node was a branch-coloured square with, on the bigger kinds, a smaller square in the middle of
     # it. That carries two facts — which branch, roughly how expensive — and it carries them in the two
@@ -711,7 +711,7 @@ def stills() -> list[dict]:
             negative_description="text, letters, numbers, icon, symbol, glyph, emblem, face, "
                                  "creature, filled centre, solid centre, plate, disc" + extra)
 
-    # --- FORM glyphs: icon_form_<form> (WeaveScreen)
+    # --- FORM glyphs: icon_form_<form> (LoadoutScreen)
     #
     # The six Forms are the whole of what a skill IS, and until now they were six words in a cycling
     # cell. A Form is picked far more often than a road is, so it earns a picture more than a road does.
@@ -733,7 +733,7 @@ def stills() -> list[dict]:
         add(f"icon_form_{fm}", "assets/art/UI/icons/forms", "glyph", motif,
             width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
 
-    # --- SKILL glyphs: icon_skill_<id> (WeaveScreen library and tree, SoloExpeditionScreen rail)
+    # --- SKILL glyphs: icon_skill_<id> (LoadoutScreen library and tree, HuntScreen rail)
     #
     # TWELVE, one per skill, because a skill is a thing you LEARN now rather than a Source crossed
     # with a Form (designer, 2026-08-30). The rail and the library were both showing the SOURCE gem
@@ -774,7 +774,7 @@ def stills() -> list[dict]:
         add(f"icon_skill_{sk}", "assets/art/UI/icons/skills", "relic", motif,
             width=192, height=192, detail="highly detailed", single_subject=True)
 
-    # --- STATUS EFFECT badges: icon_effect_<effect> (SoloExpeditionScreen, over a creature)
+    # --- STATUS EFFECT badges: icon_effect_<effect> (HuntScreen, over a creature)
     #
     # A creature's defence is drawn nowhere, so PRESS stripping it every two seconds was a rule the
     # player could read on the build screen and never once see happen. These are STATE badges — they
@@ -785,7 +785,7 @@ def stills() -> list[dict]:
         "round shield cracked and split down the middle with a jagged break, one half falling away",
         width=128, height=128, detail="highly detailed", single_subject=True)
 
-    # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)
+    # --- TRAIT ROAD glyphs: icon_road_<road> (TraitsScreen)
     #
     # The four roads plus the spine are the entire decision this screen exists to present, and they were
     # five words in five colours. Tinted at the draw site, so they arrive as flat stencils.
@@ -800,7 +800,7 @@ def stills() -> list[dict]:
         add(f"icon_road_{rd}", "assets/art/UI/icons/roads", "glyph", motif,
             width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
 
-    # --- TERMINAL emblems: art_terminal_<keystone> (PrestigeScreen detail panel)
+    # --- TERMINAL emblems: art_terminal_<keystone> (TraitsScreen detail panel)
     #
     # The four 12-point terminals are the most expensive things in the game and two of them are
     # unreachable in a career. Every one of them drew the same generic category blob. These are the only
@@ -817,7 +817,7 @@ def stills() -> list[dict]:
     ]:
         add(key, "assets/art/UI/terminals", "medallion", subj, width=256, height=256)
 
-    # --- The unlock flourish: vfx_trait_burst / vfx_trait_ring (PrestigeScreen celebration)
+    # --- The unlock flourish: vfx_trait_burst / vfx_trait_ring (TraitsScreen celebration)
     #
     # Both carry a literal prompt. Every shared still style asks for an OBJECT — an icon, an item, a
     # framed badge — and what is wanted here is light with no subject in it at all.
@@ -837,8 +837,8 @@ def stills() -> list[dict]:
     # and still filled the middle in. A hole is not a subject the model can be argued into drawing.
     #
     # It is also the one effect that does not want a texture. A ring expands, and a scaled-up 256px
-    # sprite goes soft exactly when it is biggest; PrestigeScreen plots the circumference directly
-    # (PrestigeScreen.Ring), which stays one crisp pixel band at any radius and costs no asset at all.
+    # sprite goes soft exactly when it is biggest; TraitsScreen plots the circumference directly
+    # (TraitsScreen.Ring), which stays one crisp pixel band at any radius and costs no asset at all.
     # Generate the right asset — or, when the right asset is a formula, do not generate one.
 
     # --- Loot chest
@@ -909,7 +909,7 @@ def animations() -> list[dict]:
     # Hunter clips. hunter_idle / hunter_attack_01 / hunter_defeated statics are
     # sliced from these.
     # EMPTY-HANDED on purpose. Equipped gear is drawn over this base at sockets
-    # (SoloExpeditionScreen.Sockets), so a weapon baked into the base gives the
+    # (HuntScreen.Sockets), so a weapon baked into the base gives the
     # champion two swords the moment the player equips one.
     hunter = ("a lone hooded hunter in bone-parchment cloth and cold-slate leather, "
               "EMPTY HANDS, no weapon, no sword, no shield, unarmed")

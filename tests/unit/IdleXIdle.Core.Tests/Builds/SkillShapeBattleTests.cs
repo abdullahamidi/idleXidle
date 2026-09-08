@@ -34,7 +34,7 @@ public class SkillShapeBattleTests
     private static Build BuildWith(SkillShape shape, params string[] skillIds)
     {
         var b = new Build { Shape = shape };
-        foreach (var id in skillIds) b.Weave(Sk(id));
+        foreach (var id in skillIds) b.Equip(Sk(id));
         return b;
     }
 
@@ -99,8 +99,22 @@ public class SkillShapeBattleTests
     {
         var armoured = () => Wave(2, 3000f, 40f, defense: 60f, archetype: Archetype.Armoured);
 
-        var neutral = Fight(SkillShape.None, armoured());
-        var weight = Fight(WholeBranch(Branch.Resonance), armoured());
+        // A player who walked the whole branch carries PURE, and PURE pays a CHOSEN source only
+        // (Build.ChosenSingleSource, 2026-09-07): a skill still on its Source seed is a default, not a
+        // decision. The build is posed the way that player's is — its variation taken — because the
+        // old unchosen fixture was being paid PURE's +35% for agreeing with itself.
+        WaveMetrics Fought(SkillShape shape)
+        {
+            var metrics = new WaveMetrics();
+            var b = new Build { Shape = shape };
+            b.Equip(TestBuilds.Chosen("hammer_blow", "FLATTEN"));
+            SoloBattle.ResolveWave(Champ(), b, new Hunter(), armoured(), enemyIntervalMs: 900,
+                                   ExpeditionTuning.Default, new Random(11), metrics: metrics);
+            return metrics;
+        }
+
+        var neutral = Fought(SkillShape.None);
+        var weight = Fought(WholeBranch(Branch.Resonance));
 
         Assert.True(weight.AbsorbedFraction < neutral.AbsorbedFraction,
             $"Armour ate {weight.AbsorbedFraction:P0} of the Weight build and {neutral.AbsorbedFraction:P0} " +
@@ -203,20 +217,6 @@ public class SkillShapeBattleTests
         Assert.Equal(0, padded.HealthLost);
     }
 
-    /// <summary>FORTIFY eats the first bite of the wave and only the first.</summary>
-    [Fact]
-    public void test_fortify_eats_only_the_first_bite()
-    {
-        var heavy = () => Wave(1, 40000f, 400f);
-
-        var bare = Fight(SkillShape.None, heavy());
-        var fortified = Fight(SkillShape.None with { FirstBiteFree = true }, heavy());
-
-        Assert.True(fortified.HealthLost < bare.HealthLost);
-        Assert.True(fortified.HealthLost > 0,
-            "Every bite was free — FORTIFY is meant to eat one, not to be immunity.");
-    }
-
     /// <summary>LEECH turns damage dealt into health.</summary>
     [Fact]
     public void test_leech_returns_health()
@@ -224,9 +224,9 @@ public class SkillShapeBattleTests
         var wave = () => Wave(3, 4000f, 120f);
 
         var dry = Fight(SkillShape.None, wave());
-        var leeching = Fight(SkillShape.None with { Leech = 0.25f }, wave());
+        var healing = Fight(SkillShape.None with { HealPerTargetStruck = 0.25f }, wave());
 
-        Assert.True(leeching.HealthLost < dry.HealthLost);
+        Assert.True(healing.HealthLost < dry.HealthLost);
     }
 
     // ── THE ACCEPTANCE TEST FOR THE WHOLE DESIGN. ─────────────────────────────────────────────────
@@ -245,49 +245,6 @@ public class SkillShapeBattleTests
 
     // ── THE SIDE ROADS' TWO NEW FIELDS. Each one is a new read in the sim, so each gets the "does the
     //    fight actually read it" test that the rest of this file exists for. ──────────────────────
-
-    /// <summary>
-    /// MOMENTUM — a kill takes time off every cooldown, so a Strike clears a field of weaklings faster.
-    /// </summary>
-    /// <remarks>
-    /// Measured on duration, not activations: both builds make the same six kills, so the count is the
-    /// same; what the refund buys is the six kills arriving sooner. BLOW recovers in six beats (9 s)
-    /// and a kill hands back 3,000 ms, so with one kill per cast the back half of the wave runs
-    /// visibly faster.
-    /// </remarks>
-    [Fact]
-    public void test_momentum_refunds_cooldowns_on_every_kill()
-    {
-        // Six creatures a single Strike finishes each — one kill per swing, no overkill to muddy it.
-        var field = () => Wave(6, 30f, 5f);
-
-        // No swing: the basic attack finishing half the field on its own hid the refund behind timing noise.
-        // 3000 ms, was 1000: a Strike waits six beats (9 s) since 2026-08-29, so a one-second refund is
-        // 11% of the wait and the measurement is noise. The node's liveness is what is under test, not its
-        // size — the catalogue's own MOMENTUM is a beat, which this proves reaches the beat table.
-        var plain = Fight(SkillShape.None, field(), NoSwing, "hammer_blow");
-        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 3_000 }, field(), NoSwing, "hammer_blow");
-
-        Assert.Equal(6, plain.CreaturesKilled);
-        Assert.Equal(6, momentum.CreaturesKilled);
-        Assert.True(momentum.DurationMs < plain.DurationMs * 0.8f,
-            $"With MOMENTUM the wave took {momentum.DurationMs}ms against {plain.DurationMs}ms without it. " +
-            "The refund is not reaching the cooldown table — the node is dormant.");
-    }
-
-    /// <summary>
-    /// MOMENTUM is worth more the more there is to kill — a torrent in a Swarm, a trickle against one.
-    /// </summary>
-    [Fact]
-    public void test_momentum_pays_by_the_kill_not_by_the_wave()
-    {
-        var shape = SkillShape.None with { CooldownRefundOnKillMs = 1_000 };
-
-        // One creature with the health of six: one kill, one refund, and nothing left to spend it on.
-        var one = Fight(shape, Wave(1, 180f, 5f), "hammer_blow");
-        var onePlain = Fight(SkillShape.None, Wave(1, 180f, 5f), "hammer_blow");
-        Assert.Equal(onePlain.DurationMs, one.DurationMs);
-    }
 
     /// <summary>
     /// THORNS — a creature that bites takes a share of its own bite back, so a big biter dies sooner.

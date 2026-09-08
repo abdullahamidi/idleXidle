@@ -252,6 +252,12 @@ public static class ShareCodes
             error = DamagedError;
             return false;
         }
+
+        // LAW 13 on the inspect card: a code minted before the one-slot-per-skill rule may carry a
+        // skill twice; the card shows the build the game would actually hold — first copy kept.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var unique = build.Skills.Where(s => s.SkillId is not { } id || seen.Add(id)).ToList();
+        if (unique.Count != build.Skills.Count) build = build with { Skills = unique };
         return true;
     }
 

@@ -35,19 +35,18 @@ public sealed class ForgeScreen
     //   DARK      (the header band, the footer hint, the item cards) -> Scene* (light text)
 
     // On the DARK background and the dark item cards — unchanged, and still correct there.
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
 
     // The reference art pack's panels are DARK glass, not parchment — so text on them is LIGHT, the same
     // as on the scene. The old dark "ink" ramp was invisible on the dark loot/item/merge panels.
     private static readonly Color Ink = Bone;                        // resting text — light on dark glass
-    private static readonly Color InkFaint = new(0x9A, 0x92, 0xA8);  // labels, units — dim light
+    private static readonly Color InkFaint = UiInk.Secondary;  // labels, units — dim light
     private static readonly Color InkGold = Gold;                    // "earned" — gold reads on dark glass
     private static readonly Color InkEmber = Ember;                  // danger — bright ember on dark
-    private static readonly Color Bloom = new(0xC8, 0x8A, 0xE0);     // Tyrian violet, light enough to read
 
     private static readonly string[] RarityNames = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
 
@@ -58,13 +57,8 @@ public sealed class ForgeScreen
     /// <summary>Rarity for the item NAME. The panels are dark glass now, so it is just the bright ramp —
     /// the old dark-ink version was there for a parchment panel that no longer exists.</summary>
 
-    private static readonly Dictionary<ItemBaseType, string> ItemNames = new()
-    {
-        [ItemBaseType.CreatureCore] = "CORE", [ItemBaseType.Weapon] = "WEAPON", [ItemBaseType.Charm] = "CHARM",
-        [ItemBaseType.Material] = "MATERIAL", [ItemBaseType.AbilityFocus] = "FOCUS",
-        [ItemBaseType.Helm] = "HELM", [ItemBaseType.Chest] = "CHESTPLATE", [ItemBaseType.Gloves] = "GLOVES",
-        [ItemBaseType.Boots] = "BOOTS", [ItemBaseType.Ring] = "RING", [ItemBaseType.Gem] = "GEM",
-    };
+    // The slot word is Core's (ItemNaming.SlotWord) — this screen kept its own eight-word table until
+    // 2026-09-07, one drift away from the Gear screen's.
     // package_05 rarity frames (also present in package_01 under the same names).
     private static readonly string[] FrameKey =
         ["ui_frame_rarity_common", "ui_frame_rarity_uncommon", "ui_frame_rarity_rare", "ui_frame_rarity_epic", "ui_frame_rarity_legendary"];
@@ -118,7 +112,7 @@ public sealed class ForgeScreen
 
     private readonly List<ItemInstance> _inv = new();
     private readonly List<Chest> _chests = new();    // unopened chests, waiting for the click
-    /// <summary>The item under the pointer this frame. Re-established every draw; see CharacterScreen.</summary>
+    /// <summary>The item under the pointer this frame. Re-established every draw; see GearScreen.</summary>
     private ItemInstance? _hovered;
 
     private string _msg = "";
@@ -175,6 +169,196 @@ public sealed class ForgeScreen
     /// <remarks>Every cue rides the bank's master effects volume; nothing here touches a raw SoundEffect.</remarks>
     public SoundBank? Sound { get; set; }
 
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // FEEL — what the last operation MOVED, so the screen can show it moving (brief §30–§38, §53–§55).
+    //
+    // The Forge is a screen of numbers that change when you press a button, and until this pass every
+    // one of them simply WAS a different number on the next frame: the item level, the item power, the
+    // stat rows, the balance that paid. §36 asks for the change to be readable AS a change ("160 → 162,
+    // brief emphasis; Forge stat highlight"), §37 for the spend to react AT the resource, and §53 for a
+    // brief forge flash on the piece the anvil struck.
+    //
+    // ONE MECHANISM, keyed by what a number MEANS rather than by where it is drawn — so the item
+    // column's ITEM POWER and the compare's BEFORE column, which are the same fact printed twice, tick
+    // together and flash together. An operation records where each watched number WAS; every draw asks
+    // where it is now and prints the value in between. Nothing loops: each key gets ONE UiMotion.Flash
+    // per press, fired from the operation (an event), never re-armed by a draw, and the clock that
+    // drains it is UiMotion.Tick — the host's, advanced from Update with dt.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Where each watched number stood when the last operation ran, by feel key.</summary>
+    private readonly Dictionary<int, float> _tickFrom = new(16);
+
+    /// <summary>Every key the last operation flashed — the set a posed capture freezes (see RH_SHOT_FEEL).</summary>
+    private readonly HashSet<int> _feelKeys = new();
+
+    /// <summary>DEV ONLY: hold the last operation's one-shots at one phase, so a 0.18 s tick is photographable.</summary>
+    private bool _feelFrozen;
+
+    /// <summary>The phase a frozen capture holds: 1 the instant it fired, 0 landed. See <see cref="ApplyDevPose"/>.</summary>
+    private float _feelPhase = 1f;
+
+    // The watched numbers, named once. A name is a MEANING, not a place: two columns print ITEM POWER.
+    private const string LevelFeel = "level";
+    private const string PowerFeel = "power";
+    private const string EnchantFeel = "enchant";
+    private const string ArtFeel = "art";
+    private static string AffixFeel(int i) => "affix" + i;
+    private static string PurseFeel(string balance) => "purse." + balance;
+
+    /// <summary>A stable key for a named feel — its own space, so it can never collide with a rectangle's.</summary>
+    private static int FeelKey(string name) => HashCode.Combine("forge.feel", name);
+
+    /// <summary>
+    /// Which piece the item-scoped ticks belong to.
+    /// </summary>
+    /// <remarks>
+    /// A tick belongs to the thing it happened to. Click another bag row inside the 0.18 s and the
+    /// item column would otherwise animate the upgraded piece's ITEM POWER into the new piece's — one
+    /// item's number sliding into another's, which is worse than no motion at all. A salvage leaves
+    /// this null (the piece is gone), so the bench's next occupant simply prints its own figures.
+    /// </remarks>
+    private string? _feelFor;
+
+    /// <summary>Forget the last operation's one-shots — called as the next one commits, so a press is one event.</summary>
+    private void FeelStart() { _feelKeys.Clear(); _tickFrom.Clear(); _feelFor = null; }
+
+    /// <summary>A watched number moved: remember where it was, and flash it once.</summary>
+    private void Feel(string name, float from)
+    {
+        var key = FeelKey(name);
+        _tickFrom[key] = from;
+        _feelKeys.Add(key);
+        UiMotion.Flash(key, UiMotion.Transition);
+    }
+
+    /// <summary>A one-shot with no number behind it — the forge flash on the picture, a changed word.</summary>
+    private void FeelFlash(string name, float seconds)
+    {
+        var key = FeelKey(name);
+        _feelKeys.Add(key);
+        UiMotion.Flash(key, seconds);
+    }
+
+    /// <summary>How far through its one-shot a named flash is: 1 just fired → 0 done. Frozen for a capture.</summary>
+    private float Felt(string name)
+    {
+        var key = FeelKey(name);
+        return _feelFrozen && _feelKeys.Contains(key) ? _feelPhase : UiMotion.Pulse(key);
+    }
+
+    /// <summary>
+    /// Where a ticking number stands at a phase of its one-shot: 1 is the instant it fired (the old
+    /// number), 0 is landed (the new one), smoothstepped like every other motion in the game.
+    /// </summary>
+    public static float TickValue(float from, float to, float phase) => to + (from - to) * UiMotion.Smooth(phase);
+
+    /// <summary>
+    /// The number a watched value PRINTS at this phase — the end value at once under Reduced Motion.
+    /// </summary>
+    /// <remarks>
+    /// Public, and pure, because a 0.18 s tick has no other way to be asserted at t = 0, mid and end:
+    /// the Game test drives this directly (tests/unit/IdleXIdle.Game.Tests/forge_feedback_test.cs) and
+    /// the capture rig photographs the same three phases through <c>RH_SHOT_FEEL</c>.
+    /// </remarks>
+    public static float TickShown(float from, float to, float phase)
+        => UiMotion.Reduced || phase <= 0f ? to : TickValue(from, to, phase);
+
+    /// <summary>The value to print for a watched number right now.</summary>
+    private float Ticked(string name, float now)
+        => _tickFrom.TryGetValue(FeelKey(name), out var from) ? TickShown(from, now, Felt(name)) : now;
+
+    /// <summary>The same, rounded — a level count, a power, a balance.</summary>
+    private long TickedWhole(string name, long now) => (long)MathF.Round(Ticked(name, now));
+
+    // The item-scoped three: they answer with the resting value for any piece but the one that changed.
+    private float TickedFor(ItemInstance item, string name, float now)
+        => _feelFor == item.InstanceId ? Ticked(name, now) : now;
+
+    private long TickedWholeFor(ItemInstance item, string name, long now)
+        => _feelFor == item.InstanceId ? TickedWhole(name, now) : now;
+
+    private Color TickInkFor(ItemInstance item, string name, Color rest)
+        => _feelFor == item.InstanceId ? TickInk(name, rest) : rest;
+
+    /// <summary>The feel name a compare row should carry for this piece — null when the change was another's.</summary>
+    private string? FeelOf(ItemInstance item, string name) => _feelFor == item.InstanceId ? name : null;
+
+    /// <summary>
+    /// A watched number's ink while it lands: its resting colour, lifted once toward the accent.
+    /// </summary>
+    /// <remarks>
+    /// Reduced Motion keeps this — brief §32 drops movement and idle motion but keeps simple fades, and
+    /// the value beside it is already at its end (see <see cref="TickShown"/>), so the fade is the only
+    /// thing left saying WHICH number moved.
+    /// </remarks>
+    private Color TickInk(string name, Color rest)
+    {
+        var p = Felt(name);
+        return p <= 0f ? rest : Color.Lerp(rest, UiInk.Accent, UiMotion.Smooth(p));
+    }
+
+    /// <summary>The snapshot an operation takes of everything the two columns print about a piece.</summary>
+    private readonly record struct ItemNumbers(int Level, int Power, float[] Affixes);
+
+    private ItemNumbers NumbersOf(Hunter h, ItemInstance item)
+        => new(item.ItemLevel, h.PowerContribution(item), ItemAffixes.Of(item).Select(a => a.Magnitude).ToArray());
+
+    /// <summary>The piece changed: every number that moved ticks to its new value, and the art flashes once.</summary>
+    private void FeelItem(ItemNumbers was, Hunter h, ItemInstance now)
+    {
+        _feelFor = now.InstanceId;
+        var to = NumbersOf(h, now);
+        if (to.Level != was.Level) Feel(LevelFeel, was.Level);
+        if (to.Power != was.Power) Feel(PowerFeel, was.Power);
+        for (var i = 0; i < was.Affixes.Length && i < to.Affixes.Length; i++)
+            if (MathF.Abs(to.Affixes[i] - was.Affixes[i]) > 1e-4f) Feel(AffixFeel(i), was.Affixes[i]);
+        FeelFlash(ArtFeel, UiMotion.Fast);   // the forge flash on the picture — no shake (§53)
+    }
+
+    /// <summary>The five balances the strip prints, in one snapshot — so a spend needs no per-material bookkeeping.</summary>
+    private readonly record struct Purse(long Gleam, long Scrap, long Essence, long Core, long Crystal);
+
+    private static Purse PurseOf(Hunter h)
+        => new(h.Gleam, h.MaterialOf(Material.Scrap), h.MaterialOf(Material.Essence),
+               h.MaterialOf(Material.Core), h.MaterialOf(Material.Crystal));
+
+    /// <summary>Whatever the operation paid — or paid out — reacts at its own chip in the strip (§37).</summary>
+    private void FeelPurse(Purse was, Hunter h)
+    {
+        var now = PurseOf(h);
+        if (now.Gleam != was.Gleam) Feel(PurseFeel("gleam"), was.Gleam);
+        if (now.Scrap != was.Scrap) Feel(PurseFeel("scrap"), was.Scrap);
+        if (now.Essence != was.Essence) Feel(PurseFeel("essence"), was.Essence);
+        if (now.Core != was.Core) Feel(PurseFeel("core"), was.Core);
+        if (now.Crystal != was.Crystal) Feel(PurseFeel("crystal"), was.Crystal);
+    }
+
+    /// <summary>
+    /// The sound cue for the operation just committed, cleared by reading.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <c>TraitsScreen.ConsumeCue</c>, for a host that wants to own Forge audio
+    /// centrally. This screen ALSO holds a <see cref="Sound"/> bank and plays the cue itself, so the
+    /// Forge is never silent while the host is unwired — a host that starts playing what this returns
+    /// must clear <see cref="Sound"/> first, or every operation sounds twice.
+    /// </remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    private string? _cue;
+
+    /// <summary>Say what just happened, once — the semantic cue, not the house anvil for everything.</summary>
+    private void Cue(string id, float volume)
+    {
+        _cue = id;
+        Sound?.Play(id, volume);
+    }
+
     /// <summary>The item the workbench acts on — resolved by id so a re-forge that
     /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
     private string? _focusId;
@@ -198,69 +382,326 @@ public sealed class ForgeScreen
     // needed to be three screens. UPGRADE and SALVAGE are actions on the item now, and REFORGE is a
     // column, so nothing is left to switch between.
 
-    // FROM 486 TO 140, and from six rows to fourteen: the mode rail used to sit on top of it. This is
-    // the same complaint the wheel fix answered from the other side — "FORGE ekranındaki envanter hiç
-    // kullanışlı değil" — and doubling the visible rows is worth more than any control the space held.
-    private static readonly Rectangle BagPanel = new(24, 140, 366, 762);
-
-    private const int BagRowH = 40;
-
+    // ── THE WORKBENCH (UX V2 P1.9) ────────────────────────────────────────────────────────────────
+    //
+    // Four near-equal ornate columns became THREE plus a strip. The fourth — a 514 px WALLET carrying
+    // five balances, a YOUR CHARTS essay and a THE FOUR TABS legend — was a quarter of the screen
+    // spent explaining the screen, and the width it held is exactly what the before → after compare
+    // needed. The balances are a compact strip along the top now; the legend is the tour's job.
+    //
+    // Every rectangle is a PROPERTY, not a `static readonly`. A frozen rectangle cannot follow
+    // UiKit.Page, and the page is what UI SCALE rewrites — this screen was the last big one still
+    // authored against raw 1920x1080 literals.
+    //
+    // AND EVERY SIZE THAT IS NOT PAGE GEOMETRY COMES FROM UiMetrics (UI polish brief §7–§11). UI SCALE
+    // is a density profile now: the page stays 1920×1080 and what grows is the type, the rows, the
+    // buttons and the padding — at the rates UiMetrics sets, never a factor written here. The
+    // numbers below are the 100 % values; the profile's version is what the property returns.
+    // The four page anchors (Top, Gutter, SideMargin, BottomMargin) are page geometry and stay.
     /// <summary>
-    /// How many rows actually fit between the header and the footer.
+    /// The first row under the chrome band — from the page's OWN anchor, never the notice lane's.
     /// </summary>
     /// <remarks>
-    /// <b>THE RESERVE WAS 124 AND THE FURNITURE NEEDS 176</b>, so the list claimed one row more than it
-    /// had. Header: the title and the scroll counter push the first row to Y+84. Footer: the OPEN CHESTS
-    /// button sits at Bottom-92. Row six therefore ran from Y+770 to Y+806 straight underneath a button
-    /// drawn at Y+778 — visible, clickable, and reporting another item's name.
-    ///
-    /// The panel also grew 32px downward (384 to 416) to keep six real rows rather than dropping to five,
-    /// which is exactly 84 header + 6 rows + 92 footer. Six is not generous, but the list is sorted
-    /// rarest-first now and the wheel reaches it, so the top of the list is where the interesting items
-    /// are instead of wherever they happened to drop.
+    /// Every other screen lays out from <see cref="UiKit.PageTop"/>, which grows by the notice lane so a
+    /// toast stands above the page instead of over it. The Forge cannot pay that: at UI SCALE 150 % its
+    /// three columns have no slack at all — the compare table's three secondary lines are already spent
+    /// — so a one-line notice's 162 px drove the forge column's row budget NEGATIVE. The whole
+    /// before -> after compare drew zero rows, no scrollbar appeared because no rows had overflowed, no
+    /// wheel position could reach it, and the risk line printed across the tab labels (2026-09-08).
+    /// The band a toast covers here is the materials strip, which repeats balances the chrome and the
+    /// item column both already carry; the compare table is the reason the screen exists.
     /// </remarks>
-    /// <summary>What the foot of the bag holds under the list: the merge door and the salvage door.</summary>
-    private const int BagFooterReserve = 152;
+    private static int Top => UiKit.PageTopBase;
+    private const int Gutter = 22;
+    private const int SideMargin = 38;
+    private const int BottomMargin = 40;
 
-    // THE HEADER IS SUBTRACTED NOW. It was not: the count was (Height - 240) / 40 = 13 rows starting at
-    // +84, so the last row ran to +604 and the first footer button starts at +610 — six pixels, which is
-    // why the old comment had to add "84 header + 13 rows + 240 footer = 844 of a 762-tall panel". Twelve
-    // rows off the standard header is the arithmetic actually closing.
-    private static int BagRows =>
-        (BagPanel.Height - BagFooterReserve - UiTypography.PanelBodyTop) / BagRowH;
+    /// <summary>The strip's height: a balance at Headline over its mark at Secondary, plus the plate's breath. 72 at 100 %.</summary>
+    private static int StripH =>
+        UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
+
+    private static int ColTop => Top + StripH + Gutter;
+
+    /// <summary>Every balance you hold, along the top — the QUIET tier, shared by all three columns.</summary>
+    private static Rectangle MaterialStrip =>
+        new(SideMargin, Top, UiKit.PageRight(BottomMargin) - SideMargin, StripH);
+
+    private static int ColBottom => UiKit.PageBottom(BottomMargin);
+    private static int ColSpan => UiKit.PageRight(BottomMargin) - SideMargin - Gutter * 2;
+
+    /// <summary>
+    /// The bag's share of the span: a quarter — and a little more at the accessibility profile.
+    /// </summary>
+    /// <remarks>
+    /// Brief §9: a layout need not be geometrically identical at 150 %, and a list may reflow. A 33 px
+    /// name beside a 33 px LEVEL no longer fits a quarter of the span ("SHADOW BO…" was the result), while
+    /// the compare column beside it has width to spare; the three points come out of that column.
+    /// </remarks>
+    private static int BagShare => UiMetrics.Percent >= 150 ? 28 : 25;
+
+    /// <summary>WHAT YOU HAVE. The bag, its filter, and the two bulk verbs.</summary>
+    private static Rectangle BagPanel => new(SideMargin, ColTop, ColSpan * BagShare / 100, ColBottom - ColTop);
+
+    /// <summary>WHAT IT IS. The identity of the piece on the bench — SECONDARY, never the subject.</summary>
+    private static Rectangle ItemPanel => new(BagPanel.Right + Gutter, ColTop, ColSpan * 30 / 100, ColBottom - ColTop);
+
+    /// <summary>
+    /// WHAT YOU CAN DO TO IT — the screen's one PRIMARY surface.
+    /// </summary>
+    /// <remarks>
+    /// The ornate frame was on the ITEM column, which is the one column that asks for no decision. The
+    /// gold goes where the choice is. Its aspect is about 1.0 at every scale, so it wears the SQUARE
+    /// frame — correct, and safe since UiKit.FrameDrop/PadX started clearing that art's finial and its
+    /// side diamonds automatically.
+    /// </remarks>
+    private static Rectangle ForgePanel =>
+        new(ItemPanel.Right + Gutter, ColTop,
+            UiKit.PageRight(BottomMargin) - (ItemPanel.Right + Gutter), ColBottom - ColTop);
+
+    /// <summary>
+    /// The right end of the strip, kept for the charts — a chip lane, not a column.
+    /// </summary>
+    /// <remarks>
+    /// Wide enough for all three charts at once (measured, with their counts), because a lane that is
+    /// one chip too narrow does not wrap — it draws the third chip straight through the CRYSTAL
+    /// balance. Anything that still will not fit is not drawn at all.
+    /// </remarks>
+    // A PAGE RESERVE, NOT A SPACING: it does not grow with the profile. Grown at the spacing rate it
+    // starved the five balances at 150 % — their names came out "GL…" and "SCR…" beside figures they
+    // could no longer sit next to — while the chart chips it serves are measured and dropped when they
+    // will not fit anyway.
+    private const int ChartsLane = 560;
+
+    private static int StripChipW => (MaterialStrip.Width - UiMetrics.Space(24) - ChartsLane) / 5;
+
+    private static Rectangle MatChip(int i) =>
+        new(MaterialStrip.X + UiMetrics.Space(12) + i * StripChipW, MaterialStrip.Y + UiMetrics.Space(8),
+            StripChipW - UiMetrics.Space(12),
+            UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Secondary));
+
+    /// <summary>A balance's icon in the strip. 32 at 100 %.</summary>
+    private static int MatIconSize => UiMetrics.Control(32);
+
+    /// <summary>A chart chip's height in the strip. 38 at 100 %.</summary>
+    private static int ChartChipH => UiMetrics.Control(38);
+
+    /// <summary>A bag row's pitch — a Body line with a breath above and below. 40 at 100 %.</summary>
+    private static int BagRowH => UiMetrics.Control(40);
+
+    /// <summary>The scroll track's lane beside the rows: the bar and the room around it. 34 at 100 %.</summary>
+    private static int BagScrollLane => UiMetrics.ScrollbarWidth + UiMetrics.Space(24);
+
+    private static int BagContentW => UiKit.ContentRight(BagPanel) - UiKit.ContentLeft(BagPanel) - BagScrollLane;
+
+    /// <summary>The bag's two bulk verbs' height. 48 at 100 %.</summary>
+    private static int BagFootH => UiMetrics.Control(48);
+
+    /// <summary>The bag's two bulk verbs, anchored to the panel's own foot.</summary>
+    private static Rectangle SalvageJunkBtn =>
+        new(UiKit.ContentLeft(BagPanel), UiKit.ContentBottom(BagPanel) - BagFootH, BagContentW, BagFootH);
+
+    private static Rectangle MergeBtn =>
+        new(UiKit.ContentLeft(BagPanel), SalvageJunkBtn.Y - UiMetrics.Gap - BagFootH, BagContentW, BagFootH);
+
+    /// <summary>Where the merge preview line sits — and the floor the list stops at.</summary>
+    private static int MergePreviewY => MergeBtn.Y - UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(2);
+
+    /// <summary>
+    /// How many rows fit between the header and the foot.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the foot's real position rather than from a hand-kept reserve constant. The reserve
+    /// was 124 when the furniture needed 176, so the list claimed a row it did not have and drew it
+    /// underneath a button — a row that was visible, clickable, and reporting another item's name.
+    /// </remarks>
+    private static int BagRows => Math.Max(0, (MergePreviewY - UiMetrics.Gap - UiKit.BodyTop(BagPanel)) / BagRowH);
 
     // The panel's own margin: rows drawn flush to the rectangle sit ON the frame art's ornament.
-    // The extra 34 on the right is the scroll track's lane, not a margin.
+    // The lane on the right is the scroll track's, not a margin.
     private static Rectangle BagRow(int vis)
-        => new(UiKit.ContentLeft(BagPanel), UiKit.BodyTop(BagPanel) + vis * BagRowH,
-               BagPanel.Width - UiKit.PadX(BagPanel) * 2 - 34, BagRowH - 4);
-    // ── THE WORKBENCH LAYOUT (2026-08-23 UX pass) ─────────────────────────────────────────────
-    // The old ITEM / REQUIRED MATERIALS / REFORGE trio put eleven equal-weight buttons on screen and
-    // the materials in the middle column with no icons; the playtest read it as "complex and
-    // confusing" and never noticed the wallet. The three columns are still three, but they mean
-    // different things now:
-    //
-    //   ItemPanel   (406,140)  384x890 — THE ITEM. Name, picture, element, numbers. Ornate: the subject.
-    //   ActionPanel (806,140)  560x890 — WHAT TO DO WITH IT. Four tabs, one big button each, its price
-    //               under it, the feedback strip along the foot.
-    //   WalletPanel (1382,140) 514x890 — YOUR MATERIALS, with the real icons, the charts, the legend.
-    //
-    // All three are aspect 0.43–0.63, the VERTICAL frame; all end at 1030 (canvas 923), clear of the
-    // nav. A first cut fused ITEM + ACTION into one 958-wide panel — aspect 1.08, the SQUARE frame —
-    // whose side diamonds and 100px corner scrolls sat on the item name, the stat labels and the tab
-    // strip. UiKit.Panel picks the art by aspect (>=1.30 medium, >=0.82 square, else vertical):
-    // resize any of these and the frame swaps.
-    private static readonly Rectangle ItemPanel = new(406, 140, 384, 890);
-    private static readonly Rectangle ActionPanel = new(806, 140, 560, 890);
-    private static readonly Rectangle WalletPanel = new(1382, 140, 514, 890);
+        => new(UiKit.ContentLeft(BagPanel), UiKit.BodyTop(BagPanel) + vis * BagRowH, BagContentW, BagRowH - UiMetrics.Space(4));
 
-    /// <summary>The item card inside the ItemPanel: name, picture, element, numbers, the copy-code button.</summary>
-    private static readonly Rectangle Card = new(UiKit.ContentLeft(ItemPanel), UiKit.TitleTop(ItemPanel) - 6,
-                                                 ItemPanel.Width - UiKit.PadX(ItemPanel) * 2, 790);
-    /// <summary>The action column inside the ActionPanel: the tab strip on top, the open tab's body under it.</summary>
-    private static readonly Rectangle Action = new(UiKit.ContentLeft(ActionPanel), UiKit.BodyTopBare(ActionPanel),
-                                                   ActionPanel.Width - UiKit.PadX(ActionPanel) * 2, 732);
-    private const int TabStripH = 46;
+    /// <summary>What the bag is showing. Session state — a filter that outlived a session would be a
+    /// bag that looks empty for a reason the player cannot see.</summary>
+    private enum BagFilter { All, Gear, Gems }
+
+    private BagFilter _filter = BagFilter.All;
+
+    /// <summary>
+    /// A filter chip's height: the room between the caption line and the first row, less a breath —
+    /// so a chip can never print over the first row whatever the profile. 34 at 100 %.
+    /// </summary>
+    private static int FilterChipH => UiKit.BodyTop(BagPanel) - UiKit.CaptionTop(BagPanel) - UiMetrics.Space(2);
+
+    /// <summary>The three filter chips, under the bag's title.</summary>
+    private static Rectangle FilterChip(int i)
+    {
+        var gap = UiMetrics.Space(8);
+        var w = (BagContentW + BagScrollLane - 2 * gap) / 3;
+        return new Rectangle(UiKit.ContentLeft(BagPanel) + i * (w + gap), UiKit.CaptionTop(BagPanel), w, FilterChipH);
+    }
+
+    // ── THE FORGE COLUMN'S SKELETON. Every tab fills the same shape, so switching tabs moves nothing
+    //    but the words: tabs · intent · what will change · what is uncertain · ONE button · price ·
+    //    the second option, if the tab has one · feedback. ──────────────────────────────────────────
+    /// <summary>
+    /// The extra inset this column pays for wearing the SQUARE frame.
+    /// </summary>
+    /// <remarks>
+    /// UiKit.PadX already clears that art's 64 px side diamond — but the diamond is at the panel's
+    /// vertical CENTRE, which is exactly where this column's primary button lands, and an ornate
+    /// button's own end scroll met the panel's ornament there. Measured from the capture, not guessed.
+    /// </remarks>
+    private const int FrameInset = 30;
+
+    private static int FX => UiKit.ContentLeft(ForgePanel) + FrameInset;
+    private static int FW => UiKit.ContentRight(ForgePanel) - FrameInset - FX;
+
+    // ── THE BANDS, at the profile's sizes. The 100 % values are the ones the 2026-08 captures show
+    //    behaving; each is named for what it is made of, so the profile grows the part that should
+    //    grow (a label, a button) and not the part that should not (the frame's air). ──
+    /// <summary>The tab strip: the label rung plus the air a tab wore around it. 52 at 100 %.</summary>
+    private static int TabStripH => UiTypography.NavigationLabel + UiMetrics.Space(28);
+
+    /// <summary>The one lit button: the house button plus the ornate frame's own air. 84 at 100 %.</summary>
+    private static int PrimaryH => UiMetrics.ButtonHeight + UiMetrics.Space(32);
+
+    /// <summary>The second, quieter verb: the house button. 52 at 100 %.</summary>
+    private static int OptionH => UiMetrics.ButtonHeight;
+
+    /// <summary>The feedback plate: two Secondary lines and their breath. 72 at 100 %.</summary>
+    private static int FeedbackH => 2 * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(24);
+
+    /// <summary>One tab of the strip — the same rectangle the strip draws and hit-tests.</summary>
+    private static Rectangle TabRect(int i) =>
+        new(FX + i * (FW / 4), UiKit.TitleTop(ForgePanel), FW / 4 - UiMetrics.Space(6), TabStripH);
+
+    // ── THE COLUMN'S BUDGET. ──────────────────────────────────────────────────────────────────────
+    //
+    // The stack under the compare — button, price, second verb, its price, feedback — used to be
+    // fixed at its 1080 sizes, and on a short column it consumed everything and TabBody came out
+    // NEGATIVE: the before → after table, the entire point of the column, silently drew nothing.
+    // The density profile brings the same shape back on a FULL column: at 150 % the buttons and the
+    // type are half again as tall and the column is not, so the stack alone is 780 px of 796.
+    //
+    // The column keeps its skeleton and gives up SECONDARY lines in a fixed order until the compare
+    // has room for three rows (brief §9: less secondary info at 150 %, never a smaller font):
+    //   1. the option's price line (the strip's GREATER NEEDS mark already says it),
+    //   2. the "YOU HOLD …" line under the primary's price (the strip carries every balance),
+    //   3. the tab's intent sentence (the uncertain line under the compare keeps the explanation).
+    // Nothing is dropped at 100 %. What the table still cannot show scrolls on the wheel.
+    /// <summary>A compare row's pitch — the AFTER value is set at Headline.</summary>
+    private static int CompareRowH => UiTypography.Pitch(UiTypography.Headline);
+
+    /// <summary>The rows the compare must keep before the column starts dropping its secondary lines.</summary>
+    private const int CompareRowsWanted = 3;
+
+    /// <summary>The compare's height if the column kept these lines — measured against the taller (two-verb) stack.</summary>
+    private static int TabBodyHeightIf(bool intent, bool holdLine, bool optionPrice)
+    {
+        var top = TabRect(0).Bottom + UiMetrics.Space(22)
+                  + (intent ? UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14) : 0);
+        var feedbackY = UiKit.ContentBottom(ForgePanel) - FeedbackH;
+        var optionY = feedbackY - UiMetrics.Space(12) - (optionPrice ? UiTypography.Pitch(UiTypography.Secondary) : 0) - OptionH;
+        var primaryY = optionY - UiMetrics.Space(14) - UiTypography.Pitch(UiTypography.Body)
+                       - (holdLine ? UiTypography.Pitch(UiTypography.Secondary) : 0) - PrimaryH;
+        var uncertainY = primaryY - UiTypography.Pitch(UiTypography.Body);
+        return uncertainY - UiMetrics.Space(12) - top;
+    }
+
+    private static bool Fits(bool intent, bool holdLine, bool optionPrice)
+        => TabBodyHeightIf(intent, holdLine, optionPrice) >= CompareRowsWanted * CompareRowH;
+
+    /// <summary>Does the second verb print its price line under itself? The first line to go.</summary>
+    private static bool ShowOptionPrice => Fits(true, true, true);
+
+    /// <summary>Does the primary's price print what you hold under it? The second line to go.</summary>
+    private static bool ShowHoldLine => Fits(true, true, ShowOptionPrice);
+
+    /// <summary>Does the tab print its intent sentence under the strip? The last line to go.</summary>
+    private static bool ShowIntent => Fits(true, ShowHoldLine, ShowOptionPrice);
+
+    private static int IntentY => TabRect(0).Bottom + UiMetrics.Space(22);
+    private static int BodyTopY => IntentY + (ShowIntent ? UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14) : 0);
+
+    /// <summary>The one-line verdict of the last act, directly under the button that caused it.</summary>
+    private static Rectangle Feedback =>
+        new(FX, UiKit.ContentBottom(ForgePanel) - FeedbackH, FW, FeedbackH);
+
+    /// <summary>The second, quieter verb — GREATER UPGRADE, SELL. Only two tabs have one.</summary>
+    private static Rectangle OptionBtn =>
+        new(FX, Feedback.Y - UiMetrics.Space(12) - (ShowOptionPrice ? UiTypography.Pitch(UiTypography.Secondary) : 0) - OptionH,
+            FW, OptionH);
+
+    private static int OptionPriceY => OptionBtn.Bottom + UiMetrics.Space(4);
+
+    private static Rectangle PrimaryBtn(bool hasOption) =>
+        new(FX, (hasOption ? OptionBtn.Y : Feedback.Y) - UiMetrics.Space(14)
+                - UiTypography.Pitch(UiTypography.Body)
+                - (ShowHoldLine ? UiTypography.Pitch(UiTypography.Secondary) : 0)
+                - PrimaryH,
+            FW, PrimaryH);
+
+    private static int PriceY(bool hasOption) => PrimaryBtn(hasOption).Bottom + UiMetrics.Space(12);
+
+    /// <summary>
+    /// Where the "what is uncertain" block starts — the last thing read before the commit.
+    /// </summary>
+    /// <remarks>
+    /// A tab with no second verb has room for TWO lines here and uses it (RE-ROLL says what is random
+    /// AND what is kept; SOCKET says nothing is random AND that a set gem never comes out), so its
+    /// start is pulled up by one line. Anchored one line too low, the second sentence drew straight
+    /// through the primary button.
+    /// </remarks>
+    private static int UncertainY(bool hasOption) =>
+        PrimaryBtn(hasOption).Y - UiTypography.Pitch(UiTypography.Body) - (hasOption ? 0 : UiTypography.Pitch(UiTypography.Body));
+
+    private static Rectangle TabBody(bool hasOption) =>
+        new(FX, BodyTopY, FW, UncertainY(hasOption) - UiMetrics.Space(12) - BodyTopY);
+
+    // ── ROWS THAT SCROLL. ─────────────────────────────────────────────────────────────────────────
+    //
+    // Two regions on this screen can hold more rows than they have height for once the type is
+    // bigger: the compare table and the item column's WHAT IT DOES list. Both walk their rows with
+    // this — it counts every row, skips the ones the wheel has scrolled past, stops at the floor, and
+    // reports how many it drew, so a UiKit.ScrollBar can say "there is more" and UiKit.Scrolled can
+    // clamp the wheel to it. The primary button is never inside a walked region (brief §18).
+    private struct RowWalk
+    {
+        public int Y, Floor, Right, First, Index, Shown;
+        private bool _overflow;
+
+        /// <summary>Would a row of this height land on screen right now? Claims nothing.</summary>
+        public bool Fits(int h) => Index >= First && !_overflow && Y + h <= Floor;
+
+        /// <summary>Claim the next row of this height: true when it is on screen, and the caller draws it at <see cref="Y"/>.</summary>
+        /// <remarks>
+        /// ONCE A ROW DOES NOT FIT, NOTHING AFTER IT DOES (2026-09-07). Without the latch a tall row
+        /// (a head with its first line) was refused at the floor and the shorter row after it was
+        /// drawn in its place — at 150 % the item column showed "DAMAGE · BUILT IN" as its first line
+        /// with ITEM POWER nowhere, a list out of order. A row that misses the floor now takes every
+        /// later row below the fold with it, where the wheel finds them in the order they were claimed.
+        /// </remarks>
+        public bool Take(int h)
+        {
+            var i = Index++;
+            if (i < First) return false;
+            if (_overflow || Y + h > Floor) { _overflow = true; return false; }
+            Shown++;
+            return true;
+        }
+    }
+
+    /// <summary>The compare's wheel position, and what the last draw learned about its rows.</summary>
+    private int _compareScroll, _compareShown, _compareTotal;
+    private (int Tab, string? Item) _compareKey;
+
+    /// <summary>The item column's wheel position, and what the last draw learned about its rows.</summary>
+    private int _itemScroll, _itemShown, _itemTotal;
+    private string? _itemScrollFor;
+
+    /// <summary>The lane a scrolled region gives its bar: the bar and a breath before the values.</summary>
+    private static int ScrollLane => UiMetrics.ScrollbarWidth + UiMetrics.Space(6);
 
     /// <summary>The four things you can do to an item — one tab each, one big button each.</summary>
     private enum Tab { Upgrade, Reroll, Socket, BreakDown }
@@ -268,6 +709,9 @@ public sealed class ForgeScreen
     // act (playtest 2026-08-25: "it creates an inconsistency") — one word now, the reveal's.
     private static readonly string[] TabNames = ["UPGRADE", "RE-ROLL", "SOCKET", "SALVAGE"];
     private Tab _tab = Tab.Upgrade;
+
+    /// <summary>The gem a click in the bag SELECTED for the socket tab — chosen, not yet committed.</summary>
+    private string? _gemId;
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -277,19 +721,12 @@ public sealed class ForgeScreen
     {
         TourTarget.Bag => new[] { BagPanel },
         TourTarget.ForgeItem => new[] { ItemPanel },
-        TourTarget.ForgeTabs => new[] { new Rectangle(Action.X - 6, Action.Y - 6, Action.Width + 12, TabStripH + 12) },
-        TourTarget.Materials => new[] { WalletPanel },
+        TourTarget.ForgeTabs => new[] { Grow(new Rectangle(TabRect(0).X, TabRect(0).Y, FW, TabStripH), 6) },
+        TourTarget.Materials => new[] { MaterialStrip },
         // The first-gem lesson's last card: the SOCKET tab alone, grown so the ring clears its text.
         TourTarget.SocketTab => new[] { Grow(TabRect((int)Tab.Socket), 6) },
         _ => Array.Empty<Rectangle>(),
     };
-
-    /// <summary>One tab of the strip — the same rectangle the strip draws and hit-tests.</summary>
-    private static Rectangle TabRect(int i)
-    {
-        var w = Action.Width / TabNames.Length;
-        return new Rectangle(Action.X + i * w, Action.Y, w - 4, TabStripH);
-    }
 
     private static Rectangle Grow(Rectangle r, int by) => new(r.X - by, r.Y - by, r.Width + 2 * by, r.Height + 2 * by);
 
@@ -305,7 +742,7 @@ public sealed class ForgeScreen
     /// <summary>Open the SOCKET tab — the first-gem lesson arrives with it open, so the bag lists the gems.</summary>
     public void RequestSocketTab() { _tab = Tab.Socket; _confirm = null; _socketAsk = null; }
 
-    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+    private static readonly Color Met = UiInk.Good;
     // Scrap / Essence / Core / Crystal. The REAL icons — assets/art/ItemsLoot/loot/materials — indexed
     // by (int)Material. The tint is the fallback gem if a file ever goes missing, one colour per tier.
     private static readonly string[] MatIcon = ["mat_scrap", "mat_essence", "mat_core", "mat_crystal"];
@@ -354,7 +791,12 @@ public sealed class ForgeScreen
     /// <see cref="CycleTarget"/> both mean "the wearable on the bench", and a gem can never be that —
     /// letting one into that list would point the UPGRADE and SALVAGE tabs at a stone.
     /// </remarks>
-    private List<ItemInstance> BagList() => _tab == Tab.Socket ? Gems() : Bag();
+    private List<ItemInstance> BagList() => _filter switch
+    {
+        BagFilter.Gems => Gems(),
+        BagFilter.Gear => Bag(),
+        _ => Bag().Concat(Gems()).ToList(),
+    };
 
     /// <summary>The wearable the focused modes upgrade — the id-matched item, or the first wearable.</summary>
     private ItemInstance? Target()
@@ -398,11 +840,23 @@ public sealed class ForgeScreen
             hunter.AddCharter(Charter.Refine, n);
             hunter.AddCharter(Charter.Salvage, n);
         }
+        // WHICH ITEM is on the bench, and WHAT the bag is filtered to — two dials instead of a new
+        // capture mode per state.
+        if (Environment.GetEnvironmentVariable("RH_SHOT_ITEM") is { Length: > 0 } id) DevFocus(id);
+        if (Environment.GetEnvironmentVariable("RH_SHOT_FILTER") is { } f)
+            _filter = f.ToLowerInvariant() switch
+            {
+                "gems" => BagFilter.Gems,
+                "gear" => BagFilter.Gear,
+                _ => BagFilter.All,
+            };
+
         if (Environment.GetEnvironmentVariable("RH_SHOT_TAB") is { } t)
             _tab = t.ToLowerInvariant() switch
             {
                 "reroll" => Tab.Reroll, "socket" => Tab.Socket, "breakdown" => Tab.BreakDown, _ => Tab.Upgrade,
             };
+        ApplyDevFeel(hunter);
         if (Environment.GetEnvironmentVariable("RH_SHOT_ASK") is not { } asks || Target() is not { } item) return;
         foreach (var ask in asks.ToLowerInvariant().Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -444,6 +898,77 @@ public sealed class ForgeScreen
                 case "say": Say("RE-ROLLED — THE ENCHANT IS NOW FERVOUR  (A REFORGE CHART PAID FOR IT).", Gold); break;
             }
         }
+    }
+
+    /// <summary>
+    /// DEV ONLY: RUN an operation and FREEZE the one-shots it started, so a 0.18 s tick is photographable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A state no capture can pose has never been looked at, and every piece of feedback this pass added
+    /// is a transient: the rig renders sixty frames and saves the last, by which point a
+    /// <see cref="UiMotion.Transition"/> flash fired on frame one has been over for three quarters of a
+    /// second. So the pose runs the REAL operation — the same method the button calls, the same spend,
+    /// the same Core roll — and then holds every one-shot it started at one phase.
+    /// </para>
+    /// <para>
+    /// <b>The dials.</b> <c>RH_SHOT_FEEL=upgrade|greater|reroll|socket|crush|salvage|sell|merge</c> picks
+    /// the operation; <c>RH_SHOT_FEEL_T=&lt;0..1&gt;</c> the phase held — <b>1</b> (the default) is the
+    /// instant it fired, which is the old number under a full flash; <b>0.5</b> is halfway to the new
+    /// number; and the SAME capture with no dial at all is the settled end state. Three photographs,
+    /// t = 0 · mid · end. Both are read only while <c>RH_SHOT</c> is set, so a real run never sees them:
+    /// </para>
+    /// <code>
+    /// RH_SHOT_ITEM=dev_hero RH_SHOT_FEEL=upgrade RH_SHOT_FEEL_T=0.5 \
+    ///   bash tools/asset-pipeline/capture.sh forge build/shots/p2_forge_tick_mid_100.png
+    /// </code>
+    /// </remarks>
+    private void ApplyDevFeel(Hunter hunter)
+    {
+        if (Environment.GetEnvironmentVariable("RH_SHOT_FEEL") is not { Length: > 0 } feel) return;
+        if (Target() is not { } subject) return;
+
+        switch (feel.ToLowerInvariant())
+        {
+            case "upgrade": _tab = Tab.Upgrade; DoRefine(hunter, subject); break;
+            case "greater": _tab = Tab.Upgrade; DoGreaterRefine(hunter, subject); break;
+            case "reroll": _tab = Tab.Reroll; DoReforgeEnchant(hunter, subject); break;
+            case "socket":
+            {
+                // A gem to set, because the operation needs one and the plain forge fixture holds none.
+                var gem = GemCraft.MintGem(6, _rng);
+                _inv.Add(gem);
+                _gemId = gem.InstanceId;
+                _tab = Tab.Socket;
+                TrySocket(hunter, subject, gem);
+                break;
+            }
+            case "crush":
+            {
+                var gem = GemCraft.MintGem(6, _rng);
+                if (GemCraft.Socket(subject, gem).Product is { } set)
+                {
+                    ReplaceItem(hunter, subject, set);
+                    _tab = Tab.Socket;
+                    CrushNow(hunter, set, 0);
+                }
+                break;
+            }
+            // The *Now variants: the pose is the COMMITTED act, not the question in front of it.
+            case "salvage": _tab = Tab.BreakDown; DismantleNow(hunter, subject); break;
+            case "sell": _tab = Tab.BreakDown; SellNow(hunter, subject); break;
+            case "merge": AutoMergeAll(hunter); break;
+            // Leaves the bag with no junk left, which is also the only way to photograph the bulk
+            // verb's DISABLED state: it says what it needs instead of counting to zero.
+            case "junk": SalvageJunkNow(hunter); break;
+        }
+
+        _feelFrozen = true;
+        _feelPhase = Environment.GetEnvironmentVariable("RH_SHOT_FEEL_T") is { Length: > 0 } t
+                     && float.TryParse(t, System.Globalization.NumberStyles.Float,
+                                       System.Globalization.CultureInfo.InvariantCulture, out var phase)
+            ? Math.Clamp(phase, 0f, 1f)
+            : 1f;
     }
 
     /// <summary>
@@ -556,6 +1081,15 @@ public sealed class ForgeScreen
     /// boss drop does — filtered items are sold for gleam, not dumped in the bag. Null keeps everything.
     /// </summary>
     public Rarity? AutoSellFloor { get; set; }
+
+    /// <summary>
+    /// The keystones the world has taught this account — set by the host.
+    /// </summary>
+    /// <remarks>
+    /// Read by one line: an unpaired combo enchantment whose partner keystone has not been found yet
+    /// names the region that teaches it, instead of naming a keystone the player has no way to reach.
+    /// </remarks>
+    public IReadOnlyList<Keystone> DiscoveredKeystones { get; set; } = Array.Empty<Keystone>();
 
     // ── The SELL / SALVAGE confirmation ──────────────────────────────────────────────────────────
     // Research pass (Diablo 3/4, Last Epoch, WoW): routine disposal gets ONE dialog with a suppression
@@ -732,21 +1266,27 @@ public sealed class ForgeScreen
 
 
         // THE CURSOR, IN THE SPACE THE RECTANGLES ARE AUTHORED IN. Every rect on this screen is written
-        // in 1920x1080 and drawn through Game1's overlay inset; the incoming cursor is in 480x270 canvas
-        // space. Draw already converts (see the twin below); Update did not, which is half of why the bag
-        // was unusable — see the note on the wheel.
-        var overlay = Game1.ToOverlay(mouse);
+        // in 1920x1080 page space, and since 2026-09-01 the host hands the cursor in that same space
+        // (Game1.PageCursor, mapped once through Core's PageFrame) — nothing to convert here. Update once
+        // hit-tested a cursor in another space, which is half of why the bag was unusable — see the
+        // note on the wheel.
+        var overlay = mouse;
 
-        // THE BAG'S WHEEL. It once sat below a mode return and tested the raw cursor against a
-        // 1920-space rect — the full pathology is in 98ca957's message. The rule it settled on stands:
-        // the wheel belongs to the bag, and nothing else on this screen scrolls.
+        // THE WHEEL GOES TO THE COLUMN UNDER IT. The bag's wheel once sat below a mode return and tested
+        // the raw cursor against a 1920-space rect — the full pathology is in 98ca957's message. Since
+        // the density profile the other two columns can hold more rows than they have height for, so
+        // each column scrolls its own rows (brief §18: the bag, a long inspector, a long list) and the
+        // buttons under them stay where they are.
         if (wheel != 0 && BagPanel.Contains(overlay))
         {
             // BagList, not the wearables: under the SOCKET tab the panel lists GEMS, and a wheel clamped
             // to a different list's length is the same dead-scroll bug this line already carries a note about.
-            var rowCount = BagList().Count;
-            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, rowCount - BagRows));
+            _bagScroll = UiKit.Scrolled(_bagScroll, wheel, BagRows, BagList().Count);
         }
+        else if (wheel != 0 && ItemPanel.Contains(overlay))
+            _itemScroll = UiKit.Scrolled(_itemScroll, wheel, _itemShown, _itemTotal);
+        else if (wheel != 0 && ForgePanel.Contains(overlay))
+            _compareScroll = UiKit.Scrolled(_compareScroll, wheel, _compareShown, _compareTotal);
 
         // While a SELL / SALVAGE question is up it owns the KEYS — no key may scrap a second item
         // behind the question about the first. (The question is drawn in place now, and a click
@@ -770,51 +1310,66 @@ public sealed class ForgeScreen
     /// Hand-picking three Commons out of a bag of ninety is busywork, not a decision — and busywork is
     /// what an idle game is supposed to delete. Worn gear is never consumed.
     /// </remarks>
-    public int AutoMergeAll(Hunter hunter)
+    /// <summary>
+    /// The next trio auto-merge would take, or null.
+    /// </summary>
+    /// <remarks>
+    /// ONE helper, two callers: the bag's preview line and the press itself. They used to hold two
+    /// copies of this predicate — the preview asked only "are there three of one grade?", which is
+    /// true in bags the press then refuses because the three are of different classes.
+    ///
+    /// Distinct-by-id WEARABLES only: a trio must be three DIFFERENT items (Merge rejects an item
+    /// merged with itself) and gear, not currency — so a duplicate-id copy or a stack of Scrap can
+    /// never grab the slots and stall the whole auto-merge. GEMMED PIECES ARE NEVER FED TO IT: the
+    /// product is a brand-new item, so the socketed gems — the player's own investment — would
+    /// silently cease to exist. ONE CLASS PER TRIO: the product inherits its inputs' class, so a trio
+    /// drawn in bag order across classes fused two of the hunter's pieces into one they cannot wear.
+    /// </remarks>
+    private (Rarity Rarity, List<ItemInstance> Trio)? NextTrio(Hunter hunter)
     {
-        var rounds = 0;
-        var merged = 0;
-
-        bool IsWorn(ItemInstance i) =>
+        bool Worn(ItemInstance i) =>
             Gear.SlotFor(i.BaseType) is { } s && hunter.Worn(s)?.InstanceId == i.InstanceId;
 
-        for (var again = true; again && rounds < 200; rounds++)
+        foreach (var rarity in new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic })
         {
-            again = false;
-            foreach (var rarity in new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic })
-            {
-                // Distinct-by-id WEARABLES only: a trio must be three DIFFERENT items (Merge rejects an
-                // item merged with itself) and gear, not currency — so a duplicate-id copy or a stack of
-                // Scrap can never grab the slots and stall the whole auto-merge.
-                // GEMMED PIECES ARE NEVER FED TO THE MERGE: the product is a brand-new item, so the
-                // socketed gems — the player's own investment — would silently cease to exist. Crush
-                // or keep; auto-merge must not decide that for them.
-                // ONE CLASS PER TRIO. The product inherits its inputs' class, so a trio drawn in bag
-                // order across classes fused two of the champion's pieces into one it cannot wear
-                // (review 2026-08-25). Candidates group by class — the champion's own class and
-                // legacy pieces first, then the biggest pile — and only a full trio of one group fuses.
-                var trio = _inv.Where(i => i.Rarity == rarity && !IsWorn(i) && Gear.IsWearable(i)
-                                           && i.Gems.Count == 0)
-                               .DistinctBy(i => i.InstanceId)
-                               .GroupBy(i => i.Class)
-                               .OrderByDescending(g => g.Key is null || g.Key == FavouredClass)
-                               .ThenByDescending(g => g.Count())
-                               .Select(g => g.Take(3).ToList())
-                               .FirstOrDefault(g => g.Count == 3);
-                if (trio is null) continue;
+            var trio = _inv.Where(i => i.Rarity == rarity && !Worn(i) && Gear.IsWearable(i) && i.Gems.Count == 0)
+                           .DistinctBy(i => i.InstanceId)
+                           .GroupBy(i => i.Class)
+                           .OrderByDescending(g => g.Key is null || g.Key == FavouredClass)
+                           .ThenByDescending(g => g.Count())
+                           .Select(g => g.Take(3).ToList())
+                           .FirstOrDefault(g => g.Count == 3);
+            if (trio is not null) return (rarity, trio);
+        }
+        return null;
+    }
 
-                var result = Forge.Merge(trio, _rng, Tuning, LootTuning.Default);
-                if (!result.Success) continue;
-
-                foreach (var i in trio) _inv.Remove(i);
-                _inv.Add(result.Product!);
-                merged++;
-                again = true;
-            }
+    public int AutoMergeAll(Hunter hunter)
+    {
+        var merged = 0;
+        // 200 is a runaway guard, not a budget: every round consumes three items and adds one, so a
+        // real bag converges long before it.
+        for (var rounds = 0; rounds < 200; rounds++)
+        {
+            if (NextTrio(hunter) is not { } pick) break;
+            var result = Forge.Merge(pick.Trio, _rng, Tuning, LootTuning.Default);
+            if (!result.Success) break;
+            foreach (var i in pick.Trio) _inv.Remove(i);
+            _inv.Add(result.Product!);
+            merged++;
         }
 
-        if (merged > 0) Sound?.Play("sfx_forge", 0.7f);
-        Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF ONE RARITY AND ONE CLASS).",
+        if (merged > 0)
+        {
+            // NO NUMBER TICK ON A MERGE. It consumes three pieces and mints a fourth, so the bench may
+            // be pointing at a different item afterwards — ticking "from" a destroyed piece's power
+            // would animate one item's number into another's. What is honest is the anvil: the cue and
+            // the forge flash on whatever the bench holds when the dust settles.
+            FeelStart();
+            FeelFlash(ArtFeel, UiMotion.Fast);
+            Cue("sfx_salvage", 0.7f);
+        }
+        Say(merged > 0 ? $"MERGED {merged} TIMES — THE BAG HOLDS {_inv.Count} ITEMS NOW." : "NOTHING TO MERGE — YOU NEED THREE OF THE SAME GRADE AND CLASS.",
             merged > 0 ? Gold : Slate);
         return merged;
     }
@@ -842,6 +1397,7 @@ public sealed class ForgeScreen
     {
         var junk = JunkOf(hunter);
         if (junk.Count == 0) return;
+        var purse = PurseOf(hunter);
 
         // A SALVAGE CHART DOUBLES THE YIELD. Salvage is the one Forge operation that costs nothing, so
         // its charter cannot waive a price — it raises the return instead. Spent here, after the junk
@@ -857,18 +1413,14 @@ public sealed class ForgeScreen
             _inv.Remove(it);
         }
 
-        Sound?.Play("sfx_forge", 0.7f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // the tiers that filled up react at their own chips
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.7f);
         Say($"SALVAGED {junk.Count} JUNK ITEMS — +{gained} {MaterialTiers.Name(Material.Scrap)}"
             + (chart ? "  (YOUR SALVAGE CHART DOUBLED IT)." : "."), Gold);
     }
 
-
-    /// <summary>A multiplier as a signed percentage: 1.35 → "+35%", 0.8 → "-20%".</summary>
-    private static string Pct(float mult)
-    {
-        var pct = (int)MathF.Round((mult - 1f) * 100f);
-        return pct >= 0 ? $"+{pct}%" : $"{pct}%";
-    }
 
     /// <summary>SELL, via the confirmation. Worn gear is allowed now — it comes off first, and it ALWAYS asks.</summary>
     private void Sell(Hunter hunter, ItemInstance? item)
@@ -882,11 +1434,15 @@ public sealed class ForgeScreen
 
     private void SellNow(Hunter hunter, ItemInstance item)
     {
+        var purse = PurseOf(hunter);
         TakeOffFirst(hunter, item);
         ReleaseGems(item);
         _inv.Remove(item);
         hunter.AddGleam(item.SellValue);
-        Sound?.Play("sfx_forge", 0.55f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // GLEAM ticks UP at its own chip
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SOLD FOR {item.SellValue} GLEAM — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SOLD FOR {item.SellValue} GLEAM.", Gold);
@@ -910,13 +1466,17 @@ public sealed class ForgeScreen
 
     private void DismantleNow(Hunter hunter, ItemInstance item)
     {
+        var purse = PurseOf(hunter);
         TakeOffFirst(hunter, item);
         ReleaseGems(item);
         _inv.Remove(item);
         var m = Forge.Dismantle(item, Tuning);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
         hunter.AddMaterial(tier, m);
-        Sound?.Play("sfx_forge", 0.55f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // the tier it broke into ticks UP at its own chip
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SALVAGED INTO {m} {MaterialTiers.Name(tier)} — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SALVAGED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
@@ -956,7 +1516,7 @@ public sealed class ForgeScreen
     }
 
     /// <summary>
-    /// Re-roll the selected item's ENCHANTMENT — the Form-combo, the build-defining roll. Rare+ only.
+    /// Re-roll the selected item's ENCHANTMENT — the build-defining roll. Rare and better only.
     /// </summary>
     /// <remarks>
     /// Who pays is Core's call — <see cref="Reforge.CanPay"/> and <see cref="Reforge.PayWith"/> — and
@@ -981,10 +1541,16 @@ public sealed class ForgeScreen
         var result = Reforge.ReforgeEnchant(item, _rng, ReforgeTuning.Default);
         if (!result.Success) { Say(result.Rejection!, Ember); return; }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         var paid = Reforge.PayWith(hunter, tier, result.Cost);
         if (!paid.Paid) { Say($"NEED {cost} {MaterialTiers.Name(tier)} TO RE-ROLL.", Ember); return; }
         ReplaceItem(hunter, item, result.Product!);
-        Sound?.Play("sfx_forge", 0.7f);   // RE-ROLL is an anvil verb — the house forge cue
+        FeelStart();
+        FeelItem(was, hunter, result.Product!);
+        FeelPurse(purse, hunter);          // nothing moves when a REFORGE CHART pays — and nothing flashes
+        FeelFlash(EnchantFeel, UiMotion.Transition);   // the word that changed is the point of this tab
+        Cue("sfx_reroll", 0.7f);           // the lighter shuffle (§55), not the house anvil
         var ench = Enchantments.Of(result.Product!);
         var how = paid.UsedChart ? "A REFORGE CHART PAID FOR IT" : $"{paid.MaterialSpent} {MaterialTiers.Name(tier)} SPENT";
         Say(ench is not null ? $"RE-ROLLED — THE ENCHANT IS NOW {ench.Name}  ({how})." : $"RE-ROLLED THE ENCHANT  ({how}).", Gold);
@@ -1012,12 +1578,19 @@ public sealed class ForgeScreen
             if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} GLEAM TO UPGRADE — YOU HOLD {Ab(hunter.Gleam)}.", Ember); return; }
         }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         if (chart) hunter.SpendCharter(Charter.Refine);
         else { hunter.SpendMaterial(Material.Scrap, r.Scrap); hunter.SpendGleam(r.Gold); }
 
         var outcome = Forge.TryRefine(item, Tuning, _rng);
         ReplaceItem(hunter, item, outcome.Product);
-        if (!outcome.Failed) Sound?.Play("sfx_upgrade", 0.85f);   // the rung takes; a slip stays silent on purpose
+        // A SLIP MOVES THE NUMBERS TOO, and downward — so the tick runs either way. It is the one
+        // outcome the player most needs to SEE happen rather than discover on a re-read.
+        FeelStart();
+        FeelItem(was, hunter, outcome.Product);
+        FeelPurse(purse, hunter);
+        if (!outcome.Failed) Cue("sfx_upgrade", 0.85f);   // the rung takes; a slip stays silent on purpose
         var how = chart ? "A REFINE CHART PAID FOR IT" : $"{r.Scrap} SCRAP + {r.Gold} GLEAM SPENT";
         if (outcome.Failed)
             Say($"THE UPGRADE SLIPPED — BACK TO LEVEL {outcome.Product.ItemLevel}, UPGRADE {outcome.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({how}).", Ember);
@@ -1039,10 +1612,15 @@ public sealed class ForgeScreen
         if (hunter.MaterialOf(Material.Crystal) < r.Crystal) { Say($"NEED {r.Crystal} CRYSTAL FOR A GREATER UPGRADE — YOU HOLD {hunter.MaterialOf(Material.Crystal):N0}.", Ember); return; }
         if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} GLEAM FOR A GREATER UPGRADE — YOU HOLD {Ab(hunter.Gleam)}.", Ember); return; }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
         ReplaceItem(hunter, item, r.Product);
-        Sound?.Play("sfx_upgrade", 0.9f);
+        FeelStart();
+        FeelItem(was, hunter, r.Product);
+        FeelPurse(purse, hunter);
+        Cue("sfx_upgrade", 0.9f);
         Say($"GREATER UPGRADE — LEVEL {r.Product.ItemLevel}, UPGRADE {r.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({r.Crystal} CRYSTAL + {r.Gold} GLEAM SPENT — IT NEVER SLIPS).", Gold);
     }
 
@@ -1125,7 +1703,7 @@ public sealed class ForgeScreen
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
         var names = items.Count == 0
             ? "SOLD ON SIGHT (FILTER)"
-            : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNames[i.BaseType]}"));
+            : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNaming.SlotWord(i.BaseType)}"));
         Say($"{names}   +{mat} MATERIALS",
             items.Count > 0 ? RarityColors[items.Max(i => (int)i.Rarity)] : Slate);
     }
@@ -1213,8 +1791,10 @@ public sealed class ForgeScreen
     {
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
+        if (DevHeld) UiKit.MouseHeld = true;        // capture runs only — see DevHeld
+        if (DevReduced) UiMotion.Reduced = true;    // capture runs only — see DevReduced
         if (_devPosePending) ApplyDevPose(hunter);
 
         // A SELL / SALVAGE question is drawn IN PLACE (in the tab that raised it), not as a modal, so
@@ -1223,10 +1803,13 @@ public sealed class ForgeScreen
         var uiClicked = clicked;
         var uiRight = rightClicked;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
-        _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "PICK AN ITEM IN YOUR BAG, THEN CHOOSE A TAB — UPGRADE, RE-ROLL, SOCKET OR SALVAGE", 960, 80, Slate, UiTypography.Secondary);
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));   // scrim so panels pop
+        // FORGE, without the article (D7), page-centred — and WITHOUT the sentence that used to sit
+        // under it telling the player to pick an item and choose a tab. That sentence named the four
+        // tabs a third time (the tab strip and the deleted THE FOUR TABS legend named them twice), and
+        // it was drawn inside the band the hint slot owns. The tour's "FOUR JOBS" card teaches it.
+        _ui.TextCenterBig(b, "FORGE", UiKit.PageCenterX, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
 
         // ONE WORKBENCH, full stop. The pile screen (grid + merge tray + its own chest bar) is
         // retired — playtest: "O ekrana gerek yok bence." Its two verbs that were real, auto-merge and
@@ -1239,10 +1822,71 @@ public sealed class ForgeScreen
 
         // The hover card, above the surfaces and below nothing but the reveal — which is modal, and
         // whose whole job is to be the only thing you are looking at.
+        // Clipped to the LEFT of the forge column, so a hover card can never cover the operation the
+        // player is reading (the GEAR screen's rule).
         if (_hovered is { } hov && _revealTimer <= 0f)
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080));
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, ForgePanel.X - 8, UiKit.Page.Height));
 
         if (DevForgeDebug) DrawDebug(b);
+    }
+
+    // ── THE HOUSE STATES, ON A CONTROL THIS SCREEN DRAWS ITSELF (brief §25–§29). ─────────────────
+    //
+    // UiKit.Button already carries NORMAL · HOVER · PRESSED · DISABLED for anything shaped like a
+    // button. The Forge's tabs, filter chips, bag rows and socket cells are none of those — they are
+    // plates this file paints — and until this pass a hover on any of them changed nothing at all but
+    // the ink of a word, while a press changed nothing whatever. These two give them the same hand:
+    // HOVER eases in over UiMotion.Fast as a thin luminance lift, PRESSED sinks the face two pixels
+    // and darkens it for exactly as long as the mouse is held.
+    //
+    // THE HIT RECTANGLE NEVER MOVES (§15, LAW "draw = hit"): the depression is a DRAW offset only, and
+    // every caller keeps hit-testing the rectangle it laid out — the same thing UiKit.Button does.
+
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_HELD=1</c> makes a capture read the pointer as HELD DOWN.
+    /// </summary>
+    /// <remarks>
+    /// PRESSED is the one state on this screen no fixture could pose: <see cref="UiKit.MouseHeld"/> is
+    /// set from the real mouse at the top of the host's Update, and a headless run has no finger on the
+    /// button. Read only while <c>RH_SHOT</c> is set, and applied in <c>Draw</c> so it reaches
+    /// <c>UiKit.Button</c> as well as the plates this file paints — pair it with
+    /// <c>RH_SHOT_PAGE_MOUSE=x,y</c>, which decides WHICH control is under the finger.
+    /// </remarks>
+    private static readonly bool DevHeld =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_HELD") == "1";
+
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_REDUCED=1</c> poses the screen under Reduced Motion.
+    /// </summary>
+    /// <remarks>
+    /// The accessibility setting lives in the saved prefs file, which a headless capture has no way to
+    /// write, so the ACCESSIBILITY half of §102–§107 — "the same end state, immediately" — could not be
+    /// photographed beside the moving one. Applied in <c>Draw</c>, after the host has set the real
+    /// value for the frame; pair it with <c>RH_SHOT_FEEL</c> to shoot the same operation both ways.
+    /// </remarks>
+    private static readonly bool DevReduced =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_REDUCED") == "1";
+
+    /// <summary>Where a self-drawn control puts its face this frame: two pixels down while it is held.</summary>
+    private static Rectangle Face(Rectangle r, bool hover)
+        => hover && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
+
+    /// <summary>The hover lift and the press shadow — over the control's own surface, under its label.</summary>
+    private void Touch(SpriteBatch b, Rectangle hitRect, Rectangle face, bool hover)
+    {
+        var lift = UiMotion.Ease(UiMotion.KeyOf(hitRect), hover ? 1f : 0f);
+        if (lift > 0f) _ui.Fill(b, face, Color.White * (0.07f * lift));
+        if (hover && UiKit.MouseHeld) _ui.Fill(b, face, Color.Black * 0.18f);
+    }
+
+    /// <summary>The SELECTED edge: a thin gold outline (§23) — persistent structure a hover can never mimic.</summary>
+    private void SelectedEdge(SpriteBatch b, Rectangle r)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), Gold);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), Gold);
+        _ui.Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), Gold);
     }
 
     /// <summary>
@@ -1257,60 +1901,59 @@ public sealed class ForgeScreen
     private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked)
     {
         _ui.PanelQuiet(b, BagPanel);
+        _ui.TextCenterBig(b, "BAG", BagPanel.Center.X, UiKit.TitleTop(BagPanel), Gold, UiTypography.PanelTitle);
 
-        // UNDER THE SOCKET TAB THIS PANEL IS THE GEM DRAWER. Same panel, same rows, same wheel — the
-        // gems were the one kind of item the player owned and could not see anywhere in the bag.
-        var gemMode = _tab == Tab.Socket;
+        // ── THE FILTER, VISIBLE. ─────────────────────────────────────────────────────────────────
+        //
+        // The bag used to swap itself for a GEM DRAWER whenever the SOCKET tab was open — same panel,
+        // different contents, no control — and it paid for that with a four-line block of help text
+        // explaining the state it had entered on its own. Three chips say the state and let the player
+        // change it, and the help block goes with them.
+        var names = new[] { "ALL", "GEAR", "GEMS" };
+        for (var i = 0; i < 3; i++)
+        {
+            var chip = FilterChip(i);
+            var on = (int)_filter == i;
+            var hot = chip.Contains(hit);
+            var face = Face(chip, hot);
+            _ui.Plate(b, face, on ? UiInk.Accent : null);
+            Touch(b, chip, face, hot);
+            if (on) SelectedEdge(b, face);
+            _ui.TextCenterBig(b, names[i], face.Center.X, face.Y + (face.Height - UiTypography.Caption) / 2 - 1,
+                              on ? UiInk.Accent : hot ? Bone : Slate, UiTypography.Caption);
+            if (UiKit.ClickedIn(chip, hit, clicked)) _filter = (BagFilter)i;
+        }
+
         var bag = BagList();
-        _ui.TextCenterBig(b, gemMode ? "YOUR GEMS" : "YOUR BAG", BagPanel.Center.X, UiKit.TitleTop(BagPanel), Gold, UiTypography.PanelTitle);
-
-        // THE SCROLL COUNTER SITS UNDER THE TITLE, CENTRED — the only clear ground in this header.
-        //
-        // It has now failed in both corners. First as a centred line in the strip between the last row
-        // and the frame, where the panel art's bottom diamond ate it. Then right-aligned in the header
-        // at Right - 52, which looked safe against UiKit.PanelCorner's nominal 40 — and was not: this
-        // panel's aspect selects the SQUARE frame, whose corner filigree reaches about 95px inward at
-        // this size, so "3-8 / 8" rendered as "3-8" with the slash and the total lost in the ornament.
-        // A partial number is worse than none; it reads as a bag with 3 items in it.
-        //
-        // The frame's clear interior here is only ~177px wide, which is barely the title itself, so
-        // there is no arrangement that puts two things on this line. Under it, there is room.
-        if (bag.Count > BagRows)
-            _ui.TextCenterBig(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} / {bag.Count}",
-                              BagPanel.Center.X, UiKit.CaptionTop(BagPanel), Slate, UiTypography.Secondary);
-
         if (bag.Count == 0)
         {
-            _ui.TextCenter(b, gemMode ? "NO GEMS YET — CHESTS CARRY THEM." : "EMPTY — GO AND HUNT.",
-                           BagPanel.Center.X, BagPanel.Y + 150, Dim);
+            var emptyY = UiKit.BodyTop(BagPanel) + UiMetrics.Space(40);
+            _ui.TextCenterBig(b, _filter == BagFilter.Gems ? "NO GEMS YET" : "THE BAG IS EMPTY",
+                              BagPanel.Center.X, emptyY, UiInk.Empty, UiTypography.Body);
+            _ui.TextCenterBig(b, _filter == BagFilter.Gems ? "CHESTS CARRY THEM." : "BOSSES DROP CHESTS.",
+                              BagPanel.Center.X, emptyY + UiTypography.Pitch(UiTypography.Body),
+                              Slate, UiTypography.Secondary);
             return;
         }
 
         // Keep the focused item on screen without stealing the wheel from the player.
-        // THE FOCUS IS ADOPTED BEFORE IT IS USED, and that is the OTHER half of why this list could not
-        // be scrolled. With no focus set, FindIndex returns -1, Math.Max floors it to 0, and the
-        // keep-the-selection-visible clamp below then reads "row 0 must be on screen" — so it dragged
-        // _bagScroll back to zero on EVERY FRAME. Fixing the wheel alone would have changed nothing:
-        // the scroll was being undone a frame later by a line whose job is to be helpful.
-        //
-        // Adopting the first row also makes the highlight and the ITEM PREVIEW agree on frame one; they
-        // were both falling back to "the first item" separately, which is agreement by coincidence.
-        // NEVER FROM THE GEM LIST. The focus is "the wearable on the bench" — adopting a gem into it
-        // would point UPGRADE, RE-ROLL and SALVAGE at a stone, and the SOCKET tab's own host item
-        // would change every time the drawer was opened.
-        if (!gemMode && (_focusId is null || bag.All(i => i.InstanceId != _focusId)))
+        // THE FOCUS IS ADOPTED BEFORE IT IS USED. With no focus set, FindIndex returns -1, Math.Max
+        // floors it to 0, and the keep-the-selection-visible clamp below then reads "row 0 must be on
+        // screen" — dragging _bagScroll back to zero on EVERY FRAME. Fixing the wheel alone changed
+        // nothing: the scroll was undone a frame later by a line whose job is to be helpful.
+        // NEVER FROM A GEM. The focus is "the wearable on the bench" — adopting a gem into it would
+        // point UPGRADE, RE-ROLL and SALVAGE at a stone.
+        var wearables = bag.Where(Gear.IsWearable).ToList();
+        if (wearables.Count > 0 && (_focusId is null || wearables.All(i => i.InstanceId != _focusId)))
         {
-            _focusId = bag[0].InstanceId;
+            _focusId = wearables[0].InstanceId;
             _focusFollow = false;   // an adopted default is not a choice, so nothing should scroll to it
         }
 
-        // THE CLAMP ONLY RUNS WHEN THE FOCUS WAS JUST CHOSEN, and the first version of this fix missed
-        // that entirely. Adopting row 0 made the focus REAL, which was the point — and then this clamp,
-        // seeing focus 0, went on dragging _bagScroll back to 0 on every frame exactly as before. The
-        // wheel moved the list and the next frame moved it back. Fixing the wheel and fixing the focus
-        // were both necessary and neither was sufficient: what actually blocked scrolling is that a
-        // "keep the selection visible" rule ran on frames where the selection had not moved.
-        if (_focusFollow && !gemMode)
+        // THE CLAMP ONLY RUNS WHEN THE FOCUS WAS JUST CHOSEN. Adopting row 0 made the focus REAL, and
+        // then this clamp, seeing focus 0, went on dragging _bagScroll to 0 every frame exactly as
+        // before: a "keep the selection visible" rule running on frames where the selection had not moved.
+        if (_focusFollow)
         {
             var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
             if (focus < _bagScroll) _bagScroll = focus;
@@ -1327,139 +1970,109 @@ public sealed class ForgeScreen
             var it = bag[idx];
             var row = BagRow(vis);
             var rc = RarityColors[(int)it.Rarity];
-            var sel = !gemMode && it.InstanceId == _focusId;
+            var gem = GemCraft.IsGem(it);
+            var sel = gem ? it.InstanceId == _gemId : it.InstanceId == _focusId;
             var hover = row.Contains(hit);
             if (hover) _hovered = it;
             var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
 
-            // A gem row SETS the gem into the item on the bench (left) or SELLS it (right). A gear row
-            // picks the item, as it always has.
-            if (UiKit.ClickedIn(row, hit, clicked))
+            // A CLICK SELECTS. A gem row picks the gem the SOCKET tab will set — the refusals and the
+            // question that used to fire from this click now live on that tab's button, where the
+            // player can read them before committing. A gear row picks the item on the bench.
+            if (UiKit.ClickedIn(row, hit, clicked) && !ConfirmOpen)
             {
-                if (!gemMode) { _focusId = it.InstanceId; _focusFollow = true; }
-                else if (ConfirmOpen) { /* a question already owns the clicks */ }
-                else if (Target() is { } host)
-                {
-                    // ASK FIRST (playtest 2026-08-23): a set gem can never come back out — crushing it
-                    // later destroys it — and this click also spends Essence. One click committing all
-                    // of that silently was the bug. And ask only what YES can actually do (review
-                    // 2026-08-23): the refusals TrySocket would give come BEFORE the question, not after.
-                    var slots = GemCraft.SocketCount(host.Rarity);
-                    var cost = SocketPrice(host.Rarity);
-                    if (slots == 0) Say("ONLY RARE AND BETTER GEAR HAS SOCKETS.", Ember);
-                    else if (host.Gems.Count >= slots) Say("EVERY SOCKET IS FULL — CRUSH A GEM TO FREE ONE.", Ember);
-                    else if (hunter.MaterialOf(Material.Essence) < cost)
-                        Say($"NEED {cost} ESSENCE TO SET A GEM — YOU HOLD {hunter.MaterialOf(Material.Essence):N0}.", Ember);
-                    else
-                    {
-                        _confirm = null;   // one question at a time, in both directions
-                        _confirmSuppress = false;
-                        _socketAsk = (host.InstanceId, it.InstanceId);
-                        _confirmOpenedNow = true;
-                    }
-                }
-                else Say("NO GEAR ON THE BENCH — A GEM GOES INTO AN ITEM.", Slate);
+                if (gem) { _gemId = it.InstanceId; _tab = Tab.Socket; }
+                else { _focusId = it.InstanceId; _focusFollow = true; }
             }
-            if (gemMode && !ConfirmOpen && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
+            if (gem && !ConfirmOpen && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
 
-            _ui.Fill(b, row, sel ? new Color(0x3A, 0x2E, 0x52)
-                           : hover ? new Color(0x22, 0x1C, 0x30)
-                           : new Color(0x14, 0x11, 0x1C, 0xC0));
-            _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), rc);
+            // NORMAL · HOVER · PRESSED · SELECTED, and they are four different things to look at: the
+            // rarity rule is the row's identity, the luminance lift is the pointer, the two-pixel sink
+            // is the press, and the gold outline is the piece on the bench. Before this pass a hovered
+            // row and a selected row were both "the same plate, one word in a different ink".
+            var face = Face(row, hover);
+            _ui.Plate(b, face, sel ? rc : null);
+            Touch(b, row, face, hover);
+            if (sel) SelectedEdge(b, face);
+            _ui.Fill(b, new Rectangle(face.X, face.Y, 5, face.Height), rc);
 
-            DrawItemIcon(b, it, new Rectangle(row.X + 10, row.Y + 3, 30, 30));
+            // The icon fills the row less a breath; the name sits one breath past it, centred on the row.
+            var icon = face.Height - UiMetrics.Space(6);
+            var iconX = face.X + UiMetrics.Space(10);
+            DrawItemIcon(b, it, new Rectangle(iconX, face.Y + (face.Height - icon) / 2, icon, icon));
 
-            // A GEM ROW SAYS WHAT IT GIVES. Two lines fit in 40px, and the second one is the whole
-            // point of the pass: "FURY GEM / +18% DAMAGE" instead of a coloured diamond and a name.
-            if (gemMode)
-            {
-                var lvl2 = $"LEVEL {it.ItemLevel}";
-                var nameRoom2 = row.Right - 8 - _ui.Measure(lvl2) - 16 - (row.X + 50);
-                _ui.Text(b, _ui.Shorten(GemCraft.NameOf(it), nameRoom2), row.X + 50, row.Y + 1, rc);
-                _ui.TextRight(b, lvl2, row.Right - 8, row.Y + 1, Slate);
-                _ui.TextBig(b, _ui.ShortenBig(GemCraft.Grant(it), row.Width - 58, UiTypography.Secondary),
-                            row.X + 50, row.Y + 20, Met, UiTypography.Secondary);
-                continue;
-            }
-
-            // TRUNCATED BY PIXELS, NOT BY CHARACTER COUNT. The old comment said "13 characters,
-            // measured" — but a character count cannot be measured against a proportional font, and it
-            // was not: thirteen wide glyphs overran the right-aligned level column and every row in the
-            // bag printed its name straight through its own item level. "GREEDY MACHIiL1". The one
-            // number the UPGRADE mode exists to move was illegible on every row of every mode.
-            //
-            // The level is measured FIRST and the name is given exactly what is left.
-            var lvl = isWorn ? "WORN" : $"LEVEL {it.ItemLevel}";
-            var nameRoom = row.Right - 8 - _ui.Measure(lvl) - 16 - (row.X + 50);
-            _ui.Text(b, _ui.Shorten(ItemNaming.FullName(it), nameRoom), row.X + 50, row.Y + 10,
-                     sel ? Bone : rc);
-            _ui.TextRight(b, lvl, row.Right - 8, row.Y + 10, isWorn ? Gold : Slate);
-        }
-
-        // THE PILE SCREEN IS GONE (playtest: "O ekrana gerek yok bence") — these are the two verbs of
-        // it that were real, in the place the player already looks. Chests are opened in the VAULT,
-        // whose rail tile now wears the pile count.
-        var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i) && i.Gems.Count == 0)
-                          .DistinctBy(i => i.InstanceId)
-                          .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
-        // The JUNK question comes FIRST, whatever the tab. J is not gated on the tab (nor should it be),
-        // and OpenConfirm does not move the tab for JunkAll — so under the gem drawer the question used
-        // to be armed with no drawing surface: the forge's keys died and the next Escape was spent
-        // cancelling something invisible (review 2026-08-23).
-        if (_confirm is { Kind: ScrapKind.JunkAll })
-        {
-            // The junk question is asked HERE, where its button was — not as a modal over the screen.
-            DrawJunkQuestion(b, hunter, hit, clicked);
-        }
-        else if (gemMode)
-        {
-            // MERGE and SALVAGE JUNK act on GEAR — under the gem drawer they would take from a list
-            // the player cannot see. The foot says what a row does instead.
-            var gx = UiKit.ContentLeft(BagPanel); var gw = BagPanel.Width - UiKit.PadX(BagPanel) * 2;
-            // The last line closes a dead end: with the wearables hidden there is no other way to see
-            // that the item being socketed is chosen on a different tab, and a player who cannot change
-            // it would conclude that gems only ever fit whatever the bench happened to be pointing at.
-            var help = new[]
-            {
-                "CLICK A GEM — THE FORGE ASKS BEFORE",
-                "SETTING IT. RIGHT-CLICK TO SELL.",
-                "TO CHANGE THAT ITEM, OPEN THE",
-                "UPGRADE TAB AND CLICK ONE.",
-            };
-            for (var i = 0; i < help.Length; i++)
-                _ui.TextBig(b, _ui.ShortenBig(help[i], gw, UiTypography.Secondary),
-                            gx, BagPanel.Bottom - 146 + i * 24, i < 2 ? Bone : Slate, UiTypography.Secondary);
-        }
-        else
-        {
-            if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(BagPanel), BagPanel.Bottom - 152, BagPanel.Width - UiKit.PadX(BagPanel) * 2, 52),
-                           "MERGE THREES INTO BETTER", hit, clicked, enabled: anyTrio))
-                AutoMergeAll(hunter);
-            if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(BagPanel), BagPanel.Bottom - 88, BagPanel.Width - UiKit.PadX(BagPanel) * 2, 52),
-                           "SALVAGE ALL THE JUNK", hit, clicked, enabled: JunkOf(hunter).Count > 0))
-                SalvageJunk(hunter);
+            // ONE LINE PER ROW. A gem row used to draw two — a name at 19 px and its grant under it —
+            // which needed 52 px inside a 40 px row once the type ladder settled. The gem's level moved
+            // to the hover card, which every row already feeds.
+            var right = gem ? GemCraft.Grant(it) : isWorn ? "WORN" : $"LEVEL {it.ItemLevel}";
+            var rightInk = gem ? Met : isWorn ? Gold : Slate;
+            var textX = iconX + icon + UiMetrics.Space(10);
+            var textY = face.Y + (face.Height - UiTypography.Body) / 2 - 1;
+            var pad = UiMetrics.Space(8);
+            var nameRoom = face.Right - pad - _ui.MeasureBig(right, UiTypography.Body) - UiMetrics.Space(16) - textX;
+            _ui.TextBig(b, _ui.ShortenBig(gem ? GemCraft.NameOf(it) : ItemNaming.FullName(it), nameRoom, UiTypography.Body),
+                        textX, textY, sel ? Bone : rc, UiTypography.Body);
+            _ui.TextRightBig(b, right, face.Right - pad, textY, rightInk, UiTypography.Body);
         }
 
         // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
-        // out by spinning the wheel. The list had no visible affordance of any kind: no bar, no arrows,
-        // no cut-off row — six rows and then a frame, which reads as a bag holding six items. The GEAR
-        // screen's inventory has had one all along (CharacterScreen.cs); this is the same geometry,
-        // drawn down the inside edge of the row column.
-        if (bag.Count > BagRows)
+        // out by spinning the wheel. (The scroll counter that used to sit under the title is gone: the
+        // bar says the same thing, and at 720p the counter was four physical pixels tall.) The house
+        // bar, in the lane the rows leave for it.
         {
             var first = BagRow(0);
-            var track = new Rectangle(first.Right + 8, first.Y, 6, BagRows * BagRowH - 4);
-            _ui.Fill(b, track, new Color(0x16, 0x12, 0x20, 0xE0));
-            var th = Math.Max(24, track.Height * BagRows / bag.Count);
-            var ty = track.Y + (track.Height - th) * _bagScroll / Math.Max(1, bag.Count - BagRows);
-            _ui.Fill(b, new Rectangle(track.X, ty, track.Width, th), new Color(0x8A, 0x5A, 0xC8));
+            var track = new Rectangle(first.Right + UiMetrics.Space(8), first.Y, UiMetrics.ScrollbarWidth,
+                                      BagRows * BagRowH - UiMetrics.Space(4));
+            _ui.ScrollBar(b, track, _bagScroll, BagRows, bag.Count);
         }
 
-        // (The scroll counter that used to live here moved into the header — see the note beside it.
-        // The strip between the last row and the frame is ~26px and its centre carries the panel art's
-        // bottom diamond, so nothing legible fits in it.)
-    }
+        // ── THE FOOT: two bulk verbs that say what they will act on, and why they cannot. ─────────
+        //
+        // The JUNK question comes FIRST, whatever the tab: J is not gated on the tab, and OpenConfirm
+        // does not move the tab for JunkAll, so the question must have a drawing surface here or the
+        // forge's keys die and the next Escape is spent cancelling something invisible.
+        if (_confirm is { Kind: ScrapKind.JunkAll })
+        {
+            DrawJunkQuestion(b, hunter, hit, clicked);
+            return;
+        }
 
+        var trio = NextTrio(hunter);
+        var junk = JunkOf(hunter).Count;
+
+        if (_ui.Button(b, MergeBtn, $"MERGE 3 INTO 1 BETTER  ({(trio is null ? 0 : 1)})", hit, clicked, enabled: trio is not null))
+            AutoMergeAll(hunter);
+        if (trio is { } tr)
+        {
+            // WHAT THE PRESS WILL MAKE, from the same helper the press itself uses — so the preview
+            // cannot describe a merge the button would not perform.
+            var type = MergeRecipe.TypeOf(tr.Trio);
+            var el = MergeRecipe.ElementOf(tr.Trio);
+            var kind = ItemNaming.SlotWord(type);
+            var line = $"NEXT: 3 {RarityNames[(int)tr.Rarity]} INTO 1 {RarityNames[(int)tr.Rarity + 1]} {kind}"
+                       + (el is { } e ? $" · {e.ToString().ToUpperInvariant()}" : "")
+                       + $" · LEVEL {tr.Trio.Max(i => i.ItemLevel)} · A NEW RANDOM PREFIX";
+            _ui.TextBig(b, _ui.ShortenBig(line, BagContentW, UiTypography.Secondary),
+                        UiKit.ContentLeft(BagPanel), MergePreviewY, Slate, UiTypography.Secondary);
+        }
+        else
+            _ui.TextBig(b, _ui.ShortenBig("YOU NEED THREE OF THE SAME GRADE.", BagContentW, UiTypography.Secondary),
+                        UiKit.ContentLeft(BagPanel), MergePreviewY, Slate, UiTypography.Secondary);
+
+        // A DISABLED CONTROL SAYS WHY (§29). The MERGE button has the preview line under it to explain
+        // itself; this one sits on the panel's own foot with nothing below it, so the label carries the
+        // reason instead of a count of zero — "(0)" is a number, not an answer.
+        //
+        // AND THE REASON HAS TO FIT AT 150 % (§9, §17). UiKit.Button shrinks a label only as far as
+        // Caption and then draws it anyway — "NO COMMON OR UNCOMMON GEAR TO SALVAGE" lost its first and
+        // last letter into the button art's end scrollwork at the accessibility profile. The verb is
+        // already written on the control the player is looking at, so the reason need not repeat it:
+        // what is missing is the gear.
+        if (_ui.Button(b, SalvageJunkBtn,
+                       junk > 0 ? $"SALVAGE COMMON AND UNCOMMON  ({junk})" : "NO COMMON OR UNCOMMON GEAR",
+                       hit, clicked, enabled: junk > 0))
+            SalvageJunk(hunter);
+    }
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
     // THE WORKBENCH — one item, four things you can do to it, and the wallet beside them.
@@ -1486,51 +2099,244 @@ public sealed class ForgeScreen
 
     private void DrawWorkbench(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked)
     {
-        DrawBag(b, hunter, hit, clicked, rightClicked);
         var item = Target();
+        DrawMaterialStrip(b, hunter, item, hit);
+        DrawBag(b, hunter, hit, clicked, rightClicked);
         DrawWorkPanel(b, hunter, item, hit, clicked);
-        DrawWallet(b, hunter, item);
+        if (_stripTip is { } tip) _ui.HoverTip(b, tip, hit);
+        _stripTip = null;
+    }
+
+    /// <summary>What a hovered chip in the materials strip is for — drawn last, over everything.</summary>
+    private string? _stripTip;
+
+    // ── THE MATERIALS STRIP ──────────────────────────────────────────────────────────────────────
+    //
+    // This was a 514 px ornate COLUMN — a quarter of the screen — holding five balances, an essay
+    // about charts and a legend naming the four tabs. The balances are the only part of it a player
+    // ever needs at a glance, and they need one row, not a column: five chips along the top, each
+    // saying what it is, what you hold, and what the OPEN TAB will do to it. The chart essay and the
+    // legend are the tour's job; what they said is in the tour cards word for word.
+    private void DrawMaterialStrip(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit)
+    {
+        _ui.Plate(b, MaterialStrip);
+        _ui.Fill(b, new Rectangle(MaterialStrip.X, MaterialStrip.Y, MaterialStrip.Width, 2), Gold * 0.35f);   // the strip's own rule, so it reads as part of the page's frames
+
+        // The five balances, and — for the tab that is open — the mark that says what it needs or
+        // gives. The marks are verb-first ("UPGRADE NEEDS 12", "SALVAGE GIVES +32") and every one of
+        // them comes from the same Core call the button's enable check and its payment make.
+        var marks = StripMarks(hunter, item);
+        var rows = new (string Key, string Icon, Color Tint, string Name, long Held, string Use)[]
+        {
+            ("gleam", "currency_gleam", Gold, "GLEAM", hunter.Gleam, GleamUse),
+            ("scrap", MatIcon[0], MatColor[0], "SCRAP", hunter.MaterialOf(Material.Scrap), MatUse(Material.Scrap)),
+            ("essence", MatIcon[1], MatColor[1], "ESSENCE", hunter.MaterialOf(Material.Essence), MatUse(Material.Essence)),
+            ("core", MatIcon[2], MatColor[2], "CORE", hunter.MaterialOf(Material.Core), MatUse(Material.Core)),
+            ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", hunter.MaterialOf(Material.Crystal), MatUse(Material.Crystal)),
+        };
+
+        // FIVE CELLS through the house resource cell (UiKit.ResourceCell): the well says which
+        // resource, the line over the figure says what the open action NEEDS or GIVES of it (in the
+        // met / unmet ink) or the resource's name when nothing is asked, and the figure itself turns
+        // to the danger ink while it is short. Hairlines between the cells; the frame's own rule on top.
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var chip = MatChip(i);
+            var r = rows[i];
+            var feel = PurseFeel(r.Key);
+            var moved = Felt(feel);
+            var held = Ab(TickedWhole(feel, r.Held));
+            var hasMark = marks.TryGetValue(r.Key, out var mark);
+            var isShort = hasMark && mark.Colour == Ember;
+            _ui.ResourceCell(b, chip, r.Icon, r.Tint,
+                             hasMark ? mark.Text : r.Name, hasMark ? mark.Colour : Slate,
+                             held, isShort ? Ember : TickInk(feel, Bone), UiMotion.Smooth(moved));
+            if (i > 0)
+                _ui.Fill(b, new Rectangle(chip.X - UiMetrics.Space(6), MaterialStrip.Y + UiMetrics.Space(10), 1, MaterialStrip.Height - UiMetrics.Space(20)), UiInk.Rule);
+            if (chip.Contains(hit)) _stripTip = r.Use;
+        }
+
+        // THE CHARTS, as chips at the right end — one per kind held, and nothing at all when you hold
+        // none. The panel used to spend four lines saying "NONE RIGHT NOW — WAVES DROP ONE NOW AND
+        // THEN"; an empty lane says the same thing and costs nothing.
+        // Laid out RIGHT TO LEFT from the strip's own edge, each chip measured: laid out left to right
+        // from a fixed lane, a third chart ran off the end of the screen.
+        var chipGap = UiMetrics.Space(12);
+        var cx = MaterialStrip.Right - chipGap;
+        foreach (var c in new[] { Charter.Salvage, Charter.Reforge, Charter.Refine })
+        {
+            var n = hunter.CharterCount(c);
+            if (n <= 0) continue;
+            var pays = ChartPaysOpenTab(c);
+            var label = $"{Charters.Name(c)} ×{n}";
+            var cw = _ui.MeasureBig(label, UiTypography.Secondary) + 2 * chipGap;
+            var chip = new Rectangle(cx - cw, MaterialStrip.Y + UiMetrics.Space(6), cw, ChartChipH);
+            // The lane is the promise the balances were laid out against; a chip that would cross it
+            // is dropped rather than drawn over a number.
+            if (chip.X < MaterialStrip.Right - ChartsLane) break;
+            _ui.Plate(b, chip, pays ? UiInk.Accent : UiInk.Good);
+            _ui.TextBig(b, label, chip.X + chipGap, chip.Y + (chip.Height - UiTypography.Secondary) / 2 - 1,
+                        pays ? UiInk.Accent : UiInk.Good, UiTypography.Secondary);
+            // A chart that will pay the NEXT press says so under its own chip — a badge, not a sentence.
+            if (pays)
+                _ui.TextRightBig(b, _tab == Tab.Upgrade ? "PAYS THE NEXT UPGRADE" : "PAYS THE NEXT RE-ROLL",
+                                 chip.Right, chip.Bottom + UiMetrics.Space(4), UiInk.Accent, UiTypography.Caption);
+            if (chip.Contains(hit)) _stripTip = Charters.Blurb(c);
+            cx = chip.X - chipGap;
+        }
+    }
+
+    /// <summary>Does a chart of this kind pay the open tab's next press?</summary>
+    private bool ChartPaysOpenTab(Charter c) =>
+        (_tab == Tab.Upgrade && c == Charter.Refine && Target() is not null)
+        || (_tab == Tab.Reroll && c == Charter.Reforge && Target() is { } it && it.Rarity >= Enchantments.MinimumRarity);
+
+    /// <summary>
+    /// What the OPEN tab's next press takes — or gives — per balance.
+    /// </summary>
+    /// <remarks>
+    /// Verb first, so the mark reads as a sentence ("UPGRADE NEEDS 12") rather than as a second,
+    /// unexplained number beside the balance. Every figure here comes from the same Core call the
+    /// button's enable check and its payment make, which is why the price and the press cannot drift
+    /// apart. Moved out of the deleted wallet column unchanged.
+    /// </remarks>
+    private Dictionary<string, (string Text, Color Colour)> StripMarks(Hunter hunter, ItemInstance? item)
+    {
+        var marks = new Dictionary<string, (string Text, Color Colour)>();
+        void Need(string key, string verb, long need, long have) =>
+            marks[key] = ($"NEEDS {need:N0}", have >= need ? Met : Ember);
+        void Gives(string key, string verb, long amount) => marks[key] = ($"GIVES +{amount:N0}", Gold);
+        if (item is null) return marks;
+        switch (_tab)
+        {
+            case Tab.Upgrade when !Forge.AtRefineCap(item, Tuning):
+                if (hunter.CharterCount(Charter.Refine) <= 0)
+                {
+                    var r = Forge.Refine(item, Tuning);
+                    Need("scrap", "UPGRADE", r.Scrap, hunter.MaterialOf(Material.Scrap));
+                    Need("gleam", "UPGRADE", r.Gold, hunter.Gleam);
+                }
+                Need("crystal", "GREATER", Forge.GreaterRefine(item, Tuning).Crystal, hunter.MaterialOf(Material.Crystal));
+                break;
+            case Tab.Reroll when item.Rarity >= Enchantments.MinimumRarity:
+                if (hunter.CharterCount(Charter.Reforge) <= 0)
+                {
+                    var tier = Reforge.EnchantMaterial(item.Rarity);
+                    Need(MatKey(tier), "RE-ROLL", ReforgeTuning.Default.EnchantCostFor(item.Rarity), hunter.MaterialOf(tier));
+                }
+                break;
+            case Tab.Socket when GemCraft.SocketCount(item.Rarity) > 0:
+                if (SocketPrice(item.Rarity) == 0) marks["essence"] = ("YOUR FIRST GEM IS FREE", Met);
+                else Need("essence", "A GEM", SocketPrice(item.Rarity), hunter.MaterialOf(Material.Essence));
+                break;
+            case Tab.BreakDown:
+                Gives("gleam", "SELL", item.SellValue);
+                Gives(MatKey(MaterialTiers.ForRarity(item.Rarity)), "SALVAGE", Forge.Dismantle(item, Tuning));
+                break;
+        }
+        return marks;
     }
 
     /// <summary>
-    /// The centre: the item card, then the tab strip and the open tab's body beside it, with the
-    /// feedback strip along the action panel's foot — right under the buttons that produce what it says.
+    /// The two right-hand columns: WHAT IT IS, and WHAT YOU CAN DO TO IT.
     /// </summary>
+    /// <remarks>
+    /// The ornate frame moved. It was on the ITEM column — the one column of the four that asks for no
+    /// decision — while the column holding every button, every price and every risk wore the quiet
+    /// brown. The gold goes where the choice is.
+    /// </remarks>
     private void DrawWorkPanel(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit, bool clicked)
     {
-        _ui.Panel(b, ItemPanel);
-        _ui.PanelQuiet(b, ActionPanel);
-        _ui.TextCenterBig(b, "WHAT TO DO WITH IT", ActionPanel.Center.X, UiKit.TitleTop(ActionPanel), Gold, UiTypography.PanelTitle);
+        _ui.PanelQuiet(b, ItemPanel);
+        _ui.Panel(b, ForgePanel);
+        _questionBottom = 0;
+
         if (item is null)
         {
-            _ui.TextCenterBig(b, "NO GEAR IN THE BAG.", ItemPanel.Center.X, ItemPanel.Y + 380, Slate, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "GO AND HUNT — BOSSES DROP CHESTS,", ItemPanel.Center.X, ItemPanel.Y + 430, Dim);
-            _ui.TextCenter(b, "CHESTS DROP GEAR.", ItemPanel.Center.X, ItemPanel.Y + 456, Dim);
-            _ui.TextCenter(b, "PICK AN ITEM FIRST.", ActionPanel.Center.X, ActionPanel.Y + 430, Dim);
+            // An empty state in the disabled ink reads as a screen that is switched off. This one is a
+            // fact, so it is written in the ink facts are written in. Placed by proportion, so it sits
+            // in the same part of the column at every profile.
+            var benchY = ItemPanel.Y + ItemPanel.Height * 3 / 8;
+            _ui.TextCenterBig(b, "NOTHING ON THE BENCH", ItemPanel.Center.X, benchY, UiInk.Empty, UiTypography.Headline);
+            var lineY = benchY + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14);
+            _ui.TextCenterBig(b, "YOUR BAG IS EMPTY.", ItemPanel.Center.X, lineY, Slate, UiTypography.Body);
+            _ui.TextCenterBig(b, "BOSSES DROP CHESTS, AND CHESTS DROP GEAR.", ItemPanel.Center.X,
+                              lineY + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Body);
+            DrawTabStrip(b, hit, clicked);
+            _ui.TextCenterBig(b, "PICK AN ITEM FIRST.", ForgePanel.Center.X, BodyTopY + UiMetrics.Space(40),
+                              UiInk.Empty, UiTypography.Body);
             DrawFeedback(b);
             return;
         }
 
-        // The card previews the UPGRADE tab's result — before → after — and ONLY there. On every other
-        // tab the numbers are simply the item's numbers; an arrow pointing at a change that no button
-        // on the open tab offers was one of the things that made the old screen feel busy.
-        var refined = _tab == Tab.Upgrade && !Forge.AtRefineCap(item, Tuning) ? Forge.Refine(item, Tuning).Product : null;
-        DrawCard(b, hunter, item, refined, hit, clicked);
+        // A new item or a new tab is a new table: the wheel position belonged to the rows it scrolled.
+        var key = ((int)_tab, item.InstanceId);
+        if (key != _compareKey) { _compareKey = key; _compareScroll = 0; }
+
+        DrawItemColumn(b, hunter, item, hit, clicked);
 
         DrawTabStrip(b, hit, clicked);
-        var top = Action.Y + TabStripH + 22;
-        var body = new Rectangle(Action.X, top, Action.Width, Action.Bottom - top);
+        // A tab that draws no walked rows (a locked state, a question) reports none, so no bar can
+        // outlive the table it described.
+        _compareShown = _compareTotal = 0;
+        _tabBodyGrown = 0;
+        var hasOption = _tab is Tab.Upgrade or Tab.BreakDown;
         switch (_tab)
         {
-            case Tab.Upgrade: DrawUpgradeTab(b, hunter, item, body, hit, clicked); break;
-            case Tab.Reroll: DrawRerollTab(b, hunter, item, body, hit, clicked); break;
-            case Tab.Socket: DrawSocketTab(b, hunter, item, body, hit, clicked); break;
-            default: DrawBreakDownTab(b, hunter, item, body, hit, clicked); break;
+            case Tab.Upgrade: DrawUpgradeTab(b, hunter, item, TabBody(true), hit, clicked); break;
+            case Tab.Reroll: DrawRerollTab(b, hunter, item, TabBody(false), hit, clicked); break;
+            case Tab.Socket: DrawSocketTab(b, hunter, item, TabBody(false), hit, clicked); break;
+            default: DrawBreakDownTab(b, hunter, item, TabBody(true), hit, clicked); break;
         }
+        // THE BAR, when the compare holds more rows than it has room for — beside the rows, never
+        // under the button. The rows drew narrower this frame if the last frame overflowed.
+        _compareOverflow = _compareTotal > _compareShown;
+        var body = TabBody(hasOption);
+        body.Height += _tabBodyGrown;   // the track ends where the rows did, not where the anatomy said
+        _ui.ScrollBar(b, new Rectangle(body.Right - UiMetrics.ScrollbarWidth, body.Y, UiMetrics.ScrollbarWidth, body.Height),
+                      _compareScroll, _compareShown, _compareTotal);
         DrawFeedback(b);
     }
 
-    /// <summary>The four intents, as flat tabs — so the ONE ornate button inside the open tab is the only button-shaped thing there.</summary>
+    /// <summary>Did the compare overflow on the last frame? Its rows leave the bar its lane when it did.</summary>
+    private bool _compareOverflow;
+
+    /// <summary>How much a tight tab grew its row region this frame (the RE-ROLL list reclaiming an uncertainty line), so the bar's track follows.</summary>
+    private int _tabBodyGrown;
+
+    /// <summary>A question's bottom edge this frame, or 0 — the feedback plate stands aside for a question that runs into it.</summary>
+    private int _questionBottom;
+
+    /// <summary>Start walking a tab's compare rows: from the body's top, scrolled by the wheel, clear of the bar.</summary>
+    private RowWalk BeginRows(Rectangle body) => new()
+    {
+        Y = body.Y, Floor = body.Bottom, First = _compareScroll,
+        Right = body.Right - (_compareOverflow ? ScrollLane : 0),
+    };
+
+    /// <summary>What the walk learned — how many rows there were and how many fit — for the bar and the wheel.</summary>
+    private void EndRows(in RowWalk w) { _compareShown = w.Shown; _compareTotal = w.Index; }
+
+    /// <summary>
+    /// The tab's intent sentence, under the strip — unless the column's budget dropped it. Returns the
+    /// y the body starts at. <paramref name="always"/> keeps it for a locked state, which has no compare
+    /// to make room for and whose intent IS the explanation.
+    /// </summary>
+    private int Intent(SpriteBatch b, string text, bool always = false)
+    {
+        if (!ShowIntent && !always) return BodyTopY;
+        _ui.TextBig(b, _ui.ShortenBig(text, FW, UiTypography.Body), FX, IntentY, Bone, UiTypography.Body);
+        return IntentY + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
+    }
+
+    /// <summary>
+    /// One plain line in the forge column, cut to the column: at 150 % a Body sentence is wider than
+    /// the column and ran onto the frame's side ornament.
+    /// </summary>
+    private void ColumnLine(SpriteBatch b, string text, int y, Color ink, int rung)
+        => _ui.TextBig(b, _ui.ShortenBig(text, FW, rung), FX, y, ink, rung);
+
+    /// <summary>The four intents, as tabs — the forge column's own header.</summary>
     private void DrawTabStrip(SpriteBatch b, Point hit, bool clicked)
     {
         for (var i = 0; i < TabNames.Length; i++)
@@ -1538,85 +2344,309 @@ public sealed class ForgeScreen
             var r = TabRect(i);
             var on = (int)_tab == i;
             var hover = r.Contains(hit);
-            _ui.Fill(b, r, on ? new Color(0x3A, 0x2E, 0x52) : hover ? new Color(0x22, 0x1C, 0x30) : new Color(0x14, 0x11, 0x1C, 0xC0));
-            _ui.Fill(b, new Rectangle(r.X, r.Bottom - 3, r.Width, 3), on ? Gold : Dim);
-            _ui.TextCenterBig(b, TabNames[i], r.Center.X, r.Y + 13, on ? Gold : hover ? Bone : Slate,
-                              UiTypography.Body, TextFace.Strong);
+            var face = Face(r, hover);
+            _ui.Plate(b, face, on ? UiInk.Accent : null);
+            Touch(b, r, face, hover);
+            if (on) _ui.Fill(b, new Rectangle(face.X, face.Bottom - 3, face.Width, 3), Gold);
+            // A THING YOU CLICK, at the rung things you click are set in, centred on the tab.
+            _ui.TextCenterBig(b, _ui.ShortenBig(TabNames[i], face.Width - UiMetrics.Space(12), UiTypography.NavigationLabel),
+                              face.Center.X, face.Y + (face.Height - UiTypography.NavigationLabel) / 2, on ? Gold : hover ? Bone : Slate,
+                              UiTypography.NavigationLabel, TextFace.Strong);
             // Switching tabs withdraws any question the old tab was asking — see NormaliseConfirm.
             if (UiKit.ClickedIn(r, hit, clicked) && !on) { _tab = (Tab)i; _confirm = null; _socketAsk = null; }
         }
     }
 
+    // ── THE ITEM COLUMN — identity, and nothing that belongs beside a button. ────────────────────
+    //
+    // This column used to carry the before → after compare, four hundred pixels from the UPGRADE
+    // button that produced it, at the smallest values on the screen. The compare moved to the forge
+    // column (§56: the numbers belong with the verb). What is left here is what the piece IS: what it
+    // is called, what it looks like, what it does right now, its prefix, its enchant and its sockets.
     /// <summary>
-    /// The item card: name, grade, picture, element, then the numbers — level ONCE, power, stats.
+    /// The item's picture at full size, and the floor it steps down to when the list under it needs the
+    /// room. The floor is low on purpose: at 150 % every 16 px it gives back is a third of a stat row,
+    /// and at 80 the picture is still the biggest thing in the column but its name.
     /// </summary>
-    /// <remarks>
-    /// The old preview printed the item level three times (subtitle, transition row, bag row). Here it
-    /// is the transition row only — the one place it can show before → after — and the subtitle says
-    /// what KIND of thing this is, which nothing else on the screen said.
-    /// </remarks>
-    private void DrawCard(SpriteBatch b, Hunter hunter, ItemInstance item, ItemInstance? refined, Point hit, bool clicked)
+    private const int ItemArtMax = 150;
+    private const int ItemArtMin = 80;
+
+    /// <summary>A socket's box at 100 %. It is a click target (a set gem is crushed through it), so it never shrinks under the hit minimum.</summary>
+    private const int SocketBoxEdge = 48;
+
+    private void DrawItemColumn(SpriteBatch b, Hunter hunter, ItemInstance item, Point hit, bool clicked)
     {
         var rc = RarityColors[(int)item.Rarity];
         var worn = IsWorn(hunter, item);
-        _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(item), Card.Width, UiTypography.Headline),
-                          Card.Center.X, Card.Y + 6, rc, UiTypography.Headline);
-        var kind = ItemNames.TryGetValue(item.BaseType, out var kn) ? kn : item.BaseType.ToString().ToUpperInvariant();
-        _ui.TextCenterBig(b, $"{RarityNames[(int)item.Rarity]}  ·  {kind}" + (worn ? "  ·  WORN BY YOUR CHAMPION" : ""),
-                          Card.Center.X, Card.Y + 40, worn ? Gold : Slate, UiTypography.Secondary);
+        var x = UiKit.ContentLeft(ItemPanel);
+        var right = UiKit.ContentRight(ItemPanel);
+        var w = right - x;
+        if (_itemScrollFor != item.InstanceId) { _itemScrollFor = item.InstanceId; _itemScroll = 0; }
 
-        var iconBox = new Rectangle(Card.Center.X - 90, Card.Y + 68, 180, 180);
-        DrawItemIcon(b, item, iconBox);
-        if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
+        // The sockets block, the enchant and the copy link are anchored to the FOOT. WHAT AN ITEM IS
+        // must not be the thing a long affix list pushes off the bottom — at UI SCALE 125 % the flow
+        // ran out of column exactly at the enchant, so the one line that says whether the piece does
+        // anything in this build vanished while a fifth stat number stayed.
+        var slots = GemCraft.SocketCount(item.Rarity);
+        var socketBox = Math.Max(UiMetrics.HitTargetMinimum, SocketBoxEdge);
+        var copyY = UiKit.ContentBottom(ItemPanel) - UiMetrics.Space(9) - UiTypography.Secondary;
+        var socketTop = copyY - UiMetrics.Space(12)
+                        - (slots > 0
+                            ? UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6) + socketBox
+                            : UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(30));
+        var ench = item.Rarity < Enchantments.MinimumRarity ? null : Enchantments.Of(item);
+        // THE REQUIREMENT IS RESERVED TOO (2026-09-06, the responsive text law): "NEEDS BLOODLUST —
+        // CONQUER UMBRAL REACH TO FIND IT." is the line that tells the player where to go, and at 150 %
+        // it was the line cut to "CONQUER UMBRAL REAC…" because only the blurb's lines had room kept
+        // for them. Its wrapped lines are counted here, so the band grows and the region name stays.
+        var enchNeeds = ench?.Needs is { } need0 ? RequirementLine(need0) : "";
+        var enchLines = ench is null ? 1 : 1 + Math.Min(2, _ui.WrapBig(ench.Blurb, w, UiTypography.Secondary).Count)
+                                          + (enchNeeds.Length > 0 ? Math.Min(2, _ui.WrapBig(enchNeeds, w, UiTypography.Secondary).Count) : 0);
+        var enchTop = socketTop - UiMetrics.Space(12) - enchLines * UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(16);
+        var flowFloor = enchTop - UiMetrics.Space(12);
 
-        // CALLED "FORGE ELEMENT", NOT "SOURCE": the item's element is a MERGE axis, and labelling it
-        // with the fight's word made a Nature item in a Spirit build look like a mismatch that should
-        // be costing power (playtest, item-system redesign). One line now, not three rows.
-        var ey = Card.Y + 262;
+        var y = UiKit.TitleTop(ItemPanel);
+
+        // CATEGORY · NAME — the inspector's own header, so the panel needs no title of its own.
+        void Header(string s, Color ink, int size)
+        {
+            _ui.TextBig(b, _ui.ShortenBig(s, w, size), x, y, ink, size);
+            y += UiTypography.Pitch(size);
+        }
+        var kind = ItemNaming.SlotWord(item.BaseType);
+        // LEVEL ticks: an upgrade lands +1 and a GREATER UPGRADE +5, and the line brightens once as it does.
+        Header($"{RarityNames[(int)item.Rarity]}  ·  {kind}  ·  LEVEL {TickedWholeFor(item, LevelFeel, item.ItemLevel)}" + (worn ? "  ·  WORN" : ""),
+               TickInkFor(item, LevelFeel, worn ? Gold : rc), UiTypography.Secondary);
+        Header(ItemNaming.FullName(item), rc, UiTypography.Headline);
+
+        // THE ELEMENT, as one chip. It used to take two lines, the second of which defined the element
+        // by what it is NOT ("not the fight's Source") — a definition by negation, in a retired word.
         if (item.Element is { } src)
         {
+            var gem = UiMetrics.Control(28);
             if (_ui.Assets.Get($"source_{src.ToString().ToLowerInvariant()}") is { } sg)
-                b.Draw(sg, new Rectangle(Card.X, ey - 6, 32, 32), Color.White);
-            _ui.TextBig(b, $"SET PIECE  ·  {src.ToString().ToUpperInvariant()}", Card.X + 42, ey, Bloom, UiTypography.Secondary);
-            _ui.TextBig(b, "for merging — not the fight's Source", Card.X + 42, ey + 20, Slate, UiTypography.Secondary);
+                b.Draw(sg, new Rectangle(x, y - UiMetrics.Space(2), gem, gem), Color.White);
+            _ui.TextBig(b, $"{src.ToString().ToUpperInvariant()}  ·  MERGE ELEMENT", x + gem + UiMetrics.Space(10), y,
+                        Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary);
         }
 
-        _ui.Fill(b, new Rectangle(Card.X, Card.Y + 312, Card.Width, 2), Dim);
-        DrawTransition(b, "ITEM LEVEL", $"{item.ItemLevel}", refined is null ? null : $"{refined.ItemLevel}", Card.Y + 328);
-        DrawTransition(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}",
-                       refined is null ? null : $"{hunter.PowerContribution(refined):N0}", Card.Y + 364);
-
-        var cur = ItemAffixes.Of(item);
-        var nxt = refined is null ? null : ItemAffixes.Of(refined);
-        var ay = Card.Y + 410;
-        _ui.Text(b, cur.Count > 0 ? "STATS ON THIS ITEM" : "NO STATS — RARER ITEMS CARRY MORE", Card.X, ay, Slate);
-        ay += 32;
-        // BUILT RIGHT TO LEFT, so the name gets whatever the numbers leave and never one pixel more —
-        // drawn left-first, "CRIT CHANCE" ran under its own value.
-        for (var i = 0; i < cur.Count; i++)
+        // THE PICTURE GIVES WAY FIRST: it is the one element here that says nothing the CATEGORY line
+        // above it does not. It steps down, to a floor, by exactly what the list under it is short of —
+        // measured, not guessed from the column's height — and what the smaller picture still cannot
+        // buy, the list scrolls (brief §18: a long inspector may).
+        // THE ROWS ARE CORE'S (ItemPresentation, 2026-09-07): this column lays out the piece's facts
+        // — power, rolls, gems, the built-in, both sides of the prefix's trade — with their words
+        // already decided; the enchant has its own reserved band below and the verdict and the set
+        // belong to other screens. It once composed the rows itself and listed no built-in at all, so
+        // a Common helm read "NO STATS" here and "+2 DEFENCE" under the pointer.
+        var rows = ItemPresentation.Rows(item, hunter, null, ActiveDefs, ActiveTriggers, SwornVows)
+                   .Where(r => r.Kind is not (ItemRowKind.Verdict or ItemRowKind.Enchant or ItemRowKind.EnchantNeed or ItemRowKind.Set
+                                              or ItemRowKind.GemCount or ItemRowKind.Gem))   // the SOCKETS band at the foot is the gems' one surface here
+                   .ToList();
+        var affixCount = rows.Count(r => r.Kind == ItemRowKind.Affix);
+        var prefixSides = rows.Count(r => r.Kind == ItemRowKind.PrefixSide);
+        var ruleH = UiMetrics.Space(16);
+        int RowH(ItemDisplayRow r) => r.Kind switch
         {
-            int valuesStart;
-            if (nxt is not null && i < nxt.Count)
+            ItemRowKind.Family => UiTypography.Pitch(UiTypography.Secondary),
+            ItemRowKind.Prefix => ruleH + UiTypography.Pitch(UiTypography.Body) + (prefixSides == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0),
+            _ => UiTypography.Pitch(UiTypography.Body),
+        };
+        var need = ruleH + UiTypography.Pitch(UiTypography.Secondary) + rows.Sum(RowH)
+                   + (affixCount == 0 ? UiTypography.Pitch(UiTypography.Secondary) : 0);
+        var artGap = UiMetrics.Space(6) + UiMetrics.Space(10);
+        var roomAtFull = flowFloor - (y + ItemArtMax + artGap);
+        var art = Math.Clamp(ItemArtMax - Math.Max(0, need - roomAtFull), ItemArtMin, ItemArtMax);
+        // AND GIVES WAY ENTIRELY when even its floor would leave the list no room for its first row
+        // (2026-09-07: at 150 % a five-line enchant band — a two-line sentence and a two-line
+        // requirement — left WHAT IT DOES a bare rule and a scrollbar over nothing). The picture says
+        // nothing the category line does not; the list is what the column is for.
+        var minFlow = ruleH + UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body);
+        if (flowFloor - (y + art + artGap) < minFlow) art = 0;
+        if (art > 0)
+        {
+            var iconBox = new Rectangle(ItemPanel.Center.X - art / 2, y + UiMetrics.Space(6), art, art);
+            DrawItemIcon(b, item, iconBox);
+            ForgeFlash(b, iconBox);
+            if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
+            y = iconBox.Bottom + UiMetrics.Space(10);
+        }
+        else y += UiMetrics.Space(6);
+
+        // THE FLOW. Walked, so the wheel can bring the rows the floor cut off into view.
+        var flowTop = y;
+        var scrolls = need > flowFloor - flowTop;
+        if (!scrolls) _itemScroll = 0;
+        var walk = new RowWalk { Y = y, Floor = flowFloor, First = _itemScroll, Right = right - (scrolls ? ScrollLane : 0) };
+        var rowW = walk.Right - x;
+
+        // A HEAD IS HELD UNTIL SOMETHING LANDS UNDER IT. On a short column the flow used to draw
+        // "WHAT IT DOES" and then run out of room for every row it introduced — a heading over
+        // nothing, which reads as a bug rather than as a section that did not fit. A head is claimed
+        // together with its row, so the two scroll as one.
+        string? pendingHead = null;
+        void Head(string s) => pendingHead = s;
+
+        bool Room(int size)
+        {
+            var head = pendingHead;
+            pendingHead = null;
+            var rows = UiTypography.Pitch(size) + (head is null ? 0 : UiTypography.Pitch(UiTypography.Secondary));
+            // A column too short for the head AND its row (150 %, a four-line enchant band under it)
+            // keeps the row and drops the head: the number with its word is the fact, the head is
+            // its caption. Probed, not claimed, so the walk's row count stays one per row.
+            if (head is not null && !walk.Fits(rows) && walk.Fits(UiTypography.Pitch(size)))
             {
-                _ui.TextRight(b, AffixValPrecise(nxt[i]), Card.Right, ay, Met);
-                var aw = _ui.Measure(AffixValPrecise(nxt[i]));
-                Arrow(b, Card.Right - aw - 26, ay + 3, Bloom);
-                var beforeRight = Card.Right - aw - 52;
-                _ui.TextRight(b, AffixValPrecise(cur[i]), beforeRight, ay, Slate);
-                valuesStart = beforeRight - _ui.Measure(AffixValPrecise(cur[i]));
+                head = null;
+                rows = UiTypography.Pitch(size);
             }
-            else
+            if (!walk.Take(rows)) return false;
+            if (head is not null)
             {
-                _ui.TextRight(b, AffixVal(cur[i]), Card.Right, ay, InkGold);
-                valuesStart = Card.Right - _ui.Measure(AffixVal(cur[i]));
+                _ui.TextBig(b, head, x, walk.Y, Slate, UiTypography.Secondary);
+                walk.Y += UiTypography.Pitch(UiTypography.Secondary);
             }
-            _ui.Text(b, _ui.Shorten(AffixName(cur[i].Stat), valuesStart - Card.X - 16), Card.X, ay, Bone);
-            ay += 34;
+            return true;
         }
 
-        // SHARE CODES: the item as one pasteable line. A small verb, drawn small, under the card it copies.
-        var copy = new Rectangle(Card.X + 45, Card.Bottom - 40, Card.Width - 90, 36);
-        if (_ui.Button(b, copy, "COPY ITEM CODE", hit, clicked))
+        void Line(string s, Color ink, int size)
+        {
+            if (!Room(size)) return;
+            _ui.TextBig(b, _ui.ShortenBig(s, rowW, size), x, walk.Y, ink, size);
+            walk.Y += UiTypography.Pitch(size);
+        }
+
+        // A pair may name a WATCHED number: its value then brightens once while it lands (§36).
+        void Pair(string label, string value, string? feel = null)
+        {
+            if (!Room(UiTypography.Body)) return;
+            var vw = _ui.MeasureBig(value, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(label, rowW - vw - UiMetrics.Space(16), UiTypography.Body), x, walk.Y, Slate, UiTypography.Body);
+            _ui.TextRightBig(b, value, walk.Right, walk.Y, feel is null ? Bone : TickInkFor(item, feel, Bone), UiTypography.Body);
+            walk.Y += UiTypography.Pitch(UiTypography.Body);
+        }
+
+        void Rule()
+        {
+            if (!walk.Take(ruleH)) return;
+            _ui.Fill(b, new Rectangle(x, walk.Y + UiMetrics.Space(6), rowW, 1), Dim);
+            walk.Y += ruleH;
+        }
+
+        Rule();
+        Head("WHAT IT DOES");
+        foreach (var row in rows)
+        {
+            switch (row.Kind)
+            {
+                case ItemRowKind.Power:
+                    Pair(row.Label, $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}", PowerFeel);
+                    if (affixCount == 0) Line("NO ROLLED STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
+                    break;
+                case ItemRowKind.Affix:
+                {
+                    // THE CHANGED STATS HIGHLIGHT (§53). Each row ticks in its own stat's unit, through the
+                    // same Core formatter the resting row uses — so a stat that did not move prints exactly
+                    // as it always did.
+                    var m = row.Modifier!.Value;
+                    Pair(row.Label, ItemModifiers.Value(m.Stat, TickedFor(item, AffixFeel(row.Index), m.Magnitude)), AffixFeel(row.Index));
+                    break;
+                }
+                case ItemRowKind.BuiltIn: Pair(row.Label + BuiltInSuffix, row.Value); break;
+                case ItemRowKind.Family: Line(row.Label, Slate, UiTypography.Secondary); break;
+                case ItemRowKind.Prefix:
+                    Rule();
+                    Line($"PREFIX · {row.Label}", Bone, UiTypography.Body);
+                    if (prefixSides == 0) Line(row.Note, Slate, UiTypography.Secondary);
+                    break;
+                case ItemRowKind.PrefixSide: Pair(row.Label, row.Value); break;
+            }
+        }
+
+        _itemShown = walk.Shown;
+        _itemTotal = walk.Index;
+        if (scrolls)
+            _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, flowTop, UiMetrics.ScrollbarWidth, flowFloor - flowTop),
+                          _itemScroll, walk.Shown, walk.Index);
+
+        // THE ENCHANT, in its reserved band: it is what the item IS, and the tab that re-rolls it now
+        // has room to list what it could become instead. The band's room was reserved above the socket
+        // block before the flow was drawn, so every line of it fits by construction.
+        var ey = enchTop;
+        void Band(string s, Color ink)
+        {
+            // Two lines where the foot leaves room for them, else one shortened: at 150 % the line that
+            // says WHERE a missing keystone is was cut to "CONQUER UMBRAL REAC…" (release polish 2026-09-05).
+            var pitch = UiTypography.Pitch(UiTypography.Secondary);
+            var lines = _ui.WrapBig(s, w, UiTypography.Secondary);
+            if (lines.Count > 1 && ey + pitch * 2 <= socketTop - UiMetrics.Space(6))
+            {
+                _ui.TextBig(b, lines[0], x, ey, ink, UiTypography.Secondary);
+                _ui.TextBig(b, _ui.ShortenBig(string.Join(" ", lines.Skip(1)), w, UiTypography.Secondary), x, ey + pitch, ink, UiTypography.Secondary);
+                ey += pitch * 2;
+                return;
+            }
+            _ui.TextBig(b, _ui.ShortenBig(s, w, UiTypography.Secondary), x, ey, ink, UiTypography.Secondary);
+            ey += pitch;
+        }
+        _ui.Fill(b, new Rectangle(x, ey - UiMetrics.Space(10), w, 1), Dim);
+        if (ench is null)
+            Band("NO ENCHANT — ONLY RARE AND BETTER ITEMS CARRY ONE.", UiInk.Empty);
+        else
+        {
+            Band($"ENCHANT · {ench.Name}", Bone);
+            foreach (var l in _ui.WrapBig(ench.Blurb, w, UiTypography.Secondary).Take(2))
+                Band(l, Slate);
+            if (ench.Needs is { } needs)
+            {
+                // Wrapped, never shortened: its room was reserved above (enchLines), so both lines fit.
+                var met = needs.MetBy(ActiveDefs, ActiveTriggers, SwornVows);
+                foreach (var l in _ui.WrapBig(RequirementLine(needs), w, UiTypography.Secondary).Take(2))
+                    Band(l, met ? Met : Slate);
+            }
+        }
+
+        // ── SOCKETS, anchored to the foot. ──
+        var sy = socketTop;
+        if (slots == 0)
+            _ui.TextBig(b, _ui.ShortenBig("NO SOCKETS — RARE 1 · EPIC 2 · LEGENDARY 3.", w, UiTypography.Secondary),
+                        x, sy + UiMetrics.Space(6), Slate, UiTypography.Secondary);
+        else
+        {
+            _ui.TextBig(b, $"SOCKETS  ·  {item.Gems.Count} OF {slots}", x, sy, Slate, UiTypography.Secondary);
+            var boxTop = sy + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
+            var boxPitch = socketBox + UiMetrics.Space(8);
+            var inset = UiMetrics.Space(6);
+            for (var i = 0; i < slots; i++)
+            {
+                var box = new Rectangle(x + i * boxPitch, boxTop, socketBox, socketBox);
+                // A FILLED CELL IS A CONTROL (it crushes the gem) and gets the house states; an EMPTY one
+                // is not clickable, so it stays QUIET — a hover lift on it would promise an act that
+                // does not exist (§50: empty cells quiet; "draw = hit" both ways).
+                var filled = i < item.Gems.Count;
+                var over = filled && box.Contains(hit);
+                var face = Face(box, over);
+                _ui.Plate(b, face);
+                if (filled)
+                {
+                    Touch(b, box, face, over);
+                    DrawItemIcon(b, item.Gems[i], new Rectangle(face.X + inset, face.Y + inset, socketBox - 2 * inset, socketBox - 2 * inset));
+                    // A set gem can be CRUSHED — the existing question owns the act.
+                    if (UiKit.ClickedIn(box, hit, clicked)) { _tab = Tab.Socket; RequestCrush(item, i); }
+                    if (over) _hovered = item.Gems[i];
+                }
+                else
+                    _ui.TextCenterBig(b, "+", face.Center.X, face.Y + (socketBox - UiTypography.Body) / 2 - UiMetrics.Space(3),
+                                      UiInk.Empty, UiTypography.Body);
+            }
+        }
+
+        // SHARE CODES: the item as one pasteable line. A quiet verb, drawn as a link, not a button —
+        // it competes with nothing and it is not what this screen is for.
+        var copyHot = new Rectangle(x, copyY - UiMetrics.Space(4), w, UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6)).Contains(hit);
+        _ui.TextCenterBig(b, "COPY ITEM CODE", ItemPanel.Center.X, copyY, copyHot ? Bone : Slate, UiTypography.Secondary);
+        if (copyHot && clicked)
         {
             if (ClipboardInterop.TrySet(Core.Persistence.ShareCodes.EncodeItem(item)))
                 Say("CODE COPIED — PASTE THE LINE TO SHOW A FRIEND THIS ITEM.", Gold);
@@ -1625,32 +2655,122 @@ public sealed class ForgeScreen
         }
     }
 
-    /// <summary>The feedback strip: what the last press did, printed right under the buttons that did it.</summary>
+    /// <summary>
+    /// The forge flash: white light over the piece the anvil just struck, gone in a tenth of a second.
+    /// </summary>
     /// <remarks>
-    /// It used to sit at the foot of the REFORGE column, ~800px from the UPGRADE button whose result it
-    /// reported. A message the eye has to go looking for is a message that was not delivered.
+    /// Brief §53 asks for "a brief forge flash" on the item and explicitly rules out screen shake, so
+    /// this moves nothing — the picture stays exactly where it is and the light is the whole event. A
+    /// white fill over a near-black panel reads as additive without a second SpriteBatch pass (this
+    /// screen draws inside the host's one AlphaBlend batch; a Begin/End here would break the batching
+    /// budget for one frame's worth of glow). The halo outside the box is what makes it read as light
+    /// coming OFF the piece rather than as a card being covered up.
     /// </remarks>
+    private void ForgeFlash(SpriteBatch b, Rectangle box)
+    {
+        var p = Felt(ArtFeel);
+        if (p <= 0f) return;
+        var a = UiMotion.Smooth(p);
+        _ui.Fill(b, Grow(box, UiMetrics.Space(10)), Color.White * (0.16f * a));
+        _ui.Fill(b, box, Color.White * (0.50f * a));
+    }
+
+    // ── THE COMPARE — the centre of the screen (§56). ────────────────────────────────────────────
+    //
+    // One row: what it is called, what it is now, what it becomes. The AFTER value is set at Headline
+    // and the arrow is 16 px, because this is the thing the player came to read; it used to be Body
+    // values behind a 20 px arrow on a panel four hundred pixels from the button.
+    /// <param name="feel">
+    /// The watched number this row's BEFORE value is. The compare's before IS the item's current value,
+    /// so after an operation it lands on a new figure — named here, it ticks there and brightens once
+    /// instead of simply being a different number on the next frame (§36).
+    /// </param>
+    private void ChangeRow(ref RowWalk w, string label, string? before, string after, Color afterInk, SpriteBatch b,
+                           string? feel = null)
+    {
+        if (!w.Take(CompareRowH)) return;
+        var y = w.Y;
+        var edge = w.Right;
+
+        _ui.TextRightBig(b, after, edge, y, afterInk, UiTypography.Headline);
+        var used = _ui.MeasureBig(after, UiTypography.Headline);
+        if (before is not null)
+        {
+            // The arrow is a glyph between two values, and a glyph grows with the type it sits between.
+            var arrow = UiMetrics.Control(16);
+            var gap = UiMetrics.Space(22);
+            var arrowX = edge - used - gap - arrow / 2;
+            Arrow(b, arrowX, y + UiTypography.Headline / 2 - 1, Slate, arrow);
+            var beforeRight = arrowX - gap;
+            _ui.TextRightBig(b, before, beforeRight, y, feel is null ? Slate : TickInk(feel, Slate), UiTypography.Headline);
+            used = edge - beforeRight + _ui.MeasureBig(before, UiTypography.Headline);
+        }
+        _ui.TextBig(b, FitLabel(label, edge - FX - used - UiMetrics.Space(16)),
+                    FX, y + (UiTypography.Headline - UiTypography.Body) / 2 + 2, Slate, UiTypography.Body);
+        w.Y += CompareRowH;
+    }
+
+    /// <summary>The caption a built-in row wears after its stat word — the kit's spelling, shared with the Gear inspector.</summary>
+    private const string BuiltInSuffix = UiKit.BuiltInSuffix;
+
+    /// <summary>
+    /// A compare row's label in the room it has: the stat word is never cut — a built-in row drops its
+    /// caption first (2026-09-07: "CRITICAL CHANCE · BUILT IN" ended "CRITICAL CHA…" at 150 %, a
+    /// modifier row with its stat half gone), and only a label with no caption to give up is shortened.
+    /// The ladder is <see cref="UiKit.TryFitLabel"/> — the Gear inspector reduces the same labels the
+    /// same way, and a fixed-height compare row is the caller that has no second line to give.
+    /// </summary>
+    private string FitLabel(string label, int room) => _ui.FitLabel(label, room, UiTypography.Body);
+
+    /// <summary>The gem's name and grant on one line, the NAME giving way first: the grant is the modifier and is never cut.</summary>
+    private string GemLine(ItemInstance gem, int room)
+    {
+        var tail = "  —  " + GemCraft.Grant(gem);
+        var name = _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}", room - _ui.MeasureBig(tail, UiTypography.Body), UiTypography.Body);
+        return name + tail;
+    }
+
+    /// <summary>The one-line verdict of the last act, on a quiet plate right under the button that caused it.</summary>
     private void DrawFeedback(SpriteBatch b)
     {
-        if (_msg.Length == 0) return;
-        var strip = new Rectangle(UiKit.ContentLeft(ActionPanel), ActionPanel.Bottom - 100,
-                                  ActionPanel.Width - UiKit.PadX(ActionPanel) * 2, 60);
-        _ui.Fill(b, strip, new Color(0x14, 0x11, 0x1C, 0xD0));
-        _ui.Fill(b, new Rectangle(strip.X, strip.Y, 5, strip.Height), _msgColor);
-        // One line at Body size when it fits; otherwise two lines at Secondary, never a chopped one —
-        // "(A REFORGE CHART PAID F…" is the one part of this message that must not be the part cut.
-        var room = strip.Width - 30;
+        // A question that ran down into the plate's band owns it for as long as it is asked.
+        if (_msg.Length == 0 || _questionBottom > Feedback.Y) return;
+        _ui.Plate(b, Feedback, _msgColor);
+        var inset = UiMetrics.Space(18);
+        var room = Feedback.Width - UiMetrics.Space(30);
         if (_ui.MeasureBig(_msg, UiTypography.Body) <= room)
         {
-            _ui.TextBig(b, _msg, strip.X + 18, strip.Y + 20, _msgColor, UiTypography.Body);
+            _ui.TextBig(b, _msg, Feedback.X + inset, Feedback.Y + (Feedback.Height - UiTypography.Body) / 2, _msgColor, UiTypography.Body);
             return;
         }
+        // Two lines at Secondary rather than one chopped line at Body — "(A REFORGE CHART PAID F…" is
+        // exactly the part of this message that must not be the part cut.
         var lines = _ui.WrapBig(_msg, room, UiTypography.Secondary);
+        var top = Feedback.Y + (Feedback.Height - 2 * UiTypography.Pitch(UiTypography.Secondary)) / 2;
         for (var i = 0; i < Math.Min(2, lines.Count); i++)
         {
-            var line = i == 1 && lines.Count > 2 ? _ui.ShortenBig(string.Join(" ", lines.Skip(1)), room, UiTypography.Secondary) : lines[i];
-            _ui.TextBig(b, line, strip.X + 18, strip.Y + 10 + i * 24, _msgColor, UiTypography.Secondary);
+            var line = i == 1 && lines.Count > 2
+                ? _ui.ShortenBig(string.Join(" ", lines.Skip(1)), room, UiTypography.Secondary)
+                : lines[i];
+            _ui.TextBig(b, line, Feedback.X + inset, top + i * UiTypography.Pitch(UiTypography.Secondary),
+                        _msgColor, UiTypography.Secondary);
         }
+    }
+
+    /// <summary>
+    /// What an enchant's requirement says: met, or the partner it needs — and, if that partner is a
+    /// keystone the player has not found, WHERE it is. The old line was honest and useless: it named
+    /// BLOODLUST and nothing told the player where BLOODLUST was; a dead card points at a region now.
+    /// </summary>
+    private string RequirementLine(EnchantNeed needs)
+    {
+        if (needs.MetBy(ActiveDefs, ActiveTriggers, SwornVows)) return "WORKS WITH YOUR BUILD RIGHT NOW.";
+        var missing = needs.Keystone is { } trig && Keystones.GrantingTrigger(trig) is { } partner
+                      && DiscoveredKeystones.All(k => k.Id != partner.Id)
+            ? Keystones.WhereToFind(partner.Id) : "";
+        return missing.Length > 0
+            ? $"NEEDS {needs.Label.ToUpperInvariant()} — {missing}"
+            : $"NEEDS {needs.Label.ToUpperInvariant()} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.";
     }
 
     // ── UPGRADE ──────────────────────────────────────────────────────────────────────────────────
@@ -1661,43 +2781,85 @@ public sealed class ForgeScreen
     /// </summary>
     private void DrawUpgradeTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
-        var x = body.X; var y = body.Y; var w = body.Width;
-        _ui.TextBig(b, "UPGRADE — RAISE THE ITEM ONE LEVEL", x, y, Bone, UiTypography.Body);
-        DrawWrappedBig(b, "Every stat on it grows. The card on the left shows before → after.", x, y + 30, w, Slate, UiTypography.Secondary);
+        Intent(b, "RAISE THE ITEM ONE LEVEL. EVERY STAT ON IT GROWS.");
 
         var r = Forge.Refine(item, Tuning);
         var atCap = Forge.AtRefineCap(item, Tuning);
-        var ly = y + 84;
-        _ui.TextBig(b, $"UPGRADE {item.Upgrades} OF {Tuning.MaxUpgrades}", x, ly, atCap ? Gold : Bone, UiTypography.Body);
-        _ui.Bar(b, x, ly + 30, w, 12, item.Upgrades / (float)Tuning.MaxUpgrades, atCap ? Gold : Met);
-        var note = atCap ? "THE TOP OF THE LADDER — IT CLIMBS NO FURTHER."
-                 : r.FailChance <= 0 ? $"SAFE — THE FIRST {Tuning.RefineSafeUpgrades} NEVER FAIL."
-                 : $"{(1 - r.FailChance) * 100:0}% SUCCESS. A SLIP DROPS ONE LEVEL AND ONE STEP.";
-        _ui.TextBig(b, note, x, ly + 52, atCap ? Gold : r.FailChance <= 0 ? Met : Ember, UiTypography.Secondary);
-
-        // ONE big button, its price directly under it. A REFINE CHART pays for it when you hold one —
-        // and the button is LIVE on a chart alone (the old check read only the Scrap and Gleam).
         var charts = hunter.CharterCount(Charter.Refine);
         var canPay = charts > 0 || (hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold);
-        var btn = new Rectangle(x, ly + 100, w, 72);
-        var label = atCap ? $"FULLY UPGRADED  +{Tuning.MaxUpgrades}"
-                  : r.FailChance <= 0 ? "UPGRADE  +1 LEVEL"
-                  : $"UPGRADE  +1 LEVEL  ({(1 - r.FailChance) * 100:0}% SUCCESS)";
-        if (_ui.Button(b, btn, label, hit, clicked, enabled: !atCap && canPay)) DoRefine(hunter, item);
-        if (!atCap)
-            DrawPrice(b, x, btn.Bottom + 12, w, "COSTS",
-                      [MatPrice(hunter, Material.Scrap, r.Scrap), GleamPrice(hunter, r.Gold)], Charter.Refine, charts);
 
-        // GREATER UPGRADE — +5 levels for one CRYSTAL (+ Gleam), never slips. Crystal's broad drain.
+        if (atCap)
+        {
+            // AT THE CAP THE BUTTON IS REMOVED, not greyed: a disabled control invites a click that
+            // can never work. The state says itself.
+            ColumnLine(b, $"FULLY UPGRADED  ·  {Tuning.MaxUpgrades} OF {Tuning.MaxUpgrades}", body.Y, Gold, UiTypography.Headline);
+            ColumnLine(b, "THE TOP OF THE LADDER — IT CLIMBS NO FURTHER.",
+                       body.Y + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Body);
+        }
+        else
+        {
+            // ── WHAT WILL CHANGE. The whole reason this column is the wide one. ──
+            var rows = BeginRows(body);
+            ChangeRow(ref rows, "ITEM LEVEL", $"{TickedWholeFor(item, LevelFeel, item.ItemLevel)}", $"{r.Product.ItemLevel}", Met, b,
+                      FeelOf(item, LevelFeel));
+            ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
+                      $"{hunter.PowerContribution(r.Product):N0}", Met, b, FeelOf(item, PowerFeel));
+            // THE SAME ROWS THE INSPECTOR SHOWS, for this piece and for the piece it becomes, paired by
+            // kind and index (ItemPresentation, 2026-09-07) — the labels are the rows' own; only the
+            // figures are printed to the decimal, because a step that moves +10.4% to +10.9% must not
+            // read "+10% -> +10%". THE BUILT-IN CLIMBS WITH THE LEVEL TOO (ItemFamilies.BonusOf reads
+            // ItemLevel), so it is a row here — a refine of a plain Common helm moves nothing else, and
+            // a preview that hid the one number it moves read as "changes nothing". It follows the
+            // rolled stats: on a Legendary it is the smallest mover.
+            static IReadOnlyList<ItemDisplayRow> Movers(ItemInstance piece)
+                => ItemPresentation.Rows(piece).Where(x => x.Modifier is not null && x.Kind is ItemRowKind.Affix or ItemRowKind.BuiltIn)
+                                   .OrderBy(x => x.Kind == ItemRowKind.BuiltIn).ThenBy(x => x.Index).ToList();
+            var cur = Movers(item);
+            var nxt = Movers(r.Product);
+            for (var i = 0; i < cur.Count && i < nxt.Count; i++)
+            {
+                var (was, becomes) = (cur[i].Modifier!.Value, nxt[i].Modifier!.Value);
+                if (cur[i].Kind == ItemRowKind.Affix)
+                    ChangeRow(ref rows, cur[i].Label,
+                              ItemModifiers.Value(was.Stat, TickedFor(item, AffixFeel(cur[i].Index), was.Magnitude), precise: true),
+                              ItemModifiers.Value(becomes, precise: true), Met, b, FeelOf(item, AffixFeel(cur[i].Index)));
+                else
+                    ChangeRow(ref rows, cur[i].Label + BuiltInSuffix,
+                              ItemModifiers.Value(was, precise: true), ItemModifiers.Value(becomes, precise: true), Met, b);
+            }
+            EndRows(rows);
+
+            // ── WHAT IS UNCERTAIN — the step count and the risk, in one line. (The progress bar that
+            //    used to carry the step count is gone: it said in a shape what this says in words.) ──
+            _ui.TextBig(b, _ui.ShortenBig(
+                            r.FailChance <= 0
+                                ? $"STEP {item.Upgrades + 1} OF {Tuning.MaxUpgrades}  ·  SAFE — THE FIRST {Tuning.RefineSafeUpgrades} NEVER FAIL."
+                                : $"STEP {item.Upgrades + 1} OF {Tuning.MaxUpgrades}  ·  {(1 - r.FailChance) * 100:0}% SUCCESS. A SLIP DROPS ONE LEVEL AND ONE STEP.",
+                            FW, UiTypography.Body),
+                        FX, UncertainY(true), r.FailChance <= 0 ? Met : Ember, UiTypography.Body);
+
+            var label = r.FailChance <= 0 ? "UPGRADE  +1 LEVEL"
+                                          : $"UPGRADE  +1 LEVEL  ({(1 - r.FailChance) * 100:0}% SUCCESS)";
+            if (_ui.Button(b, PrimaryBtn(true), label, hit, clicked, enabled: canPay, style: ButtonStyle.Primary))
+                DoRefine(hunter, item);
+            DrawPrice(b, FX, PriceY(true), FW, "COSTS",
+                      [MatPrice(hunter, Material.Scrap, r.Scrap), GleamPrice(hunter, r.Gold)], Charter.Refine, charts);
+        }
+
+        // GREATER UPGRADE — the second, quieter verb. Two co-equal ornate buttons is a screen that has
+        // not decided which one you came for. At the cap it is REMOVED, like the primary above it: a
+        // disabled button that can never become enabled is an invitation with no answer.
+        if (atCap) return;
         var g = Forge.GreaterRefine(item, Tuning);
-        var gbtn = new Rectangle(x, btn.Bottom + 96, w, 60);
-        var canGreat = !atCap && hunter.MaterialOf(Material.Crystal) >= g.Crystal && hunter.Gleam >= g.Gold;
-        if (_ui.Button(b, gbtn, atCap ? "GREATER UPGRADE" : $"GREATER UPGRADE  +{g.Steps} LEVELS — NEVER SLIPS",
-                       hit, clicked, enabled: canGreat))
+        var canGreat = hunter.MaterialOf(Material.Crystal) >= g.Crystal && hunter.Gleam >= g.Gold;
+        if (_ui.Button(b, OptionBtn, $"GREATER UPGRADE  +{g.Steps} LEVELS — NEVER SLIPS", hit, clicked, enabled: canGreat))
             DoGreaterRefine(hunter, item);
-        if (!atCap)
-            DrawPrice(b, x, gbtn.Bottom + 12, w, "COSTS",
-                      [MatPrice(hunter, Material.Crystal, g.Crystal), GleamPrice(hunter, g.Gold)], null, 0);
+        // The column's budget may have dropped this line: the strip's GREATER NEEDS mark still says it.
+        if (ShowOptionPrice)
+            _ui.TextBig(b, _ui.ShortenBig(
+                            $"COSTS {g.Crystal} CRYSTAL AND {Ab(g.Gold)} GLEAM — YOU HOLD {hunter.MaterialOf(Material.Crystal):N0} CRYSTAL",
+                            FW, UiTypography.Secondary),
+                        FX, OptionPriceY, canGreat ? Slate : Ember, UiTypography.Secondary);
     }
 
     // ── RE-ROLL ──────────────────────────────────────────────────────────────────────────────────
@@ -1707,43 +2869,90 @@ public sealed class ForgeScreen
     /// </summary>
     private void DrawRerollTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
-        var x = body.X; var y = body.Y; var w = body.Width;
-        _ui.TextBig(b, "RE-ROLL THE ENCHANT", x, y, Bone, UiTypography.Body);
-        DrawWrappedBig(b, "A new random enchant replaces this one — never the same one again. Level, stats and gems are kept. Only Rare and better items carry an enchant.",
-                       x, y + 30, w, Slate, UiTypography.Secondary);
-
         var hasEnch = item.Rarity >= Enchantments.MinimumRarity;
         var ench = Enchantments.Of(item);
-        var ey = y + 116;
-        _ui.Text(b, "THIS ITEM'S ENCHANT", x, ey, Slate);
-        if (!hasEnch || ench is null)
+
+        if (!hasEnch)
         {
-            _ui.TextBig(b, "NONE — THIS ITEM IS BELOW RARE", x, ey + 30, Dim, UiTypography.Headline);
+            // A LOCKED TAB SAYS WHAT UNLOCKS IT. It used to say "NONE — THIS ITEM IS BELOW RARE" in
+            // the hairline ink and stop there, which is a dead end wearing the colour of a disabled
+            // control.
+            var top = Intent(b, "THIS ITEM CANNOT BE RE-ROLLED.", always: true);
+            ColumnLine(b, "COMMON AND UNCOMMON ITEMS CARRY NO ENCHANT.", top, Bone, UiTypography.Body);
+            ColumnLine(b, "MERGE THREE OF THEM TO REACH RARE.", top + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Body);
+            return;
         }
-        else
+
+        Intent(b, "A NEW ENCHANT REPLACES THIS ONE. NEVER THE SAME ONE AGAIN.");
+
+        // ── WHAT WILL CHANGE: the exact set Reforge.Roll draws from. ─────────────────────────────
+        //
+        // The tab used to say "a new random enchant" and nothing else — the player pressed a button
+        // that spent Core to pick blind from a list the game already knew. Listing the candidates is
+        // the honest form of §58, and each one carries the only verdict Core can give about it: does
+        // your build satisfy what it needs? There is deliberately NO better/worse word and no per-
+        // candidate percentage: Core has no ordering over enchants, and printing one would invent it.
+        // The list is walked like the compare, so a pool the column cannot hold scrolls on the wheel.
+        // EACH CANDIDATE SAYS WHAT IT DOES (2026-09-07): the name, the build's verdict and the
+        // enchant's one canonical sentence (ItemPresentation — the same words the card and the
+        // inspector print). A list of names alone asked the player to spend materials on a word. A
+        // candidate is ONE line when its name, its sentence and the verdict share the rung, and two or
+        // more when the sentence must wrap beneath — the whole candidate is claimed at once, so a
+        // sentence never straddles the fold, and the column scrolls past what it cannot hold.
+        var candidates = ItemPresentation.EnchantCandidates(item, ActiveDefs, ActiveTriggers, SwornVows);
+        var right = body.Right - (_compareOverflow ? ScrollLane : 0);
+        (bool OneLine, IReadOnlyList<string> Lines, int H) Shape(ItemDisplayRow c)
         {
-            _ui.TextBig(b, ench.Name, x, ey + 30, Bloom, UiTypography.Headline);
-            DrawWrappedBig(b, ench.Blurb, x, ey + 64, w, Bone, UiTypography.Secondary);
-            // THE COMBO VERDICT: a combo enchant is live only if the build satisfies it, and the tab that
-            // re-rolls the enchant is exactly where that verdict belongs.
-            if (ench.Needs is { } need)
+            var verdictW = c.Value.Length == 0 ? 0 : _ui.MeasureBig(c.Value, UiTypography.Secondary) + UiMetrics.Space(16);
+            if (_ui.MeasureBig($"{c.Label} — {c.Note}", UiTypography.Body) + verdictW <= right - FX)
+                return (true, Array.Empty<string>(), UiTypography.Pitch(UiTypography.Body));
+            var lines = _ui.WrapBig(c.Note, right - FX, UiTypography.Secondary);
+            return (false, lines, UiTypography.Pitch(UiTypography.Body) + lines.Count * UiTypography.Pitch(UiTypography.Secondary));
+        }
+        // A TIGHT COLUMN (150 %) could not hold the header row AND one candidate — the list showed a
+        // header over nothing, which reads as "no candidates". The list then reclaims the first
+        // uncertainty line: "ONE OF THESE" in the header already says the pick is random, and the
+        // line that is kept says what is kept. Nothing is dropped at 100 %.
+        var tight = candidates.Count > 0 && body.Height < CompareRowH + Shape(candidates[0]).H;
+        if (tight) { _tabBodyGrown = UiTypography.Pitch(UiTypography.Body); body.Height += _tabBodyGrown; }
+
+        var rows = BeginRows(body);
+        ChangeRow(ref rows, "ENCHANT", ench?.Name ?? "NONE", "ONE OF THESE", Gold, b, FeelOf(item, EnchantFeel));
+        foreach (var cand in candidates)
+        {
+            var (oneLine, lines, rowH) = Shape(cand);
+            if (!rows.Take(rowH)) continue;
+            var verdict = cand.Value;
+            var vw = verdict.Length == 0 ? 0 : _ui.MeasureBig(verdict, UiTypography.Secondary) + UiMetrics.Space(16);
+            var nameW = _ui.MeasureBig(cand.Label, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(cand.Label, rows.Right - FX - vw, UiTypography.Body), FX, rows.Y, Bone, UiTypography.Body);
+            if (oneLine)
+                _ui.TextBig(b, $" — {cand.Note}", FX + nameW, rows.Y, Slate, UiTypography.Body);
+            if (verdict.Length > 0)
+                _ui.TextRightBig(b, verdict, rows.Right, rows.Y + UiMetrics.Space(2),
+                                 cand.Tone == ItemRowTone.Bonus ? Met : Slate, UiTypography.Secondary);
+            var ly = rows.Y + UiTypography.Pitch(UiTypography.Body);
+            foreach (var l in lines)
             {
-                var live = CombosWithBuild(item);
-                _ui.TextBig(b, _ui.ShortenBig(live ? "WORKS WITH YOUR BUILD RIGHT NOW."
-                                                   : $"NEEDS {need.Label} IN YOUR BUILD — UNTIL THEN IT DOES NOTHING.", w, UiTypography.Secondary),
-                            x, ey + 126, live ? Gold : Slate, UiTypography.Secondary);
+                _ui.TextBig(b, l, FX, ly, Slate, UiTypography.Secondary);
+                ly += UiTypography.Pitch(UiTypography.Secondary);
             }
+            rows.Y += rowH;
         }
+        EndRows(rows);
+
+        if (!tight) ColumnLine(b, "WHICH OF THESE YOU GET IS RANDOM.", UncertainY(false), Slate, UiTypography.Body);
+        ColumnLine(b, "LEVEL, STATS, GEMS AND THE PREFIX DO NOT CHANGE.",
+                   UncertainY(false) + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Body);
 
         var tier = Reforge.EnchantMaterial(item.Rarity);
         var cost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
         var charts = hunter.CharterCount(Charter.Reforge);
-        var btn = new Rectangle(x, ey + 178, w, 72);
         // Enabled by the SAME predicate that pays: a chart holder with no Core sees a live button.
-        if (_ui.Button(b, btn, "RE-ROLL THE ENCHANT", hit, clicked, enabled: hasEnch && Reforge.CanPay(hunter, tier, cost)))
+        if (_ui.Button(b, PrimaryBtn(false), "RE-ROLL THE ENCHANT", hit, clicked,
+                       enabled: Reforge.CanPay(hunter, tier, cost), style: ButtonStyle.Primary))
             DoReforgeEnchant(hunter, item);
-        if (hasEnch) DrawPrice(b, x, btn.Bottom + 12, w, "COSTS", [MatPrice(hunter, tier, cost)], Charter.Reforge, charts);
-        else _ui.TextBig(b, "NOTHING TO RE-ROLL ON THIS ITEM.", x, btn.Bottom + 12, Dim, UiTypography.Secondary);
+        DrawPrice(b, FX, PriceY(false), FW, "COSTS", [MatPrice(hunter, tier, cost)], Charter.Reforge, charts);
     }
 
     // ── SOCKET ───────────────────────────────────────────────────────────────────────────────────
@@ -1759,61 +2968,11 @@ public sealed class ForgeScreen
     /// </remarks>
     private void DrawSocketTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
-        var x = body.X; var y = body.Y; var w = body.Width;
-        _ui.TextBig(b, "SOCKET — SET A GEM TO ADD ITS STAT", x, y, Bone, UiTypography.Body);
-        DrawWrappedBig(b, "Your gems are listed in the bag on the left. Click one there to set it into the first open socket. Click a set gem below to crush it — the socket opens, the gem is lost.",
-                       x, y + 30, w, Slate, UiTypography.Secondary);
-
         var slots = GemCraft.SocketCount(item.Rarity);
-        var sy = y + 116;
-        _ui.Text(b, slots == 0 ? "SOCKETS — NONE" : $"SOCKETS — {item.Gems.Count} OF {slots} FILLED", x, sy, Slate);
-        if (slots == 0)
-        {
-            _ui.TextBig(b, "ONLY RARE AND BETTER GEAR HAS SOCKETS (RARE 1 · EPIC 2 · LEGENDARY 3).", x, sy + 30, Dim, UiTypography.Secondary);
-        }
-        else
-        {
-            for (var i = 0; i < slots; i++)
-            {
-                var box = new Rectangle(x + i * 80, sy + 30, 68, 68);
-                var filled = i < item.Gems.Count;
-                _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
-                var edge = filled ? Slate : Dim;
-                _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 2), edge);
-                _ui.Fill(b, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), edge);
-                _ui.Fill(b, new Rectangle(box.X, box.Y, 2, box.Height), edge);
-                _ui.Fill(b, new Rectangle(box.Right - 2, box.Y, 2, box.Height), edge);
-                if (filled)
-                {
-                    var gem = item.Gems[i];
-                    DrawItemIcon(b, gem, new Rectangle(box.X + 6, box.Y + 6, 56, 56));
-                    if (box.Contains(hit)) _hovered = gem;
-                    // Inert while any question is up — a click here must never arm a SECOND question
-                    // behind the first (the two YES buttons overlap by 20 px; review 2026-08-23).
-                    if (!ConfirmOpen && UiKit.ClickedIn(box, hit, clicked)) RequestCrush(item, i);
-                }
-                else
-                {
-                    _ui.TextCenter(b, "+", box.Center.X, box.Y + 22, Dim);
-                }
-            }
-            // THE FIRST GEM IS FREE (Core's rule, GemCraft.SocketCost): the price line says so in the
-            // words the confirmation uses, and names what later ones cost so the gift is not mistaken
-            // for the price.
-            if (SocketPrice(item.Rarity) == 0)
-            {
-                _ui.TextBig(b, "YOUR FIRST GEM IS FREE", x, sy + 112, Gold, UiTypography.Body);
-                _ui.TextBig(b, _ui.ShortenBig($"LATER ONES COST {GemCraft.SocketCost(item.Rarity)} ESSENCE FOR AN ITEM OF THIS GRADE.", w, UiTypography.Secondary),
-                            x, sy + 140, Slate, UiTypography.Secondary);
-            }
-            else
-                DrawPrice(b, x, sy + 112, w, "SETTING A GEM COSTS",
-                          [MatPrice(hunter, Material.Essence, SocketPrice(item.Rarity))], null, 0);
-        }
+        var question = new Rectangle(FX, body.Y, FW, Feedback.Y - UiMetrics.Space(12) - body.Y);
 
-        // A question about a gem — set a loose one, crush a set one, sell a loose one — takes the
-        // strip's place.
-        var gy = sy + 184;
+        // A question about a gem — set a loose one, crush a set one, sell a loose one — takes the whole
+        // body, including the button block, so no primary is drawn behind it.
         if (_socketAsk is { } sa)
         {
             // Re-resolved every frame: the bench item may have changed, the gem may have been sold.
@@ -1823,37 +2982,92 @@ public sealed class ForgeScreen
                 _socketAsk = null;
             else
             {
-                DrawSocketQuestion(b, hunter, saHost, saGem, new Rectangle(x, gy, w, body.Bottom - gy), hit, clicked);
+                DrawSocketQuestion(b, hunter, saHost, saGem, question, hit, clicked);
                 return;
             }
         }
-        if (_confirm is { } ask && ask.ItemId is { } qid && (ask.Kind == ScrapKind.CrushGem || ask.Kind == ScrapKind.Sell))
+        if (_confirm is { } ask && ask.ItemId is { } qid && ask.Kind is ScrapKind.CrushGem or ScrapKind.Sell)
         {
             if (ask.Kind == ScrapKind.CrushGem && qid == item.InstanceId && _confirmGemIndex < item.Gems.Count)
             {
-                DrawCrushQuestion(b, hunter, item, new Rectangle(x, gy, w, body.Bottom - gy), hit, clicked);
+                DrawCrushQuestion(b, hunter, item, question, hit, clicked);
                 return;
             }
-            if (ask.Kind == ScrapKind.Sell && _inv.FirstOrDefault(i => i.InstanceId == qid) is { } gem && GemCraft.IsGem(gem))
+            if (ask.Kind == ScrapKind.Sell && _inv.FirstOrDefault(i => i.InstanceId == qid) is { } sold && GemCraft.IsGem(sold))
             {
-                DrawScrapQuestion(b, hunter, gem, ScrapKind.Sell, new Rectangle(x, gy, w, body.Bottom - gy), hit, clicked);
+                DrawScrapQuestion(b, hunter, sold, ScrapKind.Sell, question, hit, clicked);
                 return;
             }
         }
 
-        // THE GEM STRIP IS GONE — the gems are in the BAG on the left now.
-        //
-        // Playtest: "gems are items too, so they should be in the inventory; pressing the SOCKET tab
-        // should not reveal something out of nowhere." A private icon strip inside one tab was the only
-        // place a gem was ever visible, so it read as a second, hidden inventory that this tab conjured.
-        // Fourteen at a time, no names, no numbers, no scroll. The left panel already has rows, a wheel,
-        // a scrollbar and a counter; this points at it rather than owning a worse copy.
-        var gems = Gems();
-        _ui.Text(b, gems.Count == 0 ? "YOU HOLD NO GEMS YET." : $"YOU HOLD {gems.Count} GEM{(gems.Count == 1 ? "" : "S")}.", x, gy, Slate);
-        DrawWrappedBig(b, gems.Count == 0
-                          ? "Gems come out of chests. When you have one it will be listed in YOUR GEMS on the left."
-                          : "Your gems are in the bag on the left — click one to set it into this item.",
-                       x, gy + 28, w, Bone, UiTypography.Secondary);
+        var top = Intent(b, "SET A GEM INTO THIS ITEM TO ADD ITS STAT.", always: slots == 0);
+
+        if (slots == 0)
+        {
+            ColumnLine(b, "THIS ITEM HAS NO SOCKETS.", top, Bone, UiTypography.Body);
+            ColumnLine(b, "RARE 1 · EPIC 2 · LEGENDARY 3.", top + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Body);
+            return;
+        }
+
+        // THE GEM IS SELECTED IN THE BAG, NOT COMMITTED THERE. Clicking a gem used to run every refusal
+        // check and then raise the question straight from the bag row — so the reasons it might refuse
+        // were toasts fired after the click. They are the button's enable and its refusal line now.
+        var gem = _gemId is null ? null : _inv.FirstOrDefault(i => i.InstanceId == _gemId && GemCraft.IsGem(i));
+        var cost = SocketPrice(item.Rarity);
+        var full = item.Gems.Count >= slots;
+        var poor = hunter.MaterialOf(Material.Essence) < cost;
+
+        if (gem is null)
+        {
+            ColumnLine(b, "PICK A GEM IN THE BAG ON THE LEFT.", body.Y, UiInk.Empty, UiTypography.Body);
+            if (Gems().Count == 0)
+                ColumnLine(b, "YOU HOLD NO GEMS YET — CHESTS CARRY THEM.", body.Y + UiTypography.Pitch(UiTypography.Body),
+                           Slate, UiTypography.Body);
+        }
+        else
+        {
+            var product = GemCraft.Socket(item, gem).Product;
+            var rows = BeginRows(body);
+            ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
+                      product is null ? "—" : $"{hunter.PowerContribution(product):N0}", Met, b, FeelOf(item, PowerFeel));
+            var adds = ItemModifiers.Gem(gem);
+            ChangeRow(ref rows, $"ADDS {ItemModifiers.Word(adds.Stat)}", null, ItemModifiers.Value(adds), Met, b);
+            ChangeRow(ref rows, "SOCKETS USED", $"{item.Gems.Count} OF {slots}", $"{item.Gems.Count + 1} OF {slots}", Bone, b);
+            EndRows(rows);
+        }
+
+        ColumnLine(b, "NOTHING HERE IS RANDOM.", UncertainY(false), Slate, UiTypography.Body);
+        ColumnLine(b, "A SET GEM CANNOT COME BACK OUT — CRUSHING IT LATER DESTROYS IT.",
+                   UncertainY(false) + UiTypography.Pitch(UiTypography.Body), Ember, UiTypography.Body);
+
+        var can = gem is not null && !full && !poor;
+        if (_ui.Button(b, PrimaryBtn(false), gem is null ? "SET A GEM" : $"SET {GemCraft.NameOf(gem)}",
+                       hit, clicked, enabled: can, style: ButtonStyle.Primary) && gem is not null)
+        {
+            // The one-way act still asks — the existing question, unchanged.
+            _confirm = null;
+            _confirmSuppress = false;
+            _socketAsk = (item.InstanceId, gem.InstanceId);
+            _confirmOpenedNow = true;
+        }
+
+        // THE REFUSAL, WHERE THE BUTTON IS. These two sentences used to be toasts fired by a bag click.
+        if (full)
+            ColumnLine(b, "EVERY SOCKET IS FULL — CRUSH A GEM TO FREE ONE.", PriceY(false), Ember, UiTypography.Secondary);
+        else if (gem is not null && poor)
+            ColumnLine(b, $"YOU NEED {cost} ESSENCE — YOU HOLD {hunter.MaterialOf(Material.Essence):N0}.",
+                       PriceY(false), Ember, UiTypography.Secondary);
+        else if (cost == 0)
+        {
+            ColumnLine(b, "YOUR FIRST GEM IS FREE", PriceY(false), Gold, UiTypography.Body);
+            if (ShowHoldLine)
+                _ui.TextBig(b, _ui.ShortenBig($"LATER ONES COST {GemCraft.SocketCost(item.Rarity)} ESSENCE FOR AN ITEM OF THIS GRADE.",
+                                              FW, UiTypography.Secondary),
+                            FX, PriceY(false) + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Secondary);
+        }
+        else
+            DrawPrice(b, FX, PriceY(false), FW, "SETTING A GEM COSTS",
+                      [MatPrice(hunter, Material.Essence, cost)], null, 0);
     }
 
     /// <summary>SET a gem into the first open socket, spending Essence — none for the player's first gem.</summary>
@@ -1872,6 +3086,8 @@ public sealed class ForgeScreen
         var (product, rejection) = GemCraft.Socket(host, gem);
         if (product is null) { Say(rejection!, Ember); return; }
 
+        var was = NumbersOf(hunter, host);
+        var purse = PurseOf(hunter);
         // A free first gem spends nothing (SpendMaterial refuses a zero anyway); either way the free
         // one is now USED, and every later socket is the Essence sink it always was.
         if (cost > 0) hunter.SpendMaterial(Material.Essence, cost);
@@ -1879,9 +3095,12 @@ public sealed class ForgeScreen
         FreeSocketUsed = true;
         _inv.Remove(gem);
         ReplaceItem(hunter, host, product);
-        Sound?.Play("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
+        FeelStart();
+        FeelItem(was, hunter, product);
+        FeelPurse(purse, hunter);          // a free first gem moves no balance, so no chip flashes
+        Cue("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
         var paid = wasFree ? "YOUR FIRST GEM WAS FREE" : $"{cost} ESSENCE SPENT";
-        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({paid}).", Gold);
+        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {GemCraft.Grant(gem)}  ({paid}).", Gold);
     }
 
     /// <summary>
@@ -1898,7 +3117,12 @@ public sealed class ForgeScreen
     private void CrushNow(Hunter hunter, ItemInstance host, int index)
     {
         if (GemCraft.Crush(host, index) is not { } result) return;
+        var was = NumbersOf(hunter, host);
         ReplaceItem(hunter, host, result.Product);
+        // The stat the gem was granting leaves — the same tick, downward, so a crush is as visible as a set.
+        FeelStart();
+        FeelItem(was, hunter, result.Product);
+        Cue("sfx_gem", 0.6f);
         Say($"{GemCraft.NameOf(result.Crushed)} CRUSHED — THE SOCKET IS OPEN.", Slate);
     }
 
@@ -1910,20 +3134,30 @@ public sealed class ForgeScreen
         if (_confirmOpenedNow) { clicked = false; _confirmOpenedNow = false; }
 
         var x = area.X; var y = area.Y; var w = area.Width;
-        _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 262), new Color(0x1C, 0x1A, 0x2A, 0xC0));
-        _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
-        DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
-        _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
-                    x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
+        var q = QuestionGrid(y);
+        var line1 = q.Icon.Bottom + UiMetrics.Space(16);
+        // Both sentences wrap rather than cut: the price and "DESTROYS IT" are the parts that must survive.
         var price = SocketPrice(host.Rarity) == 0 ? "YOUR FIRST GEM IS FREE" : $"COSTS {SocketPrice(host.Rarity)} ESSENCE";
-        _ui.TextBig(b, _ui.ShortenBig($"INTO {ItemNaming.FullName(host)} — {price}.", w, UiTypography.Secondary),
-                    x, y + 116, SocketPrice(host.Rarity) == 0 ? Gold : Bone, UiTypography.Secondary);
-        _ui.TextBig(b, "A SET GEM CANNOT COME BACK OUT — CRUSHING IT LATER DESTROYS IT.",
-                    x, y + 144, Slate, UiTypography.Secondary);
+        var into = _ui.WrapBig($"INTO {ItemNaming.FullName(host)} — {price}.", w, UiTypography.Secondary);
+        var line2 = line1 + into.Count * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
+        var warn = _ui.WrapBig("A SET GEM CANNOT COME BACK OUT — CRUSHING IT LATER DESTROYS IT.", w, UiTypography.Secondary);
+        var btnY = line2 + warn.Count * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(18);
+        var btnH = UiMetrics.Control(56);
+        QuestionPlate(b, x, y, w, btnY + btnH, new Color(0x1C, 0x1A, 0x2A, 0xC0));
+        _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
+        DrawItemIcon(b, gem, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
+        _ui.TextBig(b, GemLine(gem, w - q.NameX),
+                    x + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
+        for (var i = 0; i < into.Count; i++)
+            _ui.TextBig(b, into[i], x, line1 + i * UiTypography.Pitch(UiTypography.Secondary),
+                        SocketPrice(host.Rarity) == 0 ? Gold : Bone, UiTypography.Secondary);
+        for (var i = 0; i < warn.Count; i++)
+            _ui.TextBig(b, warn[i], x, line2 + i * UiTypography.Pitch(UiTypography.Secondary), Slate, UiTypography.Secondary);
 
-        var bw = (w - 16) / 2;
-        var keep = new Rectangle(x, y + 186, bw, 56);
-        var doIt = new Rectangle(x + bw + 16, y + 186, bw, 56);
+        var gap = UiMetrics.Space(16);
+        var bw = (w - gap) / 2;
+        var keep = new Rectangle(x, btnY, bw, btnH);
+        var doIt = new Rectangle(x + bw + gap, btnY, bw, btnH);
         // KEEP sits first, so a reflex click lands on the safe answer.
         if (_ui.Button(b, keep, "NO — KEEP IT", hit, clicked)) { _socketAsk = null; return; }
         if (_ui.Button(b, doIt, "YES — SET IT", hit, clicked))
@@ -1941,16 +3175,24 @@ public sealed class ForgeScreen
 
         var gem = host.Gems[_confirmGemIndex];
         var x = area.X; var y = area.Y; var w = area.Width;
-        _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 226), new Color(0x2A, 0x16, 0x1C, 0xC0));
+        var q = QuestionGrid(y);
+        var line1 = q.Icon.Bottom + UiMetrics.Space(16);
+        // Wrapped, not cut: "THIS CANNOT BE UNDONE" is the half of the sentence that must survive.
+        var warn = _ui.WrapBig("THE GEM IS DESTROYED AND THE SOCKET OPENS. THIS CANNOT BE UNDONE.", w, UiTypography.Secondary);
+        var btnY = line1 + warn.Count * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10);
+        var btnH = UiMetrics.Control(56);
+        QuestionPlate(b, x, y, w, btnY + btnH, new Color(0x2A, 0x16, 0x1C, 0xC0));
         _ui.TextBig(b, "CRUSH THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
-        DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
-        _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
-                    x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
-        _ui.TextBig(b, "THE GEM IS DESTROYED AND THE SOCKET OPENS. THIS CANNOT BE UNDONE.", x, y + 116, Bone, UiTypography.Secondary);
+        DrawItemIcon(b, gem, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
+        _ui.TextBig(b, GemLine(gem, w - q.NameX),
+                    x + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
+        for (var i = 0; i < warn.Count; i++)
+            _ui.TextBig(b, warn[i], x, line1 + i * UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.Secondary);
 
-        var bw = (w - 16) / 2;
-        var keep = new Rectangle(x, y + 150, bw, 56);
-        var doIt = new Rectangle(x + bw + 16, y + 150, bw, 56);
+        var gap = UiMetrics.Space(16);
+        var bw = (w - gap) / 2;
+        var keep = new Rectangle(x, btnY, bw, btnH);
+        var doIt = new Rectangle(x + bw + gap, btnY, bw, btnH);
         // KEEP sits first, so a reflex click lands on the safe answer.
         if (_ui.Button(b, keep, "NO — KEEP IT", hit, clicked)) { _confirm = null; return; }
         if (_ui.Button(b, doIt, "YES — CRUSH IT", hit, clicked))
@@ -1966,45 +3208,70 @@ public sealed class ForgeScreen
     /// </summary>
     private void DrawBreakDownTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
-        var x = body.X; var y = body.Y; var w = body.Width;
-        _ui.TextBig(b, "SALVAGE — SELL IT, OR BREAK IT INTO MATERIALS", x, y, Bone, UiTypography.Body);
-        DrawWrappedBig(b, "Either way the item is gone. Selling gives Gleam; salvaging gives Forge materials. Gems set in it come back to your bag first.",
-                       x, y + 30, w, Slate, UiTypography.Secondary);
-
-        var qy = y + 116;
         if (_confirm is { } ask && ask.ItemId == item.InstanceId && ask.Kind is ScrapKind.Sell or ScrapKind.Salvage)
         {
-            DrawScrapQuestion(b, hunter, item, ask.Kind, new Rectangle(x, qy, w, body.Bottom - qy), hit, clicked);
+            DrawScrapQuestion(b, hunter, item, ask.Kind, new Rectangle(FX, body.Y, FW, Feedback.Y - UiMetrics.Space(12) - body.Y),
+                              hit, clicked);
             return;
         }
 
+        Intent(b, "THE ITEM IS GONE EITHER WAY.");
+
         var tier = MaterialTiers.ForRarity(item.Rarity);
         var mats = Forge.Dismantle(item, Tuning);
-        var sell = new Rectangle(x, qy, w, 64);
-        if (_ui.Button(b, sell, $"SELL FOR {item.SellValue:N0} GLEAM", hit, clicked)) Sell(hunter, item);
-        DrawGain(b, x, sell.Bottom + 10, w, "currency_gleam", Gold, $"+{item.SellValue:N0} GLEAM — {GleamUse}");
+        var rows = BeginRows(body);
+        ChangeRow(ref rows, "SALVAGE GIVES", null, $"+{mats} {MaterialTiers.Name(tier)}", Met, b);
+        ChangeRow(ref rows, "SELL GIVES", null, $"+{item.SellValue:N0} GLEAM", Met, b);
+        if (item.Gems.Count > 0)
+            ChangeRow(ref rows, "GEMS RETURNED", null, $"{item.Gems.Count} TO YOUR BAG", Met, b);
+        EndRows(rows);
 
-        var salv = new Rectangle(x, sell.Bottom + 62, w, 64);
-        if (_ui.Button(b, salv, $"SALVAGE FOR {mats} {MaterialTiers.Name(tier)}", hit, clicked)) Dismantle(hunter, item);
-        DrawGain(b, x, salv.Bottom + 10, w, MatIcon[(int)tier], MatColor[(int)tier], $"+{mats} {MaterialTiers.Name(tier)} — {MatUse(tier)}");
+        var worn = IsWorn(hunter, item);
+        _ui.TextBig(b, _ui.ShortenBig(worn ? "THIS IS ON YOUR HUNTER RIGHT NOW — IT COMES OFF FIRST."
+                                           : "THIS CANNOT BE UNDONE.", FW, UiTypography.Body),
+                    FX, UncertainY(true), Ember, UiTypography.Body);
 
-        var ny = salv.Bottom + 62;
-        if (IsWorn(hunter, item))
-        {
-            _ui.Fill(b, new Rectangle(x, ny, 5, 50), Ember);
-            _ui.TextBig(b, "THIS IS ON YOUR CHAMPION RIGHT NOW.", x + 18, ny, Ember, UiTypography.Body);
-            _ui.TextBig(b, "IT COMES OFF FIRST — THE FIGHT LOSES ITS NUMBERS.", x + 18, ny + 28, Slate, UiTypography.Secondary);
-            ny += 70;
-        }
-        if (!AskBeforeScrap)
-            DrawWrappedBig(b, "You turned off the \"are you sure?\" question. Worn gear still asks.", x, ny, w, Dim, UiTypography.Secondary);
+        if (_ui.Button(b, PrimaryBtn(true), $"SALVAGE FOR {mats} {MaterialTiers.Name(tier)}", hit, clicked,
+                       enabled: true, style: ButtonStyle.Primary))
+            Dismantle(hunter, item);
+        _ui.TextBig(b, _ui.ShortenBig($"{MaterialTiers.Name(tier)} — {MatUse(tier)}", FW, UiTypography.Secondary),
+                    FX, PriceY(true), Slate, UiTypography.Secondary);
+
+        if (_ui.Button(b, OptionBtn, $"SELL FOR {item.SellValue:N0} GLEAM", hit, clicked)) Sell(hunter, item);
+        if (ShowOptionPrice)
+            _ui.TextBig(b, _ui.ShortenBig($"GLEAM — {GleamUse}", FW, UiTypography.Secondary),
+                        FX, OptionPriceY, Slate, UiTypography.Secondary);
+
+        // A note under the rows, when the rows leave it a line — never over the last of them.
+        if (!AskBeforeScrap && rows.Y + UiTypography.Pitch(UiTypography.Secondary) <= body.Bottom)
+            _ui.TextBig(b, _ui.ShortenBig("YOU TURNED OFF THE ARE-YOU-SURE QUESTION. WORN GEAR STILL ASKS.",
+                                          FW, UiTypography.Secondary),
+                        FX, body.Bottom - UiTypography.Pitch(UiTypography.Secondary), Slate, UiTypography.Secondary);
     }
 
-    /// <summary>One line under a SALVAGE button: what you get, with its icon, and what that is for.</summary>
-    private void DrawGain(SpriteBatch b, int x, int y, int width, string icon, Color tint, string text)
+    /// <summary>
+    /// The head every in-place question shares: where the icon and the name beside it sit under the
+    /// title, at the profile's sizes. One grid, so the four questions cannot drift apart.
+    /// </summary>
+    private static (Rectangle Icon, int NameX, int NameY) QuestionGrid(int y)
     {
-        DrawMatIcon(b, icon, tint, new Rectangle(x, y - 4, 26, 26));
-        _ui.TextBig(b, _ui.ShortenBig(text, width - 34, UiTypography.Secondary), x + 34, y, Slate, UiTypography.Secondary);
+        var icon = UiMetrics.Control(56);
+        var iconY = y + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8);
+        var nameX = icon + UiMetrics.Space(14);
+        var nameY = iconY + (icon - UiTypography.Body) / 2 - UiMetrics.Space(3);
+        return (new Rectangle(0, iconY, icon, icon), nameX, nameY);
+    }
+
+    /// <summary>
+    /// A question's dark plate, sized to the buttons it ends with rather than to a number — and
+    /// remembered, so the feedback plate stands aside if the question runs down into its band.
+    /// </summary>
+    private void QuestionPlate(SpriteBatch b, int x, int y, int w, int contentBottom, Color tint)
+    {
+        var pad = UiMetrics.Space(12);
+        var plate = new Rectangle(x - pad, y - UiMetrics.Space(10), w + 2 * pad, contentBottom + UiMetrics.Space(10) - (y - UiMetrics.Space(10)));
+        _questionBottom = plate.Bottom;
+        _ui.Fill(b, plate, tint);
     }
 
     /// <summary>
@@ -2025,49 +3292,60 @@ public sealed class ForgeScreen
         var gem = GemCraft.IsGem(item);
         var worn = !gem && IsWorn(hunter, item);
         var x = area.X; var y = area.Y; var w = area.Width;
-        _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 300), new Color(0x2A, 0x16, 0x1C, 0xC0));
+        var q = QuestionGrid(y);
 
-        _ui.TextBig(b, kind == ScrapKind.Sell ? (gem ? "SELL THIS GEM?" : "SELL THIS ITEM?") : "SALVAGE THIS ITEM?",
-                    x, y, Gold, UiTypography.PanelTitle);
-        DrawItemIcon(b, item, new Rectangle(x, y + 44, 56, 56));
-        var name = gem ? $"{GemCraft.NameOf(item)} {item.ItemLevel}" : ItemNaming.FullName(item);
-        _ui.TextBig(b, _ui.ShortenBig(name, w - 70, UiTypography.Body), x + 70, y + 58, RarityColors[(int)item.Rarity], UiTypography.Body);
-
+        // LAID OUT BEFORE IT IS DRAWN: the plate ends where the buttons end, and the buttons sit under
+        // however many lines the outcome wraps to at this profile.
         var outcome = kind == ScrapKind.Sell
             ? $"IT SELLS FOR {item.SellValue:N0} GLEAM. THIS CANNOT BE UNDONE."
             : $"IT BREAKS DOWN INTO {Forge.Dismantle(item, Tuning)} {MaterialTiers.Name(MaterialTiers.ForRarity(item.Rarity))}. THIS CANNOT BE UNDONE.";
-        var ly = DrawWrappedBig(b, outcome, x, y + 116, w, Bone, UiTypography.Secondary) + 6;
+        var outcomeY = q.Icon.Bottom + UiMetrics.Space(16);
+        var outcomeLines = _ui.WrapBig(outcome, w, UiTypography.Secondary);
+        var ly = outcomeY + outcomeLines.Count * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+        var gemsY = ly;
+        if (item.Gems.Count > 0) ly += UiTypography.Pitch(UiTypography.Secondary);
+        var noteY = ly;
+        var boxRowH = UiMetrics.IconSmall + UiMetrics.Space(6);
+        ly += worn
+            ? UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10)
+            : boxRowH + UiMetrics.Space(12);
+        var btnY = ly + UiMetrics.Space(8);
+        var btnH = UiMetrics.Control(60);
+        QuestionPlate(b, x, y, w, btnY + btnH, new Color(0x2A, 0x16, 0x1C, 0xC0));
+
+        _ui.TextBig(b, kind == ScrapKind.Sell ? (gem ? "SELL THIS GEM?" : "SELL THIS ITEM?") : "SALVAGE THIS ITEM?",
+                    x, y, Gold, UiTypography.PanelTitle);
+        DrawItemIcon(b, item, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
+        var name = gem ? $"{GemCraft.NameOf(item)} {item.ItemLevel}" : ItemNaming.FullName(item);
+        _ui.TextBig(b, _ui.ShortenBig(name, w - q.NameX, UiTypography.Body), x + q.NameX, q.NameY, RarityColors[(int)item.Rarity], UiTypography.Body);
+
+        for (var i = 0; i < outcomeLines.Count; i++)
+            _ui.TextBig(b, outcomeLines[i], x, outcomeY + i * UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.Secondary);
         if (item.Gems.Count > 0)
-        {
-            _ui.TextBig(b, $"ITS {item.Gems.Count} GEM{(item.Gems.Count == 1 ? "" : "S")} COME BACK TO YOU FIRST.", x, ly, Met, UiTypography.Secondary);
-            ly += 26;
-        }
+            _ui.TextBig(b, $"ITS {item.Gems.Count} GEM{(item.Gems.Count == 1 ? "" : "S")} COME BACK TO YOU FIRST.", x, gemsY, Met, UiTypography.Secondary);
 
         if (worn)
         {
             // The warning that never goes away. No box on this variant — see the remarks.
-            _ui.Fill(b, new Rectangle(x, ly, 5, 50), Ember);
-            _ui.TextBig(b, "THIS IS ON YOUR CHAMPION RIGHT NOW.", x + 18, ly, Ember, UiTypography.Body);
-            _ui.TextBig(b, "IT COMES OFF FIRST — THE FIGHT LOSES ITS NUMBERS.", x + 18, ly + 28, Slate, UiTypography.Secondary);
-            ly += 62;
+            var barH = UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(2);
+            var textX = x + UiMetrics.Space(18);
+            _ui.Fill(b, new Rectangle(x, noteY, 5, barH), Ember);
+            _ui.TextBig(b, "THIS IS ON YOUR HUNTER RIGHT NOW.", textX, noteY, Ember, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig("IT COMES OFF FIRST — THE FIGHT LOSES ITS NUMBERS.", w - UiMetrics.Space(18), UiTypography.Secondary),
+                        textX, noteY + UiTypography.Pitch(UiTypography.Body), Slate, UiTypography.Secondary);
         }
         else
         {
             // The suppression box — a wide row, so the label is as clickable as the box.
-            var box = new Rectangle(x, ly + 2, 24, 24);
-            var row = new Rectangle(x, ly, w, 30);
-            _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
-            _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A));
-            if (_confirmSuppress) _ui.Fill(b, new Rectangle(box.X + 5, box.Y + 5, 14, 14), Gold);
-            _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + 12, ly + 4,
-                        row.Contains(hit) ? Bone : Slate, UiTypography.Secondary);
+            var row = new Rectangle(x, noteY, w, boxRowH);
+            DrawSuppressBox(b, row, _confirmSuppress, hit);
             if (UiKit.ClickedIn(row, hit, clicked)) _confirmSuppress = !_confirmSuppress;
-            ly += 42;
         }
 
-        var bw = (w - 16) / 2;
-        var keep = new Rectangle(x, ly + 8, bw, 60);
-        var doIt = new Rectangle(x + bw + 16, ly + 8, bw, 60);
+        var gap = UiMetrics.Space(16);
+        var bw = (w - gap) / 2;
+        var keep = new Rectangle(x, btnY, bw, btnH);
+        var doIt = new Rectangle(x + bw + gap, btnY, bw, btnH);
         if (_ui.Button(b, keep, "NO — KEEP IT", hit, clicked)) { _confirm = null; return; }
         if (_ui.Button(b, doIt, kind == ScrapKind.Sell ? "YES — SELL IT" : "YES — SALVAGE IT", hit, clicked))
         {
@@ -2089,17 +3367,39 @@ public sealed class ForgeScreen
         var chart = hunter.CharterCount(Charter.Salvage) > 0;
         var mats = junk.Sum(i => Forge.Dismantle(i, Tuning)) * (chart ? 2 : 1);
         var x = UiKit.ContentLeft(BagPanel); var w = BagPanel.Width - UiKit.PadX(BagPanel) * 2;
+        // Stacked up from the foot the two verbs stand on: the buttons, the reason, the question.
+        var btnH = UiMetrics.Control(56);
+        var btnY = UiKit.ContentBottom(BagPanel) - UiMetrics.Space(12) - btnH;
+        var reasonY = btnY - UiMetrics.Space(2) - UiTypography.Pitch(UiTypography.Secondary);
+        var askY = reasonY - UiTypography.Pitch(UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig($"SALVAGE {junk.Count} JUNK ITEMS FOR {mats} SCRAP?", w, UiTypography.Body),
-                    x, BagPanel.Bottom - 152, Gold, UiTypography.Body);
+                    x, askY, Gold, UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig(chart ? "YOUR SALVAGE CHART DOUBLES IT AND IS USED UP." : "WORN GEAR IS NEVER TOUCHED. NO UNDO.", w, UiTypography.Secondary),
-                    x, BagPanel.Bottom - 126, chart ? Gold : Slate, UiTypography.Secondary);
-        var bw = (w - 12) / 2;
-        if (_ui.Button(b, new Rectangle(x, BagPanel.Bottom - 100, bw, 56), "NO — KEEP", hit, clicked)) { _confirm = null; return; }
-        if (_ui.Button(b, new Rectangle(x + bw + 12, BagPanel.Bottom - 100, bw, 56), "YES — SALVAGE", hit, clicked))
+                    x, reasonY, chart ? Gold : Slate, UiTypography.Secondary);
+        var gap = UiMetrics.Gap;
+        var bw = (w - gap) / 2;
+        if (_ui.Button(b, new Rectangle(x, btnY, bw, btnH), "NO — KEEP", hit, clicked)) { _confirm = null; return; }
+        if (_ui.Button(b, new Rectangle(x + bw + gap, btnY, bw, btnH), "YES — SALVAGE", hit, clicked))
         {
             _confirm = null;
             SalvageJunkNow(hunter);
         }
+    }
+
+    /// <summary>
+    /// The "don't ask me again" box and its label, filling a row so the label is as clickable as the
+    /// box. The caller owns the row's click; this only draws it.
+    /// </summary>
+    private void DrawSuppressBox(SpriteBatch b, Rectangle row, bool on, Point mouse)
+    {
+        var edge = UiMetrics.IconSmall;
+        var box = new Rectangle(row.X, row.Y + (row.Height - edge) / 2, edge, edge);
+        var inset = UiMetrics.Space(5);
+        _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
+        _ui.Fill(b, box, new Color(0x16, 0x11, 0x10));
+        if (on) _ui.Fill(b, new Rectangle(box.X + inset, box.Y + inset, edge - 2 * inset, edge - 2 * inset), Gold);
+        _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + UiMetrics.Space(12),
+                    row.Y + (row.Height - UiTypography.Secondary) / 2, row.Contains(mouse) ? Bone : Slate, UiTypography.Secondary);
     }
 
     /// <summary>
@@ -2132,126 +3432,6 @@ public sealed class ForgeScreen
     }
 
     // ── THE WALLET ───────────────────────────────────────────────────────────────────────────────
-    /// <summary>
-    /// What you hold — Gleam and the four materials, with their real icons and what each is for — and
-    /// the charts. The rows the open tab's action needs are marked, so "can I afford the next press?"
-    /// is answered where the balance is, not three panels away.
-    /// </summary>
-    private void DrawWallet(SpriteBatch b, Hunter hunter, ItemInstance? item)
-    {
-        _ui.PanelQuiet(b, WalletPanel);
-        var x = UiKit.ContentLeft(WalletPanel); var right = UiKit.ContentRight(WalletPanel); var w = right - x;
-        _ui.TextCenterBig(b, "YOUR MATERIALS", WalletPanel.Center.X, UiKit.TitleTop(WalletPanel), Gold, UiTypography.PanelTitle);
-
-        // What the OPEN tab's next press takes — or gives — per row. Verb first, so the marker reads as a
-        // sentence ("UPGRADE NEEDS 12") and not as a second, mysterious number beside the balance.
-        var marks = new Dictionary<string, (string Text, Color Colour)>();
-        Charter? chartPays = null;
-        void Need(string key, string verb, long need, long have) => marks[key] = ($"{verb} NEEDS {need:N0}", have >= need ? Met : Ember);
-        void Gives(string key, string verb, long amount) => marks[key] = ($"{verb} GIVES +{amount:N0}", Gold);
-        if (item is not null)
-        {
-            switch (_tab)
-            {
-                case Tab.Upgrade when !Forge.AtRefineCap(item, Tuning):
-                    if (hunter.CharterCount(Charter.Refine) > 0) chartPays = Charter.Refine;
-                    else
-                    {
-                        var r = Forge.Refine(item, Tuning);
-                        Need("scrap", "UPGRADE", r.Scrap, hunter.MaterialOf(Material.Scrap));
-                        Need("gleam", "UPGRADE", r.Gold, hunter.Gleam);
-                    }
-                    Need("crystal", "GREATER", Forge.GreaterRefine(item, Tuning).Crystal, hunter.MaterialOf(Material.Crystal));
-                    break;
-                case Tab.Reroll when item.Rarity >= Enchantments.MinimumRarity:
-                    if (hunter.CharterCount(Charter.Reforge) > 0) chartPays = Charter.Reforge;
-                    else
-                    {
-                        var tier = Reforge.EnchantMaterial(item.Rarity);
-                        Need(MatKey(tier), "RE-ROLL", ReforgeTuning.Default.EnchantCostFor(item.Rarity), hunter.MaterialOf(tier));
-                    }
-                    break;
-                case Tab.Socket when GemCraft.SocketCount(item.Rarity) > 0:
-                    if (SocketPrice(item.Rarity) == 0) marks["essence"] = ("YOUR FIRST GEM IS FREE", Met);
-                    else Need("essence", "A GEM", SocketPrice(item.Rarity), hunter.MaterialOf(Material.Essence));
-                    break;
-                case Tab.BreakDown:
-                    Gives("gleam", "SELL", item.SellValue);
-                    Gives(MatKey(MaterialTiers.ForRarity(item.Rarity)), "SALVAGE", Forge.Dismantle(item, Tuning));
-                    break;
-            }
-        }
-
-        var rows = new (string Key, string Icon, Color Tint, string Name, string Use, string Have)[]
-        {
-            ("gleam", "currency_gleam", Gold, "GLEAM", GleamUse, Ab(hunter.Gleam)),
-            ("scrap", MatIcon[0], MatColor[0], "SCRAP", MatUse(Material.Scrap), $"{hunter.MaterialOf(Material.Scrap):N0}"),
-            ("essence", MatIcon[1], MatColor[1], "ESSENCE", MatUse(Material.Essence), $"{hunter.MaterialOf(Material.Essence):N0}"),
-            ("core", MatIcon[2], MatColor[2], "CORE", MatUse(Material.Core), $"{hunter.MaterialOf(Material.Core):N0}"),
-            ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", MatUse(Material.Crystal), $"{hunter.MaterialOf(Material.Crystal):N0}"),
-        };
-        var ry = UiKit.BodyTopBare(WalletPanel);
-        foreach (var row in rows)
-        {
-            DrawMatIcon(b, row.Icon, row.Tint, new Rectangle(x, ry, 48, 48));
-            _ui.TextBig(b, row.Name, x + 62, ry, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, row.Have, right, ry - 2, Bone, UiTypography.Headline);
-            var useRoom = w - 62;
-            if (marks.TryGetValue(row.Key, out var m))
-            {
-                _ui.TextRightBig(b, m.Text, right, ry + 28, m.Colour, UiTypography.Secondary);
-                useRoom -= _ui.MeasureBig(m.Text, UiTypography.Secondary) + 14;
-            }
-            _ui.TextBig(b, _ui.ShortenBig(row.Use, useRoom, UiTypography.Secondary), x + 62, ry + 28, Slate, UiTypography.Secondary);
-            ry += 64;
-        }
-
-        // ── CHARTS: a permission you do not know you hold is not a permission. ──
-        var cy = ry + 6;
-        _ui.Fill(b, new Rectangle(x, cy, w, 2), Dim);
-        _ui.TextCenterBig(b, "YOUR CHARTS", WalletPanel.Center.X, cy + 16, Gold, UiTypography.PanelTitle);
-        var ey = DrawWrappedBig(b, "A chart pays for one action instead of materials. It is used up by itself when you press the button it pays for.",
-                                x, cy + 50, w, Slate, UiTypography.Secondary) + 8;
-        var held = Enum.GetValues<Charter>().Where(c => hunter.CharterCount(c) > 0).ToList();
-        if (held.Count == 0)
-        {
-            _ui.TextBig(b, "NONE RIGHT NOW — WAVES DROP ONE NOW AND THEN.", x, ey, Slate, UiTypography.Secondary);
-            ey += 30;
-        }
-        foreach (var c in held)
-        {
-            var n = hunter.CharterCount(c);
-            _ui.Fill(b, new Rectangle(x, ey, 4, 46), Met);
-            _ui.TextBig(b, $"{Charters.Name(c)} ×{n}", x + 14, ey, Met, UiTypography.Body);
-            var plainRoom = w - 14;
-            if (c == chartPays)
-            {
-                var tag = c == Charter.Refine ? "PAYS THE NEXT UPGRADE" : "PAYS THE NEXT RE-ROLL";
-                _ui.TextRightBig(b, tag, right, ey + 4, Gold, UiTypography.Secondary);
-                plainRoom -= _ui.MeasureBig(tag, UiTypography.Secondary) + 14;
-            }
-            _ui.TextBig(b, _ui.ShortenBig(Charters.Plain(c), plainRoom, UiTypography.Secondary), x + 14, ey + 26, Slate, UiTypography.Secondary);
-            ey += 56;
-        }
-
-        // ── THE FOUR TABS, in one breath — under the charts, so the column reads top to bottom. ──
-        var ly = ey + 14;
-        _ui.Fill(b, new Rectangle(x, ly, w, 2), Dim);
-        _ui.Text(b, "THE FOUR TABS", x, ly + 14, Slate);
-        var ty = ly + 44;
-        foreach (var line in new[]
-                 {
-                     "UPGRADE — raise the item's level.",
-                     "RE-ROLL — a new random enchant.",
-                     "SOCKET — set a gem to add a stat.",
-                     "SALVAGE — sell it, or break it into materials.",
-                 })
-        {
-            _ui.TextBig(b, line, x, ty, Slate, UiTypography.Secondary);
-            ty += 24;
-        }
-    }
-
     // ── Price lines and icons ────────────────────────────────────────────────────────────────────
 
     /// <summary>One part of a price: the icon to draw, the name to print, what it costs, what you hold.</summary>
@@ -2281,32 +3461,39 @@ public sealed class ForgeScreen
     private void DrawPrice(SpriteBatch b, int x, int y, int width, string verb, IReadOnlyList<Price> parts, Charter? chart, int charts)
     {
         var priceText = string.Join(" + ", parts.Select(p => $"{Amount(p, p.Cost)} {p.Name}"));
+        var gap = UiMetrics.Space(12);
+        var line2 = y + UiTypography.Pitch(UiTypography.Body);
         if (chart is { } c && charts > 0)
         {
             _ui.TextBig(b, $"FREE — YOU HOLD {charts} {Charters.Name(c)}{(charts > 1 ? "S" : "")}", x, y, Gold, UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig($"ONE IS USED UP. WITHOUT A CHART IT COSTS {priceText}.", width, UiTypography.Secondary),
-                        x, y + 28, Slate, UiTypography.Secondary);
+            if (ShowHoldLine)
+                _ui.TextBig(b, _ui.ShortenBig($"ONE IS USED UP. WITHOUT A CHART IT COSTS {priceText}.", width, UiTypography.Secondary),
+                            x, line2, Slate, UiTypography.Secondary);
             return;
         }
 
         var cx = x;
+        var icon = UiMetrics.Control(28);
         _ui.TextBig(b, verb, cx, y, Bone, UiTypography.Body);
-        cx += _ui.MeasureBig(verb, UiTypography.Body) + 12;
+        cx += _ui.MeasureBig(verb, UiTypography.Body) + gap;
         for (var i = 0; i < parts.Count; i++)
         {
             var p = parts[i];
-            if (i > 0) { _ui.TextBig(b, "+", cx, y, Bone, UiTypography.Body); cx += _ui.MeasureBig("+", UiTypography.Body) + 12; }
-            DrawMatIcon(b, p.Icon, p.Tint, new Rectangle(cx, y - 4, 28, 28));
-            cx += 34;
+            if (i > 0) { _ui.TextBig(b, "+", cx, y, Bone, UiTypography.Body); cx += _ui.MeasureBig("+", UiTypography.Body) + gap; }
+            DrawMatIcon(b, p.Icon, p.Tint, new Rectangle(cx, y + (UiTypography.Body - icon) / 2, icon, icon));
+            cx += icon + UiMetrics.Space(6);
             var t = $"{Amount(p, p.Cost)} {p.Name}";
             _ui.TextBig(b, t, cx, y, p.Have >= p.Cost ? Met : Ember, UiTypography.Body);
-            cx += _ui.MeasureBig(t, UiTypography.Body) + 12;
+            cx += _ui.MeasureBig(t, UiTypography.Body) + gap;
         }
 
+        // The column's budget may have dropped this line: the strip's NEEDS marks say the same thing,
+        // and each part above is already inked by whether you hold it.
+        if (!ShowHoldLine) return;
         var missing = parts.Where(p => p.Have < p.Cost).Select(p => p.Name).ToList();
         var held = "YOU HOLD " + string.Join(" · ", parts.Select(p => $"{Amount(p, p.Have)} {p.Name}"));
         if (missing.Count > 0) held += " — NOT ENOUGH " + string.Join(" OR ", missing);
-        _ui.TextBig(b, _ui.ShortenBig(held, width, UiTypography.Secondary), x, y + 28, missing.Count > 0 ? Ember : Slate, UiTypography.Secondary);
+        _ui.TextBig(b, _ui.ShortenBig(held, width, UiTypography.Secondary), x, line2, missing.Count > 0 ? Ember : Slate, UiTypography.Secondary);
     }
 
     /// <summary>A material's icon — the real art, or a tinted gem if the file is ever missing.</summary>
@@ -2326,30 +3513,13 @@ public sealed class ForgeScreen
 
     private const string GleamUse = "upgrades · stats · the shop";
 
-    /// <summary>One before/after row in the item card.</summary>
-    /// <remarks>
-    /// THE LABEL AND THE VALUE ARE DRAWN AT THE SAME SIZE, and that is the fix rather than a style
-    /// preference. SmoothFont draws from the TOP-LEFT of the em box, so two different type sizes sharing
-    /// a y are top-aligned rather than baseline-aligned — a ~13px baseline gap made every value read as
-    /// a superscript hanging off its label's shoulder.
-    /// </remarks>
-    private void DrawTransition(SpriteBatch b, string label, string cur, string? after, int y)
-    {
-        _ui.TextBig(b, label, Card.X, y, Slate, UiTypography.Body);
-        if (after is null) { _ui.TextRightBig(b, cur, Card.Right, y, Bone, UiTypography.Body); return; }
-        _ui.TextRightBig(b, after, Card.Right, y, Met, UiTypography.Body);
-        var aw = _ui.MeasureBig(after, UiTypography.Body);
-        Arrow(b, Card.Right - aw - 28, y + 5, Bloom);
-        _ui.TextRightBig(b, cur, Card.Right - aw - 54, y, Slate, UiTypography.Body);
-    }
-
     /// <summary>Wrap sized text to a width; returns the y just under the last line.</summary>
     private int DrawWrappedBig(SpriteBatch b, string text, int x, int y, int width, Color c, int px)
     {
         foreach (var line in _ui.WrapBig(text, width, px))
         {
             _ui.TextBig(b, line, x, y, c, px);
-            y += px + 8;
+            y += UiTypography.Pitch(px);
         }
         return y;
     }
@@ -2360,39 +3530,22 @@ public sealed class ForgeScreen
         : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
 
     /// <summary>A small solid right-pointing triangle — the before→after arrow, sized ~20px tall.</summary>
-    private void Arrow(SpriteBatch b, int x, int cy, Color c)
+    /// <summary>The before → after arrow, at a stated size — the compare draws it larger than a label does.</summary>
+    private void Arrow(SpriteBatch b, int x, int cy, Color c, int size = 20)
     {
-        for (var i = 0; i < 10; i++) _ui.Fill(b, new Rectangle(x + i, cy - (10 - i), 2, (10 - i) * 2), c);
+        var h = size / 2;
+        for (var i = 0; i < h; i++) _ui.Fill(b, new Rectangle(x + i, cy - (h - i), 2, (h - i) * 2), c);
     }
 
-    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
-    {
-        var line = "";
-        foreach (var w in text.Split(' '))
-        {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 26; line = w; }
-            else line = probe;
-        }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
-    }
-
-    /// <summary>The stat's word. Core owns it — see <see cref="ItemAffixes.StatWord"/> for why.</summary>
-    private static string AffixName(AffixStat s) => ItemAffixes.StatWord(s);
-
-    /// <summary>The magnitude in the stat's own unit. Core owns it — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
-    private static string AffixVal(ItemAffix a) => ItemAffixes.GrantLabel(a.Stat, a.Magnitude);
-
-    /// <summary>One decimal, for the before → after rows only. Playtest 2026-08-23: "why does UPGRADE
-    /// not raise the stats?" — it does, ~2% relative a rung, but "+11.2% → +11.4%" both rounded to
-    /// "+11%", so the card showed the same number on both sides of the arrow and the growth looked
-    /// like a lie. Everywhere else keeps the round figure; the comparison is where precision earns
-    /// its clutter.</summary>
-    private static string AffixValPrecise(ItemAffix a) => ItemAffixes.GrantLabelPrecise(a.Stat, a.Magnitude);
+    // The affix word / value / precise-value helpers that stood here are gone (2026-09-07): every
+    // figure on this screen prints through ItemModifiers (Core), which owns the word, the unit and
+    // the sign in one place. One decimal on the before → after rows only — playtest 2026-08-23: "why
+    // does UPGRADE not raise the stats?" — it does, ~2% relative a rung, but "+11.2% → +11.4%" both
+    // rounded to "+11%", so the card showed the same number on both sides of the arrow.
 
     private void DrawDebug(SpriteBatch b)
     {
-        var rects = new[] { BagPanel, ItemPanel, ActionPanel, WalletPanel, Card, Action };
+        var rects = new[] { MaterialStrip, BagPanel, ItemPanel, ForgePanel };
         foreach (var r in rects)
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
@@ -2462,10 +3615,29 @@ public sealed class ForgeScreen
         Environment.GetEnvironmentVariable("RH_SHOT") is not null
         && Environment.GetEnvironmentVariable("RH_SHOT_HOVER") == "reveal";
 
-    /// <summary>One item's column on the reveal: icon, name, and the two verbs under it.</summary>
-    private const int RevealCol = 210;
+    /// <summary>One item's column on the reveal: icon, name, and the two verbs under it. 210 at 100 %.</summary>
+    private static int RevealCol => UiMetrics.Control(210);
+
+    /// <summary>The item's picture on the reveal — the card's art, not a control: it does not grow with the type under it.</summary>
     private const int RevealIcon = 120;
-    private const int RevealCellH = RevealIcon + 116;
+
+    /// <summary>A reveal cell's SELL / SALVAGE button. 38 at 100 %.</summary>
+    private static int RevealBtnH => UiMetrics.Control(38);
+
+    /// <summary>Where the name sits under the picture, from the cell's top.</summary>
+    private static int RevealNameY => RevealIcon + UiMetrics.Space(8);
+
+    /// <summary>Where the first verb sits, from the cell's top — one name line under the picture, so the two can never overprint.</summary>
+    private static int RevealBtnY => RevealNameY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
+
+    /// <summary>A cell's full height: picture, name, two verbs and a breath. 236 at 100 %.</summary>
+    private static int RevealCellH => RevealBtnY + 2 * RevealBtnH + UiMetrics.Space(4) + UiMetrics.Space(2);
+
+    /// <summary>The height the reveal's own question needs, so the summary can make room for it.</summary>
+    private static int RevealQuestionH =>
+        UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8) + UiMetrics.Control(56)
+        + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4)
+        + UiMetrics.IconSmall + UiMetrics.Space(8) + UiMetrics.Space(14) + UiMetrics.Control(56) + UiMetrics.Space(20);
 
     /// <summary>
     /// Does the pointer rest on something the reveal itself would answer?
@@ -2541,9 +3713,16 @@ public sealed class ForgeScreen
 
         // The card's FINAL rectangle, known before a pixel is drawn, because the pointer test needs it
         // and the fade needs the pointer test. It grows with the haul so three drops never crowd.
+        // The card is built from what it holds — a title, a row of cells, the materials line and CLOSE —
+        // so at a bigger profile it is taller by exactly what its type and buttons grew, and centred.
         var n = _revealItems.Count;
-        var cardW = Math.Max(720, n * RevealCol + 140);
-        var full = new Rectangle(960 - cardW / 2, 300, cardW, 470);
+        var cardW = Math.Max(UiMetrics.Control(720), n * RevealCol + UiMetrics.Space(140));
+        var cellsOff = UiMetrics.Space(34) + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8);
+        var matsOff = cellsOff + RevealCellH + UiMetrics.Space(16);
+        var closeOff = matsOff + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
+        var closeH = UiMetrics.Control(56);
+        var cardH = closeOff + closeH + UiMetrics.Space(42);
+        var full = new Rectangle(960 - cardW / 2, (1080 - cardH) / 2, cardW, cardH);   // ui-page-ok: host chrome, canvas space
 
         // THE HOLD. Only once the card has FINISHED arriving — the plate landing is not enough. The
         // first cut latched at burstEnds + cardIn, which is the moment the plate lands and the moment
@@ -2571,9 +3750,9 @@ public sealed class ForgeScreen
         // A cascade says where it is and how to leave — the skip must be visible from the first frame.
         if (_revealChestCount > 1)
         {
-            _ui.TextCenterBig(b, $"CHEST {_revealIndex} OF {_revealChestCount}", 960, 214,
+            _ui.TextCenterBig(b, $"CHEST {_revealIndex} OF {_revealChestCount}", 960, 214,   // ui-page-ok: host chrome, canvas space
                               Slate * MathF.Max(fade, 0.6f), UiTypography.Secondary);
-            _ui.TextCenterBig(b, "CLICK TO SKIP TO THE HAUL", 960, 984, Slate * 0.8f, UiTypography.Secondary);
+            _ui.TextCenterBig(b, "CLICK TO SKIP TO THE HAUL", 960, 984, Slate * 0.8f, UiTypography.Secondary);   // ui-page-ok: host chrome, canvas space
         }
 
         // ── BEAT 1 · THE CHEST RATTLES ────────────────────────────────────────────────────────────
@@ -2602,7 +3781,7 @@ public sealed class ForgeScreen
             else { _ui.Fill(b, box, grade * 0.8f); }
 
             // ABOVE the chest. At 700 it sat behind the loot panel's lower half and read as a smudge.
-            _ui.TextCenterBig(b, _revealTitle, 960, 340,
+            _ui.TextCenterBig(b, _revealTitle, 960, 340,   // ui-page-ok: host chrome, canvas space
                 grade * (0.4f + 0.6f * p), UiTypography.PanelTitle);
         }
 
@@ -2648,15 +3827,17 @@ public sealed class ForgeScreen
 
         if (cp < 0.6f) return;      // the contents wait for the frame to stop moving
 
-        _ui.TextCenterBig(b, _revealTitle, card.Center.X, card.Y + 34,
+        _ui.TextCenterBig(b, _revealTitle, card.Center.X, card.Y + UiMetrics.Space(34),
             grade * fade, UiTypography.PanelTitle);
 
         // A question takes the card's body. Its subject is re-resolved by id every frame: if the item
         // has left the bag under it, the question simply has nothing left to ask.
+        var cellsTop = full.Y + cellsOff;
+        var sidePad = UiMetrics.Space(40);
         if (_revealAsk is { } ask && _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId) is { } subject)
         {
             DrawRevealQuestion(b, hunter, subject, ask.Kind,
-                               new Rectangle(full.X + 40, full.Y + 78, full.Width - 80, full.Height - 118),
+                               new Rectangle(full.X + sidePad, cellsTop, full.Width - 2 * sidePad, full.Bottom - sidePad - cellsTop),
                                mouse, click);
             return;
         }
@@ -2667,14 +3848,13 @@ public sealed class ForgeScreen
         // A CASCADE ENTRY GETS NO BUTTONS: it is on screen for about a second, and a button that brief
         // is a misclick waiting to happen. The summary at the end of the cascade carries them instead.
         var acts = !_revealBrief && cp >= 1f;
-        var cellsTop = full.Y + 78;
         ItemInstance? hover = null;
         for (var i = 0; i < n; i++)
         {
             var ip = Math.Clamp((t - burstEnds - cardIn - i * stagger) / 0.18f, 0f, 1f);
             if (ip <= 0f) continue;
             var drop = (int)(-40f * (1f - ip) * (1f - ip));
-            var cell = new Rectangle(960 - n * RevealCol / 2 + i * RevealCol, cellsTop, RevealCol - 10, RevealCellH);
+            var cell = new Rectangle(960 - n * RevealCol / 2 + i * RevealCol, cellsTop, RevealCol - UiMetrics.Space(10), RevealCellH);   // ui-page-ok: host chrome, canvas space
             if (DrawRevealCell(b, hunter, _revealItems[i], cell, drop, fade, acts && ip >= 1f, mouse, click) is { } h)
                 hover = h;
         }
@@ -2683,7 +3863,7 @@ public sealed class ForgeScreen
             hover = _inv.FirstOrDefault(i => i.InstanceId == _revealItems[0].InstanceId);
 
         if (n == 0)
-            _ui.TextCenter(b, "SOLD ON SIGHT — YOUR LOOT FILTER TOOK IT.", card.Center.X, cellsTop + 90, Slate * fade);
+            _ui.TextCenter(b, "SOLD ON SIGHT — YOUR LOOT FILTER TOOK IT.", card.Center.X, cellsTop + UiMetrics.Space(90), Slate * fade);
 
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
@@ -2691,12 +3871,13 @@ public sealed class ForgeScreen
         // A gift pays no materials; "+0 MATERIALS" under a gift reads as a shortfall, so the line is
         // simply absent when there is nothing to count up to.
         if (_revealMaterials > 0)
-            _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", card.Center.X, full.Y + 330,
+            _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", card.Center.X, full.Y + matsOff,
                 Gold * fade, UiTypography.Body);
 
         if (acts && _revealChestCount <= 1)
         {
-            var keep = new Rectangle(full.Center.X - 180, full.Y + 372, 360, 56);
+            var closeW = UiMetrics.Control(360);
+            var keep = new Rectangle(full.Center.X - closeW / 2, full.Y + closeOff, closeW, closeH);
             _revealHots.Add(keep);
             if (_ui.Button(b, keep, "CLOSE", mouse, click)) AdvanceReveal();
         }
@@ -2734,25 +3915,27 @@ public sealed class ForgeScreen
         var icon = new Rectangle(cell.X + (cell.Width - RevealIcon) / 2, cell.Y + drop, RevealIcon, RevealIcon);
 
         DrawItemIcon(b, shown, icon);
-        if (live is null) _ui.Fill(b, icon, new Color(0x0A, 0x08, 0x10, 0xB4));   // gone: dim the picture
+        if (live is null) _ui.Fill(b, icon, new Color(0x0B, 0x09, 0x08, 0xB4));   // gone: dim the picture
 
         // THE NAME, under the picture, in its rarity colour. The card used to join every item into one
         // "EPIC RING   RARE BLADE" line, which names a rarity and a shape and no item.
         _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(shown), cell.Width, UiTypography.Secondary),
-                          cell.Center.X, cell.Y + 128, (live is null ? Dim : rc) * fade, UiTypography.Secondary);
+                          cell.Center.X, cell.Y + RevealNameY, (live is null ? Dim : rc) * fade, UiTypography.Secondary);
 
         if (live is null)
         {
             // SOLD / SALVAGED by the buttons below; MERGED by TIRELESS FORGE before the card opened.
             var stamp = _revealStamp.TryGetValue(snapshot.InstanceId, out var w) ? w : "MERGED";
-            _ui.TextCenterBig(b, stamp, cell.Center.X, cell.Y + 160, Slate * fade, UiTypography.Body, TextFace.Strong);
+            _ui.TextCenterBig(b, stamp, cell.Center.X,
+                              cell.Y + RevealNameY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8),
+                              Slate * fade, UiTypography.Body, TextFace.Strong);
             return null;
         }
 
         var hover = icon.Contains(mouse) ? live : null;
         if (!acts) return hover;
 
-        var sell = new Rectangle(cell.X, cell.Y + 154, cell.Width, 38);
+        var sell = new Rectangle(cell.X, cell.Y + RevealBtnY, cell.Width, RevealBtnH);
         _revealHots.Add(sell);
         if (_ui.Button(b, sell, $"SELL FOR {live.SellValue:N0} GLEAM", mouse, click))
             AskOrScrap(hunter, live, ScrapKind.Sell);
@@ -2760,7 +3943,7 @@ public sealed class ForgeScreen
         if (Gear.IsWearable(live))
         {
             var tier = MaterialTiers.ForRarity(live.Rarity);
-            var salvage = new Rectangle(cell.X, cell.Y + 196, cell.Width, 38);
+            var salvage = new Rectangle(cell.X, sell.Bottom + UiMetrics.Space(4), cell.Width, RevealBtnH);
             _revealHots.Add(salvage);
             if (_ui.Button(b, salvage, $"SALVAGE FOR {Forge.Dismantle(live, Tuning)} {MaterialTiers.Name(tier)}", mouse, click))
                 AskOrScrap(hunter, live, ScrapKind.Salvage);
@@ -2770,7 +3953,7 @@ public sealed class ForgeScreen
             // A GEM has no salvage — it is set into gear or sold, and saying so is better than a greyed
             // button whose reason lives in someone's head.
             _ui.TextCenterBig(b, _ui.ShortenBig("SET IT INTO GEAR AT THE FORGE", cell.Width, UiTypography.Secondary),
-                              cell.Center.X, cell.Y + 202, Slate * fade, UiTypography.Secondary);
+                              cell.Center.X, sell.Bottom + UiMetrics.Space(10), Slate * fade, UiTypography.Secondary);
         }
         return hover;
     }
@@ -2817,30 +4000,33 @@ public sealed class ForgeScreen
         _revealHots.Add(area);
         _ui.Fill(b, area, new Color(0x2A, 0x16, 0x1C, 0xEE));
 
-        var x = area.X + 26; var w = area.Width - 52; var y = area.Y + 18;
+        // The same grid as the bench's questions — see QuestionGrid — laid out from the plate's top.
+        var inset = UiMetrics.Space(26);
+        var x = area.X + inset; var w = area.Width - 2 * inset; var y = area.Y + UiMetrics.Space(18);
+        var q = QuestionGrid(y);
         _ui.TextBig(b, kind == ScrapKind.Sell ? "SELL THIS?" : "SALVAGE THIS?", x, y, Gold, UiTypography.PanelTitle);
-        DrawItemIcon(b, item, new Rectangle(x, y + 42, 56, 56));
-        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), w - 70, UiTypography.Body), x + 70, y + 56,
+        DrawItemIcon(b, item, new Rectangle(x, q.Icon.Y, q.Icon.Height, q.Icon.Height));
+        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), w - q.NameX, UiTypography.Body), x + q.NameX, q.NameY,
                     RarityColors[(int)item.Rarity], UiTypography.Body);
 
         var outcome = kind == ScrapKind.Sell
             ? $"IT SELLS FOR {item.SellValue:N0} GLEAM. THIS CANNOT BE UNDONE."
             : $"IT BREAKS DOWN INTO {Forge.Dismantle(item, Tuning)} {MaterialTiers.Name(MaterialTiers.ForRarity(item.Rarity))}. THIS CANNOT BE UNDONE.";
-        _ui.TextBig(b, _ui.ShortenBig(outcome, w, UiTypography.Secondary), x, y + 112, Bone, UiTypography.Secondary);
+        var outcomeY = q.Icon.Bottom + UiMetrics.Space(14);
+        _ui.TextBig(b, _ui.ShortenBig(outcome, w, UiTypography.Secondary), x, outcomeY, Bone, UiTypography.Secondary);
 
         var answered = false;
-        var box = new Rectangle(x, y + 144, 24, 24);
-        var row = new Rectangle(x, y + 140, w, 32);
-        _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
-        _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A));
-        if (_revealAskSuppress) _ui.Fill(b, new Rectangle(box.X + 5, box.Y + 5, 14, 14), Gold);
-        _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + 12, y + 146,
-                    row.Contains(mouse) ? Bone : Slate, UiTypography.Secondary);
+        var row = new Rectangle(x, outcomeY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4), w,
+                                UiMetrics.IconSmall + UiMetrics.Space(8));
+        DrawSuppressBox(b, row, _revealAskSuppress, mouse);
         if (UiKit.ClickedIn(row, mouse, click)) { _revealAskSuppress = !_revealAskSuppress; answered = true; }
 
-        var bw = (w - 20) / 2;
-        var keep = new Rectangle(x, y + 186, bw, 56);
-        var doIt = new Rectangle(x + bw + 20, y + 186, bw, 56);
+        var gap = UiMetrics.Space(20);
+        var btnY = row.Bottom + UiMetrics.Space(14);
+        var btnH = UiMetrics.Control(56);
+        var bw = (w - gap) / 2;
+        var keep = new Rectangle(x, btnY, bw, btnH);
+        var doIt = new Rectangle(x + bw + gap, btnY, bw, btnH);
         // Registered as their own hot rects rather than trusting the panel to contain them — the host
         // routes a click to the reveal only when it lands on a registered rect.
         _revealHots.Add(keep); _revealHots.Add(doIt);
@@ -2862,40 +4048,56 @@ public sealed class ForgeScreen
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, (int)(215 * fade)));
 
         var n = _revealAll.Count;
-        const int PerRow = 5, MaxShown = 10;
-        var shown = Math.Min(n, MaxShown);
-        var rows = Math.Max(1, (shown + PerRow - 1) / PerRow);
-        // 1180 wide keeps every row count above the 1.30 aspect line, so UiKit.Panel never swaps the
-        // frame art as the haul grows (the trap the VAULT and the settings panel both hit before).
-        var height = rows * RevealCellH + 286;
-        var panel = new Rectangle(960 - 590, 540 - height / 2, 1180, height);
+        // THE GRID REFLOWS WITH THE PROFILE (brief §9: fewer columns at 150 %): as many cells across as
+        // the 1180 px plate holds at this cell width — five at 100 %, four at 125, three at 150 — and
+        // never more than two rows, so the plate stays on the page. Everything past that is in the bag
+        // and the line under the cells says so.
+        const int PlateW = 1180;
+        var perRow = Math.Max(1, (PlateW - 2 * UiKit.PanelCorner) / RevealCol);
+        var titleOff = UiMetrics.Space(34);
+        var tallyOff = titleOff + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8);
+        var cellsOff = tallyOff + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(14);
+        var matsGap = UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
+        var closeGap = UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
+        var closeH = UiMetrics.Control(56);
+        var footH = matsGap + closeGap + closeH + UiMetrics.Space(42);
+        var pageRoom = 1080 - 2 * UiMetrics.Space(24);   // ui-page-ok: host chrome, canvas space
+        var rowsFit = Math.Clamp((pageRoom - cellsOff - footH) / RevealCellH, 1, 2);
+        var shown = Math.Min(n, perRow * rowsFit);
+        var rows = Math.Max(1, (shown + perRow - 1) / perRow);
+        var contentH = rows * RevealCellH;
+        // A question takes the cells' place and needs its own height: it may cover the tally line under
+        // the cells, but the plate grows before it could reach CLOSE — the rect is what RevealWantsClick
+        // tests, and a YES that hung over CLOSE once dismissed the summary instead (review 2026-08-23).
+        var asking = _revealAsk is { } a0 && _inv.Any(i => i.InstanceId == a0.ItemId);
+        if (asking) contentH = Math.Max(contentH, RevealQuestionH - matsGap);
+        var height = cellsOff + contentH + footH;
+        // Wide enough to keep the MEDIUM frame at every row count: UiKit.Panel swaps the art under a
+        // 1.30 aspect (the trap the VAULT and the settings panel both hit before).
+        var plateW = Math.Max(PlateW, height * 13 / 10 + 2);
+        var panel = new Rectangle(960 - plateW / 2, 540 - height / 2, plateW, height);   // ui-page-ok: host chrome, canvas space
         _ui.PanelQuiet(b, panel);
 
         var best = n > 0 ? RarityColors[_revealAll.Max(i => (int)i.Rarity)] : Bone;
-        _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + 34,
+        _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + titleOff,
                           best * fade, UiTypography.PanelTitle);
 
         // The tally, rarest first — countable without reading ten icons.
         var tally = _revealAll.GroupBy(i => i.Rarity).OrderByDescending(g => (int)g.Key)
                               .Select(g => $"{g.Count()} {RarityNames[(int)g.Key]}");
         _ui.TextCenterBig(b, n == 0 ? "EVERYTHING WAS SOLD ON SIGHT (YOUR LOOT FILTER)." : string.Join("  ·  ", tally),
-                          panel.Center.X, panel.Y + 78, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
+                          panel.Center.X, panel.Y + tallyOff, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
 
-        var cellsTop = panel.Y + 116;
-        var cellsBottom = cellsTop + rows * RevealCellH;
+        var cellsTop = panel.Y + cellsOff;
+        var cellsBottom = cellsTop + contentH;
         ItemInstance? hover = null;
         var hoverCell = Rectangle.Empty;   // anchors the hover card BESIDE the item, never over its buttons
 
         if (_revealAsk is { } ask && _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId) is { } subject)
         {
-            // The question's own layout needs 260 px (18 + 186 + 56). With one row of drops the cells
-            // are only 236 px tall, so the two answer buttons hung BELOW the rect — and the rect is
-            // what RevealWantsClick tests, so the lower half of YES/NO dismissed the summary instead
-            // of answering it (review 2026-08-23, high). RevealCellH + 64 = 300 covers the layout and
-            // still stops short of KEEP ALL at cellsTop + 308.
+            var askW = UiMetrics.Control(680);
             DrawRevealQuestion(b, hunter, subject, ask.Kind,
-                               new Rectangle(panel.Center.X - 340, cellsTop, 680,
-                                             Math.Max(RevealCellH + 64, cellsBottom - cellsTop)),
+                               new Rectangle(panel.Center.X - askW / 2, cellsTop, askW, Math.Max(RevealQuestionH, contentH)),
                                mouse, click);
         }
         else
@@ -2905,11 +4107,11 @@ public sealed class ForgeScreen
             var order = _revealAll.OrderByDescending(i => (int)i.Rarity).Take(shown).ToList();
             for (var i = 0; i < order.Count; i++)
             {
-                var row = i / PerRow;
-                var inRow = Math.Min(PerRow, order.Count - row * PerRow);
+                var row = i / perRow;
+                var inRow = Math.Min(perRow, order.Count - row * perRow);
                 var x0 = panel.Center.X - inRow * RevealCol / 2;
-                var cell = new Rectangle(x0 + i % PerRow * RevealCol, cellsTop + row * RevealCellH,
-                                         RevealCol - 10, RevealCellH);
+                var cell = new Rectangle(x0 + i % perRow * RevealCol, cellsTop + row * RevealCellH,
+                                         RevealCol - UiMetrics.Space(10), RevealCellH);
                 if (i == 0) hoverCell = cell;
                 if (DrawRevealCell(b, hunter, order[i], cell, 0, fade, _revealFrozen, mouse, click) is { } h)
                 { hover = h; hoverCell = cell; }
@@ -2918,16 +4120,17 @@ public sealed class ForgeScreen
                 hover = _inv.FirstOrDefault(i => i.InstanceId == order[0].InstanceId);
             if (n > shown)
                 _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS — THEY ARE ALL IN YOUR BAG", panel.Center.X,
-                                  cellsBottom + 4, Slate * fade, UiTypography.Secondary);
+                                  cellsBottom + UiMetrics.Space(4), Slate * fade, UiTypography.Secondary);
         }
 
         _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS"
                              + (_revealMergedCount > 0 ? $"   ·   AUTO-MERGE FUSED {_revealMergedCount}x" : ""),
-                          panel.Center.X, cellsBottom + 36, Gold * fade, UiTypography.Body);
+                          panel.Center.X, cellsBottom + matsGap, Gold * fade, UiTypography.Body);
 
         // A REAL BUTTON, replacing "CLICK TO CLOSE". Clicking anywhere else still closes it, for everyone
         // who does not care — but the way out is now a thing you can see and press.
-        var keepAll = new Rectangle(panel.Center.X - 190, cellsBottom + 72, 380, 56);
+        var closeW = UiMetrics.Control(380);
+        var keepAll = new Rectangle(panel.Center.X - closeW / 2, cellsBottom + matsGap + closeGap, closeW, closeH);
         _revealHots.Add(keepAll);
         if (_ui.Button(b, keepAll, "CLOSE", mouse, click)) AdvanceReveal();
 
@@ -3053,19 +4256,8 @@ public sealed class ForgeScreen
         AffixStat.Damage => new Color(0xD6, 0x48, 0x5C),
         AffixStat.Health => new Color(0x6E, 0xC8, 0x7A),
         AffixStat.SkillRate => new Color(0x74, 0xC6, 0xE8),
-        AffixStat.Haul => new Color(0xF0, 0xB2, 0x4A),
+        AffixStat.Haul => UiInk.Accent,
         AffixStat.Crit => new Color(0xC8, 0x8A, 0xE0),
         _ => new Color(0x8A, 0x96, 0xA8),
-    };
-
-    /// <summary>The six element palette, for tinting neutral item art. Matches the creatures' Source colours.</summary>
-    private static Color SourceTint(Source s) => s switch
-    {
-        Source.Body => new Color(0xD6, 0x48, 0x5C),
-        Source.Mind => new Color(0x74, 0xC6, 0xE8),
-        Source.Nature => new Color(0x48, 0xB8, 0x88),
-        Source.Machine => new Color(0xBC, 0x78, 0x40),
-        Source.Shadow => new Color(0x52, 0x45, 0x7E),
-        _ => new Color(0xDC, 0xD4, 0xEC),
     };
 }

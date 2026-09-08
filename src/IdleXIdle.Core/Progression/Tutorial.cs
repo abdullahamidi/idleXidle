@@ -36,7 +36,7 @@ public enum TutorialStep
     EquipItem,
 
     /// <summary>The build is the game. Skills, and what they are made of.</summary>
-    WeaveBuild,
+    ChooseBuild,
 
     /// <summary>Nothing left to say.</summary>
     Done,
@@ -56,7 +56,13 @@ public readonly record struct TutorialFacts(
     int ChestsHeld = 0,
     int SkillsWoven = 0,
     int DeepestWave = 0,
-    int RegionsConquered = 0);
+    int RegionsConquered = 0,
+    /// <summary>
+    /// How many things the BUILD screen has to choose between beyond the signature: taught skills,
+    /// keystones, vows. Zero means the screen is not open yet (Unlocks gates it on the same facts),
+    /// and the CHOOSE BUILD rung waits rather than name a door the game has not opened.
+    /// </summary>
+    int BuildChoices = 0);
 
 /// <summary>
 /// The first-run guide: one sentence at a time, and only once the player can act on it.
@@ -121,11 +127,13 @@ public static class Tutorial
     /// <summary>The rungs a player can be shown, in the ladder's (the career's) order.</summary>
     private static readonly TutorialStep[] Ladder =
     {
-        // Conquer is LAST since conquest moved to wave 20 (2026-08-26): a chest, a worn item and a
-        // woven build all arrive well before the twentieth wave, so any earlier seat would let the
-        // rungs after it be satisfied before they were ever shown.
+        // Conquer sat LAST since conquest moved to wave 20 (2026-08-26). CHOOSE BUILD moved behind it
+        // on 2026-09-06: the BUILD screen opens on a real choice now — a second skill, a keystone or a
+        // vow — and in the shipping game the first of those is the keystone the first conquest
+        // teaches. A build lesson seated before the conquest would wait, silent, and hide the
+        // conquest lesson behind it.
         TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss,
-        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.WeaveBuild, TutorialStep.Conquer,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.Conquer, TutorialStep.ChooseBuild,
     };
 
     /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
@@ -144,7 +152,7 @@ public static class Tutorial
         TutorialStep.Conquer => f.RegionsConquered >= 1,
         TutorialStep.OpenChest => f.ItemsOwned >= 1,
         TutorialStep.EquipItem => f.ItemsWorn >= 1,
-        TutorialStep.WeaveBuild => f.SkillsWoven >= 1,
+        TutorialStep.ChooseBuild => f.SkillsWoven >= 1,
         _ => true,
     };
 
@@ -160,7 +168,7 @@ public static class Tutorial
     /// </summary>
     /// <param name="f">What the player has done so far.</param>
     /// <param name="dismissedRungs">
-    /// Rung NAMES (<c>TutorialStep.ToString()</c>) the player dismissed with the guide strip's close
+    /// Rung NAMES (<c>TutorialStep.ToString()</c>) the player dismissed with a lesson's ×
     /// button, or null for none. A dismissed rung is skipped exactly as if it were completed — but only
     /// for DISPLAY: nothing here fakes the underlying facts, so the gates and unlocks that read those
     /// facts are untouched. A dismissed rung never returns.
@@ -208,8 +216,11 @@ public static class Tutorial
     /// </remarks>
     public static bool IsReady(TutorialStep step, TutorialFacts f) => step switch
     {
-        TutorialStep.SpendGleam => f.Gleam >= FirstRankCost,
+        // AND THE SCREEN IT SENDS TO IS OPEN: TRAINING opens after several waves (Unlocks), and a
+        // lesson naming a door the game has not opened is worse than silence.
+        TutorialStep.SpendGleam => f.Gleam >= FirstRankCost && f.WavesCleared >= Unlocks.TrainingOpensAtWaves,
         TutorialStep.EquipItem => f.ItemsOwned >= 1,
+        TutorialStep.ChooseBuild => f.BuildChoices >= 1,
         TutorialStep.Done => false,
         _ => true,
     };
@@ -232,14 +243,25 @@ public static class Tutorial
     }
 
     /// <summary>The line shown for a step. One sentence, and it names the key that acts on it.</summary>
+    /// <summary>
+    /// A saved dismissed-rung name, read forward across renames: WEAVEBUILD became CHOOSEBUILD when the
+    /// weave vocabulary retired (2026-09-01, UX V2). Without this a player who had closed that lesson
+    /// would see it again.
+    /// </summary>
+    public static string ModernRungName(string saved) => saved switch
+    {
+        "WeaveBuild" => nameof(TutorialStep.ChooseBuild),
+        _ => saved,
+    };
+
     public static string Title(TutorialStep step) => step switch
     {
-        TutorialStep.Watch => "YOUR CHAMPION FIGHTS ON ITS OWN",
+        TutorialStep.Watch => "YOUR HUNTER FIGHTS ON ITS OWN",
         TutorialStep.SpendGleam => "YOU HAVE GLEAM TO SPEND",
         TutorialStep.MeetABoss => "EVERY FIFTH WAVE IS A BOSS",
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",
         TutorialStep.EquipItem => "SOMETHING DROPPED",
-        TutorialStep.WeaveBuild => "THE BUILD IS THE GAME",
+        TutorialStep.ChooseBuild => "THE BUILD IS THE GAME",
         TutorialStep.Conquer => $"{Checkpoints.ConquestWave} WAVES CONQUER A REGION",
         _ => "",
     };
@@ -252,8 +274,8 @@ public static class Tutorial
             + "You are here to decide WHAT it is, not to swing for it.",
 
         TutorialStep.SpendGleam =>
-            "Every wave pays Gleam. Press V for STATS and train — that is the champion's own power, "
-            + "and it never resets.",
+            "Every wave pays Gleam. Press V for TRAINING and spend it — that is the hunter's own "
+            + "power, and it never resets.",
 
         TutorialStep.MeetABoss =>
             "Bosses hit far harder, and a boss is the only thing in the game that drops a chest. "
@@ -268,9 +290,9 @@ public static class Tutorial
             "Press C for GEAR and equip it. An item in the bag does nothing; the fight only reads "
             + "what is worn.",
 
-        TutorialStep.WeaveBuild =>
-            "Press B for BUILD. Pick a slot, then one of your learned skills from the library — "
-            + "skills are learned on the MASTERY tree (E), and stay learned for good.",
+        TutorialStep.ChooseBuild =>
+            "Press B for BUILD. Pick a slot, then a skill from the library — a shared skill is unlocked "
+            + "by its road on the MASTERY tree (E), and stays unlocked while you keep that road.",
 
         TutorialStep.Conquer =>
             $"Reach CONQUEST {Checkpoints.ConquestWave} / {Checkpoints.ConquestWave} in the banner over the arena to conquer the region and open the next. "
@@ -311,7 +333,7 @@ public static class Tutorial
     /// </remarks>
     public static Activity? Sends(TutorialStep step, TutorialFacts f) => step switch
     {
-        TutorialStep.SpendGleam => Activity.Stats,
+        TutorialStep.SpendGleam => Activity.Training,
 
         // OpenChest is the one step that speaks DURING A WAIT — a chest is a 20% roll and the guide
         // would otherwise go silent for tens of waves. Until one actually drops its body is in the
@@ -321,7 +343,7 @@ public static class Tutorial
         TutorialStep.OpenChest => f.ChestsHeld >= 1 ? Activity.Vault : null,
 
         TutorialStep.EquipItem => Activity.Gear,
-        TutorialStep.WeaveBuild => Activity.Build,
+        TutorialStep.ChooseBuild => Activity.Build,
         _ => null,   // Watch, MeetABoss and Conquer are about the fight itself
     };
 

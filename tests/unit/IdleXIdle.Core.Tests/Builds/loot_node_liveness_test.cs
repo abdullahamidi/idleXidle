@@ -55,13 +55,13 @@ public class LootNodeLivenessTests
         // do with the node. The roads are held identical on both sides, so they cannot be the thing
         // that moved.
         tree.RestoreTaken(ids.Concat(MasteryCatalog.Nodes
-            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)));
+            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)), repair: false);
         return tree;
     }
 
     private static Build Compose(MasteryTree mastery)
         => BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
+            mastery, character: null,
             skills: new[]
             {
                 // The old Strike/Projectile/Aura/Trap spread by catalogue id: two actives and the

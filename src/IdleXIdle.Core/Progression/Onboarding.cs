@@ -29,14 +29,14 @@ public enum TourTarget
     RightColumn,
     /// <summary>The navigation rail down the left edge.</summary>
     NavRail,
-    /// <summary>Where the guide strip will appear, bottom centre.</summary>
-    GuideStrip,
+    /// <summary>Where the fight's lesson card appears — the toast slot under the header stack.</summary>
+    LessonSlot,
 
-    // ── STATS ──
-    /// <summary>The training rows: one per stat, with its TRAIN button and the real fight number.</summary>
+    // ── TRAINING ──
+    /// <summary>The training rows: one per stat, grouped, each with what it is now and after a rank.</summary>
     TrainingRows,
-    /// <summary>The hunter card: level, gear power, mastery points.</summary>
-    HunterCard,
+    /// <summary>The right-hand column that explains the selected stat in full.</summary>
+    TrainingDetail,
     /// <summary>The RESET ALL TRAINING bar under the rows.</summary>
     ResetBar,
 
@@ -69,8 +69,6 @@ public enum TourTarget
     // ── VAULT ──
     /// <summary>The chest cards.</summary>
     ChestCards,
-    /// <summary>The ? chip on a chest card that reads its promise.</summary>
-    ChestQuestion,
     /// <summary>The header buttons: OPEN ALL, TRADER, PASTE A CODE.</summary>
     VaultButtons,
 
@@ -99,15 +97,19 @@ public enum TourTarget
     RegionChain,
     /// <summary>The chosen region's detail column.</summary>
     RegionDetail,
-    /// <summary>The ENTER THIS REGION button.</summary>
+    /// <summary>The region's own button — HUNT HERE, or RESUME HERE where you already are.</summary>
     EnterRegion,
 
     // ── TRAITS ──
-    /// <summary>The trait tree canvas.</summary>
+    /// <summary>The trait tree canvas. Belongs to the OLD tree screen, which P5 deletes with the tree.</summary>
     TraitTree,
-    /// <summary>The TRAIT POINTS TO SPEND readout.</summary>
+    /// <summary>The TRAIT POINTS TO SPEND readout. As above — nothing points a tour at it any more.</summary>
     TraitPoints,
-    /// <summary>The chosen trait's detail column, with LEARN.</summary>
+    /// <summary>The three worn characteristic slots at the top of the TRAITS screen.</summary>
+    TraitSlots,
+    /// <summary>The grid of awakened and undiscovered characteristics.</summary>
+    TraitCollection,
+    /// <summary>The chosen characteristic's reading column, with the one button that wears it.</summary>
     TraitDetail,
 
     // ── ROSTER ──
@@ -125,6 +127,32 @@ public readonly record struct TourStep(TourTarget Target, string Title, string B
 /// <summary>A note a screen shows at the top: the key that remembers it, and the words.</summary>
 /// <param name="Key">Written into the save's explained list when the player closes the banner.</param>
 public readonly record struct ScreenBanner(string Key, string Title, string Body);
+
+/// <summary>
+/// What is true right now that a screen could point at — the inputs to <see cref="Onboarding.HintFor"/>.
+/// Every field is a fact the host already holds; nothing here is telemetry.
+/// </summary>
+/// <param name="NewRegionName">A region that is open, not conquered, and never hunted — or null.</param>
+/// <param name="MasteryPointsFree">Mastery points earned and not spent.</param>
+/// <param name="EmptySkillSlots">Open skill slots with nothing equipped.</param>
+/// <param name="NewChampionName">A champion who joined and has not been looked at on the roster — or null.</param>
+/// <param name="ChestsWaiting">Unopened chests in the vault.</param>
+/// <param name="TrainableStat">The cheapest stat the player can afford to train right now — or null.</param>
+/// <param name="TrainableCost">What that rank costs.</param>
+/// <param name="AffordableUpgradeName">The first Warren facility whose next level is affordable — or null.</param>
+public readonly record struct HintFacts(
+    string? NewRegionName = null,
+    int MasteryPointsFree = 0,
+    int EmptySkillSlots = 0,
+    string? NewChampionName = null,
+    int ChestsWaiting = 0,
+    string? TrainableStat = null,
+    long TrainableCost = 0,
+    string? AffordableUpgradeName = null);
+
+/// <summary>One line a screen says at the top about its own state, and the key that dismisses it.</summary>
+/// <param name="Key">Encodes the fact, so the same hint returns when the fact changes (two chests after one).</param>
+public readonly record struct ScreenHint(string Key, string Text);
 
 /// <summary>
 /// The first minute on every screen: a click-through tour of the HUNT before the first wave, and a tour
@@ -187,19 +215,19 @@ public static class Onboarding
     {
         Activity.Hunt => new[]
         {
-            new TourStep(TourTarget.Champion, "YOUR CHAMPION",
-                "This is your champion. It fights on its own. You never press attack."),
+            new TourStep(TourTarget.Champion, "YOUR HUNTER",
+                "This is your hunter. It fights on its own. You never press attack."),
 
             new TourStep(TourTarget.Enemies, "THE ENEMIES",
                 "Enemies come in waves. Every fifth wave is a boss. "
                 + "The banner at the top counts the waves and the conquest."),
 
-            new TourStep(TourTarget.HunterHud, "YOUR CHAMPION'S LIFE",
-                "This is your champion's life. When it reaches zero the descent ends — "
+            new TourStep(TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
+                "This is your hunter's life. When it reaches zero the descent ends — "
                 + "then it gets back up and starts again. Nothing is lost."),
 
             new TourStep(TourTarget.CurrencyPills, "GLEAM",
-                "Every cleared wave pays Gleam. Spend Gleam on the STATS screen to train your champion."),
+                "Every cleared wave pays Gleam. Spend Gleam on the TRAINING screen to make your hunter stronger."),
 
             new TourStep(TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
@@ -209,23 +237,23 @@ public static class Onboarding
                 + "or you earn mastery points, the buttons here take you there."),
 
             new TourStep(TourTarget.NavRail, "THE OTHER SCREENS",
-                "The other screens. Most are closed for now. They open as you play — "
-                + "a gold NEW mark shows what just opened."),
+                "Only the screens you can use are on this rail. New ones appear as you play — "
+                + "a notice says what opened and why, and a gold NEW mark stays on it until you look."),
 
-            new TourStep(TourTarget.GuideStrip, "LESSONS",
-                "When there is something new to do, a short lesson appears down here. Close it with the ×. "
-                + "That is all — go and watch the first wave."),
+            new TourStep(TourTarget.LessonSlot, "LESSONS",
+                "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. "
+                + "The fight's own lessons appear here. Close one with the ×."),
         },
 
-        Activity.Stats => new[]
+        Activity.Training => new[]
         {
-            new TourStep(TourTarget.TrainingRows, "TRAIN YOUR CHAMPION",
-                "Every row is one thing your champion can train. Press TRAIN to spend Gleam on it. "
-                + "The number on the row is the real number the fight uses."),
+            new TourStep(TourTarget.TrainingRows, "WHAT TO TRAIN",
+                "Every row is one thing your hunter can train, grouped by what it changes. The two "
+                + "numbers are what it is now and what it becomes if you buy one rank."),
 
-            new TourStep(TourTarget.HunterCard, "YOUR CHAMPION",
-                "Your champion's level, life, gear power and mastery points. Gear power comes from "
-                + "what you wear on the GEAR screen. Mastery points go to the MASTERY tree."),
+            new TourStep(TourTarget.TrainingDetail, "THE FULL STORY",
+                "Click a row and this column explains it: what the stat does, what one rank adds, "
+                + "and what the next rank costs."),
 
             new TourStep(TourTarget.ResetBar, "STARTING OVER",
                 "This bar takes every trained rank back, so you can train differently. "
@@ -254,12 +282,12 @@ public static class Onboarding
                 + "More slots open as you go deeper."),
 
             new TourStep(TourTarget.SkillPicker, "YOUR SKILL LIBRARY",
-                "Twelve skills exist, two per style. You learn them on the MASTERY tree, and once "
-                + "learned they are yours for good — pick any learned one for the chosen slot."),
+                "Twelve shared skills are unlocked by roads on the MASTERY tree and lock again if you "
+                + "give a road back. Your levels are kept. Your SIGNATURE needs no road."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
-                "A Vow is a promise on one skill. It pays a lot while the promise is kept, and nothing "
-                + "when it is not. Keystones are rules learned on the TRAITS screen."),
+                "A Vow is a promise about your build. It pays a lot while it is kept and nothing when "
+                + "it is not. Keystones are rules the world gives you for conquering it."),
 
             new TourStep(TourTarget.MasteryTile, "THE MASTERY TREE",
                 "The MASTERY tile on the rail opens a tree of small rules that change how your skills "
@@ -272,9 +300,9 @@ public static class Onboarding
                 "Four directions grow out of the centre. RESONANCE is your skills' power. LOOT is a "
                 + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
 
-            new TourStep(TourTarget.Specialisations, "ONE DISCIPLINE",
-                "A specialisation is your discipline: that STYLE's skills hit twice as hard, and "
-                + "its road teaches the style's two skills — learned for good."),
+            new TourStep(TourTarget.Specialisations, "ONE STYLE",
+                "A specialisation chooses your Style: that Style's skills hit twice as hard. One Style "
+                + "per hunter, and TAKE EVERY POINT BACK lets you choose again."),
 
             new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
                 "Rest the pointer on a node to read it here. Points come from reaching a depth you "
@@ -286,16 +314,12 @@ public static class Onboarding
         Activity.Vault => new[]
         {
             new TourStep(TourTarget.ChestCards, "YOUR CHESTS",
-                "Every chest you hold, one card per kind. Your first is a welcome gift. A card shows "
-                + "the grade, the tier and the element. Click a card to open one."),
+                "Every chest you hold, one card for each kind. Your first is a welcome gift. The card "
+                + "says what it promises before you open it. Click a card to open one."),
 
-            new TourStep(TourTarget.ChestQuestion, "WHAT IS INSIDE",
-                "Rest the pointer on the small glass to read what a chest promises. A boss's chest "
-                + "only promises a lowest rarity. The gift says exactly what it holds."),
-
-            new TourStep(TourTarget.VaultButtons, "THE HEADER BUTTONS",
-                "OPEN ALL opens every chest at once. TRADER opens a stall that changes every week. "
-                + "PASTE A CODE reads a code someone shared with you."),
+            new TourStep(TourTarget.VaultButtons, "THE TOOLBAR",
+                "OPEN ALL opens every chest at once. CHEST FILTER decides which chests you keep. "
+                + "TRADER is a stall that changes every week."),
         },
 
         Activity.Forge => new[]
@@ -339,42 +363,45 @@ public static class Onboarding
                 + "than the last. Reach the goal depth in one to conquer it, which opens the next."),
 
             new TourStep(TourTarget.RegionDetail, "WHAT A REGION HOLDS",
-                "Click a region to read it here: its element, its enemies, the depth that conquers it, "
-                + "and what it drops. Where you hunt is a loot choice too."),
+                "Click a region to read it here: its element, how its enemies fight, the wave that "
+                + "conquers it, and what it drops. Where you hunt is a loot choice too."),
 
             new TourStep(TourTarget.EnterRegion, "GO THERE",
-                "ENTER THIS REGION moves the hunt there. Once every region is yours, a corruption "
-                + "ladder appears above this button: enemies hit harder and take more hits."),
+                "HUNT HERE moves the hunt to the region you picked. A locked region names the one to "
+                + "conquer first."),
         },
 
         Activity.Traits => new[]
         {
-            new TourStep(TourTarget.TraitTree, "ONE SPINE, FOUR ROADS",
-                "Traits are permanent bonuses. One spine everyone grows, and four roads: RUIN hits "
-                + "harder, AEGIS lives longer, ARTIFICE changes skills, AVARICE finds more loot."),
+            // REWRITTEN FOR THE NEW SYSTEM (P4). The three cards used to teach a spine, four roads
+            // and a currency, and every word of that is now false: traits are not bought, there is no
+            // tree, and nothing on the screen costs anything.
+            new TourStep(TourTarget.TraitSlots, "THREE AT A TIME",
+                "A trait is a characteristic your hunter has. Each hunter wears three of them, and "
+                + "changing which three costs nothing at all."),
 
-            new TourStep(TourTarget.TraitPoints, "TRAIT POINTS",
-                "Traits cost TRAIT POINTS. You earn one for each region you conquer, one each time a "
-                + "region's mastery rises a level, and two for each new corruption tier."),
+            new TourStep(TourTarget.TraitCollection, "THEY AWAKEN, THEY ARE NOT BOUGHT",
+                "A trait awakens from what you have done — how you fight, what you survive, where "
+                + "you go. One you have not awakened yet shows only as ???."),
 
-            new TourStep(TourTarget.TraitDetail, "LEARN",
-                "Click a trait to read it here, then press LEARN. Each road ends in a capstone so "
-                + "costly you cannot finish the other three. A trait never resets, not ever."),
+            new TourStep(TourTarget.TraitDetail, "READING ONE",
+                "Click a trait to read what it does, then press WEAR IT. Every hunter you own can "
+                + "wear any trait you have awakened."),
         },
 
         Activity.Roster => new[]
         {
-            new TourStep(TourTarget.ChampionCards, "THE CHAMPIONS",
-                "One card per champion, one column per gear class, the first of the class above the "
-                + "second. A card shows its road and what unlocks it. Click one to read it."),
+            new TourStep(TourTarget.ChampionCards, "THE HUNTERS",
+                "One card per hunter, one column per gear class. A card shows its innate power and "
+                + "what unlocks it. Click one to read it here."),
 
             new TourStep(TourTarget.ChampionDetail, "WHO THEY ARE",
-                "The champion's always-on power, what it is best at, and its gear class. "
-                + "Two champions share each class. Gear of another class cannot be worn."),
+                "The hunter's starting skill, its always-on innate power, its road and its gear "
+                + "class. Gear of another class cannot be worn."),
 
-            new TourStep(TourTarget.BecomeThem, "BECOME THEM",
-                "Press BECOME THEM to play as this champion. Nothing is lost: gear it cannot wear "
-                + "goes back to the bag, and your build and progress stay."),
+            new TourStep(TourTarget.BecomeThem, "SET ACTIVE",
+                "Press SET ACTIVE to play as this hunter. Nothing resets. Gear this hunter cannot "
+                + "wear goes back to your bag."),
         },
 
         // A cast that is not a declared Activity is a programming error, and an empty tour would reach
@@ -398,6 +425,17 @@ public static class Onboarding
 
     /// <summary>The explained-list key for a screen.</summary>
     public static string ScreenKey(Activity screen) => screen.ToString();
+
+    /// <summary>
+    /// A saved explained-screen key, read forward across renames. The save stores <see cref="Activity"/>
+    /// NAMES; when STATS became TRAINING (2026-09-01, UX V2) every existing save still said "Stats", and
+    /// without this a returning player would be re-toured through a screen they had already learned.
+    /// </summary>
+    public static string ModernScreenKey(string saved) => saved switch
+    {
+        "Stats" => nameof(Activity.Training),
+        _ => saved,
+    };
 
     /// <summary>The explained-list key of the first-gem lesson — the Forge's second, smaller tour.</summary>
     /// <remarks>
@@ -515,4 +553,60 @@ public static class Onboarding
     public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained)
         => screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
            && (TourDue(screen, explained) is not null || BannerFor(screen, f, explained) is not null);
+
+    /// <summary>
+    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause: while
+    /// a guide rung is showing, the tile it <see cref="Tutorial.Sends"/> the player to wears the mark too.
+    /// </summary>
+    /// <remarks>
+    /// UX V2 P0.7. A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over
+    /// the Forge). Now it renders only on the screen it is about; everywhere else, the rung is this mark
+    /// on the tile it points at — the rail says where, the screen says what.
+    /// </remarks>
+    public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained,
+                             TutorialStep? showing, TutorialFacts tf)
+        => IsNew(screen, f, explained)
+           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
+               && showing is { } s && Tutorial.HasGuidance(s) && Tutorial.Sends(s, tf) == screen);
+
+    /// <summary>
+    /// The one line this screen says about its own state right now, or null when nothing is true.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UX V2 P0.7 (chrome audit §7). After the tours and the slot notes, a screen teaches by pointing at a
+    /// fact: unspent points, a waiting chest, a rank you can afford. Every line is a pure function of state
+    /// the host already holds, so it appears when the fact becomes true and disappears on its own when it
+    /// stops — nothing is scheduled, nothing is guessed. The key carries the fact, so dismissing "1 CHEST"
+    /// does not silence "2 CHESTS".
+    /// </para>
+    /// <para>
+    /// GEAR says nothing: "an unworn item may beat what you wear" needs a per-slot comparison Core does not
+    /// make yet. FORGE says nothing: nothing in Core says an item wants work. HUNT teaches through its
+    /// lessons, not a hint. A hint is a line, never a paragraph.
+    /// </para>
+    /// </remarks>
+    public static ScreenHint? HintFor(Activity screen, HintFacts f) => screen switch
+    {
+        Activity.Map when f.NewRegionName is { Length: > 0 } r =>
+            new ScreenHint($"Hint:Map:{r}", $"A NEW REGION IS AVAILABLE — {r.ToUpperInvariant()}"),
+        // NOTHING IS SPENT ON THE TRAITS SCREEN, so there is no "you have N to spend" hint to give.
+        // TraitPointsFree was kept on these facts for the old Memory tree screen; both are deleted.
+        Activity.Mastery when f.MasteryPointsFree > 0 =>
+            new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
+        Activity.Build when f.EmptySkillSlots > 0 =>
+            new ScreenHint($"Hint:Build:{f.EmptySkillSlots}",
+                           f.EmptySkillSlots == 1 ? "AN EMPTY SKILL SLOT — EQUIP A SKILL" : $"{f.EmptySkillSlots} EMPTY SKILL SLOTS — EQUIP SKILLS"),
+        Activity.Roster when f.NewChampionName is { Length: > 0 } c =>
+            new ScreenHint($"Hint:Roster:{c}", $"A NEW HUNTER HAS JOINED — {c.ToUpperInvariant()}"),
+        Activity.Vault when f.ChestsWaiting > 0 =>
+            new ScreenHint($"Hint:Vault:{f.ChestsWaiting}", f.ChestsWaiting == 1 ? "1 CHEST IS WAITING" : $"{f.ChestsWaiting} CHESTS ARE WAITING"),
+        Activity.Training when f.TrainableStat is { Length: > 0 } s =>
+            new ScreenHint($"Hint:Training:{s}:{f.TrainableCost}", $"YOU CAN TRAIN {s.ToUpperInvariant()} FOR {f.TrainableCost} GLEAM"),
+        Activity.Warren when f.AffordableUpgradeName is { Length: > 0 } u =>
+            new ScreenHint($"Hint:Warren:{u}", $"AN UPGRADE IS AFFORDABLE — {u.ToUpperInvariant()}"),
+        _ => null,
+    };
+
+    private static string Plural(int n) => n == 1 ? "" : "S";
 }

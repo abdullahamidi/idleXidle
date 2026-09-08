@@ -20,7 +20,7 @@ public readonly record struct WaveReward(Haul Haul, int Wave, bool IsBoss);
 /// </summary>
 /// <remarks>
 /// <para>
-/// Extracted from <c>SoloExpeditionScreen.StartRun/BeginWave</c> (P5, 2026-08-31 — audit critique
+/// Extracted from <c>HuntScreen.StartRun/BeginWave</c> (P5, 2026-08-31 — audit critique
 /// G2: "Game1 and the hunt screen are the second Core"). The descent state machine living in a
 /// MonoGame class meant there was NO headless fast-forward: offline progress was a rate estimate
 /// (<c>ChampionGleamRate × seconds × 0.5</c>), loop probes could not model the loop, and the
@@ -70,6 +70,17 @@ public sealed class Descent
     /// which is also the offline setting: an unwatched descent pays gleam, not build depth.
     /// </summary>
     public SkillProgress? Progress { get; set; }
+
+    /// <summary>
+    /// Where a cleared wave's facts reach the account's trait ledger, or null when nothing watches.
+    /// </summary>
+    /// <remarks>
+    /// Set beside <see cref="Progress"/> and for the same reason: both outlive a run, so the descent
+    /// carries a reference rather than owning one. An OFFLINE descent deliberately leaves this null —
+    /// an unwatched hunt pays gleam, not build depth, and awakening a characteristic the player was
+    /// not there for would be a reveal delivered to nobody (§32).
+    /// </remarks>
+    public Traits.TraitWatch? TraitWatch { get; set; }
 
     /// <summary>The stream Harvest/Ricochet rolls draw from. Seed it and the descent is replayable.</summary>
     public Random Rng { get; set; } = new();
@@ -125,8 +136,9 @@ public sealed class Descent
             RegionId = RegionId,
             RunIndex = ++RunIndex,
             // The skills bank their levels here rather than in the run, because a run ends and a
-            // skill's levels do not.
+            // skill's levels do not. The trait ledger rides along on the same argument.
             Progress = Progress,
+            TraitWatch = TraitWatch,
         };
         if (startWave > 0)
         {

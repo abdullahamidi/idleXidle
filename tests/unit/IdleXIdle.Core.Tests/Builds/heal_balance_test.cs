@@ -74,11 +74,11 @@ public class HealBalanceTest
         Grants = new[] { BuildTrigger.NoHealing },
     };
 
-    private static Build Weave(IEnumerable<(string Id, Source Source)> skills, SkillShape shape,
+    private static Build Equip(IEnumerable<(string Id, Source Source)> skills, SkillShape shape,
                                BuildMods mods, bool heals, BuildTrigger? extra = null)
     {
         var b = new Build { PassiveMods = mods, Shape = shape };
-        foreach (var (id, s) in skills) b.Weave(TestBuilds.Skill(id, s));
+        foreach (var (id, s) in skills) b.Equip(TestBuilds.Skill(id, s));
         if (extra is { } t)
             b.Take(new Keystone { Id = $"probe_{t}", Name = t.ToString(), Blurb = "probe", Grants = new[] { t } });
         if (!heals) b.Take(NoHeals);
@@ -88,11 +88,11 @@ public class HealBalanceTest
     // SPIRIT everywhere a Source is not the point: a single-Source Spirit build never cashes its own
     // prime, so it is the signature-neutral choice (the same reasoning as the balance sweep).
     private static Build Morphs(bool heals, bool siphon = false, BuildMods? mods = null)
-        => Weave(Enumerable.Repeat(("drain_drink", Source.Spirit), 4), SkillShape.None,
+        => Equip(Enumerable.Repeat(("drain_drink", Source.Spirit), 4), SkillShape.None,
                  mods ?? Geared, heals, siphon ? BuildTrigger.Siphon : null);
 
     private static Build NatureAuras(bool heals)
-        => Weave(Enumerable.Repeat(("field_mire", Source.Nature), 4), SkillShape.None, Geared, heals);
+        => Equip(Enumerable.Repeat(("field_mire", Source.Nature), 4), SkillShape.None, Geared, heals);
 
     /// <summary>The sweep's four-skill loadout carrying the ENDURE walk — the tree's own heals.</summary>
     private static Build EndureWalk(bool heals)
@@ -114,7 +114,7 @@ public class HealBalanceTest
         } while (progress);
 
         var skills = new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" };
-        return Weave(skills.Select(id => (id, Source.Spirit)), taken.Shape(), Geared, heals);
+        return Equip(skills.Select(id => (id, Source.Spirit)), taken.Shape(), Geared, heals);
     }
 
     /// <param name="OverPoolShare">
@@ -206,7 +206,7 @@ public class HealBalanceTest
 
         foreach (var (label, heal) in new[] { ("LEGACY", HealTuning.Legacy), ("LIVE", HealTuning.Default) })
         {
-            _out.WriteLine($"── {label}: transformation leech {heal.TransformationLeech:0%}, "
+            _out.WriteLine($"── {label}: transformation heal {heal.TransformationLeech:0%}, "
                            + (float.IsPositiveInfinity(heal.MaxHealFractionPerWave)
                                ? "no heal ceiling"
                                : $"heal ceiling {heal.MaxHealFractionPerWave:0%} of the pool per wave"));
@@ -234,7 +234,7 @@ public class HealBalanceTest
             // curve — the legacy MORPH x4 row is the picture of it. The live numbers must leave every
             // heal build clearly below parity, and it must actually die in the run it plays.
             // 0.95, was 0.90 (2026-09-01, P13b): LEGION went LIVE in Verdant Hollow's band 4, and this
-            // fixture walks straight through it. Splits mean more bodies — more leech targets AND more
+            // fixture walks straight through it. Splits mean more bodies — more heal targets AND more
             // bites — so healing and damage rise together and the RATIO drifts toward parity while
             // mortality is untouched (the SIPHON row measures 0.90 with 16/16 deaths and 1% over-pool
             // waves). The pin's job is immunity, and parity is 1.0; the death and over-pool pins below
@@ -264,8 +264,8 @@ public class HealBalanceTest
             // 2.6, from 2.5 (2026-08-26, the one-action model): the MORPH x4 twin WITHOUT heals fell
             // from 22 to 17 — four Transformations saturate the single action lock and, with no heal,
             // the build has nothing else — while the healed build itself stayed at 42–43. The ratio
-            // moved on the twin's side, not the heal's; the leech and the ceiling were both probed and
-            // do not move it (43 at leech 0.09, 42 at ceiling 0.30). Left as a MORPH follow-up.
+            // moved on the twin's side, not the heal's; the heal and the ceiling were both probed and
+            // do not move it (43 at heal 0.09, 42 at ceiling 0.30). Left as a MORPH follow-up.
             // ...and 2.8 under the BEAT model (2026-08-27, measured MORPH x4 2.63, + SIPHON 2.75): the
             // no-heal twin fell one more wave — one action per beat caps a four-Transformation build's
             // output hardest of all (it has nothing but casts), while its healed self holds at 42–44.
@@ -306,21 +306,21 @@ public class HealBalanceTest
         Assert.Same(h, ExpeditionTuning.Default.Heal);
 
         // And what the player is told matches them. The heal-ceiling sentence lives ONLY in
-        // HealCeilingRule since the per-Form rule lines died with the Form table; the 12% leech is
+        // HealCeilingRule since the per-Form rule lines died with the Form table; the 12% heal is
         // pinned above as DRINK's own dial.
         Assert.Contains("40%", BuildGlossary.HealCeilingRule());
         Assert.Contains("60%", BuildGlossary.HealCeilingRule());
         Assert.Contains("3%", BuildGlossary.Signature(Source.Nature));
     }
 
-    /// <summary>A wave with absurd leech, so the ceiling is the only thing deciding the number.</summary>
+    /// <summary>A wave with absurd heal, so the ceiling is the only thing deciding the number.</summary>
     private static (long Healed, Champion Champ) OverhealWave(SkillShape shape, ExpeditionTuning tuning,
                                                               BuildTrigger? trigger = null, int pool = 10_000)
     {
         // Health 1 so there is room for the whole ceiling and more; a creature that dies (so
-        // SECOND WIND's on-clear heal fires) but only after many hits (so leech has time to overshoot).
+        // SECOND WIND's on-clear heal fires) but only after many hits (so heal has time to overshoot).
         var champ = new Champion { MaxHealth = pool, Health = 1 };
-        var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2), shape, BuildMods.None, heals: true, trigger);
+        var build = Equip(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2), shape, BuildMods.None, heals: true, trigger);
         var (outcome, events) = SoloBattle.ResolveWave(champ, build, new Hunter(),
             new[] { WaveCreature.Single(3_000f, 0f) }, enemyIntervalMs: 100_000, tuning, new Random(5));
         Assert.Equal(WaveOutcome.Cleared, outcome);
@@ -330,7 +330,7 @@ public class HealBalanceTest
     [Fact]
     public void test_healing_in_one_wave_never_exceeds_the_ceiling()
     {
-        var absurd = SkillShape.None with { Leech = 5f, HealPerTargetStruck = 0.5f, HealOnClear = 0.9f };
+        var absurd = SkillShape.None with { HealPerTargetStruck = 5.5f, HealOnClear = 0.9f };
         var (healed, champ) = OverhealWave(absurd, ExpeditionTuning.Default);
 
         var budget = HealTuning.Default.BudgetFor(10_000);
@@ -349,16 +349,16 @@ public class HealBalanceTest
     {
         // Leech alone spends the whole budget before the clear; SECOND WIND's 90% on the clear must
         // then land as nothing — a clear reward that could exceed the ceiling would be the loophole.
-        var leechOnly = SkillShape.None with { Leech = 5f };
-        var withClear = leechOnly with { HealOnClear = 0.9f };
-        var (a, _) = OverhealWave(leechOnly, ExpeditionTuning.Default);
+        var healOnly = SkillShape.None with { HealPerTargetStruck = 5f };
+        var withClear = healOnly with { HealOnClear = 0.9f };
+        var (a, _) = OverhealWave(healOnly, ExpeditionTuning.Default);
         var (b, _) = OverhealWave(withClear, ExpeditionTuning.Default);
         Assert.Equal(a, b);
         Assert.Equal(HealTuning.Default.BudgetFor(10_000), b);
 
         // And with room left under the ceiling, the clear heal does land — the allowance is shared,
         // not a ban.
-        var small = SkillShape.None with { Leech = 0.01f };
+        var small = SkillShape.None with { HealPerTargetStruck = 0.01f };
         var (c, _) = OverhealWave(small, ExpeditionTuning.Default);
         var (d, _) = OverhealWave(small with { HealOnClear = 0.08f }, ExpeditionTuning.Default);
         Assert.True(d > c, "SECOND WIND healed nothing with the allowance unspent");
@@ -367,7 +367,7 @@ public class HealBalanceTest
     [Fact]
     public void test_siphon_raises_the_ceiling_by_its_multiplier()
     {
-        var absurd = SkillShape.None with { Leech = 5f };
+        var absurd = SkillShape.None with { HealPerTargetStruck = 5f };
         var (plain, _) = OverhealWave(absurd, ExpeditionTuning.Default);
         var (siphon, _) = OverhealWave(absurd, ExpeditionTuning.Default, BuildTrigger.Siphon);
 
@@ -395,7 +395,7 @@ public class HealBalanceTest
         // swapping the injected tuning deliberately no longer reroutes it: the two runs heal the
         // same. What injection still owns is the per-wave budget and SIPHON's multiplier, which
         // their own tests cover. The old assertion (legacy heals ~4.2x more) proved the injection
-        // reached the base leech; this one proves it no longer does, which is the new contract.
+        // reached the base heal; this one proves it no longer does, which is the new contract.
         Assert.Equal(legacy, live);
         Assert.Equal(HealTuning.Default.TransformationLeech,
                      SkillCatalogue.ById("drain_drink").Lifesteal, precision: 4);
@@ -407,8 +407,8 @@ public class HealBalanceTest
         // A full champion that leeches for the whole fight, then takes ONE late bite: the heals that
         // landed on a full pool must not have spent the budget, so the bite is healed back.
         var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
-        var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2),
-                          SkillShape.None with { Leech = 5f }, BuildMods.None, heals: true);
+        var build = Equip(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2),
+                          SkillShape.None with { HealPerTargetStruck = 5f }, BuildMods.None, heals: true);
         // One bite at 30s, 1_000 deep, then nothing for the rest of the fight.
         var foe = WaveCreature.Single(1e9f, 1_000f);
         var (_, events) = SoloBattle.ResolveWave(champ, build, new Hunter(), new[] { foe },
@@ -429,7 +429,7 @@ public class HealBalanceTest
         int HealthAfterOneWave(bool bloodMagic)
         {
             var shape = SkillShape.None with { BetweenWaveRegen = 0.20f };
-            var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 4), shape, Geared, heals: !bloodMagic);
+            var build = Equip(Enumerable.Repeat(("hammer_blow", Source.Spirit), 4), shape, Geared, heals: !bloodMagic);
             var champ = new Champion { MaxHealth = 1_000, Health = 1_000 };
             var run = new SoloExpedition(build, champ, MidCareerHunter(), 120f, 9f,
                                          ExpeditionTuning.Default, new Random(1))

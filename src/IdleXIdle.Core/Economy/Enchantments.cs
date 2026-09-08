@@ -149,36 +149,83 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     public string Name => Kind.ToString().ToUpperInvariant();
 
     /// <summary>
-    /// What it does, in the player's words. States the TRIGGER, because the trigger IS the effect.
+    /// What it does, in the player's words. States the TRIGGER, because the trigger IS the effect —
+    /// and where the sentence carries a NUMBER, it says what the number is of.
     /// </summary>
     /// <remarks>
-    /// Kept under ~21 characters — the Forge gives the blurb a fixed column from x=344 to the panel
-    /// edge, and that is what fits. The first draft ("ON A KILL: 38% CHANCE OF A SPARE CORE.") ran
-    /// clean off the panel and lost the half of the sentence that carried the meaning.
+    /// <para>
+    /// ONE sentence per enchant, printed everywhere the enchant's effect is shown: the item card
+    /// (wrapped, no cap), the Gear inspector (up to four Body lines), the Forge's enchant band (two
+    /// Secondary lines). It used to be two sentences — a 21-character fragment for the Forge's old
+    /// fixed column and a longer one for the card — and the fragments had lost the half the number
+    /// was about: "BLOODLUST +50%" and "ZEAL +50%" said a keystone's name beside a percentage of
+    /// nothing, "PER VOW: +10%" named no stat at all, "SKILLS POISON +62%" read as a stat called
+    /// POISON (2026-09-07). The Forge's RE-ROLL list prints it under each candidate's name
+    /// (<c>ItemPresentation.EnchantCandidates</c>).
+    /// </para>
+    /// <para>
+    /// Each numeric line names the mechanic its figure moves, and the figure is THE ONE THE FIGHT
+    /// READS, not the raw magnitude: VENOM's share of a skill hit is the larger of the sim's own floor
+    /// and the worn magnitude (<c>SoloBattle.VenomBasePoison</c>), so a Rare and an Epic both poison
+    /// for 50% and say so; FERVOUR and BULWARK add to BLOODLUST's and ZEAL's per-health slope, and the
+    /// line prints what that is WORTH over the keystone alone at the end of the ramp
+    /// (<c>Magnitude / (1 + BloodlustScale)</c>: a Legendary's +0.5 on a 0.8 slope is +28% more
+    /// damage at empty health, not "+50%"); REVERB multiplies every hit, the basic swing included,
+    /// while ECHO is socketed; TITHE is a damage share per sworn Vow; DESPERATION's threshold is a
+    /// third of maximum health (<c>SoloExpedition</c>); SIPHON's two figures are HealTuning's. A line
+    /// that only names the keystone and a number is the item version of "GLOVES +2%".
+    /// </para>
+    /// <para>
+    /// Invariant culture on every arm, like <see cref="ItemModifiers.Value(AffixStat, float, bool)"/>:
+    /// the copy is English, and a test host or a tool thread on another locale must print the string
+    /// the game prints.
+    /// </para>
     /// </remarks>
     public string Blurb => Kind switch
     {
-        EnchantKind.Splinter => "ON KILL: RICHER LOOT",
-        EnchantKind.Harvest => $"ON KILL: {Magnitude * 100f:0}% CORE",
-        EnchantKind.Venom => $"SKILLS POISON +{Magnitude * 100f:0}%",
-        EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
-        EnchantKind.Overdraw => "VOLLEY FIRES +1",
-        EnchantKind.Linger => "AMPLIFY LASTS LONGER",
+        // The figure the fight reads, like VENOM below: the worn magnitude, floored at the bare
+        // trigger's own base (SplinterBaseQuality). "RICHER LOOT" said nothing a rarity could sharpen,
+        // which is how four tiers of one enchant read identically on the card for as long as they
+        // played identically in the fight.
+        // ON WAVE CLEAR, not ON KILL (2026-09-08). Both payouts live in SoloBattle's wave-CLEAR handler
+        // — one payment when the last creature falls, however many stood in the wave — and "ON KILL"
+        // reads as "each enemy that dies", which is what SHADE, the bleed-on-kill variations, HARDFACE
+        // and LOOSE AGAIN really do. The trigger's timing is not changing; the sentence is.
+        EnchantKind.Splinter => Inv($"ON WAVE CLEAR: +{MathF.Max(Builds.SoloBattle.SplinterBaseQuality, Magnitude) * 100f:0}% BETTER LOOT ODDS"),
+        EnchantKind.Harvest => Inv($"ON WAVE CLEAR: {Magnitude * 100f:0}% CHANCE OF A SPARE CORE"),
+        EnchantKind.Venom => Inv($"SKILL HITS POISON FOR {MathF.Max(Builds.SoloBattle.VenomBasePoison, Magnitude) * 100f:0}% OF THE HIT"),
+        EnchantKind.Desperation => Inv($"BELOW A THIRD HEALTH: +{Magnitude * 100f:0}% LOOT"),
+        EnchantKind.Overdraw => "VOLLEY FIRES ONE MORE TIME",
+        EnchantKind.Linger => "MARKS LAST LONGER",
         EnchantKind.Radiance => "FIELDS TICK FASTER",
         EnchantKind.Execute => "HAMMER CRUSHES WEAK",
         EnchantKind.Coiled => "SNARES RE-ARM SOONER",
-        // Both halves from HealTuning, so the card cannot drift from the sim: the leech doubling and
+        // Both halves from HealTuning, so the card cannot drift from the sim: the leech multiplier and
         // the raised per-wave healing limit (the half that is measurable under the ceiling). The
-        // Form it needs ("TRANSFORMATION") is printed by the row from Need, so the 21 characters
-        // here are spent on what it does.
-        EnchantKind.Siphon => $"HEALS {Builds.HealTuning.Default.SiphonMultiplier:0}X, "
-                              + $"UP TO {Builds.HealTuning.Default.CeilingText(siphon: true)}",
-        EnchantKind.Fervour => $"BLOODLUST +{Magnitude * 100f:0}%",
-        EnchantKind.Reverb => $"ECHO HITS +{Magnitude * 100f:0}%",
-        EnchantKind.Bulwark => $"ZEAL +{Magnitude * 100f:0}%",
-        EnchantKind.Tithe => $"PER VOW: +{Magnitude * 100f:0}%",
+        // style it needs (DRAIN) is on the Need row and opens the sentence.
+        EnchantKind.Siphon => Inv($"DRAIN HEALS {Times(Builds.HealTuning.Default.SiphonMultiplier)}, UP TO {Builds.HealTuning.Default.CeilingText(siphon: true)} HEALTH A WAVE"),
+        EnchantKind.Fervour => Inv($"BLOODLUST: UP TO +{Magnitude / (1f + Builds.SoloBattle.BloodlustScale) * 100f:0}% MORE DAMAGE AT LOW HEALTH"),
+        EnchantKind.Reverb => Inv($"WITH ECHO: +{Magnitude * 100f:0}% DAMAGE"),
+        EnchantKind.Bulwark => Inv($"ZEAL: UP TO +{Magnitude / (1f + Builds.SoloBattle.ZealScale) * 100f:0}% MORE DAMAGE AT FULL HEALTH"),
+        EnchantKind.Tithe => Inv($"+{Magnitude * 100f:0}% DAMAGE PER SWORN VOW"),
         _ => "SURVIVE DEATH ONCE",
     };
+
+    private static string Inv(FormattableString s) => FormattableString.Invariant(s);
+
+    /// <summary>"TWICE AS MUCH" for a multiplier of two, "3 TIMES AS MUCH" otherwise — the leech figure in words.</summary>
+    private static string Times(float multiplier)
+        => MathF.Abs(multiplier - 2f) < 0.01f ? "TWICE AS MUCH" : Inv($"{multiplier:0} TIMES AS MUCH");
+
+    /// <summary>Does the sentence carry a figure?</summary>
+    /// <remarks>
+    /// The binary enchants (UNDYING, the Form combos) are switches: rarity buys them as drops, not as
+    /// a bigger percentage, and their line rightly has no figure in it. SIPHON is a switch too — its
+    /// two figures are HealTuning's, not its magnitude — but they are figures a player reads, so it
+    /// counts here. The test that holds every numeric line to naming its mechanic reads this so it
+    /// never demands a number of a switch.
+    /// </remarks>
+    public bool BlurbIsNumeric => Blurb.Any(char.IsDigit);
 
     /// <summary>
     /// What this enchantment needs in your build to matter — null for the ones that always work.
@@ -190,7 +237,7 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         // KIND and EFFECT, not style, for the two whose sim gate never asked about style (P11):
         // Radiance speeds ANY Field's tick — hammer_press's as much as field_mire's — and
         // Linger stretches ANY amplify window. The style-keyed need greyed those live combos.
-        EnchantKind.Linger => new EnchantNeed("AN AMPLIFY WINDOW", AnyAmplify: true),
+        EnchantKind.Linger => new EnchantNeed("A SKILL THAT MARKS", AnyAmplify: true),
         EnchantKind.Radiance => new EnchantNeed("A FIELD SKILL", Kind: Builds.SkillKind.Field),
         EnchantKind.Execute => new EnchantNeed("HAMMER", Style: Builds.Style.Hammer),
         EnchantKind.Coiled => new EnchantNeed("SNARE", Style: Builds.Style.Snare),

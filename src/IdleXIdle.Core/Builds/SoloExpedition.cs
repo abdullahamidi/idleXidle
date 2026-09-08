@@ -7,6 +7,7 @@ using IdleXIdle.Core.Combat;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Traits;
 
 namespace IdleXIdle.Core.Builds;
 
@@ -88,6 +89,9 @@ public sealed class SoloExpedition
     /// <summary>The composition the last resolved wave held — the report reads this.</summary>
     public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
 
+    /// <summary>The bite clock the last wave was resolved on, before any slow — what the enemy inspector measures a slow against.</summary>
+    public int LastWaveIntervalMs { get; private set; } = EnemyIntervalMs;
+
     /// <summary>
     /// Per-wave measurements for this descent, which the post-run report reads.
     /// </summary>
@@ -161,6 +165,23 @@ public sealed class SoloExpedition
     /// </remarks>
     public SkillProgress? Progress { get; init; }
 
+    /// <summary>
+    /// The account's trait ledger, fed by every CLEARED wave, or null when nothing is watching.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Injected for the same reason <see cref="Progress"/> is: an expedition is minted per run and a
+    /// discovered trait outlives every one. Null in a probe or a bench, which is why the balance
+    /// suites are entirely unaffected by traits existing.
+    /// </para>
+    /// <para>
+    /// <b>Only a cleared wave feeds it</b> — the rule skill experience already follows: a run that
+    /// dies teaches nothing on its way out. WHAT KILLED YOU is the deliberate exception and is
+    /// evaluated at run END by the host, from the saved run log.
+    /// </para>
+    /// </remarks>
+    public TraitWatch? TraitWatch { get; init; }
+
     public int Wave { get; private set; }
     public bool Over { get; private set; }
     public Haul Carried { get; private set; }
@@ -191,6 +212,27 @@ public sealed class SoloExpedition
 
     /// <summary>The outcome of the most recent wave — what the report calls the run's ending.</summary>
     public WaveOutcome LastOutcome { get; private set; } = WaveOutcome.Cleared;
+
+    /// <summary>
+    /// For each Vow, how many waves of THIS descent were cleared with its rule held and the Vow unsworn.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Vow's condition is a property of the build, so an end-of-descent check would need no counter at
+    /// all — except that the build can CHANGE mid-descent (see <see cref="ReplaceBuild"/>). A player
+    /// could clear fourteen waves on a four-skill, four-source, fully-armoured build, drop to one skill
+    /// in the breath before wave fifteen, die, and have the end-of-run context report one Source, one
+    /// Style, no defence and three bare slots — six Vows proved by a build that never fought.
+    /// </para>
+    /// <para>
+    /// So the proof is counted per CLEARED wave, as the descent happens. The wave that killed you does
+    /// not count, and a checkpoint start cannot buy proof it never fought for. Never persisted, never
+    /// crosses a run: this is the only new state the whole Vow-discovery rule needs.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, int> VowProofWaves => _vowProofWaves;
+
+    private readonly Dictionary<string, int> _vowProofWaves = new(StringComparer.Ordinal);
 
 
     /// <summary>
@@ -259,6 +301,28 @@ public sealed class SoloExpedition
         _champion.Health = _champion.Alive ? Math.Clamp((int)MathF.Round(pool * fraction), 1, pool) : 0;
     }
 
+    /// <summary>
+    /// Credit one cleared wave to every Vow whose rule this build kept without swearing it.
+    /// </summary>
+    /// <remarks>
+    /// One <c>DescribeBuild</c> per cleared wave — the same context the fight itself builds once per
+    /// wave for exactly the same reason. Vow discovery reads the BUILD; trait discovery reads the wave's
+    /// metrics. That is the line between the two systems, and it is why they can never answer the same
+    /// question twice.
+    /// </remarks>
+    private void CountVowProof()
+    {
+        var ctx = SoloBattle.DescribeBuild(_build, _hunter);
+        var sworn = _build.Vows;
+
+        foreach (var vow in Vows.Discoverable)
+        {
+            if (sworn.Any(v => v.Id == vow.Id)) continue;   // a Vow you wore proves nothing
+            if (!Vows.RuleHeld(vow, ctx)) continue;
+            _vowProofWaves[vow.Id] = _vowProofWaves.GetValueOrDefault(vow.Id) + 1;
+        }
+    }
+
     public WaveOutcome PushWave()
     {
         LastWaveHaul = default;
@@ -269,6 +333,7 @@ public sealed class SoloExpedition
         var scale = WaveScaling.EnemyScale(next, _tuning);
         var bonus = new WaveBonus();
         var (interval, dmgMult) = BiasTempo();   // the region's combat character bends the enemy's tempo
+        LastWaveIntervalMs = interval;
 
         // Health takes the boss spike; damage does not. They used to be the same number — see
         // WaveScaling.EnemyDamageScale.
@@ -344,6 +409,7 @@ public sealed class SoloExpedition
             entrenched: affixes.Contains(Affix.Entrenched),
             legionSplits: affixes.Contains(Affix.Legion));
         Recorder.Record(next, metrics);
+        if (outcome == WaveOutcome.Cleared) CountVowProof();
 
         // The ledger WARDED reads next wave: this wave's top style by damage, ties toward more casts,
         // then style order. A wave in which no skill landed wards nothing.
@@ -377,6 +443,14 @@ public sealed class SoloExpedition
         if (Progress is { } prog)
             foreach (var sk in _build.Skills)
                 prog.RecordWave(sk.Def.Id);
+
+        // ── AND THE TRAITS LEARN FROM IT TOO, on the same terms and for the same reason: a cleared
+        //    wave taught something and a lost one did not. The facts are built HERE rather than in
+        //    the fight because half of them are build facts the wave's metrics do not carry — how
+        //    much of the pool the champion was standing in, what its critical chance is, how many
+        //    elements it carries — and the fight must not learn about the account to answer them.
+        if (TraitWatch is { } watch)
+            watch.WaveCleared(TraitFactsFor(metrics), next);
 
         // ── BETWEEN WAVES. game-flow.md §3.3 makes "health does not regenerate between waves" a rule of
         //    the game — it is what turns a descent into one continuous fight rather than a series of
@@ -429,6 +503,63 @@ public sealed class SoloExpedition
     /// place. Every other term in the wave payout is a multiplier on this.
     /// </remarks>
     public const float GleamPerWaveCoefficient = 3f;
+
+    /// <summary>
+    /// Everything one cleared wave contributes to the trait ledger: the wave's own measurements, plus
+    /// the build facts the measurements cannot carry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Nothing here reads a roll.</b> Creature count and archetype are rolled by the band, so no
+    /// rule may read either; every fact below is either the champion's own build, a measurement of
+    /// what the champion DID, or a deterministic property of the weave. That is BRIEF §30 satisfied
+    /// by construction rather than by inspection.
+    /// </para>
+    /// <para>
+    /// Built once per cleared wave. <c>DescribeBuild</c> walks four skills and is the same call the
+    /// vow layer already makes every wave, so this adds one of them and no allocation the fight did
+    /// not already make.
+    /// </para>
+    /// </remarks>
+    private TraitWaveFacts TraitFactsFor(WaveMetrics m)
+    {
+        var ctx = SoloBattle.DescribeBuild(_build, _hunter);
+        var shape = _build.Shape;
+
+        var wide = false;
+        for (var i = 0; i < _build.Skills.Count; i++)
+        {
+            // A WIDE wave is one this build could have reached three creatures with — a property of
+            // the weave, not of how many creatures the band happened to roll.
+            if (shape.TargetsFor(_build.Skills[i].Def) >= TraitDiscovery.WideTargets) wide = true;
+        }
+
+        return new TraitWaveFacts(
+            ChampionMaxHealth: _champion.MaxHealth,
+            HeavyHits: m.HeavyHits,
+            Overkill: m.Overkill,
+            ShieldGained: m.ShieldGained,
+            ShieldBreaks: m.ShieldBreaks,
+            ShieldAbsorbed: m.ShieldAbsorbed,
+            Healed: m.Healed,
+            ReflectedDamage: m.ReflectedDamage,
+            LowestHealthFraction: m.LowestHealthFraction,
+            HealthLost: m.HealthLost,
+            CreaturesKilled: m.CreaturesKilled,
+            MarkCasts: m.MarkCasts,
+            CarriedWideSkill: wide,
+            CreaturesPresent: m.CreaturesPresent,
+            CritPercent: ctx.CritPercent,
+            // COMMITTED, not merely agreeing. Build.PureSource is the one reading of a pure-Source
+            // build (two or more woven skills, each with a chosen Source, all the same); the old
+            // inline "every woven skill matches the first" was true of the one-skill starter from
+            // its first wave, which is a fact no player had decided.
+            PureSourceBuild: _build.PureSource is not null,
+            DistinctChosenSources: ctx.DistinctChosenSources,
+            // The promises this build is KEEPING, asked of the whole build and counted once per vow —
+            // the same call the fight makes when it decides what those promises pay.
+            VowsKept: Vows.KeptCount(_build.Vows, ctx));
+    }
 
     private Haul HaulForWave(int wave, WaveBonus bonus)
     {
@@ -496,9 +627,9 @@ public sealed class SoloExpedition
         if (_build.Triggers(_hunter).Contains(BuildTrigger.Desperation)
             && _champion.Health <= _champion.MaxHealth / 3)
         {
-            // Read the WORN magnitude so a rarer Desperation charm pays more and its "HAUL +N%" blurb is
-            // honest (it read a rarity-scaled % but the kick was a flat +50%). A mastery-notable source, with
-            // no worn enchant, keeps the base bonus.
+            // Read the WORN magnitude so a rarer Desperation charm pays more and its card ("BELOW A THIRD
+            // HEALTH: +N% LOOT") is honest (it read a rarity-scaled % but the kick was a flat +50%). A
+            // mastery-notable source, with no worn enchant, keeps the base bonus.
             var despMag = Economy.Enchantments.MagnitudeOf(_hunter.WornEnchantments, Economy.EnchantKind.Desperation);
             haul *= 1f + (despMag > 0f ? despMag : DesperationHaulBonus);
         }

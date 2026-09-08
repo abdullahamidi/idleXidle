@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the PURE parts of the Game assembly: the UI density metrics, the scale-aware typography
+    ladder, the display profile, and every page-anchored layout rectangle a screen exposes as a static.
+    Nothing here touches a GraphicsDevice — UiKit's draw calls and the screens' constructors are out of
+    scope (they belong to the capture rig, tools/asset-pipeline/capture.sh). Until 2026-09-01 there was no
+    test project for this assembly at all, which is why tools/check_*.py are text gates.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\IdleXIdle.Game\IdleXIdle.Game.csproj" />
+  </ItemGroup>
+
+</Project>
