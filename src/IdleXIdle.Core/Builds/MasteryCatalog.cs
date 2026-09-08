@@ -186,7 +186,10 @@ public static class MasteryCatalog
     {
         const Branch b = Branch.Tempo;
         Trunk(n, b, "bite", "BITE — +4 ATTACK POWER", StartId, 0, Stat(HunterStat.AttackPower, 4f));
-        Trunk(n, b, "swift", "SWIFT — +3 ENGINEERING", "bite", 1, Stat(HunterStat.Engineering, 3f));
+        // TEMPO, not ENGINEERING (2026-09-08): the enum's name reached the player on this node and on
+        // QUICK below, and nothing in the game has ever shown that word anywhere else — the Training
+        // screen calls this stat TEMPO and teaches what it does under that name.
+        Trunk(n, b, "swift", "SWIFT — +3 TEMPO", "bite", 1, Stat(HunterStat.Engineering, 3f));
 
         // THE OPENING — the wave's first seconds are where the damage is.
         const MasteryRoute a = MasteryRoute.Left;
@@ -203,7 +206,7 @@ public static class MasteryCatalog
 
         // THE RHYTHM — cadence: the swing sooner, each cast hastening the next.
         const MasteryRoute c = MasteryRoute.Right;
-        Minor(n, b, c, 0, "quick", "QUICK — +3 ENGINEERING", "swift", Stat(HunterStat.Engineering, 3f));
+        Minor(n, b, c, 0, "quick", "QUICK — +3 TEMPO", "swift", Stat(HunterStat.Engineering, 3f));
         Teaches(n, b, c, 1, "road_sign_2", "quick", "sign_brand");
         Notable(n, b, c, 2, "brisk", "BRISK — YOUR BASIC SWING COMES 20% SOONER",
                 S with { AutoAttackRate = 1.20f }, "road_sign_2");

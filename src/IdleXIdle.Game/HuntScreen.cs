@@ -2564,28 +2564,14 @@ public sealed class HuntScreen
         {
             if (_champClipStripsFor == Character.Id && ReferenceEquals(_champClipStripsSkills, _waveSkills) && _champClipStripsNoStrips == DevNoStrips)
                 return _champClipStrips;
-            _champClipStrips.Clear();
-            Add("idle");
-            Add("attack");
-            foreach (var equipped in _waveSkills)
-                Add(equipped.Def.Kind == SkillKind.Reaction ? "trap" : equipped.Def.ClipKey);
+            // Most specific first, exactly as the draw resolves it — the decision itself is
+            // ActorClips.ChampionStrips, which needs no GraphicsDevice and is tested without one. The
+            // only thing this screen still owns here is the answer to "is that strip loaded?".
+            ActorClips.ChampionStrips(Character, _waveSkills, StripAvailable, _champClipStrips);
             _champClipStripsFor = Character.Id;
             _champClipStripsSkills = _waveSkills;
             _champClipStripsNoStrips = DevNoStrips;
             return _champClipStrips;
-
-            // Most specific first, exactly as the draw resolves it: the character's own strip for the
-            // clip, then the generic attack/cast it stands in for. A clip with no art contributes
-            // nothing rather than falling through to a strip the draw would not use.
-            void Add(string clip)
-            {
-                foreach (var key in Character.StripKeys(clip))
-                    if (StripAvailable(key))
-                    {
-                        if (!_champClipStrips.Contains(key)) _champClipStrips.Add(key);
-                        return;
-                    }
-            }
         }
     }
 
@@ -2989,9 +2975,15 @@ public sealed class HuntScreen
         var seconds = EnemyClipSeconds(attacking, fps);
         if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
         {
-            _bossBodyRect = new Rectangle(BossAnchor.X - 110, BossAnchor.Y - BossTargetBodyHeight, 220, BossTargetBodyHeight);
-            _bossFullRect = _bossBodyRect;
-            _ui.Fill(b, _bossBodyRect, Ember);
+            // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
+            // while LayoutActors published the full box as this boss's body and envelope — 2.45x wider
+            // than the bar on screen, so 160 px of empty ground on each side hit-tested as the boss and
+            // every relative-scale effect sized itself against a body nobody could see. Bosses ship
+            // strips and no stills, so the boss is the one actor whose ladder can fall this far; the
+            // geometry follows the draw down its fallback everywhere else, and now here too.
+            _bossBodyRect = box;
+            _bossFullRect = box;
+            _ui.Fill(b, box, Ember);
             return;
         }
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses

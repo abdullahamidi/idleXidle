@@ -104,6 +104,41 @@ public class row_fit_test
     }
 
     [Fact]
+    public void test_the_widest_live_pair_takes_a_second_line_rather_than_losing_its_meaning()
+    {
+        // THE DEFENSIVE PATH, stated with LIVE content. The widest pair the Gear column can draw is a
+        // socketed gem: the stone's name on the left and its whole modifier line on the right, where
+        // every other row pairs a stat word with a bare figure. Today's catalogue fits it at all three
+        // profiles — but the row's promise is what happens when it does NOT, and that is decided here:
+        // the ladder refuses instead of handing back a cut label, which is the caller's signal to take
+        // a second line. A shortened "EDGE G…" beside a number would be a modifier nobody can read.
+        var gem = new ItemInstance
+        {
+            InstanceId = "cd_gem1", BaseType = ItemBaseType.Gem,
+            Rarity = Rarity.Legendary, SellValue = 200, ItemLevel = 18,
+        };
+        var host = new ItemInstance
+        {
+            InstanceId = "widest", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
+            SellValue = 220, ItemLevel = 62, Family = 1,
+            Gems = new List<ItemInstance> { gem },
+        };
+        var row = Assert.Single(ItemPresentation.Rows(host).Where(r => r.Kind == ItemRowKind.Gem));
+        var label = row.Label;                 // "EDGE GEM"
+        var value = row.Line;                  // "+3.1% CRITICAL CHANCE"
+        Assert.Contains("GEM", label, StringComparison.Ordinal);
+        Assert.Contains("CRITICAL CHANCE", value, StringComparison.Ordinal);
+
+        // A column that holds both: one line, nothing given up.
+        var roomy = PerChar(label) + PerChar(value) + 4;
+        Assert.True(UiKit.TryFitLabel(label, roomy - PerChar(value), PerChar, out var whole));
+        Assert.Equal(label, whole);
+
+        // A column that cannot: refused, never cut — the label keeps every letter for the second line.
+        Assert.False(UiKit.TryFitLabel(label, PerChar(label) - 1, PerChar, out _));
+    }
+
+    [Fact]
     public void test_every_built_in_row_in_the_catalogue_keeps_its_stat_word_on_a_narrow_column()
     {
         // The real labels, from the real rows: a Common piece of every wearable type, at the narrowest

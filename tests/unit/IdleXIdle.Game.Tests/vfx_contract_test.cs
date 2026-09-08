@@ -233,6 +233,30 @@ public class VfxContractTests
     }
 
     [Fact]
+    public void test_the_boss_fallback_fills_the_box_the_geometry_publishes()
+    {
+        // WHAT IS DRAWN IS WHAT IS PUBLISHED, down the whole fallback ladder. A boss ships strips and no
+        // stills, so it is the one actor whose ladder can reach the coloured fill — and that fill used a
+        // hardcoded 220x540 rectangle while LayoutActors published the full 540-wide box as this boss's
+        // body and envelope. 160 px of empty ground on each side hit-tested as the boss, every
+        // relative-scale effect sized itself against a body 2.45x wider than the bar on screen, and the
+        // published centre slid away from the drawn bar during a lunge (2026-09-08).
+        //
+        // Source-level, because DrawBoss needs a GraphicsDevice and this is the only seam that can see
+        // it: the fallback branch must name the laid-out box and mint no rectangle of its own.
+        var src = Code(HuntScreenSource());
+        var start = src.IndexOf("private void DrawBoss", StringComparison.Ordinal);
+        Assert.True(start > 0, "DrawBoss has been renamed — this guard is pointing at nothing");
+        var end = src.IndexOf("\n    private ", start + 10, StringComparison.Ordinal);
+        var body = end > start ? src[start..end] : src[start..];
+
+        Assert.DoesNotContain("new Rectangle(", body, StringComparison.Ordinal);
+        Assert.Contains("_bossBodyRect = box;", body, StringComparison.Ordinal);
+        Assert.Contains("_bossFullRect = box;", body, StringComparison.Ordinal);
+        Assert.Contains("_ui.Fill(b, box, Ember);", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void test_the_effects_pass_stays_unscissored()
     {
         // A documented regression, deliberately preserved: clipping the additive pass cut bursts flat

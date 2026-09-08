@@ -1838,7 +1838,7 @@ public sealed class UiKit
     /// </summary>
     /// <remarks>
     /// There was no wrapping in this codebase at all, which is why every explanatory string in it is a
-    /// fragment sized to a column — "ON KILL: RICHER LOOT", 21 characters, because that is what fits on
+    /// fragment sized to a column — OLD COPY: "ON KILL: RICHER LOOT", 21 characters, because that is what fits on
     /// one line. That constraint is fine for a label and fatal for an explanation: a build game has to
     /// be able to say "deals NO damage; it opens a window in which everything else hits harder", and
     /// there is no way to shorten that into a caption without deleting the part the player needs.

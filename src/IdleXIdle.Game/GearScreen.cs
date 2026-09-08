@@ -1120,7 +1120,7 @@ public sealed class GearScreen
             var h = UiTypography.Pitch(px);
             var lines = _ui.WrapBig(s, w, px).Take(maxLines).ToList();
             // ONE CLAIM FOR THE WHOLE SENTENCE (2026-09-07). Claimed a line at a time, a wrapped row
-            // could straddle the fold — "ON KILL: 38% CHANCE OF A" on the last visible line and the
+            // could straddle the fold — "ON WAVE CLEAR: 38% CHANCE" on the last visible line and the
             // rest a wheel away — which reads as a sentence cut, not as a panel that scrolls. A row
             // that does not fit whole goes below the fold whole, where the scroll finds it.
             if (lines.Count == 0 || !Take(h * lines.Count)) return;

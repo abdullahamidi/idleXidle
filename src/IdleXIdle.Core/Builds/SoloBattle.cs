@@ -1634,7 +1634,9 @@ public static class SoloBattle
                 if (source == HitSource.Carry) metrics.CarryKills++;
             }
             var idx = IndexOf(target);
-            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: !swing));
+            // THE PROVENANCE THE FIGHT ALREADY HAS, carried rather than flattened: FromSkill is derived
+            // from it and keeps exactly the value !swing gave it, so no consumer changes.
+            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, source));
             if (!target.Alive)
             {
                 alive--;

@@ -8,9 +8,10 @@
 # butler lives at %LOCALAPPDATA%\butler\butler.exe (installed 2026-08-25 from broth.itch.zone);
 # the script installs it there if it is missing.
 #
-# What it does, in order: `dotnet publish` (Release, win-x64, self-contained) into
-# build/release/IDLExIDLE-win64, a smoke boot of the published exe under RH_SHOT (a build that
-# cannot draw its title is not uploaded), then `butler push` of the FOLDER (butler diffs and
+# What it does, in order: CLEAN build/release/IDLExIDLE-win64 (butler pushes the folder, so anything
+# an older build left behind would ship), `dotnet publish` (Release, win-x64, self-contained) into
+# it, copy docs/publisher-notes.md in as README.md, a smoke boot of the published exe under RH_SHOT
+# (a build that cannot draw its title is not uploaded), then `butler push` of the FOLDER (butler diffs and
 # uploads only what changed — a 65 MB zip becomes a few MB after the first push), stamped with
 # the git sha as the user-facing version so a tester's feedback code and the build page agree.
 set -euo pipefail
@@ -31,9 +32,22 @@ fi
 
 SHA="$(git rev-parse --short HEAD)"
 OUT="build/release/IDLExIDLE-win64"
+
+# A CLEAN FOLDER, because butler pushes the FOLDER and not the publish. dotnet publish overwrites what
+# it produces and deletes nothing else, so anything a previous build left behind was still being
+# uploaded: this directory was shipping ResonanceHunter.Core.dll — the project's former assembly name,
+# retired 2026-08-31 — months after the rename (found 2026-09-08 in the release sweep). butler's
+# --if-changed diff means a clean rebuild costs no more bytes than a dirty one.
+echo "== clean ${OUT}"
+if [ -d "$OUT" ]; then find "$OUT" -mindepth 1 -delete; fi   # not `[ -d ] && …`: under set -e an absent dir would end the script
+
 echo "== publish ${SHA} → ${OUT}"
 dn publish src/IdleXIdle.Game -c Release -r win-x64 --self-contained -o "$OUT" -v q --nologo \
   || { echo "publish failed" >&2; exit 1; }
+
+# The evaluator's README travels with the build: what the game is, how to run it, where the save lives
+# and how to reset it. One source (docs/publisher-notes.md), copied rather than duplicated.
+cp docs/publisher-notes.md "$OUT/README.md"
 
 echo "== smoke boot of the published exe"
 SHOT="$(winpath "$PWD")\\build\\release\\smoke_${SHA}.png"

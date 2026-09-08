@@ -2137,7 +2137,13 @@ public sealed class MasteryScreen
         // ("+4 ATTACKPOWER" under "+4 ATTACK POWER" — the first capture of the path tree). The lines
         // are for a node whose label says something ELSE and carries a stat besides, like DEEP.
         if (n.Stats is { Count: > 0 } stats && n.Shape != SkillShape.None)
-            foreach (var kv in stats.Take(3)) Line($"+{kv.Value:0} {kv.Key.ToString().ToUpperInvariant()}", Bone, UiTypography.Body, 1);
+            foreach (var kv in stats.Take(3)) Line($"+{kv.Value:0} {HunterStatWords.Word(kv.Key)}", Bone, UiTypography.Body, 1);
+        // WHAT THAT STAT IS. A Minor's whole label is its stat ("SWIFT — +3 TEMPO") and this screen
+        // never said what the stat does, so a purchasable node could be read only by someone who had
+        // already studied the Training screen. Same sentence Training prints, from the same table.
+        if (n.Stats is { Count: > 0 } named)
+            foreach (var kv in named.Take(2))
+                Line(HunterStatWords.Definition(kv.Key), Slate, UiTypography.Secondary, 2);
         if (roadDef is not null)
         {
             Line($"TEACHES {roadDef.Name.ToUpperInvariant()} — {roadDef.Line}", Bone, UiTypography.Body, 3);

@@ -89,18 +89,7 @@ public sealed class TrainingScreen
     /// "YOU CAN TRAIN ATTACKPOWER FOR 25 GLEAM". The words existed only inside a tuple in this file,
     /// where the host could not reach them.
     /// </remarks>
-    public static string WordFor(HunterStat s) => s switch
-    {
-        HunterStat.AttackPower => "MIGHT",
-        HunterStat.ResonanceAffinity => "RESONANCE",
-        HunterStat.CriticalChance => "CRITICAL",
-        HunterStat.Focus => "FOCUS",
-        HunterStat.MaxHealth => "HEALTH",
-        HunterStat.Defense => "DEFENSE",
-        HunterStat.Vitality => "VITALITY",
-        HunterStat.Engineering => "TEMPO",
-        _ => "GUILE",
-    };
+    public static string WordFor(HunterStat s) => HunterStatWords.Word(s);
 
     /// <summary>The nine stats grouped by what each one actually changes in the fight.</summary>
     /// <remarks>
@@ -167,18 +156,7 @@ public sealed class TrainingScreen
     };
 
     /// <summary>One line saying what the stat is, for the inspector and for a row's hover tip.</summary>
-    private static string IdentityOf(HunterStat s) => s switch
-    {
-        HunterStat.AttackPower => "Your basic attack — the plain swing between skills.",
-        HunterStat.ResonanceAffinity => "Your skills' damage.",
-        HunterStat.CriticalChance => "How often a hit becomes a critical hit.",
-        HunterStat.Focus => "How hard a critical hit lands.",
-        HunterStat.MaxHealth => "The base of your hunter's life.",
-        HunterStat.Defense => "How much smaller every hit you take becomes.",
-        HunterStat.Vitality => "Life you regain every second of a fight.",
-        HunterStat.Engineering => "How fast you act — swings, skills and animations.",
-        _ => "How much a cleared wave pays.",
-    };
+    private static string IdentityOf(HunterStat s) => HunterStatWords.Definition(s);
 
     // ── LAYOUT. Two columns to the page plus a reset footer. Every rectangle here used to be a
     //    hand-placed 1920x1080 literal; since the UI polish pass (brief §7–§11) every size that is not

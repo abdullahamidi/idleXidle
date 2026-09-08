@@ -398,7 +398,20 @@ public sealed class ForgeScreen
     // buttons and the padding — at the rates UiMetrics sets, never a factor written here. The
     // numbers below are the 100 % values; the profile's version is what the property returns.
     // The four page anchors (Top, Gutter, SideMargin, BottomMargin) are page geometry and stay.
-    private static int Top => UiKit.PageTop;   // the first row under the chrome band, at this profile
+    /// <summary>
+    /// The first row under the chrome band — from the page's OWN anchor, never the notice lane's.
+    /// </summary>
+    /// <remarks>
+    /// Every other screen lays out from <see cref="UiKit.PageTop"/>, which grows by the notice lane so a
+    /// toast stands above the page instead of over it. The Forge cannot pay that: at UI SCALE 150 % its
+    /// three columns have no slack at all — the compare table's three secondary lines are already spent
+    /// — so a one-line notice's 162 px drove the forge column's row budget NEGATIVE. The whole
+    /// before -> after compare drew zero rows, no scrollbar appeared because no rows had overflowed, no
+    /// wheel position could reach it, and the risk line printed across the tab labels (2026-09-08).
+    /// The band a toast covers here is the materials strip, which repeats balances the chrome and the
+    /// item column both already carry; the compare table is the reason the screen exists.
+    /// </remarks>
+    private static int Top => UiKit.PageTopBase;
     private const int Gutter = 22;
     private const int SideMargin = 38;
     private const int BottomMargin = 40;

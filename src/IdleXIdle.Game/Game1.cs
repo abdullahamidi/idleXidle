@@ -5464,7 +5464,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _hunter.AddGleam(r.Haul.Gleam);
             _champGleamAccrued += r.Haul.Gleam;
             // HAUL CORES ARE THE FORGE MATERIAL NOW. The hatchery currency they used to feed retired
-            // 2026-08-24 with the creature subsystem, which left HARVEST ("ON KILL: n% CORE") and
+            // 2026-08-24 with the creature subsystem, which left HARVEST ("a chance of a spare core") and
             // LODESTONE ("a spare core") paying into a channel nobody read — an enchant whose stat
             // was a lie. But both texts already say CORE, and the forge's re-roll material IS called
             // CORE — the words become true by pointing the payout there. Only those two produce into
