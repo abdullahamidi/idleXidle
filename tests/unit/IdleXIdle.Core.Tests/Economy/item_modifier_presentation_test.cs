@@ -250,7 +250,7 @@ public class item_modifier_presentation_test
         // FIGHT READS (see Enchantment.Blurb): VENOM's share is floored by the sim at 50%, so a Rare
         // (magnitude 0.27) and an Epic (0.38) both say 50% and only a Legendary (0.62) says more;
         // FERVOUR's +0.5 on BLOODLUST's 0.8 slope is worth +28% over the keystone alone, not "+50%".
-        Assert.Equal("ON KILL: 38% CHANCE OF A SPARE CORE", At(EnchantKind.Harvest));
+        Assert.Equal("ON WAVE CLEAR: 38% CHANCE OF A SPARE CORE", At(EnchantKind.Harvest));
         Assert.Equal("SKILL HITS POISON FOR 62% OF THE HIT", At(EnchantKind.Venom));
         Assert.Equal("SKILL HITS POISON FOR 50% OF THE HIT", At(EnchantKind.Venom, Rarity.Rare));
         Assert.Equal("SKILL HITS POISON FOR 50% OF THE HIT", At(EnchantKind.Venom, Rarity.Epic));

@@ -2152,15 +2152,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // Two superior UNEQUIPPED drops, added first so they sit at the top of the bag — they
                     // pose the green UP badge and the hover tooltip's "UPGRADE +N PWR" verdict (with
                     // RH_SHOT_MOUSE parked over the first card).
+                    // The weapon is the starter's class, so the UPGRADE verdict still poses on the
+                    // first card; the chestplate is a WARDEN's, so the second card poses the dimmed
+                    // lock and, under RH_SHOT_MOUSE, the "who can wear it" lines of the hover card.
+                    // HEAVY, so the first card — the one RH_SHOT_MOUSE hovers and the detail panel
+                    // opens on — carries a trade with both sides on it (2026-09-07). A bow, so its
+                    // built-in is the longest stat word, CRITICAL CHANCE.
+                    var upWeapon = new ItemInstance { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62, Class = ItemClass.Wanderer, Family = 1, TraitOverride = GearTrait.Heavy };
+                    // ...AND ITS SOCKETS ARE FULL (2026-09-08). The widest row the detail column can
+                    // draw is a GEM: the stone's name on the left and its WHOLE modifier line on the
+                    // right ("EDGE GEM" · "+3.5% CRITICAL CHANCE"), where every other row pairs a stat
+                    // word with a bare figure. No fixture had ever set a stone, so the pair the row
+                    // layout exists for had never been photographed at any scale. A gem's stat is
+                    // derived from its id (GemCraft.StatOf), so these three ids deterministically give
+                    // the widest pair, a second percentage and a flat value — through the real socket
+                    // path, at the level the wandering trader's own stones carry.
+                    foreach (var gemId in new[] { "cd_gem1", "cd_gem_b", "cd_gem2" })
+                    {
+                        var gem = new ItemInstance
+                        {
+                            InstanceId = gemId, BaseType = ItemBaseType.Gem,
+                            Rarity = Rarity.Legendary, SellValue = 200, ItemLevel = 18,
+                        };
+                        if (GemCraft.Socket(upWeapon, gem).Product is { } set) upWeapon = set;
+                    }
                     _forge.AddLoot(new List<ItemInstance>
                     {
-                        // The weapon is the starter's class, so the UPGRADE verdict still poses on the
-                        // first card; the chestplate is a WARDEN's, so the second card poses the dimmed
-                        // lock and, under RH_SHOT_MOUSE, the "who can wear it" lines of the hover card.
-                        // HEAVY, so the first card — the one RH_SHOT_MOUSE hovers and the detail panel
-                        // opens on — carries a trade with both sides on it (2026-09-07). A bow, so its
-                        // built-in is the longest stat word, CRITICAL CHANCE.
-                        new() { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62, Class = ItemClass.Wanderer, Family = 1, TraitOverride = GearTrait.Heavy },
+                        upWeapon,
                         new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55, Class = ItemClass.Warden },
                     });
                     _forge.AddLoot(seed);

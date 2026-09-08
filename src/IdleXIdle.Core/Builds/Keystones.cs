@@ -76,7 +76,9 @@ public static partial class Keystones
         new()
         {
             Id = "reaper", Name = "REAPER",
-            Blurb = "EVERY KILL GIVES RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
+            // "EVERY KILL" was the same false claim the SPLINTER card carried until 2026-09-08: this
+            // grants BuildTrigger.Splinter, which is paid once in the wave-clear handler.
+            Blurb = "EVERY WAVE YOU CLEAR GIVES RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.75f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Splinter },
         },
