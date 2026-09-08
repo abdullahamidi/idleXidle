@@ -183,7 +183,11 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     /// </remarks>
     public string Blurb => Kind switch
     {
-        EnchantKind.Splinter => "ON KILL: RICHER LOOT",
+        // The figure the fight reads, like VENOM below: the worn magnitude, floored at the bare
+        // trigger's own base (SplinterBaseQuality). "RICHER LOOT" said nothing a rarity could sharpen,
+        // which is how four tiers of one enchant read identically on the card for as long as they
+        // played identically in the fight.
+        EnchantKind.Splinter => Inv($"ON KILL: +{MathF.Max(Builds.SoloBattle.SplinterBaseQuality, Magnitude) * 100f:0}% BETTER LOOT ODDS"),
         EnchantKind.Harvest => Inv($"ON KILL: {Magnitude * 100f:0}% CHANCE OF A SPARE CORE"),
         EnchantKind.Venom => Inv($"SKILL HITS POISON FOR {MathF.Max(Builds.SoloBattle.VenomBasePoison, Magnitude) * 100f:0}% OF THE HIT"),
         EnchantKind.Desperation => Inv($"BELOW A THIRD HEALTH: +{Magnitude * 100f:0}% LOOT"),

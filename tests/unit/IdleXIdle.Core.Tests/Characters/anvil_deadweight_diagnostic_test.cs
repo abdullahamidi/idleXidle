@@ -106,6 +106,9 @@ public class AnvilDeadweightDiagnosticTest
         public readonly double[] WaveMs = new double[3], WaveDelivered = new double[3], WaveDeadweight = new double[3];
         public readonly long[] WaveStores = new long[3], WaveReleases = new long[3];
 
+        /// <summary>What each wave OPENED from, on the first seed — the phase the waves before it left behind.</summary>
+        public readonly ParityGauntlet.WavePhase[] Entry = new ParityGauntlet.WavePhase[3];
+
         /// <summary>The passive's direct contribution — released damage as a share of everything landed.</summary>
         public double DeadweightShare => Delivered <= 0 ? 0 : DeadweightDamage / Delivered;
     }
@@ -134,7 +137,13 @@ public class AnvilDeadweightDiagnosticTest
         return build;
     }
 
-    private static Tally Measure(Character c, Row row, int seeds = ParityGauntlet.Seeds)
+    /// <summary>
+    /// Run a row's gauntlet and total it. <paramref name="isolated"/> is the §8 diagnostic, NOT the game:
+    /// every wave is handed a fresh champion and a fresh random source, so both arms open every wave
+    /// from the same place and a per-wave percentage is a causal reading. The default is the shipped
+    /// behaviour — one champion, one clock, cooldowns carried wave to wave.
+    /// </summary>
+    private static Tally Measure(Character c, Row row, int seeds = ParityGauntlet.Seeds, bool isolated = false)
     {
         var build = Compose(c, row);
         var waves = WavesOf(row);
@@ -148,6 +157,13 @@ public class AnvilDeadweightDiagnosticTest
             double seedDeadweight = 0, seedClear = 0;
             for (var w = 0; w < waves.Length; w++)
             {
+                if (isolated)
+                {
+                    champ = ParityGauntlet.FreshChampion();
+                    rng = new Random(ParityGauntlet.Seed(s) + w);
+                }
+                // READ THE ENTRY STATE BEFORE THE WAVE TOUCHES IT — the phase that explains this row.
+                if (s == 0) t.Entry[w] = ParityGauntlet.PhaseOf(champ, build);
                 var metrics = new WaveMetrics();
                 var (outcome, _) = SoloBattle.ResolveWave(champ, build, hunter, waves[w].Make(),
                                                           ParityGauntlet.EnemyIntervalMs, ParityGauntlet.Tuning, rng,
@@ -211,8 +227,11 @@ public class AnvilDeadweightDiagnosticTest
         _out.WriteLine(" released damage per run. OF DEALT: that as a share of everything the Anvil landed. CARRIES / CARRIED: the");
         _out.WriteLine(" overkill carry the build wears, both arms — unchanged by the passive, which is no longer a carry.)");
         _out.WriteLine("");
-        _out.WriteLine("PER WAVE — where the weight lives. (Cooldowns persist across waves, so a wave's clear time carries the");
-        _out.WriteLine(" previous wave's phase; the counters do not.)");
+        _out.WriteLine("PER WAVE — CONTINUOUS RUN · CARRY-IN STATE. These rows are NOT isolated measurements: a descent is one");
+        _out.WriteLine(" fight, cooldowns are counted in beats that never reset, and each wave opens from whatever the wave");
+        _out.WriteLine(" before it left. A local percentage is therefore a reading OF THAT PHASE — where the two arms enter");
+        _out.WriteLine(" differently the row is marked, and the phase that explains it is printed beneath. The whole-run table");
+        _out.WriteLine(" above is the authoritative number for how the build actually plays.");
         foreach (var (row, a, c) in results)
         {
             _out.WriteLine($"  {row.Label}");
@@ -222,8 +241,36 @@ public class AnvilDeadweightDiagnosticTest
                 var name = waves[w].Name;
                 var fasterW = a.WaveMs[w] <= 0 ? 0 : 100.0 * (c.WaveMs[w] / a.WaveMs[w] - 1.0);
                 var shareW = a.WaveDelivered[w] <= 0 ? 0 : a.WaveDeadweight[w] / a.WaveDelivered[w];
+                var matched = a.Entry[w].SamePlaceAs(c.Entry[w]);
                 _out.WriteLine($"    {name,-6} clear {a.WaveMs[w] / seeds,8:N0} ms ({fasterW,5:+0.0;-0.0;0.0}%)  stores {a.WaveStores[w] / (double)seeds,5:0.0}  " +
-                               $"releases {a.WaveReleases[w] / (double)seeds,5:0.0}  released {a.WaveDeadweight[w] / seeds,7:N0} ({shareW,5:0.0%} of dealt)");
+                               $"releases {a.WaveReleases[w] / (double)seeds,5:0.0}  released {a.WaveDeadweight[w] / seeds,7:N0} ({shareW,5:0.0%} of dealt)" +
+                               (matched ? "" : "   ← PHASE-SENSITIVE: the arms enter this wave differently"));
+                // BOTH ARMS' ENTRY STATE, on every wave that has one: the reader never has to take the
+                // marker's word for it, and a row whose clocks match is visibly a like-for-like reading.
+                _out.WriteLine($"           carry-in  anvil   {a.Entry[w].Line}");
+                if (w > 0) _out.WriteLine($"           carry-in  control {c.Entry[w].Line}");
+            }
+        }
+
+        // ── ISOLATED WAVE — the §8 companion, and NOT how the game runs. Every wave is handed a fresh
+        //    champion and a fresh random source, so both arms open from the same place and the
+        //    percentage is causal: it answers "is this wave intrinsically better with the passive?",
+        //    which the continuous table above cannot. Read them together; never one for the other. ──
+        _out.WriteLine("");
+        _out.WriteLine("ISOLATED WAVE — MATCHED ENTRY STATE (diagnostic only; production carries cooldowns wave to wave)");
+        foreach (var row in Matrix.Where(r => !r.BossOnly))
+        {
+            var ai = Measure(Anvil, row, isolated: true);
+            var ci = Measure(Control, row, isolated: true);
+            _out.WriteLine($"  {row.Label}");
+            var waves = WavesOf(row);
+            for (var w = 0; w < waves.Length; w++)
+            {
+                var fasterW = ai.WaveMs[w] <= 0 ? 0 : 100.0 * (ci.WaveMs[w] / ai.WaveMs[w] - 1.0);
+                _out.WriteLine($"    {waves[w].Name,-6} clear {ai.WaveMs[w] / seeds,8:N0} ms ({fasterW,5:+0.0;-0.0;0.0}%)  " +
+                               $"released {ai.WaveDeadweight[w] / seeds,7:N0}   both arms open at {ai.Entry[w].Line}");
+                Assert.True(ai.Entry[w].SamePlaceAs(ci.Entry[w]),
+                            $"{row.Label} / {waves[w].Name}: the isolated arms did not open from the same state — the mode is not matched");
             }
         }
 
@@ -286,6 +333,109 @@ public class AnvilDeadweightDiagnosticTest
             Assert.True(row.Persists == (placed < 0),
                         $"{row.Label}: EnsureSignature returned {placed} — the row's claim about surviving a relaunch is wrong");
         }
+    }
+
+    // ── PHASE, NOT REGRESSION ────────────────────────────────────────────────────────────────────
+
+    /// <summary>The row whose pack wave reads negative inside a run that is positive.</summary>
+    private const string PhaseRow = "PLANISH + DRINK SIPHON, VOW OF THE PURE kept (the parity row)";
+
+    /// <summary>Percent the anvil arm is faster than the control, for one wave of a row.</summary>
+    private static double FasterOnWave(Tally anvil, Tally control, int wave)
+        => anvil.WaveMs[wave] <= 0 ? 0 : 100.0 * (control.WaveMs[wave] / anvil.WaveMs[wave] - 1.0);
+
+    [Fact]
+    public void test_a_phase_sensitive_wave_reads_negative_inside_a_run_that_is_positive()
+    {
+        // THE SITUATION THIS REPORTING EXISTS FOR. One pack wave of this row clears SLOWER with the
+        // passive than without it, inside a descent that finishes faster with it. Nothing is wrong with
+        // the mechanic: the two arms arrive at that wave on different beats with different skills ready,
+        // because the waves before it went differently — which is what a continuous fight does.
+        var row = Matrix.Single(r => r.Label == PhaseRow);
+        const int pack = 1, seeds = 3;   // the gauntlet is seed-invariant; three seeds carry the same figures
+
+        var anvil = Measure(Anvil, row, seeds);
+        var control = Measure(Control, row, seeds);
+
+        var local = FasterOnWave(anvil, control, pack);
+        var run = 100.0 * (control.ClearMs / anvil.ClearMs - 1.0);
+        _out.WriteLine($"continuous — pack {local:+0.0;-0.0}%   whole run {run:+0.0;-0.0}%");
+        _out.WriteLine($"  anvil   {anvil.Entry[pack].Line}");
+        _out.WriteLine($"  control {control.Entry[pack].Line}");
+
+        Assert.True(local < 0, $"the pack wave is no longer the negative local row — it reads {local:+0.0;-0.0}%");
+        Assert.True(run > 0, $"the run is no longer positive — {run:+0.0;-0.0}%");
+
+        // THE EXPLANATION IS ON THE ROW: the arms do not open this wave from the same place, and the
+        // table marks it. A reader who sees the minus sign is handed the phase in the next two lines.
+        Assert.False(anvil.Entry[pack].SamePlaceAs(control.Entry[pack]),
+                     "the arms open this wave identically — then the negative would need another explanation");
+
+        // AND THE CAUSAL READING SAYS THE OPPOSITE. Same wave, both arms from a fresh champion: the
+        // passive is worth MORE than nothing here, so the continuous minus sign was the carry-in.
+        var isolatedAnvil = Measure(Anvil, row, seeds, isolated: true);
+        var isolatedControl = Measure(Control, row, seeds, isolated: true);
+        var matched = FasterOnWave(isolatedAnvil, isolatedControl, pack);
+        _out.WriteLine($"isolated (matched entry) — pack {matched:+0.0;-0.0}%");
+
+        Assert.True(isolatedAnvil.Entry[pack].SamePlaceAs(isolatedControl.Entry[pack]));
+        Assert.True(matched >= 0,
+                    $"with a matched entry state the pack wave is still {matched:+0.0;-0.0}% — that WOULD be the mechanic, not the phase");
+    }
+
+    [Fact]
+    public void test_the_diagnostic_reports_the_carry_in_phase_and_production_still_carries_it()
+    {
+        // The first wave of a descent opens from nothing; every wave after it opens from the one before.
+        // If that ever stopped being true — if some pass "cleaned up" the table by resetting cooldowns
+        // between waves — the game would have changed, not the diagnostic, and this is the tripwire.
+        foreach (var row in Matrix.Where(r => !r.BossOnly))
+        {
+            var a = Measure(Anvil, row, seeds: 1);
+            Assert.Equal(0, a.Entry[0].Beat);
+            Assert.Equal(ParityGauntlet.ChampionHealth, a.Entry[0].Health);
+            Assert.Equal(a.Entry[0].Waits.Count, a.Entry[0].Ready);   // a fresh champion owes nothing
+
+            for (var w = 1; w < WavesOf(row).Length; w++)
+                Assert.True(a.Entry[w].Beat > 0,
+                            $"{row.Label} / wave {w}: opened on beat 0 — the beat clock was reset between waves, which production never does");
+        }
+    }
+
+    [Fact]
+    public void test_the_isolated_mode_matches_both_arms_and_leaves_the_continuous_numbers_alone()
+    {
+        var row = Matrix.Single(r => r.Label == PhaseRow);
+        const int seeds = 3;
+
+        var before = Measure(Anvil, row, seeds);
+        var isolated = Measure(Anvil, row, seeds, isolated: true);
+        var after = Measure(Anvil, row, seeds);
+
+        // The diagnostic mode shares no state with the continuous one — the same measurement taken
+        // either side of it is the same measurement.
+        Assert.Equal(before.ClearMs, after.ClearMs);
+        Assert.Equal(before.DeadweightDamage, after.DeadweightDamage);
+        Assert.Equal(before.Stores, after.Stores);
+
+        // ...and the per-wave figures the table prints are the run it reports, not a second fight.
+        Assert.Equal(before.ClearMs, before.WaveMs.Sum(), 3);
+        Assert.Equal(before.DeadweightDamage, before.WaveDeadweight.Sum(), 3);
+        Assert.Equal(before.Stores, before.WaveStores.Sum());
+
+        // ISOLATED IS A RESET, and it lives only here: every wave opens from a fresh champion, which is
+        // exactly what the shipped descent must never do.
+        for (var w = 0; w < WavesOf(row).Length; w++)
+        {
+            Assert.Equal(0, isolated.Entry[w].Beat);
+            Assert.Equal(ParityGauntlet.ChampionHealth, isolated.Entry[w].Health);
+        }
+        Assert.True(before.Entry[1].Beat > 0, "the continuous arm stopped carrying its phase");
+    }
+
+    [Fact]
+    public void test_the_control_is_the_anvil_minus_the_passive()
+    {
         // The control really is the Anvil minus the passive: the shape is the only difference.
         Assert.Equal(0f, Control.Shape.DeadweightShare);
         Assert.Equal(Anvil.SignatureSkillId, Control.SignatureSkillId);

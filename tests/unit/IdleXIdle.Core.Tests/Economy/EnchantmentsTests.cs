@@ -306,7 +306,9 @@ public class EnchantmentsTests
             Assert.True(stripped.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 3,
                         $"{kind}: \"{e.Blurb}\" is a name and a number.");
         }
-        // The magnitude-bearing kinds: HARVEST, VENOM, DESPERATION, SIPHON, FERVOUR, REVERB, BULWARK, TITHE.
-        Assert.Equal(8, numeric);
+        // The magnitude-bearing kinds: SPLINTER, HARVEST, VENOM, DESPERATION, SIPHON, FERVOUR, REVERB,
+        // BULWARK, TITHE. SPLINTER joined them on 2026-09-08, when its rarity curve started reaching the
+        // payout — until then it read "RICHER LOOT" at every tier, because every tier paid the same.
+        Assert.Equal(9, numeric);
     }
 }

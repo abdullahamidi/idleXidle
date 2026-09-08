@@ -2697,24 +2697,17 @@ public sealed class ForgeScreen
         w.Y += CompareRowH;
     }
 
-    /// <summary>The caption a built-in row wears after its stat word — one spelling for the inspector and the preview.</summary>
-    private const string BuiltInSuffix = "  ·  " + ItemPresentation.BuiltInCaption;
+    /// <summary>The caption a built-in row wears after its stat word — the kit's spelling, shared with the Gear inspector.</summary>
+    private const string BuiltInSuffix = UiKit.BuiltInSuffix;
 
     /// <summary>
     /// A compare row's label in the room it has: the stat word is never cut — a built-in row drops its
     /// caption first (2026-09-07: "CRITICAL CHANCE · BUILT IN" ended "CRITICAL CHA…" at 150 %, a
     /// modifier row with its stat half gone), and only a label with no caption to give up is shortened.
+    /// The ladder is <see cref="UiKit.TryFitLabel"/> — the Gear inspector reduces the same labels the
+    /// same way, and a fixed-height compare row is the caller that has no second line to give.
     /// </summary>
-    private string FitLabel(string label, int room)
-    {
-        if (_ui.MeasureBig(label, UiTypography.Body) <= room) return label;
-        if (label.EndsWith(BuiltInSuffix, StringComparison.Ordinal))
-        {
-            var bare = label[..^BuiltInSuffix.Length];
-            if (_ui.MeasureBig(bare, UiTypography.Body) <= room) return bare;
-        }
-        return _ui.ShortenBig(label, room, UiTypography.Body);
-    }
+    private string FitLabel(string label, int room) => _ui.FitLabel(label, room, UiTypography.Body);
 
     /// <summary>The gem's name and grant on one line, the NAME giving way first: the grant is the modifier and is never cut.</summary>
     private string GemLine(ItemInstance gem, int room)

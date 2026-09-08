@@ -134,6 +134,19 @@ public sealed class GearScreen
     private static readonly string? DevPoseSpec = Environment.GetEnvironmentVariable("RH_SHOT_GEAR_POSE");
 
     /// <summary>
+    /// DEV: RH_SHOT_GEAR_DETAIL=&lt;rows&gt; parks the item detail column that many rows down.
+    /// </summary>
+    /// <remarks>
+    /// The column scrolls, and at UI SCALE 150 % the rows a modifier row can collide on — the built-in
+    /// with its caption, both sides of a prefix's trade — start below the fold. A state no capture mode
+    /// can pose has never been looked at, which is exactly how the caption came to draw through its own
+    /// figure there; this dial is the fixture that makes the fixed row photographable. Rig-only: unset,
+    /// the column opens at the top as it always has.
+    /// </remarks>
+    private static readonly int DevDetailScroll =
+        int.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_GEAR_DETAIL"), out var rows) ? Math.Max(0, rows) : 0;
+
+    /// <summary>
     /// DEV: RH_SHOT_GEAR_REDUCED=1 forces Reduced Motion for a capture. The accessibility setting lives in
     /// the host's SETTINGS and a rig run never reads a save, so the ONE law this pass must be judged on —
     /// "the same end state, instantly" — had no way to be photographed at all. Applied from Update, before
@@ -1079,7 +1092,7 @@ public sealed class GearScreen
         // THE SHEET SCROLLS when it is taller than the room (§18: long inspectors) — by whole items from the
         // top, so the first visible line is always a complete one, and the verbs and EQUIP stay anchored under
         // the floor (never below a scroll region). A new selection starts at the top.
-        if (_detScrollFor != _selectedId) { _detScroll = 0; _detScrollFor = _selectedId; }
+        if (_detScrollFor != _selectedId) { _detScroll = DevDetailScroll; _detScrollFor = _selectedId; }
         var scrollable = _detScroll > 0 || _detOverflow;
         if (scrollable) w -= UiMetrics.ScrollbarWidth + UiMetrics.Space(8);
         int index = 0, shown = 0;
@@ -1125,10 +1138,28 @@ public sealed class GearScreen
         void Pair(string k, string v, Color vc)
         {
             var h = UiTypography.Pitch(UiTypography.Body);
-            if (!Take(h)) return;
-            _ui.TextBig(b, k, x, y, Slate, UiTypography.Body);
-            _ui.TextRightBig(b, v, x + w, y, vc, UiTypography.Body);
-            y += h;
+            // THE VALUE IS RESERVED FIRST (2026-09-08). The label was drawn at the margin and the figure
+            // right-aligned at the column's edge with nothing but luck between them: at 150 % a built-in
+            // row's "CRITICAL CHANCE  ·  BUILT IN" ran straight through its own "+6.0%". The room is what
+            // the figure leaves, and the label is reduced into it by the shared ladder — the caption goes
+            // before any part of the stat word does.
+            var room = w - _ui.MeasureBig(v, UiTypography.Body) - UiMetrics.Space(16);
+            if (_ui.TryFitLabel(k, room, UiTypography.Body, out var fitted))
+            {
+                if (!Take(h)) return;
+                _ui.TextBig(b, fitted, x, y, Slate, UiTypography.Body);
+                _ui.TextRightBig(b, v, x + w, y, vc, UiTypography.Body);
+                y += h;
+                return;
+            }
+            // NOTHING LEFT TO GIVE UP: the stat word itself does not fit beside the figure, so the row
+            // takes a second line rather than cutting either half. "SKILL RATE" reduced to "SKILL…"
+            // beside a number is a modifier a player cannot read; this column scrolls, so a row that is
+            // two rows tall costs a wheel notch and nothing else.
+            if (!Take(h * 2)) return;
+            _ui.TextBig(b, _ui.ShortenBig(k, w, UiTypography.Body), x, y, Slate, UiTypography.Body);
+            _ui.TextRightBig(b, v, x + w, y + h, vc, UiTypography.Body);
+            y += h * 2;
         }
 
         var item = Selected(hunter);

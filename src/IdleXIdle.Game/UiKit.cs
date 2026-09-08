@@ -1915,6 +1915,48 @@ public sealed class UiKit
         return s.TrimEnd() + "…";
     }
 
+    /// <summary>The caption a built-in row wears after its stat word — one spelling for every screen.</summary>
+    public const string BuiltInSuffix = "  ·  " + Core.Economy.ItemPresentation.BuiltInCaption;
+
+    /// <summary>
+    /// Fit a row's LABEL into the room its VALUE leaves — the stat word is the last thing to give way.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ladder, in order: the whole label; the label without its BUILT IN caption; nothing. It is
+    /// shared because both live inspectors reduce the same labels for the same reason — the Forge's
+    /// compare row has done it since 2026-09-07 ("CRITICAL CHANCE · BUILT IN" ended "CRITICAL CHA…" at
+    /// 150 %, a modifier row with its stat half gone), and the Gear inspector's rows reserved nothing
+    /// at all, so the caption simply drew through its own figure.
+    /// </para>
+    /// <para>
+    /// FALSE means the ladder ran out: even the bare stat word does not fit beside the value. The
+    /// caller decides what that costs — a second line (the Gear inspector) or a cut (the Forge's
+    /// fixed-height compare row) — because only the caller knows whether it has a line to give.
+    /// </para>
+    /// </remarks>
+    public bool TryFitLabel(string label, int room, int px, out string fitted)
+        => TryFitLabel(label, room, s => MeasureBig(s, px), out fitted);
+
+    /// <summary>The ladder itself, over any measure — the geometry is testable without a font.</summary>
+    public static bool TryFitLabel(string label, int room, Func<string, int> measure, out string fitted)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        fitted = label ?? "";
+        if (fitted.Length == 0) return true;
+        if (room > 0 && measure(fitted) <= room) return true;
+        if (fitted.EndsWith(BuiltInSuffix, StringComparison.Ordinal))
+        {
+            var bare = fitted[..^BuiltInSuffix.Length];
+            if (room > 0 && measure(bare) <= room) { fitted = bare; return true; }
+        }
+        return false;
+    }
+
+    /// <summary>The same ladder, ending in a cut when the row has no second line to give.</summary>
+    public string FitLabel(string label, int room, int px)
+        => TryFitLabel(label, room, px, out var fitted) ? fitted : ShortenBig(label, room, px);
+
     /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
     /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because
     /// the frame's centre is opaque). <paramref name="type"/> is health / mana / progress / boss / xp.</summary>

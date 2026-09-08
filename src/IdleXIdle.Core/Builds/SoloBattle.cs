@@ -554,6 +554,19 @@ public static class SoloBattle
     /// </remarks>
     public const float VenomBasePoison = 0.50f;
 
+    /// <summary>
+    /// SPLINTER's floor: the loot quality one kill adds when the build carries the trigger but wears no
+    /// SPLINTER item to set its strength (the REAPER keystone, THE QUIVER's grant).
+    /// </summary>
+    /// <remarks>
+    /// The literal this names sat inline in the kill handler and was the ONLY figure SPLINTER ever paid
+    /// — a worn weapon's rarity-scaled magnitude (<see cref="Economy.Enchantments.MagnitudeFor"/>)
+    /// reached the item card and stopped there, because <see cref="Build.Triggers"/> maps an enchant to
+    /// a boolean and the boolean is all the kill could read. Named here so the card and the fight quote
+    /// one number, exactly as <see cref="VenomBasePoison"/> does.
+    /// </remarks>
+    public const float SplinterBaseQuality = 0.15f;
+
     /// <summary>How much of the standing poison bleeds every half-second. The rest carries to later ticks.</summary>
     /// <remarks>
     /// 0.12, from 0.25 (2026-08-29) and 0.5 before that. Skills land on beats, and since the cooldowns
@@ -867,6 +880,15 @@ public static class SoloBattle
         // so a Legendary blurb promising 38% delivered 25%). A bare trigger with no worn enchant keeps a floor.
         var harvestChance = triggers.Contains(BuildTrigger.Harvest)
             ? Math.Max(0.10f, Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Harvest))
+            : 0f;
+
+        // SPLINTER reads its WORN magnitude too, for the same reason and in the same shape (2026-09-08).
+        // Its rarity curve was authored, tested and shown, and the kill paid a flat 0.15 whatever the
+        // weapon was: a Legendary SPLINTER (0.60) delivered the bare keystone's 0.15, so four rarity
+        // tiers of the enchant were the same item. Hoisted once per wave, like the two above, so a
+        // per-kill lookup cannot creep in — and read in exactly one place below.
+        var splinterQuality = triggers.Contains(BuildTrigger.Splinter)
+            ? Math.Max(SplinterBaseQuality, Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Splinter))
             : 0f;
 
         // THE KEYSTONE AND VOW COMBOS. Hoisted here like Venom and Harvest, and read below only INSIDE
@@ -1216,7 +1238,7 @@ public static class SoloBattle
             // spare core. The rhythm argument with REND is settled here, at the only moment that counts.
             if (chargeLive && triggers.Contains(BuildTrigger.Lodestone) && charge >= chargeCap)
                 bonus?.AddCores(1);
-            if (triggers.Contains(BuildTrigger.Splinter)) bonus?.AddQuality(0.15f);   // richer loot on a kill (see the blurb)
+            if (splinterQuality > 0f) bonus?.AddQuality(splinterQuality);   // richer loot on a kill, at the strength the item promises
 
             return Finish(WaveOutcome.Cleared, atMs);
         }
