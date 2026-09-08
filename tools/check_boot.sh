@@ -29,7 +29,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
-SAVE="${LOCALAPPDATA:-$HOME/.local/share}/ResonanceHunter/save.json"
+SAVE="${LOCALAPPDATA:-$HOME/.local/share}/IDLExIDLE/save.json"   # SaveFile.AppDataFolderName
 
 dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }

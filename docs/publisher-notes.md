@@ -50,13 +50,12 @@ page stays the same size and the type, rows and controls grow.
 The game writes one save automatically:
 
 ```
-%LOCALAPPDATA%\ResonanceHunter\save.json
+%LOCALAPPDATA%\IDLExIDLE\save.json
 ```
 
-The folder keeps the project's former name on purpose so that existing testers' saves survive the
-rename; nothing inside the game shows that word. **To evaluate from a clean start,** close the game
-and delete (or rename) that folder — the next launch begins a fresh account. `save.bak` beside it is
-the previous good save and is restored automatically if a save is ever truncated.
+**To evaluate from a clean start,** close the game and delete (or rename) that folder — the next
+launch begins a fresh account. `save.bak` beside it is the previous good save and is restored
+automatically if a save is ever truncated.
 
 Progress is credited while the game is closed, up to a cap that grows with the Warren.
 

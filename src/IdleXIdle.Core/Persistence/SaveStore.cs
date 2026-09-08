@@ -38,6 +38,47 @@ public static class SaveStore
     /// <summary>Full path of the rolling backup inside <paramref name="dir"/>.</summary>
     public static string BackupPath(string dir) => Path.Combine(dir, BackupFileName);
 
+    /// <summary>
+    /// Take over a folder the game used to save into — once, and only when there is nothing to lose.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The product was renamed and the save folder followed it (2026-09-08). This moves what the old
+    /// folder held into the new one on the first launch after the rename, so a player who has been
+    /// playing keeps their game. It refuses in every ambiguous case: it does nothing if the new folder
+    /// already holds a save (that game is the live one), nothing if the old folder holds none, and
+    /// nothing if the two paths are the same.
+    /// </para>
+    /// <para>
+    /// MOVES rather than copies, so there is exactly one live save afterwards and no chance of a
+    /// player editing the copy the game stopped reading. Every file is taken, not just save.json — the
+    /// backup, the display preference and the dated pre-reset snapshots are the player's too. A file
+    /// that will not move is skipped rather than thrown: a locked leftover must not cost a launch.
+    /// </para>
+    /// </remarks>
+    /// <returns>True when something was adopted.</returns>
+    public static bool AdoptOnce(string legacyDir, string dir)
+    {
+        ArgumentNullException.ThrowIfNull(legacyDir);
+        ArgumentNullException.ThrowIfNull(dir);
+        if (string.Equals(Path.GetFullPath(legacyDir), Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!Directory.Exists(legacyDir) || !File.Exists(SavePath(legacyDir))) return false;
+        if (File.Exists(SavePath(dir))) return false;
+
+        Directory.CreateDirectory(dir);
+        var adopted = false;
+        foreach (var from in Directory.GetFiles(legacyDir))
+        {
+            var to = Path.Combine(dir, Path.GetFileName(from));
+            if (File.Exists(to)) continue;
+            try { File.Move(from, to); adopted = true; }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return adopted;
+    }
+
     /// <summary>Must a session refuse to write, given how its load ended?</summary>
     /// <remarks>
     /// A session that could not READ the player's file has nothing but a blank game in memory, and

@@ -2643,8 +2643,13 @@ public sealed class MasteryScreen
         }
         else if (node.Kind == MasteryKind.Minor && _zoom >= FirstOpenZoom * 0.8f && node.Stats is { Count: > 0 } st0)
         {
+            // THE STAT, NOT JUST THE NUMBER (2026-09-08). The comment above has always said a minor
+            // "shows the stat it gives instead of a name", and it drew a bare "+8" — a figure of
+            // nothing, on the one node kind whose whole label IS its stat. The word is the player's
+            // (HunterStatWords), so the canvas, the inspector and the Training screen agree.
             var kv0 = st0.First();
-            _ui.TextCenterBig(b, $"+{kv0.Value:0}", cx, box.Bottom + UiMetrics.Space(2), taken ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, $"+{kv0.Value:0} {HunterStatWords.Word(kv0.Key)}", cx,
+                              box.Bottom + UiMetrics.Space(2), taken ? Bone : Slate, UiTypography.Secondary);
         }
 
         if (hover && node.Kind != MasteryKind.Start)
