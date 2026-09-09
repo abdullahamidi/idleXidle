@@ -408,22 +408,40 @@ public sealed class WarrenScreen
     // figure ran long ("2H 42M") — the one line that says what an absence holds, cut at the number.
     private int _awayLines = 1;
     private int StripRegionsY => StripMultiplierY + _closedLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
-    private int StripRuleY => StripRegionsY + _levelLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    private int StripRuleY => Math.Max(StripRegionsY + _levelLines * UiTypography.Pitch(UiTypography.Secondary),
+                                       StripMultiplierY + StripMetersH) + UiMetrics.Space(6);
     private int StripAwayY => StripRuleY + UiMetrics.Space(8);
     private int StripHeight => StripAwayY + _awayLines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
 
-    /// <summary>Cell C's sentences, measured before the strip is laid out, so its height is theirs.</summary>
-    private string ClosedLine => $"WHILE THE GAME IS CLOSED IT PAYS {OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY  (+{OfflineCamp.EfficiencyPerFacilityLevel:P1} A LEVEL)";
-    private string LevelLine => $"EACH LEVEL: A LARGER SHARE OF THE HUNT'S PAY  ({Warren.Share:P0} NOW)";
+    // ── WHAT AN ABSENCE IS WORTH, AS TWO METERS RATHER THAN THREE SENTENCES. ─────────────────────
+    //
+    // Cell C used to carry two wrapped sentences, and the strip's foot carried a third, all three
+    // saying the same two numbers: what share of live pay the camp keeps while the game is closed, and
+    // how long a closed game it can hold. Both are BOUNDED — 30 % to 60 %, and two hours to twelve —
+    // and a bounded quantity read against its own ceiling is a bar, not a clause. In prose the ceiling
+    // has to be stated ("UP TO 12 HOURS") and the player still has to work out how far along they are.
+    //
+    // This is the first of the text-for-picture swaps from the 2026-09-09 pass, and it was chosen
+    // because it is the least arguable: no wording is lost that the bar does not show better, and the
+    // two figures stay printed beside their bars for anyone who wants the number.
+    private static int StripMeterH => Math.Max(6, UiMetrics.Control(9));
+
+    /// <summary>The two meter rows' height, reserved before the strip lays out.</summary>
+    private static int StripMetersH =>
+        2 * (UiTypography.Pitch(UiTypography.Secondary) + StripMeterH + UiMetrics.Space(6));
 
     private void MeasureStrip()
     {
         var iw = SummaryStripWidth - GridPad * 2;
         var cw = iw - iw * 26 / 100 - iw * 28 / 100;
-        _closedLines = Math.Clamp(_ui.WrapBig(ClosedLine, cw, UiTypography.Secondary).Count, 1, 2);
-        _levelLines = Math.Clamp(_ui.WrapBig(LevelLine, cw, UiTypography.Secondary).Count, 1, 2);
+        // The two meters are a fixed block now — they do not wrap, so nothing has to be measured to
+        // know their height. The two counters stay so the rest of the strip's arithmetic reads on.
+        _closedLines = 0;
+        _levelLines = 0;
         // The away line takes the strip's whole width and as many rows as its words need — never cut.
-        _awayLines = Math.Max(1, _ui.WrapBig(AwayText, iw, UiTypography.Secondary).Count);
+        // ZERO when there is nothing to report: the row is an absence's own news, and reserving a line
+        // for it on every visit was what made the third sentence feel obligatory.
+        _awayLines = AwayText.Length == 0 ? 0 : _ui.WrapBig(AwayText, iw, UiTypography.Secondary).Count;
     }
 
     /// <summary>The strip's width, which no sentence changes — what the sentences are wrapped to.</summary>
@@ -569,15 +587,37 @@ public sealed class WarrenScreen
         => perMinute >= 10f ? Ab((long)MathF.Round(perMinute)) : perMinute.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// The now → next pair. When both round to the same whole number — a deep Warren's share climbs by
-    /// less each level — the tenths are shown, so "+92 → +92" never claims a level buys nothing.
+    /// The now → next pair, at the coarsest precision that still tells the two apart.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A deep Warren's rate climbs by less each level, so at some point the two figures round together
+    /// and a card claims an upgrade buys nothing. The old rule handled that at one precision and one
+    /// threshold: tenths, and only above ten a minute. Under ten it could still print "+9.2 → +9.2",
+    /// and — worse — the two figures were formatted by DIFFERENT rules on the same card, which is how
+    /// a NURSERY at level 18 came to read "+92 /min" over "NEXT LEVEL +91.7 /min": an upgrade
+    /// advertised as a downgrade, in the exact place the player decides whether to buy one.
+    /// </para>
+    /// <para>
+    /// One walk now, from whole numbers to hundredths, stopping at the first format that separates
+    /// them — or at whole numbers when they genuinely are equal, which is a real state (a capped
+    /// facility) and must not be dressed up as a gain. This is the ONLY place a rate pair is formatted;
+    /// both figures on a card come out of one call, so they cannot disagree again.
+    /// </para>
+    /// </remarks>
     private static (string Now, string Next) RatePair(float now, float next)
     {
-        if (now >= 10f && MathF.Round(now) == MathF.Round(next))
-            return (now.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
-                    next.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture));
-        return (Rate(now), Rate(next));
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var fmt in new[] { "0", "0.0", "0.00" })
+        {
+            var a = now.ToString(fmt, inv);
+            var bnext = next.ToString(fmt, inv);
+            if (a != bnext || MathF.Abs(next - now) < 0.0005f)
+                return fmt == "0"
+                    ? (Ab((long)MathF.Round(now)), Ab((long)MathF.Round(next)))
+                    : (a, bnext);
+        }
+        return (now.ToString("0.00", inv), next.ToString("0.00", inv));
     }
 
     /// <summary>
@@ -767,15 +807,14 @@ public sealed class WarrenScreen
                     ? $"WHILE YOU WERE AWAY {WelcomeSummary.AwayText(w.AwaySeconds)} THE WARREN MADE {string.Join("  ·  ", w.WarrenParts())}"
                     : "";
             }
-            return _awayLine.Length > 0 ? _awayLine : AwayNever;
+            return _awayLine;
         }
     }
 
-    // THE CAMP'S CAPACITY, in the Warren's own words (OfflineCamp, 2026-09-06): what an absence holds
-    // now, and what one more facility level buys — the offline dimension every upgrade improves.
-    private string AwayNever =>
-        $"THE CAMP HOLDS {OfflineCamp.HoursText(OfflineCamp.HoursFor(Warren))} OF HUNTING WHILE THE GAME IS CLOSED — "
-        + $"EACH FACILITY LEVEL HOLDS {OfflineCamp.HoursPerFacilityLevel * 60f:0} MINUTES MORE, UP TO {OfflineCamp.MaxHours:0} HOURS";
+    // THE CAMP'S CAPACITY USED TO BE SAID HERE TOO — a third sentence carrying the same two figures the
+    // meters above now draw, and the strip printed it whether or not there had been an absence to
+    // report. The foot row is only about a real absence now, and says nothing when there has not been
+    // one. (What one more level buys is on the facility card, beside the level being bought.)
 
     // ── THE WHEEL. The host latches the wheel once a frame and hands it to the screens whose Update
     //    takes it; this screen's entry point predates any of them and takes only the cursor and the
@@ -1017,22 +1056,20 @@ public sealed class WarrenScreen
             _ui.TextBig(b, ResName(r), cx + k * chw, strip.Y + StripNamesY, v > 0f ? ResColor(r) : Slate, UiTypography.Secondary);
             k++;
         }
-        // THE CAMP, in two lines (the rate model, 2026-09-06): what an absence holds and at what share
-        // of live pay, then what every level buys — the three things a level moves, in player words.
-        // The figures are Core's (OfflineCamp, WarrenBudget); nothing here owns a number.
-        // Wrapped, never shortened (MeasureStrip reserved the lines): the figure is the sentence's point.
-        var closedY = strip.Y + StripMultiplierY;
-        foreach (var l in _ui.WrapBig(ClosedLine, cw, UiTypography.Secondary).Take(2))
-        {
-            _ui.TextBig(b, l, cx, closedY, Bone, UiTypography.Secondary);
-            closedY += UiTypography.Pitch(UiTypography.Secondary);
-        }
-        var levelY = strip.Y + StripRegionsY;
-        foreach (var l in _ui.WrapBig(LevelLine, cw, UiTypography.Secondary).Take(2))
-        {
-            _ui.TextBig(b, l, cx, levelY, Slate, UiTypography.Secondary);
-            levelY += UiTypography.Pitch(UiTypography.Secondary);
-        }
+        // THE CAMP, AS TWO METERS. Both figures are Core's (OfflineCamp); nothing here owns a number,
+        // and each bar's FULL length is that figure's real ceiling — so "how much better can this get"
+        // is answered by the shape rather than by a clause saying UP TO.
+        var meterY = strip.Y + StripMultiplierY;
+        meterY = CampMeter(b, cx, meterY, cw, "WHILE CLOSED, PAYS",
+                           $"{OfflineCamp.EfficiencyFor(Warren):P0} OF LIVE PAY",
+                           (OfflineCamp.EfficiencyFor(Warren) - OfflineCamp.BaseEfficiency)
+                           / Math.Max(0.0001f, OfflineCamp.MaxEfficiency - OfflineCamp.BaseEfficiency),
+                           Gold);
+        CampMeter(b, cx, meterY, cw, "AND HOLDS",
+                  OfflineCamp.HoursText(OfflineCamp.HoursFor(Warren)) + " OF HUNTING",
+                  (OfflineCamp.HoursFor(Warren) - OfflineCamp.BaseHours)
+                  / Math.Max(0.0001f, OfflineCamp.MaxHours - OfflineCamp.BaseHours),
+                  ResColor(WarrenResource.Dust));
 
         // THE AWAY LINE — the screen's own question, answered with the figures from the absence that
         // actually happened. The host already had them; this screen never showed them.
@@ -1045,6 +1082,25 @@ public sealed class WarrenScreen
             _ui.TextBig(b, l, ix, awayY, Bone, UiTypography.Secondary);
             awayY += UiTypography.Pitch(UiTypography.Secondary);
         }
+    }
+
+    /// <summary>
+    /// One camp meter: a caption, the figure, and a bar filled to where that figure stands between its
+    /// floor and its ceiling. Returns the y the next one starts at.
+    /// </summary>
+    /// <remarks>
+    /// The caption and the figure share a row — the caption left, the figure right — so the bar
+    /// underneath spans the whole cell and the eye reads label, number, position in one pass. Every
+    /// facility level moves both bars, which is the thing three sentences were trying to say and a
+    /// moving bar says by itself.
+    /// </remarks>
+    private int CampMeter(SpriteBatch b, int x, int y, int w, string caption, string figure, float fill, Color tint)
+    {
+        _ui.TextBig(b, caption, x, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, figure, x + w, y, Bone, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.Bar(b, x, y, w, StripMeterH, Math.Clamp(fill, 0f, 1f), tint);
+        return y + StripMeterH + UiMetrics.Space(6);
     }
 
     // ── THE GRID. Eight cards, each answering "can I upgrade this one?" without being clicked. ──
@@ -1225,11 +1281,26 @@ public sealed class WarrenScreen
             var pay = _landed is { } paid && paid.Kind == f.Kind
                 ? Ticked(paid.FromOutput, Boosted(f), outLit) : Boosted(f);
             var rateNow = Warren.OutputPerMinute(f.Kind);
-            _ui.TextBig(b, rateNow < 10f ? $"+{Rate(rateNow)} /min" : $"+{Ab(pay)} /min", drawn.X + CardPadX, rows.FigureY,
+            // ── ONE FORMATTER FOR BOTH FIGURES ON THE CARD. ──────────────────────────────────────
+            //
+            // The big figure rounded to a whole number while the NEXT LEVEL line under it used the
+            // pair's tenths, so a deep facility card read "+92 /min" over "NEXT LEVEL +91.7 /min" —
+            // an upgrade advertised as a downgrade, in the one place the player decides whether to buy
+            // one. RatePair exists precisely to keep the two honest ("+92 → +92 never claims a level
+            // buys nothing", says its own note); only the top figure was not asking it.
+            //
+            // The top figure still animates through `pay`, which counts up as a level lands — so it is
+            // the PRECISION that is taken from the pair, not the value.
+            var pair = RatePair(rateNow, Warren.NextLevelOutputPerMinute(f.Kind));
+            // The pair's NOW, except on the frames a level is landing — there the figure counts up
+            // through `pay`, which is a whole number by construction, so the flourish shows whole
+            // numbers and the settled card shows the pair. Correct at rest, alive on arrival.
+            var nowText = outLit > 0f ? Ab(pay) : pair.Now;
+            _ui.TextBig(b, $"+{nowText} /min", drawn.X + CardPadX, rows.FigureY,
                         Color.Lerp(Bone, Flare, outLit), UiTypography.Headline);
             // THE NEXT LEVEL'S PROMISE, under the figure — what the upgrade changes, answered on the card.
             if (rows.HasMilestone)
-                _ui.TextBig(b, _ui.ShortenBig($"NEXT LEVEL  +{RatePair(Warren.OutputPerMinute(f.Kind), Warren.NextLevelOutputPerMinute(f.Kind)).Next} /min", drawn.Width - CardPadX * 2, UiTypography.Secondary),
+                _ui.TextBig(b, _ui.ShortenBig($"NEXT LEVEL  +{pair.Next} /min", drawn.Width - CardPadX * 2, UiTypography.Secondary),
                             drawn.X + CardPadX, rows.MilestoneY, Slate, UiTypography.Secondary);
 
             // ── THE CHIP: the answer the player had to click eight cards to find. ──
