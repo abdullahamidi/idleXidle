@@ -212,6 +212,9 @@ public sealed class GearScreen
         TourTarget.PaperDoll => new[] { EquippedPanel },
         TourTarget.Inventory => new[] { InventoryPanel },
         TourTarget.ItemDetail => new[] { DetailPanel },
+        // The doll's foot strip: worn count, average level, and a chip per live set rung. It is where
+        // a set announces itself, so it is what the SET card lights.
+        TourTarget.GearSets => new[] { FooterStrip },
         _ => Array.Empty<Rectangle>(),
     };
 

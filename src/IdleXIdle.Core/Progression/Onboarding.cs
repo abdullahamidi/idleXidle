@@ -48,6 +48,9 @@ public enum TourTarget
     /// <summary>The detail column for the clicked item, with EQUIP.</summary>
     ItemDetail,
 
+    /// <summary>The strip along the doll's foot: what is worn, the average level, and the live set rungs.</summary>
+    GearSets,
+
     // ── BUILD (the weave) ──
     /// <summary>The skill slot rows.</summary>
     SkillSlots,
@@ -288,9 +291,22 @@ public static class Onboarding
                 "Every item you own that is not worn. Any of them can be dragged onto the doll. "
                 + "A dimmed item belongs to another class, and this hunter cannot wear it."),
 
+            // ITEM ELEMENTS AND SET BONUSES WERE NAMED AS MISSING IN THE 2026-09-09 PLAYTEST — "item
+            // elements, gear bonuses, stats and enhancements are never mentioned" — and were still
+            // missing after that pass, which is most of what "the tutorial still explains nothing"
+            // is about. An ELEMENT is the most consequential thing on a piece of gear and the tour
+            // had never said the word.
+            //
+            // Said HERE rather than on a fifth card: a tour is two to four cards and no two of them
+            // may point at the same place, both of which are house rules with tests behind them, and
+            // "who can wear it" was already the Inventory card's second sentence.
             new TourStep(TourTarget.ItemDetail, "THE ITEM",
-                "The real numbers of the item you picked, and who can wear it. EQUIP wears it, "
-                + "and what was in that slot goes back to the bag."),
+                "Its GRADE is the frame colour, its LEVEL its size, and its ELEMENT the Source it "
+                + "belongs to. EQUIP wears it; what was there goes back to the bag."),
+
+            new TourStep(TourTarget.GearSets, "WEARING A SET",
+                "Wear several pieces of one ELEMENT and this strip lights: each rung of a set is a "
+                + "standing bonus, and five is the whole of it."),
         },
 
         Activity.Build => new[]
