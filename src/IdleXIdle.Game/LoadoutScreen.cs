@@ -659,6 +659,18 @@ public sealed class LoadoutScreen
     /// <summary>The width of four risk pips at this pip size, for laying a label beside them.</summary>
     private static int RiskPipsWidth(int pip) => pip * 4 + UiMetrics.Space(3) * 3;
 
+    /// <summary>
+    /// Is the screen's NEW SKILL SLOT reveal on screen right now? Set by the host every frame.
+    /// </summary>
+    /// <remarks>
+    /// The banner says a slot opened; this is what points at the slot. A steady accented outline on the
+    /// first empty row rather than a pulse: a pulse is a one-shot armed by an event, and this state can
+    /// last for days — the player may not open BUILD for a week. A steady outline also needs no motion
+    /// key, so nothing can be orphaned by the list scrolling under it, and Reduced Motion has nothing
+    /// to collapse. It goes when the reveal is acknowledged, because the host stops setting it.
+    /// </remarks>
+    public bool RevealingNewSlot { get; set; }
+
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
     internal Rectangle[] Spotlights(TourTarget target)
     {
@@ -1293,6 +1305,9 @@ public sealed class LoadoutScreen
         var known = KnownSkills();
         var region = ListRegion;
         var scrolling = _loadOverflow > 0;
+        // Marked on the first EMPTY row only, and cleared once it is drawn, so three owed slots never
+        // light three rows at once — the reveal itself is one at a time and its light matches it.
+        var revealAt = RevealingNewSlot;
         if (scrolling) BeginClip(b, region);
         foreach (var (slot, row, passive, first) in _rows)
         {
@@ -1300,7 +1315,15 @@ public sealed class LoadoutScreen
                 _ui.TextBig(b, passive ? "PASSIVE — ALWAYS ON" : "ACTIVE — TAKES A TURN", row.X, row.Y - UiTypography.Pitch(UiTypography.Secondary) - 2, Slate, UiTypography.Secondary);
             if (row.Bottom <= region.Y || row.Y >= region.Bottom) continue;   // scrolled clear of the region
             var shown = In(row, region);
-            if (slot < 0) { DrawEmptyRow(b, row, shown, hit); continue; }
+            if (slot < 0)
+            {
+                DrawEmptyRow(b, row, shown, hit);
+                // THE ROW THE REVEAL IS ABOUT. The banner at the top of the screen says a slot opened;
+                // without this the player has to work out which of the rows it means. The FIRST empty
+                // one, once, in the same gold the trait screen marks a landing slot with.
+                if (revealAt && slot < 0) { Outline(b, shown, Gold, 3); revealAt = false; }
+                continue;
+            }
 
             var s = skills[slot];
             var def = SkillCatalogue.Find(s.SkillId);

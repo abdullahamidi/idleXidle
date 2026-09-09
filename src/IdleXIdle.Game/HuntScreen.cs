@@ -4240,13 +4240,23 @@ public sealed class HuntScreen
     /// Where the EXPEDITION LOG button sits: right of the stage header, UNDER the chrome row.
     /// </summary>
     /// <remarks>
-    /// Both of its numbers are anchors rather than literals now. The x clears the stage header's own
-    /// right rail; the y hangs off <see cref="Game1.ChromeRowBottom"/>, because a fixed 40 put the
-    /// medallion half underneath the GLEAM capsule at 150 % — where the capsules are half again as
-    /// tall and their chain reaches back past 1206. Its edge follows the profile, as a hit target must.
+    /// <para>
+    /// BOTH OF ITS NUMBERS ARE ANCHORS, and each was a literal that failed at 150 %. The y hangs off
+    /// <see cref="Game1.ChromeRowBottom"/>: a fixed 40 put the medallion half underneath the GLEAM
+    /// capsule, where the capsules are half again as tall and their chain reaches back past 1206.
+    /// </para>
+    /// <para>
+    /// The x then had to leave the page's centred column entirely. Below the capsules is where the
+    /// locked-tile refusal lives — 900 px wide, centred, and taller at every profile because its type
+    /// scales while its top does not — so a medallion at 1206 was simply covered by it for three
+    /// seconds, which is the control READ THE LOG points at. There is no band that holds all three, so
+    /// the medallion takes the gap between that toast's right edge and the right-hand column. Its own
+    /// edge follows the profile, as a hit target must.
+    /// </para>
     /// </remarks>
     internal static Rectangle LogButtonRect
-        => new(1206, Game1.ChromeRowBottom + UiMetrics.Space(8), UiMetrics.Control(64), UiMetrics.Control(64));
+        => new(Game1.LockedToastRight + UiMetrics.Space(16), Game1.ChromeRowBottom + UiMetrics.Space(8),
+               UiMetrics.Control(64), UiMetrics.Control(64));
 
     /// <summary>
     /// The EXPEDITION LOG's own button — the log was reachable only by the L key, which a player who has

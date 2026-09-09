@@ -420,17 +420,24 @@ public static class Unlocks
 
     /// <summary>What opening a new skill slot should say, for the slot just gained.</summary>
     /// <remarks>
+    /// <para>
     /// Indexed by the slot NUMBER rather than by a milestone, so the copy cannot drift out of step with
     /// <see cref="SkillSlots"/> when the gates are retuned.
+    /// </para>
+    /// <para>
+    /// ONE SHORT LINE EACH. These were two-sentence paragraphs of advice — how timers interleave, what
+    /// a SIGN is for, what a full build means — written when this note arrived at the end of the BUILD
+    /// tour, with the screen already explained. It is a REVEAL now, and a reveal says what happened and
+    /// gets out of the way; the advice belongs in the tour, which is still there behind LEARN THIS
+    /// SCREEN, and in the skills' own readings. The slot number is kept because "another" is vaguer
+    /// than "a third" for no gain.
+    /// </para>
     /// </remarks>
     public static string SkillSlotNote(int slot) => slot switch
     {
-        2 => "A SECOND SKILL. Each skill fires on its own timer, so what you pair matters — a slow "
-             + "heavy hit beside a fast one fills the gap the heavy one leaves.",
-        3 => "A THIRD SKILL. Room for a plan now: something to keep you alive, or a SIGN to make "
-             + "the other two hit harder.",
-        4 => "A FOURTH SKILL. A full build. Every skill and every style is open to you — the "
-             + "build is now the main thing you are playing with.",
+        2 => "You can equip a second skill.",
+        3 => "You can equip a third skill.",
+        4 => "You can equip a fourth skill — a full build.",
         _ => "",
     };
 

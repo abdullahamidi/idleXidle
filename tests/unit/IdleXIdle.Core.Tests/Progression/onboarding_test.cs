@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Progression;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,6 +21,9 @@ namespace IdleXIdle.Core.Tests.Progression;
 /// </remarks>
 public class OnboardingTest
 {
+
+    /// <summary>A file version from before the explained list could be believed — the seeded era.</summary>
+    private const int PreExplainedList = Onboarding.FirstVersionWithExplainedList - 1;
     private readonly ITestOutputHelper _out;
 
     public OnboardingTest(ITestOutputHelper output) => _out = output;
@@ -82,10 +86,7 @@ public class OnboardingTest
                 "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. The fight's own lessons appear here. Close one with the ×."),
         };
 
-        var intro = Onboarding.Intro;
-        Assert.Same(Onboarding.TourFor(Activity.Hunt).GetType(), intro.GetType());
         Assert.Equal(expected.Select(e => new TourStep(e.Target, e.Title, e.Body)), Onboarding.TourFor(Activity.Hunt));
-        Assert.Equal(Onboarding.TourFor(Activity.Hunt), intro);
     }
 
     // ── Every tour ────────────────────────────────────────────────────────────────────────────
@@ -196,7 +197,8 @@ public class OnboardingTest
     [Fact]
     public void test_a_new_player_starts_with_nothing_explained()
     {
-        var seeded = Onboarding.SeedExplained(new UnlockFacts(), introSeen: false, explained: Array.Empty<string>());
+        var seeded = Onboarding.SeedExplained(new UnlockFacts(), introSeen: false, explained: Array.Empty<string>(),
+                                              freeSocketUsed: false, fileVersion: PreExplainedList);
         Assert.Empty(seeded);
     }
 
@@ -210,7 +212,8 @@ public class OnboardingTest
         // that fixture on 2026-09-09.
         var facts = new UnlockFacts(WavesCleared: 8, DeepestWave: 12, RegionsConquered: 1,
                                     MasteryPointsEarned: Unlocks.RoadPaths[2]);
-        var seeded = Onboarding.SeedExplained(facts, introSeen: false, explained: Array.Empty<string>());
+        var seeded = Onboarding.SeedExplained(facts, introSeen: false, explained: Array.Empty<string>(),
+                                              freeSocketUsed: false, fileVersion: PreExplainedList);
 
         _out.WriteLine("seeded: " + string.Join(", ", seeded.OrderBy(s => s)));
 
@@ -234,7 +237,8 @@ public class OnboardingTest
         // An OLD save says "Stats"; the host reads it forward through ModernScreenKey before seeding
         // (the screen became TRAINING 2026-09-01), so the returning player keeps what they learned.
         var seeded = Onboarding.SeedExplained(facts, introSeen: true,
-            explained: new[] { Onboarding.ModernScreenKey("Stats") });
+            explained: new[] { Onboarding.ModernScreenKey("Stats") },
+            freeSocketUsed: false, fileVersion: PreExplainedList);
 
         Assert.Equal(new[] { "Training" }, seeded.OrderBy(s => s));
         Assert.True(Onboarding.IsNew(Activity.Gear, facts, seeded));
@@ -274,28 +278,130 @@ public class OnboardingTest
     }
 
     [Fact]
-    public void test_the_build_screen_gives_its_tour_first_and_then_the_new_slot()
+    public void test_a_new_player_who_cleared_a_wave_and_reloaded_is_not_seeded_as_a_veteran()
     {
-        // Wave 5 opens the Build screen AND the second skill slot on the same frame. Two things are
-        // owed; they arrive one at a time, the screen before the change on it — and the slot note is
-        // a banner, which is the one place a banner is still used.
+        // THE DEFECT THIS CLOSES, and it is the same shape as the fall-loop one. "The intro was never
+        // seen and waves have been cleared" meant "written before the intro existed" only while an
+        // intro existed to be seen. Nothing shows one now, so that description also fits a BRAND-NEW
+        // player who cleared a wave, quit and came back — and they were being marked as having read
+        // every screen, every slot reveal and the first-gem lesson, once, on their second session.
+        var newPlayer = new UnlockFacts(WavesCleared: 3, DeepestWave: 3, ItemsOwned: 1);
+
+        var honest = Onboarding.SeedExplained(newPlayer, introSeen: false, explained: Array.Empty<string>(),
+                                              freeSocketUsed: false, fileVersion: SaveGame.CurrentVersion);
+        Assert.Empty(honest);
+        Assert.NotNull(Onboarding.TourDue(Activity.Gear, honest));
+        Assert.Equal(Onboarding.GemTourKey, Onboarding.GemTourDue(gemsHeld: 1, explained: honest));
+
+        // ...and the veteran whose file really does predate it is still seeded, unchanged.
+        var veteran = Onboarding.SeedExplained(newPlayer, introSeen: false, explained: Array.Empty<string>(),
+                                               freeSocketUsed: false, fileVersion: PreExplainedList);
+        Assert.NotEmpty(veteran);
+        Assert.Null(Onboarding.TourDue(Activity.Gear, veteran));
+        Assert.Null(Onboarding.GemTourDue(gemsHeld: 1, explained: veteran));
+    }
+
+    [Fact]
+    public void test_the_explained_list_migration_version_is_frozen_at_five()
+    {
+        // IT MUST NEVER BE SaveGame.CurrentVersion. Written that way, the next bump would start seeding
+        // files that are perfectly honest, and every player mid-onboarding would be marked as having
+        // read everything. Five is the first version written by a build in which no tour starts itself.
+        Assert.Equal(5, Onboarding.FirstVersionWithExplainedList);
+        Assert.True(Onboarding.FirstVersionWithExplainedList <= SaveGame.CurrentVersion,
+                    "the explained list cannot first be trustworthy in a version that does not exist yet");
+    }
+
+    [Fact]
+    public void test_the_new_slot_is_revealed_whether_or_not_the_build_tour_was_taken()
+    {
+        // WHAT THIS TEST USED TO SAY, and why it was wrong. Wave 5 opens the BUILD screen and the
+        // second skill slot on the same frame, and the two used to be handed over in order — the
+        // screen before the change on it — with the slot note withheld until the tour had been given.
+        // That was sound while the tour ran itself on first open. It does not run itself any more:
+        // LEARN THIS SCREEN is a button, and a player who never presses it was never told they had a
+        // second skill slot. A slot opening is progression feedback the screen owes, not a reward for
+        // reading optional help.
         var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5,
                                     MasteryPointsEarned: Unlocks.RoadPaths[0]);
-        var explained = new HashSet<string>();
+        var untoured = new HashSet<string>();
 
-        var tour = Onboarding.TourDue(Activity.Build, explained);
-        Assert.Equal(Onboarding.ScreenKey(Activity.Build), tour);
-        Assert.Null(Onboarding.BannerFor(Activity.Build, facts, explained));   // not while the tour is owed
-        explained.Add(tour!);
-
-        var note = Onboarding.BannerFor(Activity.Build, facts, explained);
+        // The tour is still owed — and the reveal comes anyway.
+        Assert.Equal(Onboarding.ScreenKey(Activity.Build), Onboarding.TourDue(Activity.Build, untoured));
+        var note = Onboarding.BannerFor(Activity.Build, facts, untoured);
         Assert.NotNull(note);
         Assert.Equal(Onboarding.SlotKey(2), note!.Value.Key);
         Assert.Equal(Unlocks.SkillSlotNote(2), note.Value.Body);
-        explained.Add(note.Value.Key);
 
-        Assert.Null(Onboarding.BannerFor(Activity.Build, facts, explained));
-        Assert.False(Onboarding.IsNew(Activity.Build, facts, explained));
+        // ...and it is the SAME reveal for a player who did press ?. Reading the help changes nothing.
+        var toured = new HashSet<string> { Onboarding.ScreenKey(Activity.Build) };
+        Assert.Equal(note, Onboarding.BannerFor(Activity.Build, facts, toured));
+
+        // Acknowledged once, gone for good — from both.
+        untoured.Add(note.Value.Key);
+        toured.Add(note.Value.Key);
+        Assert.Null(Onboarding.BannerFor(Activity.Build, facts, untoured));
+        Assert.Null(Onboarding.BannerFor(Activity.Build, facts, toured));
+        Assert.False(Onboarding.IsNew(Activity.Build, facts, toured));
+    }
+
+    [Fact]
+    public void test_the_slots_are_revealed_one_at_a_time_and_only_up_to_the_capacity_unlocks_gives()
+    {
+        // Three slots can be owed at once on a save that has never opened BUILD, and three
+        // congratulations in one frame is a failure this codebase has killed before. Lowest first,
+        // one at a time, each acknowledged by its own key — and never one the player has not earned.
+        var all = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, RegionsConquered: 6,
+                                  KeystonesDiscovered: 3, MasteryPointsEarned: 9999);
+        var cap = Unlocks.SkillSlots(all);
+        Assert.True(cap >= 3, "the fixture must earn more than one slot for this to prove anything");
+
+        var explained = new HashSet<string>();
+        for (var slot = 2; slot <= cap; slot++)
+        {
+            var owed = Onboarding.BannerFor(Activity.Build, all, explained);
+            Assert.NotNull(owed);
+            Assert.Equal(Onboarding.SlotKey(slot), owed!.Value.Key);
+            Assert.Equal(Unlocks.SkillSlotNote(slot), owed.Value.Body);
+            explained.Add(owed.Value.Key);
+        }
+        Assert.Null(Onboarding.BannerFor(Activity.Build, all, explained));
+
+        // CAPACITY IS UNLOCKS', AND ONLY UNLOCKS'. The reveal never invents a slot: a player one
+        // milestone short is offered exactly the slots Unlocks.SkillSlots says they have.
+        var early = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, MasteryPointsEarned: Unlocks.RoadPaths[0]);
+        var seen = new HashSet<string>();
+        for (var slot = 2; slot <= Unlocks.SkillSlots(early); slot++)
+        {
+            var owed = Onboarding.BannerFor(Activity.Build, early, seen);
+            Assert.Equal(Onboarding.SlotKey(slot), owed!.Value.Key);
+            seen.Add(owed.Value.Key);
+        }
+        Assert.Null(Onboarding.BannerFor(Activity.Build, early, seen));
+    }
+
+    [Fact]
+    public void test_acknowledging_a_slot_reveal_fabricates_no_gameplay_fact()
+    {
+        // Closing the card writes one string into the explained list and nothing else. The slot is
+        // still empty, the capacity is unchanged, and FirstSharedSkillEquip — which teaches the actual
+        // deed — is untouched by it, because it reads the loadout and not this list.
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5,
+                                    MasteryPointsEarned: Unlocks.RoadPaths[0]);
+        var before = Unlocks.SkillSlots(facts);
+
+        var explained = new HashSet<string>();
+        var note = Onboarding.BannerFor(Activity.Build, facts, explained)!.Value;
+        explained.Add(note.Key);
+
+        Assert.Equal(before, Unlocks.SkillSlots(facts));
+        Assert.Equal(new[] { Onboarding.SlotKey(2) }, explained.ToArray());
+
+        // The lesson that asks for the deed does not read the acknowledgement — it reads live state.
+        var owed = new LessonFacts(WavesCleared: 5, DeepestWave: 5, HuntersOwned: 1,
+                                   SharedSkillsAvailable: 1, EmptySkillSlots: 1);
+        Assert.Contains(OnboardingLessonId.FirstSharedSkillEquip, OnboardingLessons.EligibleNow(owed));
+        Assert.False(OnboardingLessons.Completed(OnboardingLessonId.FirstSharedSkillEquip, owed));
     }
 
     [Fact]

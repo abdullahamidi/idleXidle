@@ -49,7 +49,7 @@ before=""
 boot_run() {
   timeout 120 bash -c '
     . tools/shellenv.sh || exit 1
-    RH_ENV=(RH_BOOTCHECK=1)
+    RH_ENV=(RH_BOOTCHECK=1 RH_LESSON_LEDGER=1)
     [ -n "$1" ] && RH_ENV+=(RH_SAVE_DIR="$1")
     dn run --project src/IdleXIdle.Game --no-build
   ' _ "$1" 2>&1
@@ -139,4 +139,73 @@ if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; 
   exit 1
 fi
 
-echo "boot green — reads, writes, and reads back what it wrote."
+# ── AND THE ONE PIECE OF WIRING NO UNIT TEST CAN REACH. ───────────────────────────────────────
+#
+# Two migrations decide whether a loaded save is a VETERAN — one for the fall loop
+# (OnboardingLessons.SeedFallLoopAsLived) and one for the explained list (Onboarding.SeedExplained)
+# — and both read the same host field, Game1._saveVersionSeen, which is assigned from the loaded
+# file's Version. The PREDICATES are unit-tested at both branches. The WIRING is not, and cannot be:
+# Game1 needs MonoGame to instantiate, so there is no seam a unit test can hold. Extracting one
+# would mean a fake host or an interface hierarchy for a single assignment, which is a worse trade
+# than this.
+#
+# So it is proved where it actually runs. Two boots against a hand-written file that differs by one
+# character, reading the ledger the game already prints (RH_LESSON_LEDGER).
+#
+# THE NEGATIVE CONTROL IS THE HALF THAT MATTERS: a `SaveGame.CurrentVersion` creeping into either
+# call site would still pass the v4 lane and fail the v5 one.
+SEED="${TEMP:-/tmp}/rh_bootcheck_seed"
+mkdir -p "$SEED"
+
+# MasteryEarned is what Game1 restores into _deepestEver, which LessonFactsNow hands to DeepestWave;
+# 25 clears Checkpoints.ConquestWave (20), so the progression half of the seed's test is satisfied
+# and only the VERSION decides. Every other member takes its default through System.Text.Json.
+#
+# THE TWO NUMBERS ARE FROZEN CONSTANTS, not "one less than current": 4 is a file from before the
+# tours became opt-in, 5 is Onboarding.FirstVersionWithExplainedList and
+# OnboardingLessons.FirstVersionWithFallLoopFacts. When CurrentVersion next moves, these do not —
+# and if somebody makes them move, this lane is where it shows.
+seed_version() {
+  rm -f "$SEED/save.json" "$SEED/save.bak" "$SEED"/save.pre-v*.json
+  printf '{ "Version": %s, "SavedAtMs": 1700000000000, "MasteryEarned": 25 }
+' "$1" > "$SEED/save.json"
+}
+
+ledger_line() { echo "$1" | grep -m1 "ftue_loop_lived="; }
+
+seed_version 4
+old_out="$(boot_run "$(winpath "$SEED")")"
+old_line="$(ledger_line "$old_out")"
+if [ -z "$old_line" ]; then
+  echo "NO LESSON LEDGER — RH_LESSON_LEDGER printed nothing, so this lane proves nothing." >&2
+  echo "$old_out" | tail -20 >&2
+  exit 1
+fi
+if ! echo "$old_line" | grep -q "ftue_loop_lived=True"; then
+  echo "A PRE-v5 SAVE WAS NOT SEEDED AS A VETERAN — Game1._saveVersionSeen is not reaching the seed." >&2
+  echo "  ledger: $old_line" >&2
+  exit 1
+fi
+echo "v4 save seeded as a veteran."
+
+seed_version 5
+new_out="$(boot_run "$(winpath "$SEED")")"
+new_line="$(ledger_line "$new_out")"
+if [ -z "$new_line" ]; then
+  echo "NO LESSON LEDGER on the current-version lane." >&2
+  exit 1
+fi
+if ! echo "$new_line" | grep -q "ftue_loop_lived=False"; then
+  echo "A CURRENT-VERSION SAVE WAS SEEDED AS A VETERAN — the version has stopped deciding, and a new" >&2
+  echo "player who reloads loses READ THE LOG, MAKE ONE CHANGE and TRY AGAIN." >&2
+  echo "  ledger: $new_line" >&2
+  exit 1
+fi
+echo "v5 save believed as written — false facts stay false."
+
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE MIGRATION LANES TOUCHED THE PLAYER'S SAVE." >&2
+  exit 1
+fi
+
+echo "boot green — reads, writes, reads back what it wrote, and migrates by version."

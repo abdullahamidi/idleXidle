@@ -215,6 +215,11 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #
 #   RH_SAVE_DIR="$(cygpath -w "$TEMP/fresh")" bash tools/asset-pipeline/capture.sh fight out.png
 [ -n "${RH_SAVE_DIR:-}" ] && RH_ENV+=(RH_SAVE_DIR="$RH_SAVE_DIR")
+# RH_SHOT_LOCKED=<Activity> poses the LOCKED-TILE REFUSAL toast — what a rail tile that is not open
+# yet says when it is pressed. Three seconds behind a click no capture can make:
+#
+#   RH_SHOT_LOCKED=Warren RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh fight out.png
+[ -n "${RH_SHOT_LOCKED:-}" ] && RH_ENV+=(RH_SHOT_LOCKED="$RH_SHOT_LOCKED")
 # RH_SHOT_BOSSCALL=1 holds the BOSS INCOMING announcement up on any fight fixture — a second and a
 # half of the break before a boss wave, on a timer no capture could otherwise reach.
 [ -n "${RH_SHOT_BOSSCALL:-}" ] && RH_ENV+=(RH_SHOT_BOSSCALL="$RH_SHOT_BOSSCALL")

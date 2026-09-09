@@ -1810,9 +1810,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// they have used for hours. The rule itself is <see cref="Onboarding.SeedExplained"/>.
     /// </para>
     /// <para>
-    /// A save from before the intro existed is recognised there (intro neither seen nor due) and every
-    /// open screen is marked read. That save then carries IntroSeen forward as TRUE — the migration
-    /// happens once, not on every load.
+    /// A save written before the explained list could be believed is recognised there BY ITS VERSION
+    /// (<c>Onboarding.FirstVersionWithExplainedList</c>), and every open screen is marked read. It then
+    /// saves at the current version, so the migration happens once and not on every load.
     /// </para>
     /// <para>
     /// UNDER THE CAPTURE RIG everything is explained unless a fixture says otherwise: every fixture
@@ -1855,7 +1855,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         var facts = GuideUnlockFacts();
-        foreach (var key in Onboarding.SeedExplained(facts, _introSeen, _pendingExplained ?? new List<string>(), _forge.FreeSocketUsed))
+        foreach (var key in Onboarding.SeedExplained(facts, _introSeen, _pendingExplained ?? new List<string>(),
+                                                     _forge.FreeSocketUsed, _saveVersionSeen))
             _explained.Add(key);
         _pendingExplained = null;
 
@@ -3239,6 +3240,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // and it is also the ordinary late-career state rather than a bought fixture.
                     _world.RestoreConquered(Regions.All.Select(r => r.Id));
                     _world.RestoreCorruption(16);
+                    // ...AND THE DEPTH THAT PAID FOR IT, per region. The comment above says a fixture
+                    // that conquers the world without saying how deep it went poses a hunter the game
+                    // cannot produce — and this one did exactly that, one level down: MASTERY POINTS
+                    // are derived from each region's BEST DEPTH (SkillPointsEarned), never from
+                    // _deepestEver, so the pose carried six conquests, a four-skill loadout, and an
+                    // unlock ladder still saying "earn 7 mastery points for a SECOND skill slot".
+                    // Nothing that reads Unlocks could be photographed truthfully here until now.
+                    foreach (var def in Regions.All) _world.RegionFarm(def.Id).RecordDepth(_deepestEver);
                     // AND THE VOWS THE ACCOUNT HAS PROVED. A Vow is found by keeping its rule once
                     // without it, so the fixture states the account's knowledge directly rather than
                     // buying it: three found, which is a real mid-career collection and enough rows to
@@ -3653,7 +3662,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
             }
 
-        if (_noticeTimer > 0f) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
+        // A QUEUE, NOT A STACK — the rule this codebase already keeps for the toast slot, applied to
+        // the band above a menu screen's page. A slot REVEAL and a notice both stand there, and drawing
+        // both put QUEST COMPLETE through "You can equip a second skill." Stacking them instead cost
+        // the page two lanes and squeezed four labels into ellipses at 150 %. So the reveal, which
+        // waits for a click, holds the band; the notice, which is a few seconds, waits — AND ITS CLOCK
+        // IS HELD, so it lands the moment the card closes rather than expiring unseen behind it.
+        if (_noticeTimer > 0f && !NoticeHeld) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
         {
             _notice = _noticeQueue.Dequeue();
@@ -4183,6 +4198,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.KnownVows = _vowMenu;
             _loadoutScreen.NextSocketNote = Unlocks.NextSocketNote(GuideUnlockFacts());
             _loadoutScreen.NextSkillSlotNote = Unlocks.NextSkillSlotNote(GuideUnlockFacts());
+            // ...AND WHETHER THE SLOT REVEAL IS UP, so the screen can mark the row the banner is about.
+            // One question, asked once: the same ScreenBannerShowing the slot itself draws from.
+            _loadoutScreen.RevealingNewSlot = ScreenBannerShowing() is not null;
             _loadoutScreen.NextVowNote = Unlocks.NextVowNote(GuideUnlockFacts());
             _loadoutScreen.SkillLevels = _skillProgress;
             _loadoutScreen.Hunter = _hunter;
@@ -5226,16 +5244,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private const int LockedToastWidth = 900;
 
     /// <summary>
-    /// Where the locked-tile refusal hangs: under the chrome, and under the HUNT's log medallion.
+    /// The locked-tile toast's right edge — and the wall the HUNT's log medallion stands clear of.
     /// </summary>
     /// <remarks>
-    /// It was a literal 96, which cleared a medallion that ended at 104 and stopped clearing one that
-    /// now ends at 148 — the medallion had to move down to get out from under the currency capsules at
-    /// 150 %, and this band is where it landed. The toast is 900 wide and centred, so it crosses the
-    /// medallion's column; leaving both put a three-second message over the control that READ THE LOG
-    /// points at. The toast yields, because it is the transient of the two.
+    /// Published for the same reason <see cref="ChromeRowBottom"/> is: two surfaces that must never
+    /// share a pixel should read one number, not two literals that happen to agree at 100 %. This one
+    /// is what decides where the medallion can live at all — see <c>HuntScreen.LogButtonRect</c>.
     /// </remarks>
-    private static int LockedToastTop => HuntScreen.LogButtonRect.Bottom + UiMetrics.Space(8);
+    internal static int LockedToastRight => UiKit.PageCenterX + LockedToastWidth / 2;
+
+    /// <summary>
+    /// Where the locked-tile refusal hangs — the band under the chrome row, at every profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS WAS BRIEFLY MOVED DOWN, to get out from under the log medallion after the medallion itself
+    /// had to move to escape the currency capsules at 150 %. Photographing it (RH_SHOT_LOCKED) showed
+    /// what the arithmetic had missed: the band below the medallion is the TOAST SLOT — where the
+    /// welcome toast, the notice and the fight's lesson card live — so the refusal simply traded a
+    /// collision with a button for a collision with onboarding copy, printed through it.
+    /// </para>
+    /// <para>
+    /// There is no third band. At 150 % the capsules own y 16..106 out to x 1191 and cannot be made
+    /// narrower (three ornate capsules of one digit each), so the medallion must sit below them; and a
+    /// 900-wide line centred on the page crosses the medallion's column wherever it is put. So the
+    /// toast keeps the band it has always had, and for its three seconds it covers the medallion's
+    /// upper half — a permanent control the player can press a moment later, rather than a lesson that
+    /// does not come back.
+    /// </para>
+    /// </remarks>
+    private const int LockedToastTop = 96;
 
     // ── The slot-note banner ───────────────────────────────────────────────────────────────────
     //
@@ -5388,6 +5426,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
         // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
         if (_tourActive) return;
+        if (NoticeHeld) return;   // the band belongs to a slot reveal; the clock is held with it
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         // IN THE LANE on a menu screen (ReserveNoticeLane): the toast stands where the body's first row
@@ -5999,6 +6038,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // up (see the Draw call's suppressBanner argument). Every fight fixture opens with one, so a
         // posed BOSS INCOMING would be suppressed by a toast rather than photographed.
         if (CaptureRig && _expedition.DevBossCall) { _bootTimer = 0f; _noticeTimer = 0f; }
+
+        // RH_SHOT_LOCKED=<Activity> poses the LOCKED-TILE REFUSAL — the toast a player gets for
+        // pressing a rail tile that is not open yet. It is three seconds long and lives behind a click
+        // no capture can make, so it had never been photographed; the chrome fix that moved the log
+        // medallion moved this toast with it, and a band nobody has looked at is a band nobody has
+        // checked. Written every frame, so the fixture's own dressing cannot clear it.
+        if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_LOCKED") is { Length: > 0 } lockedName)
+        {
+            var locked = Enum.TryParse<Activity>(lockedName, true, out var la)
+                ? la
+                : throw new InvalidOperationException(
+                    $"RH_SHOT_LOCKED='{lockedName}' is not an Activity. Known: " + string.Join(", ", Enum.GetNames<Activity>()) + ".");
+            _lockedMsg = $"{Unlocks.Headline(locked)} IS NOT OPEN YET — {Unlocks.Requirement(locked).ToUpperInvariant()}.";
+            _lockedTimer = 3.2f;
+        }
 
         WatchTheFallLoop();
         RaiseSignatureBeat();
@@ -9241,6 +9295,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         UiKit.PageTop = UiKit.PageTopBase + UiKit.NoticeLane;
     }
 
+    /// <summary>
+    /// Is the band above the page owed to a slot reveal rather than to a notice?
+    /// </summary>
+    /// <remarks>
+    /// Only a slot card WITH A BODY holds it. A one-line hint fits inside the band the page already
+    /// reserves and leaves the notice its own room, so it queues nothing.
+    /// </remarks>
+    private bool NoticeHeld => OverlayActive && SlotShowing() is { Body.Length: > 0 };
+
     /// <summary>The notice lane's motion key — its height eases open and shut.</summary>
     private static readonly int NoticeLaneKey = HashCode.Combine("notice", "lane");
 
@@ -9262,7 +9325,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void ReserveNoticeLane()
     {
         var showing = OverlayActive && !_tourActive && !_showTitle && !_showHelp && !_showSettings && !WelcomeUp
-                      && _noticeTimer > 0f && _notice.Head.Length > 0
+                      && _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld
                       && !(_showMastery && _masteryScreen.SpecialisationOpen);
         if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);
         _noticeLaneOpen = UiMotion.Ease(NoticeLaneKey, showing ? 1f : 0f, UiMotion.Transition);

@@ -206,12 +206,10 @@ public readonly record struct ScreenHint(string Key, string Text);
 /// </remarks>
 public static class Onboarding
 {
-    /// <summary>The tour of the HUNT screen — the intro. Eight cards, each pointing at one region.</summary>
-    /// <remarks>Kept under its old name because the capture rig's fixture is still called that:
-    /// RH_SHOT_MODE=intro poses these cards, though it reaches them through <see cref="TourFor"/>
-    /// like every other tour. Nothing decides to RUN it any more — LEARN THIS SCREEN asks for a
-    /// tour, and the explained list only decides which rail tiles wear a NEW mark.</remarks>
-    public static IReadOnlyList<TourStep> Intro => TourFor(Activity.Hunt);
+    // THE `Intro` ALIAS IS GONE. It was `TourFor(Activity.Hunt)` under the old name, kept "because the
+    // capture rig's fixture is still called that" — but the rig never touched it: RH_SHOT_MODE=intro is
+    // a MODE NAME that reaches the cards through BeginTour and TourFor like every other tour. Zero
+    // callers in src/, one in a test that already asserted the same thing against TourFor.
 
     /// <summary>
     /// The tour of a screen, in the order it is shown. Two to four cards, each pointing at one region.
@@ -477,11 +475,12 @@ public static class Onboarding
     /// so a wave clearing while the player read card three could not end the intro under them.
     /// </remarks>
     /// <remarks>
-    /// <b>NOTHING IN THE GAME CALLS THIS ANY MORE.</b> The mandatory intro is gone — a fresh save now
-    /// begins on the fight with one short observation instead of eight modal cards — and the tours it
-    /// belonged to live behind LEARN THIS SCREEN. It survives for <see cref="SeedExplained"/>, which
-    /// still has to tell a save written before the intro existed from one that skipped it, and for the
-    /// capture rig, which poses the intro by number.
+    /// <b>MIGRATION ONLY.</b> Nothing in the game runs an intro: a fresh save begins on the fight with
+    /// one short observation, and the tours live behind LEARN THIS SCREEN. This predicate survives for
+    /// exactly one reader, <see cref="SeedExplained"/>, as the corroborating half of its old-save test
+    /// — and it is only the corroborating half now, because the file's VERSION is what decides. (The
+    /// capture rig was named here as a second reader and never was one: RH_SHOT_MODE=intro reaches the
+    /// HUNT's cards through <see cref="TourFor"/>, not through this.)
     /// </remarks>
     public static bool IntroDue(int wavesCleared, bool introSeen) => !introSeen && wavesCleared < 1;
 
@@ -551,27 +550,55 @@ public static class Onboarding
     public static string SlotKey(int slot) => $"SkillSlot{slot}";
 
     /// <summary>
+    /// THE FIRST SAVE VERSION WHOSE EXPLAINED LIST CAN BE BELIEVED. Frozen forever.
+    /// </summary>
+    /// <remarks>
+    /// A literal, never <c>SaveGame.CurrentVersion</c> — the sibling constant
+    /// <c>OnboardingLessons.FirstVersionWithFallLoopFacts</c> carries the same warning and for the same
+    /// reason: written against CurrentVersion, the next bump would start seeding files that are
+    /// perfectly honest, and every player mid-onboarding would be marked as having read everything.
+    /// Version 5 is the first written by a build in which no tour starts itself.
+    /// </remarks>
+    public const int FirstVersionWithExplainedList = 5;
+
+    /// <summary>
     /// The explained list a player should start the session with.
     /// </summary>
-    /// <param name="f">The unlock facts at load.</param>
-    /// <param name="introSeen">The save's intro flag.</param>
+    /// <param name="f">The unlock facts at load, as corroboration.</param>
+    /// <param name="introSeen">The save's intro flag — migration input, nothing sets it in play.</param>
     /// <param name="explained">The save's explained list.</param>
+    /// <param name="freeSocketUsed">Has a gem ever been set? True for every save, not only old ones.</param>
+    /// <param name="fileVersion">The Version of the file that was LOADED — the test, not the guess.</param>
     /// <remarks>
-    /// A save from before this file existed has an empty list, and honouring that literally would
-    /// put a gold NEW mark on every tile a returning player has been using for hours. Such a save
-    /// is recognisable — <see cref="IntroDue"/> is false and the intro was never seen — and for it
-    /// every screen open at load and every skill slot already earned counts as read. A player who
-    /// has seen the intro gets the list exactly as saved: what they never looked at keeps its mark.
+    /// A save written before this list existed has an empty one, and honouring that literally would put
+    /// a gold NEW mark on every tile a returning player has been using for hours. Such a file is
+    /// recognised by its VERSION, and for it every screen open at load and every skill slot already
+    /// earned counts as read. Every newer file is believed exactly as saved: what the player never
+    /// looked at keeps its mark.
     /// </remarks>
     public static IReadOnlyCollection<string> SeedExplained(
-        UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed = false)
+        UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed,
+        int fileVersion)
     {
         var set = new HashSet<string>(explained);
         // A player who has already set a gem needs no lesson in setting one — and the lesson's last
         // card would promise a free socket the Forge then refuses (review 2026-08-26). This holds for
         // every save, not only the ones from before the intro.
         if (freeSocketUsed) set.Add(GemTourKey);
-        var returningFromBefore = !introSeen && !IntroDue(f.WavesCleared, false);
+        // ── THE VERSION IS THE TEST. ────────────────────────────────────────────────────────────
+        //
+        // "The intro was never seen, and waves have been cleared" meant "this file predates the intro"
+        // only while an intro existed to be seen. Nothing shows one now, so that description also fits
+        // a BRAND-NEW player who cleared a wave and relaunched — and they were being handed the
+        // veteran's answer: every screen marked read, every slot reveal marked read, the first-gem
+        // lesson suppressed for good, and the rail stripped of its unread marks. Once, silently, on
+        // their second session.
+        //
+        // Only a file older than the version that stopped auto-touring can be the veteran. The wave
+        // count stays as corroboration; it is no longer the test. (Same shape, same fix, as the
+        // fall-loop seed — OnboardingLessons.SeedFallLoopAsLived.)
+        var returningFromBefore = fileVersion < FirstVersionWithExplainedList
+                                  && !introSeen && !IntroDue(f.WavesCleared, false);
         if (!returningFromBefore) return set;
 
         foreach (var screen in Unlocks.Open(f)) set.Add(ScreenKey(screen));
@@ -596,17 +623,32 @@ public static class Onboarding
         => screen != Activity.Hunt && !explained.Contains(ScreenKey(screen)) ? ScreenKey(screen) : null;
 
     /// <summary>
-    /// The note this screen should show at the top, after its tour, or null if nothing is owed.
+    /// The reveal this screen owes: a skill slot that has opened and not been acknowledged.
     /// </summary>
     /// <remarks>
-    /// Only the BUILD screen has notes: one for each skill slot that opened after the screen did. They
-    /// are handed over one at a time, and only once the screen's own tour has been given — what the
-    /// screen is, then what changed on it. While the tour is still owed this returns null, so the
-    /// two can never be on screen together.
+    /// <para>
+    /// Only the BUILD screen has one, and it is BUILD's own progression feedback — not a lesson, not
+    /// optional help. A slot opening is a thing that HAPPENED to the player's build, and the screen
+    /// says so once, quietly, with an ×.
+    /// </para>
+    /// <para>
+    /// <b>IT USED TO WAIT FOR THE SCREEN'S TOUR</b> — "what the screen is, then what changed on it" —
+    /// which was sound while that tour ran itself the first time BUILD was opened. Tours are asked for
+    /// now (LEARN THIS SCREEN), so the rule meant a player who never pressed <c>?</c> never learned
+    /// they had a second skill slot at all: dormant progression feedback behind an optional door. The
+    /// tour cannot gate this. If both are wanted at once the host decides the order, and it does —
+    /// <c>ScreenBannerShowing</c> withholds every banner while a tour is actually up.
+    /// </para>
+    /// <para>
+    /// ONE AT A TIME, lowest slot first. Three slots can be owed at once on a returning save, and
+    /// three banners in a frame is the "three congratulations in a row" failure this codebase has
+    /// already killed once. Each is acknowledged by its own <see cref="SlotKey"/>, so closing the
+    /// second does not silence the third.
+    /// </para>
     /// </remarks>
     public static ScreenBanner? BannerFor(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained)
     {
-        if (screen != Activity.Build || TourDue(screen, explained) is not null) return null;
+        if (screen != Activity.Build) return null;
         for (var slot = 2; slot <= Unlocks.SkillSlots(f); slot++)
             if (!explained.Contains(SlotKey(slot)))
                 return new ScreenBanner(SlotKey(slot), "A NEW SKILL SLOT", Unlocks.SkillSlotNote(slot));

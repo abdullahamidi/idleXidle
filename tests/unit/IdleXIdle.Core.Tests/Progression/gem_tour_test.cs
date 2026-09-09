@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Progression;
 using Xunit;
 
@@ -12,6 +13,9 @@ namespace IdleXIdle.Core.Tests.Progression;
 /// </summary>
 public class GemTourTest
 {
+
+    /// <summary>A file version from before the explained list could be believed — the seeded era.</summary>
+    private const int PreExplainedList = Onboarding.FirstVersionWithExplainedList - 1;
     private const int MaxBodyChars = 160;
     private static readonly HashSet<char> AllowedMarks = new("·×—–→←‹›…");
 
@@ -65,7 +69,8 @@ public class GemTourTest
     {
         // A pre-intro save with hours of play: every open screen counts as read, and so does the gem.
         var veteran = new UnlockFacts(WavesCleared: 300, DeepestWave: 300, ItemsOwned: 40, ChestsEverHeld: 20);
-        var seeded = Onboarding.SeedExplained(veteran, introSeen: false, explained: Array.Empty<string>());
+        var seeded = Onboarding.SeedExplained(veteran, introSeen: false, explained: Array.Empty<string>(),
+                                              freeSocketUsed: false, fileVersion: PreExplainedList);
 
         Assert.Contains(Onboarding.GemTourKey, seeded);
         Assert.Null(Onboarding.GemTourDue(3, seeded));
@@ -75,7 +80,9 @@ public class GemTourTest
     public void test_a_player_who_has_seen_the_intro_keeps_the_gem_lesson_owed()
     {
         // The list is taken as saved: whatever they have not read is still waiting for them.
-        var seeded = Onboarding.SeedExplained(new UnlockFacts(WavesCleared: 30), introSeen: true, explained: new[] { "Stats" });
+        var seeded = Onboarding.SeedExplained(new UnlockFacts(WavesCleared: 30), introSeen: true,
+                                              explained: new[] { "Stats" },
+                                              freeSocketUsed: false, fileVersion: PreExplainedList);
         Assert.DoesNotContain(Onboarding.GemTourKey, seeded);
         Assert.Equal(Onboarding.GemTourKey, Onboarding.GemTourDue(1, seeded));
     }
@@ -108,11 +115,15 @@ public class GemTourTest
     [Fact]
     public void test_a_player_who_already_set_a_gem_is_not_owed_the_lesson_even_after_the_intro()
     {
-        // Review 2026-08-26: every save launched since the intro build carries introSeen = true, so the
-        // "from before the intro" seed never protected real players; a save that has already socketed
-        // a gem got the YOUR FIRST GEM cards promising a free socket the Forge then refused.
+        // Review 2026-08-26: a save that has already socketed a gem must not be handed the YOUR FIRST
+        // GEM cards, which promise a free socket the Forge then refuses. FreeSocketUsed answers that on
+        // its own, for EVERY save — note the current file version below: this does not ride on the
+        // old-save seed, which no longer fires for a file this build wrote.
+        // (The premise this comment used to carry — "every save since the intro build carries
+        // introSeen = true" — died with the intro. Nothing sets that flag automatically now.)
         var seeded = Onboarding.SeedExplained(new UnlockFacts(WavesCleared: 30), introSeen: true,
-                                              explained: Array.Empty<string>(), freeSocketUsed: true);
+                                              explained: Array.Empty<string>(), freeSocketUsed: true,
+                                              fileVersion: SaveGame.CurrentVersion);
         Assert.Contains(Onboarding.GemTourKey, seeded);
         Assert.Null(Onboarding.GemTourDue(gemsHeld: 2, explained: seeded));
     }
