@@ -289,8 +289,11 @@ public class TraitTreeMigrationTest
         Assert.Equal(4, loadout.Skills.Count);
         Assert.DoesNotContain("field_pulse", loadout.Skills.Select(s => s.SkillId));
 
+        // Enough waves to be past the SECOND rung of the curve, read from the curve rather than typed
+        // (SkillProgress.WavesForLevel moved on 2026-09-09 and a hard 40 quietly stopped meaning
+        // "well levelled").
         var progress = new SkillProgress();
-        for (var i = 0; i < 40; i++) progress.RecordWave("field_pulse");
+        for (var i = 0; i < SkillProgress.UsesForLevel(2); i++) progress.RecordWave("field_pulse");
         Assert.True(progress.LevelOf("field_pulse") > 1, "the dropped skill must keep what it earned");
     }
 

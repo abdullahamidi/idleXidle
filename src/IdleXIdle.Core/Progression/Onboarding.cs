@@ -140,6 +140,8 @@ public readonly record struct ScreenBanner(string Key, string Title, string Body
 /// <param name="TrainableStat">The cheapest stat the player can afford to train right now — or null.</param>
 /// <param name="TrainableCost">What that rank costs.</param>
 /// <param name="AffordableUpgradeName">The first Warren facility whose next level is affordable — or null.</param>
+/// <param name="SkillWithLevelToSpend">The first woven skill holding an unspent level — or null.</param>
+/// <param name="SkillLevelsToSpend">Unspent levels across every woven skill.</param>
 public readonly record struct HintFacts(
     string? NewRegionName = null,
     int MasteryPointsFree = 0,
@@ -148,7 +150,9 @@ public readonly record struct HintFacts(
     int ChestsWaiting = 0,
     string? TrainableStat = null,
     long TrainableCost = 0,
-    string? AffordableUpgradeName = null);
+    string? AffordableUpgradeName = null,
+    string? SkillWithLevelToSpend = null,
+    int SkillLevelsToSpend = 0);
 
 /// <summary>One line a screen says at the top about its own state, and the key that dismisses it.</summary>
 /// <param name="Key">Encodes the fact, so the same hint returns when the fact changes (two chests after one).</param>
@@ -594,6 +598,17 @@ public static class Onboarding
         // TraitPointsFree was kept on these facts for the old Memory tree screen; both are deleted.
         Activity.Mastery when f.MasteryPointsFree > 0 =>
             new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
+        // A LEVEL TO SPEND OUTRANKS AN EMPTY SLOT. Playtest 2026-09-09: "the skill upgrade section
+        // wasn't understood at all; no one would have even looked at it if I hadn't pointed it out. We
+        // didn't provide any guidance, and it's tucked away in a hidden spot." A skill's variation is
+        // the one decision in the game the player is never told they can make, and it is the deeper of
+        // the two — an empty slot is answered by picking from a list, this is answered by reading three
+        // effects and choosing.
+        Activity.Build when f.SkillWithLevelToSpend is { Length: > 0 } sk =>
+            new ScreenHint($"Hint:Build:Level:{sk}:{f.SkillLevelsToSpend}",
+                           f.SkillLevelsToSpend == 1
+                               ? $"{sk.ToUpperInvariant()} HAS A LEVEL TO SPEND — CHOOSE WHAT IT BECOMES"
+                               : $"{f.SkillLevelsToSpend} SKILL LEVELS TO SPEND — CHOOSE WHAT THEY BECOME"),
         Activity.Build when f.EmptySkillSlots > 0 =>
             new ScreenHint($"Hint:Build:{f.EmptySkillSlots}",
                            f.EmptySkillSlots == 1 ? "AN EMPTY SKILL SLOT — EQUIP A SKILL" : $"{f.EmptySkillSlots} EMPTY SKILL SLOTS — EQUIP SKILLS"),

@@ -549,8 +549,27 @@ public sealed class LoadoutScreen
         }
         else height += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Body);
         _skillsOverflow = Math.Max(0, height + UiMetrics.Space(12) - SkillsRegion.Height);
+
+        // ── SHOW THE PLAYER THE DECISION THEY HAVE EARNED, ONCE. The skill's own tree — its variation
+        //    and its reinforcements — sits UNDER a library of thirteen tiles, so on any profile it
+        //    starts below the fold and the column has to be scrolled to reach it. Playtest 2026-09-09:
+        //    "the skill upgrade section wasn't understood at all; no one would have even looked at it
+        //    if I hadn't pointed it out... it's tucked away in a hidden spot, so players can't find
+        //    it." When the selected skill is holding an unspent level, the column scrolls to the tree
+        //    ONCE — the same one-shot the Vows column already uses — and never again for that skill,
+        //    so it cannot fight the player's own wheel.
+        if (SlotDef(_slot) is { } sel && SkillLevels.FreeOn(sel.Id) > 0 && _revealedTreeFor != sel.Id)
+        {
+            _revealedTreeFor = sel.Id;
+            _skillsScroll = _skillsOverflow;
+        }
+        else if (SlotDef(_slot) is not { } keep || SkillLevels.FreeOn(keep.Id) <= 0) _revealedTreeFor = null;
+
         _skillsScroll = Math.Clamp(_skillsScroll, 0, _skillsOverflow);
     }
+
+    /// <summary>The skill whose tree this screen has already scrolled to. One reveal per skill.</summary>
+    private string? _revealedTreeFor;
 
     // ── THE INSPECTOR: a scrolling body over an anchored refusal line, two text actions and the one button. ──
     private static int InsX => UiKit.ContentLeft(InspectorPanel);

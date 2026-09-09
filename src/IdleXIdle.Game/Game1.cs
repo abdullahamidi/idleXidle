@@ -4648,6 +4648,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var f in Facilities.All)
             if (_warren.CanUpgrade(f.Kind, _hunter.Gleam, _dust.MemoryDust)) { upgrade = f.Name; break; }
 
+        // AN UNSPENT SKILL LEVEL, and the first skill holding one. Read off the woven slots, so it can
+        // only ever name a skill the player is actually fighting with.
+        string? levelled = null;
+        var levelsFree = 0;
+        foreach (var woven in _loadout.Skills)
+        {
+            if (woven.SkillId is not { } id || SkillCatalogue.Find(id) is not { } wd) continue;
+            var free = _skillProgress.FreeOn(id);
+            if (free <= 0) continue;
+            levelsFree += free;
+            levelled ??= wd.Name;
+        }
+
         return new HintFacts(
             NewRegionName: newRegion,
             MasteryPointsFree: _mastery.Available,
@@ -4661,7 +4674,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ChestsWaiting: _forge?.UnopenedChests.Count ?? 0,
             TrainableStat: stat,
             TrainableCost: cost,
-            AffordableUpgradeName: upgrade);
+            AffordableUpgradeName: upgrade,
+            // WHICH SKILL IS WAITING, and how many levels in total. Named rather than counted alone,
+            // because "SPRAY HAS A LEVEL TO SPEND" sends the player to a row while "1 SKILL LEVEL"
+            // sends them hunting down a column they have never scrolled to.
+            SkillWithLevelToSpend: levelled,
+            SkillLevelsToSpend: levelsFree);
     }
 
     // ── The HUNT's lesson card (UX V2 P0.7) ────────────────────────────────────────────────────
@@ -8641,9 +8659,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // saying one was waiting, and the most valuable thing the game gives you should not be the
             // hardest to find. The Vault took that job, and a badge pointing at the old address is a
             // signpost to the wrong door — worse than none, because the player follows it.
-            if (Nav[i].Label == "VAULT" && _forge is not null && _forge.UnopenedChests.Count > 0)
+            // ...AND UNSPENT SKILL LEVELS, as the same count on the BUILD tile. The one decision the
+            // game never told anyone they could make: a skill's variation and its reinforcements sit at
+            // the foot of a scrolling column, behind a click on a slot, with no mark anywhere saying
+            // one is waiting (playtest 2026-09-09: "no one would have even looked at it if I hadn't
+            // pointed it out"). This is the established idiom for "something valuable is behind this
+            // door" and it already had exactly one user.
+            var pending = activity == Activity.Vault ? _forge?.UnopenedChests.Count ?? 0
+                        : activity == Activity.Build && unlocked ? UnspentSkillLevels()
+                        : 0;
+            if (pending > 0)
             {
-                var n = _forge.UnopenedChests.Count;
+                var n = pending;
                 var count = n > 9 ? "9+" : n.ToString();
                 // A badge sized from its count: the caption rung plus a pad (38 × 30 at 100 %). Top-right,
                 // clear of the icon and the label the same way the NEW mark is — at 150 % it sat across
@@ -8660,6 +8687,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                   UiInk.Primary, UiTypography.Secondary);
             }
         }
+    }
+
+    /// <summary>Levels earned on woven skills and not yet spent — the BUILD tile's badge.</summary>
+    /// <remarks>
+    /// Woven skills only, so it can never point at a decision the player is not currently fighting
+    /// with, and derived every frame from the one ledger that owns it.
+    /// </remarks>
+    private int UnspentSkillLevels()
+    {
+        if (_skillProgress is null) return 0;
+        var total = 0;
+        foreach (var woven in _loadout.Skills)
+            if (woven.SkillId is { } id) total += _skillProgress.FreeOn(id);
+        return total;
     }
 
     private void HandleNavClick()
