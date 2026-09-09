@@ -4956,7 +4956,8 @@ public sealed class HuntScreen
         // Ease returns the target outright, which is exactly the old behaviour.
         var ringCentre = new Vector2(box.Center.X, box.Center.Y);
         var ringR = box.Width * 0.50f;
-        var shownSweep = t.RingSteps > 0 ? UiMotion.Ease(SkillRingKey(i), t.Swept, UiMotion.Transition) : t.Swept;
+        var shownSweep = _devCooldownPose
+                         ?? (t.RingSteps > 0 ? UiMotion.Ease(SkillRingKey(i), t.Swept, UiMotion.Transition) : t.Swept);
         var pop = UiMotion.Pulse(SkillReadyKey(i));
 
         if (t.Flash <= 0f)
@@ -5944,6 +5945,26 @@ public sealed class HuntScreen
     /// identical). UpdateFight applies it on the first live frame of whichever run survives.
     /// </remarks>
     public void DevSeek(float seconds) => _devSeekMs = Math.Max(0f, seconds * 1000f);
+
+    /// <summary>
+    /// DEV: hold every Active's ring at <paramref name="swept"/> of its cycle, so a COOLDOWN can be
+    /// photographed. 0 is just cast, 1 the instant it comes up.
+    /// </summary>
+    /// <remarks>
+    /// The rail's cooldown had no fixture at all. Every fight mode the rig owns runs a build whose
+    /// skills come back inside one beat, so a seek to any instant photographs a rail of READY
+    /// medallions — the ring, its notches, its warming edge and its comet head were all drawn by code
+    /// no capture could reach. That is the exact shape of the fault this project keeps finding: a state
+    /// no capture can pose is a state nobody has looked at.
+    /// <para>
+    /// It overrides the SHOWN sweep only. The fight underneath is untouched, the readiness word still
+    /// reads off the real timing, and nothing is armed — a pose must not fire a one-shot, or the
+    /// shutter would catch a ready-pop that did not happen.
+    /// </para>
+    /// </remarks>
+    public void DevPoseCooldown(float swept) => _devCooldownPose = Math.Clamp(swept, 0f, 1f);
+
+    private float? _devCooldownPose;
 
     /// <summary>
     /// DEV: the current wave's events and the playhead, as text — written beside a capture under
