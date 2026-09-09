@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
@@ -261,14 +261,14 @@ public static class TraitCatalogue
             Fixed(new TraitRules(ShieldAfterBreakBonus: 0.5f))),
 
         new("t_standing_plate", "STANDING PLATE",
-            "Half of the shield you are still holding when a wave ends is carried into the next one.",
+            "All of the shield you are still holding when a wave ends is carried into the next one.",
             "Plate does not forget the shape it was beaten into.",
             TraitTag.Shield,
             // Absorbing a great deal awakens something shield-shaped. HALF the carry, not all of it:
             // ShieldRules states that a shield accumulating while nothing happens would make standing
             // still the strongest defensive play, and halving keeps that invariant nearly intact.
             At(TraitCounter.ShieldAbsorbedPools, 220),
-            Fixed(new TraitRules(ShieldCarryFraction: 0.5f))),
+            Fixed(new TraitRules(ShieldCarryFraction: 1f))),
 
         new("t_answering_wall", "THE ANSWERING WALL",
             "While you hold a shield, every enemy that bites you takes back a tenth of its own bite.",

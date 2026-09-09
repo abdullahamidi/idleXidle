@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -479,7 +479,7 @@ public static class SkillCatalogue
                     // Was CARRIED-as-cooldown. Shield is wave-local by law, so the branch cannot carry
                     // a shield between waves — it can arrive at each wave already wearing one.
                     ("CARRIED",  "Every wave begins with SHIELD worth 10% of your maximum health.",
-                     d => d with { WaveStartShieldFraction = 0.10f })),
+                     d => d with { WaveStartShieldFraction = 0.05f })),
             },
             PaysBackDamageTaken: 2.0f),
 
@@ -956,7 +956,7 @@ public static class SkillCatalogue
                     // the tick loop can never satisfy, since it opens at TickMs. This buys the same
                     // sentence on a site that fires: the wave opens with the plate already on.
                     ("GROUNDWORK", "The wall is already standing when the wave opens: every wave begins with shield worth 5.5% of your maximum health.",
-                     d => d with { WaveStartShieldFraction = 0.055f })),
+                     d => d with { WaveStartShieldFraction = 0.03f })),
                 V("DEEP ROOTS", "Half the wall. Each pulse also heals 1% of your maximum health.",
                     Source.Spirit,
                     d => d with { ShieldPerPulse = 0.012f, HealPerPulse = 0.010f },

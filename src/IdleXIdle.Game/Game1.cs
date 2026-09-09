@@ -188,6 +188,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     //     own. It never takes input.
 
     /// <summary>Is a tour on screen? While true, input belongs to it and nothing else teaches.</summary>
+    /// <summary>The unread dot's slow breath, in seconds of a two-second cycle.</summary>
+    private float _navDotClock;
+
     private bool _tourActive;
 
     /// <summary>
@@ -5113,7 +5116,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // anything — and the longest of those is 164 characters against a line that fits about 80.
         var pad = UiMetrics.Space(22);
         var r0 = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, 0);
-        var room = r0.Width - UiMetrics.Space(60);
+        // MEASURED AGAINST THE CLOSE BUTTON, on BOTH sides, because this text is CENTRED: a reserve
+        // on the right alone moves the middle, and the line still reaches the corner the x sits in.
+        // At 150 % the second line of a keystone reveal ran straight under it.
+        var room = r0.Width - 2 * (UiKit.PanelCorner + 8 + UiMetrics.Control(UiKit.CloseSize) + UiMetrics.Space(8));
         var body = !_notice.Awakening && _notice.Detail.Length > 0
             ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).ToList()
             : new List<string>();
@@ -5124,11 +5130,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
             : UiTypography.Pitch(UiTypography.OverlayTitle)
               + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body.Count);
         var h = pad + rungs + UiMetrics.Space(12);
-        var r = new Rectangle(r0.X, r0.Y, r0.Width, h);
+        // ── IT ARRIVES, rather than being there. ─────────────────────────────────────────────────
+        //
+        // Playtest 2026-09-09: "nobody pays any attention to the notification messages at the top."
+        // The largest part of that is answered by the rail's unread dot, which holds until the screen
+        // is looked at — but a toast that simply exists for six seconds and fades is also easy to miss
+        // on a screen where a fight is moving. It drops in over the first fifth of a second and takes
+        // a bar down its leading edge, which is what a notification looks like everywhere else.
+        var entry = Math.Clamp((NoticeSeconds - _noticeTimer) / 0.2f, 0f, 1f);
+        var drop = UiMotion.Reduced ? 0 : (int)MathF.Round((1f - UiMotion.Smooth(entry)) * UiMetrics.Space(18));
+        var r = new Rectangle(r0.X, r0.Y - drop, r0.Width, h);
         // A toast weighs less than the panels it hangs over: the house plate with the accent rule, as the
-        // boot toast and the hint slot wear — not a framed panel (chrome-08).
-        _ui.Fill(_batch, r, Color.Black * (0.35f * fade));
+        // boot toast and the hint slot wear — not a framed panel (chrome-08). The backdrop is heavier
+        // than it was: this thing has to win against a wave of creatures moving behind it.
+        _ui.Fill(_batch, r, Color.Black * (0.55f * fade));
         _ui.Plate(_batch, r, UiInk.Accent, fade);
+        // THE BAR IS THE SIGNAL. One thick accent edge down the left, the shape a notification wears in
+        // every interface a player has used, and the one element here that is not shared with the four
+        // other plates this game hangs at the top of a screen.
+        _ui.Fill(_batch, new Rectangle(r.X, r.Y, Math.Max(3, UiMetrics.Control(6)), r.Height), UiInk.Accent * fade);
         // A DISMISS, at the house close position: the toast leaves on its timer, and on a click too.
         // Drawn here; the click is read in Update (DismissNoticeIfClosed) like the hint slot's.
         _noticeCloseRect = UiKit.CloseRect(r);
@@ -7829,6 +7849,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         _screenFade = Math.Max(0f, _screenFade - dt);
 
+        // THE UNREAD DOT'S BREATH — one cycle every two seconds, on the clock rather than on the frame
+        // rate. Wrapped so it never grows without bound in a session left running overnight.
+        _navDotClock = (_navDotClock + dt) % 2f;
+
         // THE MODAL. The rising edge starts it; a closed modal leaves nothing behind.
         var modal = ModalUpNow;
         if (modal && !_modalWasUp) _modalFade = UiMotion.Fast;
@@ -8943,18 +8967,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             || (activity == Activity.Roster && _rosterNews));
             if (isNew)
             {
-                // A chip sized from its word: the caption rung plus a pad (50 × 26 at 100 %). It keeps to
-                // the tile's top-left corner, clear of the icon beside it and the label under it — at
-                // 150 % the corner is smaller than the chip would like, and the chip yields, not the label.
-                // The house chip: a plate with the accent rule and the word in the accent — not a solid
-                // gold slab with a dark word, which was the only filled block on the rail (chrome-07).
-                var markH = UiTypography.Secondary + UiMetrics.Space(7);
-                var markW = _ui.MeasureBig("NEW", UiTypography.Secondary) + UiMetrics.Space(16);
-                var mark = new Rectangle(Math.Min(r.X + UiMetrics.Space(10), r.Center.X - iconPx / 2 - NavIconGap - markW),
-                                         Math.Min(r.Y + UiMetrics.Space(14), labelY - NavIconGap - markH), markW, markH);
-                _ui.Plate(_batch, mark, UiInk.Accent);
-                _ui.TextCenterBig(_batch, "NEW", mark.Center.X + 2, mark.Y + (markH - UiTypography.Secondary) / 2, UiInk.Accent,
-                                  UiTypography.Secondary);
+                // ── AN UNREAD DOT, NOT A GOLD CHIP. ─────────────────────────────────────────────
+                //
+                // Playtest 2026-09-09: "nobody pays any attention to the notification messages at the
+                // top — we cannot put important things there. It needs to be more noticeable. It could
+                // even be given as a notification on the relevant screen's left-panel button: a red dot
+                // over the newly opened thing."
+                //
+                // The mark existed and was a plate with the word NEW in the ACCENT — the same gold as
+                // the rail's own lit tile, its labels, its frames and half the game's chrome. A gold
+                // mark on a gold rail is camouflage. Red appears nowhere else on the rail, and a dot on
+                // a menu button is the one notification idiom every player already owns.
+                //
+                // It is a state, not an animation: it holds until the screen is visited, so it says
+                // what a six-second toast could not. Under Reduced Motion it simply does not breathe.
+                var dot = Math.Max(8, UiMetrics.Control(14));
+                var at = new Rectangle(Math.Min(r.X + UiMetrics.Space(12), r.Center.X - iconPx / 2 - NavIconGap - dot),
+                                       Math.Min(r.Y + UiMetrics.Space(14), labelY - NavIconGap - dot), dot, dot);
+                // A dark seat first, so the dot reads on the tile's own art rather than merging with it.
+                _ui.Disc(_batch, new Rectangle(at.X - 2, at.Y - 2, at.Width + 4, at.Height + 4), UiInk.Ground * 0.85f);
+                _ui.Disc(_batch, at, UiInk.Danger);
+                if (!UiMotion.Reduced)
+                {
+                    // One slow breath — a halo that grows and fades on a two-second cycle. It draws the
+                    // eye on a still screen without ever moving the dot itself.
+                    var beat = (MathF.Sin(_navDotClock * MathF.PI) + 1f) * 0.5f;
+                    var halo = (int)MathF.Round(dot * (0.35f + 0.45f * beat));
+                    _ui.Disc(_batch, new Rectangle(at.X - halo / 2, at.Y - halo / 2, at.Width + halo, at.Height + halo),
+                             UiInk.Danger * (0.30f * (1f - beat)));
+                }
             }
 
             // UNOPENED CHESTS, as a count on the VAULT tile — the page chests actually live on.

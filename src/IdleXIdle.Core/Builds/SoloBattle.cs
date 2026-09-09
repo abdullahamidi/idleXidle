@@ -23,25 +23,49 @@ namespace IdleXIdle.Core.Builds;
 /// that grants Shield grants THIS Shield, additively, to the same ceiling.
 /// </para>
 /// <para>
-/// <b>Wave-local.</b> It resets to zero at the start of every wave, and wave-start effects grant
-/// after that reset. An idle game whose shield accumulated while nothing was happening would make
-/// standing still the strongest defensive play.
+/// <b>RUN-LOCAL SINCE 2026-09-09, and it used to be wave-local.</b> Half of whatever is still held at
+/// a wave's end carries into the next one, for everybody
+/// (<see cref="ShieldRules.BaseCarryFraction"/>); a death mints a fresh champion, so a shield never
+/// crosses one.
 /// </para>
 /// <para>
-/// <b>ONE NAMED EXCEPTION, and it is deliberate: the trait STANDING PLATE</b>
-/// (<c>TraitRules.ShieldCarryFraction</c>, <see cref="Champion.CarryShield"/>) carries HALF of the
-/// shield still held at a wave's end into the next one. The clause above still holds where it
-/// matters: shield only ever enters through <c>GrantShield</c>, that is clamped to
-/// <see cref="CapFor"/> — half the pool — and nothing grants outside a fight, so a shield cannot
-/// accumulate while nothing is happening. Halving the carry rather than keeping it whole is what
-/// keeps the invariant nearly intact; the full-carry version is not the one that shipped. Do not
-/// "fix" the exception away without reading this.
+/// <b>The invariant this replaced, and why it survives the change.</b> It was wave-local with one
+/// named exception, on the argument that <i>"an idle game whose shield accumulated while nothing was
+/// happening would make standing still the strongest defensive play"</i>. That argument is about
+/// ACCUMULATING WHILE IDLE, and it still holds: shield only ever enters through <c>GrantShield</c>,
+/// which is clamped to <see cref="ShieldRules.CapFor"/> — half the pool — and nothing grants outside
+/// a fight. Carrying does not let a shield grow while nothing happens; it lets a wave open with what
+/// the last one left, and a HALF carry means a repeated grant settles at twice itself rather than
+/// climbing without end.
+/// </para>
+/// <para>
+/// <b>What the designer asked for</b> (playtest 2026-09-09): <i>"let the shield carry between waves,
+/// and with that carry let the shield from sources drop, so that people who build purely for shield
+/// can use it as a win condition."</i> So the three wave-start grants were halved on the same day:
+/// a repeated grant's steady state is <c>2G</c> under a half carry, so halving G leaves the standing
+/// figure where it was and moves WHEN it arrives — the first wave is weaker, surviving is what builds
+/// it, and a build that stacks several sources climbs to the cap and holds it. That last part is the
+/// win condition: a capped shield is half a health pool that refills itself.
+/// </para>
+/// <para>
+/// STANDING PLATE is still the exception, and it is a bigger one now: it carries the shield WHOLE
+/// (<c>TraitRules.ShieldCarryFraction</c>, <see cref="Champion.CarryShield"/>). The trait used to
+/// mean "you carry half instead of nothing"; it means "you carry all instead of half".
 /// </para>
 /// </remarks>
 public static class ShieldRules
 {
     /// <summary>The ceiling, as a share of the pool: half of maximum health.</summary>
     public const float CapFraction = 0.5f;
+
+    /// <summary>
+    /// How much of a wave's leftover shield opens the next one — for everybody, with no trait.
+    /// </summary>
+    /// <remarks>
+    /// HALF, which is what makes a repeated grant settle instead of climb: a grant of G every wave
+    /// reaches a steady <c>2G</c> and stops. Whole carry is what STANDING PLATE buys.
+    /// </remarks>
+    public const float BaseCarryFraction = 0.5f;
 
     /// <summary>The most Shield a hunter with this pool may hold.</summary>
     public static int CapFor(int maxHealth) => (int)MathF.Round(Math.Max(0, maxHealth) * CapFraction);
@@ -130,18 +154,18 @@ public sealed class Champion
         return eaten;
     }
 
-    /// <summary>Wave start: Shield is wave-local and always begins at zero.</summary>
+    /// <summary>Drop the shield outright — a fresh champion, or a fixture posing an empty bar.</summary>
     public void ResetShield() => CurrentShield = 0f;
 
     /// <summary>
-    /// Wave start with STANDING PLATE worn: keep a SHARE of what was still held, instead of zero.
+    /// Wave start: keep a SHARE of what was still held.
     /// </summary>
     /// <remarks>
-    /// The single, named exception to the wave-local rule stated on <see cref="ShieldRules"/> — read
-    /// that remark before touching this. It is bounded three ways: the trait carries half, the total
-    /// is still clamped to <see cref="MaxShield"/>, and nothing grants shield outside a fight, so the
-    /// idle case the invariant exists to prevent (a shield accumulating while nothing happens) cannot
-    /// occur. A fraction of zero or less is a plain reset.
+    /// Half for everybody (<see cref="ShieldRules.BaseCarryFraction"/>), whole with STANDING PLATE.
+    /// Bounded three ways: the fraction, the clamp to <see cref="MaxShield"/>, and the fact that
+    /// nothing grants shield outside a fight — so the case the wave-local rule existed to prevent, a
+    /// shield growing while nothing happens, still cannot occur. A fraction of zero or less is a
+    /// plain reset.
     /// </remarks>
     public void CarryShield(float fraction)
     {
@@ -1114,14 +1138,11 @@ public static class SoloBattle
         var healBudgetBase = healBudget == long.MaxValue ? 0L : healBudget;
         long healedThisWave = 0;
 
-        // ── SHIELD IS WAVE-LOCAL. Zero at the start of every wave, before any wave-start effect
-        //    grants into it. Without the reset an idle run would accumulate a shield while nothing
-        //    was happening, and standing still would be the strongest defensive play in the game.
-        //
-        //    STANDING PLATE is the one named exception, and it carries HALF rather than all — see the
-        //    remark on ShieldRules, which states the invariant and names this trait as its exception.
-        if (traits.ShieldCarryFraction > 0f) champ.CarryShield(traits.ShieldCarryFraction);
-        else champ.ResetShield();
+        // ── SHIELD CARRIES. Half of whatever survived the last wave opens this one, for everybody;
+        //    STANDING PLATE carries it whole. A death is where it ends — Descent.StartRun mints a new
+        //    Champion, so nothing here has to reset one. See the remark on ShieldRules for the
+        //    invariant this replaced and why halving keeps it true.
+        champ.CarryShield(MathF.Max(ShieldRules.BaseCarryFraction, traits.ShieldCarryFraction));
 
         // FOUNDATION — STEADY's swell does not start from nothing. Applied at the wave's start, after
         // the reset that clears everything else, so it is a standing start rather than a carried one.

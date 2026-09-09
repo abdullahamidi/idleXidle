@@ -113,6 +113,7 @@ public sealed class UiKit
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
     private readonly Texture2D _blob;
+    private readonly Texture2D _disc;
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
@@ -420,7 +421,16 @@ public sealed class UiKit
         _hex = MakeHex(device, 120, 104);       // flat-top hexagon, drawn tinted + scaled (LinearClamp keeps it smooth)
         _diamond = MakeDiamond(device, 64);      // a gem for the nav / accents
         _blob = MakeBlob(device, 128);           // soft contact shadow under the fighters
+        _disc = MakeDisc(device, 64);            // a hard circle — the unread badge, and nothing else yet
     }
+
+    /// <summary>Draw a hard-edged filled circle inside <paramref name="dest"/>, tinted.</summary>
+    /// <remarks>
+    /// The house had a hexagon, a diamond and a soft blob and no plain circle, so a notification dot
+    /// had to be a square or a gem — and neither of those reads as "unread" anywhere a player has
+    /// been before. Antialiased at the rim only, so it stays round at the sizes a badge is drawn at.
+    /// </remarks>
+    public void Disc(SpriteBatch b, Rectangle dest, Color fill) => b.Draw(_disc, dest, fill);
 
     /// <summary>Draw the flat-top hexagon filling <paramref name="dest"/>, tinted.</summary>
     public void Hex(SpriteBatch b, Rectangle dest, Color fill) => b.Draw(_hex, dest, fill);
@@ -825,6 +835,27 @@ public sealed class UiKit
     /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>
     public void GroundShadow(SpriteBatch b, int cx, int cy, int width, int height, float strength = 0.55f)
         => b.Draw(_blob, new Rectangle(cx - width / 2, cy - height / 2, width, height), Color.White * strength);
+
+    private static Texture2D MakeDisc(GraphicsDevice d, int s)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = (s - 1) / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                // Solid to the rim, then one texel of falloff — a hard disc that is not jagged.
+                var a = Math.Clamp((1f - r) * c * 0.5f, 0f, 1f);
+                // PREMULTIPLIED, like every other texture this renderer loads. Written as (1,1,1,a)
+                // the disc drew as a SQUARE: under premultiplied blending the source RGB is added
+                // whatever the alpha says, so full white outside the circle painted the whole quad.
+                // MakeBlob gets away with (0,0,0,a) because adding zero is invisible.
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
 
     private static Texture2D MakeDiamond(GraphicsDevice d, int s)
     {
