@@ -106,7 +106,20 @@ public sealed class SkillProgress
     /// <summary>Every skill's cleared-wave tally — the career fact the quest layer reads (P10).</summary>
     public IReadOnlyDictionary<string, int> UsesBySkill() => new Dictionary<string, int>(_uses);
 
-    public int LevelOf(string skillId) => LevelFor(UsesOf(skillId));
+    /// <summary>
+    /// This skill's level — what its waves have earned, and never less than what it has already SPENT.
+    /// </summary>
+    /// <remarks>
+    /// The floor is for the players who levelled under the old curve. It was
+    /// <c>floor(sqrt(uses)/2)</c> — level 4 at 64 waves — and it is a table now, so a skill sitting on
+    /// 120 waves with a variation and three reinforcements bought reads as level ONE against the new
+    /// numbers. Nothing is taken while they leave it alone (<see cref="FreeOn"/> clamps at zero), but
+    /// <see cref="Respec"/> is advertised as free and lossless, and without this floor it would hand
+    /// back one level for four purchases and permanently confiscate three. A level once earned is
+    /// earned: the curve decides when the NEXT one arrives, never whether an old one still counts.
+    /// Found by this session's own adversarial review.
+    /// </remarks>
+    public int LevelOf(string skillId) => Math.Max(LevelFor(UsesOf(skillId)), SpentOn(skillId));
 
     /// <summary>Levels already committed — the variation counts as one, each reinforcement as one.</summary>
     public int SpentOn(string skillId)

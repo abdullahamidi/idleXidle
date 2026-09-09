@@ -945,10 +945,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (save.WovenSkills.Count > PlayerLoadout.MaxSkills)
             _fifthSkillDropped = SkillCatalogue.Find(save.WovenSkills[^1].SkillId ?? "")?.Name ?? "A SKILL";
         _loadout.SkillCapacity = Math.Max(1, save.WovenSkills.Count);
-        // NAMED BEFORE THE REPAIR RUNS. EnsureSignature (below) pins the signature to slot one, and it
-        // can only do that once the loadout knows which skill that is — the per-frame assignment in
-        // ApplyBuildCapacities does not happen until the first Update.
-        _loadout.SignatureSkillId = _characters.Active?.SignatureSkillId;
         // SOCKETS, floored the same way and for the same reason. The unlock facts are all zero at this
         // point in the load — conquest is not restored until RestoreWorld, far below — so asking the
         // derived rule HERE would see a player with no conquests, answer zero, and PlayerLoadout.Restore
@@ -1023,6 +1019,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // room but not the active champion's own skill gets it here, into an empty slot only. The
         // switch repair does the same on every switch (RepairForSwitch); the fresh-game path already
         // starts with it (PlayerLoadout.Starter).
+        // NAMED HERE, AND NOT ONE LINE EARLIER. The pin has to know which skill is the signature, and
+        // only the RestoreCharacters above makes _characters.Active the champion the save was written
+        // with — before it, Active is whoever CharacterState was constructed with, so naming it any
+        // sooner pinned the STARTER's skill for every player who had switched champions, and the lock
+        // silently guarded the wrong slot until ApplyBuildCapacities corrected it on the first Update.
+        _loadout.SignatureSkillId = _characters.Active?.SignatureSkillId;
         LoadoutRepair.EnsureSignature(_loadout, _characters.Active);
         _runsWithVowKept = save.RunsWithVowKept;
         // THE TRAIT ACCOUNT. A plain object with no device, like CharacterState above and unlike the
@@ -1156,7 +1158,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // nothing else: not BestDepth, not _deepestEver, not a quest, not a mastery point. Offline
             // still earns no RECORDS (OfflineHunt's own contract); this is a starting position, and one
             // descent's worth of it.
-            _offlineResumeWave = offline.DeepestWave > 1 ? offline.DeepestWave : 0;
+            // CAPPED AT WHAT THE PLAYER HAS ALREADY PROVED HERE. The live run RECORDS depth (RecordDepth
+            // / _deepestEver, further down this file), so a resume deeper than the region's best depth
+            // would write a permanent record — and, past wave 20, a CONQUEST — for waves nobody fought.
+            // That is not a discount on the checkpoint, it is the checkpoint's whole product for free,
+            // and it also breaks OfflineHunt's own standing contract that offline earns no records.
+            // Bounded this way the resume can only ever save the player from re-walking ground they
+            // have already held, which is exactly what it is for. Found by the session's own review.
+            var provedHere = _world.RegionFarm(_activeRegion).BestDepth;
+            _offlineResumeWave = Math.Min(offline.DeepestWave, provedHere) > 1
+                ? Math.Min(offline.DeepestWave, provedHere)
+                : 0;
             _offlineResumeRegion = _activeRegion;
             _offlineResumeRuns = 0;
         }
@@ -3951,6 +3963,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.DiscoveredSkills = DiscoveredSkillsNow();
             _loadoutScreen.KnownVows = _vowMenu;
             _loadoutScreen.NextSocketNote = Unlocks.NextSocketNote(GuideUnlockFacts());
+            _loadoutScreen.NextSkillSlotNote = Unlocks.NextSkillSlotNote(GuideUnlockFacts());
             _loadoutScreen.NextVowNote = Unlocks.NextVowNote(GuideUnlockFacts());
             _loadoutScreen.SkillLevels = _skillProgress;
             _loadoutScreen.Hunter = _hunter;
@@ -8606,12 +8619,27 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // The padlock goes INSIDE the icon box's lower-right quadrant, never the top-left corner:
             // at 125 % and 150 % the band above the icon is 8 px and that corner belongs to the NEW
             // chip, which yields there already.
+            //
+            // THE BREAK IS DRAWN ON AN UNLOCKED TILE, which is the only kind of tile it can happen to.
+            // Armed by Reveal.Newly, and Reveal.Newly fires on the frame the gate OPENS — so a break
+            // guarded by `if (!unlocked)` was a flourish that could never once play: by the time it was
+            // armed the branch that reads it was already closed. It draws whenever the tile is bound OR
+            // the pulse is still running, and only the padlock is locked-only.
+            //
+            // The strip closes over its eight frames (frame 0 is the open ring, frame 7 the shut one —
+            // the sworn Vow's own use of it in LoadoutScreen reads the same way), so BOUND holds it at
+            // the end and the break walks it BACKWARDS to the open ring while fading out. It used to run
+            // 0 -> 7 on the break, which is the closing animation played a second time.
+            var breaking = UiMotion.Pulse(NavBreakKey(activity));
+            if (!unlocked || breaking > 0f)
+            {
+                var bound = breaking > 0f ? UiMotion.Smooth(breaking) : 1f;   // 1 = shut, 0 = sprung open
+                _ui.AnimSprite(_batch, "fx_bind_chain_strip8_512", iconBox,
+                               bound * NavChainSeconds, 8f, loop: false,
+                               NavGold * (0.55f * (unlocked ? bound : 1f)));
+            }
             if (!unlocked)
             {
-                var breaking = UiMotion.Pulse(NavBreakKey(activity));
-                var chain = breaking > 0f ? UiMotion.Smooth(breaking) : 0f;   // 1 -> 0 as it springs open
-                _ui.AnimSprite(_batch, "fx_bind_chain_strip8_512", iconBox,
-                               (1f - chain) * NavChainSeconds, 8f, loop: false, NavGold * 0.55f);
                 var lockPx = Math.Max(10, iconPx / 2);
                 _ui.LockGlyph(_batch, new Rectangle(iconBox.Right - lockPx, iconBox.Bottom - lockPx, lockPx, lockPx),
                                 UiInk.Secondary * 0.85f);

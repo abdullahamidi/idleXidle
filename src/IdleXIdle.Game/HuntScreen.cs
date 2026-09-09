@@ -1003,9 +1003,6 @@ public sealed class HuntScreen
     /// <summary>Is the champion down and regrouping right now?</summary>
     public bool ChampionDowned => _mode == Mode.Downed;
 
-    /// <summary>The wave being fought — the number a rail badge would say.</summary>
-    public int WaveNow => _replayWave;
-
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
     {
@@ -1154,6 +1151,7 @@ public sealed class HuntScreen
         if (TraitWatch is { } watch) { watch.RegionId = RegionId; watch.CharacterId = Character.Id; }
         // THE DEEPER OF THE TWO: the checkpoint the player paid for, or the wave the absence left the
         // champion standing on. Never their sum — they are two answers to the same question.
+        _runOpenedAt = Math.Max(1, Math.Max(StartWave, FreeStartWave));
         _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, Math.Max(StartWave, FreeStartWave));
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
@@ -1245,10 +1243,6 @@ public sealed class HuntScreen
         _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
         _diedAt.Clear();          // the previous wave's fallen are gone with its replay
         _actors.Clear();
-        // The readiness edges belong to the wave that was measured against. Kept across the boundary,
-        // a slot that ended one wave ready and opens the next one waiting would pop when it came back
-        // — which is a pop for a cooldown the player never watched run.
-        _railReady.Clear();
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
         // beat. Without this a wave of five reads as one bar going down, which hides the single most
         // useful fact in a Swarm band: how many of them you actually got through.
@@ -1275,6 +1269,20 @@ public sealed class HuntScreen
         //    gate in front of the playhead would freeze every fight* shot on frame zero of an entrance.
         //    DevStart clears it (see below).
         _enemyEnter = 1f;
+
+        // ── THE READINESS EDGES ARE RE-SEEDED, NOT WIPED. The edge detector in Update fires on a
+        //    FALSE -> TRUE crossing and reads the stored value with GetValueOrDefault, so an empty map
+        //    reads as "every slot was waiting" — and a wave that opens with three skills already ready
+        //    (which is most of them, since the carry rolls a short wave's wait forward) then popped all
+        //    three medallions and chimed for each on its first frame. That is a ready-pop for a cooldown
+        //    that did not run, at every single wave boundary: exactly what clearing the map here was
+        //    written to prevent, caused by the clear itself. Seeded from what is true at the wave's
+        //    opening instant instead, so only a slot that actually comes up during the wave pops.
+        for (var slot = 0; slot < _waveSkills.Count; slot++)
+        {
+            var def = _waveSkills[slot].Def;
+            _railReady[slot] = def.TakesABeat && Timing(slot, def).Swept >= 1f;
+        }
     }
 
     /// <summary>The host rolled a chest for the boss just felled — upgrade the banner to the reward beat.</summary>
@@ -4658,8 +4666,13 @@ public sealed class HuntScreen
         // half seconds it said FELL AT WAVE 40 over a live wave 1 while the header underneath said
         // WAVE 1. Two contradictory wave numbers, at the one moment a player is asking what happened.
         // Once the new descent is running the plate becomes the news it now IS: where you went back to.
+        // ...and it says where the run ACTUALLY opened, not where the next one would. RestartWave is a
+        // live read of the paid checkpoint, which is zero whenever the Dust will not cover one and which
+        // never knew about the free offline resume at all — so a descent that opened at wave 30 on the
+        // absence's own depth announced BACK TO WAVE 1 the instant it regrouped, over a header reading
+        // wave 31. _runOpenedAt is recorded by the StartRun that did it: a fact, not a forecast.
         var regrouped = _mode != Mode.Downed;
-        var title = regrouped ? $"BACK TO WAVE {RestartWave}" : $"FELL AT WAVE {_fellWave}";
+        var title = regrouped ? $"BACK TO WAVE {_runOpenedAt}" : $"FELL AT WAVE {_fellWave}";
         _ui.TextBig(b, title, face.X + pad, face.Y + top + (titleRow - UiTypography.Pitch(UiTypography.StageLabel)) / 2,
                     Ember * fade, UiTypography.StageLabel, TextFace.Display);
         var limit = regrouped
@@ -4680,6 +4693,15 @@ public sealed class HuntScreen
     /// A number cached when the champion fell could promise a checkpoint it can no longer afford.
     /// </remarks>
     private int RestartWave => Math.Max(1, StartWave);
+
+    /// <summary>The wave the descent now running actually opened at, stamped by <c>StartRun</c>.</summary>
+    /// <remarks>
+    /// The counterpart to <see cref="RestartWave"/>, and the reason both exist: one is a forecast about
+    /// the NEXT descent (which the host revalidates against the Dust every frame), this is a record of
+    /// THIS one. The free offline resume opens a run deeper than any checkpoint and is spent the moment
+    /// a second descent begins, so it can only ever be read back from here.
+    /// </remarks>
+    private int _runOpenedAt = 1;
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>
@@ -5662,13 +5684,17 @@ public sealed class HuntScreen
         // first capture of this fixture photographed three empty health bars.
         _playheadMs = 0f;
         _callouts.Clear();
-        // HELD, or the shutter never sees it. The entrance decays at 1.25/second and a capture renders
-        // 60 frames before it saves, so a posed value is long gone by the time the picture is taken —
-        // the same reason DevHoldReport exists. Holding changes when the beat ENDS, not what it shows.
-        _devHoldArrival = true;
     }
 
-    private bool _devHoldArrival;
+    /// <summary>
+    /// The held entrance pose, re-asserted every frame while a capture is posing one.
+    /// </summary>
+    /// <remarks>
+    /// HELD, or the shutter never sees it. The entrance decays at 1.25/second and a capture renders 60
+    /// frames before it saves, so a value written once is long gone by the time the picture is taken —
+    /// the same reason DevHoldReport exists. Holding changes when the beat ENDS, not what it shows.
+    /// This nullable IS the hold: a separate bool beside it was written and never read.
+    /// </remarks>
     private float? _devArrivalPose;
 
     /// <summary>

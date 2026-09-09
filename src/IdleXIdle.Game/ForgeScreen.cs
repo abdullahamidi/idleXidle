@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -1690,6 +1690,11 @@ public sealed class ForgeScreen
         if (idx < 0) { Say("THAT CHEST IS ALREADY OPEN.", Slate); return; }
 
         _chests.RemoveAt(idx);
+        // THE SCAVENGER TALLY IS PER OPENING, and this is the opening the player actually performs.
+        // OPEN ALL and the dev fixture both reset it and this one did not, so the count and the Gleam
+        // accumulated across every chest opened since launch and the reveal card claimed a single chest
+        // had sold forty items. Reset BEFORE LandChest, which is what fills it.
+        _autoSoldCount = 0; _autoSoldGleam = 0;
         Reveal(chest, LandChest(chest, hunter));
     }
 
@@ -2242,7 +2247,10 @@ public sealed class ForgeScreen
             if (pays)
                 _ui.TextRightBig(b, _tab == Tab.Upgrade ? "PAYS THE NEXT UPGRADE" : "PAYS THE NEXT RE-ROLL",
                                  chip.Right, chip.Bottom + UiMetrics.Space(4), UiInk.Accent, UiTypography.Caption);
-            if (chip.Contains(hit)) _stripTip = Charters.Blurb(c);
+            // THE ANCHOR TOO, or the tip has no element to stand beside. HoverTip places against the
+            // rectangle it is given (the cursor stopped carrying tooltips this pass), and a chip that
+            // set only the text left the previous chip's rectangle — or an empty one — behind it.
+            if (chip.Contains(hit)) { _stripTip = Charters.Blurb(c); _stripTipAt = chip; }
             cx = chip.X - chipGap;
         }
     }
@@ -3784,7 +3792,14 @@ public sealed class ForgeScreen
         var n = _revealItems.Count;
         var cardW = Math.Max(UiMetrics.Control(720), n * RevealCol + UiMetrics.Space(140));
         var cellsOff = UiMetrics.Space(34) + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(8);
-        var matsOff = cellsOff + RevealCellH + UiMetrics.Space(16);
+        // THE RUNNERS' SALE TAKES ITS OWN RUNG, and the card grows by it. The first version drew that
+        // line at cellsTop + RevealCellH + Space(6) — ten pixels ABOVE this materials line, printing
+        // through it, because the card's height is computed from these offsets and nothing had made
+        // room. Found by this session's own review; a line that has to be measured into a layout is
+        // measured into the layout.
+        var soldRung = _autoSoldCount > 0 ? UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4) : 0;
+        var soldOff = cellsOff + RevealCellH + UiMetrics.Space(10);
+        var matsOff = cellsOff + RevealCellH + UiMetrics.Space(16) + soldRung;
         var closeOff = matsOff + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
         var closeH = UiMetrics.Control(56);
         var cardH = closeOff + closeH + UiMetrics.Space(42);
@@ -3936,7 +3951,7 @@ public sealed class ForgeScreen
         // removed before the reveal is built, so it has no cell and no stamp — a chest that gave two
         // items and lost one said nothing at all about the one that went (playtest 2026-09-09).
         if (n > 0 && _autoSoldCount > 0)
-            _ui.TextCenter(b, AutoSoldLine, 960, cellsTop + RevealCellH + UiMetrics.Space(6), Slate * fade);   // ui-page-ok: host chrome, canvas space
+            _ui.TextCenter(b, AutoSoldLine, card.Center.X, full.Y + soldOff, Slate * fade);
 
         if (n == 0)
             _ui.TextCenter(b, "YOUR SCAVENGER RUNS SOLD IT AS THE CHEST OPENED.", card.Center.X, cellsTop + UiMetrics.Space(90), Slate * fade);
@@ -4087,11 +4102,15 @@ public sealed class ForgeScreen
         ArgumentNullException.ThrowIfNull(hunter);
         if (!Gear.IsWearable(item) || (Wearer is not null && !Gear.CanWear(Wearer, item))) return;
         _revealStamp[item.InstanceId] = "WORN";
-        // Equip hands back whatever it displaced, and the bag is this screen's list — so the exchange
-        // is: the new piece leaves _inv, the old one returns to it. Exactly what GEAR does.
+        // WEAR IT, AND LEAVE THE BAG ALONE. A worn piece lives in BOTH — the doll points at a bag item
+        // (Game1: "Equipping does NOT remove the item from the bag"; GearScreen.Filtered hides worn
+        // pieces from the grid rather than the list losing them; RepairForSwitch relies on Unequip
+        // alone putting a piece back). The first version of this method removed the item from _inv on
+        // the strength of a comment claiming that is "exactly what GEAR does" — GEAR does no such
+        // thing, and _inv IS what the save serialises: the piece would have read correctly until
+        // TAKE OFF, a champion switch, or the next launch destroyed it. Found by the session's own
+        // adversarial review, which is what that review is for.
         var displaced = hunter.Equip(item);
-        _inv.Remove(item);
-        if (displaced is not null && _inv.All(i => i.InstanceId != displaced.InstanceId)) _inv.Add(displaced);
         FeelStart();
         Cue("sfx_equip", 0.55f);
         Say(displaced is null

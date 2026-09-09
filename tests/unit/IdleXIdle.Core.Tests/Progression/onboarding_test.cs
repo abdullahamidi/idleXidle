@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Progression;
@@ -74,7 +74,7 @@ public class OnboardingTest
             (TourTarget.RightColumn, "WHAT IS WAITING",
                 "What is waiting for you. A chest is in the VAULT already, and when the game has something else for you a button appears here to take you to it."),
             (TourTarget.NavRail, "THE OTHER SCREENS",
-                "Only the screens you can use are on this rail. New ones appear as you play — a notice says what opened and why, and a gold NEW mark stays on it until you look."),
+                "Every screen is on this rail from the start. The ones still in chains are not open yet — a notice says when one opens, and a gold NEW mark waits on it."),
             (TourTarget.LessonSlot, "LESSONS",
                 "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. The fight's own lessons appear here. Close one with the ×."),
         };

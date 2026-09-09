@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;
@@ -238,6 +238,54 @@ public class LoadoutSignatureLibraryTests
 
         var (label, enabled, _) = Primary(s);
         Assert.True(enabled, $"the signature read \"{label}\" with an empty mastery tree — it is exempt from mastery (sec.18)");
+    }
+
+    // ── The signature's SLOT: what the button says before it is pressed ──────────────────────────
+
+    [Fact]
+    public void test_the_signature_slot_refuses_an_equip_before_the_button_is_pressed()
+    {
+        // THE MODEL ALREADY REFUSED IT — PlayerLoadout.SetSkill will not write the signature's slot —
+        // and the screen offered an enabled EQUIP over it anyway. The press then fell through to the
+        // commit's catch-all, "THAT SKILL CANNOT GO THERE", which names no rule and reads as a fault
+        // in the game rather than a rule of it. A control has to carry its own state.
+        UiMetrics.Apply(100);
+        var who = CharacterRoster.Get("seeker");
+        var s = Screen(who, "road_hammer");
+        s.Loadout.SignatureSkillId = who.SignatureSkillId;
+        LoadoutRepair.EnsureSignature(s.Loadout, who);
+        Assert.True(s.Loadout.IsSignatureSlot(0), "the fixture did not pin the signature to slot one");
+
+        // Slot one is the selected slot; the click picks a shared skill to put in it.
+        s.Update(Tile(s, (int)Style.Hammer, 0).Center, clicked: true, held: false, wheel: 0);
+        var (label, enabled, refusal) = Primary(s);
+
+        Assert.False(enabled, $"the button offered \"{label}\" over a slot the loadout will not write");
+        Assert.Contains("OWN SKILL", refusal, StringComparison.OrdinalIgnoreCase);
+        // ...and the write really is refused, so the button and the model agree.
+        Assert.False(s.Loadout.SetSkill(0, "hammer_blow"));
+    }
+
+    [Fact]
+    public void test_the_signature_slot_refuses_removal_before_the_button_is_pressed()
+    {
+        // The same rule on the way out. Commit already answered this one with a message and a cue, so
+        // the refusal was at least explained — but only after a press of a button that looked live.
+        UiMetrics.Apply(100);
+        var who = CharacterRoster.Get("seeker");
+        var s = Screen(who, "road_hammer");
+        s.Loadout.SignatureSkillId = who.SignatureSkillId;
+        LoadoutRepair.EnsureSignature(s.Loadout, who);
+        // A SECOND SKILL, so the refusal cannot be the LAST SKILL STAYS rule wearing this test's name.
+        s.Loadout.AddSkill();
+        Assert.True(s.Loadout.SetSkill(1, "hammer_blow"));
+        Assert.True(s.Loadout.Skills.Count > 1);
+
+        var (label, enabled, refusal) = Primary(s);
+
+        Assert.Contains("REMOVE", label);
+        Assert.False(enabled, "the signature's slot offered a live REMOVE");
+        Assert.Contains("OWN SKILL", refusal, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

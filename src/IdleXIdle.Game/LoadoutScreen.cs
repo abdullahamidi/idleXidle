@@ -288,6 +288,10 @@ public sealed class LoadoutScreen
     /// <summary>What the world says about the next keystone socket, or "" when all three are open.</summary>
     public string NextSocketNote { get; set; } = "";
 
+    /// <summary>What the world charges for the NEXT skill slot — <c>Unlocks.NextSkillSlotNote</c>, set by the host.</summary>
+    /// <remarks>Empty once all four are open, exactly like <see cref="NextSocketNote"/>.</remarks>
+    public string NextSkillSlotNote { get; set; } = "";
+
     /// <summary>What the world says about the next Vow, or "" at the last one.</summary>
     public string NextVowNote { get; set; } = "";
     /// <summary>What each skill has earned by being used, and where the player spends it.</summary>
@@ -1052,6 +1056,12 @@ public sealed class LoadoutScreen
                 }
                 if (_slot >= skills.Count) return ("EQUIP", false, "PICK A SLOT ON THE LEFT FIRST.");
                 if (skills[_slot].SkillId == def.Id) return ($"EQUIPPED IN SLOT {_slot + 1}", false, "");
+                // THE SIGNATURE'S SLOT IS NOT THE PLAYER'S TO OVERWRITE, and the button has to say so
+                // BEFORE it is pressed. PlayerLoadout.SetSkill refuses the write, so an enabled EQUIP
+                // here was a promise the model would not keep: the press fell through to Commit's
+                // catch-all "THAT SKILL CANNOT GO THERE", which names no rule and reads as a fault.
+                if (Loadout.IsSignatureSlot(_slot))
+                    return ($"EQUIP TO SLOT {_slot + 1}", false, "THAT SLOT HOLDS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.");
                 // LAW 13: one slot per skill. The button says WHERE it already is, in words, rather than
                 // going grey without a reason — the loadout itself refuses the write regardless.
                 if (Loadout.IndexOfSkill(def.Id) is var other && other >= 0)
@@ -1088,6 +1098,11 @@ public sealed class LoadoutScreen
             default:
             {
                 if (!SlotFilled(_slot)) return ("REMOVE FROM SLOT", false, "");
+                // ...and the same rule on the way out, for the same reason: Commit already refuses the
+                // signature, so leaving the button enabled here made the refusal a surprise instead of
+                // a state the player could read off the control.
+                if (Loadout.IsSignatureSlot(_slot))
+                    return ("REMOVE FROM SLOT", false, "THIS IS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.");
                 if (skills.Count <= 1) return ("REMOVE FROM SLOT", false, "THE LAST SKILL STAYS — A HUNTER NEEDS ONE.");
                 return ("REMOVE FROM SLOT", true, "");
             }
@@ -2036,6 +2051,15 @@ public sealed class LoadoutScreen
                     Line($"EQUIP REPLACES {replacing.Name.ToUpperInvariant()} IN SLOT {_slot + 1}", Slate, UiTypography.Secondary);
             }
             _respecShown = slotOf >= 0 && have && SkillLevels.SpentOn(def.Id) > 0;
+
+            // HOW MANY SLOTS THIS HUNTER HAS, AND WHAT OPENS THE NEXT. The ladder was re-gated on the
+            // mastery roads (playtest 2026-09-09: "we had four skill slots unlocked before we even had
+            // the skills"), and then the gate said nothing anywhere — the sentence for it was written
+            // and tested and had no caller at all. It belongs beside the slot it is about, and it goes
+            // quiet the moment the fourth slot opens.
+            if (_pick == Pick.Slot && NextSkillSlotNote.Length > 0)
+                Line($"SKILL SLOTS {skills.Count} / {Loadout.SkillCapacity} — {NextSkillSlotNote}",
+                     Slate, UiTypography.Secondary, 2);
 
             // THE VOWS — the validator block, and it asks the BUILD, not this row.
             //
