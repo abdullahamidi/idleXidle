@@ -6023,7 +6023,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             WelcomeFigure.Falls => ("icon_effect_break", UiInk.Danger),
             WelcomeFigure.Dust => ("ui_memory_dust", new Color(0x9E, 0x86, 0xFF)),
             WelcomeFigure.Scrap => ("mat_scrap", new Color(0x9A, 0xC0, 0x88)),
-            WelcomeFigure.Essence => ("mat_essence", new Color(0x6E, 0xC8, 0x7A)),
+            WelcomeFigure.Essence => ("mat_essence", UiInk.Good),
             _ => ("", Bone),
         };
 

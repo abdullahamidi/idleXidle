@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -62,7 +62,7 @@ public sealed class VaultScreen
 
     /// <summary>The same ramp the Forge uses. A grade must read as one colour everywhere in the game.</summary>
     private static readonly Color[] RarityColors =
-        [Bone, new Color(0x6E, 0xC8, 0x7A), new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
+        [Bone, UiInk.Good, new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
 
     /// <summary>Also shared with the fight screen, for the same reason.</summary>
     private static readonly Dictionary<Source, Color> SourceColor = new()

@@ -148,7 +148,7 @@ public sealed class TrainingScreen
         HunterStat.ResonanceAffinity => ("stat_resonance", new Color(0x74, 0xC6, 0xE8)),
         HunterStat.Engineering => ("stat_tempo", new Color(0x48, 0xB8, 0x88)),
         HunterStat.Vitality => ("stat_vitality", new Color(0xC0, 0x6E, 0xE0)),
-        HunterStat.MaxHealth => ("stat_health", new Color(0x6E, 0xC8, 0x7A)),
+        HunterStat.MaxHealth => ("stat_health", UiInk.Good),
         HunterStat.Defense => ("stat_defense", new Color(0x8A, 0x96, 0xA8)),
         HunterStat.CriticalChance => ("stat_critical", new Color(0xF0, 0xA8, 0x30)),
         HunterStat.Focus => ("stat_focus", new Color(0xE8, 0xC8, 0x7A)),

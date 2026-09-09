@@ -1783,7 +1783,7 @@ public sealed class GearScreen
     };
     private static Color RarityColor(Rarity r) => r switch
     {
-        Rarity.Common => Bone, Rarity.Uncommon => new Color(0x6E, 0xC8, 0x7A), Rarity.Rare => new Color(0x4A, 0x90, 0xD9),
+        Rarity.Common => Bone, Rarity.Uncommon => UiInk.Good, Rarity.Rare => new Color(0x4A, 0x90, 0xD9),
         Rarity.Epic => new Color(0x8B, 0x3F, 0x82), _ => Gold,
     };
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -2540,7 +2540,7 @@ public sealed class MasteryScreen
             // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
             // the capture, a caption floating in empty space.
             _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - UiTypography.Secondary / 2,
-                              taken ? new Color(0x15, 0x10, 0x0F) : aff is null ? Bone : Muted(Bone, 0.62f),
+                              taken ? UiInk.Ground : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
             // INWARD, toward the centre: on the south arms the road node stands just outside this diamond and
             // used to print through the caption ("S ECIALISATION").
@@ -2561,7 +2561,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * 0.50f);
             var learnedRoad = Mastery.AvailableSkills().Contains(roadSkill);
             _ui.SpriteFit(b, skillGlyph, new Rectangle(cx - g / 2, cy - g / 2, g, g),
-                          taken ? new Color(0x15, 0x10, 0x0F) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
+                          taken ? UiInk.Ground : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
             if (learnedRoad && !taken)
             {
                 var bd = Math.Max(8, rad / 3);
@@ -2576,7 +2576,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * (node.Kind == MasteryKind.Mastery ? 0.54f : 0.46f));
             // Dark on a lit field once taken, lit on a dark field before: whichever way round, the
             // glyph is the thing with contrast against what is behind it.
-            var tint = taken ? new Color(0x15, 0x10, 0x0F) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
+            var tint = taken ? UiInk.Ground : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
             _ui.SpriteFit(b, glyph, new Rectangle(cx - g / 2, cy - g / 2, g, g), tint);
         }
         else if (frame is null && _zoom > 0.34f
@@ -2586,7 +2586,7 @@ public sealed class MasteryScreen
             // The greybox kind mark, kept for the no-art path only.
             var pip = Math.Max(3, rad / 4);
             _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2),
-                     taken ? new Color(0x15, 0x10, 0x0F) : branchCol);
+                     taken ? UiInk.Ground : branchCol);
         }
 
         // A CAPSTONE WEARS ITS OWN NAME, under the medallion. It used to print Short(node.Branch) inside

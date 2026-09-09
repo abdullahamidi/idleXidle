@@ -1737,7 +1737,7 @@ public sealed class UiKit
         var w = Math.Max(16, Measure(key) + 8);
         if (Assets.Get("ui_keycap") is { } cap) b.Draw(cap, new Rectangle(x, y, w, 16), Color.White);
         else { Fill(b, new Rectangle(x, y, w, 16), Dim); Fill(b, new Rectangle(x + 1, y + 1, w - 2, 14), PanelBg); }
-        Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? new Color(0xE8, 0xDF, 0xC8));
+        Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? UiInk.Primary);
     }
 
     /// <summary>

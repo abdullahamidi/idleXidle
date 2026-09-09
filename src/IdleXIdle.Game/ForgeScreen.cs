@@ -53,7 +53,7 @@ public sealed class ForgeScreen
 
     /// <summary>Rarity on the DARK item cards and frames. Light.</summary>
     private static readonly Color[] RarityColors =
-        [Bone, new Color(0x6E, 0xC8, 0x7A), new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
+        [Bone, UiInk.Good, new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
 
     /// <summary>Rarity for the item NAME. The panels are dark glass now, so it is just the bright ramp —
     /// the old dark-ink version was there for a parchment panel that no longer exists.</summary>
@@ -4490,7 +4490,7 @@ public sealed class ForgeScreen
     private static Color GemColor(AffixStat s) => s switch
     {
         AffixStat.Damage => new Color(0xD6, 0x48, 0x5C),
-        AffixStat.Health => new Color(0x6E, 0xC8, 0x7A),
+        AffixStat.Health => UiInk.Good,
         AffixStat.SkillRate => new Color(0x74, 0xC6, 0xE8),
         AffixStat.Haul => UiInk.Accent,
         AffixStat.Crit => new Color(0xC8, 0x8A, 0xE0),
