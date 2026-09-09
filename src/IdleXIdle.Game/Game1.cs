@@ -404,6 +404,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // The VAULT's keep-filter — playthrough state, saved with the run (see VaultScreen.KeepMinTier).
     private int _chestKeepMinTier;
 
+    /// <summary>Where the absence left the champion standing — the wave the FIRST live descent opens at.</summary>
+    /// <remarks>
+    /// Not persisted: it describes one launch. Cleared the moment a second descent starts, and only
+    /// honoured in the region the absence was simulated in.
+    /// </remarks>
+    private int _offlineResumeWave;
+    private string _offlineResumeRegion = "";
+    private int _offlineResumeRuns;
+
     /// <summary>
     /// Has the player ALLOWED the Warren's runners to sell low-grade gear out of an opened chest?
     /// </summary>
@@ -1141,6 +1150,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
             champOffline = OfflineCamp.HuntCredit(offline, camp, credited);
             if (champOffline > 0) _hunter.AddGleam((int)Math.Min(int.MaxValue, champOffline));
+
+            // WHERE IT WAS STANDING. The first live descent opens there instead of at wave one — the
+            // whole of "the game shouldn't start at Wave 1 every time it's launched". It changes
+            // nothing else: not BestDepth, not _deepestEver, not a quest, not a mastery point. Offline
+            // still earns no RECORDS (OfflineHunt's own contract); this is a starting position, and one
+            // descent's worth of it.
+            _offlineResumeWave = offline.DeepestWave > 1 ? offline.DeepestWave : 0;
+            _offlineResumeRegion = _activeRegion;
+            _offlineResumeRuns = 0;
         }
 
         // Seed the LIVE rate from the save, not just the offline calc above. Without this the field stays 0
@@ -5390,6 +5408,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var farmHere = _world.RegionFarm(def.Id);
         var wish = Checkpoints.Clamp(farmHere.StartWave, farmHere.BestDepth, _world.IsConquered(def.Id));
         _expedition.StartWave = _dust.MemoryDust >= Checkpoints.DustCost(wish) ? wish : 0;
+        // AND THE FREE RESUME, for ONE descent. The absence's own simulation left the champion on a
+        // wave; that depth was earned in real elapsed time and already paid out at the camp's rate, so
+        // opening there costs no Dust. It is spent the moment a SECOND descent begins — the first fall
+        // drops back to the paid checkpoint, which is where the Dust economy's revenue actually lives
+        // (HuntScreen re-charges DustCost on every StartRun, including the one after a death).
+        if (_offlineResumeWave > 0 && _expedition.RunsStarted > _offlineResumeRuns) _offlineResumeWave = 0;
+        _expedition.FreeStartWave = _expedition.RegionId == _offlineResumeRegion ? _offlineResumeWave : 0;
         _expedition.RegionConquered = _world.IsConquered(def.Id);
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.VaultOpen = Unlocks.IsOpen(Activity.Vault, GuideUnlockFacts());       // the rail hides a reward whose screen is locked
@@ -5835,6 +5860,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawWelcomePanel()
     {
         if (_welcome is not { } w) { _showWelcome = false; return; }
+        // THE ACCOUNT, IN SENTENCES. The rows of figures are still there under it — a player who wants
+        // the numbers gets the numbers — but the panel now opens by telling them what happened.
+        var story = w.Story();
         var hunt = w.HuntParts();
         var warren = w.WarrenParts();
         // The panel's width follows the profile so the wrapped lines keep their length; its height is
@@ -5852,8 +5880,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // a long night paid like a short one, and what buys more (OfflineCamp, 2026-09-06).
         var campLines = w.CampLine() is { } campLine ? _ui.WrapBig(campLine, cw, UiTypography.Secondary) : Array.Empty<string>();
         var campH = campLines.Count == 0 ? 0 : campLines.Count * UiTypography.Pitch(UiTypography.Secondary) + rowGap;
+        // Every story sentence is MEASURED into the height, never assumed: this panel has no scrollbar
+        // and its frame is drawn from the height, so a line that did not fit would print through the
+        // ornament (the CHEST FILTER's own lesson, one commit earlier).
+        var storyLines = new List<string>();
+        foreach (var line in story) storyLines.AddRange(_ui.WrapBig(line, cw, UiTypography.Body));
+        var storyH = storyLines.Count == 0 ? 0 : storyLines.Count * UiTypography.Pitch(UiTypography.Body) + rowGap;
+        var resume = w.ResumeLine();
+        var resumeH = resume is null ? 0 : UiTypography.Pitch(UiTypography.Headline) + rowGap;
         var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14)
-                + RowH(huntLines) + RowH(warrenLines) + campH + UiMetrics.Space(16) + button + pad;
+                + storyH + resumeH + RowH(huntLines) + RowH(warrenLines) + campH + UiMetrics.Space(16) + button + pad;
         var r = new Rectangle(UiKit.PageCenterX - width / 2, (UiKit.Page.Height - h) / 2 - UiMetrics.Space(40), width, h);
 
         _ui.Fill(_batch, UiKit.Page, new Color(0x0B, 0x09, 0x08) * 0.55f);
@@ -5874,6 +5910,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             foreach (var line in lines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
             y += rowGap;
         }
+        foreach (var line in storyLines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
+        if (storyLines.Count > 0) y += rowGap;
+
+        // WHERE IT PICKS UP. Gold and at the Headline rung, because it is the one line on this panel
+        // about what happens next — and because a resume nobody is told about is a resume nobody sees.
+        if (resume is not null)
+        {
+            _ui.TextBig(_batch, resume, x, y, Gold, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline) + rowGap;
+        }
+
         Row("HUNT", huntLines);
         void CampRow()
         {

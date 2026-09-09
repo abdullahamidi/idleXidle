@@ -338,6 +338,29 @@ public sealed class HuntScreen
     /// </summary>
     public int StartWave { get; set; }
 
+    /// <summary>
+    /// A wave the NEXT descent may open at for FREE — where an absence left the champion standing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest 2026-09-09: <i>"The game shouldn't start at Wave 1 every time it's launched. We need
+    /// to convince the player that the simulation continues even while the game is closed, picking up
+    /// from the middle of a run."</i> It always did simulate — <c>OfflineHunt</c> runs the real descent
+    /// against the real build — and then threw the depth away and opened the live run at wave 1.
+    /// </para>
+    /// <para>
+    /// <b>Separate from <see cref="StartWave"/> because one is PAID and this is not.</b> A checkpoint
+    /// costs 25 Memory Dust per wave, every descent, and StartRun charges it below; charging for a
+    /// resume would bill the player for time they already spent. The host consumes this after ONE
+    /// descent, so the checkpoint's real revenue — the second, third and twentieth run of a session —
+    /// is untouched, and a player cannot farm depth by closing and reopening the game.
+    /// </para>
+    /// </remarks>
+    public int FreeStartWave { get; set; }
+
+    /// <summary>How many descents this screen has begun. The host watches it to spend the free resume.</summary>
+    public int RunsStarted { get; private set; }
+
     /// <summary>Set by StartRun when a descent began at a checkpoint: the Dust the host must now take.</summary>
     public int CheckpointCharge { get; set; }
 
@@ -1097,6 +1120,7 @@ public sealed class HuntScreen
 
     private void StartRun(Hunter hunter)
     {
+        RunsStarted++;
         var build = ComposeBuild(hunter);
         _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
         _chargeNow = 0;
@@ -1125,10 +1149,16 @@ public sealed class HuntScreen
         // push, so a first awakening is stamped with the region and champion it happened to.
         _descent.TraitWatch = TraitWatch;
         if (TraitWatch is { } watch) { watch.RegionId = RegionId; watch.CharacterId = Character.Id; }
-        _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, StartWave);
+        // THE DEEPER OF THE TWO: the checkpoint the player paid for, or the wave the absence left the
+        // champion standing on. Never their sum — they are two answers to the same question.
+        _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, Math.Max(StartWave, FreeStartWave));
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
         // host fed StartWave = 0 when the Dust was not there, so a start here is always affordable.
+        // THE DUST IS CHARGED FOR THE CHECKPOINT ALONE. A free resume (FreeStartWave) opens the run
+        // deeper and costs nothing: the waves under it were fought, in real elapsed absence, already
+        // paid out at the camp's 30-60% rate. The player has been charged once; the depth is the
+        // receipt, not a second purchase.
         if (StartWave > 0) CheckpointCharge += Checkpoints.DustCost(StartWave);
         _mode = Mode.Fighting;
         BeginWave();
