@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -1582,7 +1582,15 @@ public static class SoloBattle
             }
 
             hitCrit = chance > 0f && critRng.NextDouble() < chance;
-            if (hitCrit) { hitCritFactor = critMult; mindFocus = 0f; }
+            if (hitCrit)
+            {
+                hitCritFactor = critMult;
+                // ONLY A SKILL CRITICAL MAY EMPTY THE BANK. FOCUS is fed by skill hits and read by
+                // skill hits (the branch above is `fromSkill`), so a basic swing that happens to crit
+                // must not spend it: the swing never paid into the climb, and letting it clear the
+                // bank would also delete a CERTAINTY the player had already earned but not yet cashed.
+                if (fromSkill) mindFocus = 0f;
+            }
             else if (fromSkill && shape.FocusPerHitPercent > 0f)
                 mindFocus = MathF.Min(shape.FocusCapPercent, mindFocus + shape.FocusPerHitPercent);
         }
@@ -2791,7 +2799,13 @@ public static class SoloBattle
                         {
                             executes++;
                             castCarry = vdef.Rule.OverkillCarry;
-                            LandOn(weak, MathF.Max(raw, weak.Health), ms, HitSource.Primary, ignoresArmour: true);
+                            // It is a skill landing like any other, so it rolls like one. Without this
+                            // the execute was the one HitSource.Primary hit in the model that could
+                            // never crit — and, because RollCrit is also what feeds MIND's FOCUS, the
+                            // one skill hit that never moved the bank either way.
+                            RollCrit(HitSource.Primary);
+                            LandOn(weak, MathF.Max(raw, weak.Health), ms, HitSource.Primary, ignoresArmour: true,
+                                   crit: hitCrit);
                             castCarry = 0f;
                             if (alive == 0) return Kill(ms);
                         }

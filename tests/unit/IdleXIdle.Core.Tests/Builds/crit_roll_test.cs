@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
@@ -203,6 +203,84 @@ public class crit_roll_test
 
         _out.WriteLine("derived provenances seen: " + string.Join(", ", seen.OrderBy(x => x.ToString())));
         Assert.NotEmpty(seen);   // the sweep must actually have posed the case it is clearing
+    }
+
+    [Fact]
+    public void test_certainty_arrives_on_time_because_only_a_skill_crit_spends_the_bank()
+    {
+        // MIND'S PROMISE IS ARITHMETIC, and that makes it a assertion rather than a rate. The bank is
+        // fed 3 points by every SKILL hit that did not crit, against a 15-point cap, and CERTAINTY
+        // forces the hit taken at the cap — so a SIXTH consecutive skill hit without a critical cannot
+        // exist. Five fill the bank; the next one is guaranteed.
+        //
+        // Two separate defects broke exactly that count, and neither is visible to any test that only
+        // asks whether criticals happen at the stated rate:
+        //
+        //   · a basic SWING that rolled a critical emptied the bank. The swing never pays into FOCUS
+        //     (the branch that banks is `fromSkill`), so it was spending a climb it had not made — and
+        //     when the bank was full it consumed the guaranteed hit without anyone taking it.
+        //   · HAMMER's FINISH execute is a HitSource.Primary landing that never called the roll at all.
+        //     It could not crit, and it did not bank, so it slid a further non-critical skill hit into
+        //     the middle of the run.
+        //
+        // FINISH is woven deliberately: it is the fixture's own poser for the second one, and the
+        // execute's extra landing is counted below so the case cannot quietly stop arising.
+        var blow = SkillCatalogue.ById("hammer_blow");
+        var finish = blow.Variations.Single(v => v.Name == "FINISH");
+        var build = new Build { Shape = new SkillShape { FocusPerHitPercent = 3f, FocusCapPercent = 15f, CertaintyAtFocusCap = true } };
+        // A VARIATION IS A FUNCTION ON THE DEFINITION, and the sim reads the definition it is handed —
+        // BuildComposer is what applies it on the live path, so a fixture that only names the variation
+        // in the EquippedSkill fights the BASE skill and poses nothing. (It did, for one draft: zero
+        // executes over five hundred landings, because ExecuteFraction was still zero.)
+        build.Equip(new EquippedSkill(finish.Modify!(blow), Source.Shadow, null, finish));
+        var hunter = WithCrit(20f);
+
+        // The longest run of skill hits that may pass without one: 15 points of cap at 3 a hit.
+        var longestAllowed = (int)(15f / 3f);
+        var worst = 0;
+        var executes = 0;
+        var swingCrits = 0;
+        var skillHits = 0;
+
+        // POSED AS WAVES, one ResolveWave each, because the bank is minted with a wave and dies with
+        // it — and creatures big enough that the blow cannot one-shot them, since the execute needs a
+        // SURVIVOR under the threshold and a wave that dies to its first landing never has one. The
+        // creatures do not bite, so the sample is a long clean run of the champion's own hits.
+        for (var wave = 0; wave < 40; wave++)
+        {
+            var champ = new Champion { MaxHealth = 10_000_000, Health = 10_000_000 };
+            var creatures = Enumerable.Range(0, 3).Select(_ => WaveCreature.Single(9_000f, 0f)).ToList();
+            var (_, events) = SoloBattle.ResolveWave(champ, build, hunter, creatures,
+                                                    enemyIntervalMs: 100_000, ExpeditionTuning.Default,
+                                                    new Random(4_242 + wave * 7919));
+
+            var streak = 0;
+            var primaries = 0;
+            var casts = 0;
+            foreach (var e in events)
+            {
+                if (e.Kind == BattleEventKind.Skill) casts++;
+                if (e.Kind != BattleEventKind.Strike) continue;
+                if (e.Hit == HitSource.Swing && e.Crit) swingCrits++;
+                if (e.Hit != HitSource.Primary) continue;
+                primaries++;
+                skillHits++;
+                streak = e.Crit ? 0 : streak + 1;
+                worst = Math.Max(worst, streak);
+            }
+            // BLOW takes one target and hits it once, so one cast is one landing — and a wave with more
+            // landings than casts is a wave the execute fired in.
+            if (primaries > casts) executes++;
+        }
+
+        _out.WriteLine($"{skillHits} skill hits · longest run without a critical {worst} (cap {longestAllowed})"
+                       + $" · {swingCrits} swing criticals · {executes} waves with an execute");
+
+        Assert.True(skillHits > 100, $"only {skillHits} skill hits sampled — too few to catch a run");
+        Assert.True(swingCrits > 0, "no swing ever crit — the fixture cannot pose the bank being robbed");
+        Assert.True(executes > 0, "FINISH never executed — the fixture cannot pose the unrolled landing");
+        Assert.True(worst <= longestAllowed,
+                    $"{worst} skill hits passed without a critical where CERTAINTY promises at most {longestAllowed}");
     }
 
     [Fact]
