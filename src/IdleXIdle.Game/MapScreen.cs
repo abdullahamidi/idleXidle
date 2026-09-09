@@ -1064,6 +1064,11 @@ public sealed class MapScreen
                         plate.Y + (plateH - UiTypography.Headline) / 2, Bone, UiTypography.Headline);
         }
         Line(Description(def.Theme), Bone, body, 1);
+        // WHAT THIS PLACE IS. Two sentences the world says about itself, in the flow so they take
+        // their room like every other item and give it back when the page is short. They lived as C#
+        // comments for months — two design documents quoted them as shipped text and no player ever
+        // saw one (playtest 2026-09-09: "let's write a story for the game").
+        if (def.Blurb.Length > 0) Line(def.Blurb, Slate, UiTypography.Secondary, 4);
         Rule();
 
         // ── CAN I SURVIVE IT — the two figures, and the gap between them IN WORDS. ──

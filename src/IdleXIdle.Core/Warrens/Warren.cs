@@ -51,14 +51,23 @@ public static class Facilities
 {
     public static readonly IReadOnlyList<FacilityInfo> All = new List<FacilityInfo>
     {
-        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and raise young. More paws at work, more Gleam.",  WarrenResource.Gleam),
-        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Search the deep soil for Memory Dust.",                  WarrenResource.Dust),
-        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady Gleam from the digging.",       WarrenResource.Gleam),
-        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners out to bring back Scrap.",                  WarrenResource.Scrap),
-        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the resonance. Slow, deep Essence.",           WarrenResource.Essence),
-        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Patrol the forage trails, shaking loose more Dust.",     WarrenResource.Dust),
-        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Sort and store the salvage. Steady Scrap.",              WarrenResource.Scrap),
-        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed resonant stock. Their sheddings carry Essence.",   WarrenResource.Essence),
+        // ── PEOPLE, NOT LIVESTOCK (2026-09-09). Four of these eight described a colony of ANIMALS —
+        //    hatching young, breeding resonant stock, sheddings — which is the last survivor of the
+        //    creature-collection game this one stopped being. Nothing in the shipped game has creatures
+        //    on the player's side, so the copy implied a whole subsystem nobody could find. The Warren
+        //    is the settlement dug into the first joint that ever held; its people work the joint, and
+        //    each facility says what it does and what that gives. Every NAME is kept — six of them were
+        //    already about the work rather than the animals, and NURSERY is pinned by a hint test —
+        //    except BREEDING CHAMBER, which cannot be read any other way. The enum member (the save
+        //    key) is untouched; only the word the player reads changes.
+        new(FacilityKind.Nursery,        "NURSERY",         "Where the camp's young are taught the work. More hands, more Gleam.", WarrenResource.Gleam),
+        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Sift the deep soil where the joint sheds. Memory Dust.",  WarrenResource.Dust),
+        new(FacilityKind.Tunnels,        "TUNNELS",         "Cut deeper to the seam. Steady Gleam from the working.",  WarrenResource.Gleam),
+        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Runners walk the old lines and bring back Scrap.",        WarrenResource.Scrap),
+        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the works, and answer. Slow, deep Essence.",    WarrenResource.Essence),
+        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Watch-posts along the forage trails. More Dust comes home.", WarrenResource.Dust),
+        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Sort and store what comes back. Steady Scrap.",           WarrenResource.Scrap),
+        new(FacilityKind.BreedingChamber,"SOUNDING CHAMBER","Strike the old works and hold the note. Essence.",        WarrenResource.Essence),
     };
 
     public static FacilityInfo Info(FacilityKind kind) => All.First(f => f.Kind == kind);

@@ -34,7 +34,7 @@ Assets live beside this file:
 >
 > Your champion stands in the arena and fights wave after wave — on every screen, and while the game is closed. Every wave it clears pays out at once. Every fifth is a boss. When it falls, it gets back up and pushes on. Nothing is banked, nothing is lost.
 >
-> **Weave a build, not a rotation.** Skills are woven from a SOURCE (what it is made of) and a FORM (what it does): a Body Strike, a Shadow Projectile, a Nature Aura. Add Vows — rules you accept for extra power that only pay while your build keeps the rule — and Keystones that trade one thing for another. Then a Mastery tree of four directions and six Specialisations decides how your skills fight.
+> **Weave a build, not a rotation.** Twelve skills across six styles — HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds — each carrying a SOURCE, and each deepened by a variation and two of its three reinforcements as it levels from use. Add Vows — rules you accept for extra power that only pay while your build keeps the rule — and Keystones that trade one thing for another. Then a Mastery tree of four directions and six Specialisations decides how your skills fight.
 >
 > **Gear that reads honestly.** Every item shows its real numbers. The Forge upgrades, re-rolls, sockets and breaks down — and asks before it does anything you cannot undo.
 >
@@ -42,20 +42,20 @@ Assets live beside this file:
 >
 > **A Warren that works while you sleep.** Facilities produce Gleam, Memory Dust and Forge materials while you are away. Come back, spend, leave.
 >
-> **Traits that never reset.** Memory Dust buys permanent traits along four roads — Ruin, Aegis, Artifice, Avarice — and the capstone you choose closes the other three forever.
+> **Characteristics you awaken, never buy.** Twenty-six traits open from what you have actually done — how you fight, what you survive, where you go — and each hunter wears three. Memory Dust buys the Warren and the right to start a descent deeper.
 >
 > Made by one person. Offline, no account, no ads, no in-game purchases — you buy it once and everything that changes the fight is in the box.
 
 ### Bullet list (Steam "About this game" feature list / itch page sidebar)
 
 - Auto-battler that keeps fighting while the game is closed
-- Weave skills from Source × Form × Vow — 6 sources, 6 forms, 12 vows
+- Weave skills from Source × Style × Vow — 6 sources, 6 styles, 13 vows
 - 10 champions, each with an always-on passive that reshapes your build
 - Mastery tree: four directions, six Specialisations, one discipline per hunter
 - A forge with upgrades, re-rolls, sockets and gems — every stat shown in real numbers
 - Six regions, a five-rung Corruption ladder you can climb up and down
 - Warren: idle production of three currencies while you are away
-- 51 permanent traits along four roads — and a capstone you cannot take back
+- 26 characteristics that awaken from what you have done — three worn at a time
 - Offline. No account. No ads. No in-game purchases.
 
 ## 3. Tags and metadata

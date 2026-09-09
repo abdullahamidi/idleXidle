@@ -19,6 +19,27 @@ public sealed record RegionDefinition
 
     /// <summary>Which attack tempo this region's creatures favour — how it feels to fight, not just look at.</summary>
     public AttackBias CombatBias { get; init; } = AttackBias.Balanced;
+
+    /// <summary>
+    /// What this place IS, in two sentences — the only prose the world says about itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These lines existed as C# COMMENTS above each region for months ("Cinderworks grinds you down
+    /// with slow, heavy industrial blows"; "a slaughterhouse"; "death by a thousand cuts"), and two
+    /// design documents quoted them as if they were shipped text. No player ever saw one: the only
+    /// region prose in the game was a one-line drop blurb drawn on a chest card. Promoted to a real
+    /// field and drawn on the map (playtest 2026-09-09: "let's write a story for the game and ensure
+    /// that descriptions... all align with this lore").
+    /// </para>
+    /// <para>
+    /// The second sentence of each carries what <see cref="CombatBias"/> actually does, so the
+    /// sentence and the fight cannot drift: HEAVY is fewer, larger bites; FAST is more, smaller ones;
+    /// BALANCED is neither. Nothing here invents a mechanic — an earlier draft gave Cinderworks
+    /// enemies a miss chance, and the model has none.
+    /// </para>
+    /// </remarks>
+    public string Blurb { get; init; } = "";
 }
 
 /// <summary>
@@ -63,28 +84,35 @@ public static class Regions
             // The starting region stays Balanced — the player learns the baseline before it's bent.
             Id = VerdantHollow.RegionId, Name = "VERDANT HOLLOW", Theme = Source.Nature,
             PrereqId = null, CombatBias = AttackBias.Balanced,
+            Blurb = "The first joint that ever held, and the one the camp was dug into. "
+                    + "What rises here comes evenly, and teaches you what even feels like.",
         },
-        // Cinderworks grinds you down with slow, heavy industrial blows.
         BuildRegion("cinderworks", "CINDERWORKS", Source.Machine, prereq: VerdantHollow.RegionId,
-            bias: AttackBias.Heavy),
-        // Umbral Reach harries you with fast, creeping strikes.
+            bias: AttackBias.Heavy,
+            blurb: "A works that went on making after there was nobody left to make for. "
+                   + "It hits slowly and it hits hard, and it can afford to wait."),
         BuildRegion("umbral_reach", "UMBRAL REACH", Source.Shadow, prereq: "cinderworks",
-            bias: AttackBias.Fast),
+            bias: AttackBias.Fast,
+            blurb: "The seam here tore wide and low, and what comes through never gathers. "
+                   + "Many small bites, quickly, from more directions than you have answers."),
         // The back half of the world — one region per remaining Source, so all six get a home and the
         // Source matchup has somewhere to land every element. (An older comment here promised these were
         // "shorter to conquer"; they never were — the conquest bar is one constant for the whole world.
         // What actually separates them is RegionLadder, which prices each one at a fixed multiple of the
         // last, so the back half asks for gear rather than for more waves.) So
         // the journey is SPREAD across more, sharper places rather than three long grinds.
-        // Marrow Wastes: BODY. Brutal, heavy blows — a slaughterhouse that grinds you down.
         BuildRegion("marrow_wastes", "MARROW WASTES", Source.Body, prereq: "umbral_reach",
-            bias: AttackBias.Heavy),
-        // The Still Archive: MIND. Fast, precise psychic lances — death by a thousand cuts.
+            bias: AttackBias.Heavy,
+            blurb: "Bone took the shape the pressure asked for and kept it. "
+                   + "Everything here is heavy, and it swings like it has nothing to spend."),
         BuildRegion("still_archive", "THE STILL ARCHIVE", Source.Mind, prereq: "marrow_wastes",
-            bias: AttackBias.Fast),
-        // The Pale Choir: SPIRIT. The deepest reach — balanced, relentless, the end of the known world.
+            bias: AttackBias.Fast,
+            blurb: "Where the network kept what it knew. The knowing is still here and it is awake. "
+                   + "It cuts precisely, and often, and it does not need to be strong."),
         BuildRegion("pale_choir", "THE PALE CHOIR", Source.Spirit, prereq: "still_archive",
-            bias: AttackBias.Balanced),
+            bias: AttackBias.Balanced,
+            blurb: "The last joint on the line, and the one nobody came back from mending. "
+                   + "It asks for everything at once and it does not stop asking."),
     };
 
     public static RegionDefinition Get(string id) => All.First(r => r.Id == id);
@@ -98,8 +126,9 @@ public static class Regions
     }
 
     private static RegionDefinition BuildRegion(
-        string id, string name, Source theme, string prereq, AttackBias bias = AttackBias.Balanced)
-        => new() { Id = id, Name = name, Theme = theme, PrereqId = prereq, CombatBias = bias };
+        string id, string name, Source theme, string prereq, AttackBias bias = AttackBias.Balanced,
+        string blurb = "")
+        => new() { Id = id, Name = name, Theme = theme, PrereqId = prereq, CombatBias = bias, Blurb = blurb };
 }
 
 /// <summary>
