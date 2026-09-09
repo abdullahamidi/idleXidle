@@ -3423,7 +3423,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else _showSettings = true;
         }
 
-        if (_bootTimer > 0f) _bootTimer = Math.Max(0f, _bootTimer - dt);
+        // THE ONE LINE THAT SAYS THE GAME HAS STARTED MUST SURVIVE THE INTRO. _bootMessage on a fresh
+        // save is "YOUR HUNTER IS ALREADY FIGHTING / WATCH THE FIRST WAVES", and DrawBootToast refuses
+        // to draw it under the intro's scrim — correctly, it would be a dim duplicate. But its clock
+        // ran anyway, so all seven seconds burned behind eight cards and the toast was gone before the
+        // player ever saw the arena. Playtest 2026-09-09: "the game starts running in the background
+        // while the tutorial is active, and the player misses this; we need a way to indicate that the
+        // game has started." Holding the clock is the whole fix: the nudge now lands the instant the
+        // scrim lifts, which is the first moment it could be read.
+        if (_bootTimer > 0f && !_tourActive) _bootTimer = Math.Max(0f, _bootTimer - dt);
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
         // Notice toasts: one at a time, each for NoticeSeconds, the next one only once the last has
         // gone. Ticks here, past the title return, so only seconds of actual play count.
@@ -4093,6 +4101,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // it feeds shows during the wait as well as after it — a 20% drop off a boss every fifth wave is
         // tens of waves, and the guide going quiet for all of them was the reported bug.
         ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
+        // THE GEM DEED'S TWO FACTS, counted apart. A LOOSE gem in the bag is what makes the rung
+        // actionable; a gem SET into something is what completes it. Counting them together would let
+        // the rung satisfy itself the moment a gem dropped — the lesson marked done before the player
+        // had done anything, which is exactly the failure the rung ladder's own remarks describe.
+        GemsHeld: _forge?.Inventory.Count(GemCraft.IsGem) ?? 0,
+        GemsSet: (_forge?.Inventory.Sum(i => i.Gems.Count) ?? 0)
+                 + Enum.GetValues<GearSlot>().Sum(sl => _hunter.Worn(sl)?.Gems.Count ?? 0),
         // WAS `_mastery.Spent > 0`, WHICH MEASURED THE WRONG SYSTEM. The step says "press B for BUILD,
         // then WEAVE", and weaving a skill touches _loadout — it never touches the mastery tree. So a
         // player who did exactly what they were told stayed on that prompt forever, while a player who
@@ -7760,6 +7775,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             (new Rectangle(l2, PillRowTop, e2 - l2, PillHeight), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
             (new Rectangle(leftEdge, PillRowTop, e3 - leftEdge, PillHeight), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
         };
+        // WHERE THE GLEAM PILL ACTUALLY IS, published for the intro's spotlight. Card 4 is titled
+        // GLEAM and lit a hand-written (1440,4,400,84) rectangle that frames all THREE pills — so the
+        // card named one resource and the light showed three, which is the first thing the playtest
+        // reported (2026-09-09: "the resource display lists only 'Gleam' but shows all three resource
+        // types"). Read from the row the draw just laid out, so the two cannot drift again.
+        s_gleamPillRect = pillRows[2].R;
         // THE SPEND REACTS HERE (brief sec. 37), at the pill, rather than by flying a coin across the
         // page: the capsule takes a rim in its own colour that fades over a transition. A flash is a
         // state change rather than movement, so Reduced Motion keeps it — what Reduced drops is the
@@ -7815,6 +7836,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static int PillHeight => UiMetrics.Control(60);
     /// <summary>The gap between two capsules.</summary>
     private const int PillGap = 20;
+
+    /// <summary>The GLEAM capsule's own rectangle, as the last DrawCurrencyPills laid it out.</summary>
+    /// <remarks>
+    /// Static because the tour asks HuntScreen for its spotlights and the pills are the host's chrome.
+    /// Published rather than recomputed: a second copy of this arithmetic is how the card and the
+    /// light came apart in the first place.
+    /// </remarks>
+    internal static Rectangle GleamPillRect => s_gleamPillRect;
+
+    private static Rectangle s_gleamPillRect = new(1640, 4, 200, 84);
     /// <summary>What UiKit.Pill wraps around a value: its left pad, the icon, the gap, the right pad — the capsule's own proportions.</summary>
     private static int PillCapsuleChrome => UiKit.PillChrome(PillHeight);
     /// <summary>The row's right end: a breath left of the settings gear, so the two can never share a pixel.</summary>

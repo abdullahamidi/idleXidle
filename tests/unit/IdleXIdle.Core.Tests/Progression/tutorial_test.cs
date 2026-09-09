@@ -71,8 +71,13 @@ public class TutorialTest
         Step("wave 9, still no chest", facts with { ChestsHeld = 1, DeepestWave = 10 });
         Step("a chest dropped", facts with { ItemsOwned = 1, ChestsHeld = 0, DeepestWave = 11 });
         Step("opened it — an item", facts with { ItemsWorn = 1, DeepestWave = 12 });
-        Step("equipped it", facts with { DeepestWave = 19, WavesCleared = 19 });
-        Step("wave 19 — conquest in reach", facts with { DeepestWave = 20, RegionsConquered = 1, BuildChoices = 1 });
+        // A GEM DROPS AND IS SET — the one rung that waits on a DEED rather than on a threshold. It
+        // stays silent until a gem is actually in the bag (a rung that arrives before the player can
+        // act on it is noise), and only a gem SET into something satisfies it: holding one, reading
+        // about one and walking past the Forge all leave it waiting.
+        Step("equipped it", facts with { DeepestWave = 14, WavesCleared = 14, GemsHeld = 1 });
+        Step("a gem dropped", facts with { GemsHeld = 0, GemsSet = 1, DeepestWave = 19, WavesCleared = 19 });
+        Step("set it into an item", facts with { DeepestWave = 20, RegionsConquered = 1, BuildChoices = 1 });
         Step("conquered — the region's keystone is a first choice", facts with { SkillsWoven = 1, DeepestWave = 22 });
         Step("wove a skill — the loop is lived", facts);
 

@@ -771,7 +771,10 @@ public sealed class HuntScreen
             Inflated(StageHeader, 10),
         },
         TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
-        TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
+        // THE GLEAM CAPSULE ALONE — the card is titled GLEAM and says Gleam pays for training, and
+        // the light used to frame all three pills beside it (playtest 2026-09-09). Read from the row
+        // the host just drew, so the card's claim and the lit rectangle cannot drift apart again.
+        TourTarget.CurrencyPills => new[] { Inflated(Game1.GleamPillRect, 6) },
         TourTarget.Skills => new[] { Inflated(s_dockRect, 10) },
         // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
         // rail's height depends on how many errands are up, and a new game now holds the welcome chest,

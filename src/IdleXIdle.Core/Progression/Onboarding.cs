@@ -222,12 +222,17 @@ public static class Onboarding
             new TourStep(TourTarget.Champion, "YOUR HUNTER",
                 "This is your hunter. It fights on its own. You never press attack."),
 
+            // ITEM 7 LIVES HERE: "each wave is randomized, but we never mention this fact." This says
+            // the half a player can act on — what comes at you changes from wave to wave. (The band is
+            // fixed by wave number and the creatures inside it are rolled from a seed of region, wave
+            // and run, so a REPLAYED wave is the same wave; that is a fact about fast-forward, not
+            // about what to expect, and a tour card is not where it belongs.)
             new TourStep(TourTarget.Enemies, "THE ENEMIES",
-                "Enemies come in waves. Every fifth wave is a boss. "
-                + "The banner at the top counts the waves and the conquest."),
+                "Enemies come in waves, and no two waves are made of the same thing. Every fifth is "
+                + "a boss. The banner at the top counts the waves and the conquest."),
 
             new TourStep(TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
-                "This is your hunter's life. When it reaches zero the descent ends — "
+                "This is your hunter's life. When it reaches zero the run ends — "
                 + "then it gets back up and starts again. Nothing is lost."),
 
             new TourStep(TourTarget.CurrencyPills, "GLEAM",
@@ -236,9 +241,9 @@ public static class Onboarding
             new TourStep(TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
 
-            new TourStep(TourTarget.RightColumn, "REWARDS AND ERRANDS",
-                "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, "
-                + "or you earn mastery points, the buttons here take you there."),
+            new TourStep(TourTarget.RightColumn, "WHAT IS WAITING",
+                "What is waiting for you. A chest is in the VAULT already, and when the game has "
+                + "something else for you a button appears here to take you to it."),
 
             new TourStep(TourTarget.NavRail, "THE OTHER SCREENS",
                 "Only the screens you can use are on this rail. New ones appear as you play — "
@@ -259,9 +264,14 @@ public static class Onboarding
                 "Click a row and this column explains it: what the stat does, what one rank adds, "
                 + "and what the next rank costs."),
 
+            // NO CRYSTAL HERE. A Crystal has no currency pill anywhere — the three pills are Scrap,
+            // Memory Dust and Gleam, and Essence, Core and Crystal live on the Forge, which is
+            // normally still shut when this tour runs at wave three. So the word arrived with nothing
+            // to point at (playtest 2026-09-09). The bar prints its own price to a player who can by
+            // then see one.
             new TourStep(TourTarget.ResetBar, "STARTING OVER",
                 "This bar takes every trained rank back, so you can train differently. "
-                + "It costs a Crystal. The Gleam you spent does not come back."),
+                + "It says on it what that costs, and the Gleam you spent does not come back."),
         },
 
         Activity.Gear => new[]
@@ -285,9 +295,11 @@ public static class Onboarding
                 "Each row is one skill slot. Click a row to change the skill in it. "
                 + "More slots open as you go deeper."),
 
+            // Was the hardest sentence in the whole tour set: a conditional inside a conditional,
+            // naming "roads" and "SIGNATURE" for the first time in the same breath.
             new TourStep(TourTarget.SkillPicker, "YOUR SKILL LIBRARY",
-                "Twelve shared skills are unlocked by roads on the MASTERY tree and lock again if you "
-                + "give a road back. Your levels are kept. Your SIGNATURE needs no road."),
+                "Twelve shared skills, each opened by the MASTERY tree. Your hunter's own skill is "
+                + "the one at the top: it needs nothing, and it cannot be changed."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
                 "A Vow is a promise about your build. It pays a lot while it is kept and nothing when "
@@ -301,8 +313,8 @@ public static class Onboarding
         Activity.Mastery => new[]
         {
             new TourStep(TourTarget.MasteryTree, "FOUR DIRECTIONS",
-                "Four directions grow out of the centre. RESONANCE is your skills' power. LOOT is a "
-                + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
+                "Four directions grow out of the centre. RESONANCE is your skills' power and LOOT is "
+                + "a richer haul. TEMPO hits sooner and more often; ENDURE outlasts the enemy."),
 
             new TourStep(TourTarget.Specialisations, "ONE STYLE",
                 "A specialisation chooses your Style: that Style's skills hit twice as hard. One Style "
@@ -321,9 +333,14 @@ public static class Onboarding
                 "Every chest you hold, one card for each kind. Your first is a welcome gift. The card "
                 + "says what it promises before you open it. Click a card to open one."),
 
+            // THE BUTTON SAYS WHAT IT SAYS. This card read "OPEN ALL opens every chest at once" — and
+            // the tour's first visit is guaranteed to be the ONE-chest state (the welcome gift), where
+            // VaultScreen draws OPEN THE CHEST. So the card named a control that was not on the screen
+            // (playtest 2026-09-09), and the reading it did have was odd besides. It now names the
+            // button by what it does at any count, and stops naming two tools it does not explain.
             new TourStep(TourTarget.VaultButtons, "THE TOOLBAR",
-                "OPEN ALL opens every chest at once. CHEST FILTER decides which chests you keep. "
-                + "TRADER is a stall that changes every week."),
+                "The button on the right opens your chests — one at a time, or all of them when you "
+                + "hold more than one. Everything a chest gives you goes into your bag."),
         },
 
         Activity.Forge => new[]
@@ -342,7 +359,7 @@ public static class Onboarding
 
             new TourStep(TourTarget.Materials, "YOUR MATERIALS",
                 "Every job costs materials. Waves pay them, and deeper waves pay better ones. "
-                + "A CHART is a one-use paper that pays for one job in full."),
+                + "Sometimes a wave pays a paper that covers one whole job on its own."),
         },
 
         Activity.Warren => new[]

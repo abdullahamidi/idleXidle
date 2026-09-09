@@ -35,6 +35,23 @@ public enum TutorialStep
     /// <summary>Something dropped. Gear is worn, not collected.</summary>
     EquipItem,
 
+    /// <summary>A gem is held and no item is wearing one. Set it — the mechanic is learned by doing it.</summary>
+    /// <remarks>
+    /// Playtest 2026-09-09: <i>"We also need to force the player to interact with certain elements; we
+    /// should make them perform the initial actions themselves. For instance, if a gem and a
+    /// compatible item drop, we should require the player to equip the gem so they learn the
+    /// mechanic."</i>
+    /// <para>
+    /// It is a RUNG rather than a step inside the tour, and that is the whole design. A tour card is
+    /// modal — the scrim swallows every click and every key — so a card that waited for a deed would
+    /// have to hand input back to the screen underneath, which means handing back every hotkey in the
+    /// game with it. A rung waits on a FACT the player produced, sits in the lesson slot on the screen
+    /// it is about, and completes the moment the deed is done whether or not it was read. It cannot
+    /// trap anybody: the fight goes on behind it and its × closes it for good.
+    /// </para>
+    /// </remarks>
+    SetAGem,
+
     /// <summary>The build is the game. Skills, and what they are made of.</summary>
     ChooseBuild,
 
@@ -54,6 +71,10 @@ public readonly record struct TutorialFacts(
     int ItemsOwned = 0,
     int ItemsWorn = 0,
     int ChestsHeld = 0,
+    /// <summary>Loose gems in the bag — a gem the player could set into something right now.</summary>
+    int GemsHeld = 0,
+    /// <summary>Gems already set into worn or carried items. One is proof the mechanic was met.</summary>
+    int GemsSet = 0,
     int SkillsWoven = 0,
     int DeepestWave = 0,
     int RegionsConquered = 0,
@@ -133,7 +154,8 @@ public static class Tutorial
         // teaches. A build lesson seated before the conquest would wait, silent, and hide the
         // conquest lesson behind it.
         TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss,
-        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.Conquer, TutorialStep.ChooseBuild,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.SetAGem,
+        TutorialStep.Conquer, TutorialStep.ChooseBuild,
     };
 
     /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
@@ -152,6 +174,9 @@ public static class Tutorial
         TutorialStep.Conquer => f.RegionsConquered >= 1,
         TutorialStep.OpenChest => f.ItemsOwned >= 1,
         TutorialStep.EquipItem => f.ItemsWorn >= 1,
+        // The DEED, and nothing else counts as it: holding a gem, reading about a gem and walking
+        // past the Forge all leave this false. One set gem satisfies it for ever.
+        TutorialStep.SetAGem => f.GemsSet >= 1,
         TutorialStep.ChooseBuild => f.SkillsWoven >= 1,
         _ => true,
     };
@@ -221,6 +246,9 @@ public static class Tutorial
         TutorialStep.SpendGleam => f.Gleam >= FirstRankCost && f.WavesCleared >= Unlocks.TrainingOpensAtWaves,
         TutorialStep.EquipItem => f.ItemsOwned >= 1,
         TutorialStep.ChooseBuild => f.BuildChoices >= 1,
+        // ...and it says nothing at all until there is a gem to set. A rung that arrives before the
+        // player can act on it is noise, which is the rule the whole ladder is built on.
+        TutorialStep.SetAGem => f.GemsHeld >= 1,
         TutorialStep.Done => false,
         _ => true,
     };
@@ -261,6 +289,7 @@ public static class Tutorial
         TutorialStep.MeetABoss => "EVERY FIFTH WAVE IS A BOSS",
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",
         TutorialStep.EquipItem => "SOMETHING DROPPED",
+        TutorialStep.SetAGem => "A GEM IS WAITING TO BE SET",
         TutorialStep.ChooseBuild => "THE BUILD IS THE GAME",
         TutorialStep.Conquer => $"{Checkpoints.ConquestWave} WAVES CONQUER A REGION",
         _ => "",
@@ -289,6 +318,10 @@ public static class Tutorial
         TutorialStep.EquipItem =>
             "Press C for GEAR and equip it. An item in the bag does nothing; the fight only reads "
             + "what is worn.",
+
+        TutorialStep.SetAGem =>
+            "Press F for the FORGE, open SOCKET, put a Rare or better item on the bench and click the "
+            + "gem. It adds its stat to that item, and your first one is free to set.",
 
         TutorialStep.ChooseBuild =>
             "Press B for BUILD. Pick a slot, then a skill from the library — a shared skill is unlocked "
@@ -343,6 +376,7 @@ public static class Tutorial
         TutorialStep.OpenChest => f.ChestsHeld >= 1 ? Activity.Vault : null,
 
         TutorialStep.EquipItem => Activity.Gear,
+        TutorialStep.SetAGem => Activity.Forge,
         TutorialStep.ChooseBuild => Activity.Build,
         _ => null,   // Watch, MeetABoss and Conquer are about the fight itself
     };
