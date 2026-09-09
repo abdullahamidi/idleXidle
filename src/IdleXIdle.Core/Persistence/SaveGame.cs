@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -30,6 +30,17 @@ public sealed record SaveGame
     // build is unwoven to four on the way in. THE BUMP IS WHAT MAKES THAT SAFE: SaveStore's
     // SnapshotBeforeUpgrade guard is `if (fileVersion >= CurrentVersion) return null;`, so without a
     // bump no pre-change copy is taken and the ten-second autosave overwrites the only original.
+    // 5 = the fall-loop facts (2026-09-09). ReportOpenedEver, ChangedAfterFall and RetriedAfterChange
+    // were added without a bump of their own, on the reasoning that default-false loads clean — which
+    // is true of the FIELDS and false of the MIGRATION. A veteran whose file predates them has to be
+    // seeded as having lived the loop, or the game opens on READ THE LOG at wave 300; but "predates
+    // them" was being inferred from progression plus ReportOpenedEver == false, and that description
+    // also fits a BRAND-NEW player on this build who conquered a region before their first fall, quit,
+    // and came back. They were handed the veteran treatment and lost the most important lesson in the
+    // game. THIS NUMBER IS THE DISCRIMINATOR: a file at 5 or above carries the facts and is believed;
+    // a file below 5 predates them and is seeded (OnboardingLessons.FirstVersionWithFallLoopFacts).
+    // The bump earns its keep twice over — it is also what makes SnapshotBeforeUpgrade copy every v4
+    // file aside before the first autosave rewrites it.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -264,28 +275,36 @@ public sealed record SaveGame
     /// First-run guide rungs the player closed by hand — the retired ladder's step NAMES.
     /// </summary>
     /// <remarks>
-    /// Names rather than ordinals, so reordering the enum can never silently dismiss a different
-    /// lesson. Default-empty means every older save loads clean — no version bump. A dismissed rung is
-    /// a DISPLAY choice only: the facts the guide derives its ladder from are untouched, the closed
-    /// rung just never shows again.
+    /// Names rather than ordinals, so reordering the enum could never silently dismiss a different
+    /// lesson. Default-empty means every older save loads clean — no version bump. NOTHING READS
+    /// THIS LIST any more: the ladder went with the <c>TutorialStep</c> enum that named its rungs,
+    /// lessons are <c>OnboardingLessonId</c> values completed by a fact the player produced, and a
+    /// closed card completes nothing. The names are loaded and written back untouched so that
+    /// rolling this build back does not lose what an old player had already closed.
     /// </remarks>
     public List<string> DismissedGuideRungs { get; init; } = new();
 
     /// <summary>Has the click-through intro been finished or skipped? False on every older save.</summary>
     /// <remarks>
-    /// False alone does not mean "show it": a save from before the intro existed is false too, and
-    /// <c>Onboarding.IntroDue</c> reads a cleared wave as having seen it. Default-false, no version bump.
+    /// Nothing shows an intro any more — the mandatory cards are gone and the tours live behind
+    /// LEARN THIS SCREEN — so this flag is kept for one job: <c>Onboarding.SeedExplained</c> uses
+    /// it, with the wave count, to tell a save written before the intro existed (false here, with
+    /// waves already cleared) from one that simply has not reached it, and marks the first kind as
+    /// having read every screen it already had open. Default-false, no version bump.
     /// </remarks>
     public bool IntroSeen { get; init; }
 
     /// <summary>
-    /// Screens whose first-open explanation the player has closed, as <c>Activity</c> NAMES — plus
-    /// <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
+    /// Screens whose tour the player has read to the end or skipped, as <c>Activity</c> NAMES —
+    /// plus <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
     /// </summary>
     /// <remarks>
-    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. Default-empty
-    /// means an older save loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that
-    /// was already open as read, so a returning player is not re-taught the game they have been playing.
+    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. It decides
+    /// which rail tiles wear a gold NEW mark, not whether a tour may run: LEARN THIS SCREEN never
+    /// consults it, so a screen already read can be toured again. Default-empty means an older save
+    /// loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that was already open
+    /// as read, so a returning player's rail is not covered in marks for screens they have used for
+    /// hours.
     /// </remarks>
     public List<string> ExplainedScreens { get; init; } = new();
 

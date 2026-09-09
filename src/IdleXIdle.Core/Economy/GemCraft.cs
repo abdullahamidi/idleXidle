@@ -149,6 +149,49 @@ public static class GemCraft
         return (host with { Gems = host.Gems.Append(gem).ToList() }, null);
     }
 
+    /// <summary>
+    /// Could this player set a gem RIGHT NOW — a loose gem, somewhere legal to put it, and the price?
+    /// </summary>
+    /// <param name="items">
+    /// Everything the player holds, gems and gear together. The Forge's own bag is exactly this: worn
+    /// pieces live in the inventory as well as on the doll, so one sweep covers both.
+    /// </param>
+    /// <param name="essence">The wallet, for the price. The first gem is free, so a new player passes.</param>
+    /// <param name="freeSocketUsed">Has a gem ever been set? <c>SaveGame.FreeSocketUsed</c>.</param>
+    /// <remarks>
+    /// <para>
+    /// THE ANSWER IS <see cref="Socket"/>'S, NOT A SECOND COPY OF IT. Every legality clause — is it a
+    /// gem, is the host wearable, is the host rare enough to carry a socket, are its sockets already
+    /// full — is asked by running the real rule against the real pair and reading whether it produced
+    /// anything. Re-stating those four conditions here would be a rule that could drift from the one
+    /// the SET button obeys, and a prompt that says SOCKET YOUR FIRST GEM over a Forge that refuses is
+    /// the exact "instruction the game itself then refused" this codebase keeps having to delete.
+    /// </para>
+    /// <para>
+    /// The price is asked too, because the Forge asks it: the SET button is dead while the wallet is
+    /// short (<c>poor</c>), so an answer that ignored Essence would still be a prompt nobody could obey.
+    /// It is a cheap sweep — a few dozen items against one probe gem, once per frame — because
+    /// <see cref="Socket"/> reads the HOST only after its one gem-ness check, so the first loose gem
+    /// answers for all of them.
+    /// </para>
+    /// </remarks>
+    public static bool CanSocketNow(IReadOnlyList<ItemInstance> items, long essence, bool freeSocketUsed,
+                                    SocketTuning? tuning = null)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ItemInstance? probe = null;
+        foreach (var i in items)
+            if (IsGem(i)) { probe = i; break; }
+        if (probe is null) return false;
+
+        foreach (var host in items)
+        {
+            if (Socket(host, probe).Product is null) continue;
+            if (essence >= SocketCost(host.Rarity, freeSocketUsed, tuning)) return true;
+        }
+        return false;
+    }
+
     /// <summary>Crush the gem at <paramref name="index"/> — the gem is destroyed, the slot opens.</summary>
     public static (ItemInstance Product, ItemInstance Crushed)? Crush(ItemInstance host, int index)
     {

@@ -186,10 +186,16 @@ public class onboarding_vocabulary_test
                                     ReportOpenedEver: true, ChangedAfterFall: true, RetriedAfterChange: true);
         Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(noGem));
 
-        var holding = noGem with { GemsHeld = 1 };
+        // A GEM IN THE BAG IS NOT ENOUGH. The lesson says SOCKET YOUR FIRST GEM, and until there is
+        // something legal to socket it INTO the Forge would refuse — RARE AND BETTER GEAR CARRIES
+        // SOCKETS — so a prompt here would be an instruction the game itself then declines.
+        var noHost = noGem with { GemsHeld = 1 };
+        Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(noHost));
+
+        var holding = noHost with { CanSocketNow = true };
         Assert.Equal(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(holding));
 
-        var set = holding with { GemsHeld = 0, GemsSet = 1 };
+        var set = holding with { GemsHeld = 0, CanSocketNow = false, GemsSet = 1 };
         Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstGemSocket, set));
         Assert.NotEqual(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(set));
 
@@ -206,7 +212,8 @@ public class onboarding_vocabulary_test
         // one lesson for the session, and SKIP GUIDANCE silences all of them for good. In both cases
         // the gem is still unset, and every gate that reads that fact is untouched.
         var holding = new LessonFacts(WavesCleared: 20, DeepestWave: 20, StatsTrained: 1,
-                                      ItemsOwned: 1, ItemsWorn: 1, GemsHeld: 1, HuntersOwned: 1,
+                                      ItemsOwned: 1, ItemsWorn: 1, GemsHeld: 1, CanSocketNow: true,
+                                      HuntersOwned: 1,
                                       ReportOpenedEver: true, ChangedAfterFall: true, RetriedAfterChange: true);
         Assert.Equal(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(holding));
 

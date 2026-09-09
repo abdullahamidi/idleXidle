@@ -215,6 +215,9 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #
 #   RH_SAVE_DIR="$(cygpath -w "$TEMP/fresh")" bash tools/asset-pipeline/capture.sh fight out.png
 [ -n "${RH_SAVE_DIR:-}" ] && RH_ENV+=(RH_SAVE_DIR="$RH_SAVE_DIR")
+# RH_SHOT_BOSSCALL=1 holds the BOSS INCOMING announcement up on any fight fixture — a second and a
+# half of the break before a boss wave, on a timer no capture could otherwise reach.
+[ -n "${RH_SHOT_BOSSCALL:-}" ] && RH_ENV+=(RH_SHOT_BOSSCALL="$RH_SHOT_BOSSCALL")
 # RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson
 # (eligible / shown / completed / muted / skipped) and one milestone row, ftue_loop_lived — did this
 # player open their first failure report, change something, and go back down. There is no analytics

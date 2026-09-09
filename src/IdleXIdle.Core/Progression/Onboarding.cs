@@ -31,6 +31,15 @@ public enum TourTarget
     NavRail,
     /// <summary>Where the fight's lesson card appears — the toast slot under the header stack.</summary>
     LessonSlot,
+    /// <summary>
+    /// The EXPEDITION LOG medallion, right of the stage header — the door to every run's report.
+    /// </summary>
+    /// <remarks>
+    /// Drawn every frame the fight draws, with no fall condition and no disabled state, which is why
+    /// READ THE LOG marks this and not the fall plate's own button: the plate lives for nine seconds
+    /// and the medallion is always there.
+    /// </remarks>
+    LogButton,
 
     // ── TRAINING ──
     /// <summary>The training rows: one per stat, grouped, each with what it is now and after a rank.</summary>
@@ -162,8 +171,8 @@ public readonly record struct HintFacts(
 public readonly record struct ScreenHint(string Key, string Text);
 
 /// <summary>
-/// The first minute on every screen: a click-through tour of the HUNT before the first wave, and a tour
-/// of each other screen the first time it is opened.
+/// The click-through tour of a screen, and the small notes and hints a screen says about itself —
+/// the explanations a player ASKS for, rather than ones the game puts in front of them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -181,10 +190,13 @@ public readonly record struct ScreenHint(string Key, string Text);
 /// now, in the HUNT's exact style, and the HUNT's intro is simply the tour of the HUNT.
 /// </para>
 /// <para>
-/// A tour runs once per screen, the first time that screen is on top, and the screen keeps working
-/// underneath it — the champion keeps fighting. The player advances it by clicking and can skip it.
-/// Nothing is announced over the top of a screen the player did not ask for: an opened screen gets a
-/// small NEW mark on its rail tile, and its tour waits there until the player goes.
+/// <b>And then no tour started itself at all.</b> The mandatory HUNT intro and every screen's
+/// first-open tour were both cut, because a screen the player has not watched yet cannot be
+/// explained to them. A tour now runs only when the player presses LEARN THIS SCREEN — the ? beside
+/// the settings gear — and may be asked for again as often as they like. The screen keeps working
+/// underneath it, the champion keeps fighting, the player advances it by clicking and can skip it.
+/// The gold NEW mark on a rail tile says "you have not looked at this screen", never "a tour is
+/// waiting there".
 /// </para>
 /// <para>
 /// Derived where it can be. Whether a tile is new is a question asked of the unlock gates and the
@@ -195,8 +207,10 @@ public readonly record struct ScreenHint(string Key, string Text);
 public static class Onboarding
 {
     /// <summary>The tour of the HUNT screen — the intro. Eight cards, each pointing at one region.</summary>
-    /// <remarks>Kept under its old name because it is asked for by name: the intro's decision is its own
-    /// (<see cref="IntroDue"/>), while every other tour is owed by the explained list.</remarks>
+    /// <remarks>Kept under its old name because the capture rig's fixture is still called that:
+    /// RH_SHOT_MODE=intro poses these cards, though it reaches them through <see cref="TourFor"/>
+    /// like every other tour. Nothing decides to RUN it any more — LEARN THIS SCREEN asks for a
+    /// tour, and the explained list only decides which rail tiles wear a NEW mark.</remarks>
     public static IReadOnlyList<TourStep> Intro => TourFor(Activity.Hunt);
 
     /// <summary>
@@ -451,7 +465,7 @@ public static class Onboarding
     };
 
     /// <summary>
-    /// Should the intro run when this player leaves the title screen?
+    /// Was this save written with the intro still ahead of it — neither seen, nor a wave cleared?
     /// </summary>
     /// <param name="f">What the player has done so far.</param>
     /// <param name="introSeen">The save's own record of having finished or skipped it.</param>
@@ -459,8 +473,8 @@ public static class Onboarding
     /// Two guards, because the save flag did not exist until the intro did. A player whose save was
     /// written before this file has <paramref name="introSeen"/> false and hundreds of cleared waves;
     /// teaching them where the champion is would be the interruption this file exists to remove. So a
-    /// cleared wave counts as having seen it. Asked ONCE, at the moment the title closes — the intro
-    /// must not vanish because the first wave happened to clear while the player was reading card three.
+    /// cleared wave counts as having seen it. It was asked ONCE, at the moment the title closed,
+    /// so a wave clearing while the player read card three could not end the intro under them.
     /// </remarks>
     /// <remarks>
     /// <b>NOTHING IN THE GAME CALLS THIS ANY MORE.</b> The mandatory intro is gone — a fresh save now
@@ -543,11 +557,11 @@ public static class Onboarding
     /// <param name="introSeen">The save's intro flag.</param>
     /// <param name="explained">The save's explained list.</param>
     /// <remarks>
-    /// A save from before this file existed has an empty list, and honouring that literally would put
-    /// a NEW mark on every open tile and a tour on every screen a returning player has used for
-    /// hours. Such a save is recognisable — the intro is neither seen nor due — and for it every screen
-    /// open at load and every skill slot already earned counts as explained. A player who has seen the
-    /// intro gets the list exactly as saved: whatever they have not yet read is still waiting for them.
+    /// A save from before this file existed has an empty list, and honouring that literally would
+    /// put a gold NEW mark on every tile a returning player has been using for hours. Such a save
+    /// is recognisable — <see cref="IntroDue"/> is false and the intro was never seen — and for it
+    /// every screen open at load and every skill slot already earned counts as read. A player who
+    /// has seen the intro gets the list exactly as saved: what they never looked at keeps its mark.
     /// </remarks>
     public static IReadOnlyCollection<string> SeedExplained(
         UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed = false)
@@ -571,9 +585,12 @@ public static class Onboarding
     /// The explained-list key of the tour this screen still owes, or null if it has been given.
     /// </summary>
     /// <remarks>
-    /// The Hunt owes nothing here: its tour is the intro, and whether the intro runs is decided by
-    /// <see cref="IntroDue"/> against the save's own flag. Every other screen's tour is owed until its
-    /// key is in the list, which the host writes when the tour is finished or skipped.
+    /// "Owed" no longer means a tour will run: it is what a rail tile's gold NEW mark is made of,
+    /// and what the capture rig poses a tour from. LEARN THIS SCREEN never consults this list, so a
+    /// screen already read can be toured again as often as the player likes. The Hunt owes nothing,
+    /// because the player is looking at it and its tile carries no mark. Every other screen's tour
+    /// is owed until its key is in the list, which the host writes when the tour is finished or
+    /// skipped.
     /// </remarks>
     public static string? TourDue(Activity screen, IReadOnlyCollection<string> explained)
         => screen != Activity.Hunt && !explained.Contains(ScreenKey(screen)) ? ScreenKey(screen) : null;

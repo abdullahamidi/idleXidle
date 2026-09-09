@@ -749,11 +749,13 @@ public sealed class HuntScreen
     /// <remarks>
     /// Hand-measured against this screen's real layout (the hunter panel at (196,20,420,205), the stage
     /// header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for one skill, the right column
-    /// from x 1570 down to the CHEST FILTER row — closed, as a fresh save shows it — the champion in
-    /// ChampBox, the pack right of it) with a margin of about ten pixels so
-    /// the frame art is inside the light, not cut by it. A fresh save is the only state this ever draws
-    /// over, so the one-skill rail height is the right one. The fight screen is not inset, so these are
-    /// already chrome coordinates and the host adds no margin of its own.
+    /// from x 1570 down to the CHEST FILTER row, the champion in ChampBox, the pack right of it)
+    /// with a margin of about ten pixels so the frame art is inside the light, not cut by it. A
+    /// FRESH SAVE IS NO LONGER THE ONLY STATE THIS DRAWS OVER — LEARN THIS SCREEN offers the tour
+    /// at any depth, to a player with four skills docked and a full errand rail — so the figures
+    /// above survive only as the 100 % baseline, and every light whose extent moves with play is
+    /// read from what the screen LAST DREW. The fight screen is not inset, so these are already
+    /// chrome coordinates and the host adds no margin of its own.
     /// </remarks>
     // DERIVED from the rects the screen draws (UI polish P2): the card, the strip and the stage move
     // with the profile, and a light measured for the 100 % layout would fall beside them at 150 %.
@@ -784,6 +786,10 @@ public sealed class HuntScreen
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
         // The lesson card hangs under the header stack (UX V2 P0.7) — the same slot the toasts use.
         TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
+        // THE MEDALLION ITSELF — the same rectangle DrawLogButton draws from and UiKit.ClickedIn
+        // hit-tests, so the light and the click cannot drift apart. IT FELL / READ THE LOG is the most
+        // important prompt in the game and it pointed at nothing until this arm existed.
+        TourTarget.LogButton => new[] { Inflated(LogButtonRect, 10) },
         _ => Array.Empty<Rectangle>(),
     };
 
@@ -888,7 +894,7 @@ public sealed class HuntScreen
         // The banner outlives the recovery beat (FellBannerSeconds), so it stays readable into the
         // next descent — and it outranks the wave banner, because the fall is the news.
         if (_fellTimer > 0f) return HuntOverlay.HunterDown;
-        if (_bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
+        if (DevBossCall || _bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
         if (DevForceBoss) return HuntOverlay.None;   // boss verification fixture: active combat, no wave banner
         if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
         return HuntOverlay.None;
@@ -1032,7 +1038,7 @@ public sealed class HuntScreen
         if (_devArrivalPose is { } posed) _enemyEnter = posed;   // held for the shutter (DevPoseArrival)
         else _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
-        _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
+        if (!DevBossCall) _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         // The flash holds while the fall fixture is posing it — a capture must be able to photograph
         // the one frame it exists to check (does the flash cover the WHOLE screen, corners included).
         if (!DevShowFall) _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
@@ -3886,12 +3892,19 @@ public sealed class HuntScreen
                 break;
             case HuntOverlay.BossIncoming:
             {
-                var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
+                var fade = DevBossCall ? 1f : Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
+                // UNDER THE HEADER, NEVER BEHIND IT. The plate sat at a literal y of 200, which cleared
+                // a header that ended at 153 and stopped clearing one that can now end at 262 — and the
+                // state that makes the wave lane take a second row is BOSS WAVE, which is precisely the
+                // state this announcement plays under. The panel's frame is opaque, so the top half of
+                // the game's boss warning was simply painted over. Floored at the old 200 so nothing
+                // moves at the profile and row count it was measured for.
+                var plateTop = Math.Max(200, StageHeaderBottomY + UiMetrics.Space(24));
                 // The plate is as tall as its two lines: (610, 200, 700, 110) at 100 %.
-                var titleY = 200 + UiMetrics.Space(24);
+                var titleY = plateTop + UiMetrics.Space(24);
                 var subY = titleY + UiTypography.Pitch(UiTypography.RegionTitle) + 1;
-                var plateH = subY + UiTypography.OverlayBody + UiMetrics.Space(14) - 200;
-                _ui.Fill(b, new Rectangle(610, 200, 700, plateH), PanelBg * fade);
+                var plateH = subY + UiTypography.OverlayBody + UiMetrics.Space(14) - plateTop;
+                _ui.Fill(b, new Rectangle(610, plateTop, 700, plateH), PanelBg * fade);
                 _ui.TextCenterBig(b, "BOSS INCOMING", 960, titleY, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
                 _ui.TextCenterBig(b, "GET READY", 960, subY, Bone * fade, UiTypography.OverlayBody);
                 break;
@@ -4211,8 +4224,17 @@ public sealed class HuntScreen
     }
 
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
-    /// <summary>Where the EXPEDITION LOG button sits: just right of the stage header, clear of the pills. A hit target — its edge follows the profile.</summary>
-    private static Rectangle LogButtonRect => new(1206, 40, UiMetrics.Control(64), UiMetrics.Control(64));
+    /// <summary>
+    /// Where the EXPEDITION LOG button sits: right of the stage header, UNDER the chrome row.
+    /// </summary>
+    /// <remarks>
+    /// Both of its numbers are anchors rather than literals now. The x clears the stage header's own
+    /// right rail; the y hangs off <see cref="Game1.ChromeRowBottom"/>, because a fixed 40 put the
+    /// medallion half underneath the GLEAM capsule at 150 % — where the capsules are half again as
+    /// tall and their chain reaches back past 1206. Its edge follows the profile, as a hit target must.
+    /// </remarks>
+    internal static Rectangle LogButtonRect
+        => new(1206, Game1.ChromeRowBottom + UiMetrics.Space(8), UiMetrics.Control(64), UiMetrics.Control(64));
 
     /// <summary>
     /// The EXPEDITION LOG's own button — the log was reachable only by the L key, which a player who has
@@ -4340,13 +4362,51 @@ public sealed class HuntScreen
     //    header rather than printing the wave over the title. The enemy strip and the boss bar hang from
     //    its foot. The x and width are page anchors and stay. ──
     private const int StageHeaderCentreX = 910;
+    /// <summary>What joins the wave to the run's state on ONE row. Measured and drawn from here alone.</summary>
+    private const string WaveJoin = "  —  ";
     private const int StageHeaderTop = 18;
     /// <summary>Where the region title sits: a breath under the frame's top.</summary>
     private static int StageHeaderTitleY => StageHeaderTop + UiMetrics.Space(10);
     /// <summary>The wave line, one title under the title. 70 at 100 %.</summary>
     private static int StageHeaderWaveY => StageHeaderTitleY + UiTypography.RegionTitle + UiMetrics.Space(4);
-    /// <summary>The conquest bar's line, one wave line under the wave. 106 at 100 %.</summary>
-    private static int StageHeaderBarY => StageHeaderWaveY + UiTypography.StageLabel + UiMetrics.Space(8);
+    /// <summary>
+    /// How many rows the wave line is spending this frame — 1 normally, 2 while the run's state is
+    /// beside it and the pair will not fit the header's own content width.
+    /// </summary>
+    /// <remarks>
+    /// A per-frame mirror in the shape of <c>s_headerStackBottom</c> and <c>s_hunterCardBottom</c>:
+    /// <see cref="DrawStageHeader"/> decides it before it reads <see cref="StageHeader"/>, and
+    /// everything hung off the header's foot follows for free. The frame's padding does not change
+    /// with the extra row — 560 wide stays past <c>UiTypography.WidePanelFrom</c> and every height it
+    /// can take keeps the same panel art key — so <see cref="StageHeaderRoom"/> cannot feed back into
+    /// the decision that sets this.
+    /// </remarks>
+    private static int s_waveRows = 1;
+
+    /// <summary>The wave lane's height: one rung, plus a full line for each extra row.</summary>
+    private static int StageHeaderWaveH
+        => UiTypography.StageLabel + (s_waveRows - 1) * UiTypography.Pitch(UiTypography.StageLabel);
+
+    /// <summary>The header's usable line width — its own content rails, 480 at every profile.</summary>
+    private static int StageHeaderRoom => UiKit.ContentRight(StageHeader) - UiKit.ContentLeft(StageHeader);
+
+    /// <summary>
+    /// Does a wave line of this width need a second row?
+    /// </summary>
+    /// <remarks>
+    /// Pure, so the rule can be tested without a font. The wave line is the ONE line in this header
+    /// with no fit ladder and no clamp: the region title above it steps its rung down until it fits,
+    /// and the conquest row below it reserves its bar around a measured label, but the wave line was
+    /// simply centred on 910 and drawn. At 150 % the fall variant — "WAVE 11 — RECOVERING — BACK TO
+    /// WAVE 11" — is measured at the full text rate while 910, 630, 560 and the panel's padding are
+    /// all literals, so it grew past both of the header's rails and printed itself over the hunter's
+    /// health readout on the left and under the log medallion on the right. During the fall, which is
+    /// the single most important moment onboarding has.
+    /// </remarks>
+    internal static int WaveRowsFor(int lineWidth, int room) => lineWidth > room ? 2 : 1;
+
+    /// <summary>The conquest bar's line, under the wave lane. 106 at 100 %.</summary>
+    private static int StageHeaderBarY => StageHeaderWaveY + StageHeaderWaveH + UiMetrics.Space(8);
     /// <summary>The conquest bar's height.</summary>
     private static int StageHeaderBarH => UiMetrics.Control(16);
     /// <summary>The header's bottom edge — the enemy strip hangs from it. 153 at 100 %.</summary>
@@ -4377,6 +4437,18 @@ public sealed class HuntScreen
         // conquest, a small label and a thin bar on one line). WHAT is being fought hangs under the panel
         // in DrawEnemyLine at the same width, so the two read as one stack (playtest 2026-08-28: "the wave
         // information texts look quite bad" — three lines of three sizes with a bar between two of them).
+        // ── THE WAVE LANE IS MEASURED BEFORE THE FRAME IS DRAWN, because the frame's height depends
+        //    on the answer. One row when the line fits the header's rails; two when the run's state
+        //    makes it too long, which is what a fall does at the larger profiles.
+        var wave = $"WAVE {Math.Max(1, _replayWave)}";
+        if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
+        var waveTint = isBossWave ? Gold : Bone;
+        var state = RunState();
+        var room = StageHeaderRoom;
+        s_waveRows = state is { } probe
+            ? WaveRowsFor(RunsWidth(UiTypography.StageLabel, (wave, waveTint), (WaveJoin, Slate), (probe.Text, probe.Tint)), room)
+            : WaveRowsFor(_ui.MeasureBig(wave, UiTypography.StageLabel), room);
+
         var bar = StageHeader;
         // The quiet frame, like every other panel on this screen (UiKit.PanelQuiet: gold is for modals).
         _ui.PanelQuiet(b, bar);
@@ -4392,12 +4464,24 @@ public sealed class HuntScreen
         // THE WAVE LINE CARRIES THE RUN'S STATE, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.
-        var wave = $"WAVE {Math.Max(1, _replayWave)}";
-        if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
-        var waveTint = isBossWave ? Gold : Bone;
+        //
+        // TWO ROWS WHEN ONE WILL NOT HOLD IT, and the line break becomes the separator — the dash is
+        // what joins two halves of one row, so a second row does not need it. Nothing shrinks and
+        // nothing is hidden: the header's own stack grows and everything under it moves down with it,
+        // which is exactly what the geometry block above this method promises.
         var waveY = StageHeaderWaveY;
-        if (RunState() is { } st)
-            RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), ("  —  ", Slate), (st.Text, st.Tint));
+        if (state is { } st && s_waveRows == 1)
+            RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), (WaveJoin, Slate), (st.Text, st.Tint));
+        else if (state is { } st2)
+        {
+            _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
+            // THE LAST RESORT, on the second row only: a state that still overruns a whole row of its
+            // own steps DOWN THE RUNG LADDER rather than losing a word. "BACK TO WAVE 100" is the
+            // longest thing this can ever say and it wants the room.
+            var statePx = _ui.FitRung(st2.Text, room, UiTypography.StageLabel);
+            _ui.TextCenterBig(b, st2.Text, cx, waveY + UiTypography.Pitch(UiTypography.StageLabel)
+                                              + (UiTypography.StageLabel - statePx) / 2, st2.Tint, statePx);
+        }
         else _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
 
         // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
@@ -4745,7 +4829,7 @@ public sealed class HuntScreen
         // between deaths (the checkpoint is re-charged in Dust on every StartRun, so a descent that
         // could afford wave 30 last time may open at 1 this time with nothing said).
         if (_mode == Mode.Downed) return ($"RECOVERING — BACK TO WAVE {RestartWave}", Ember);
-        if (WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
+        if (DevBossCall || WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
         return null;
     }
 
@@ -5765,6 +5849,17 @@ public sealed class HuntScreen
     /// suppress, so the beat simply expired mid-capture and photographed a fresh wave instead.
     /// </remarks>
     public bool DevShowFall { get; set; }
+
+    /// <summary>
+    /// DEV: hold the BOSS INCOMING announcement up so it can be photographed.
+    /// </summary>
+    /// <remarks>
+    /// It lives for a second and a half in the break before a boss wave, on a timer no capture can
+    /// reach, so nobody had ever looked at it against the header above it — which is how its plate
+    /// came to sit at a literal y that a taller header paints over. A state no fixture can pose is a
+    /// state nobody has checked; this is the pose. Null in play, always.
+    /// </remarks>
+    public bool DevBossCall { get; set; }
 
     /// <summary>
     /// DEV: pose the wave's ARRIVAL at <paramref name="progress"/> — 1 fully off-stage, 0 just landed.

@@ -113,6 +113,17 @@ public readonly record struct LessonFacts(
     int ItemsOwned = 0,
     int ItemsWorn = 0,
     int GemsHeld = 0,
+    /// <summary>
+    /// Could a gem be set RIGHT NOW — the Forge's own answer, not a second copy of its rules.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Economy.GemCraft.CanSocketNow"/> asks the real rule whether some loose gem fits some
+    /// held item at a price this wallet can pay. HOLDING a gem is not the same question: a first gem
+    /// arrives long before a Rare item does, and RARE AND BETTER GEAR CARRIES SOCKETS is what the
+    /// Forge says to everybody else. This exists so SOCKET YOUR FIRST GEM is never shown to a player
+    /// the Forge would refuse.
+    /// </remarks>
+    bool CanSocketNow = false,
     int GemsSet = 0,
     int MasterySpent = 0,
     int MasteryPointsFree = 0,
@@ -199,7 +210,11 @@ public static class OnboardingLessons
         OnboardingLessonId.SignatureSeen => f.WavesCleared >= 1,
         OnboardingLessonId.FirstTrainingPurchase => f.StatsTrained >= 1,
         OnboardingLessonId.FirstBoss => f.BossesFelled >= 1 || f.DeepestWave > BossEvery,
-        OnboardingLessonId.FirstChestOpen => f.ChestsOpened >= 1 || f.ItemsOwned >= 1 || f.ItemsWorn >= 1,
+        // THE DEED IS OPENING A CHEST, so that is the only thing that completes it. It used to accept
+        // "owns an item" and "wears an item" as proxies, which are not the same deed and are reachable
+        // without ever touching the VAULT — a trader purchase, a share code, a fixture, a seeded save.
+        // A save that genuinely predates the counter is handled in migration, never by loosening this.
+        OnboardingLessonId.FirstChestOpen => f.ChestsOpened >= 1,
         OnboardingLessonId.FirstItemEquip => f.ItemsWorn >= 1,
 
         OnboardingLessonId.FirstFailureReport => f.ReportOpenedEver,
@@ -243,8 +258,26 @@ public static class OnboardingLessons
             f.WavesCleared >= Unlocks.TrainingOpensAtWaves && f.Gleam >= FirstRankCost,
 
         OnboardingLessonId.FirstBoss => false,       // an Observe beat the arena raises; see the note below
-        OnboardingLessonId.FirstChestOpen => f.ChestsHeld >= 1,
-        OnboardingLessonId.FirstItemEquip => f.ItemsOwned >= 1,
+        // ── THE OPENING IS AN ORDER, NOT A RACE. ────────────────────────────────────────────────
+        //
+        // A new account owns the welcome chest from frame one, so on priority alone the chest lesson
+        // won the moment the fight lesson was satisfied — at wave 1, two waves before TRAINING even
+        // opens. The journey came out as FIGHT -> OPEN CHEST -> EQUIP -> TRAIN, which teaches the loot
+        // loop before the decision loop and leaves the one screen the whole game is built on until
+        // last. The intended order is FIGHT -> TRAIN -> OPEN -> EQUIP: watch it fight, make one
+        // decision, then be paid for it.
+        //
+        // Priority alone cannot express that, because the chest is ELIGIBLE before training is. So the
+        // chest waits on the deed rather than on the ranking. It gates nothing: the VAULT is open, its
+        // tile carries the chest count, and a player who opens the chest early simply completes this
+        // lesson without ever being asked.
+        OnboardingLessonId.FirstChestOpen => f.ChestsHeld >= 1 && f.StatsTrained >= 1,
+        // ...AND SO DOES THE ITEM, for the same reason and against a harder case: the VAULT is open
+        // from frame one and its tile wears an unread mark, so a curious player can open the welcome
+        // chest at wave 0 and own a weapon before TRAINING exists. Gating only the chest left EQUIP
+        // ONE ITEM (78) outranking TRAIN ANY STAT ONCE (76), and the journey came out
+        // FIGHT -> EQUIP -> TRAIN — the same inversion, reached by a different route.
+        OnboardingLessonId.FirstItemEquip => f.ItemsOwned >= 1 && f.StatsTrained >= 1,
 
         // ── THE TRIO. Each waits on the one before it, because they are one sequence. ────────────
         OnboardingLessonId.FirstFailureReport => f.Falls >= 1,
@@ -261,7 +294,11 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstRegionTravel => f.RegionsConquered >= 1 && f.RegionsOpen >= 2,
         OnboardingLessonId.FirstKeystoneChoice => f.KeystonesDiscovered >= 1,
 
-        OnboardingLessonId.FirstGemSocket => f.GemsHeld >= 1,
+        // NOT MERELY HOLDING ONE. The lesson's words are SOCKET YOUR FIRST GEM, so the deed has to be
+        // performable at the instant it is asked for: a loose gem, an item that gem legally fits, and
+        // the price. The Forge answers all three (GemCraft.CanSocketNow) — asking here would be a
+        // second set of socket rules, free to drift from the one the SET button obeys.
+        OnboardingLessonId.FirstGemSocket => f.CanSocketNow,
         OnboardingLessonId.FirstTraitEquip => f.TraitsDiscovered >= 1,
         OnboardingLessonId.FirstHunterInteraction => f.HuntersOwned >= 2,
         // NEVER BEFORE THE CAMP HAS PAID. A Warren tour given to somebody the Warren has done nothing
@@ -354,6 +391,10 @@ public static class OnboardingLessons
     /// </remarks>
     public static TourTarget? Target(OnboardingLessonId id) => id switch
     {
+        // THE ONE FALL-LOOP LESSON WITH A CONTROL. Its Sends stays null — the fight itself is where it
+        // belongs, and Game1's HuntLessonShowing draws the card only for a null Sends — so the host
+        // reads a null Sends as "the HUNT" when it resolves this light.
+        OnboardingLessonId.FirstFailureReport => TourTarget.LogButton,
         OnboardingLessonId.FirstTrainingPurchase => TourTarget.TrainingRows,
         OnboardingLessonId.FirstChestOpen => TourTarget.ChestCards,
         OnboardingLessonId.FirstItemEquip => TourTarget.Inventory,
@@ -475,15 +516,40 @@ public static class OnboardingLessons
     // ── MIGRATION ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Should a returning save be treated as having already lived the fall loop?
+    /// THE FIRST SAVE VERSION WHOSE FILES CARRY THE THREE FALL-LOOP FACTS. Frozen forever.
     /// </summary>
     /// <remarks>
-    /// The three fall-loop facts are the only ones onboarding has to persist, and a save written before
-    /// they existed carries none of them. A player who has already conquered a region has fallen, read
-    /// or ignored the log, changed their build and gone again many times over — replaying READ THE LOG
-    /// at them would be the game announcing it has not been watching. So a save with real progression
-    /// behind it is seeded as having done all three.
+    /// A literal, never <c>SaveGame.CurrentVersion</c>. Written against CurrentVersion this would
+    /// re-open the bug it closes on the very next bump: at version 6, every version-5 file — which
+    /// does carry the facts, honestly — would start being seeded again, and every player who had not
+    /// yet lived the loop would silently be marked as having lived it. The number describes a moment
+    /// in this project's history and that moment does not move.
     /// </remarks>
-    public static bool SeedFallLoopAsLived(LessonFacts f)
-        => f.RegionsConquered >= 1 || f.DeepestWave >= Encounters.Checkpoints.ConquestWave || f.MasterySpent >= 1;
+    public const int FirstVersionWithFallLoopFacts = 5;
+
+    /// <summary>
+    /// Should a returning save be treated as having already lived the fall loop?
+    /// </summary>
+    /// <param name="f">The player's progression, as corroboration.</param>
+    /// <param name="fileVersion">The Version of the file that was LOADED — not the build's.</param>
+    /// <remarks>
+    /// <para>
+    /// A save written before the three fall-loop facts existed carries none of them, and a player who
+    /// has conquered a region has fallen, read or ignored the log, changed their build and gone again
+    /// many times over — replaying READ THE LOG at them would be the game announcing it has not been
+    /// watching. So an OLD file with real progression behind it is seeded as having done all three.
+    /// </para>
+    /// <para>
+    /// <b>THE VERSION IS THE TEST; the progression is only the corroboration.</b> This asked the
+    /// progression alone, and "high progress, ReportOpenedEver false" describes two different players:
+    /// the veteran whose file predates the field, and a brand-new player on this build who conquered a
+    /// region before their first fall and then reloaded. The second one was being handed the veteran's
+    /// answer and losing the lesson the whole first session is for. Only a file older than
+    /// <see cref="FirstVersionWithFallLoopFacts"/> can be the first player.
+    /// </para>
+    /// </remarks>
+    public static bool SeedFallLoopAsLived(LessonFacts f, int fileVersion)
+        => fileVersion < FirstVersionWithFallLoopFacts
+           && (f.RegionsConquered >= 1 || f.DeepestWave >= Encounters.Checkpoints.ConquestWave
+               || f.MasterySpent >= 1);
 }

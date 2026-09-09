@@ -97,7 +97,7 @@ public class GemTourTest
         // waves, and going silent for all of them was a reported bug. The lesson has no wait to speak
         // through: it is eligible only when a chest is actually in the vault, which a fresh save has
         // from the welcome gift, so the critical path never depends on a roll.
-        var holding = new LessonFacts(WavesCleared: 5, DeepestWave: 5, ChestsHeld: 1, HuntersOwned: 1);
+        var holding = new LessonFacts(WavesCleared: 5, DeepestWave: 5, ChestsHeld: 1, StatsTrained: 1, HuntersOwned: 1);
         Assert.Contains(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(holding));
         Assert.Equal(Activity.Vault, OnboardingLessons.Sends(OnboardingLessonId.FirstChestOpen));
 

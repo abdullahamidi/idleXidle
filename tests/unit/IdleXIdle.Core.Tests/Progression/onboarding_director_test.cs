@@ -4,6 +4,7 @@ using System.Linq;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Progression;
 using Xunit;
 using Xunit.Abstractions;
@@ -47,7 +48,7 @@ public class onboarding_director_test
         // The catalogue has no dismissal input at all, which is the point: there is nowhere for a
         // closed card to become a socketed gem. Suppression is a separate argument to Next, and it is
         // a DISPLAY filter — the lesson stays incomplete underneath and returns when the mute lifts.
-        var holding = Playing() with { GemsHeld = 1 };
+        var holding = Playing() with { GemsHeld = 1, CanSocketNow = true };
         Assert.False(OnboardingLessons.Completed(OnboardingLessonId.FirstGemSocket, holding));
         Assert.Equal(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(holding));
 
@@ -78,8 +79,8 @@ public class onboarding_director_test
         var conquered = noGem with { RegionsConquered = 1, RegionsOpen = 2 };
         Assert.Equal(OnboardingLessonId.FirstRegionTravel, OnboardingLessons.Next(conquered));
 
-        // And with a gem in hand it is eligible again, still behind all three.
-        var withGem = mastery with { GemsHeld = 1 };
+        // And with a gem in hand AND somewhere to put it, it is eligible again, still behind all three.
+        var withGem = mastery with { GemsHeld = 1, CanSocketNow = true };
         Assert.Contains(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(withGem));
         Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(withGem));
     }
@@ -108,7 +109,7 @@ public class onboarding_director_test
         var loud = Playing() with
         {
             RegionsConquered = 1, RegionsOpen = 2,
-            KeystonesDiscovered = 1, GemsHeld = 1, MasteryPointsFree = 1,
+            KeystonesDiscovered = 1, GemsHeld = 1, CanSocketNow = true, MasteryPointsFree = 1,
             TraitsDiscovered = 3, HuntersOwned = 2,
             WarrenOpen = true, WarrenPaidOffline = true,
         };
@@ -156,6 +157,139 @@ public class onboarding_director_test
         Assert.Equal(OnboardingLessonId.FirstWarrenReturn, OnboardingLessons.Next(keyed));
     }
 
+    // ── 6a. THE GEM LESSON IS ACTIONABLE OR SILENT ───────────────────────────────────────────────
+
+    [Fact]
+    public void test_the_gem_lesson_waits_for_a_socket_the_forge_would_actually_allow()
+    {
+        // FOUR STATES, and only one of them may speak. The lesson's words are SOCKET YOUR FIRST GEM,
+        // so anything else is an instruction the Forge then refuses — which is the failure mode this
+        // whole catalogue was built to stop. The fact is the Forge's own answer (GemCraft.CanSocketNow);
+        // this only pins that the lesson reads it and reads nothing else.
+        var playing = Playing();
+
+        // 1. A gem in the bag with nowhere legal to put it. Silent.
+        var gemNoHost = playing with { GemsHeld = 1, CanSocketNow = false };
+        Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(gemNoHost));
+
+        // 2. A socketable item and no gem. Silent.
+        var hostNoGem = playing with { GemsHeld = 0, CanSocketNow = false };
+        Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(hostNoGem));
+
+        // 3. Both. Now it may ask, and the deed can be done the moment it is asked for.
+        var both = playing with { GemsHeld = 1, CanSocketNow = true };
+        Assert.Contains(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(both));
+
+        // 4. Already set. Complete by the deed, and never shown again — even with another gem in hand.
+        var done = both with { GemsSet = 1 };
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstGemSocket, done));
+        Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(done));
+        Assert.NotEqual(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(done));
+
+        // AND IT BLOCKS NOTHING while it waits: an unopenable gem lesson never suppresses a lesson
+        // that has nothing to do with gems.
+        var alsoOwed = gemNoHost with { MasteryPointsFree = 1 };
+        Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(alsoOwed));
+    }
+
+    // ── 6b. THE OPENING, IN ORDER ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_the_opening_teaches_fight_then_training_then_the_chest_then_the_item()
+    {
+        // THE JOURNEY THIS PINS, and the drift it catches. A new account owns the welcome gift chest
+        // from frame one, so on priority alone (chest 80 > item 78 > training 76) the opening came out
+        // as FIGHT -> OPEN CHEST -> EQUIP -> TRAIN: the loot loop before the decision loop, with the
+        // one screen the whole game is built on left until last. The intended order is
+        //
+        //     OBSERVE THE FIRST FIGHT -> TRAIN ANY STAT ONCE -> OPEN THE GIFT CHEST -> EQUIP ONE ITEM
+        //
+        // Priority alone cannot express it, because the chest is ELIGIBLE two waves before training
+        // is. The eligibility clause is what holds the order; this test fails if EITHER the clause or
+        // the ranking drifts, which is why it walks the real facts rather than asserting the numbers.
+        var chests = GiftChests.NewGameChests().Count;
+        Assert.True(chests >= 1, "the fresh-save journey assumes the welcome gift — SeedNewGame stopped giving it");
+
+        // 1. FRAME ONE. Nothing has happened, nothing is owned but the gift, and one thing is said.
+        var fresh = new LessonFacts(ChestsHeld: chests, HuntersOwned: 1);
+        Assert.Equal(OnboardingLessonId.FirstFight, OnboardingLessons.Next(fresh));
+        Assert.Equal(LessonMode.Observe, OnboardingLessons.Mode(OnboardingLessonId.FirstFight));
+
+        // 2. THE FIRST WAVE CLEARS — and the chest does NOT jump the queue, even though it is held.
+        //    Training is not actionable yet either (the screen opens at wave 3), so the game is quiet.
+        var wave1 = fresh with { WavesCleared = 1, DeepestWave = 1, Gleam = 6 };
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstFight, wave1));
+        Assert.Null(OnboardingLessons.Next(wave1));
+
+        // 3. TRAINING OPENS and the purse can afford a rank. This is the first decision the game asks
+        //    for, and it asks for A stat, never a particular one.
+        var canTrain = wave1 with { WavesCleared = Unlocks.TrainingOpensAtWaves, DeepestWave = Unlocks.TrainingOpensAtWaves,
+                                    Gleam = OnboardingLessons.FirstRankCost };
+        Assert.Equal(OnboardingLessonId.FirstTrainingPurchase, OnboardingLessons.Next(canTrain));
+        Assert.Equal("TRAIN ANY STAT ONCE", OnboardingLessons.Action(OnboardingLessonId.FirstTrainingPurchase));
+
+        // 4. ONE RANK BOUGHT. Now the chest — the reward for the decision, not before it.
+        var trained = canTrain with { StatsTrained = 1, Gleam = 0 };
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstTrainingPurchase, trained));
+        Assert.Equal(OnboardingLessonId.FirstChestOpen, OnboardingLessons.Next(trained));
+
+        // 5. THE CHEST OPENED, deterministically leaving one wearable item. Then, and only then, EQUIP.
+        var opened = trained with { ChestsHeld = 0, ChestsOpened = 1, ItemsOwned = 1 };
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstChestOpen, opened));
+        Assert.Equal(OnboardingLessonId.FirstItemEquip, OnboardingLessons.Next(opened));
+
+        // 6. WORN. The opening is done and the game goes quiet until something new is true.
+        var worn = opened with { ItemsWorn = 1 };
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstItemEquip, worn));
+        Assert.Null(OnboardingLessons.Next(worn));
+    }
+
+    [Fact]
+    public void test_opening_the_gift_chest_early_still_does_not_jump_the_training_lesson()
+    {
+        // THE OTHER ROUTE INTO THE SAME INVERSION, and the one gating only the chest missed. The VAULT
+        // is open from frame one and its tile wears an unread mark, so a curious player can open the
+        // welcome chest at wave 0. That completes the chest lesson and mints one wearable weapon —
+        // and EQUIP ONE ITEM (78) outranks TRAIN ANY STAT ONCE (76), so the journey came out
+        // FIGHT -> EQUIP -> TRAIN with the chest clause in place and doing nothing about it.
+        var openedEarly = new LessonFacts(WavesCleared: 1, DeepestWave: 1, Gleam: 6,
+                                          ChestsOpened: 1, ItemsOwned: 1, HuntersOwned: 1);
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstChestOpen, openedEarly));
+        Assert.DoesNotContain(OnboardingLessonId.FirstItemEquip, OnboardingLessons.EligibleNow(openedEarly));
+        Assert.Null(OnboardingLessons.Next(openedEarly));
+
+        // At the wave TRAINING opens, with a rank affordable: the decision is what is asked for, even
+        // though a wearable has been sitting in the bag for three waves.
+        var canTrain = openedEarly with { WavesCleared = Unlocks.TrainingOpensAtWaves,
+                                          DeepestWave = Unlocks.TrainingOpensAtWaves,
+                                          Gleam = OnboardingLessons.FirstRankCost };
+        Assert.Equal(OnboardingLessonId.FirstTrainingPurchase, OnboardingLessons.Next(canTrain));
+
+        // ...and only then the item.
+        var trained = canTrain with { StatsTrained = 1, Gleam = 0 };
+        Assert.Equal(OnboardingLessonId.FirstItemEquip, OnboardingLessons.Next(trained));
+    }
+
+    [Fact]
+    public void test_the_gift_chest_never_speaks_before_the_first_training_decision()
+    {
+        // The narrow claim, stated on its own so a priority edit cannot quietly restore the old order
+        // by making the chest outrank training again: it is the ELIGIBILITY that holds, at every wave
+        // and any purse, for as long as no stat has been trained.
+        for (var wave = 0; wave <= 12; wave++)
+        {
+            var untrained = new LessonFacts(WavesCleared: wave, DeepestWave: wave, Gleam: 5_000,
+                                            ChestsHeld: 3, HuntersOwned: 1);
+            Assert.DoesNotContain(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(untrained));
+            Assert.NotEqual(OnboardingLessonId.FirstChestOpen, OnboardingLessons.Next(untrained));
+
+            // The same for the item, whether it arrived from the chest or from anywhere else.
+            var owning = untrained with { ChestsOpened = 1, ItemsOwned = 4 };
+            Assert.DoesNotContain(OnboardingLessonId.FirstItemEquip, OnboardingLessons.EligibleNow(owning));
+            Assert.NotEqual(OnboardingLessonId.FirstItemEquip, OnboardingLessons.Next(owning));
+        }
+    }
+
     // ── 7. RETURNING SAVES ───────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -164,10 +298,11 @@ public class onboarding_director_test
         // The three fall-loop facts are the only ones onboarding persists, and a save written before
         // they existed carries none. Somebody who has conquered a region has fallen and gone again
         // many times; replaying READ THE LOG would be the game admitting it was not watching.
+        const int old = OnboardingLessons.FirstVersionWithFallLoopFacts - 1;
         var veteran = new LessonFacts(WavesCleared: 400, DeepestWave: 120, RegionsConquered: 3,
                                       StatsTrained: 40, ItemsWorn: 8, MasterySpent: 12,
                                       RegionsEntered: 3, HuntersOwned: 4, Falls: 30);
-        Assert.True(OnboardingLessons.SeedFallLoopAsLived(veteran));
+        Assert.True(OnboardingLessons.SeedFallLoopAsLived(veteran, old));
 
         var seeded = veteran with { ReportOpenedEver = true, ChangedAfterFall = true, RetriedAfterChange = true };
         foreach (var id in new[] { OnboardingLessonId.FirstFailureReport,
@@ -176,7 +311,47 @@ public class onboarding_director_test
             Assert.True(OnboardingLessons.Completed(id, seeded), $"{id} would replay on a veteran save");
 
         // A genuinely new player is NOT seeded — the loop is the one thing they must actually live.
-        Assert.False(OnboardingLessons.SeedFallLoopAsLived(new LessonFacts(WavesCleared: 3, Falls: 1)));
+        Assert.False(OnboardingLessons.SeedFallLoopAsLived(new LessonFacts(WavesCleared: 3, Falls: 1), old));
+    }
+
+    [Fact]
+    public void test_a_new_save_that_conquered_before_it_ever_fell_is_not_treated_as_a_veteran()
+    {
+        // THE BUG THIS CLOSES. The seed used to read progression alone: "has conquered a region and
+        // has never opened a report" was taken to mean "a file written before those facts existed".
+        // It also describes somebody who started a NEW game on this build, ran to a conquest without
+        // dying, quit, and came back — and they were handed the veteran's answer, which silently
+        // deletes READ THE LOG / MAKE ONE CHANGE / TRY AGAIN. That is the most important lesson in
+        // the game and the only one a first session exists to teach.
+        var conqueredEarly = new LessonFacts(WavesCleared: 20, DeepestWave: 20, RegionsConquered: 1,
+                                             StatsTrained: 6, ItemsWorn: 3, RegionsEntered: 1,
+                                             HuntersOwned: 2, Falls: 0);
+
+        // Written by THIS build: the file carries the facts, so false means false.
+        Assert.False(OnboardingLessons.SeedFallLoopAsLived(conqueredEarly, SaveGame.CurrentVersion));
+        Assert.False(OnboardingLessons.SeedFallLoopAsLived(conqueredEarly,
+                                                           OnboardingLessons.FirstVersionWithFallLoopFacts));
+
+        // ...and the lesson survives the reload it used to be deleted by.
+        Assert.False(OnboardingLessons.Completed(OnboardingLessonId.FirstFailureReport, conqueredEarly));
+        var fell = conqueredEarly with { Falls = 1 };
+        Assert.Equal(OnboardingLessonId.FirstFailureReport, OnboardingLessons.Next(fell));
+
+        // The same progression in a file that PREDATES the facts is the veteran, and is still seeded.
+        Assert.True(OnboardingLessons.SeedFallLoopAsLived(
+            conqueredEarly, OnboardingLessons.FirstVersionWithFallLoopFacts - 1));
+    }
+
+    [Fact]
+    public void test_the_fall_loop_migration_version_is_frozen_at_five()
+    {
+        // IT MUST NEVER BE SaveGame.CurrentVersion. Written that way, the next bump would start
+        // seeding every version-5 file — files that carry the facts honestly — and every player who
+        // had not yet lived the loop would be marked as having lived it. The number names a moment in
+        // this project's history, and that moment does not move when the format does.
+        Assert.Equal(5, OnboardingLessons.FirstVersionWithFallLoopFacts);
+        Assert.True(OnboardingLessons.FirstVersionWithFallLoopFacts <= SaveGame.CurrentVersion,
+                    "the fall-loop facts cannot first appear in a version that does not exist yet");
     }
 
     // ── 8. GLOBAL SKIP ───────────────────────────────────────────────────────────────────────────
@@ -265,7 +440,7 @@ public class onboarding_director_test
         // back down. Each waits on the one before it, and all three outrank every other lesson —
         // including a chest sitting unopened and a point waiting to be spent.
         var fell = new LessonFacts(WavesCleared: 24, DeepestWave: 24, Gleam: 400, StatsTrained: 1,
-                                   BossesFelled: 4, ChestsHeld: 1, ItemsOwned: 1, ItemsWorn: 1,
+                                   BossesFelled: 4, ChestsHeld: 1, ChestsOpened: 2, ItemsOwned: 1, ItemsWorn: 1,
                                    MasteryPointsFree: 1, RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
 
         Assert.Equal(OnboardingLessonId.FirstFailureReport, OnboardingLessons.Next(fell));
@@ -318,11 +493,17 @@ public class onboarding_director_test
         // The critical path may not depend on a 20% boss roll, so the lesson is eligible on HOLDING a
         // chest — which a new save does, from the welcome gift — and never on felling bosses until one
         // drops. A player with no chest is simply not asked.
-        var gifted = new LessonFacts(WavesCleared: 3, DeepestWave: 3, ChestsHeld: 1, HuntersOwned: 1);
+        var gifted = new LessonFacts(WavesCleared: 3, DeepestWave: 3, ChestsHeld: 1, StatsTrained: 1, HuntersOwned: 1);
         Assert.Contains(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(gifted));
 
         var none = gifted with { ChestsHeld = 0 };
         Assert.DoesNotContain(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(none));
+
+        // ...AND IT STILL WAITS ITS TURN. The gift is owned from frame one, so without this the chest
+        // would be asked for at wave 1 — before TRAINING has even opened — and the first decision the
+        // game teaches would be a loot screen. The chest is second, after one training rank.
+        var untrained = gifted with { StatsTrained = 0 };
+        Assert.DoesNotContain(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(untrained));
     }
 
     [Fact]

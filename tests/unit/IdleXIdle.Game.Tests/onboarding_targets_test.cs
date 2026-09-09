@@ -64,7 +64,10 @@ public class OnboardingTargetTests
         foreach (var id in OnboardingLessons.All)
         {
             if (OnboardingLessons.Target(id) is not { } target) continue;
-            if (OnboardingLessons.Sends(id) is not { } screen) continue;
+            // A NULL Sends IS THE HUNT — the host's own fallback (Game1.DrawCoachSpotlight). Skipping
+            // those here would have left READ THE LOG, the most important light in the game, with no
+            // density coverage at all.
+            var screen = OnboardingLessons.Sends(id) ?? Activity.Hunt;
 
             var rects = Resolve(screen, target);
             Assert.True(rects.Length > 0, $"{id}: {screen} does not answer for {target} at {percent}%");
@@ -94,7 +97,7 @@ public class OnboardingTargetTests
             foreach (var id in OnboardingLessons.All)
             {
                 if (OnboardingLessons.Target(id) is not { } target) continue;
-                if (OnboardingLessons.Sends(id) is not { } screen) continue;
+                var screen = OnboardingLessons.Sends(id) ?? Activity.Hunt;
                 foreach (var r in Resolve(screen, target))
                     Assert.False(r.Width >= 1900 && r.Height >= 1060,
                                  $"{id} lights the whole canvas at {percent}% — {screen} does not know {target}");
@@ -123,15 +126,76 @@ public class OnboardingTargetTests
     {
         // READ THE LOG → MAKE ONE CHANGE → TRY AGAIN is one sequence and it lives around the arena:
         // the log opens over the HUNT, and the retry is the next descent. None of the three sends the
-        // player to a menu screen, so none of them marks a control on one.
+        // player to a MENU screen — and that null Sends is load-bearing twice over: it is what makes
+        // Game1.HuntLessonShowing draw their cards on the fight, and what the spotlight's
+        // `?? Activity.Hunt` fallback reads.
         foreach (var id in new[] { OnboardingLessonId.FirstFailureReport,
                                    OnboardingLessonId.FirstPostFailureChange,
                                    OnboardingLessonId.FirstRetry })
         {
             Assert.Null(OnboardingLessons.Sends(id));
-            Assert.Null(OnboardingLessons.Target(id));
             Assert.NotEqual(LessonMode.Observe, OnboardingLessons.Mode(id));
         }
+
+        // THE FIRST OF THEM POINTS AT A REAL DOOR. IT FELL / READ THE LOG is a HardGuide, and a
+        // HardGuide with no target lights nothing at all — which is what it did until now.
+        Assert.Equal(TourTarget.LogButton, OnboardingLessons.Target(OnboardingLessonId.FirstFailureReport));
+
+        // The other two ask for a change and a descent; neither is one control, so neither marks one.
+        Assert.Null(OnboardingLessons.Target(OnboardingLessonId.FirstPostFailureChange));
+        Assert.Null(OnboardingLessons.Target(OnboardingLessonId.FirstRetry));
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_read_the_log_lights_the_expedition_log_medallion_at_every_density(int percent)
+    {
+        // THE CLAIM: the bracket falls on the button that opens the report, at every profile — the
+        // same rectangle HuntScreen.DrawLogButton draws from and hit-tests, never a copy of it, and
+        // never a hardcoded pixel. The medallion's EDGE follows the density profile, so this also
+        // proves the light grows with the control rather than staying at its 100 % size.
+        UiMetrics.Apply(percent);
+        var lit = HuntScreen.Spotlights(TourTarget.LogButton);
+        Assert.Single(lit);
+        var r = lit[0];
+
+        Assert.True(r.Width >= UiMetrics.Control(64) && r.Height >= UiMetrics.Control(64),
+                    $"the light is smaller than the control it marks at {percent}% ({r})");
+        Assert.True(r.Intersects(new Rectangle(0, 0, 1920, 1080)), $"off the page at {percent}% ({r})");
+        Assert.False(r.Width >= 1900 && r.Height >= 1060, $"the whole-canvas fallback at {percent}%");
+
+        // ...and it is the HUNT that answers for it, through the same route the host takes.
+        Assert.Null(OnboardingLessons.Sends(OnboardingLessonId.FirstFailureReport));
+        Assert.Equal(r, Resolve(Activity.Hunt, OnboardingLessons.Target(OnboardingLessonId.FirstFailureReport)!.Value)[0]);
+
+        // AND THE CONTROL IS NOT UNDER THE CHROME. At 150 % the capsules are half again as tall and
+        // their chain reaches back past the medallion's left edge, so a medallion pinned at a literal
+        // y of 40 was drawn half underneath the GLEAM pill — a light pointing at something invisible.
+        // Both now hang off Game1.ChromeRowBottom, and this is what keeps them apart.
+        var control = HuntScreen.LogButtonRect;
+        Assert.True(control.Top >= Game1.ChromeRowBottom,
+                    $"the log medallion runs up into the currency row at {percent}% ({control})");
+        Assert.True(r.Contains(control), $"the light does not cover the control at {percent}% ({r} vs {control})");
+        UiMetrics.Apply(100);
+    }
+
+    [Fact]
+    public void test_the_wave_lane_takes_a_second_row_only_when_one_will_not_hold_it()
+    {
+        // The rule the fall banner's overlap came down to, on its own and without a font. The wave
+        // line is the one line in the stage header with no fit ladder: the region title above it steps
+        // its rung down to fit, the conquest row below it reserves its bar around a measured label,
+        // and this was simply centred and drawn — so at 150 % "WAVE 11 — RECOVERING — BACK TO WAVE 11"
+        // grew past both of the header's rails and printed itself over the hunter's health readout.
+        foreach (var percent in new[] { 100, 125, 150 })
+        {
+            UiMetrics.Apply(percent);
+            Assert.Equal(1, HuntScreen.WaveRowsFor(10, 480));
+            Assert.Equal(1, HuntScreen.WaveRowsFor(480, 480));    // exactly full still fits
+            Assert.Equal(2, HuntScreen.WaveRowsFor(481, 480));
+            Assert.Equal(2, HuntScreen.WaveRowsFor(9_999, 480));
+        }
+        UiMetrics.Apply(100);
     }
 
     // ── THE DIRECTOR'S OWN BEHAVIOUR ─────────────────────────────────────────────────────────────
@@ -149,21 +213,21 @@ public class OnboardingTargetTests
 
         // The deed done: the lesson goes, and the QUIET follows it so the next ask does not land on
         // top of the reward for this one.
-        var watched = Fresh() with { WavesCleared = 1, DeepestWave = 1, ChestsHeld = 1 };
+        var watched = Fresh() with { WavesCleared = 3, DeepestWave = 3, Gleam = 60, ChestsHeld = 1 };
         d.Update(1 / 60f, watched, Idle);
         Assert.True(d.Quiet, "a satisfied lesson did not start a quiet period");
         Assert.Null(d.Showing);
 
-        // ...and after the quiet, the next one — never two at once.
+        // ...and after the quiet, the next one — never two at once, and TRAINING before the chest.
         for (var t = 0f; t < OnboardingDirector.QuietAfterLesson + 0.5f; t += 0.25f) d.Update(0.25f, watched, Idle);
-        Assert.Equal(OnboardingLessonId.FirstChestOpen, d.Showing);
+        Assert.Equal(OnboardingLessonId.FirstTrainingPurchase, d.Showing);
     }
 
     [Fact]
     public void test_the_director_does_not_talk_over_a_reward_or_a_modal()
     {
         var d = new OnboardingDirector();
-        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, ChestsHeld = 1 };
+        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1 };
 
         d.Update(1 / 60f, facts, new OnboardingDirector.Busy(RewardUp: true, ModalUp: false, ReportUp: false));
         Assert.Null(d.Showing);
@@ -180,7 +244,7 @@ public class OnboardingTargetTests
     public void test_muting_a_card_silences_it_and_completes_nothing()
     {
         var d = new OnboardingDirector();
-        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, ChestsHeld = 1 };
+        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1 };
         d.Update(1 / 60f, facts, Idle);
         Assert.Equal(OnboardingLessonId.FirstChestOpen, d.Showing);
 
@@ -196,7 +260,7 @@ public class OnboardingTargetTests
     public void test_skip_guidance_makes_the_director_silent_without_touching_the_facts()
     {
         var d = new OnboardingDirector();
-        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, ChestsHeld = 1, GuidanceOff = true };
+        var facts = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1, GuidanceOff = true };
         for (var i = 0; i < 10; i++) d.Update(1 / 60f, facts, Idle);
         Assert.Null(d.Showing);
         Assert.False(OnboardingLessons.Completed(OnboardingLessonId.FirstChestOpen, facts));
@@ -209,7 +273,7 @@ public class OnboardingTargetTests
         // fresh director simply re-derives from the world — which is the whole reason completion was
         // put on facts. Two cases, and neither can trap anybody: the deed was done while away (the
         // lesson is complete and never reappears), or it was not (it resumes exactly where it was).
-        var mid = Fresh() with { WavesCleared = 4, DeepestWave = 4, ChestsHeld = 1 };
+        var mid = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1 };
         var before = new OnboardingDirector();
         before.Update(1 / 60f, mid, Idle);
         Assert.Equal(OnboardingLessonId.FirstChestOpen, before.Showing);

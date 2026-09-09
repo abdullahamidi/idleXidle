@@ -304,7 +304,7 @@ public class TraitTreeMigrationTest
         // Without the bump the ten-second autosave overwrites the only copy of the pre-migration file
         // and there is no undo at all — which is why the bump is a data-safety requirement here rather
         // than bookkeeping.
-        Assert.Equal(4, SaveGame.CurrentVersion);
-        Assert.True(3 < SaveGame.CurrentVersion);
+        Assert.Equal(5, SaveGame.CurrentVersion);
+        Assert.True(4 < SaveGame.CurrentVersion);
     }
 }
