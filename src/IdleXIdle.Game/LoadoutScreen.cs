@@ -995,14 +995,7 @@ public sealed class LoadoutScreen
             _vowListReveal = 2;
             return;
         }
-        if (RespecText.Contains(hit) && _respecShown && SlotDef(_slot) is { } rd)
-        {
-            SkillLevels.Respec(rd.Id);
-            Dirty = true; _buildRev++;
-            if (_pick == Pick.Reinforcement) _pick = Pick.Slot;
-            _msg = $"{rd.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
-            return;
-        }
+        if (RespecText.Contains(hit) && _respecShown && SlotDef(_slot) is { } rd) { DoRespec(rd); return; }
         if (CopyText.Contains(hit))
         {
             var code = IdleXIdle.Core.Persistence.ShareCodes.EncodeBuild(
@@ -1029,6 +1022,48 @@ public sealed class LoadoutScreen
             // SLOT — only presses; there is nothing to say no to.
             else if (refusal.Length > 0) _cue = "sfx_error";
         }
+    }
+
+    /// <summary>
+    /// Is the primary button a RESPEC right now?
+    /// </summary>
+    /// <remarks>
+    /// Standing on a variation you have already chosen, or a reinforcement you already own, the biggest
+    /// control on the screen had nothing to do: it read CHOSEN or OWNED and sat dead. The one action
+    /// actually available there — giving the levels back, which is free, and which the refusal line
+    /// beside it kept advertising — was a line of grey caption text in the column's corner. Playtest
+    /// 2026-09-09: <i>"the respec button is not visible. It is not even a button, it is clickable text.
+    /// We could put it where CHOSEN is."</i> So it is there, and the dead label is gone from the two
+    /// places that could always be answered.
+    /// <para>
+    /// One predicate, read by both <see cref="Primary"/> and <see cref="Commit"/>, so the button's verb
+    /// and the deed behind it cannot come apart — the failure the whole Primary/Commit split exists to
+    /// prevent.
+    /// </para>
+    /// </remarks>
+    private bool RespecIsThePrimary()
+    {
+        if (SlotDef(_slot) is not { } def || SkillLevels.SpentOn(def.Id) <= 0) return false;
+        return _pick switch
+        {
+            Pick.Variation => _pickIndex < def.Variations.Count
+                              && SkillLevels.VariationOf(def)?.Name == def.Variations[_pickIndex].Name,
+            Pick.Reinforcement => SkillLevels.VariationOf(def) is { } v
+                                  && _pickIndex < v.Reinforcements.Count
+                                  && SkillLevels.HasReinforcement(def.Id, v.Reinforcements[_pickIndex].Name),
+            _ => false,
+        };
+    }
+
+    /// <summary>Give this skill's spent levels back, and say so. The one respec path.</summary>
+    private void DoRespec(SkillDef def)
+    {
+        SkillLevels.Respec(def.Id);
+        Dirty = true;
+        _buildRev++;
+        if (_pick is Pick.Reinforcement or Pick.Variation) _pick = Pick.Slot;
+        _msg = $"{def.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
+        Sound?.Play("sfx_click", 0.4f);
     }
 
     /// <summary>The primary button's verb for the current selection, and whether it may be pressed.</summary>
@@ -1073,7 +1108,10 @@ public sealed class LoadoutScreen
                 if (SlotDef(_slot) is not { } def || _pickIndex >= def.Variations.Count) return ("", false, "");
                 var v = def.Variations[_pickIndex];
                 var chosen = SkillLevels.VariationOf(def);
-                if (chosen?.Name == v.Name) return ("CHOSEN", false, "");
+                if (chosen?.Name == v.Name)
+                    return RespecIsThePrimary()
+                        ? ("RESPEC — TAKE THE LEVELS BACK", true, "")
+                        : ("CHOSEN", false, "");
                 if (chosen is not null) return ($"CHOOSE {v.Name}", false, $"{def.Name} IS {chosen.Name}. RESPEC TO CHANGE — IT IS FREE.");
                 if (SkillLevels.FreeOn(def.Id) < 1)
                     return ($"CHOOSE {v.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
@@ -1083,7 +1121,10 @@ public sealed class LoadoutScreen
             {
                 if (SlotDef(_slot) is not { } def || SkillLevels.VariationOf(def) is not { } v || _pickIndex >= v.Reinforcements.Count) return ("", false, "");
                 var r = v.Reinforcements[_pickIndex];
-                if (SkillLevels.HasReinforcement(def.Id, r.Name)) return ("OWNED", false, "");
+                if (SkillLevels.HasReinforcement(def.Id, r.Name))
+                    return RespecIsThePrimary()
+                        ? ("RESPEC — TAKE THE LEVELS BACK", true, "")
+                        : ("OWNED", false, "");
                 if (SkillLevels.FreeOn(def.Id) < 1)
                     return ($"TAKE {r.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
                 return ($"TAKE {r.Name}", true, "");
@@ -1121,6 +1162,9 @@ public sealed class LoadoutScreen
     {
         var (_, enabled, _) = Primary();
         if (!enabled) return;
+        // THE BUTTON'S OWN VERB FIRST. On a taken variation or an owned reinforcement the primary IS
+        // the respec, and falling through to the switch below would try to buy a thing already bought.
+        if (RespecIsThePrimary() && SlotDef(_slot) is { } respecDef) { DoRespec(respecDef); return; }
         switch (_pick)
         {
             case Pick.Library:
@@ -1849,10 +1893,12 @@ public sealed class LoadoutScreen
         // is free and reversible, and it stays calm (§44).
         if (_respecShown)
         {
-            var over = RespecText.Contains(hit);
-            var press = Down(over);
-            _ui.TextBig(b, "RESPEC — FREE", RespecText.X, RespecText.Y + actionTextY + (press ? 1 : 0),
-                        Color.Lerp(Slate, Bone, Lift(RespecText, over)) * (press ? 0.75f : 1f), UiTypography.Secondary);
+            // ...AND THIS ONE IS A BUTTON NOW. It was grey caption text in a corner, at the size the
+            // game uses for column heads, and it went unfound (playtest 2026-09-09). COPY BUILD CODE
+            // stays a text action beside it because it is a convenience; giving a skill's levels back
+            // is a decision, and a decision gets a control. Still calm and still Secondary — §44's rule
+            // is that a free, reversible action does not shout, not that it hides.
+            _ui.Button(b, RespecText, "RESPEC — FREE", hit, false, true, ButtonStyle.Secondary);
             Tip(RespecText, hit, "Give this skill's levels back. Free, and it keeps every level it has earned.");
         }
         {

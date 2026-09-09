@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
@@ -143,35 +143,41 @@ public class offline_resume_test
     }
 
     [Fact]
-    public void test_the_return_screen_tells_the_absence_as_sentences_and_invents_nothing()
+    public void test_the_return_screen_is_a_results_grid_and_invents_nothing()
     {
-        // Every line must be a figure the model produced — the rule this file was written under, and
-        // the reason it has no NOTABLE block. A sentence about a boss is only printed when a boss fell.
+        // Every tile must be a figure the model produced — the rule this file was written under, and
+        // the reason there is no NOTABLE block. Playtest 2026-09-09 replaced the narration with tiles:
+        // "make them iconed and like a results screen, we are not telling a story." The discipline did
+        // not change with the shape — a boss tile is printed only when a boss fell.
         var r = Away(3 * 3600);
         var w = new WelcomeSummary(3 * 3600, r, default, WarrenOpen: false);
-        var story = w.Story();
+        var tiles = w.HuntTiles();
 
-        foreach (var line in story) _out.WriteLine(line);
-        Assert.NotEmpty(story);
-        Assert.Contains(story, l => l.Contains("THE HUNTER KEPT STANDING", StringComparison.Ordinal));
-        if (r.BossesFelled == 0)
-            Assert.DoesNotContain(story, l => l.Contains("GATHERED INTO", StringComparison.Ordinal));
-        if (r.Falls == 0)
-            Assert.DoesNotContain(story, l => l.Contains("PUT IT BACK", StringComparison.Ordinal));
+        foreach (var t in tiles) _out.WriteLine($"{t.Figure,-8} {t.Value,8}  {t.Label}");
+        Assert.NotEmpty(tiles);
+        Assert.Contains(tiles, t => t.Figure == WelcomeFigure.Waves);
+        Assert.Equal(r.BossesFelled > 0, tiles.Any(t => t.Figure == WelcomeFigure.Bosses));
+        Assert.Equal(r.Falls > 0, tiles.Any(t => t.Figure == WelcomeFigure.Falls));
+        // Never a tile whose figure is nothing: a zero is omitted, not printed.
+        Assert.DoesNotContain(tiles, t => t.Value is "0");
 
-        // A hunter who did nothing at all is told nothing at all beyond the absence itself.
-        var silent = new WelcomeSummary(0, default, default, WarrenOpen: false);
-        Assert.Empty(silent.Story());
+        // A hunter who did nothing at all is shown nothing at all beyond the absence itself.
+        Assert.Empty(new WelcomeSummary(0, default, default, WarrenOpen: false).HuntTiles());
     }
 
     [Fact]
-    public void test_the_pinned_figure_rows_are_untouched()
+    public void test_the_words_under_the_figures_agree_with_them()
     {
-        // The narration sits AROUND the parts, never in place of them: their exact fragments are
-        // pinned by welcome_back_test, and a player who wants the numbers still gets the numbers.
-        var w = new WelcomeSummary(3 * 3600, Away(3 * 3600), default, WarrenOpen: false);
-        var parts = w.HuntParts();
-        Assert.Contains(parts, p => p.EndsWith(" GLEAM", StringComparison.Ordinal));
-        Assert.Contains(parts, p => p.Contains("WAVES CLEARED", StringComparison.Ordinal));
+        // A tile is three things and the third is a word, so the word has to match the number over it —
+        // "1 FALLS" and "2 BOSS FELLED" are the kind of wrong that makes a results screen look broken.
+        var one = new WelcomeSummary(3600, new OfflineHunt.Result(0, 1, 1, DeepestWave: 4, 0, 0, 0, BossesFelled: 1), default, false);
+        Assert.Contains(one.HuntTiles(), t => t is { Figure: WelcomeFigure.Waves, Label: "WAVE HELD" });
+        Assert.Contains(one.HuntTiles(), t => t is { Figure: WelcomeFigure.Bosses, Label: "BOSS FELLED" });
+        Assert.Contains(one.HuntTiles(), t => t is { Figure: WelcomeFigure.Falls, Label: "FALL" });
+
+        var many = new WelcomeSummary(3600, new OfflineHunt.Result(0, 9, 3, DeepestWave: 4, 0, 0, 0, BossesFelled: 2), default, false);
+        Assert.Contains(many.HuntTiles(), t => t is { Figure: WelcomeFigure.Waves, Label: "WAVES HELD" });
+        Assert.Contains(many.HuntTiles(), t => t is { Figure: WelcomeFigure.Bosses, Label: "BOSSES FELLED" });
+        Assert.Contains(many.HuntTiles(), t => t is { Figure: WelcomeFigure.Falls, Label: "FALLS" });
     }
 }

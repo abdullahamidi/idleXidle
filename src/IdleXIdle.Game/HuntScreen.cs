@@ -1281,7 +1281,11 @@ public sealed class HuntScreen
         for (var slot = 0; slot < _waveSkills.Count; slot++)
         {
             var def = _waveSkills[slot].Def;
-            _railReady[slot] = def.TakesABeat && Timing(slot, def).Swept >= 1f;
+            var t0 = Timing(slot, def);
+            _railReady[slot] = def.TakesABeat && t0.Swept >= 1f;
+            // ...and the notch it opens on, for the same reason: an unseeded map reads as notch zero,
+            // and every ring would tick on the wave's first frame.
+            _railStep[slot] = t0.RingSteps > 0 ? (int)MathF.Floor(t0.Swept * t0.RingSteps + 0.001f) : 0;
         }
     }
 
@@ -1594,10 +1598,32 @@ public sealed class HuntScreen
         {
             var def = _waveSkills[slot].Def;
             if (!def.TakesABeat) continue;             // a passive is always ready; it never crosses
-            var nowReady = Timing(slot, def).Swept >= 1f;
+            var timing = Timing(slot, def);
+            var nowReady = timing.Swept >= 1f;
+
+            // ── EVERY NOTCH ANNOUNCES ITSELF. ────────────────────────────────────────────────────
+            //
+            // A beat-counted ring is quantised to one notch per action, so between notches it shows
+            // nothing at all; a six-beat skill was three silent jumps across four and a half seconds.
+            // Crossing a notch now arms a tick, and the ring draws it as a bright spoke that fades —
+            // so the wait reads as a countdown rather than as a stalled dial. Armed HERE, in Update,
+            // for the rail's standing rule: a Draw that armed a pulse would re-arm it every frame.
+            var step = timing.RingSteps > 0
+                ? (int)MathF.Floor(timing.Swept * timing.RingSteps + 0.001f)
+                : 0;
+            if (timing.RingSteps > 0 && step > _railStep.GetValueOrDefault(slot) && step < timing.RingSteps)
+                UiMotion.Flash(SkillStepKey(slot), UiMotion.Transition);
+            _railStep[slot] = nowReady ? 0 : step;
+
             if (nowReady && !_railReady.GetValueOrDefault(slot))
             {
                 UiMotion.Flash(SkillReadyKey(slot), UiMotion.Transition);
+                // AND THE MOMENT ITSELF GETS A SHAPE. The pop was a tenth of a swell over 180 ms, which
+                // is the smallest reading of "the cooldown animation is not satisfying" (playtest
+                // 2026-09-09) and not the one that was asked for. A ring now leaves the medallion and
+                // fades over the REWARD beat — the same length the game uses for a haul landing —
+                // because a skill coming up IS the fight's reward beat.
+                UiMotion.Flash(SkillBurstKey(slot), UiMotion.Reward);
                 // A CUE, but a quiet and a rare one. The screen already plays a thud every beat and a
                 // cast every action; four Actives coming up every few beats would be the disco-ball
                 // note again, one modality over. Only a skill with a real wait (two notches or more)
@@ -4523,8 +4549,24 @@ public sealed class HuntScreen
     /// <summary>Was each slot ready last frame? The edge, not the state, is what arms the pop.</summary>
     private readonly Dictionary<int, bool> _railReady = new();
 
+    /// <summary>Which notch each slot's ring last stood on, so a crossing can be told from a hold.</summary>
+    private readonly Dictionary<int, int> _railStep = new();
+
     /// <summary>The eased ring position, so a beat-counted notch travels instead of teleporting.</summary>
     private static int SkillRingKey(int slot) => HashCode.Combine("hunt.skill.ring", slot);
+
+    /// <summary>
+    /// One notch crossed — the tick that makes a long wait feel like it is counting down.
+    /// </summary>
+    /// <remarks>
+    /// A six-beat skill spends four and a half seconds getting ready and used to report that with three
+    /// silent jumps. Each notch it passes now says so, which turns a dead band into a countdown the eye
+    /// can follow without reading the word beside it.
+    /// </remarks>
+    private static int SkillStepKey(int slot) => HashCode.Combine("hunt.skill.step", slot);
+
+    /// <summary>The ready burst's own key — a ring that leaves the medallion, longer-lived than the pop.</summary>
+    private static int SkillBurstKey(int slot) => HashCode.Combine("hunt.skill.burst", slot);
 
     // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
@@ -4880,9 +4922,15 @@ public sealed class HuntScreen
         // swapped, the dim stepped up, and nothing moved. The medallion swells a tenth over a
         // Transition on the crossing, armed in the event pump (Draw must never arm a pulse).
         var box = MedallionBox(slot);
+        // THE SWELL OVERSHOOTS AND SETTLES. A flat tenth over 180 ms reads as a nudge; the same motion
+        // with an overshoot reads as a thing arriving. The curve is 1 - (1-p)^2 shaped past its target
+        // and pulled back, which is the ordinary back-ease and costs nothing — and it is skipped whole
+        // under Reduced Motion, like every other one-shot on this screen.
         if (UiMotion.Pulse(SkillReadyKey(i)) is var pp && pp > 0f && !UiMotion.Reduced)
         {
-            var grow = (int)MathF.Round(box.Width * 0.10f * UiMotion.Smooth(pp));
+            var k = 1f - UiMotion.Smooth(pp);              // 0 at the crossing, 1 when the pop is spent
+            var swell = MathF.Sin(k * MathF.PI) * 0.17f;   // out and back, peaking a sixth over
+            var grow = (int)MathF.Round(box.Width * swell);
             box = new Rectangle(box.X - grow / 2, box.Y - grow / 2, box.Width + grow, box.Height + grow);
         }
         if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
@@ -4913,16 +4961,49 @@ public sealed class HuntScreen
 
         if (t.Flash <= 0f)
         {
-            _ui.CooldownSweep(b, ringCentre, ringR, shownSweep, new Color(0x0F, 0x0B, 0x0B, 0xE0), Gold * 0.95f);
+            // THE EDGE WARMS AS IT APPROACHES. The moving line was full gold from the first frame of a
+            // cooldown to the last, so the ring said HOW MUCH LONGER and never HOW CLOSE. Ramped, the
+            // last quarter of every wait glows, and a rail of four skills tells you at a glance which
+            // one is about to go off.
+            var heat = Math.Clamp((shownSweep - 0.55f) / 0.45f, 0f, 1f);
+            var edge = Color.Lerp(new Color(0x8A, 0x74, 0x52), Gold, heat);
+            _ui.CooldownSweep(b, ringCentre, ringR, shownSweep, new Color(0x0F, 0x0B, 0x0B, 0xE0), edge);
+
+            // ...AND IT CARRIES A HEAD. A one-pixel line on a band that moves a few degrees a second is
+            // invisible; a short bright arc trailing back from it is not, and it makes the ring read as
+            // something travelling rather than as a shape being erased.
+            if (shownSweep is > 0f and < 1f)
+            {
+                const float step = MathF.PI / 72f;
+                var lead = -MathF.PI / 2f + shownSweep * MathF.Tau;
+                for (var k = 0; k < 7; k++)
+                {
+                    var a = lead + k * step;
+                    var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                    var fadeK = (1f - k / 7f) * (1f - k / 7f);
+                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * ringR,
+                                MathF.Max(2f, ringR * 0.10f), edge * (0.55f * fadeK));
+                }
+            }
+
             // THE NOTCHES THEMSELVES, so "2 ACTIONS" is a shape and not only a word: the band reads as
-            // a segmented track and each step visibly arrives somewhere.
+            // a segmented track and each step visibly arrives somewhere. The one just crossed FLARES —
+            // a spoke that brightens and reaches past the rim, then settles back into the track.
             if (t.RingSteps > 1 && shownSweep < 1f)
+            {
+                var tick = UiMotion.Pulse(SkillStepKey(i));
+                var crossed = t.RingSteps > 0 ? (int)MathF.Floor(shownSweep * t.RingSteps + 0.001f) : 0;
                 for (var n = 1; n < t.RingSteps; n++)
                 {
                     var a = -MathF.PI / 2f + n / (float)t.RingSteps * MathF.Tau;
                     var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * ringR, 2f, Slate * 0.55f);
+                    var hot = n == crossed && tick > 0f ? UiMotion.Smooth(tick) : 0f;
+                    var reach = ringR * (1f + 0.14f * hot);
+                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * reach,
+                                2f + 2f * hot, Color.Lerp(Slate * 0.55f, Gold, hot));
                 }
+            }
+
             // AND THE BAND COMPLETES RATHER THAN VANISHING. CooldownSweep returns on its first line at
             // ready >= 1, so the dark band simply disappeared on the frame a skill came up — the single
             // moment the rail exists to teach had no event at all. On the ready crossing the band is
@@ -4934,6 +5015,19 @@ public sealed class HuntScreen
         {
             var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
             Outline(b, halo, Gold * t.Flash, 2);
+        }
+
+        // ── READY: A RING LEAVES THE MEDALLION. ──────────────────────────────────────────────────
+        //
+        // Drawn after the ring and the art so it crosses both, and after the branch above so it fires
+        // whether the skill came up quietly or came up mid-cast. Two rings a beat apart, the second
+        // wider and fainter, so the burst has a front and a wake instead of being one expanding circle
+        // — the cheapest thing that reads as ENERGY rather than as a growing outline.
+        if (!UiMotion.Reduced && UiMotion.Pulse(SkillBurstKey(i)) is var burst && burst > 0f)
+        {
+            var age = 1f - burst;                       // 0 at the crossing, 1 when spent
+            SkillBurstRing(b, ringCentre, ringR, age, Gold);
+            if (age > 0.18f) SkillBurstRing(b, ringCentre, ringR, age - 0.18f, sc);
         }
 
         // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
@@ -5038,6 +5132,30 @@ public sealed class HuntScreen
     /// slots further down the rail sit at 0.5, so a waiting skill reads as dimmer than a real row but
     /// not as absent.
     /// </remarks>
+    /// <summary>
+    /// One expanding ring of the ready burst: wider, thinner and fainter as it ages.
+    /// </summary>
+    /// <param name="age">0 the instant it fires, 1 when it is gone.</param>
+    /// <remarks>
+    /// Twenty-four segments, which is smooth at the medallion's radius and is twenty-four draws — this
+    /// runs at most four times a wave, once per Active, and only on the frames a skill comes up.
+    /// </remarks>
+    private void SkillBurstRing(SpriteBatch b, Vector2 centre, float radius, float age, Color tint)
+    {
+        age = Math.Clamp(age, 0f, 1f);
+        var r = radius * (1f + 0.60f * UiMotion.Smooth(1f - age));
+        var thick = MathF.Max(1.5f, radius * 0.13f * (1f - age));
+        var alpha = (1f - age) * (1f - age);
+        const int seg = 24;
+        for (var k = 0; k < seg; k++)
+        {
+            var a0 = k / (float)seg * MathF.Tau;
+            var a1 = (k + 1) / (float)seg * MathF.Tau;
+            _ui.LineSeg(b, centre + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * r,
+                        centre + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * r, thick, tint * alpha);
+        }
+    }
+
     private const float WaitingSkillDim = 0.45f;
 
 

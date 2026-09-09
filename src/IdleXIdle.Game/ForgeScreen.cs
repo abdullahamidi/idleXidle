@@ -3664,6 +3664,17 @@ public sealed class ForgeScreen
     /// <summary>The player asked to close — the hold must not keep the card they just dismissed.</summary>
     private bool _revealClosing;
 
+    /// <summary>How many cells offered a live verb the last time the reveal drew, and whether any could.</summary>
+    /// <remarks>
+    /// The pair that lets <see cref="CloseRevealIfSettled"/> ask "is there anything left to decide?"
+    /// without duplicating the two draws' knowledge of which items are actionable — a stamped item,
+    /// an item the auto-merge consumed and an item beyond the summary's visible count all fail to
+    /// offer, and none of them is a thing the player can still answer.
+    /// </remarks>
+    private int _revealOffers;
+
+    private bool _revealActsLive;
+
     /// <summary>What this reveal has already disposed of: instance id to the stamp word (SOLD / SALVAGED).</summary>
     private readonly Dictionary<string, string> _revealStamp = new(StringComparer.Ordinal);
 
@@ -3750,6 +3761,8 @@ public sealed class ForgeScreen
         _revealAskSuppress = false;
         _revealPointerHold = false;
         _revealClosing = false;
+        _revealOffers = 0;
+        _revealActsLive = false;
     }
 
     /// <summary>
@@ -3929,6 +3942,8 @@ public sealed class ForgeScreen
         // A CASCADE ENTRY GETS NO BUTTONS: it is on screen for about a second, and a button that brief
         // is a misclick waiting to happen. The summary at the end of the cascade carries them instead.
         var acts = !_revealBrief && cp >= 1f;
+        _revealOffers = 0;
+        _revealActsLive = acts;
         ItemInstance? hover = null;
         var hoverCell = Rectangle.Empty;   // anchors the card BESIDE the item, never over its own buttons
         for (var i = 0; i < n; i++)
@@ -3979,6 +3994,30 @@ public sealed class ForgeScreen
         // already pinned to the plate's edge; its Y still followed the mouse until 2026-09-09.)
         if (hover is not null)
             ItemTooltip.Draw(_ui, b, hover, hunter, hoverCell, new Rectangle(0, 0, 1920, 1080));
+
+        CloseRevealIfSettled();
+    }
+
+    /// <summary>
+    /// The card has nothing left to ask, so it lets go — the same dismissal a click would give it.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-09-09: <i>"after I open an item from a chest and press a button — equip, salvage,
+    /// sell — that panel should close."</i> It stayed up wearing a SOLD stamp, so the last thing the
+    /// player did was dismiss a card with no question left in it.
+    /// <para>
+    /// <b>SETTLED, not "a button was pressed".</b> A chest can drop three, and closing on the first
+    /// press would take the other two away mid-decision — answering one question by cancelling two. So
+    /// it closes when every cell that was still offering a verb has stopped offering one, which for the
+    /// ordinary single-drop chest is the instant the button is pressed. It waits for the confirm
+    /// question to be gone too, or a SELL that asks "are you sure?" would dismiss its own question.
+    /// </para>
+    /// </remarks>
+    private void CloseRevealIfSettled()
+    {
+        if (!_revealActsLive || _revealClosing || _revealAsk is not null) return;
+        if (_revealStamp.Count == 0 || _revealOffers > 0) return;
+        AdvanceReveal();
     }
 
     /// <summary>
@@ -4028,6 +4067,7 @@ public sealed class ForgeScreen
 
         var hover = icon.Contains(mouse) ? live : null;
         if (!acts) return hover;
+        _revealOffers++;   // this cell is still asking something — see CloseRevealIfSettled
 
         // ── EQUIP FIRST, and it carries the VERDICT rather than a bare verb: the whole decision the
         //    reveal is asking for is "is this better than what I am wearing", and the item card already
@@ -4270,6 +4310,8 @@ public sealed class ForgeScreen
             _revealAsk = null;
             // Rarest first — each in its own rarity frame, named, and sellable where it lies.
             var order = _revealAll.OrderByDescending(i => (int)i.Rarity).Take(shown).ToList();
+            _revealOffers = 0;
+            _revealActsLive = _revealFrozen;
             for (var i = 0; i < order.Count; i++)
             {
                 var row = i / perRow;
@@ -4303,6 +4345,8 @@ public sealed class ForgeScreen
         // own SELL and SALVAGE buttons — the two things it is helping you choose between.
         if (hover is not null)
             ItemTooltip.Draw(_ui, b, hover, hunter, hoverCell, new Rectangle(0, 0, 1920, 1080));
+
+        CloseRevealIfSettled();
     }
 
     /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>

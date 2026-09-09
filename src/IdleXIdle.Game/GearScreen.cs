@@ -388,6 +388,54 @@ public sealed class GearScreen
 
     private bool CanWearNow(ItemInstance item) => Gear.CanWear(Character, item);
 
+    /// <summary>
+    /// Put the carried piece where it was dropped: on its own slot, or back in the bag.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It goes through <c>hunter.Equip</c> / <c>hunter.Unequip</c> — the same two calls the inspector's
+    /// button makes — so the drag cannot equip something the button would refuse, and a piece cannot
+    /// end up somewhere the model does not agree it is.
+    /// </para>
+    /// <para>
+    /// <b>A DROP ON THE WRONG SLOT IS ANSWERED, NOT IGNORED.</b> Boots dropped on the helm slot play the
+    /// refusal cue, because silence there reads as a broken drag rather than as a rule. A drop on
+    /// nothing at all is a cancel and says nothing, which is what letting go over empty space means.
+    /// </para>
+    /// </remarks>
+    private void DropGear(Hunter hunter, string itemId, Point at)
+    {
+        var item = Wearable().FirstOrDefault(i => i.InstanceId == itemId)
+                   ?? AllSlots.Select(hunter.Worn).FirstOrDefault(w => w?.InstanceId == itemId);
+        if (item is null) return;
+        _selectedId = itemId;
+
+        foreach (var (slot, _, col, row) in SlotLayout)
+        {
+            if (!SlotRect(col, row).Contains(at)) continue;
+            if (Gear.SlotFor(item.BaseType) != slot || !CanWearNow(item))
+            {
+                _feedback.Cue("sfx_error");
+                return;
+            }
+            if (_carryFromSlot == slot) return;   // dropped back where it came from: nothing happened
+            hunter.Equip(item);
+            ArmFlight(item, _carryFromRect, slot);
+            Dirty = true;
+            _feedback.Cue("sfx_equip");
+            return;
+        }
+
+        // OFF THE DOLL AND INTO THE BAG. Only from a worn slot, and only onto the bag itself — dropping
+        // a piece on the doll's portrait or on the page's margin is a change of mind.
+        if (_carryFromSlot is { } fromSlot && InventoryPanel.Contains(at))
+        {
+            hunter.Unequip(fromSlot);
+            Dirty = true;
+            _feedback.Cue("sfx_equip");
+        }
+    }
+
     private static bool InTab(ItemBaseType t, int tab) => tab switch
     {
         1 => t == ItemBaseType.Weapon,
@@ -432,6 +480,61 @@ public sealed class GearScreen
     public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);
     private float _anim;
 
+    // ── DRAG AND DROP, AND THE FLIGHT THAT FOLLOWS IT ────────────────────────────────────────────
+    //
+    // Playtest 2026-09-09: "items in the inventory should be draggable, drag-and-drop should work.
+    // There should also be an equipped effect and animation. The player should feel good."
+    //
+    // Both halves are one idea. Equipping was a click on a button in a third column, and the piece
+    // simply appeared on the doll — the object never moved, so nothing on screen connected the thing
+    // picked up with the place it went. Dragging makes the player perform the move, and the FLIGHT
+    // makes the game perform it back: on any equip, from any path, the piece travels from where it was
+    // to the slot it lands in and the slot flares as it arrives.
+    //
+    // The click path, the right-click menu and EQUIP HIGHEST POWER all still work and all arm the same
+    // flight, so the reward is a property of equipping rather than of one gesture.
+
+    /// <summary>How far the pointer must travel before a press becomes a drag rather than a click.</summary>
+    private const int DragSlop = 4;
+
+    private string? _carryId;
+    private Rectangle _carryFromRect;
+    private GearSlot? _carryFromSlot;
+    private Point _carryFrom;
+    private Point _carryAt;
+    private bool _carryMoved;
+    private bool _wasHeld;
+
+    /// <summary>Is a piece actually in flight under the hand? A press that never moved is still a click.</summary>
+    private bool Dragging => _carryId is not null && _carryMoved;
+
+    /// <summary>Where a POSED drag holds its hand — the capture rig's only way to aim one. Null in play.</summary>
+    private Point? _devDragAt;
+
+    /// <summary>The piece travelling to the slot it was just put in, and the two rectangles it crosses.</summary>
+    private (ItemInstance Item, Rectangle From, Rectangle To)? _flight;
+
+    /// <summary>The flight's one-shot. One at a time: a second equip replaces the first, as the eye would.</summary>
+    private static readonly int FlightKey = HashCode.Combine("gear.flight");
+
+    /// <summary>
+    /// Send a piece from where it sat to the slot it now occupies, and flare the slot when it lands.
+    /// </summary>
+    /// <remarks>
+    /// Armed from every equip path — the inspector's button, the drop, the menu, EQUIP HIGHEST POWER —
+    /// so "I equipped something" always looks the same. A missing source rectangle (an equip with no
+    /// visible origin, such as the bulk button's later pieces) simply flies from the bag's centre,
+    /// which is where those pieces actually were.
+    /// </remarks>
+    private void ArmFlight(ItemInstance? item, Rectangle from, GearSlot slot)
+    {
+        if (item is null || UiMotion.Reduced) return;
+        var to = SlotRect(SlotLayout.First(l => l.Slot == slot).Column, SlotLayout.First(l => l.Slot == slot).Row);
+        if (from.Width <= 0) from = new Rectangle(InventoryPanel.Center.X - to.Width / 2, InventoryPanel.Center.Y - to.Height / 2, to.Width, to.Height);
+        _flight = (item, from, to);
+        UiMotion.Flash(FlightKey, UiMotion.Reward);
+    }
+
     // ── UPDATE ──────────────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, bool rightClicked, int wheel, Hunter hunter)
     {
@@ -468,6 +571,53 @@ public sealed class GearScreen
             // Down only while the last Draw left something under the floor; up to the top.
             if (wheel < 0 && _detOverflow) _detScroll += DetailScrollStep;
             else if (wheel > 0) _detScroll = Math.Max(0, _detScroll - DetailScrollStep);
+        }
+
+        // ── THE CARRY, RESOLVED BEFORE ANY EARLY RETURN. ────────────────────────────────────────
+        //
+        // This method returns from a dozen places once it has spent a click, so the drag has to be
+        // handled above all of them or a release would be eaten by whichever branch happened to match.
+        var held = UiKit.MouseHeld;
+        var pressed = held && !_wasHeld;
+        var releasedDrag = !held && _wasHeld;
+        _wasHeld = held;
+        _carryAt = _devDragAt ?? hit;
+        if (_carryId is not null && held
+            && (Math.Abs(hit.X - _carryFrom.X) > DragSlop || Math.Abs(hit.Y - _carryFrom.Y) > DragSlop))
+            _carryMoved = true;
+        if (!held)
+        {
+            if (releasedDrag && _carryId is { } dropped && _carryMoved) DropGear(hunter, dropped, hit);
+            _carryId = null;
+            _carryFromSlot = null;
+            _carryMoved = false;
+        }
+        else if (pressed && !rightClicked)
+        {
+            // FROM THE BAG, or off the doll. Picking a worn piece up and dropping it on the bag is the
+            // drag path's TAKE OFF, and picking one out of the bag and dropping it on its slot is the
+            // equip — the two gestures the third column's buttons were the only way to reach.
+            for (var vis = 0; vis < InvCols * InvRows && _carryId is null; vis++)
+            {
+                var idx = _invScroll * InvCols + vis;
+                if (idx >= list.Count) break;
+                if (!InvCellRect(vis).Contains(hit)) continue;
+                _carryId = list[idx].InstanceId;
+                _carryFromRect = InvCellRect(vis);
+                _carryFromSlot = null;
+                _carryFrom = hit;
+                _carryMoved = false;
+            }
+            foreach (var (slot, _, col, row) in SlotLayout)
+            {
+                if (_carryId is not null || !SlotRect(col, row).Contains(hit)) continue;
+                if (hunter.Worn(slot) is not { } wornPick) continue;
+                _carryId = wornPick.InstanceId;
+                _carryFromRect = SlotRect(col, row);
+                _carryFromSlot = slot;
+                _carryFrom = hit;
+                _carryMoved = false;
+            }
         }
 
         if (rightClicked)
@@ -527,7 +677,20 @@ public sealed class GearScreen
                 // The equip itself is the cue's moment; the slot pulse and the power tick follow from the
                 // diff, not from here. A press on CANNOT WEAR is a refusal, and a refusal is heard (§86).
                 if (IsWorn(hunter, sel) && Gear.SlotFor(sel.BaseType) is { } ws) { hunter.Unequip(ws); Dirty = true; _feedback.Cue("sfx_equip"); }
-                else if (!IsWorn(hunter, sel) && CanWearNow(sel)) { hunter.Equip(sel); Dirty = true; _feedback.Cue("sfx_equip"); }
+                else if (!IsWorn(hunter, sel) && CanWearNow(sel))
+                {
+                    // FROM THE CELL IT IS SITTING IN, so the button's equip animates like the drag's.
+                    var cellFrom = Rectangle.Empty;
+                    for (var vis = 0; vis < InvCols * InvRows; vis++)
+                    {
+                        var idx = _invScroll * InvCols + vis;
+                        if (idx < list.Count && list[idx].InstanceId == sel.InstanceId) { cellFrom = InvCellRect(vis); break; }
+                    }
+                    hunter.Equip(sel);
+                    if (Gear.SlotFor(sel.BaseType) is { } into) ArmFlight(sel, cellFrom, into);
+                    Dirty = true;
+                    _feedback.Cue("sfx_equip");
+                }
                 else _feedback.Cue("sfx_error");
                 return;
             }
@@ -566,6 +729,40 @@ public sealed class GearScreen
         // PRESSED is not an event but a HELD button, and the rig has no hands: this holds it down for the
         // whole run, and RH_SHOT_PAGE_MOUSE says what it is held over.
         if (kind == "press") { UiKit.MouseHeld = true; return; }
+        // A DRAG IS A STATE NO CAPTURE COULD POSE, and a state no capture can pose has never been looked
+        // at — which is how every wrong UI state in this project has been found. This holds the first
+        // wearable bag piece in the hand, already past the slop, so the shutter sees the ghost, the lit
+        // target slot and the dimmed cell it came out of. RH_SHOT_PAGE_MOUSE says where the hand is.
+        if (kind == "drag")
+        {
+            var first = Wearable().FirstOrDefault(i => Gear.SlotFor(i.BaseType) is not null && CanWearNow(i));
+            if (first is null || Gear.SlotFor(first.BaseType) is not { } goesTo) return;
+            var list = Filtered(hunter);
+            // HELD, or the lifecycle clears the hand on its own next line: the rig has no buttons, and a
+            // carry with the mouse up is a carry that has just been dropped.
+            UiKit.MouseHeld = true;
+            _carryId = first.InstanceId;
+            _selectedId = first.InstanceId;
+            _carryFromSlot = null;
+            _carryMoved = true;
+            for (var vis = 0; vis < InvCols * InvRows; vis++)
+            {
+                var idx = _invScroll * InvCols + vis;
+                if (idx < list.Count && list[idx].InstanceId == first.InstanceId) { _carryFromRect = InvCellRect(vis); break; }
+            }
+            // ...and the hand is put over the slot this piece actually belongs in, so the pose shows the
+            // lit target rather than needing the caller to compute a rectangle the screen owns.
+            // ...and unless the caller has aimed the pointer itself (RH_SHOT_PAGE_MOUSE), the hand is put
+            // over the slot this piece belongs in, so the pose shows the lit target without the caller
+            // having to compute a rectangle the screen owns. With a page mouse given, the rig wins: that
+            // is how a MID-FLIGHT frame — ghost between the bag and the doll — is photographed at all.
+            if (Environment.GetEnvironmentVariable("RH_SHOT_PAGE_MOUSE") is not { Length: > 0 })
+            {
+                var seat = SlotLayout.First(l => l.Slot == goesTo);
+                _devDragAt = SlotRect(seat.Column, seat.Row).Center;
+            }
+            return;
+        }
         if (!_devPosePrepared)
         {
             _devPosePrepared = true;
@@ -727,6 +924,9 @@ public sealed class GearScreen
             // the doll's footer. The strip is inside the EQUIPPED panel the card already floats over.
             ItemTooltip.Draw(_ui, b, hov, hunter, _hoveredAt, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), UiKit.Page.Height), Character);
         else if (_tip is { } tip && _menuItemId is null) _ui.HoverTip(b, tip, _tipAt);
+        // LAST, over every panel: the piece in the hand must never slide behind the column it is being
+        // carried between, and the flight crosses two panels by definition.
+        DrawCarriedGear(b, hunter);
         if (DevGearDebug) DrawDebug(b, hunter);
     }
 
@@ -785,6 +985,66 @@ public sealed class GearScreen
         // is open (a card over a menu), so a Tip() on this row would have been a reason nobody ever saw —
         // and this menu is the last thing drawn, so the card belongs on top of it.
         if (lockedWhy is { } lw) _ui.HoverTip(b, lw, lockedRow);
+    }
+
+    /// <summary>The item currently in hand, resolved live off the bag or the doll.</summary>
+    /// <remarks>
+    /// By ID rather than by reference: a merge, a salvage or a champion switch can retire the object
+    /// mid-drag, and a stale reference would draw a piece that no longer exists and then equip it.
+    /// </remarks>
+    private ItemInstance? CarriedItem(Hunter hunter)
+        => _carryId is null ? null
+           : Wearable().FirstOrDefault(i => i.InstanceId == _carryId)
+             ?? AllSlots.Select(hunter.Worn).FirstOrDefault(w => w?.InstanceId == _carryId);
+
+    /// <summary>
+    /// The piece under the hand, and the piece flying to the slot it was just put in.
+    /// </summary>
+    /// <remarks>
+    /// Drawn after every panel so neither is ever behind one. The flight is the answer to "there should
+    /// be an equipped effect and animation": the object LEAVES the bag and ARRIVES on the doll, on an
+    /// arc, shrinking into the slot, and the slot flares as it lands. Without it the piece teleported
+    /// and the only feedback was a number changing in another column.
+    /// </remarks>
+    private void DrawCarriedGear(SpriteBatch b, Hunter hunter)
+    {
+        if (Dragging && CarriedItem(hunter) is { } held)
+        {
+            var side = SlotBox * 4 / 5;
+            var g = new Rectangle(_carryAt.X - side / 2, _carryAt.Y - side / 2, side, side);
+            _ui.Fill(b, new Rectangle(g.X + 5, g.Y + 6, g.Width, g.Height), new Color(0, 0, 0) * 0.45f);
+            _ui.Plate(b, g);
+            _ui.Fill(b, new Rectangle(g.X, g.Y, 5, g.Height), RarityColor(held.Rarity));
+            _forge.DrawItemIcon(b, held, Shrink(g, UiMetrics.Space(6)));
+            Ring(b, g, RarityColor(held.Rarity), 2);
+        }
+
+        if (_flight is not { } f || UiMotion.Reduced) return;
+        var p = UiMotion.Pulse(FlightKey);
+        if (p <= 0f) { _flight = null; return; }
+
+        // 0 at the launch, 1 on arrival. Eased so it leaves fast and settles, which is what a thing
+        // being PUT somewhere looks like, and lifted through an arc so it travels rather than slides.
+        var t = UiMotion.Smooth(1f - p);
+        var arc = MathF.Sin(t * MathF.PI) * f.From.Height * 0.55f;
+        var w = (int)MathHelper.Lerp(f.From.Width, f.To.Width, t);
+        var cx = MathHelper.Lerp(f.From.Center.X, f.To.Center.X, t);
+        var cy = MathHelper.Lerp(f.From.Center.Y, f.To.Center.Y, t) - arc;
+        var box = new Rectangle((int)cx - w / 2, (int)cy - w / 2, w, w);
+        var tint = RarityColor(f.Item.Rarity);
+        // A TRAIL: three ghosts along the path behind it, fading. Cheap, and it turns a moving square
+        // into something with speed.
+        for (var k = 1; k <= 3; k++)
+        {
+            var tk = Math.Max(0f, t - k * 0.07f);
+            var ak = MathF.Sin(tk * MathF.PI) * f.From.Height * 0.55f;
+            var wk = (int)MathHelper.Lerp(f.From.Width, f.To.Width, tk);
+            var bx = (int)MathHelper.Lerp(f.From.Center.X, f.To.Center.X, tk) - wk / 2;
+            var by = (int)(MathHelper.Lerp(f.From.Center.Y, f.To.Center.Y, tk) - ak) - wk / 2;
+            _ui.Fill(b, new Rectangle(bx, by, wk, wk), tint * (0.16f * (1f - k / 4f)));
+        }
+        _forge.DrawItemIcon(b, f.Item, box);
+        Ring(b, box, tint, 2);
     }
 
     // ── EQUIPPED: the one ornate surface — who, what they wear, what it adds up to, two actions. ──────────
@@ -863,6 +1123,12 @@ public sealed class GearScreen
             var worn = hunter.Worn(slot);
             // A worn slot is a control (it selects); an empty one is not, and stays quiet under the pointer (§50).
             var hot = worn is not null && box.Contains(hit);
+            // ...but while something is IN HAND every slot is a target, empty or not, because the whole
+            // question the drag answers is "where does this go".
+            var carried = Dragging ? CarriedItem(hunter) : null;
+            var fits = carried is not null && Gear.SlotFor(carried.BaseType) == slot && CanWearNow(carried);
+            var overSlot = Dragging && box.Contains(_carryAt);
+            var liftedOut = Dragging && _carryFromSlot == slot;
             var selected = worn is not null && worn.InstanceId == _selectedId;
             var lift = UiMotion.Ease(UiMotion.KeyOf(box), hot ? 1f : 0f);
             var pressed = hot && UiKit.MouseHeld;
@@ -895,8 +1161,19 @@ public sealed class GearScreen
                 emptyInRing = _ui.MeasureBig("EMPTY", UiTypography.Caption) <= box.Width - rim * 2;
                 if (emptyInRing) _ui.TextCenterBig(b, "EMPTY", box.Center.X, box.Center.Y - UiTypography.Caption / 2, UiInk.Empty, UiTypography.Caption);
             }
+            // THE SLOT THIS PIECE BELONGS IN LIGHTS THE MOMENT IT LEAVES THE BAG, before the pointer
+            // ever reaches it — so the drag says where to go rather than waiting to be guessed at. The
+            // one under the pointer lights harder; every other slot goes quiet so the answer is single.
+            if (Dragging && carried is not null)
+            {
+                if (fits) _ui.Fill(b, box, Gold * (overSlot ? 0.24f : 0.10f));
+                if (fits && overSlot) Ring(b, box, Gold, 3);
+                else if (overSlot) Ring(b, box, UiInk.Danger, 3);   // dropped here it would be refused, and says so
+            }
+            if (liftedOut) _ui.Fill(b, box, new Color(0x0B, 0x09, 0x08) * 0.55f);
+
             if (selected) Ring(b, box, Gold, 3);   // gold = selected
-            else if (lift > 0f) Ring(b, box, Slate * lift, 2);
+            else if (lift > 0f && !Dragging) Ring(b, box, Slate * lift, 2);
             // JUST EQUIPPED (§49): one gold pulse on the slot the piece landed in — a fading wash inside the
             // ring and a halo outside it, which steps out as it fades (a fade alone under Reduced Motion).
             if (pulse > 0f)
@@ -1036,7 +1313,7 @@ public sealed class GearScreen
             // and says who can wear it on the hover card (§29).
             var lift = UiMotion.Ease(UiMotion.KeyOf(cell), hot ? 1f : 0f);
             var pressed = hot && UiKit.MouseHeld;
-            if (lift > 0f && !sel) _ui.Fill(b, cell, CellHot * lift);
+            if (lift > 0f && !sel && !Dragging) _ui.Fill(b, cell, CellHot * lift);
             var drop = pressed ? 2 : 0;
             _forge.DrawItemIcon(b, item, new Rectangle(cell.X + iconInset, cell.Y + iconInset + drop, cell.Width - iconInset * 2, cell.Height - iconInset * 2));
             if (pressed) _ui.Fill(b, Shrink(cell, 5), Color.Black * 0.18f);
@@ -1055,6 +1332,10 @@ public sealed class GearScreen
             var better = wearable && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is { } wornPiece
                          && (bs == GearSlot.Weapon ? WeaponDps(hunter, item) > WeaponDps(hunter, wornPiece) * 1.005f
                                                     : hunter.PowerContribution(item) > hunter.PowerContribution(wornPiece));
+            // THE CELL THE PIECE WAS LIFTED OUT OF GOES DARK — over the icon, not under it, or the veil
+            // is a shade behind a picture that is still at full brightness and the item reads as being
+            // in two places at once, which is what makes a drag look like a copy.
+            if (Dragging && item.InstanceId == _carryId) _ui.Fill(b, Shrink(cell, 2), new Color(0x0B, 0x09, 0x08) * 0.62f);
             if (better) Ring(b, Shrink(cell, 3), new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
             if (sel) { Ring(b, cell, Gold, 3); Ring(b, Shrink(cell, 3), new Color(0x16, 0x11, 0x10, 0x88), 1); }   // gold = selected
             else if (lift > 0f) Ring(b, cell, Slate * lift, 2);
@@ -1067,11 +1348,28 @@ public sealed class GearScreen
 
         if (list.Count == 0)
         {
-            var ey = InvTop + UiMetrics.Space(40);
-            _ui.TextBig(b, total == 0 ? "NOTHING IN THE BAG" : "NOTHING IN THIS FILTER", InvX, ey, UiInk.Empty, UiTypography.Headline);
-            ey += UiTypography.Pitch(UiTypography.Headline);
+            // ── AN EMPTY GRID'S MESSAGE BELONGS IN THE MIDDLE OF THE EMPTY GRID. ──────────────────
+            //
+            // It was pinned to the column's left edge, forty pixels under the tabs — the position a
+            // FIRST ROW would occupy. So the one moment the panel has no rows, it drew a heading where
+            // row one goes and left the other nine tenths of the column blank beneath it, which reads
+            // as a loading state rather than as an answer (playtest 2026-09-09: "move NOTHING IN THIS
+            // FILTER to the exact centre").
+            //
+            // Centred on the GRID, not on the panel: the grid is what is empty, and it is the region
+            // the tabs above and the footer below already bracket. Measured from the same three rungs
+            // the block is drawn in, so it stays centred at every density profile.
+            var head = total == 0 ? "NOTHING IN THE BAG" : "NOTHING IN THIS FILTER";
             var why = total == 0 ? "CHESTS DROP GEAR — BOSSES DROP CHESTS, AND THE VAULT OPENS THEM." : "TRY ANOTHER TAB, OR THE ALL TAB.";
-            foreach (var l in _ui.WrapBig(why, InvW, UiTypography.Body)) { _ui.TextBig(b, l, InvX, ey, Slate, UiTypography.Body); ey += UiTypography.Pitch(UiTypography.Body); }
+            var lines = _ui.WrapBig(why, InvW, UiTypography.Body).ToList();
+            var blockH = UiTypography.Pitch(UiTypography.Headline) + lines.Count * UiTypography.Pitch(UiTypography.Body);
+            var gridTop = InvTop;
+            var gridBottom = InvFooterTop - UiMetrics.Space(12);
+            var ey = gridTop + Math.Max(0, (gridBottom - gridTop - blockH) / 2);
+            var cx = InvX + InvW / 2;
+            _ui.TextCenterBig(b, head, cx, ey, UiInk.Empty, UiTypography.Headline);
+            ey += UiTypography.Pitch(UiTypography.Headline);
+            foreach (var l in lines) { _ui.TextCenterBig(b, l, cx, ey, Slate, UiTypography.Body); ey += UiTypography.Pitch(UiTypography.Body); }
         }
 
         // The footer. The four verbs are named in the inspector now, so this says only what the order is.

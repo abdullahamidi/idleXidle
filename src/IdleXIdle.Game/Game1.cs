@@ -5906,78 +5906,136 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawWelcomePanel()
     {
         if (_welcome is not { } w) { _showWelcome = false; return; }
-        // THE ACCOUNT, IN SENTENCES. The rows of figures are still there under it — a player who wants
-        // the numbers gets the numbers — but the panel now opens by telling them what happened.
-        var story = w.Story();
-        var hunt = w.HuntParts();
-        var warren = w.WarrenParts();
-        // The panel's width follows the profile so the wrapped lines keep their length; its height is
-        // its lines. The inset is the frame's own (PanelPadX): the corner ornament reaches that far.
+
+        // ── A RESULTS SCREEN, NOT A REPORT. ──────────────────────────────────────────────────────
+        //
+        // Playtest 2026-09-09: "you have written the resources and statistics on the Welcome Back panel
+        // as flat text — make them iconed and like a results screen; we are not telling a story." The
+        // panel had tried prose twice: a run of joined fragments, and then six narrated sentences over
+        // the top of them. Both make the reader parse a sentence to find a number.
+        //
+        // Now every figure is a TILE — picture, figure, word — laid on a grid, which is the shape every
+        // end-of-run screen in the genre uses because it can be read at a glance and in any order. The
+        // figures and their words are Core's (WelcomeSummary.HuntTiles / WarrenTiles, which omit a zero
+        // rather than printing one); the only thing decided here is which picture goes with which.
+        var hunt = w.HuntTiles();
+        var warren = w.WarrenTiles();
+        var resume = w.ResumeLine();
+
         var width = Math.Min(UiMetrics.Control(WelcomeWidth), UiKit.Page.Width - UiMetrics.Space(40) * 2);
         const int pad = UiTypography.PanelPadX;
         var cw = width - pad * 2;
-        var huntLines = hunt.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", hunt), cw, UiTypography.Body) : Array.Empty<string>();
-        var warrenLines = warren.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", warren), cw, UiTypography.Body) : Array.Empty<string>();
-        var rowGap = UiMetrics.Space(12);
-        int RowH(IReadOnlyList<string> lines) => lines.Count == 0 ? 0
-            : UiTypography.Pitch(UiTypography.Secondary) + lines.Count * UiTypography.Pitch(UiTypography.Body) + rowGap;
-        var button = UiMetrics.Control(56);
-        // THE CAMP'S SENTENCE, when the absence outran what the camp holds — the one line that says why
-        // a long night paid like a short one, and what buys more (OfflineCamp, 2026-09-06).
+
+        // THE GRID. Three across is the widest that keeps a tile square-ish at every profile; a row that
+        // does not fill centres, so two tiles never read as one tile and a hole.
+        const int cols = 3;
+        var gap = UiMetrics.Space(10);
+        var tileW = (cw - gap * (cols - 1)) / cols;
+        var tileH = WelcomeTileH;
+        int GridH(int count) => count == 0 ? 0 : ((count + cols - 1) / cols) * (tileH + gap) - gap;
+
         var campLines = w.CampLine() is { } campLine ? _ui.WrapBig(campLine, cw, UiTypography.Secondary) : Array.Empty<string>();
-        var campH = campLines.Count == 0 ? 0 : campLines.Count * UiTypography.Pitch(UiTypography.Secondary) + rowGap;
-        // Every story sentence is MEASURED into the height, never assumed: this panel has no scrollbar
-        // and its frame is drawn from the height, so a line that did not fit would print through the
-        // ornament (the CHEST FILTER's own lesson, one commit earlier).
-        var storyLines = new List<string>();
-        foreach (var line in story) storyLines.AddRange(_ui.WrapBig(line, cw, UiTypography.Body));
-        var storyH = storyLines.Count == 0 ? 0 : storyLines.Count * UiTypography.Pitch(UiTypography.Body) + rowGap;
-        var resume = w.ResumeLine();
-        var resumeH = resume is null ? 0 : UiTypography.Pitch(UiTypography.Headline) + rowGap;
-        var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14)
-                + storyH + resumeH + RowH(huntLines) + RowH(warrenLines) + campH + UiMetrics.Space(16) + button + pad;
+        var campH = campLines.Count == 0 ? 0 : campLines.Count * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10);
+        var headRow = UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
+        var button = UiMetrics.Control(56);
+        var resumeH = resume is null ? 0 : UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(10);
+
+        // Measured, never assumed: this panel has no scrollbar and its frame is cut from the height, so
+        // a block that did not fit would print straight through the ornament.
+        var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(10)
+                + (hunt.Count > 0 ? headRow + GridH(hunt.Count) + UiMetrics.Space(16) : 0)
+                + (warren.Count > 0 ? headRow + GridH(warren.Count) + UiMetrics.Space(16) : 0)
+                + campH + resumeH + button + pad;
         var r = new Rectangle(UiKit.PageCenterX - width / 2, (UiKit.Page.Height - h) / 2 - UiMetrics.Space(40), width, h);
 
         _ui.Fill(_batch, UiKit.Page, new Color(0x0B, 0x09, 0x08) * 0.55f);
         _ui.Panel(_batch, r);   // gold: this is a modal, and the one thing on screen
         var x = r.X + pad;
         var y = r.Y + UiTypography.ModalTitleTop;
-        // Centred, in the same face and rung as SETTINGS and CONTROLS: three modals, one title grammar (chrome-16).
-        _ui.TextCenterBig(_batch, "WELCOME BACK", r.Center.X, y, Gold, UiTypography.PanelTitle);
-        y += UiTypography.Pitch(UiTypography.PanelTitle);
-        _ui.TextBig(_batch, $"AWAY {WelcomeSummary.AwayText(w.AwaySeconds)}", x, y, Bone, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14);
 
-        void Row(string label, IReadOnlyList<string> lines)
+        // THE TITLE CARRIES THE ABSENCE. It used to be its own Headline line underneath, spending a
+        // whole row on two words and a duration; joined, the panel answers "how long was I gone" in the
+        // place a reader already looks first.
+        _ui.TextCenterBig(_batch, $"WELCOME BACK  ·  AWAY {WelcomeSummary.AwayText(w.AwaySeconds)}",
+                          r.Center.X, y, Gold, UiTypography.PanelTitle);
+        y += UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(10);
+
+        void Grid(string head, IReadOnlyList<WelcomeTile> tiles)
         {
-            if (lines.Count == 0) return;
-            _ui.TextBig(_batch, label, x, y, Slate, UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary);
-            foreach (var line in lines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
-            y += rowGap;
+            if (tiles.Count == 0) return;
+            _ui.TextBig(_batch, head, x, y, Slate, UiTypography.Secondary);
+            y += headRow;
+            for (var i = 0; i < tiles.Count; i++)
+            {
+                var row = i / cols;
+                var inRow = Math.Min(cols, tiles.Count - row * cols);
+                // A SHORT LAST ROW CENTRES rather than hugging the left edge, so the block reads as one
+                // shape. Two tiles pinned left under three read as a third tile that failed to draw.
+                var rowW = inRow * tileW + (inRow - 1) * gap;
+                var x0 = x + (cw - rowW) / 2;
+                DrawWelcomeTile(tiles[i], new Rectangle(x0 + i % cols * (tileW + gap), y + row * (tileH + gap), tileW, tileH));
+            }
+            y += GridH(tiles.Count) + UiMetrics.Space(16);
         }
-        foreach (var line in storyLines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
-        if (storyLines.Count > 0) y += rowGap;
 
-        // WHERE IT PICKS UP. Gold and at the Headline rung, because it is the one line on this panel
-        // about what happens next — and because a resume nobody is told about is a resume nobody sees.
+        Grid("THE HUNT", hunt);
+        Grid("THE WARREN", warren);
+
+        foreach (var line in campLines) { _ui.TextBig(_batch, line, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+        if (campLines.Count > 0) y += UiMetrics.Space(10);
+
+        // WHERE IT PICKS UP — the one line about what happens NEXT rather than about what happened, so
+        // it sits directly over the button that does it.
         if (resume is not null)
-        {
-            _ui.TextBig(_batch, resume, x, y, Gold, UiTypography.Headline);
-            y += UiTypography.Pitch(UiTypography.Headline) + rowGap;
-        }
-
-        Row("HUNT", huntLines);
-        void CampRow()
-        {
-            foreach (var line in campLines) { _ui.TextBig(_batch, line, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
-            if (campLines.Count > 0) y += rowGap;
-        }
-        Row("WARREN", warrenLines);
-        CampRow();
+            _ui.TextCenterBig(_batch, resume, r.Center.X, y, Gold, UiTypography.Headline);
 
         var btn = new Rectangle(x, r.Bottom - pad - button, cw, button);
         if (_ui.Button(_batch, btn, "CONTINUE", ChromeMouse, _clicked, true, ButtonStyle.Primary)) _showWelcome = false;
+    }
+
+    /// <summary>A return tile's height: an icon box, the figure, and the word under it, at the profile.</summary>
+    private static int WelcomeTileH
+        => UiMetrics.Space(12) + UiMetrics.Control(40) + UiMetrics.Space(6)
+           + UiTypography.Pitch(UiTypography.PrimaryValue) + UiTypography.Pitch(UiTypography.Caption) + UiMetrics.Space(8);
+
+    /// <summary>
+    /// One tile on the return screen: the picture, the figure, the word.
+    /// </summary>
+    /// <remarks>
+    /// The picture is chosen HERE and nowhere else — Core hands over a <see cref="WelcomeFigure"/> and
+    /// knows nothing about textures. Every key below is an asset that carries a real symbol, checked by
+    /// eye rather than assumed: the crossed blades for waves held, the coin for Gleam, a skull for a
+    /// boss, the broken disc for a fall, the map's star for depth, and the three material glyphs the
+    /// currency pills already use — so a resource looks the same here as it does everywhere else.
+    /// </remarks>
+    private void DrawWelcomeTile(WelcomeTile tile, Rectangle box)
+    {
+        var (key, tint) = tile.Figure switch
+        {
+            WelcomeFigure.Waves => ("nav_hunt_128", Bone),
+            WelcomeFigure.Gleam => ("ui_gleam_coin", Gold),
+            WelcomeFigure.Bosses => ("icon_trait_t_carrion_weight", Bone),
+            WelcomeFigure.Deepest => ("nav_relics_128", Bone),
+            WelcomeFigure.Falls => ("icon_effect_break", UiInk.Danger),
+            WelcomeFigure.Dust => ("ui_memory_dust", new Color(0x9E, 0x86, 0xFF)),
+            WelcomeFigure.Scrap => ("mat_scrap", new Color(0x9A, 0xC0, 0x88)),
+            WelcomeFigure.Essence => ("mat_essence", new Color(0x6E, 0xC8, 0x7A)),
+            _ => ("", Bone),
+        };
+
+        _ui.Plate(_batch, box);
+        var edge = UiMetrics.Control(40);
+        var icon = new Rectangle(box.Center.X - edge / 2, box.Y + UiMetrics.Space(12), edge, edge);
+        // A MISSING TEXTURE DOES NOT LEAVE A HOLE. Icon returns false when the key resolves to nothing,
+        // and a tile with no picture is still a figure and a word — the house rule for every glyph draw.
+        if (!_ui.Icon(_batch, key, icon, Color.White)) _ui.Diamond(_batch, icon, tint * 0.7f);
+
+        var vy = icon.Bottom + UiMetrics.Space(6);
+        // THE FIGURE IS THE LOUDEST THING ON THE TILE, at the rung the game reserves for a headline
+        // number: this panel exists to be read at a glance after a night away.
+        _ui.TextCenterBig(_batch, tile.Value, box.Center.X, vy, tint, UiTypography.PrimaryValue);
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(tile.Label, box.Width - UiMetrics.Space(8), UiTypography.Caption),
+                          box.Center.X, vy + UiTypography.Pitch(UiTypography.PrimaryValue), Slate, UiTypography.Caption);
     }
 
     // ── THE BAND UNDER A MENU SCREEN'S TITLE STRIP ─────────────────────────────────────────────
@@ -7139,11 +7197,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
         sy += f.TogglePitch;
         changed |= ToggleRow("RED FLASH", f.RightX, sy, f.RightW, ref _showScreenFlash, rowClick);
         sy += f.TogglePitch;
-        var reduced = ReducedMotion;
-        changed |= ToggleRow("REDUCED MOTION", f.RightX, sy, f.RightW, ref reduced, rowClick);
-        if (reduced != ReducedMotion) ReducedMotion = reduced;
+        // ── EVERY SWITCH IN THIS COLUMN POINTS THE SAME WAY. ─────────────────────────────────────
+        //
+        // Four of the five read "ON = you get this", and REDUCED MOTION read "ON = you get LESS", so
+        // the column's honest maximum was four ONs and an OFF and its honest minimum was four OFFs and
+        // an ON. Playtest 2026-09-09: "everything is ON but reduced motion is OFF — when I want it all
+        // I turn everything ON, when I want none I turn everything OFF. Something there is illogical."
+        //
+        // The switch is named for the thing it grants rather than for the thing it withholds, so ON is
+        // ON down the whole column. The SETTING behind it is untouched — DisplaySettings still persists
+        // `motion=0|1` as REDUCED MOTION, and Game1.ReducedMotion is still the flag every screen reads —
+        // because inverting a saved value would silently flip the preference of every player who has
+        // already set one. Only the label and its sense are inverted, here, at the one place it is read
+        // by a human.
+        var motionOn = !ReducedMotion;
+        changed |= ToggleRow("INTERFACE MOTION", f.RightX, sy, f.RightW, ref motionOn, rowClick);
+        if (motionOn == ReducedMotion) ReducedMotion = !motionOn;
         if (changed) SaveDisplay();
-        _ui.TextBig(_batch, "REDUCED MOTION HOLDS IDLE ANIMATIONS STILL", f.RightX, f.AccessCaptionY + dy,
+        _ui.TextBig(_batch, "TURN INTERFACE MOTION OFF TO HOLD IDLE ANIMATIONS STILL", f.RightX, f.AccessCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
         if (f.Scrolls)

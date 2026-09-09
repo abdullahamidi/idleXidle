@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using IdleXIdle.Core.Expeditions;
@@ -26,6 +26,40 @@ namespace IdleXIdle.Core.Progression;
 /// <param name="Hunt">What the hunter earned and did while away.</param>
 /// <param name="Warren">What the Warren produced while away — default when it is not open yet.</param>
 /// <param name="WarrenOpen">Whether the Warren exists for this player; a closed Warren has no row.</param>
+/// <summary>WHICH figure a return tile carries. The screen maps this to a picture; Core never sees one.</summary>
+public enum WelcomeFigure
+{
+    /// <summary>Waves the absence held.</summary>
+    Waves,
+
+    /// <summary>Gleam earned — by the hunt, or by the camp.</summary>
+    Gleam,
+
+    /// <summary>Bosses felled.</summary>
+    Bosses,
+
+    /// <summary>The deepest wave the absence stood on.</summary>
+    Deepest,
+
+    /// <summary>How many times the champion fell. The one figure here that is not a gain.</summary>
+    Falls,
+
+    /// <summary>Memory Dust the camp produced.</summary>
+    Dust,
+
+    /// <summary>Scrap the camp produced.</summary>
+    Scrap,
+
+    /// <summary>Essence the camp produced.</summary>
+    Essence,
+}
+
+/// <summary>One tile on the return screen: what it is, the figure, and the word under it.</summary>
+/// <param name="Figure">What this tile counts — the screen picks the icon from it.</param>
+/// <param name="Value">The figure, already grouped and locale-independent.</param>
+/// <param name="Label">The word under the figure, singular or plural to match it.</param>
+public readonly record struct WelcomeTile(WelcomeFigure Figure, string Value, string Label);
+
 public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Result Hunt, WarrenYield Warren, bool WarrenOpen,
                                              double CampSeconds = -1, long HuntGleamPaid = -1)
 {
@@ -52,18 +86,58 @@ public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Res
         return rest > 0 ? $"{days} DAY{(days == 1 ? "" : "S")} {rest}h" : $"{days} DAY{(days == 1 ? "" : "S")}";
     }
 
-    /// <summary>The HUNT row's parts, non-zero only, in the order they matter: Gleam, waves, falls, deepest.</summary>
-    public IReadOnlyList<string> HuntParts()
+    /// <summary>
+    /// THE RETURN IS A RESULT, NOT A STORY — one figure per tile, and no tile for a zero.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest 2026-09-09: <i>"you have written the resources and statistics on the Welcome Back panel
+    /// as flat text. Make them iconed and like a results screen — we are not telling a story."</i> The
+    /// panel had been the other way twice over: first a run of joined fragments
+    /// ("+12,340 GLEAM · 86 WAVES CLEARED · FELL 4 TIMES"), then six narrated sentences stacked on top
+    /// of them. Both are prose about numbers, and prose is the slowest way to read a number.
+    /// </para>
+    /// <para>
+    /// So Core stops writing sentences and hands over the figures, each tagged with WHAT it is. The
+    /// screen owns the picture — an icon is presentation, and Core knows nothing about textures — but
+    /// the value, the label and the decision not to print a zero stay here, with every other figure in
+    /// this file. The narration and the joined hunt fragments were DELETED rather than left unread: the
+    /// thing this codebase punishes hardest is a function that still compiles and nothing calls.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<WelcomeTile> HuntTiles()
     {
-        var parts = new List<string>(4);
-        if (PaidGleam > 0) parts.Add($"+{N(PaidGleam)} GLEAM");
-        if (Hunt.WavesCleared > 0) parts.Add($"{N(Hunt.WavesCleared)} WAVE{(Hunt.WavesCleared == 1 ? "" : "S")} CLEARED");
-        if (Hunt.Falls > 0) parts.Add($"FELL {N(Hunt.Falls)} TIME{(Hunt.Falls == 1 ? "" : "S")}");
-        if (Hunt.DeepestWave > 0) parts.Add($"DEEPEST WAVE {N(Hunt.DeepestWave)}");
-        return parts;
+        var tiles = new List<WelcomeTile>(5);
+        if (Hunt.WavesCleared > 0) tiles.Add(new(WelcomeFigure.Waves, N(Hunt.WavesCleared), Hunt.WavesCleared == 1 ? "WAVE HELD" : "WAVES HELD"));
+        if (PaidGleam > 0) tiles.Add(new(WelcomeFigure.Gleam, N(PaidGleam), "GLEAM EARNED"));
+        if (Hunt.BossesFelled > 0) tiles.Add(new(WelcomeFigure.Bosses, N(Hunt.BossesFelled), Hunt.BossesFelled == 1 ? "BOSS FELLED" : "BOSSES FELLED"));
+        if (Hunt.DeepestWave > 0) tiles.Add(new(WelcomeFigure.Deepest, N(Hunt.DeepestWave), "DEEPEST WAVE"));
+        // FALLS LAST, and only when there were any. It is the one figure on the panel that is not a
+        // gain, and leading with it would make a good night read as a bad one.
+        if (Hunt.Falls > 0) tiles.Add(new(WelcomeFigure.Falls, N(Hunt.Falls), Hunt.Falls == 1 ? "FALL" : "FALLS"));
+        return tiles;
     }
 
-    /// <summary>The WARREN row's parts, non-zero only; empty when the Warren is not open.</summary>
+    /// <summary>The Warren's tiles — what the camp produced, one per resource, zeros omitted.</summary>
+    public IReadOnlyList<WelcomeTile> WarrenTiles()
+    {
+        var tiles = new List<WelcomeTile>(4);
+        if (!WarrenOpen) return tiles;
+        if (Warren.Gleam > 0) tiles.Add(new(WelcomeFigure.Gleam, N(Warren.Gleam), "GLEAM"));
+        if (Warren.Dust > 0) tiles.Add(new(WelcomeFigure.Dust, N(Warren.Dust), "MEMORY DUST"));
+        if (Warren.Scrap > 0) tiles.Add(new(WelcomeFigure.Scrap, N(Warren.Scrap), "SCRAP"));
+        if (Warren.Essence > 0) tiles.Add(new(WelcomeFigure.Essence, N(Warren.Essence), "ESSENCE"));
+        return tiles;
+    }
+
+    /// <summary>
+    /// The WARREN row as joined fragments — for the Warren screen's own one-line "while you were away".
+    /// </summary>
+    /// <remarks>
+    /// Kept as a sentence because its one consumer is a sentence: <c>WarrenScreen</c> prints it inline
+    /// under the camp's title, where a grid of tiles would be a second, competing summary of a panel the
+    /// player has just dismissed. The RETURN PANEL uses <see cref="WarrenTiles"/>.
+    /// </remarks>
     public IReadOnlyList<string> WarrenParts()
     {
         var parts = new List<string>(4);
@@ -73,48 +147,6 @@ public readonly record struct WelcomeSummary(double AwaySeconds, OfflineHunt.Res
         if (Warren.Scrap > 0) parts.Add($"+{N(Warren.Scrap)} SCRAP");
         if (Warren.Essence > 0) parts.Add($"+{N(Warren.Essence)} ESSENCE");
         return parts;
-    }
-
-    /// <summary>
-    /// WHAT THE HUNTER DID WHILE YOU WERE AWAY, in sentences — the return screen's narration.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Playtest 2026-09-09: <i>"The player should be greeted by a nice welcome back screen upon
-    /// relaunching the game, showing them what the hunter has been doing in this world while they were
-    /// away."</i> The panel had six lines maximum, every one of them a figure with a label — AWAY, then
-    /// "+12,340 GLEAM · 86 WAVES CLEARED · FELL 4 TIMES · DEEPEST WAVE 31". True, and not an account of
-    /// anything.
-    /// </para>
-    /// <para>
-    /// <b>Every line is still a figure the model actually produced</b> — the discipline this file was
-    /// written under, and the reason it has no NOTABLE block: offline does not level skills, drop items
-    /// or complete sets, and a line the model cannot back is a lie. These sentences add no facts. They
-    /// say the same numbers in the world's own voice, and a line whose figure is zero is not printed.
-    /// <see cref="HuntParts"/> and <see cref="WarrenParts"/> are untouched: their exact fragments are
-    /// pinned by tests, and the narration is built to sit around them rather than replace them.
-    /// </para>
-    /// </remarks>
-    public IReadOnlyList<string> Story()
-    {
-        var lines = new List<string>(6);
-        if (AwaySeconds > 0) lines.Add($"YOU WERE GONE {AwayText(AwaySeconds)}. THE HUNTER KEPT STANDING.");
-        if (Hunt.WavesCleared > 0)
-            lines.Add(PaidGleam > 0
-                          ? $"{N(Hunt.WavesCleared)} WAVE{(Hunt.WavesCleared == 1 ? "" : "S")} HELD. THE WORLD PAID {N(PaidGleam)} GLEAM FOR THEM."
-                          : $"{N(Hunt.WavesCleared)} WAVE{(Hunt.WavesCleared == 1 ? "" : "S")} HELD.");
-        if (Hunt.BossesFelled > 0)
-            lines.Add(Hunt.BossesFelled == 1
-                          ? "ONE OF THEM GATHERED INTO A SINGLE SHAPE. IT FELL TOO."
-                          : $"{N(Hunt.BossesFelled)} OF THEM GATHERED INTO SINGLE SHAPES. ALL OF THEM FELL.");
-        if (Hunt.Falls > 0)
-            lines.Add(Hunt.Falls == 1
-                          ? "IT FELL ONCE, AND THE WORLD PUT IT BACK."
-                          : $"IT FELL {N(Hunt.Falls)} TIMES, AND EACH TIME THE WORLD PUT IT BACK.");
-        if (Hunt.DeepestWave > 0) lines.Add($"DEEPEST IT STOOD: WAVE {N(Hunt.DeepestWave)}.");
-        if (WarrenOpen && WarrenParts().Count > 0)
-            lines.Add($"THE WARREN WORKED THROUGH ALL OF IT — {string.Join("  ·  ", WarrenParts())}.");
-        return lines;
     }
 
     /// <summary>Where the next descent picks up, or 0 when the absence ended on a fall.</summary>

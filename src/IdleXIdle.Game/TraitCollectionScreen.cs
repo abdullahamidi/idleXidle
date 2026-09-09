@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -45,6 +45,40 @@ public sealed class TraitCollectionScreen
 
     /// <summary>An unknown sigil's ink — dim, but never absent. A mystery must still read as a shape.</summary>
     private static readonly Color Unknown = new(0x6A, 0x64, 0x80);
+
+    // ── DRAG AND DROP ────────────────────────────────────────────────────────────────────────────
+    //
+    // Playtest 2026-09-09: "centre the trait slots, and add drag-and-drop placement." Wearing a trait
+    // was select-then-click-a-slot, which is two gestures for one intent and gives no answer to "which
+    // of the three am I replacing" until after it has happened. Dragging answers it while the hand is
+    // still moving: the slot under the cursor lights, and letting go is the commit.
+    //
+    // The click path is UNTOUCHED. It is the keyboard-and-one-button path, it is what the tour teaches,
+    // and a drag that replaced it would take the screen away from anyone who does not drag. The same
+    // ledger call is behind both.
+    //
+    // The lifecycle mirrors LoadoutScreen's carry exactly — press, slop, move, release — because a
+    // second grammar for the same gesture in the same game is how one of them ends up subtly wrong.
+
+    /// <summary>How far the pointer must travel before a press becomes a drag rather than a click.</summary>
+    private const int DragSlop = 4;
+
+    /// <summary>The trait in hand, or null. Set on the press, read by the ghost, spent on the release.</summary>
+    private string? _carryId;
+
+    /// <summary>Which worn slot it came out of, or -1 when it came from the collection.</summary>
+    private int _carryFromSlot = -1;
+
+    private Point _carryFrom;
+    private Point _carryAt;
+    private bool _carryMoved;
+    private bool _wasHeld;
+
+    /// <summary>Is a trait actually in flight? A press that never moved is still a click.</summary>
+    private bool Dragging => _carryId is not null && _carryMoved;
+
+    /// <summary>A slot that has just taken a trait — the one-shot the drop plays on it.</summary>
+    private static int TraitSlotKey(int slot) => HashCode.Combine("traits.slot.set", slot);
 
     private readonly UiKit _ui;
 
@@ -157,13 +191,19 @@ public sealed class TraitCollectionScreen
     /// <summary>A worn slot's side. The loudest tile on the screen, so the biggest.</summary>
     private static int WornSide => UiMetrics.Control(104);
 
-    /// <summary>One worn slot's square, counted from the left of the strip.</summary>
+    /// <summary>One worn slot's square, counted from the left of the CENTRED block of three.</summary>
+    /// <remarks>
+    /// <b>Centred since 2026-09-09</b>, on the designer's call: <i>"centre the trait slots on the trait
+    /// screen."</i> They were pinned hard left with a note explaining why — the eye read the title and
+    /// then crossed 420 px of black to find its subject. That reasoning was sound and the fix was the
+    /// wrong one: the title moved instead. It is centred over the block now, so the two are one shape
+    /// and there is no gap between them to travel.
+    /// </remarks>
     private static Rectangle WornSlot(int i)
     {
-        // LEFT-ALIGNED under the title, not centred in a 1150 px strip: the eye read the title, then
-        // travelled 420 px of black to find its subject (traits-11).
         var strip = WornStrip;
-        var x = strip.X + UiMetrics.Space(16);
+        var blockW = TraitCatalogue.SlotsPerCharacter * WornSide + (TraitCatalogue.SlotsPerCharacter - 1) * Gap;
+        var x = strip.X + (strip.Width - blockW) / 2;
         return new Rectangle(x + i * (WornSide + Gap), strip.Y, WornSide, WornSide);
     }
 
@@ -313,6 +353,48 @@ public sealed class TraitCollectionScreen
         ArgumentNullException.ThrowIfNull(ledger);
         Dirty = false;
 
+        // ── THE CARRY, RESOLVED BEFORE ANYTHING DRAWS. ───────────────────────────────────────────
+        //
+        // The drop is hit-tested against WornSlot and CollectionArea, which are arithmetic and do not
+        // need the frame to have been drawn — so the release is spent here rather than being latched
+        // for a later draw to find. A latched click that no draw spends is this codebase's own bug
+        // species, and it is exactly what the chest reveal had to be fixed for.
+        var worn0 = ledger.LoadoutOf(characterId);
+        var held = UiKit.MouseHeld;
+        var released = _wasHeld && !held;
+        _wasHeld = held;
+        _carryAt = mouse;
+        if (_carryId is not null && held
+            && (Math.Abs(mouse.X - _carryFrom.X) > DragSlop || Math.Abs(mouse.Y - _carryFrom.Y) > DragSlop))
+            _carryMoved = true;
+        if (released || !held)
+        {
+            if (released && _carryId is { } dropped && _carryMoved) DropTrait(ledger, characterId, dropped, _carryFromSlot, mouse);
+            _carryId = null;
+            _carryFromSlot = -1;
+            _carryMoved = false;
+        }
+        var pressed = held && _carryId is null && !released;
+
+        // ── A POSED DRAG, for the shutter. ───────────────────────────────────────────────────────
+        //
+        // A drag is a state the capture rig cannot reach — it has no hands — and a state no capture can
+        // pose is a state nobody has ever looked at. RH_SHOT_TRAIT_DRAG=<slot> holds the first awakened
+        // trait over that worn slot, already past the slop, so the ghost, the lit target and the dimmed
+        // tile it came from are all on one frame.
+        if (Environment.GetEnvironmentVariable("RH_SHOT_TRAIT_DRAG") is { Length: > 0 } dragTo
+            && int.TryParse(dragTo, out var dragSlot))
+        {
+            var pick = TraitCatalogue.All.FirstOrDefault(d => ledger.Has(d.Id) && !worn0.Contains(d.Id, StringComparer.Ordinal));
+            if (pick is not null)
+            {
+                _carryId = pick.Id;
+                _carryFromSlot = -1;
+                _carryMoved = true;
+                _carryAt = WornSlot(Math.Clamp(dragSlot, 0, TraitCatalogue.SlotsPerCharacter - 1)).Center;
+            }
+        }
+
         // The starfield behind it is the host's (bg_constellation) and it still works — §37 and §41
         // both say to keep it. A scrim over it, like every other menu screen, so text reads.
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD2));
@@ -339,25 +421,88 @@ public sealed class TraitCollectionScreen
         _ui.PanelQuiet(b, inspector);
 
         var worn = ledger.LoadoutOf(characterId);
-        DrawWorn(b, ledger, characterId, characterName, worn, mouse, clicked);
-        DrawCollection(b, ledger, characterId, worn, mouse, clicked, wheel);
+        DrawWorn(b, ledger, characterId, characterName, worn, mouse, clicked, pressed);
+        DrawCollection(b, ledger, characterId, worn, mouse, clicked, wheel, pressed);
         DrawInspector(b, ledger, characterId, worn, mouse, clicked);
+        DrawCarriedTrait(b);
+    }
+
+    /// <summary>
+    /// Put the trait in hand where it was dropped: into a worn slot, or back into the collection.
+    /// </summary>
+    /// <remarks>
+    /// The same <see cref="TraitLedger.EquipInto"/> the click path calls, so the two gestures cannot
+    /// diverge. A drop that lands on nothing is a CANCEL rather than an unequip — letting go over empty
+    /// space is what a person does when they change their mind, and reading it as "take it off" would
+    /// make the gesture unsafe. Taking one off is its own deliberate drop, back onto the collection it
+    /// came from.
+    /// </remarks>
+    private void DropTrait(TraitLedger ledger, string characterId, string traitId, int fromSlot, Point at)
+    {
+        for (var i = 0; i < TraitCatalogue.SlotsPerCharacter; i++)
+        {
+            if (!WornSlot(i).Contains(at)) continue;
+            if (ledger.EquipInto(characterId, i, traitId))
+            {
+                Dirty = true;
+                _selected = traitId;
+                _cue = "sfx_trait_lit";
+                UiMotion.Flash(TraitSlotKey(i), UiMotion.Reward);
+            }
+            else _cue = "sfx_error";
+            return;
+        }
+
+        // BACK INTO THE COLLECTION IS HOW YOU TAKE ONE OFF. It is the only unequip gesture on the
+        // screen — the click path has none, because a click on a worn slot READS it — and it is
+        // deliberate enough not to fire by accident.
+        if (fromSlot >= 0 && CollectionArea.Contains(at) && ledger.Unequip(characterId, traitId))
+        {
+            Dirty = true;
+            _cue = "sfx_click";
+        }
+    }
+
+    /// <summary>The trait under the cursor while it is in flight — a small plate with its sigil.</summary>
+    /// <remarks>
+    /// Drawn LAST, over the inspector, so the hand is never behind a panel. A ghost at half weight
+    /// rather than a full tile: it has to read as something being moved, not as a tile that has already
+    /// landed somewhere odd.
+    /// </remarks>
+    private void DrawCarriedTrait(SpriteBatch b)
+    {
+        if (!Dragging || TraitCatalogue.Find(_carryId!) is not { } def) return;
+        var side = WornSide * 3 / 4;
+        var r = new Rectangle(_carryAt.X - side / 2, _carryAt.Y - side / 2, side, side);
+        _ui.Fill(b, new Rectangle(r.X + 5, r.Y + 6, r.Width, r.Height), new Color(0, 0, 0) * 0.45f);
+        _ui.Plate(b, r, Gold);
+        Face(b, r, def.Id, Gold);
+        _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, r.Width + Gap, UiTypography.Caption),
+                          r.Center.X, r.Bottom + UiMetrics.Space(4), Bone, UiTypography.Caption);
     }
 
     private void DrawWorn(SpriteBatch b, TraitLedger ledger, string characterId, string characterName,
-                          IReadOnlyList<string> worn, Point mouse, bool clicked)
+                          IReadOnlyList<string> worn, Point mouse, bool clicked, bool pressed)
     {
         var board = Board;
         // A breath past the corner flourish, which points straight at the title's first letter on the
         // medium frame (traits-07).
-        _ui.TextBig(b, $"{characterName.ToUpperInvariant()} WEARS THREE",
-                    UiKit.ContentLeft(board) + UiMetrics.Space(16), UiKit.TitleTop(board), Bone, UiTypography.PanelTitle);
+        // OVER THE BLOCK IT DESCRIBES, now that the block is centred — see WornSlot.
+        _ui.TextCenterBig(b, $"{characterName.ToUpperInvariant()} WEARS THREE",
+                          WornStrip.Center.X, UiKit.TitleTop(board), Bone, UiTypography.PanelTitle);
 
         for (var i = 0; i < TraitCatalogue.SlotsPerCharacter; i++)
         {
             var slot = WornSlot(i);
             var id = i < worn.Count ? worn[i] : null;
             var hot = slot.Contains(mouse);
+            // THE SLOT THE DROP WOULD LAND IN, lit while the hand is still moving — the whole reason
+            // dragging beats select-then-click here is that it answers "which of the three am I
+            // replacing" BEFORE the replacing happens.
+            var target = Dragging && slot.Contains(_carryAt);
+            // ...and the one it came out of goes quiet, so the strip shows the move rather than showing
+            // the trait in two places at once.
+            var lifted = Dragging && _carryFromSlot == i;
 
             _ui.Plate(b, slot, id is null ? null : Gold);
             if (id is not null && TraitCatalogue.Find(id) is { } def)
@@ -375,7 +520,28 @@ public sealed class TraitCollectionScreen
                                   slot.Center.Y - UiTypography.Caption / 2, UiInk.Empty, UiTypography.Caption);
             }
 
-            if (hot) _ui.Fill(b, slot, Color.White * 0.05f);
+            if (hot && !Dragging) _ui.Fill(b, slot, Color.White * 0.05f);
+            if (lifted) _ui.Fill(b, slot, new Color(0x0B, 0x09, 0x08) * 0.55f);
+            if (target)
+            {
+                _ui.Fill(b, slot, Gold * 0.16f);
+                Outline(b, slot, Gold, 3);
+            }
+            // AND THE DROP ITSELF LANDS. A trait arriving in a slot flashes it gold over the reward
+            // beat: the gesture ends with something happening, which is the half a swap was missing.
+            if (UiMotion.Pulse(TraitSlotKey(i)) is var landed && landed > 0f && !UiMotion.Reduced)
+                Outline(b, slot, Gold * UiMotion.Smooth(landed), 3);
+
+            // A PRESS ON A WORN SLOT PICKS IT UP. It only becomes a drag once the pointer travels
+            // (DragSlop); short of that the click below still reads the slot, which is what it has
+            // always done.
+            if (pressed && hot && id is not null)
+            {
+                _carryId = id;
+                _carryFromSlot = i;
+                _carryFrom = mouse;
+                _carryMoved = false;
+            }
 
             if (UiKit.ClickedIn(slot, mouse, clicked))
             {
@@ -398,7 +564,7 @@ public sealed class TraitCollectionScreen
     }
 
     private void DrawCollection(SpriteBatch b, TraitLedger ledger, string characterId,
-                               IReadOnlyList<string> worn, Point mouse, bool clicked, int wheel)
+                               IReadOnlyList<string> worn, Point mouse, bool clicked, int wheel, bool pressed)
     {
         var board = Board;
         _ui.TextBig(b, "WHAT YOU HAVE AWAKENED", UiKit.ContentLeft(board),
@@ -458,6 +624,19 @@ public sealed class TraitCollectionScreen
             }
 
             if (picked) Outline(b, tile, Gold * 0.9f, 2);
+            // The tile in hand dims where it lies, for the same reason a lifted worn slot does.
+            if (Dragging && string.Equals(_carryId, def.Id, StringComparison.Ordinal) && _carryFromSlot < 0)
+                _ui.Fill(b, tile, new Color(0x0B, 0x09, 0x08) * 0.55f);
+
+            // A PRESS ON AN AWAKENED TILE PICKS IT UP. An undiscovered one cannot be carried — there is
+            // nothing to carry — and the click below still selects it to read.
+            if (pressed && hot && known)
+            {
+                _carryId = def.Id;
+                _carryFromSlot = -1;
+                _carryFrom = mouse;
+                _carryMoved = false;
+            }
 
             if (UiKit.ClickedIn(cell, mouse, clicked))
             {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using FontStashSharp;
@@ -38,14 +38,22 @@ public enum TextFace
 /// <b>THE TWO FACES</b> are art bible 7.1's requirement, which had no implementation:
 /// </para>
 /// <list type="bullet">
-/// <item><b>Data — IBM Plex Sans Condensed</b> (SIL OFL). Chosen on the bible's own two hard criteria.
-/// Its figures are TABULAR — all ten digits are 540 units wide, in all three weights — so a right-aligned
-/// column of 1,190 / 2,004 / 888 keeps its separators on one vertical line, and a number does not shift
-/// when it changes weight. This game is almost entirely number columns. Its digits are also
-/// unambiguous at small size (0/O, 1/l/I, 5/S, 8/B), the bible's second demand. And being CONDENSED it
-/// buys about 12% horizontal room over a normal-width grotesque at the same height — which is not a
-/// stylistic bonus but a direct fix for the truncation the layout has been fighting everywhere.
-/// <c>tools/check_font_digits.py</c> enforces the tabular rule so a future swap cannot quietly undo it.</item>
+/// <item><b>Data — Spectral</b> (SIL OFL, Production Type). A serif drawn for screen reading rather
+/// than adapted to it, which is what a game whose panels are half rules-text needs. It clears the
+/// bible's two hard criteria: its figures are TABULAR — every digit is 500/1000 units, in all three
+/// weights — so a right-aligned column of 1,190 / 2,004 / 888 keeps its separators on one vertical line
+/// and a number does not shift when it changes weight; and its digits stay unambiguous small (0/O,
+/// 1/l/I, 5/S, 8/B). <c>tools/check_font_digits.py</c> enforces the tabular rule so a future swap
+/// cannot quietly undo it.
+/// <para>
+/// <b>It replaced IBM Plex Sans Condensed on 2026-09-09</b>, on the designer's call: the condensed
+/// grotesque read as technical documentation rather than as this world. The trade was measured before
+/// it was made and is real — set in caps, Spectral runs about 22% wider than the condensed face and
+/// carries a 13% smaller x-height, so the swap is a layout event and not a skin. Its DIGITS are 7%
+/// NARROWER (0.500em against 0.540em), so the number columns the bible worries about got room rather
+/// than lost it, and the cost lands on long uppercase labels instead — which is where
+/// <see cref="UiKit.ShortenBig"/> and the row-fit gates already look.
+/// </para></item>
 /// <item><b>Display — Cinzel</b> (SIL OFL). Inscriptional Roman capitals — literally carved letterforms,
 /// which is what 7.1 asks the ceremony face for. It is used ONLY at title sizes, so its low small-size
 /// legibility costs nothing, and every title in this game is already set in caps, so its small-cap
@@ -53,7 +61,7 @@ public enum TextFace
 /// </list>
 /// <para>
 /// <b>Cinzel is loaded with the data face behind it in the same FontSystem</b>, which makes FontStashSharp
-/// resolve any glyph Cinzel lacks from Plex instead of drawing nothing. A display face has a narrow
+/// resolve any glyph Cinzel lacks from the data face instead of drawing nothing. A display face has a narrow
 /// character set, and a missing glyph in this engine is not a box — the text closes over the hole and
 /// reads as a different sentence, which is the exact failure <c>check_font_coverage.py</c> exists for.
 /// </para>
@@ -121,14 +129,14 @@ public sealed class SmoothFont
     {
         _fallback = fallback;
 
-        var data = ReadFace("IBMPlexSansCondensed-Regular") ?? ReadSystemFace();
+        var data = ReadFace("Spectral-Regular") ?? ReadSystemFace();
         if (data is null) { Loaded = false; return; }
 
         _regular = Systems(data);
         // A weight that did not ship falls back to the one below it, so a partial install degrades to
         // "less hierarchy" rather than to no text.
-        _semiBold = ReadFace("IBMPlexSansCondensed-SemiBold") is { } sb ? Systems(sb) : _regular;
-        _bold = ReadFace("IBMPlexSansCondensed-Bold") is { } bd ? Systems(bd) : _semiBold;
+        _semiBold = ReadFace("Spectral-SemiBold") is { } sb ? Systems(sb) : _regular;
+        _bold = ReadFace("Spectral-Bold") is { } bd ? Systems(bd) : _semiBold;
 
         // Cinzel first, the data face behind it: FontStashSharp resolves a glyph the display face lacks
         // from the fallback rather than drawing nothing at all.
