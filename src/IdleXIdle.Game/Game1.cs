@@ -404,6 +404,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // The VAULT's keep-filter — playthrough state, saved with the run (see VaultScreen.KeepMinTier).
     private int _chestKeepMinTier;
 
+    /// <summary>
+    /// Has the player ALLOWED the Warren's runners to sell low-grade gear out of an opened chest?
+    /// </summary>
+    /// <remarks>
+    /// The capability is unlocked by a Warren facility level; this is the consent. Off by default and
+    /// off for every existing save, because the rider used to arrive unannounced with an upgrade
+    /// bought for its output (playtest 2026-09-09: "it sold an item obtained from a chest even though
+    /// the item filter wasn't active").
+    /// </remarks>
+    private bool _autoSellOn;
+
     // ── THE WANDERING TRADER. Week + purchases persist; the stock is re-minted on demand (identity
     //    is week-seeded, level follows the deepest wave, so a cache key of (week, level) suffices). ──
     private int _traderWeek;
@@ -1042,6 +1053,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Parked for the same reason: the Forge owns the flag. Core decides what an old save means.
         _pendingFreeSocketUsed = SaveSystem.RestoreFreeSocketUsed(save);
         _chestKeepMinTier = save.ChestKeepMinTier;
+        _autoSellOn = save.AutoSellOn;
         _traderWeek = save.TraderWeekStamp;
         _traderBought.Clear();
         foreach (var slot in save.TraderBoughtSlots) _traderBought.Add(slot);
@@ -1291,6 +1303,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ChestsOpened = _forge.ChestsOpened,
             FreeSocketUsed = _forge.FreeSocketUsed,
             ChestKeepMinTier = _chestKeepMinTier,
+            AutoSellOn = _autoSellOn,
             TraderWeekStamp = _traderWeek,
             TraderBoughtSlots = _traderBought.ToList(),
             ChestKeepSlots = _chestKeepSlots.Select(sl => sl.ToString()).ToList(),
@@ -1386,6 +1399,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _champSecondsAccrued = 0;
         _champGleamRate = 0f;
         _chestKeepMinTier = 0;
+        _autoSellOn = false;
         _chestKeepSlots.Clear();
         _traderWeek = 0;
         _traderBought.Clear();
@@ -1601,6 +1615,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The keep-filter (TAKE ONLY, on the HUNT screen since 2026-08-23), seeded ONCE — the screen
         // owns it from here; the host reads it back on FilterDirty (UpdateExpedition).
         _vault.KeepMinTier = _chestKeepMinTier;
+        _vault.AutoSellOn = _autoSellOn;
         _vault.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _vault.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingTreeCamera is { } cam) _masteryScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
@@ -1996,7 +2011,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // A pile of chests of varying grades, so the chest bar + OPEN buttons pose with content.
                     foreach (var cr in new[] { Rarity.Common, Rarity.Rare, Rarity.Epic, Rarity.Legendary, Rarity.Rare })
                         _forge.AddChest(new Chest { Rarity = cr, Tier = 8, Element = Source.Nature });
-                    _forge.DevOpenOneChest(_hunter);   // pose the chest-open REVEAL burst
+                    // WHO IS WEARING IT, before the chest is opened. The reveal's EQUIP button asks the
+                    // champion's class whether the drop is wearable, and the per-frame push in
+                    // UpdateExpedition has not run yet at fixture time — so without this the button
+                    // could only ever photograph its refused state.
+                    _forge.Wearer = _characters.Active;
+                    _forge.FavouredClass = _characters.Active.Class;
+                    // RH_SHOT_REVEAL_WEARABLE poses the reveal over a piece this champion CAN wear, so
+                    // the EQUIP button's live readings (UPGRADE / SIDEGRADE, and the empty slot) have a
+                    // fixture. Without it the roll decides, and four in five class-locked rolls refuse.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_REVEAL_WEARABLE") is { Length: > 0 })
+                        _forge.DevRevealItem(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature },
+                                             new ItemInstance
+                                             {
+                                                 InstanceId = "dev_reveal_wear", BaseType = ItemBaseType.Boots,
+                                                 Rarity = Rarity.Epic, SellValue = 180, Element = Source.Nature,
+                                                 ItemLevel = 8,
+                                             });
+                    else _forge.DevOpenOneChest(_hunter);   // pose the chest-open REVEAL burst
                     // AFTER the open, never before: opening a chest resets the reveal clock, so a pose
                     // applied earlier is silently overwritten and every RH_SHOT_T lands on t=0.
                     if (_pendingRevealPose is { } rp) _forge.DevPoseReveal(rp);
@@ -5345,6 +5377,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             _vault.FilterDirty = false;
             _chestKeepMinTier = _vault.KeepMinTier;
+            _autoSellOn = _vault.AutoSellOn;
             _chestKeepSlots.Clear(); foreach (var sl in _vault.KeepSlots) _chestKeepSlots.Add(sl);
             Save();
         }
@@ -5370,7 +5403,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // AUTO-SELL IS THE WARREN'S JOB — SCAVENGER RUNS level 2 sells Commons, level 4 Uncommons. An
         // old save's filter nodes are converted to that facility's level once, at load, by
         // LegacyTraitTree, so a returning player keeps the automation without the tree existing.
-        _forge.AutoSellFloor = WarrenAutomation.AutoSellAtOrBelow(_warren);
+        // THE FACILITY UNLOCKS IT; THE PLAYER TURNS IT ON. The level alone used to be the whole gate,
+        // so an upgrade bought for its production quietly began selling gear out of every chest opened
+        // from then on, with no switch anywhere and no line at the moment of sale.
+        var sellFloor = WarrenAutomation.AutoSellAtOrBelow(_warren);
+        _forge.AutoSellFloor = _autoSellOn ? sellFloor : null;
+        _vault.AutoSellUnlocked = sellFloor is not null;
+        _vault.AutoSellOn = _autoSellOn;
 
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
@@ -5429,6 +5468,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _lastActiveCharacterId = _characters.ActiveId;
         // Four in five class-locked pieces a chest pays are the active champion's.
         _forge.FavouredClass = _characters.Active.Class;
+        // ...and WHO is wearing it, so the reveal's EQUIP button can judge the drop against the slot.
+        _forge.Wearer = _characters.Active;
         // THE ACCOUNT-WIDE LEAK IS GONE. This line used to latch the active champion's birth skill
         // into the permanent learned set, every frame, for ever: play THE QUIVER once and every
         // other champion could weave WEEP from then on. BRIEF sec.9 forbids exactly that, and it was

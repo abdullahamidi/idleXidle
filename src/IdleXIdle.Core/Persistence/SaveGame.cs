@@ -335,6 +335,18 @@ public sealed record SaveGame
     /// <see cref="ChestKeepSlot"/> is the one wanted slot.</summary>
     public List<string> ChestKeepSlots { get; init; } = new();
 
+    /// <summary>
+    /// Has the player allowed the Warren's runners to SELL low-grade gear as a chest is opened?
+    /// </summary>
+    /// <remarks>
+    /// Default false, and DELIBERATELY false for a save already past the facility level that unlocks
+    /// it (2026-09-09). The capability used to switch itself on with a Warren upgrade bought for its
+    /// output, with no off switch and no notice at the moment of sale — so a returning player is
+    /// asked rather than assumed to have agreed. No version bump: an absent field reads as off, which
+    /// is the answer this change wants for every old save.
+    /// </remarks>
+    public bool AutoSellOn { get; init; }
+
     /// <summary>The ISO week (year*100+week) whose trader stall the two fields below describe.</summary>
     /// <remarks>Zero on old saves — the host treats a mismatch with the CURRENT week as "new week,
     /// stall resets", so the migration is the rollover itself.</remarks>

@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Forging;
@@ -1125,6 +1126,17 @@ public sealed class ForgeScreen
     public float RarityBonus { get; set; } = 1f;
 
     /// <summary>
+    /// WHO IS WEARING IT — the active champion, host-set every frame like the fields around it.
+    /// </summary>
+    /// <remarks>
+    /// The reveal card's EQUIP button needs two things this screen had no way to ask for: whether the
+    /// champion's class may wear the item at all (<c>Gear.CanWear</c>) and, through
+    /// <c>ItemPresentation.Rows</c>, what wearing it would be worth against what is already in the
+    /// slot. Null leaves the button offered on wearables and unjudged, which is what a bench sees.
+    /// </remarks>
+    public Character? Wearer { get; set; }
+
+    /// <summary>
     /// The active champion's ITEM CLASS, so four in five class-locked pieces a chest pays are theirs.
     /// Host-set every frame like <see cref="RarityBonus"/>: the screen has no roster of its own.
     /// </summary>
@@ -1135,6 +1147,23 @@ public sealed class ForgeScreen
 
     /// <summary>DEV ONLY: open the best chest, so a screenshot can pose the reveal burst.</summary>
     public void DevOpenOneChest(Hunter hunter) => OpenBestChest(hunter);
+
+    /// <summary>
+    /// DEV ONLY: pose the reveal over an EXPLICIT item, so a state the roll rarely produces has a fixture.
+    /// </summary>
+    /// <remarks>
+    /// The reveal's EQUIP button has three readings — a wearable upgrade, a sidegrade or downgrade, and
+    /// a piece this champion's class refuses — and which one a fixture photographs was, until this
+    /// existed, whatever the chest happened to roll. Four times in five that is a class-locked piece
+    /// the fixture champion cannot wear, so the ENABLED button had no fixture at all and by this
+    /// project's own rule had never been looked at.
+    /// </remarks>
+    public void DevRevealItem(Chest chest, ItemInstance item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        _inv.Add(item);
+        Reveal(chest, (0, new List<ItemInstance> { item }));
+    }
 
     public void AddLoot(IEnumerable<ItemInstance> items) => _inv.AddRange(items);
 
@@ -1677,6 +1706,7 @@ public sealed class ForgeScreen
 
         var chest = _chests[idx];
         _chests.RemoveAt(idx);
+        _autoSoldCount = 0; _autoSoldGleam = 0;
         Reveal(chest, LandChest(chest, hunter));
     }
 
@@ -1702,7 +1732,7 @@ public sealed class ForgeScreen
 
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
         var names = items.Count == 0
-            ? "SOLD ON SIGHT (FILTER)"
+            ? "YOUR RUNNERS SOLD IT"
             : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNaming.SlotWord(i.BaseType)}"));
         Say($"{names}   +{mat} MATERIALS",
             items.Count > 0 ? RarityColors[items.Max(i => (int)i.Rarity)] : Slate);
@@ -1722,6 +1752,7 @@ public sealed class ForgeScreen
         var entries = new List<(Rarity Grade, int Materials, List<ItemInstance> Items)>();
         _revealAll.Clear();
         _revealAllMats = 0;
+        _autoSoldCount = 0; _autoSoldGleam = 0;
         ResetRevealActions();
         foreach (var chest in opened)
         {
@@ -1755,7 +1786,20 @@ public sealed class ForgeScreen
         NextRevealEntry();
     }
 
-    /// <summary>Roll a chest's contents, honour the loot filter, land the items + materials. Returns what landed.</summary>
+    /// <summary>What the runners took out of the chests opened in this reveal, so the card can say so.</summary>
+    /// <remarks>
+    /// Reset when a reveal opens, summed across an OPEN ALL cascade. Without it the sale is invisible
+    /// for every chest that also gave something the player kept — the sold item never becomes a cell,
+    /// so there is nothing to stamp and nothing to read.
+    /// </remarks>
+    private int _autoSoldCount;
+    private long _autoSoldGleam;
+
+    /// <summary>The runners' sale, in a sentence — spelled out, with the count and the Gleam it paid.</summary>
+    private string AutoSoldLine =>
+        $"YOUR SCAVENGER RUNS SOLD {_autoSoldCount} ITEM{(_autoSoldCount == 1 ? "" : "S")} FOR {_autoSoldGleam:N0} GLEAM";
+
+    /// <summary>Roll a chest's contents, honour the runners' sale, land the items + materials. Returns what landed.</summary>
     private (int Materials, List<ItemInstance> Items) LandChest(Chest chest, Hunter hunter)
     {
         var reward = Chests.Open(chest, _rng, LootTuning.Default, rarityBonus: RarityBonus, favouredClass: FavouredClass);
@@ -1764,12 +1808,22 @@ public sealed class ForgeScreen
 
         // Gems land beside the gear — same bag, same reveal, their own reward channel in Core.
         var items = reward.Items.Concat(reward.Gems).ToList();
-        // Same loot filter a boss drop honours: filtered items are SOLD for gleam, never dumped in the bag.
+        // THE RUNNERS' SALE, and it is now REPORTED. Gated on the player's own switch (the host only
+        // sets AutoSellFloor once they have turned it on), and the count and the Gleam are carried out
+        // so the reveal can say what happened: a chest that gave two items and lost one to the sale
+        // used to draw one card and say nothing at all, because the sold item was removed from the
+        // list BEFORE the reveal was built and so had no cell to stamp.
         if (AutoSellFloor is { } floor)
         {
             // WEARABLES ONLY: a gem's frame grade tracks its LEVEL, not its worth — the filter selling
             // "Common" gems would quietly eat the socket system's whole supply line.
-            foreach (var it in items.Where(i => Gear.IsWearable(i) && i.Rarity <= floor)) hunter.AddGleam(it.SellValue);
+            var sold = items.Where(i => Gear.IsWearable(i) && i.Rarity <= floor).ToList();
+            foreach (var it in sold) hunter.AddGleam(it.SellValue);
+            if (sold.Count > 0)
+            {
+                _autoSoldCount += sold.Count;
+                _autoSoldGleam += sold.Sum(i => (long)i.SellValue);
+            }
             items = items.Where(i => !Gear.IsWearable(i) || i.Rarity > floor).ToList();
         }
 
@@ -3631,7 +3685,12 @@ public sealed class ForgeScreen
     private static int RevealBtnY => RevealNameY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
 
     /// <summary>A cell's full height: picture, name, two verbs and a breath. 236 at 100 %.</summary>
-    private static int RevealCellH => RevealBtnY + 2 * RevealBtnH + UiMetrics.Space(4) + UiMetrics.Space(2);
+    /// <summary>
+    /// Three button rows now, not two: EQUIP sits above SELL and SALVAGE (playtest 2026-09-09 — "when
+    /// opening a chest, it looks like I only have options to sell or salvage; we should add an EQUIP
+    /// option there as well"). A gem draws no third row and keeps its one line of prose instead.
+    /// </summary>
+    private static int RevealCellH => RevealBtnY + 3 * RevealBtnH + 2 * UiMetrics.Space(4) + UiMetrics.Space(2);
 
     /// <summary>The height the reveal's own question needs, so the summary can make room for it.</summary>
     private static int RevealQuestionH =>
@@ -3862,8 +3921,14 @@ public sealed class ForgeScreen
         if (DevRevealHover && hover is null && n > 0)
             hover = _inv.FirstOrDefault(i => i.InstanceId == _revealItems[0].InstanceId);
 
+        // AND WHAT THE RUNNERS TOOK, when they took something the card cannot show. A sold item is
+        // removed before the reveal is built, so it has no cell and no stamp — a chest that gave two
+        // items and lost one said nothing at all about the one that went (playtest 2026-09-09).
+        if (n > 0 && _autoSoldCount > 0)
+            _ui.TextCenter(b, AutoSoldLine, 960, cellsTop + RevealCellH + UiMetrics.Space(6), Slate * fade);   // ui-page-ok: host chrome, canvas space
+
         if (n == 0)
-            _ui.TextCenter(b, "SOLD ON SIGHT — YOUR LOOT FILTER TOOK IT.", card.Center.X, cellsTop + UiMetrics.Space(90), Slate * fade);
+            _ui.TextCenter(b, "YOUR SCAVENGER RUNS SOLD IT AS THE CHEST OPENED.", card.Center.X, cellsTop + UiMetrics.Space(90), Slate * fade);
 
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
@@ -3922,9 +3987,12 @@ public sealed class ForgeScreen
         _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(shown), cell.Width, UiTypography.Secondary),
                           cell.Center.X, cell.Y + RevealNameY, (live is null ? Dim : rc) * fade, UiTypography.Secondary);
 
+        // GONE FROM THE BAG, or WORN out of it. An equipped item leaves _inv the same way a sold one
+        // does, so "live is null" alone would stamp a freshly worn item MERGED; the stamp ledger is
+        // asked first and WORN is one of its words.
         if (live is null)
         {
-            // SOLD / SALVAGED by the buttons below; MERGED by TIRELESS FORGE before the card opened.
+            // SOLD / SALVAGED / WORN by the buttons below; MERGED by TIRELESS FORGE before the card opened.
             var stamp = _revealStamp.TryGetValue(snapshot.InstanceId, out var w) ? w : "MERGED";
             _ui.TextCenterBig(b, stamp, cell.Center.X,
                               cell.Y + RevealNameY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8),
@@ -3935,7 +4003,28 @@ public sealed class ForgeScreen
         var hover = icon.Contains(mouse) ? live : null;
         if (!acts) return hover;
 
-        var sell = new Rectangle(cell.X, cell.Y + RevealBtnY, cell.Width, RevealBtnH);
+        // ── EQUIP FIRST, and it carries the VERDICT rather than a bare verb: the whole decision the
+        //    reveal is asking for is "is this better than what I am wearing", and the item card already
+        //    computes that (ItemPresentation's Verdict row). Until 2026-09-09 the reveal offered only
+        //    SELL and SALVAGE, so the one thing a player wants to do with a good drop was the one thing
+        //    this overlay could not do — they closed it, walked to GEAR and found the item in the bag. ──
+        var y = cell.Y + RevealBtnY;
+        if (Gear.IsWearable(live))
+        {
+            // A null Wearer is "nobody has said who is playing" — a bench, or a frame before the host
+            // has pushed the roster. Gear.CanWear THROWS on null rather than answering, so the question
+            // is asked only when there is somebody to ask it about.
+            var canWear = Wearer is null || Gear.CanWear(Wearer, live);
+            var equip = new Rectangle(cell.X, y, cell.Width, RevealBtnH);
+            _revealHots.Add(equip);
+            if (_ui.Button(b, equip, EquipLabel(hunter, live, canWear), mouse, click, enabled: canWear,
+                           style: canWear ? ButtonStyle.Primary : ButtonStyle.Secondary)
+                && canWear)
+                EquipFromReveal(hunter, live);
+            y = equip.Bottom + UiMetrics.Space(4);
+        }
+
+        var sell = new Rectangle(cell.X, y, cell.Width, RevealBtnH);
         _revealHots.Add(sell);
         if (_ui.Button(b, sell, $"SELL FOR {live.SellValue:N0} GLEAM", mouse, click))
             AskOrScrap(hunter, live, ScrapKind.Sell);
@@ -3956,6 +4045,48 @@ public sealed class ForgeScreen
                               cell.Center.X, sell.Bottom + UiMetrics.Space(10), Slate * fade, UiTypography.Secondary);
         }
         return hover;
+    }
+
+    /// <summary>
+    /// What the reveal's EQUIP button says: the verb, and the decision the item card already computed.
+    /// </summary>
+    /// <remarks>
+    /// The verdict comes from <see cref="ItemPresentation.Rows"/> rather than being recomputed here —
+    /// one source for "is this better", so the button and the card can never disagree — and the class
+    /// refusal is named on the button itself instead of leaving a greyed control with no reason.
+    /// </remarks>
+    private string EquipLabel(Hunter hunter, ItemInstance item, bool canWear)
+    {
+        if (!canWear) return "CANNOT WEAR THIS";
+        var verdict = ItemPresentation.Rows(item, hunter, Wearer)
+                                      .FirstOrDefault(r => r.Kind == ItemRowKind.Verdict);
+        if (verdict.Label is not { Length: > 0 } word) return "EQUIP";
+        return verdict.Value is { Length: > 0 } figure ? $"EQUIP  ·  {word} {figure}" : $"EQUIP  ·  {word}";
+    }
+
+    /// <summary>Wear it, straight out of the reveal, and stamp the cell so the card says what happened.</summary>
+    /// <remarks>
+    /// Equipping takes the item out of the bag exactly as selling does, so the cell would otherwise
+    /// read MERGED — the stamp is written first, for the same reason <see cref="DoRevealScrap"/>
+    /// writes one. Nothing is destroyed here: whatever was in the slot goes back to the bag, which is
+    /// the same exchange the GEAR screen makes.
+    /// </remarks>
+    private void EquipFromReveal(Hunter hunter, ItemInstance item)
+    {
+        ArgumentNullException.ThrowIfNull(hunter);
+        if (!Gear.IsWearable(item) || (Wearer is not null && !Gear.CanWear(Wearer, item))) return;
+        _revealStamp[item.InstanceId] = "WORN";
+        // Equip hands back whatever it displaced, and the bag is this screen's list — so the exchange
+        // is: the new piece leaves _inv, the old one returns to it. Exactly what GEAR does.
+        var displaced = hunter.Equip(item);
+        _inv.Remove(item);
+        if (displaced is not null && _inv.All(i => i.InstanceId != displaced.InstanceId)) _inv.Add(displaced);
+        FeelStart();
+        Cue("sfx_equip", 0.55f);
+        Say(displaced is null
+                ? $"{ItemNaming.FullName(item)} IS WORN."
+                : $"{ItemNaming.FullName(item)} IS WORN — {ItemNaming.FullName(displaced)} WENT BACK TO YOUR BAG.",
+            Gold);
     }
 
     /// <summary>
@@ -4085,8 +4216,12 @@ public sealed class ForgeScreen
         // The tally, rarest first — countable without reading ten icons.
         var tally = _revealAll.GroupBy(i => i.Rarity).OrderByDescending(g => (int)g.Key)
                               .Select(g => $"{g.Count()} {RarityNames[(int)g.Key]}");
-        _ui.TextCenterBig(b, n == 0 ? "EVERYTHING WAS SOLD ON SIGHT (YOUR LOOT FILTER)." : string.Join("  ·  ", tally),
+        _ui.TextCenterBig(b, n == 0 ? "YOUR SCAVENGER RUNS SOLD EVERY ITEM AS THE CHESTS OPENED." : string.Join("  ·  ", tally),
                           panel.Center.X, panel.Y + tallyOff, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
+        if (n > 0 && _autoSoldCount > 0)
+            _ui.TextCenterBig(b, AutoSoldLine, panel.Center.X,
+                              panel.Y + tallyOff + UiTypography.Pitch(UiTypography.Secondary),
+                              Slate * fade, UiTypography.Secondary);
 
         var cellsTop = panel.Y + cellsOff;
         var cellsBottom = cellsTop + contentH;

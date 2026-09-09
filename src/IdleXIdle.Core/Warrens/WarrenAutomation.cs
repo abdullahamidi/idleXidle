@@ -60,10 +60,14 @@ public static class WarrenAutomation
         ArgumentNullException.ThrowIfNull(warren);
         var t = warren.Tuning;
 
+        // UNLOCKS, not switches on (2026-09-09). This level used to BEGIN selling gear out of every
+        // chest from then on, with no switch anywhere — an upgrade bought for its production carried a
+        // rider nobody agreed to. The capability arrives here; the consent lives in the CHEST FILTER.
         if (kind == FacilityKind.ScavengerRuns && level == t.AutoSellCommonLevel)
-            return "YOUR RUNNERS WILL SELL COMMON ITEMS FOR YOU WHEN A CHEST IS OPENED.";
+            return "UNLOCKS: YOUR RUNNERS CAN SELL COMMON ITEMS WHEN A CHEST IS OPENED. "
+                   + "TURN IT ON IN THE CHEST FILTER.";
         if (kind == FacilityKind.ScavengerRuns && level == t.AutoSellUncommonLevel)
-            return "YOUR RUNNERS WILL SELL UNCOMMON ITEMS WHEN A CHEST IS OPENED TOO. "
+            return "UNLOCKS: YOUR RUNNERS CAN SELL UNCOMMON ITEMS WHEN A CHEST IS OPENED TOO. "
                    + "RARE AND BETTER ARE ALWAYS KEPT.";
         if (kind == FacilityKind.HoardVaults && level == t.AutoMergeLevel)
             return "THE VAULT WILL STACK YOUR SPARE ITEMS INTO BETTER ONES WHEN A CHEST IS OPENED.";
@@ -78,8 +82,10 @@ public static class WarrenAutomation
         if (kind == FacilityKind.ScavengerRuns)
             return AutoSellAtOrBelow(warren) switch
             {
-                Rarity.Uncommon => "SELLS YOUR COMMON AND UNCOMMON ITEMS WHEN A CHEST IS OPENED.",
-                Rarity.Common => "SELLS YOUR COMMON ITEMS WHEN A CHEST IS OPENED.",
+                // WHAT IT CAN DO. Whether it IS doing it is the player's switch in the CHEST FILTER,
+                // which this file cannot see — it reads the Warren, not the save's preferences.
+                Rarity.Uncommon => "CAN SELL YOUR COMMON AND UNCOMMON ITEMS WHEN A CHEST IS OPENED.",
+                Rarity.Common => "CAN SELL YOUR COMMON ITEMS WHEN A CHEST IS OPENED.",
                 _ => "",
             };
         if (kind == FacilityKind.HoardVaults && AutoMergeOnChestOpen(warren))

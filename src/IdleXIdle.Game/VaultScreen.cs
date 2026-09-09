@@ -1581,6 +1581,30 @@ public sealed class VaultScreen
     public HashSet<ItemBaseType> KeepSlots { get; } = new();
     /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
     public bool FilterDirty { get; set; }
+
+    /// <summary>
+    /// May the Warren's runners SELL a chest's low-grade gear as it is opened? Off until the player says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest, 2026-09-09: <i>"It sold an item obtained from a chest even though the item filter
+    /// wasn't active."</i> Both halves of that were true. The CHEST FILTER — the only thing the game
+    /// calls a filter in a place the player can reach — keeps or drops whole CHESTS and has never sold
+    /// anything; the sale came from SCAVENGER RUNS, a Warren facility whose level-2 upgrade is bought
+    /// for its output and carries auto-sell as an unannounced rider, with no off switch anywhere.
+    /// The reveal card then blamed "YOUR LOOT FILTER", which is why the report reads as a contradiction.
+    /// </para>
+    /// <para>
+    /// The facility level now UNLOCKS the capability and this switch turns it on, defaulting off even
+    /// for a save already past the level — nobody ever consented to the old behaviour, so nobody
+    /// inherits it. It lives in the CHEST FILTER popover because that is where the player already
+    /// looks for "what happens to my loot".
+    /// </para>
+    /// </remarks>
+    public bool AutoSellOn { get; set; }
+
+    /// <summary>Is the capability available at all — i.e. has the Warren's facility reached its level?</summary>
+    public bool AutoSellUnlocked { get; set; }
     /// <summary>The filter's popover is up. The toolbar button toggles it; its ×, a click outside it, and Escape close it.</summary>
     public bool FilterOpen { get; set; }
 
@@ -1618,10 +1642,24 @@ public sealed class VaultScreen
             h += pitch;                                                        // GEAR SLOTS THE CHEST IS FOR
             h += 2 * (FilterCellH + FilterCellGap) + UiMetrics.Space(6);       // the medallions
             h += FilterAllH + UiMetrics.Space(10);                             // ALL SLOTS
+            h += pitch + UiMetrics.Space(6);                                   // WHAT HAPPENS TO THE GEAR INSIDE
+            h += FilterAllH + UiMetrics.Space(6);                              // the sell switch
+            h += SellSentenceLines * pitch;                                    // its sentence
             h += 2 * pitch;                                                    // the closing sentence
             return h + inset;
         }
     }
+
+    /// <summary>
+    /// Lines budgeted for the sell switch's sentence — its LONGEST reading, measured at 100 %.
+    /// </summary>
+    /// <remarks>
+    /// The popover's height is a static sum of the rows it draws and has no UiKit to measure with, so
+    /// this is the one number that has to be right by inspection. Budgeted at two, the locked reading
+    /// wrapped to three and pushed the closing sentence out through the frame's foot — caught in the
+    /// capture, which is the only place it could have been caught.
+    /// </remarks>
+    private const int SellSentenceLines = 3;
 
     private Rectangle FilterPopover =>
         new(Math.Min(FilterBtn.X, UiKit.PageRight(24) - FilterPopoverW), FilterBtn.Bottom + UiMetrics.Space(10),
@@ -1727,6 +1765,28 @@ public sealed class VaultScreen
         MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
         if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
         y += FilterAllH + UiMetrics.Space(10);
+
+        // ── AND WHAT HAPPENS TO THE GEAR INSIDE A CHEST YOU KEPT. The other half of "my loot", and
+        //    the half that was invisible: it lived on a Warren facility card, was switched on by an
+        //    upgrade bought for something else, and had no off switch at all. ──
+        _ui.TextBig(b, "WHAT HAPPENS TO THE GEAR INSIDE", inner.X, y, Bone, UiTypography.Secondary);
+        y += pitch + UiMetrics.Space(6);
+        var sellRow = new Rectangle(inner.X, y, inner.Width, FilterAllH);
+        MiniButton(b, sellRow, AutoSellOn ? "RUNNERS SELL LOW GEAR" : "KEEP EVERYTHING", hit, AutoSellOn,
+                   enabled: AutoSellUnlocked);
+        if (AutoSellUnlocked && UiKit.ClickedIn(sellRow, hit, clicked)) { AutoSellOn = !AutoSellOn; FilterDirty = true; }
+        y += FilterAllH + UiMetrics.Space(6);
+        foreach (var l in _ui.WrapBig(!AutoSellUnlocked
+                                          ? "UPGRADE SCAVENGER RUNS IN THE WARREN TO UNLOCK THIS"
+                                          : AutoSellOn
+                                              ? "SOLD AS A CHEST OPENS. RARE AND BETTER ARE ALWAYS KEPT"
+                                              : "EVERY ITEM A CHEST GIVES YOU GOES INTO YOUR BAG",
+                                      inner.Width, UiTypography.Secondary))
+        {
+            _ui.TextBig(b, l, inner.X, y, Slate, UiTypography.Secondary);
+            y += pitch;
+        }
+
         foreach (var l in _ui.WrapBig(KeepMinTier > 0 || KeepSlots.Count > 0
                                           ? "OTHER CHESTS TURN INTO A LITTLE SCRAP"
                                           : "EVERY CHEST IS KEPT",
@@ -1738,17 +1798,18 @@ public sealed class VaultScreen
         if (tip is not null) _ui.HoverTip(b, tip, hit);
     }
 
-    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
+    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false, bool enabled = true)
     {
-        var hot = r.Contains(hit);
+        var hot = enabled && r.Contains(hit);
         // The same states as every control (§25): HOVER lifts the edge and the ink a value step,
         // PRESSED darkens the well while the button is held, LIT (selected) is gold and stays.
+        // DISABLED draws at rest in Dim and never reacts — the reason is on the line beneath it.
         var pressed = hot && Held;
         _ui.Fill(b, r, new Color(0x16, 0x11, 0x10, 0xE0));
         if (pressed) _ui.Fill(b, r, Color.Black * 0.18f);
-        Outline(b, r, lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
+        Outline(b, r, !enabled ? Dim * 0.6f : lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
         _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1 + (pressed ? 1 : 0),
-                          lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
+                          !enabled ? Dim : lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)
