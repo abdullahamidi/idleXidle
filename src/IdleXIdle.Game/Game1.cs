@@ -8155,8 +8155,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool TakeLearnClick()
     {
         if (!MouseClicked || !LearnOffered() || !LearnButton.Contains(ChromeMouse)) return false;
-        // The screen's own tour, started by hand. It is marked explained on the way out exactly as
-        // before, so asking twice is allowed and the rail's dot still means "you have not looked".
+
+        // THE GEM TOUR IS STILL REACHABLE. It is a second, smaller FORGE tour — three cards about
+        // sockets and the free first one — and it used to fire itself the first time the Forge was
+        // opened with a gem in the bag. Nothing fires itself now, and without this clause its copy
+        // would be alive, tested, and unreachable: the exact species of dead feature this project
+        // keeps producing. When a gem is held and that tour is still owed, the ? gives that one; the
+        // SOCKET tab is opened with it, so the light falls on the tab the card names.
+        if (ScreenActivity() == Activity.Forge && _showForge
+            && Onboarding.GemTourDue(GemsHeld(), _explained) is { } gemKey)
+        {
+            _forge.RequestSocketTab();
+            BeginTour(Activity.Forge, Onboarding.GemTourFor(_forge.FreeSocketUsed), gemKey);
+            _sound.Play("sfx_click", 0.7f);
+            return true;
+        }
+
+        // ...otherwise the screen's own tour, started by hand. It is marked explained on the way out
+        // exactly as before, so asking twice is allowed and the rail's dot still means "you have not
+        // looked".
         BeginTour(ScreenActivity());
         _sound.Play("sfx_click", 0.7f);
         return true;
