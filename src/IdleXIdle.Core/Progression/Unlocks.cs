@@ -283,14 +283,65 @@ public static class Unlocks
     /// THIRD action-taking skill — which pushed the demand on the champion's own swing back toward the
     /// number the slot rework existed to bring down.
     /// </para>
+    /// <para>
+    /// <b>A SLOT MUST NOT OPEN BEFORE THERE IS A SKILL FOR IT (2026-09-09).</b> Playtest: <i>"Four skill
+    /// slots unlocked before the skills themselves were actually available."</i> The old ladder was
+    /// keyed to depth and conquest alone — wave 5, wave 12, one conquest — and none of those facts pays
+    /// for a skill. A fresh account can weave exactly ONE thing, its signature; every other skill is
+    /// taught by a road on the mastery tree that costs <see cref="MasteryCatalog.SkillRoadCost"/> plus
+    /// the trunk behind it, and depth pays points as <c>floor(0.9 · sqrt(depth))</c> per region. So all
+    /// four slots stood open at wave 20 while three of them had been unfillable for another forty waves
+    /// at least, and the BUILD screen greeted a first-time visitor with three congratulation banners in
+    /// a row over a library of one usable skill.
+    /// </para>
+    /// <para>
+    /// The gates are keyed to <see cref="UnlockFacts.MasteryPointsEarned"/> against the catalogue's own
+    /// road-path costs, and the old depth conditions are KEPT beside them, so a slot needs both "the
+    /// world could have taught you a skill" and "you have been that deep". Points are used rather than
+    /// <see cref="UnlockFacts.SkillsKnown"/> because points only ever grow: a respec refunds a road and
+    /// the skill leaves the known set, and a slot that could be taken away is a slot that can strand a
+    /// woven build. The costs come from <see cref="MasteryCatalog.CheapestRoadPaths"/> rather than being
+    /// typed here, so re-pricing a road moves these gates with it.
+    /// </para>
     /// </remarks>
     public static int SkillSlots(UnlockFacts f)
     {
         var slots = 1;
-        if (f.DeepestWave >= 5) slots++;      // with the Build screen itself
-        if (f.DeepestWave >= 12) slots++;
-        if (f.RegionsConquered >= 1) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[0] && f.DeepestWave >= 5) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[1] && f.DeepestWave >= 12) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[2] && f.RegionsConquered >= 1) slots++;
         return slots;
+    }
+
+    /// <summary>What the world charges for a 1st, 2nd and 3rd taught skill — the slot ladder's prices.</summary>
+    /// <remarks>
+    /// A lower bound (the cheapest routes, reusing trunks already paid for), which is the honest
+    /// direction for a gate: a player who spent elsewhere reaches a slot later, never sooner.
+    /// </remarks>
+    public static IReadOnlyList<int> RoadPaths { get; } = Builds.MasteryCatalog.CheapestRoadPaths(3);
+
+    /// <summary>What the player must do for their next skill slot, or "" when all four are open.</summary>
+    /// <remarks>
+    /// Says the SCARCER of the two conditions, because naming the one already met would read as a
+    /// gate that is stuck.
+    /// </remarks>
+    public static string NextSkillSlotNote(UnlockFacts f)
+    {
+        var slots = SkillSlots(f);
+        if (slots >= 4) return "";
+        var (points, depth, depthWord) = slots switch
+        {
+            1 => (RoadPaths[0], 5, "REACH WAVE 5"),
+            2 => (RoadPaths[1], 12, "REACH WAVE 12"),
+            _ => (RoadPaths[2], 0, "CONQUER A REGION"),
+        };
+        if (f.MasteryPointsEarned < points)
+            return $"EARN {points} MASTERY POINTS AND LEARN A SKILL FOR A {Ordinal(slots + 1)} SKILL SLOT";
+        return slots == 3 && f.RegionsConquered < 1
+            ? $"{depthWord} FOR A FOURTH SKILL SLOT"
+            : $"{depthWord} FOR A {Ordinal(slots + 1)} SKILL SLOT";
+
+        static string Ordinal(int n) => n switch { 2 => "SECOND", 3 => "THIRD", _ => "FOURTH" };
     }
 
     // ── Build vocabulary: what the world hands you, and how much of it you may wear at once ─────

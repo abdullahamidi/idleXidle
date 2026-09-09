@@ -130,12 +130,35 @@ public class WarrenAutomationTest
     {
         // The fifth slot is REMOVED, not moved. Nothing in the game sells one, and the ladder's top
         // rung is four — which is two skills that take an action and two that do not.
-        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts()));
-        Assert.Equal(2, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 5)));
-        Assert.Equal(3, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12)));
-        Assert.Equal(4, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12, RegionsConquered: 1)));
+        //
+        // EVERY RUNG NOW HAS TWO CONDITIONS: the depth it always had, and the mastery points the
+        // world charges for a skill to put in the slot. Depth alone opened all four by wave 20 while
+        // three of them stayed unfillable for another forty waves (playtest, 2026-09-09).
+        var paths = Unlocks.RoadPaths;
 
-        var everything = new UnlockFacts(DeepestWave: 9_999, RegionsConquered: 99, TraitsDiscovered: 999);
+        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts()));
+
+        // Depth without the points buys nothing — this is the whole regression.
+        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 5)));
+        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12)));
+        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12, RegionsConquered: 1)));
+
+        // ...and the points without the depth buy nothing either.
+        Assert.Equal(1, Unlocks.SkillSlots(new UnlockFacts(MasteryPointsEarned: paths[2])));
+
+        Assert.Equal(2, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 5, MasteryPointsEarned: paths[0])));
+        Assert.Equal(3, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12, MasteryPointsEarned: paths[1])));
+        Assert.Equal(4, Unlocks.SkillSlots(new UnlockFacts(DeepestWave: 12, RegionsConquered: 1,
+                                                          MasteryPointsEarned: paths[2])));
+
+        // The prices are the catalogue's own, so re-pricing a road moves the gates rather than
+        // stranding them: three roads, each dearer than the last, and the first is a real cost.
+        Assert.Equal(3, paths.Count);
+        Assert.True(paths[0] >= MasteryCatalog.SkillRoadCost);
+        Assert.True(paths[0] < paths[1] && paths[1] < paths[2]);
+
+        var everything = new UnlockFacts(DeepestWave: 9_999, RegionsConquered: 99, TraitsDiscovered: 999,
+                                         MasteryPointsEarned: 9_999);
         Assert.Equal(Build.SkillSlots, Unlocks.SkillSlots(everything));
     }
 

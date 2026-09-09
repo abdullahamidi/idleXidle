@@ -925,6 +925,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (save.WovenSkills.Count > PlayerLoadout.MaxSkills)
             _fifthSkillDropped = SkillCatalogue.Find(save.WovenSkills[^1].SkillId ?? "")?.Name ?? "A SKILL";
         _loadout.SkillCapacity = Math.Max(1, save.WovenSkills.Count);
+        // NAMED BEFORE THE REPAIR RUNS. EnsureSignature (below) pins the signature to slot one, and it
+        // can only do that once the loadout knows which skill that is — the per-frame assignment in
+        // ApplyBuildCapacities does not happen until the first Update.
+        _loadout.SignatureSkillId = _characters.Active?.SignatureSkillId;
         // SOCKETS, floored the same way and for the same reason. The unlock facts are all zero at this
         // point in the load — conquest is not restored until RestoreWorld, far below — so asking the
         // derived rule HERE would see a player with no conquests, answer zero, and PlayerLoadout.Restore
@@ -4146,6 +4150,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // and a Math.Max here would let the type's own default stand in for the world's answer, which
         // is exactly how this milestone came to grant nothing at all.
         _loadout.VowCapacity = Unlocks.VowCapacity(facts);
+        // WHOSE SKILL IS UNTOUCHABLE. Published from the active champion the same way, so the loadout's
+        // own verbs can refuse to clear, overwrite or reorder it (playtest 2026-09-09).
+        _loadout.SignatureSkillId = _characters.Active?.SignatureSkillId;
 
         if (fresh.Count > 0) RebuildBuildMenus();
 
@@ -4562,7 +4569,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return new HintFacts(
             NewRegionName: newRegion,
             MasteryPointsFree: _mastery.Available,
-            EmptySkillSlots: Math.Max(0, Unlocks.SkillSlots(GuideUnlockFacts()) - _loadout.Skills.Count),
+            // AN EMPTY SLOT IS ONLY WORTH NAGGING ABOUT IF SOMETHING CAN FILL IT. The count is bounded
+            // by how many skills the world has actually taught, so a respec that gives a road back
+            // stops the line rather than sending the player to a library of locked tiles (2026-09-09).
+            EmptySkillSlots: Math.Max(0, Math.Min(Unlocks.SkillSlots(GuideUnlockFacts()),
+                                                  1 + (_mastery?.AvailableSkills().Count ?? 0))
+                                         - _loadout.Skills.Count),
             NewChampionName: _rosterNews ? _rosterNewName : null,
             ChestsWaiting: _forge?.UnopenedChests.Count ?? 0,
             TrainableStat: stat,
@@ -4643,6 +4655,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void RepairForSwitch()
     {
         var who = _characters.Active;
+        // THE NEW CHAMPION'S SKILL BECOMES THE UNTOUCHABLE ONE before anything is shed or placed: the
+        // loadout's verbs refuse to move whatever is named here, and naming the OUTGOING champion's
+        // skill would make the switch unable to take it out.
+        _loadout.SignatureSkillId = who?.SignatureSkillId;
         var shed = new List<string>();
         foreach (var slot in Enum.GetValues<GearSlot>())
         {

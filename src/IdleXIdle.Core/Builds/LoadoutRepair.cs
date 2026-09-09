@@ -128,13 +128,33 @@ public static class LoadoutRepair
         ArgumentNullException.ThrowIfNull(loadout);
         if (character?.SignatureSkillId is not { } sigId) return -1;
         if (SkillCatalogue.Find(sigId) is not { } def || def.OwnerCharacterId != character.Id) return -1;
-        if (loadout.HasSkill(sigId)) return -1;
+        // ALREADY WOVEN — but is it at the TOP? The signature is locked to slot one (playtest
+        // 2026-09-09: "that skill must remain unchangeable"), and slot order decides which skill wins
+        // a tied beat, so a save written before the rule — or one whose repair placed the signature in
+        // the first empty slot further down — is lifted here. PinSignature is the only mover that may
+        // touch it.
+        if (loadout.HasSkill(sigId))
+        {
+            loadout.PinSignature();
+            return -1;
+        }
 
+        // SLOT ONE FIRST, and only then the fallbacks. Writing it straight into slot 0 would overwrite
+        // a shared skill the player chose, so the old placement rule still decides WHERE it lands; the
+        // pin then lifts it, carrying whatever was on top down one rather than deleting it.
         for (var i = 0; i < loadout.Skills.Count; i++)
-            if (loadout.Skills[i].SkillId is null && loadout.SetSkill(i, sigId)) return i;
+            if (loadout.Skills[i].SkillId is null && loadout.SetSkill(i, sigId))
+            {
+                loadout.PinSignature();
+                return loadout.SignatureSlot >= 0 ? loadout.SignatureSlot : i;
+            }
 
         var added = loadout.AddSkill();
-        if (added >= 0 && loadout.SetSkill(added, sigId)) return added;
+        if (added >= 0 && loadout.SetSkill(added, sigId))
+        {
+            loadout.PinSignature();
+            return loadout.SignatureSlot >= 0 ? loadout.SignatureSlot : added;
+        }
         if (added >= 0) loadout.RemoveSkill(added);   // never leave a slot we opened and could not fill
         return -1;
     }

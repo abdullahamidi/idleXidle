@@ -202,7 +202,11 @@ public class OnboardingTest
     {
         // Wave 8 with a conquest: Stats, Build, Mastery, Warren, Map, Roster and the Hunt are all open,
         // and the second, third and fourth skill slots are earned. None of it may be announced.
-        var facts = new UnlockFacts(WavesCleared: 8, DeepestWave: 12, RegionsConquered: 1);
+        // A slot needs the mastery points that pay for a skill to fill it as well as the depth, so the
+        // facts carry both — a fixture posing "every slot is earned" with depth alone stopped being
+        // that fixture on 2026-09-09.
+        var facts = new UnlockFacts(WavesCleared: 8, DeepestWave: 12, RegionsConquered: 1,
+                                    MasteryPointsEarned: Unlocks.RoadPaths[2]);
         var seeded = Onboarding.SeedExplained(facts, introSeen: false, explained: Array.Empty<string>());
 
         _out.WriteLine("seeded: " + string.Join(", ", seeded.OrderBy(s => s)));
@@ -272,7 +276,8 @@ public class OnboardingTest
         // Wave 5 opens the Build screen AND the second skill slot on the same frame. Two things are
         // owed; they arrive one at a time, the screen before the change on it — and the slot note is
         // a banner, which is the one place a banner is still used.
-        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5);
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5,
+                                    MasteryPointsEarned: Unlocks.RoadPaths[0]);
         var explained = new HashSet<string>();
 
         var tour = Onboarding.TourDue(Activity.Build, explained);
@@ -295,7 +300,8 @@ public class OnboardingTest
     {
         // Wave 12 opens the third slot. The Build screen is open (a keystone made the first choice)
         // and long explained; the tile still lights, because there is something unread on it.
-        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12, KeystonesDiscovered: 1);
+        var facts = new UnlockFacts(WavesCleared: 12, DeepestWave: 12, KeystonesDiscovered: 1,
+                                    MasteryPointsEarned: Unlocks.RoadPaths[1]);
         var explained = new[] { Onboarding.ScreenKey(Activity.Build), Onboarding.SlotKey(2) };
 
         Assert.True(Onboarding.IsNew(Activity.Build, facts, explained));
@@ -309,7 +315,8 @@ public class OnboardingTest
         // Every other screen's whole first explanation is its tour. A banner elsewhere would be the
         // "too crowded and too small" paragraph coming back.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99,
+                                         MasteryPointsEarned: 9999);
         foreach (var screen in Enum.GetValues<Activity>().Where(a => a != Activity.Build))
             Assert.Null(Onboarding.BannerFor(screen, everything, Array.Empty<string>()));
     }

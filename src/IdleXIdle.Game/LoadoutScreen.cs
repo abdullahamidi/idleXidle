@@ -839,13 +839,26 @@ public sealed class LoadoutScreen
             if (moved)
             {
                 var onto = SlotUnder(hit);
+                if (from >= 0 && Loadout.IsSignatureSlot(from))
+                {
+                    _msg = "YOUR HUNTER'S OWN SKILL ALWAYS GOES FIRST.";
+                    Sound?.Play("sfx_error", 0.35f);
+                    return;
+                }
                 if (from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
                 {
-                    _slot = onto; _pick = Pick.Slot;
+                    // WHERE IT LANDED, not where it was dropped: a drag onto the signature's slot is
+                    // answered with the earliest place that exists, which is the one under it.
+                    var landed = Loadout.SignatureSlot == 0 && onto == 0 ? 1 : onto;
+                    _slot = landed; _pick = Pick.Slot;
                     Dirty = true; _buildRev++;
-                    PulseSlot(onto);
+                    PulseSlot(landed);
                     Sound?.Play("sfx_weave", 0.5f);
-                    _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
+                    _msg = landed == 0
+                        ? "FIRST IN LINE — IT WINS EVERY TIED BEAT."
+                        : landed == 1 && Loadout.SignatureSlot == 0
+                            ? "RIGHT BEHIND YOUR HUNTER'S OWN SKILL."
+                            : $"NOW SLOT {landed + 1}.";
                 }
                 return;
             }
@@ -868,7 +881,10 @@ public sealed class LoadoutScreen
             {
                 _slot = Loadout.AddSkill(); _pick = Pick.Slot; _vowListOpen = false;
                 Dirty = true; _buildRev++;
-                _msg = "PICK A SKILL FROM THE LIBRARY FOR THIS SLOT.";
+                var spare = KnownSkills().Count - skills.Count(sk => SkillCatalogue.Find(sk.SkillId) is not null);
+                _msg = spare > 0
+                    ? "PICK A SKILL FROM THE LIBRARY FOR THIS SLOT."
+                    : "YOU HAVE NO SPARE SKILL YET — LEARN ONE ON THE MASTERY TREE.";
             }
             return;
         }
@@ -1111,6 +1127,15 @@ public sealed class LoadoutScreen
                 if (Loadout.ToggleKeystone(_pickKeystoneId, DiscoveredKeystones)) { Dirty = true; _buildRev++; _msg = ""; }
                 break;
             default:
+                // THE SIGNATURE IS NOT THE PLAYER'S TO CLEAR. The loadout refuses it, and a screen that
+                // said "SLOT CLEARED." over a slot that had not cleared would be the worse half of the
+                // bug: a rule the player cannot see, reported as an action they did.
+                if (Loadout.IsSignatureSlot(_slot))
+                {
+                    _msg = "THIS IS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.";
+                    Sound?.Play("sfx_error", 0.35f);
+                    break;
+                }
                 Loadout.RemoveSkill(_slot);
                 _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
                 Dirty = true; _buildRev++; _msg = "SLOT CLEARED.";
@@ -1238,9 +1263,16 @@ public sealed class LoadoutScreen
             var line3 = row.Bottom - UiMetrics.Space(8) - UiTypography.Body;
             if (!filled || def is null)
             {
+                // AN EMPTY ROW WITH NOTHING TO PUT IN IT IS NOT AN INVITATION. A shared skill is
+                // taught by a road on the mastery tree, and until one is the library holds a single
+                // usable tile — so a row that says PICK A SKILL sends the player to a wall of locks
+                // (playtest 2026-09-09). The row says which door opens it instead.
+                var spare = KnownSkills().Count - Loadout.Skills.Count(sk => SkillCatalogue.Find(sk.SkillId) is not null);
                 _ui.Icon(b, "ui_slot_locked", gbox, Slate);
-                _ui.TextBig(b, "EMPTY SLOT", tx, row.Y + pad, UiInk.Empty, UiTypography.Headline);
-                _ui.TextBig(b, _ui.ShortenBig("PICK A SKILL FROM THE LIBRARY", right - tx, UiTypography.Secondary), tx, row.Y + pad + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
+                _ui.TextBig(b, spare > 0 ? "EMPTY SLOT" : "NO SKILL FOR IT YET", tx, row.Y + pad, UiInk.Empty, UiTypography.Headline);
+                _ui.TextBig(b, _ui.ShortenBig(spare > 0 ? "PICK A SKILL FROM THE LIBRARY" : "LEARN ONE ON THE MASTERY TREE",
+                                              right - tx, UiTypography.Secondary),
+                            tx, row.Y + pad + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
                 continue;
             }
             _ui.Icon(b, $"icon_skill_{def.Id}", gbox, col);

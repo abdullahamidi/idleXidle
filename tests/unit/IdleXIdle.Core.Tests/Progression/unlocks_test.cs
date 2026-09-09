@@ -152,7 +152,8 @@ public class UnlocksTest
         // And the gate really does stop at four — past that the trait tree is the source, which is an
         // existing reward rather than a starting condition.
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
-                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99);
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitsDiscovered: 99,
+                                         MasteryPointsEarned: 9999);
         Assert.Equal(4, Unlocks.SkillSlots(everything));
     }
 

@@ -120,6 +120,75 @@ public static class MasteryCatalog
     public static int BranchCost(Branch branch)
         => Nodes.Where(n => n.Branch == branch && n.Kind != MasteryKind.Bridge).Sum(n => n.Cost);
 
+    /// <summary>What one node costs INCLUDING everything that must be taken to reach it.</summary>
+    /// <remarks>
+    /// The node's own cost plus the cheapest chain of prerequisites behind it. Recursive, and safe
+    /// because the tree is a directed acyclic graph rooted at <see cref="StartId"/> (every node names
+    /// parents nearer the centre than itself).
+    /// </remarks>
+    public static int PathCost(string id)
+    {
+        var n = ById(id);
+        if (n is null || n.Prereqs.Count == 0) return n?.Cost ?? 0;
+        return n.Cost + n.Prereqs.Min(PathCost)
+               + (n.SecondPrereqs.Count > 0 ? n.SecondPrereqs.Min(PathCost) : 0);
+    }
+
+    /// <summary>
+    /// What it costs a player to have been TAUGHT their 1st, 2nd, … nth skill, cheapest route first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Derived from the catalogue rather than typed, because the number this answers is the one
+    /// <c>Unlocks.SkillSlots</c> gates on: a slot must not open before the world can pay for a skill
+    /// to put in it. When a road's cost or position moves, the gates move with it.
+    /// </para>
+    /// <para>
+    /// Greedy and therefore a LOWER BOUND, which is the honest direction: it takes the cheapest road
+    /// first, then the next cheapest given what that already paid for (a second road on the same
+    /// branch reuses its trunk). A player who spends elsewhere reaches these later, never sooner.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<int> CheapestRoadPaths(int roads)
+    {
+        var costs = new List<int>();
+        var taken = new HashSet<string>(StringComparer.Ordinal);
+        var remaining = Nodes.Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id).ToList();
+        var spent = 0;
+
+        for (var i = 0; i < roads && remaining.Count > 0; i++)
+        {
+            var best = remaining.OrderBy(id => MarginalCost(id, taken)).ThenBy(id => id, StringComparer.Ordinal).First();
+            spent += MarginalCost(best, taken);
+            MarkTaken(best, taken);
+            remaining.Remove(best);
+            costs.Add(spent);
+        }
+        return costs;
+
+        // What this road adds on top of what is already bought — its own cost plus any prerequisite
+        // still unpaid, down the cheapest chain.
+        static int MarginalCost(string id, HashSet<string> owned)
+        {
+            if (owned.Contains(id)) return 0;
+            var n = ById(id);
+            if (n is null) return 0;
+            var cost = n.Cost;
+            if (n.Prereqs.Count > 0) cost += n.Prereqs.Min(p => MarginalCost(p, owned));
+            if (n.SecondPrereqs.Count > 0) cost += n.SecondPrereqs.Min(p => MarginalCost(p, owned));
+            return cost;
+        }
+
+        static void MarkTaken(string id, HashSet<string> owned)
+        {
+            if (!owned.Add(id)) return;
+            var n = ById(id);
+            if (n is null) return;
+            if (n.Prereqs.Count > 0) MarkTaken(n.Prereqs.OrderBy(p => MarginalCost(p, owned)).First(), owned);
+            if (n.SecondPrereqs.Count > 0) MarkTaken(n.SecondPrereqs.OrderBy(p => MarginalCost(p, owned)).First(), owned);
+        }
+    }
+
     private static SkillShape S => SkillShape.None;
 
     private static IReadOnlyList<MasteryNode> Build()
