@@ -190,6 +190,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Is a tour on screen? While true, input belongs to it and nothing else teaches.</summary>
     private bool _tourActive;
 
+    /// <summary>
+    /// Where the tour's card was drawn — the ONE rectangle a click may land on while a tour is up.
+    /// </summary>
+    /// <remarks>
+    /// Latched by <see cref="DrawTour"/> and read by the input pass on the next frame, the way every
+    /// screen in this game hit-tests what it drew. It is empty until the first card has been drawn,
+    /// which is correct: there is nothing to click before there is a card.
+    /// </remarks>
+    private Rectangle _tourCard;
+
     /// <summary>The screen the running tour is about. The Hunt's tour is the intro.</summary>
     private Activity _tourScreen;
 
@@ -327,21 +337,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // threshold, because Gleam arrives a few at a time all through a hunt and a badge on every kill
     // is not feedback, it is weather.
 
-    /// <summary>The three pills' true values as of the last Update — the tick's target.</summary>
-    private readonly long[] _pillTrue = new long[3];
+    /// <summary>Each purse slot's true value as of the last Update — the tick's target.</summary>
+    /// <remarks>Sized by <see cref="PurseCount"/> and indexed by the frozen Purse* constants, so a
+    /// slot's motion state means the same thing whether or not its capsule is on the row today.</remarks>
+    private readonly long[] _pillTrue = new long[PurseCount];
 
     /// <summary>What each pill is currently PRINTING; eases to <see cref="_pillTrue"/>.</summary>
-    private readonly double[] _pillShown = new double[3];
+    private readonly double[] _pillShown = new double[PurseCount];
 
     /// <summary>Seconds left of a pill's reaction flash.</summary>
-    private readonly float[] _pillFlash = new float[3];
+    private readonly float[] _pillFlash = new float[PurseCount];
 
     /// <summary>Gains banked but not yet worth announcing, per pill.</summary>
-    private readonly long[] _pillGainAcc = new long[3];
+    private readonly long[] _pillGainAcc = new long[PurseCount];
 
     /// <summary>The gain each pill is announcing, and the seconds left of that announcement.</summary>
-    private readonly long[] _pillGainShow = new long[3];
-    private readonly float[] _pillGainT = new float[3];
+    private readonly long[] _pillGainShow = new long[PurseCount];
+    private readonly float[] _pillGainT = new float[PurseCount];
 
     /// <summary>
     /// Seconds the pills have been watching. Until <see cref="PillWarmSeconds"/> they only TRACK: they
@@ -1438,6 +1450,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _runsWithVowKept = 0;
         _bossesFelled = 0;
         _highestMasteryAwarded = 0;
+        // FOUND BY tools/check_reset_clears.py ON ITS FIRST RUN, and it is the same fault as the
+        // absence below: a latch the loader restores and the reset never put back. Sockets are earned
+        // by conquest and depth, both of which a new game has none of — but the latch is floored at
+        // what the account was WEARING, so a reset handed a starter three keystone sockets.
+        _keystoneSocketsEarned = 0;
         _hasSave = false;
 
         // Nothing pending: SeedNewGame below parks only the first-boot message.
@@ -1449,10 +1466,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _pendingChestsOpened = 0;
         _pendingFreeSocketUsed = false;   // a fresh game's first gem is free again
 
+        // ── THE ABSENCE GOES WITH THE GAME. ──────────────────────────────────────────────────────
+        //
+        // Playtest 2026-09-09: "I reset the game, but I died at around wave 17 — normally I have no
+        // way of getting there. The Welcome Back screen probably was not reset. Starting the game over
+        // should lose all my AFK progress."
+        //
+        // Exactly right, and worse than it looks. The free offline resume is a HOST field, not a saved
+        // one, and it was never cleared here: the reset deletes the file, mints a fresh world with no
+        // conquests and no depth, rebuilds every screen — and then the very next descent still opened
+        // at the wave the DELETED account's absence had reached. The depth cap that keeps the resume
+        // honest is applied once, when a save loads, so a reset never re-asked it; and the spend
+        // counter compares against the new screen's run count, which the rebuild had just put back to
+        // zero, so the resume was not even spent after the first descent. A new game inherited an old
+        // account's night of hunting and could not give it back.
+        //
+        // Everything an absence produced is cleared together: the panel, the flag that shows it, and
+        // the three fields that carry the resume. The Warren screen's "while you were away" line reads
+        // _welcome every frame, so it goes silent with it.
+        _welcome = null;
+        _showWelcome = false;
+        _offlineResumeWave = 0;
+        _offlineResumeRegion = "";
+        _offlineResumeRuns = 0;
+
         // The teaching layer starts over with the game: the intro is due again, nothing is explained,
         // no tile has been visited, and no notice is waiting.
         _rosterBaselined = false;
         _tourActive = false;
+        _tourCard = Rectangle.Empty;
         _tourStep = 0;
         _introDecided = false;
         _introSeen = false;
@@ -3561,14 +3603,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
         // developer happens to press in the sixty frames advances the card — a capture asked for card
         // five came back as card six. The rig poses a card by number; it never plays.
-        if (_tourActive && !CaptureRig && (_clicked || AnyKeyPressed()))
+        if (_tourActive && !CaptureRig)
         {
-            // Raw edge, not Pressed(): Pressed reads !_swallowInput, which is already true.
+            // ── THE TOUR ADVANCES FROM ITS OWN CARD, AND FROM NOWHERE ELSE. ─────────────────────
+            //
+            // It used to advance on ANY click and ANY key, anywhere on the screen. Playtest
+            // 2026-09-09: "while in the tutorial, clicking outside the screen also fast-forwards it."
+            // Worse than an accident — it made the tour's own spotlight into a lie. The ring goes
+            // round a real control, the card beside it says what that control does, and pressing the
+            // control skipped the explanation instead of using it. Every gold ring in the intro was
+            // a button that did the wrong thing.
+            //
+            // Now: the CARD is the control. A click on it (or its NEXT button) continues, SPACE and
+            // ENTER continue, ESC skips, and a click anywhere else is swallowed and does nothing —
+            // which is what a modal means. The ring is a pointer now, not a button; see DrawTour.
+            //
+            // Raw edges, not Pressed(): Pressed reads !_swallowInput, which is already true.
             var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);
-            if (escape || _tourStep + 1 >= _tour.Count) EndTour();
-            else _tourStep++;
-            _sound.Play("sfx_click", 0.7f);
-            // _swallowInput deliberately STAYS true: this frame's input was spent on the tour.
+            var keyGo = (_keys.IsKeyDown(Keys.Space) && _prevKeys.IsKeyUp(Keys.Space))
+                        || (_keys.IsKeyDown(Keys.Enter) && _prevKeys.IsKeyUp(Keys.Enter));
+            var clickGo = _clicked && _tourCard.Contains(ChromeMouse);
+            if (escape) EndTour();
+            else if (keyGo || clickGo)
+            {
+                if (_tourStep + 1 >= _tour.Count) EndTour();
+                else _tourStep++;
+                _sound.Play("sfx_click", 0.7f);
+            }
+            // _swallowInput deliberately STAYS true whatever happened: a click that missed the card
+            // is spent here rather than reaching the frozen screen underneath.
         }
 
         // A CHEST REVEAL IS MODAL TOO: while it is up, a click (or Space / Enter) advances or skips IT —
@@ -4568,6 +4631,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void EndTour()
     {
         _tourActive = false;
+        _tourCard = Rectangle.Empty;
         _explained.Add(_tourKey.Length > 0 ? _tourKey : Onboarding.ScreenKey(_tourScreen));
         _visited.Add(_tourScreen);
         if (_tourScreen == Activity.Hunt) _introSeen = true;
@@ -5276,7 +5340,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (step.Target == TourTarget.LessonSlot) DrawLessonCard(TutorialStep.Watch, 1f);
 
         DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
-        foreach (var h in holes) TourOutline(h, 3, NavGold);
+        // THE RING IS A POINTER, NOT A BUTTON. It used to be a solid gold outline — the same shape
+        // this game puts round a SELECTED control — so the intro spent forty cards ringing things that
+        // could not be pressed. Drawn as corner brackets instead: a viewfinder marks what is being
+        // talked about and has never in any interface meant "press me".
+        foreach (var h in holes) TourBrackets(h);
 
         // The card's height is its lines: a title line, the wrapped body at the paragraph pitch, a
         // footer line — so a bigger profile makes a taller card, never a body that leaves its plate.
@@ -5309,13 +5377,48 @@ public class Game1 : Microsoft.Xna.Framework.Game
             y += UiTypography.Pitch(UiTypography.Body);
         }
 
-        // The last card's footer says what the click does next: the intro's hands over to the first
-        // wave; every other tour's hands the screen back.
+        // ── A REAL CONTROL, WHERE THE INSTRUCTION USED TO BE. ────────────────────────────────────
+        //
+        // The footer said CLICK TO CONTINUE and the whole screen obeyed it, which is how a ringed
+        // nav tile came to advance the tour instead of opening the screen it was ringing. The verb
+        // now belongs to a button that is visibly the only thing lit, and ESC still skips.
         var last = stepNo + 1 >= _tour.Count;
-        var footer = !last ? "CLICK TO CONTINUE  ·  ESC SKIPS"
-                   : _tourScreen == Activity.Hunt ? "CLICK TO BEGIN" : "CLICK TO FINISH";
-        _ui.TextBig(_batch, footer, card.X + pad, card.Bottom - pad - UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4),
+        var verb = !last ? "NEXT" : _tourScreen == Activity.Hunt ? "BEGIN THE HUNT" : "DONE";
+        var btnH = UiMetrics.Control(44);
+        var btnW = Math.Min(card.Width - pad * 2, UiMetrics.Control(240));
+        var btn = new Rectangle(card.Right - pad - btnW, card.Bottom - pad - btnH + UiMetrics.Space(6), btnW, btnH);
+        // Drawn only — the press is spent in the input pass, which owns the whole frame while a tour
+        // is up. A Button that took the click here would fire on a frame the tour had already spent.
+        _ui.Button(_batch, btn, verb, ChromeMouse, false, true, ButtonStyle.Primary);
+        _ui.TextBig(_batch, "ESC SKIPS", card.X + pad,
+                    btn.Y + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(2),
                     UiInk.Secondary, UiTypography.Secondary);
+        _tourCard = card;
+    }
+
+    /// <summary>
+    /// The tour's spotlight marker: four corner brackets, not a closed ring.
+    /// </summary>
+    /// <remarks>
+    /// A closed gold outline is this game's SELECTED state — the mastery tree, the bag, the roster all
+    /// use it — so ringing a control during a tour said "this is chosen, press it" about something the
+    /// tour had frozen. Brackets are a viewfinder: they mark, they do not offer.
+    /// </remarks>
+    private void TourBrackets(Rectangle r)
+    {
+        var t = Math.Max(2, UiMetrics.Control(3));
+        var len = Math.Clamp(Math.Min(r.Width, r.Height) / 4, UiMetrics.Control(10), UiMetrics.Control(28));
+        var g = UiMetrics.Space(3);
+        var x0 = r.X - g; var y0 = r.Y - g; var x1 = r.Right + g; var y1 = r.Bottom + g;
+        void Corner(int cx, int cy, int dx, int dy)
+        {
+            _ui.Fill(_batch, new Rectangle(Math.Min(cx, cx + dx * len), cy - (dy < 0 ? t : 0), len, t), NavGold);
+            _ui.Fill(_batch, new Rectangle(cx - (dx < 0 ? t : 0), Math.Min(cy, cy + dy * len), t, len), NavGold);
+        }
+        Corner(x0, y0, 1, 1);
+        Corner(x1, y0, -1, 1);
+        Corner(x0, y1, 1, -1);
+        Corner(x1, y1, -1, -1);
     }
 
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
@@ -7733,14 +7836,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _modalWasUp = modal;
         _modalFade = Math.Max(0f, _modalFade - dt);
 
-        // THE PILLS. Order matches DrawCurrencyPills: scrap, dust, gleam.
-        Span<long> now = stackalloc long[3];
-        now[0] = (long)_hunter.MaterialOf(Material.Scrap);
-        now[1] = (long)_dust.MemoryDust;
-        now[2] = _hunter.Gleam;
+        // THE PILLS. Indexed by the frozen Purse* constants, so a pill's motion state cannot change
+        // meaning when the row grows. A pill with no capsule still ticks: it costs nothing, and it
+        // means the first Crystal ever salvaged arrives with its flash rather than appearing settled.
+        Span<long> now = stackalloc long[PurseCount];
+        for (var k = 0; k < PurseCount; k++) now[k] = PurseValue(k);
 
         _pillWarm += dt;
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < PurseCount; i++)
         {
             if (_pillWarm < PillWarmSeconds)
             {
@@ -7828,73 +7931,54 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawCurrencyPills()
     {
-        // Rev 4 §20: ONE currency per capsule — no packed "S.. E.. C.. X..". The three most Hunt-relevant
-        // (Gleam, Dust, Scrap); the finer materials (Essence/Core/Crystal) live on the Forge. Three capsules
-        // fit the bar's 686px without crossing into the stage header.
-        // Rev 4 §20.4: icon + abbreviated value ONLY (no long text label). A labelled pill with an 8-digit
-        // value (e.g. 130.6M GLEAM) balloons past the 686px bar and crosses into the stage header — the icon
-        // carries the identity, the number is abbreviated. The check is a crash-SAFE dev warning, never a
-        // Debug.Assert (a failed assert aborts the game's Debug build — the "Continue" crash).
-        var scrapVal = (long)_hunter.MaterialOf(Material.Scrap);
-        var dustVal = (long)_dust.MemoryDust;
-        var gleamVal = _hunter.Gleam;
+        // ONE CURRENCY PER CAPSULE — never a packed "S.. E.. C.. X..". Gleam, Dust and Scrap are
+        // always here; Essence, Core and Crystal join the row once the account holds any (see the
+        // Purse table). Icon and abbreviated value only: a labelled pill with an eight-digit value
+        // balloons past the bar and crosses into the stage header.
+        //
+        // WHAT A PILL PRINTS is the walking number (TickChromeMotion), not the true one — a spend or a
+        // payout moves it over a transition instead of swapping it between two frames. The HOVER reads
+        // the exact figure: the animation is for the corner of the eye, the tooltip for "how much".
+        var shown = PurseOrder.Where(PurseShown).ToArray();
 
-        // THE CHAIN IS MEASURED BEFORE IT IS DRAWN (UI polish P2). The value is drawn at the Label rung,
-        // which follows the profile, so at 150 % three late-game "130.6M"s would run the row into the
-        // stage header. When the chain would cross PillChainMinLeft every value drops its decimals —
-        // "131M" — the icon carries the identity and the hover the exact figure, so nothing is lost.
-        // UiKit.Pill itself is untouched: its capsule is a fixed 60 and the row's y stays with it.
-        // WHAT THE PILL PRINTS is the walking number (see TickChromeMotion), not the true one — a spend
-        // or a payout moves it to its new figure over a transition instead of swapping it between two
-        // frames. The HOVER still reads the exact, true value: the animation is for the corner of the
-        // eye, and the tooltip is for the question "how much exactly".
-        var walk = new[] { (long)Math.Round(_pillShown[0]), (long)Math.Round(_pillShown[1]), (long)Math.Round(_pillShown[2]) };
-        var values = new[] { Abbrev(walk[0]), Abbrev(walk[1]), Abbrev(walk[2]) };
+        // THE CHAIN IS MEASURED BEFORE IT IS DRAWN. The value is set at the Label rung, which follows
+        // the profile, so at 150 % a row of six late-game figures would run into the stage header.
+        // When the chain would cross PillChainMinLeft every value drops its decimals — "131M" — and
+        // the icon carries the identity.
+        var walk = shown.Select(i => (long)Math.Round(_pillShown[i])).ToArray();
+        var values = walk.Select(v => Abbrev(v)).ToArray();
         if (PillChainLeft(values) < PillChainMinLeft)
-            values = new[] { Abbrev(walk[0], compact: true), Abbrev(walk[1], compact: true), Abbrev(walk[2], compact: true) };
+            values = walk.Select(v => Abbrev(v, compact: true)).ToArray();
 
-        var e1 = PillRowRight;
-        var l1 = _ui.Pill(_batch, e1, PillRowTop, "mat_scrap", new Color(0x9A, 0xC0, 0x88), values[0], "", new Color(0x9A, 0xC0, 0x88), PillHeight);
-        var e2 = l1 - PillGap;
-        var l2 = _ui.Pill(_batch, e2, PillRowTop, "ui_memory_dust", default, values[1], "", new Color(0x9E, 0x86, 0xFF), PillHeight);
-        var e3 = l2 - PillGap;
-        var leftEdge = _ui.Pill(_batch, e3, PillRowTop, "ui_gleam_coin", default, values[2], "", UiInk.Accent, PillHeight);
-        if (leftEdge < PillChainMinLeft) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
+        // Right to left, each capsule starting where the last one ended.
+        var rects = new Rectangle[shown.Length];
+        var edge = PillRowRight;
+        for (var k = 0; k < shown.Length; k++)
+        {
+            var left = _ui.Pill(_batch, edge, PillRowTop, PurseIcon[shown[k]], default, values[k], "",
+                                PurseInk[shown[k]], PillHeight);
+            rects[k] = new Rectangle(left, PillRowTop, edge - left, PillHeight);
+            edge = left - PillGap;
+        }
+        if (edge < PillChainMinLeft) System.Diagnostics.Debug.WriteLine($"Currency bar (left {edge}) crowds the stage header.");
 
-        // WHAT AM I LOOKING AT. The pills are icon + "4.2M", which names neither the resource nor the
-        // real figure — hover does both, in plain words and exact digits (playtest: "3 kaynağın ne
-        // olduğu anlaşılır değil... tam sayısı yazsın üstüne gelince"). Invariant grouping, so the
-        // number reads the same on every machine. The SCRAP pill's hover lists ALL FOUR material
-        // tiers — Essence, Core and Crystal have no pill of their own, and "Core sayısını
-        // göremiyorum" is exactly the question this answers.
-        var inv = System.Globalization.CultureInfo.InvariantCulture;
-        var allMats = $"SCRAP {scrapVal.ToString("N0", inv)}  ·  ESSENCE {_hunter.MaterialOf(Material.Essence).ToString("N0", inv)}"
-                      + $"  ·  CORE {_hunter.MaterialOf(Material.Core).ToString("N0", inv)}"
-                      + $"  ·  CRYSTAL {_hunter.MaterialOf(Material.Crystal).ToString("N0", inv)}";
-        var pillRows = new (Rectangle R, string Name, long V)[]
+        // WHERE THE GLEAM PILL ACTUALLY IS, published for the intro's spotlight — read from the row
+        // this draw just laid out, so the card that says GLEAM and the light that shows it cannot
+        // drift apart. (Card four used to light a hand-written rectangle framing all three pills.)
+        var gleamAt = Array.IndexOf(shown, PurseGleam);
+        if (gleamAt >= 0) s_gleamPillRect = rects[gleamAt];
+
+        // THE SPEND REACTS AT THE PILL (brief sec. 37) rather than by flying a coin across the page:
+        // the capsule takes a rim in its own colour that fades over a transition. A flash is a state
+        // change rather than movement, so Reduced Motion keeps it.
+        for (var k = 0; k < shown.Length; k++)
         {
-            (new Rectangle(l1, PillRowTop, e1 - l1, PillHeight), allMats, -1),
-            (new Rectangle(l2, PillRowTop, e2 - l2, PillHeight), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
-            (new Rectangle(leftEdge, PillRowTop, e3 - leftEdge, PillHeight), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
-        };
-        // WHERE THE GLEAM PILL ACTUALLY IS, published for the intro's spotlight. Card 4 is titled
-        // GLEAM and lit a hand-written (1440,4,400,84) rectangle that frames all THREE pills — so the
-        // card named one resource and the light showed three, which is the first thing the playtest
-        // reported (2026-09-09: "the resource display lists only 'Gleam' but shows all three resource
-        // types"). Read from the row the draw just laid out, so the two cannot drift again.
-        s_gleamPillRect = pillRows[2].R;
-        // THE SPEND REACTS HERE (brief sec. 37), at the pill, rather than by flying a coin across the
-        // page: the capsule takes a rim in its own colour that fades over a transition. A flash is a
-        // state change rather than movement, so Reduced Motion keeps it — what Reduced drops is the
-        // easing, and TickChromeMotion has already landed the number by the time it gets here.
-        var pillInk = new[] { new Color(0x9A, 0xC0, 0x88), new Color(0x9E, 0x86, 0xFF), UiInk.Accent };
-        for (var i = 0; i < 3; i++)
-        {
-            var rr = pillRows[i].R;
+            var i = shown[k];
+            var rr = rects[k];
             if (_pillFlash[i] > 0f)
             {
                 var a = _pillFlash[i] / UiMotion.Transition;
-                var ink = pillInk[i] * (a * 0.75f);
+                var ink = PurseInk[i] * (a * 0.75f);
                 _ui.Fill(_batch, new Rectangle(rr.X, rr.Y, rr.Width, 2), ink);
                 _ui.Fill(_batch, new Rectangle(rr.X, rr.Bottom - 2, rr.Width, 2), ink);
                 _ui.Fill(_batch, new Rectangle(rr.X, rr.Y, 2, rr.Height), ink);
@@ -7903,28 +7987,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // AND A SUBSTANTIAL GAIN SAYS SO (brief sec. 38), under its own pill, once — the bank in
             // TickChromeMotion decides what counts as substantial. Never while the pill is hovered:
-            // the tooltip lives on that line and two answers in one place is neither.
+            // the tooltip lives on that line, and two answers in one place is neither.
             if (_pillGainT[i] > 0f && _pillGainShow[i] > 0 && !rr.Contains(ChromeMouse))
             {
                 var fade = Math.Min(1f, _pillGainT[i] / 0.3f);
                 _ui.TextRight(_batch, "+" + Abbrev(_pillGainShow[i]), rr.Right, rr.Bottom + UiMetrics.Space(4),
-                              pillInk[i] * fade);
+                              PurseInk[i] * fade);
             }
         }
 
-        foreach (var (rr, name, v) in pillRows)
+        // WHAT AM I LOOKING AT, AND WHERE DOES MORE COME FROM. The pill is an icon and "4.2M", which
+        // names neither the resource nor the real figure; the hover does both — the name, where it is
+        // earned, and every digit. It used to say what the resource was FOR, which is the question the
+        // player is not asking: they are looking at a number that moved, or at a price they cannot
+        // meet, and both are answered by the faucet (playtest 2026-09-09).
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        for (var k = 0; k < shown.Length; k++)
         {
+            var rr = rects[k];
             if (!rr.Contains(ChromeMouse)) continue;
-            var text = v < 0 ? name : $"{name}  ·  {v.ToString("N0", inv)}";
-            // The plate is its line plus a pad — 42 tall at 100 %, taller with the rung — hung under the capsules.
+            var text = $"{PurseSource[shown[k]]}  ·  {PurseValue(shown[k]).ToString("N0", inv)}";
+            // The plate is its line plus a pad — 42 tall at 100 %, taller with the rung — hung under
+            // the capsules, and it never leaves the page's right edge.
             var padX = UiMetrics.Space(14);
             var padY = UiMetrics.Space(10);
-            var w = _ui.Measure(text) + padX * 2;
+            var w = Math.Min(_ui.Measure(text) + padX * 2, UiKit.Page.Width - UiMetrics.Space(32));
             var tip = new Rectangle(Math.Min(rr.Right, UiKit.PageRight(16)) - w, PillRowTop + PillHeight + UiMetrics.Space(8), w,
                                     UiTypography.Label + padY * 2);
             _ui.Fill(_batch, tip, new Color(0x0E, 0x0A, 0x14, 0xF0));
             _ui.Fill(_batch, new Rectangle(tip.X, tip.Y, tip.Width, 2), NavGold * 0.6f);
-            _ui.TextRight(_batch, text, tip.Right - padX, tip.Y + padY, Bone);
+            _ui.TextRight(_batch, _ui.Shorten(text, w - padX * 2), tip.Right - padX, tip.Y + padY, Bone);
             break;
         }
     }
@@ -7932,6 +8024,71 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // ── The currency row's geometry. The capsules are UiKit.Pill's — a fixed 60 tall, icon 40, pads
     //    24 / 12 / 24 around the value — so the row is page geometry: it neither grows nor moves with
     //    the profile, only the value inside a capsule does.
+    // ── THE PURSE. Six things the account can hold, in the order the row draws them RIGHT to left.
+    //
+    // Playtest 2026-09-09: "Crystal and Essence are only visible once you enter the Forge screen. If
+    // they have uses elsewhere they need to stand globally."
+    //
+    // They do: a Crystal is what RESET ALL TRAINING costs, on a screen with no Crystal anywhere on it
+    // except inside the sentence asking for one. The three finer tiers had lived in a hover on the
+    // Scrap pill, which is not a place anybody looks for a number they are about to spend.
+    //
+    // A PILL APPEARS WHEN THE ACCOUNT HOLDS ANY. Gleam, Dust and Scrap are always there — the game
+    // pays them from the first wave — and Essence, Core and Crystal arrive with the first one
+    // salvaged, so the row grows with the account instead of showing three empty capsules to a player
+    // who has never seen a Rare. The row is right-anchored and already measures its own chain, so the
+    // extra capsules push leftward into space the early game was not using.
+    //
+    // The indices are FROZEN: 0/1/2 are the original three and the per-pill motion arrays are keyed by
+    // them, so the animation state of a pill cannot change meaning when the row grows.
+    private const int PurseCount = 6;
+    private const int PurseScrap = 0, PurseDust = 1, PurseGleam = 2, PurseEssence = 3, PurseCore = 4, PurseCrystal = 5;
+
+    /// <summary>Right to left: the materials cluster at the edge, then Dust, then Gleam.</summary>
+    private static readonly int[] PurseOrder = { PurseCrystal, PurseCore, PurseEssence, PurseScrap, PurseDust, PurseGleam };
+
+    private static readonly string[] PurseIcon =
+        { "mat_scrap", "ui_memory_dust", "ui_gleam_coin", "mat_essence", "mat_core", "mat_crystal" };
+
+    private static readonly Color[] PurseInk =
+    {
+        new(0x9A, 0xC0, 0x88), new(0x9E, 0x86, 0xFF), UiInk.Accent,
+        new(0x74, 0xC6, 0xE8), new(0xC0, 0x6E, 0xE0), new(0xF0, 0xC0, 0x48),
+    };
+
+    /// <summary>
+    /// WHERE EACH ONE COMES FROM — the hover's sentence.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-09-09: <i>"instead of saying what the resources are used for, let us write how
+    /// they are obtained."</i> The hovers said "GLEAM — PAYS FOR TRAINING (V)", which answers a
+    /// question the player is not asking: they are looking at a number that went up, or at a price
+    /// they cannot meet, and either way the useful answer is where MORE comes from. What it buys is
+    /// written on the thing it buys, at the moment of buying, in every screen that spends it.
+    /// </remarks>
+    private static readonly string[] PurseSource =
+    {
+        "SCRAP — SALVAGE COMMON AND UNCOMMON GEAR · THE WARREN'S SCAVENGER RUNS",
+        "MEMORY DUST — CONQUER A REGION · EACH MASTERY LEVEL · THE WARREN'S FORAGING PITS AND SENTRY BURROWS",
+        "GLEAM — EVERY WAVE YOU CLEAR PAYS IT · THE WARREN'S NURSERY AND TUNNELS",
+        "ESSENCE — SALVAGE RARE GEAR · THE WARREN'S RITUAL NEST AND SOUNDING CHAMBER",
+        "CORE — SALVAGE EPIC GEAR",
+        "CRYSTAL — SALVAGE LEGENDARY GEAR",
+    };
+
+    private long PurseValue(int i) => i switch
+    {
+        PurseScrap => (long)_hunter.MaterialOf(Material.Scrap),
+        PurseDust => _dust.MemoryDust,
+        PurseGleam => _hunter.Gleam,
+        PurseEssence => (long)_hunter.MaterialOf(Material.Essence),
+        PurseCore => (long)_hunter.MaterialOf(Material.Core),
+        _ => (long)_hunter.MaterialOf(Material.Crystal),
+    };
+
+    /// <summary>Does this one have a capsule right now? The first three always; the rest once held.</summary>
+    private bool PurseShown(int i) => i <= PurseGleam || PurseValue(i) > 0;
+
     /// <summary>The capsules' top edge — level with the settings gear beside them.</summary>
     private const int PillRowTop = 16;
     /// <summary>A capsule's height (UiKit.Pill's) — at the control rate, so the capsule grows with the digits inside it (chrome-17).</summary>

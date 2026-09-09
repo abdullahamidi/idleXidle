@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Progression;
@@ -108,6 +108,35 @@ public class onboarding_vocabulary_test
             Assert.True(card.Body.Contains(term, StringComparison.OrdinalIgnoreCase),
                         $"{target} is the ledger's introducer for \"{term}\" and no longer says it");
         }
+    }
+
+    [Fact]
+    public void test_no_tour_card_orders_a_click_the_tour_will_not_honour()
+    {
+        // A TOUR CARD DESCRIBES A SCREEN IT HAS FROZEN. While one is up the whole screen is modal —
+        // the card is the only thing a click may land on — so an imperative on the card is an order
+        // the game refuses. Playtest 2026-09-09: "it still says you can go there by clicking here, and
+        // the button looks clickable, but clicking it fast-forwards the tutorial."
+        //
+        // Fourteen cards were written that way, and each of them had a gold ring drawn round the
+        // control it named. The ring is corner brackets now and the card carries the only button; this
+        // holds the other half — the words. The indicative is always available: "a row reads out here"
+        // says the same thing as "click a row" and promises nothing about this instant.
+        var orders = new List<string>();
+        foreach (var (screen, step) in AllCards())
+        foreach (var verb in new[] { "CLICK ", "PRESS ", "TAP " })
+        {
+            // The verb as an ORDER — at the start of a sentence. "…and the Gleam you spent" is prose;
+            // "Click a row" is an instruction, and only the second one is a promise.
+            foreach (var sentence in step.Body.Split(". ", StringSplitOptions.RemoveEmptyEntries))
+                if (sentence.TrimStart().StartsWith(verb, StringComparison.OrdinalIgnoreCase))
+                    orders.Add($"{screen}/{step.Target}: \"{sentence.Trim()}\"");
+        }
+
+        foreach (var o in orders) _out.WriteLine(o);
+        Assert.True(orders.Count == 0,
+                    "a tour card orders a click it has frozen:" + Environment.NewLine
+                    + string.Join(Environment.NewLine, orders));
     }
 
     [Fact]

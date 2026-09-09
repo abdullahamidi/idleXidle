@@ -2216,11 +2216,11 @@ public sealed class ForgeScreen
         var marks = StripMarks(hunter, item);
         var rows = new (string Key, string Icon, Color Tint, string Name, long Held, string Use)[]
         {
-            ("gleam", "currency_gleam", Gold, "GLEAM", hunter.Gleam, GleamUse),
-            ("scrap", MatIcon[0], MatColor[0], "SCRAP", hunter.MaterialOf(Material.Scrap), MatUse(Material.Scrap)),
-            ("essence", MatIcon[1], MatColor[1], "ESSENCE", hunter.MaterialOf(Material.Essence), MatUse(Material.Essence)),
-            ("core", MatIcon[2], MatColor[2], "CORE", hunter.MaterialOf(Material.Core), MatUse(Material.Core)),
-            ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", hunter.MaterialOf(Material.Crystal), MatUse(Material.Crystal)),
+            ("gleam", "currency_gleam", Gold, "GLEAM", hunter.Gleam, GleamSource),
+            ("scrap", MatIcon[0], MatColor[0], "SCRAP", hunter.MaterialOf(Material.Scrap), MatSource(Material.Scrap)),
+            ("essence", MatIcon[1], MatColor[1], "ESSENCE", hunter.MaterialOf(Material.Essence), MatSource(Material.Essence)),
+            ("core", MatIcon[2], MatColor[2], "CORE", hunter.MaterialOf(Material.Core), MatSource(Material.Core)),
+            ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", hunter.MaterialOf(Material.Crystal), MatSource(Material.Crystal)),
         };
 
         // FIVE CELLS through the house resource cell (UiKit.ResourceCell): the well says which
@@ -3331,12 +3331,12 @@ public sealed class ForgeScreen
         if (_ui.Button(b, PrimaryBtn(true), $"SALVAGE FOR {mats} {MaterialTiers.Name(tier)}", hit, clicked,
                        enabled: true, style: ButtonStyle.Primary))
             Dismantle(hunter, item);
-        _ui.TextBig(b, _ui.ShortenBig($"{MaterialTiers.Name(tier)} — {MatUse(tier)}", FW, UiTypography.Secondary),
+        _ui.TextBig(b, _ui.ShortenBig($"{MaterialTiers.Name(tier)} — {MatSource(tier)}", FW, UiTypography.Secondary),
                     FX, PriceY(true), Slate, UiTypography.Secondary);
 
         if (_ui.Button(b, OptionBtn, $"SELL FOR {item.SellValue:N0} GLEAM", hit, clicked)) Sell(hunter, item);
         if (ShowOptionPrice)
-            _ui.TextBig(b, _ui.ShortenBig($"GLEAM — {GleamUse}", FW, UiTypography.Secondary),
+            _ui.TextBig(b, _ui.ShortenBig($"GLEAM — {GleamSource}", FW, UiTypography.Secondary),
                         FX, OptionPriceY, Slate, UiTypography.Secondary);
 
         // A note under the rows, when the rows leave it a line — never over the last of them.
@@ -3599,16 +3599,25 @@ public sealed class ForgeScreen
         if (!_ui.Icon(b, key, box)) _ui.Diamond(b, box, tint);
     }
 
-    /// <summary>What each material is FOR, in the wallet's words — the question "what is Core?" answered where Core is.</summary>
-    private static string MatUse(Material m) => m switch
+    /// <summary>
+    /// WHERE EACH MATERIAL COMES FROM — the question a wallet is actually asked.
+    /// </summary>
+    /// <remarks>
+    /// It said what each one was FOR, and the player is standing at the bench that spends it: every
+    /// tab, every price and every refusal on this screen already names the use, in the moment of
+    /// using. What none of them answers is where MORE comes from, and that is what somebody short of
+    /// two Cores needs (playtest 2026-09-09: "instead of saying what the resources are used for, let
+    /// us write how they are obtained").
+    /// </remarks>
+    private static string MatSource(Material m) => m switch
     {
-        Material.Scrap => "pays for upgrades",
-        Material.Essence => "sets gems into sockets",
-        Material.Core => "re-rolls rare and epic enchants",
-        _ => "legendary re-rolls · greater upgrades",
+        Material.Scrap => "salvage common and uncommon gear",
+        Material.Essence => "salvage rare gear · the ritual nest",
+        Material.Core => "salvage epic gear",
+        _ => "salvage legendary gear",
     };
 
-    private const string GleamUse = "upgrades · stats · the shop";
+    private const string GleamSource = "every wave you clear pays it";
 
     /// <summary>Wrap sized text to a width; returns the y just under the last line.</summary>
     private int DrawWrappedBig(SpriteBatch b, string text, int x, int y, int width, Color c, int px)

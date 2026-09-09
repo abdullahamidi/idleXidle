@@ -265,7 +265,7 @@ public static class Onboarding
                 + "numbers are what it is now and what it becomes if you buy one rank."),
 
             new TourStep(TourTarget.TrainingDetail, "THE FULL STORY",
-                "Click a row and this column explains it: what the stat does, what one rank adds, "
+                "This column explains the row you pick: what the stat does, what one rank adds, "
                 + "and what the next rank costs."),
 
             // NO CRYSTAL HERE. A Crystal has no currency pill anywhere — the three pills are Scrap,
@@ -282,21 +282,21 @@ public static class Onboarding
         {
             new TourStep(TourTarget.PaperDoll, "WHAT YOU WEAR",
                 "Eight slots, one item each. Only what is worn counts in the fight. "
-                + "Click a slot to see what is in it."),
+                + "A slot reads out on the right when you pick it."),
 
             new TourStep(TourTarget.Inventory, "YOUR ITEMS",
-                "Every item you own that is not worn. Click one to read it. "
-                + "A dimmed item belongs to another class of champion, and this one cannot wear it."),
+                "Every item you own that is not worn. Any of them can be dragged onto the doll. "
+                + "A dimmed item belongs to another class, and this hunter cannot wear it."),
 
             new TourStep(TourTarget.ItemDetail, "THE ITEM",
-                "The real numbers of the item you clicked, and who can wear it. Press EQUIP to wear it. "
-                + "What was in that slot goes back to the bag."),
+                "The real numbers of the item you picked, and who can wear it. EQUIP wears it, "
+                + "and what was in that slot goes back to the bag."),
         },
 
         Activity.Build => new[]
         {
             new TourStep(TourTarget.SkillSlots, "YOUR SKILL SLOTS",
-                "Each row is one skill slot. Click a row to change the skill in it. "
+                "Each row is one skill slot, and picking a row is how its skill is changed. "
                 + "More slots open as you go deeper."),
 
             // Was the hardest sentence in the whole tour set: a conditional inside a conditional,
@@ -325,7 +325,7 @@ public static class Onboarding
                 + "per hunter, and TAKE EVERY POINT BACK lets you choose again."),
 
             new TourStep(TourTarget.NodeCard, "READING A NODE, AND TAKING IT",
-                "Click a node to read it here. Nothing is spent until you press TAKE. Points come "
+                "A node reads out here when you pick it, and nothing is spent until TAKE. Points come "
                 + "from reaching a depth you never reached, and TAKE EVERY POINT BACK is free."),
         },
 
@@ -335,7 +335,7 @@ public static class Onboarding
         {
             new TourStep(TourTarget.ChestCards, "YOUR CHESTS",
                 "Every chest you hold, one card for each kind. Your first is a welcome gift. The card "
-                + "says what it promises before you open it. Click a card to open one."),
+                + "says what it promises before it is opened."),
 
             // THE BUTTON SAYS WHAT IT SAYS. This card read "OPEN ALL opens every chest at once" — and
             // the tour's first visit is guaranteed to be the ONE-chest state (the welcome gift), where
@@ -350,7 +350,7 @@ public static class Onboarding
         Activity.Forge => new[]
         {
             new TourStep(TourTarget.Bag, "THE BAG",
-                "Everything you own that is not worn, rarest first. Click an item to put it on the "
+                "Everything you own that is not worn, rarest first. An item goes onto the "
                 + "bench. The mouse wheel scrolls the list."),
 
             new TourStep(TourTarget.ForgeItem, "THE BENCH",
@@ -370,7 +370,7 @@ public static class Onboarding
         {
             new TourStep(TourTarget.Facilities, "THE FACILITIES",
                 "Each card is a facility. They produce on their own, even while the game is closed. "
-                + "Conquering regions opens more of them. Click one to read it."),
+                + "Conquering regions opens more of them."),
 
             new TourStep(TourTarget.FacilityDetail, "UPGRADING",
                 "What the chosen facility makes each minute, and what the next level costs. "
@@ -388,7 +388,7 @@ public static class Onboarding
                 + "than the last. Reach the goal depth in one to conquer it, which opens the next."),
 
             new TourStep(TourTarget.RegionDetail, "WHAT A REGION HOLDS",
-                "Click a region to read it here: its element, how its enemies fight, the wave that "
+                "A region reads out here: its element, how its enemies fight, the wave that "
                 + "conquers it, and what it drops. Where you hunt is a loot choice too."),
 
             new TourStep(TourTarget.EnterRegion, "GO THERE",
@@ -410,7 +410,7 @@ public static class Onboarding
                 + "you go. One you have not awakened yet shows only as ???."),
 
             new TourStep(TourTarget.TraitDetail, "READING ONE",
-                "Click a trait to read what it does, then press WEAR IT. Every hunter you own can "
+                "A trait reads out here, and WEAR IT puts it on — or drag it onto a slot. Every hunter you own can "
                 + "wear any trait you have awakened."),
         },
 
@@ -418,14 +418,14 @@ public static class Onboarding
         {
             new TourStep(TourTarget.ChampionCards, "THE HUNTERS",
                 "One card per hunter, one column per gear class. A card shows its innate power and "
-                + "what unlocks it. Click one to read it here."),
+                + "what unlocks it."),
 
             new TourStep(TourTarget.ChampionDetail, "WHO THEY ARE",
                 "The hunter's starting skill, its always-on innate power, its road and its gear "
                 + "class. Gear of another class cannot be worn."),
 
             new TourStep(TourTarget.BecomeThem, "SET ACTIVE",
-                "Press SET ACTIVE to play as this hunter. Nothing resets. Gear this hunter cannot "
+                "SET ACTIVE plays as this hunter. Nothing resets. Gear this hunter cannot "
                 + "wear goes back to your bag."),
         },
 
