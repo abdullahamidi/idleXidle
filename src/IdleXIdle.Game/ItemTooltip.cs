@@ -83,17 +83,23 @@ public static class ItemTooltip
     /// <param name="wearer">
     /// The champion reading the card. When set and they cannot wear the item, the card names who can.
     /// </param>
-    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Point at, Rectangle canvas,
+    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Rectangle at, Rectangle canvas,
                             Character? wearer = null)
     {
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
 
-        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the pointer is the anchor, the
-        // card hangs to its right, flips left at the edge, and is clamped into the canvas — the same
-        // rule the enemy inspector and the hover tip obey.
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the card hangs to the right of
+        // THE CELL, flips left at the edge, and is clamped into the canvas — the same rule the enemy
+        // inspector and the hover tip obey.
+        //
+        // The anchor was a 1x1 rectangle built from the POINTER until 2026-09-09, and this is the
+        // biggest thing on the screen that followed it — 460 px wide at 100 %, 690 at 150 %, and up to
+        // 700 tall. Playtest: "the informational text that appears on hover shouldn't move along with
+        // the mouse cursor." Anchored to the cell, it is still while the pointer moves inside it and
+        // lands in the same place every time the reader comes back to that item.
         var h = HeightFor(ui, item, hunter, wearer);
-        var anchor = new Rectangle(at.X, at.Y - UiMetrics.Space(20), 1, 1);
+        var anchor = at;
         var card = PopoverPlacement.Place(anchor, new Point(Width, h), canvas, null,
                                           new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Above },
                                           UiMetrics.Space(24));

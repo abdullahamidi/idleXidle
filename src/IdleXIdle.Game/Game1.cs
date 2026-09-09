@@ -6779,6 +6779,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private string _tipKey = "";
     private float _tipTimer;
 
+    /// <summary>The settings row the pending tip explains — the plate hangs off it, never the cursor.</summary>
+    private Rectangle _tipZone;
+
     /// <summary>Seconds a row must be hovered before its explanation appears.</summary>
     private const float TipDelaySeconds = 0.35f;
 
@@ -7404,7 +7407,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                          || (openList != Rectangle.Empty && openList.Contains(mouse));
         if (!suppressed)
             foreach (var z in zones)
-                if (z.Zone.Contains(mouse)) { key = z.Key; tip = z.Tip; break; }
+                if (z.Zone.Contains(mouse)) { key = z.Key; tip = z.Tip; _tipZone = z.Zone; break; }
 
         if (key != _tipKey)
         {
@@ -7412,7 +7415,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _tipTimer = 0f;
             return;
         }
-        if (key.Length > 0 && _tipTimer >= TipDelaySeconds) _ui.HoverTip(_batch, tip, mouse);
+        // BESIDE THE ROW, not the pointer: a settings row is wide, and a plate that slid along it
+        // as the reader's eye moved was the loudest instance of the cursor-following complaint.
+        if (key.Length > 0 && _tipTimer >= TipDelaySeconds) _ui.HoverTip(_batch, tip, _tipZone);
     }
 
     /// <summary>The corner gear — the way back to settings from any screen, including mid-hunt.</summary>

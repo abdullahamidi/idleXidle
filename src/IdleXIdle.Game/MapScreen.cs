@@ -183,7 +183,7 @@ public sealed class MapScreen
     public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
 
     /// <summary>The locked card's hover explanation, gathered in DrawMap and drawn last so it sits over everything.</summary>
-    private (string Text, Point At)? _lockTip;
+    private (string Text, Rectangle At)? _lockTip;
 
     // ── THE INSPECTOR'S SCROLL (UI polish §17–§18). ──────────────────────────────────────────────
     //
@@ -818,7 +818,7 @@ public sealed class MapScreen
                 // that line for want of room — a short field, a world strip over the chain, 150 % — where
                 // the card would otherwise say LOCKED and refuse to say by what. Gathered here, drawn
                 // last, over both panels.
-                if (hot && !reqPrinted) _lockTip = (LockedReason(def), hit);
+                if (hot && !reqPrinted) _lockTip = (LockedReason(def), node);
             }
 
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);

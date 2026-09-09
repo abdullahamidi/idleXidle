@@ -1847,6 +1847,7 @@ public sealed class ForgeScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = mouse;
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
+        _hoveredAt = Rectangle.Empty;
         if (DevHeld) UiKit.MouseHeld = true;        // capture runs only — see DevHeld
         if (DevReduced) UiMotion.Reduced = true;    // capture runs only — see DevReduced
         if (_devPosePending) ApplyDevPose(hunter);
@@ -1879,7 +1880,7 @@ public sealed class ForgeScreen
         // Clipped to the LEFT of the forge column, so a hover card can never cover the operation the
         // player is reading (the GEAR screen's rule).
         if (_hovered is { } hov && _revealTimer <= 0f)
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, ForgePanel.X - 8, UiKit.Page.Height));
+            ItemTooltip.Draw(_ui, b, hov, hunter, _hoveredAt, new Rectangle(0, 0, ForgePanel.X - 8, UiKit.Page.Height));
 
         if (DevForgeDebug) DrawDebug(b);
     }
@@ -2027,7 +2028,7 @@ public sealed class ForgeScreen
             var gem = GemCraft.IsGem(it);
             var sel = gem ? it.InstanceId == _gemId : it.InstanceId == _focusId;
             var hover = row.Contains(hit);
-            if (hover) _hovered = it;
+            if (hover) { _hovered = it; _hoveredAt = row; }
             var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
 
             // A CLICK SELECTS. A gem row picks the gem the SOCKET tab will set — the refusals and the
@@ -2157,12 +2158,18 @@ public sealed class ForgeScreen
         DrawMaterialStrip(b, hunter, item, hit);
         DrawBag(b, hunter, hit, clicked, rightClicked);
         DrawWorkPanel(b, hunter, item, hit, clicked);
-        if (_stripTip is { } tip) _ui.HoverTip(b, tip, hit);
+        if (_stripTip is { } tip) _ui.HoverTip(b, tip, _stripTipAt);
         _stripTip = null;
     }
 
     /// <summary>What a hovered chip in the materials strip is for — drawn last, over everything.</summary>
     private string? _stripTip;
+
+    /// <summary>The CHIP that tip explains. The plate hangs off it, so it does not chase the pointer.</summary>
+    private Rectangle _stripTipAt;
+
+    /// <summary>The CELL the hover card explains — the card hangs off it, so it does not chase the pointer.</summary>
+    private Rectangle _hoveredAt;
 
     // ── THE MATERIALS STRIP ──────────────────────────────────────────────────────────────────────
     //
@@ -2207,7 +2214,7 @@ public sealed class ForgeScreen
                              held, isShort ? Ember : TickInk(feel, Bone), UiMotion.Smooth(moved));
             if (i > 0)
                 _ui.Fill(b, new Rectangle(chip.X - UiMetrics.Space(6), MaterialStrip.Y + UiMetrics.Space(10), 1, MaterialStrip.Height - UiMetrics.Space(20)), UiInk.Rule);
-            if (chip.Contains(hit)) _stripTip = r.Use;
+            if (chip.Contains(hit)) { _stripTip = r.Use; _stripTipAt = chip; }
         }
 
         // THE CHARTS, as chips at the right end — one per kind held, and nothing at all when you hold
@@ -2523,7 +2530,7 @@ public sealed class ForgeScreen
             var iconBox = new Rectangle(ItemPanel.Center.X - art / 2, y + UiMetrics.Space(6), art, art);
             DrawItemIcon(b, item, iconBox);
             ForgeFlash(b, iconBox);
-            if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
+            if (iconBox.Contains(hit)) { _hovered = item; _hoveredAt = iconBox; }   // the big picture carries the full tooltip
             y = iconBox.Bottom + UiMetrics.Space(10);
         }
         else y += UiMetrics.Space(6);
@@ -2688,7 +2695,7 @@ public sealed class ForgeScreen
                     DrawItemIcon(b, item.Gems[i], new Rectangle(face.X + inset, face.Y + inset, socketBox - 2 * inset, socketBox - 2 * inset));
                     // A set gem can be CRUSHED — the existing question owns the act.
                     if (UiKit.ClickedIn(box, hit, clicked)) { _tab = Tab.Socket; RequestCrush(item, i); }
-                    if (over) _hovered = item.Gems[i];
+                    if (over) { _hovered = item.Gems[i]; _hoveredAt = box; }
                 }
                 else
                     _ui.TextCenterBig(b, "+", face.Center.X, face.Y + (socketBox - UiTypography.Body) / 2 - UiMetrics.Space(3),
@@ -3908,6 +3915,7 @@ public sealed class ForgeScreen
         // is a misclick waiting to happen. The summary at the end of the cascade carries them instead.
         var acts = !_revealBrief && cp >= 1f;
         ItemInstance? hover = null;
+        var hoverCell = Rectangle.Empty;   // anchors the card BESIDE the item, never over its own buttons
         for (var i = 0; i < n; i++)
         {
             var ip = Math.Clamp((t - burstEnds - cardIn - i * stagger) / 0.18f, 0f, 1f);
@@ -3915,7 +3923,10 @@ public sealed class ForgeScreen
             var drop = (int)(-40f * (1f - ip) * (1f - ip));
             var cell = new Rectangle(960 - n * RevealCol / 2 + i * RevealCol, cellsTop, RevealCol - UiMetrics.Space(10), RevealCellH);   // ui-page-ok: host chrome, canvas space
             if (DrawRevealCell(b, hunter, _revealItems[i], cell, drop, fade, acts && ip >= 1f, mouse, click) is { } h)
+            {
                 hover = h;
+                hoverCell = cell;
+            }
         }
 
         if (DevRevealHover && hover is null && n > 0)
@@ -3947,12 +3958,12 @@ public sealed class ForgeScreen
             if (_ui.Button(b, keep, "CLOSE", mouse, click)) AdvanceReveal();
         }
 
-        // LAST, so nothing is drawn over it — and BESIDE THE CARD rather than under the pointer. At the
-        // pointer it lands squarely on the item's own SELL and SALVAGE buttons: you hover a drop to
-        // decide, and the thing helping you decide covers the two things you decided between.
+        // LAST, so nothing is drawn over it — and BESIDE THE CELL rather than under the pointer. At the
+        // pointer it lands squarely on the item's own EQUIP, SELL and SALVAGE buttons: you hover a drop
+        // to decide, and the thing helping you decide covers the things you decided between. (Its X was
+        // already pinned to the plate's edge; its Y still followed the mouse until 2026-09-09.)
         if (hover is not null)
-            ItemTooltip.Draw(_ui, b, hover, hunter, new Point(full.Right - 16, mouse.Y - 60),
-                             new Rectangle(0, 0, 1920, 1080));
+            ItemTooltip.Draw(_ui, b, hover, hunter, hoverCell, new Rectangle(0, 0, 1920, 1080));
     }
 
     /// <summary>
@@ -4272,8 +4283,7 @@ public sealed class ForgeScreen
         // Anchored to the hovered CELL, not to the pointer. At the pointer the card lands on the item's
         // own SELL and SALVAGE buttons — the two things it is helping you choose between.
         if (hover is not null)
-            ItemTooltip.Draw(_ui, b, hover, hunter, new Point(hoverCell.Right, hoverCell.Y),
-                             new Rectangle(0, 0, 1920, 1080));
+            ItemTooltip.Draw(_ui, b, hover, hunter, hoverCell, new Rectangle(0, 0, 1920, 1080));
     }
 
     /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>

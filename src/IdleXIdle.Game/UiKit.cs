@@ -1867,15 +1867,29 @@ public sealed class UiKit
     }
 
     /// <summary>
-    /// A small explanation panel beside the cursor — the hover tooltip the settings rows use.
+    /// A small explanation panel beside the THING it explains — the hover tooltip the screens use.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>It hangs off the ELEMENT, never the pointer (2026-09-09).</b> Playtest: <i>"the informational
+    /// text that appears on hover shouldn't move along with the mouse cursor; it should remain in a
+    /// fixed position."</i> This method used to take a <c>Point</c> and build a synthetic 26×30
+    /// "cursor" rectangle out of it, so the plate translated one-for-one with every mouse move and a
+    /// reader chasing a sentence dragged it around the screen. The placement rule was never at fault —
+    /// <see cref="PopoverPlacement.Place"/> places a popover beside whatever rectangle it is handed,
+    /// and two of its four callers handed it the pointer where a control belonged. Given the control's
+    /// own rectangle the tip is STILL while the pointer moves inside it, and it lands in the same place
+    /// every time the reader comes back to that control.
+    /// </para>
+    /// <para>
     /// Callers draw it LAST so it sits over the row it explains. Near the right or bottom edge of the
     /// 1920×1080 chrome space it flips to the other side of the anchor, so a tip on the last row is
     /// never clipped off screen. Deliberately a flat plate rather than an ornate panel: a tooltip is
     /// furniture, and the ornate frame is a claim of importance this text should not make.
+    /// </para>
     /// </remarks>
-    public void HoverTip(SpriteBatch b, string text, Point anchor)
+    /// <param name="element">The control being explained. Its rectangle, not the cursor's position.</param>
+    public void HoverTip(SpriteBatch b, string text, Rectangle element)
     {
         int width = UiMetrics.Text(430), pad = UiMetrics.Space(14);
         var lineH = UiTypography.Pitch(UiTypography.Secondary);
@@ -1888,8 +1902,7 @@ public sealed class UiKit
         // used to flip left at the right edge with no left clamp, so a tip near the rail went negative.
         var actionBand = new Rectangle(0, PageBottom(UiMetrics.Space(36)) - UiMetrics.ButtonHeightPrimary - UiMetrics.Space(24),
                                        Page.Width, UiMetrics.ButtonHeightPrimary + UiMetrics.Space(60));
-        var cursor = new Rectangle(anchor.X, anchor.Y, 26, 30);
-        var tip = PopoverPlacement.Place(cursor, new Point(width, h), Page, new[] { actionBand },
+        var tip = PopoverPlacement.Place(element, new Point(width, h), Page, new[] { actionBand },
                                          new[] { PopoverSide.Below, PopoverSide.Above, PopoverSide.Right, PopoverSide.Left }, 4);
         // THE HOUSE PLATE (§2 QUIET), not a private purple box with a gold rule: a tip is furniture, and
         // furniture wears the tier every list and chip on the page wears. The 4 px shadow stays, so the tip

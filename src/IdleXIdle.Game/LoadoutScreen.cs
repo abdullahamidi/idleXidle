@@ -1155,7 +1155,7 @@ public sealed class LoadoutScreen
 
     // ── DRAW ────────────────────────────────────────────────────────────────────────────────────────────
     private string? _tip;
-    private Point _tipAt;
+    private Rectangle _tipAt;
     private int _changeVowY;
     private bool _changeVowShown;
     private int _vowListTop;
@@ -1195,7 +1195,8 @@ public sealed class LoadoutScreen
         if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
     }
 
-    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit) && _carrying == Carry.None) { _tip = text; _tipAt = hit; } }
+    /// <summary>Remember a row's explanation, and THE ROW — the tip hangs off it, never off the cursor.</summary>
+    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit) && _carrying == Carry.None) { _tip = text; _tipAt = r; } }
 
     // ── YOUR LOADOUT ────────────────────────────────────────────────────────────────────────────────────
     private void DrawLoadout(SpriteBatch b, Point hit)

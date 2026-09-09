@@ -797,7 +797,7 @@ public sealed class VaultScreen
             _modalOpenedNow = true;
         }
         if (pasteHot)
-            _ui.HoverTip(b, "READ AN ITEM OR BUILD CODE SOMEONE SHARED WITH YOU. IT NEVER JOINS YOUR BAG.", hit);
+            _ui.HoverTip(b, "READ AN ITEM OR BUILD CODE SOMEONE SHARED WITH YOU. IT NEVER JOINS YOUR BAG.", PasteRect);
 
         // The hairline the toolbar stands on, so the buttons read as a header and the cards below as
         // the panel's contents — one rule instead of a gap the eye has to guess at.
@@ -1484,8 +1484,11 @@ public sealed class VaultScreen
             _ui.TextCenterBig(b, "A FRIEND'S ITEM", panel.Center.X, panel.Y + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
             _ui.TextCenterBig(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", panel.Center.X,
                               panel.Y + UiTypography.PanelCaptionTop, Slate, UiTypography.Secondary);
-            ItemTooltip.Draw(_ui, b, item, Hunter,
-                             new Point(panel.Center.X - ItemTooltip.Width / 2, panel.Y + tipTop), UiKit.Page);
+            // A FIXED DOCK inside the modal, never a placed popover: the position was always exact
+            // here, and Draw's job is to CHOOSE a position. DrawAt is the call that takes one.
+            ItemTooltip.DrawAt(_ui, b, item, Hunter,
+                               new Rectangle(panel.Center.X - ItemTooltip.Width / 2, panel.Y + tipTop,
+                                             ItemTooltip.Width, ItemTooltip.HeightFor(_ui, item, Hunter)));
             var close = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
                                       InspectButtonW, InspectButtonH);
             if (_ui.Button(b, close, "CLOSE", hit, clicked, true))
@@ -1736,6 +1739,7 @@ public sealed class VaultScreen
         _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
         y += pitch;
         string? tip = null;
+        var tipAt = Rectangle.Empty;
         var cellH = FilterCellH;
         var cellW = inner.Width / 4;
         for (var i = 0; i < SlotChips.Length; i++)
@@ -1753,7 +1757,7 @@ public sealed class VaultScreen
             if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
                 _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
             if (lit) Outline(b, cell, Gold * 0.8f, 2);
-            if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
+            if (hot) { tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it."); tipAt = cell; }
             if (UiKit.ClickedIn(cell, hit, clicked))
             {
                 if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
@@ -1795,7 +1799,7 @@ public sealed class VaultScreen
             _ui.TextBig(b, l, inner.X, y, Slate, UiTypography.Secondary);
             y += pitch;
         }
-        if (tip is not null) _ui.HoverTip(b, tip, hit);
+        if (tip is not null) _ui.HoverTip(b, tip, tipAt);
     }
 
     private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false, bool enabled = true)

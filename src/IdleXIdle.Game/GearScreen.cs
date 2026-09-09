@@ -370,7 +370,10 @@ public sealed class GearScreen
     private string? _selectedId;
     private ItemInstance? _hovered;
     private string? _tip;
-    private Point _tipAt;
+    private Rectangle _tipAt;
+
+    /// <summary>The CELL the hover card explains — the card hangs off it, so it does not chase the pointer.</summary>
+    private Rectangle _hoveredAt;
 
     // THE INSPECTOR'S SCROLL, in whole items from the top (§18: long inspectors scroll; the verbs and EQUIP
     // never do). What the last Draw measured tells the next Update whether there is anything below to reach.
@@ -707,6 +710,7 @@ public sealed class GearScreen
         _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
 
         _hovered = null;
+        _hoveredAt = Rectangle.Empty;
         _tip = null;
         DrawEquipped(b, hit, hunter);
         DrawInventory(b, hit, hunter);
@@ -721,7 +725,7 @@ public sealed class GearScreen
             // that stopped at the footer strip was shorter than the card at 150 % — the plate was cut
             // to the canvas while the walk drew every line, so the last three hung off the plate over
             // the doll's footer. The strip is inside the EQUIPPED panel the card already floats over.
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), UiKit.Page.Height), Character);
+            ItemTooltip.Draw(_ui, b, hov, hunter, _hoveredAt, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), UiKit.Page.Height), Character);
         else if (_tip is { } tip && _menuItemId is null) _ui.HoverTip(b, tip, _tipAt);
         if (DevGearDebug) DrawDebug(b, hunter);
     }
@@ -759,6 +763,7 @@ public sealed class GearScreen
                     hx, box.Y + (MenuHeaderH - UiTypography.Secondary) / 2, rc, UiTypography.Secondary);
         _ui.Fill(b, new Rectangle(box.X + UiMetrics.Space(8), box.Y + MenuHeaderH - UiMetrics.Space(4), box.Width - UiMetrics.Space(8) * 2, 1), Dim);
         string? lockedWhy = null;
+        var lockedRow = Rectangle.Empty;
         for (var i = 0; i < MenuEntries.Length; i++)
         {
             var (action, label) = MenuEntries[i];
@@ -774,12 +779,12 @@ public sealed class GearScreen
             if (pressed) _ui.Fill(b, row, Color.Black * 0.18f);
             _ui.TextBig(b, shown, row.X + UiMetrics.Space(16), row.Y + (row.Height - UiTypography.Body) / 2 + (pressed ? 1 : 0),
                         locked ? UiInk.Disabled : hover ? Bone : Slate, UiTypography.Body);
-            if (locked && row.Contains(hit)) lockedWhy = ItemClasses.WhyNot(Character, item);
+            if (locked && row.Contains(hit)) { lockedWhy = ItemClasses.WhyNot(Character, item); lockedRow = row; }
         }
         // THE LOCKED ROW SAYS WHY, HERE. Not through Tip(): the deferred tip is suppressed while this menu
         // is open (a card over a menu), so a Tip() on this row would have been a reason nobody ever saw —
         // and this menu is the last thing drawn, so the card belongs on top of it.
-        if (lockedWhy is { } lw) _ui.HoverTip(b, lw, hit);
+        if (lockedWhy is { } lw) _ui.HoverTip(b, lw, lockedRow);
     }
 
     // ── EQUIPPED: the one ornate surface — who, what they wear, what it adds up to, two actions. ──────────
@@ -872,7 +877,7 @@ public sealed class GearScreen
             var emptyInRing = false;
             if (worn is { } w2)
             {
-                if (hot) _hovered = w2;
+                if (hot) { _hovered = w2; _hoveredAt = box; }
                 // PRESSED: the piece sits two pixels lower and darker for as long as the button is held (§27).
                 var drop = pressed ? 2 : 0;
                 // RARITY ON THE LEFT EDGE, the grid's own grammar — a bar floating above the ring read
@@ -1025,7 +1030,7 @@ public sealed class GearScreen
             var item = list[idx];
             var hot = cell.Contains(hit);
             var sel = item.InstanceId == _selectedId;
-            if (hot) _hovered = item;
+            if (hot) { _hovered = item; _hoveredAt = cell; }
             // HOVER eases in (§26) and is never the selected look (§28); PRESSED sits the icon two pixels
             // lower and darker while the button is held (§27); a LOCKED cell keeps its dimmed veil and lock
             // and says who can wear it on the hover card (§29).
@@ -1405,7 +1410,8 @@ public sealed class GearScreen
     private static int Halo(float reveal, int room)
         => Math.Clamp(UiMotion.Reduced ? 2 : 2 + (int)MathF.Round(UiMetrics.Space(4) * (1f - reveal)), 1, Math.Max(1, room));
 
-    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit)) { _tip = text; _tipAt = hit; } }
+    /// <summary>Remember a row's explanation, and THE ROW — the tip hangs off it, never off the cursor.</summary>
+    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit)) { _tip = text; _tipAt = r; } }
 
     private void DrawDebug(SpriteBatch b, Hunter hunter)
     {

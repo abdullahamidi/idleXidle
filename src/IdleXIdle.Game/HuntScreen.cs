@@ -4127,12 +4127,12 @@ public sealed class HuntScreen
         // panel two calls later, and the sentence was cut mid-word — "…every descent's report. The L k".
         // A hover tip that a panel eats is worse than no tip: it says there is more to read and then
         // hides it. It is remembered here and drawn last (see the foot of Draw).
-        _logTipAt = hot ? hit : null;
+        _logTipAt = hot ? r : null;   // the BUTTON, not the pointer: the tip stands still while you read it
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
 
     /// <summary>Where the LOG button's hover tip is owed this frame, or null — drawn at the top of the HUD pass.</summary>
-    private Point? _logTipAt;
+    private Rectangle? _logTipAt;
 
     /// <summary>Set by the log button; the host routes it through its own L handling and clears it.</summary>
     public bool WantsLog { get; set; }

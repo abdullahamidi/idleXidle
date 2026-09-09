@@ -429,6 +429,7 @@ public sealed class TrainingScreen
         // refuses any screen that converts at all.
         var hit = mouse;
         _tip = null;
+        _tipAt = Rectangle.Empty;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xD8));
 
@@ -453,7 +454,7 @@ public sealed class TrainingScreen
         DrawInspector(b, hunter, build, mods, shape, hit, clicked);
         DrawReset(b, hunter, hit, clicked);
         if (DevStatsDebug) DrawDebug(b);
-        if (_tip is { } tip) _ui.HoverTip(b, tip, hit);
+        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
     }
 
     /// <summary>Every trainable stat, grouped by what it changes, each row saying NOW and AFTER.</summary>
@@ -488,9 +489,14 @@ public sealed class TrainingScreen
                      (_refuseGlow > glow ? Ember : Gold) * (0.16f * MathF.Max(glow, _refuseGlow)));
         }
         _ui.TextRightBig(b, purse, right, hy, purseInk, UiTypography.Headline);
-        // LEVEL is a medal, not a stat — the honest answer stays, as a tip rather than a panel.
-        if (new Rectangle(left, hy, UiMetrics.Text(460), UiTypography.Pitch(UiTypography.Body)).Contains(hit))
+        // LEVEL is a medal, not a stat — the honest answer stays, as a tip rather than a panel. The
+        // ROW is remembered beside the words: the tip hangs off the thing it explains, never the cursor.
+        var levelRow = new Rectangle(left, hy, UiMetrics.Text(460), UiTypography.Pitch(UiTypography.Body));
+        if (levelRow.Contains(hit))
+        {
             _tip = "HUNTER LEVEL IS ONE PER FIVE RANKS TRAINED. IT DOES NOT CHANGE THE FIGHT — IT IS A MEDAL, NOT A STAT.";
+            _tipAt = levelRow;
+        }
         var ruleY = hy + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
         _ui.Fill(b, new Rectangle(left, ruleY, right - left, 1), Dim);
 
@@ -1127,6 +1133,9 @@ public sealed class TrainingScreen
 
     /// <summary>What a hovered row or the header is saying this frame — drawn last, over everything.</summary>
     private string? _tip;
+
+    /// <summary>The control <see cref="_tip"/> explains — the tip is placed beside IT, not the pointer.</summary>
+    private Rectangle _tipAt;
 
     /// <summary>
     /// One stat's live headline and its plain-words hover card, with the player's real numbers filled in.
