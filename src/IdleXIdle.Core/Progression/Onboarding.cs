@@ -304,9 +304,9 @@ public static class Onboarding
                 "A specialisation chooses your Style: that Style's skills hit twice as hard. One Style "
                 + "per hunter, and TAKE EVERY POINT BACK lets you choose again."),
 
-            new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
-                "Rest the pointer on a node to read it here. Points come from reaching a depth you "
-                + "have never reached. TAKE EVERY POINT BACK is free, any time."),
+            new TourStep(TourTarget.NodeCard, "READING A NODE, AND TAKING IT",
+                "Click a node to read it here. Nothing is spent until you press TAKE. Points come "
+                + "from reaching a depth you never reached, and TAKE EVERY POINT BACK is free."),
         },
 
         // The first visit's chest is the WELCOME GIFT a new game is seeded with (GiftChests), so both
