@@ -5062,6 +5062,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
         if (_expedition.LogOpen) return null;
+        // THE FALL PLATE SAYS IT FIRST, AND SAYS IT LOUDER. It lands in this exact slot, names the wave,
+        // diagnoses what stopped the run and carries its own READ THE LOG button — so a card repeating
+        // that sentence on top of it is two surfaces saying one thing, overlapping. The plate holds the
+        // slot for its seven and a half seconds; if the report is still unread when it goes, the quiet
+        // card takes over. (Never photographed before: the fall fixture poses the collapse with
+        // DevShowFall, which is the one state that keeps the plate off.)
+        if (_expedition.FallPlateUp) return null;
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
         if (_coach.Showing is not { } step) return null;

@@ -995,6 +995,18 @@ public sealed class HuntScreen
     /// <summary>Is the champion down and regrouping right now?</summary>
     public bool ChampionDowned => _mode == Mode.Downed;
 
+    /// <summary>
+    /// Is the FALL PLATE up — the panel that names the wave, diagnoses the run and offers READ THE LOG?
+    /// </summary>
+    /// <remarks>
+    /// Published for the host, which hangs its lesson card in the same slot: the plate sits at
+    /// <c>HeaderStackBottom + Space(8)</c> and so does the card, so both drawing means two surfaces
+    /// saying READ THE LOG on top of each other. The plate wins while it is up — it is louder, it
+    /// carries the diagnosis, and its button is the deed. Same expression <see cref="ResolveOverlay"/>
+    /// uses, so the two cannot disagree about when the plate exists.
+    /// </remarks>
+    public bool FallPlateUp => (_mode == Mode.Downed && !DevShowFall) || _fellTimer > 0f;
+
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
     {
