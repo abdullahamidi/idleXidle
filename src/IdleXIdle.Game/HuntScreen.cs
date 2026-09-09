@@ -1192,6 +1192,10 @@ public sealed class HuntScreen
         _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
         _diedAt.Clear();          // the previous wave's fallen are gone with its replay
         _actors.Clear();
+        // The readiness edges belong to the wave that was measured against. Kept across the boundary,
+        // a slot that ended one wave ready and opens the next one waiting would pop when it came back
+        // — which is a pop for a cooldown the player never watched run.
+        _railReady.Clear();
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
         // beat. Without this a wave of five reads as one bar going down, which hides the single most
         // useful fact in a Swarm band: how many of them you actually got through.
@@ -1519,6 +1523,29 @@ public sealed class HuntScreen
         }
 
         _playheadMs += dt * 1000f * _speedMul;
+
+        // ── THE READY CROSSING, ARMED HERE AND NOWHERE ELSE. A pulse belongs to Update: a Draw that
+        //    armed one would re-arm it every frame and the medallion would swell for as long as you
+        //    looked at it (the rail's own standing rule, and the reason the cast pulse lives in the
+        //    event pump). Each slot's readiness is read once per frame and only a FALSE -> TRUE edge
+        //    fires — so a skill that stays ready between waves pops once, at the moment it came up.
+        for (var slot = 0; slot < _waveSkills.Count; slot++)
+        {
+            var def = _waveSkills[slot].Def;
+            if (!def.TakesABeat) continue;             // a passive is always ready; it never crosses
+            var nowReady = Timing(slot, def).Swept >= 1f;
+            if (nowReady && !_railReady.GetValueOrDefault(slot))
+            {
+                UiMotion.Flash(SkillReadyKey(slot), UiMotion.Transition);
+                // A CUE, but a quiet and a rare one. The screen already plays a thud every beat and a
+                // cast every action; four Actives coming up every few beats would be the disco-ball
+                // note again, one modality over. Only a skill with a real wait (two notches or more)
+                // is worth announcing, and it is announced under the cast's own volume.
+                if (def.Beats > 2) Sound?.Play("sfx_trait_lit", 0.16f, vary: 0.05f);
+            }
+            _railReady[slot] = nowReady;
+        }
+
         // THE AURA'S PULSE, ON THE WALL CLOCK. It used to be raised by an aura's damage event, which
         // meant a tick landing on a cast's own millisecond was read as that cast's blow and raised
         // nothing — and in a real four-skill build that happened often enough that the field looked
@@ -4429,6 +4456,15 @@ public sealed class HuntScreen
     /// <summary>One skill tile's cast pulse, keyed by the slot the Skill event names.</summary>
     private static int SkillCastKey(int slot) => HashCode.Combine("hunt.skill.cast", slot);
 
+    /// <summary>The one-shot armed the instant a slot crosses into READY — the pop and the unwinding band.</summary>
+    private static int SkillReadyKey(int slot) => HashCode.Combine("hunt.skill.ready", slot);
+
+    /// <summary>Was each slot ready last frame? The edge, not the state, is what arms the pop.</summary>
+    private readonly Dictionary<int, bool> _railReady = new();
+
+    /// <summary>The eased ring position, so a beat-counted notch travels instead of teleporting.</summary>
+    private static int SkillRingKey(int slot) => HashCode.Combine("hunt.skill.ring", slot);
+
     // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
     //    management, not combat state. DEEPEST WAVE REACHED went too — the header's CONQUEST n / 20 is the same
@@ -4755,10 +4791,25 @@ public sealed class HuntScreen
         // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS: a step, not a fade — the moment worth seeing is the one
         // where the skill becomes available. The ring around the rim answers HOW MUCH LONGER; this answers
         // WHETHER. A passive is always ready and never dims.
-        var waiting = t.Swept < 1f && t.Flash <= 0f;
-        var wake = waiting ? WaitingSkillDim : 1f;
+        //
+        // THE TELEGRAPH BRIGHTENS THE WHOLE MEDALLION (2026-09-09). `waiting` tested t.Flash alone while
+        // `lit` — which the hex frame uses — is max(Flash, Telegraph), so for the 300 ms before a cast
+        // the FRAME went full gold around a diamond and a glyph still sitting at 0.45. A gold ring
+        // around a dark icon, three times a second, on every Active in the rail. Reading `lit` here
+        // instead makes those 300 ms a charge-up: the medallion brightens INTO its own cast, which is
+        // the tell the rail was missing.
         var lit = Math.Max(t.Flash, t.Telegraph);
+        var waiting = t.Swept < 1f && lit <= 0f;
+        var wake = waiting ? MathHelper.Lerp(WaitingSkillDim, 1f, Math.Clamp(lit, 0f, 1f)) : 1f;
+        // THE READY POP. The one moment the rail is for had no presentation whatsoever: the word
+        // swapped, the dim stepped up, and nothing moved. The medallion swells a tenth over a
+        // Transition on the crossing, armed in the event pump (Draw must never arm a pulse).
         var box = MedallionBox(slot);
+        if (UiMotion.Pulse(SkillReadyKey(i)) is var pp && pp > 0f && !UiMotion.Reduced)
+        {
+            var grow = (int)MathF.Round(box.Width * 0.10f * UiMotion.Smooth(pp));
+            box = new Rectangle(box.X - grow / 2, box.Y - grow / 2, box.Width + grow, box.Height + grow);
+        }
         if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
             b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
         // The diamond and the glyph are PROPORTIONS of the medallion art (44 and 40×44 of 72), so they
@@ -4770,9 +4821,40 @@ public sealed class HuntScreen
         if (_ui.Assets.Get($"icon_skill_{def.Id}") is { } sg) b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
         else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, glyphBox, Color.White * wake);
         else _ui.Diamond(b, glyphBox, sc * wake);
-        // The cooldown ring at the rim, over everything; the gold halo is the cast itself.
+        // ── THE COOLDOWN, AND THE MOMENT IT ENDS ─────────────────────────────────────────────────
+        //
+        // For a beat-counted skill — which is most of them — this ring used to be a STAIRCASE: the
+        // dial is quantised to one notch per action, so it held perfectly still for a whole beat
+        // (1500 ms), jumped in a single frame, and held again. Three instantaneous jumps in a 4.5 s
+        // cycle and nothing at all in between, which is the whole of "the skill cooldown animation
+        // isn't satisfying" (playtest 2026-09-09). The notch still MEANS one action — that is what
+        // the steps are for, and the smooth dial would lie about when the skill fires — but it now
+        // TRAVELS to its new position over a Transition instead of teleporting. Under Reduced Motion
+        // Ease returns the target outright, which is exactly the old behaviour.
+        var ringCentre = new Vector2(box.Center.X, box.Center.Y);
+        var ringR = box.Width * 0.50f;
+        var shownSweep = t.RingSteps > 0 ? UiMotion.Ease(SkillRingKey(i), t.Swept, UiMotion.Transition) : t.Swept;
+        var pop = UiMotion.Pulse(SkillReadyKey(i));
+
         if (t.Flash <= 0f)
-            _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, t.Swept, new Color(0x0F, 0x0B, 0x0B, 0xE0), Gold * 0.95f);
+        {
+            _ui.CooldownSweep(b, ringCentre, ringR, shownSweep, new Color(0x0F, 0x0B, 0x0B, 0xE0), Gold * 0.95f);
+            // THE NOTCHES THEMSELVES, so "2 ACTIONS" is a shape and not only a word: the band reads as
+            // a segmented track and each step visibly arrives somewhere.
+            if (t.RingSteps > 1 && shownSweep < 1f)
+                for (var n = 1; n < t.RingSteps; n++)
+                {
+                    var a = -MathF.PI / 2f + n / (float)t.RingSteps * MathF.Tau;
+                    var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * ringR, 2f, Slate * 0.55f);
+                }
+            // AND THE BAND COMPLETES RATHER THAN VANISHING. CooldownSweep returns on its first line at
+            // ready >= 1, so the dark band simply disappeared on the frame a skill came up — the single
+            // moment the rail exists to teach had no event at all. On the ready crossing the band is
+            // drawn back in GOLD and unwinds off over a Transition.
+            if (pop > 0f)
+                _ui.CooldownSweep(b, ringCentre, ringR, 1f - UiMotion.Smooth(pop), Gold * 0.40f, Gold);
+        }
         else
         {
             var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
