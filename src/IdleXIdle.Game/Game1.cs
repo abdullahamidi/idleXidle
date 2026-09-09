@@ -3418,8 +3418,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // RH_SHOT_REVEAL=<Activity> names the one reveal a capture wants to see announced.
         if (_revealSeeded)
             foreach (var opened in Reveal.Newly(_revealed, GuideUnlockFacts()))
+            {
+                // THE CHAINS COME OFF THE TILE ON THE SAME FRAME the notice says why. The tile has been
+                // standing there bound since the first launch, so the reveal is a thing the player can
+                // SEE happen on the rail rather than a row quietly appearing under the last one.
+                UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
                 if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
                     PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
+            }
 
         if (_noticeTimer > 0f) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
@@ -5541,9 +5547,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 * Math.Max(0.01f, _expedition.SpeedMultiplier);
 
         // Credit every wave the champion cleared since last frame.
+        // THE BITE, ONCE. _enemySinceHit counts UP from zero and is reset on the sim's own EnemyStrike,
+        // so a fall in its value is the edge — read here, in Update, because a Draw that armed a pulse
+        // would re-arm it every frame and the tile would sit red for as long as the player looked.
+        var sinceHit = _expedition.SinceChampionHit;
+        if (sinceHit < _navHuntSinceHit && _showScreenFlash && !UiMotion.Reduced)
+            UiMotion.Flash(NavHuntHurtKey, UiMotion.Fast);
+        _navHuntSinceHit = sinceHit;
+
         while (_expedition.HasReward)
         {
             var r = _expedition.TakeReward();
+            // THE RAIL LEARNS EVERY WAVE THE FIGHT CLEARS. No new plumbing: this loop already runs on
+            // every screen and already carries the wave and whether it was a boss — the HUNT tile just
+            // had no way to know. A boss's tick lives longer and lands brighter.
+            UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);
+            _navHuntBoss = r.IsBoss;
             _hunter.AddGleam(r.Haul.Gleam);
             _champGleamAccrued += r.Haul.Gleam;
             // HAUL CORES ARE THE FORGE MATERIAL NOW. The hatchery currency they used to feed retired
@@ -8217,6 +8236,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // and it is the one cue every refusal in the game shares, so the sound means the thing
             // rather than the place.
             _sound.Play("sfx_error", 0.55f);
+            // AND NOTHING ELSE. Deliberately no _visited.Add and no screen flag: a refused tile must
+            // not read as "that screen was on top", or the tour owed to a screen the player has never
+            // reached would fire against it and burn its key — which is PERSISTED (SaveGame's
+            // ExplainedScreens), so the tour would be lost for good rather than for the session. Ten
+            // tiles are clickable-and-refused now, where before only a re-locked one ever could be.
             return;
         }
 
@@ -8433,6 +8457,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
             var unlocked = NavUnlocked(i);
+            var activity = NavActivity[i];
             // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
             if (slot > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
 
@@ -8468,15 +8493,60 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // 150 under a 36 px word (chrome-06). Now 38 / 47 / 41, never under the icon's floor.
             var iconPx = Math.Clamp(Math.Min(UiMetrics.Control(38), labelY - NavIconGap - r.Y - UiMetrics.Space(6)), NavIconMin, NavIconMax);
             var iconY = labelY - NavIconGap - iconPx;
+            var iconBox = new Rectangle(r.Center.X - iconPx / 2, iconY, iconPx, iconPx);
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - iconPx / 2, iconY, iconPx, iconPx), iconTint);
+                _batch.Draw(g, iconBox, iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - iconPx / 2 + 4, iconY + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
+                _ui.Diamond(_batch, new Rectangle(iconBox.X + 4, iconBox.Y + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
+
+            // ── A LOCKED TILE IS BOUND, and the binding BREAKS when the screen opens. ────────────
+            //
+            // The chain is the existing fx_bind_chain strip a sworn Vow already uses — a ring that
+            // contracts inward over eight frames — so a lock is the same idiom as a promise being
+            // made, and a reveal plays it in REVERSE: the ring springs open as the tile arrives. It is
+            // drawn on the ICON BOX rather than the tile because the art is 1:1 and the icon box is
+            // square; stretched to a 180x98 tile every link would be an ellipse.
+            //
+            // The padlock goes INSIDE the icon box's lower-right quadrant, never the top-left corner:
+            // at 125 % and 150 % the band above the icon is 8 px and that corner belongs to the NEW
+            // chip, which yields there already.
+            if (!unlocked)
+            {
+                var breaking = UiMotion.Pulse(NavBreakKey(activity));
+                var chain = breaking > 0f ? UiMotion.Smooth(breaking) : 0f;   // 1 -> 0 as it springs open
+                _ui.AnimSprite(_batch, "fx_bind_chain_strip8_512", iconBox,
+                               (1f - chain) * NavChainSeconds, 8f, loop: false, NavGold * 0.55f);
+                var lockPx = Math.Max(10, iconPx / 2);
+                _ui.LockGlyph(_batch, new Rectangle(iconBox.Right - lockPx, iconBox.Bottom - lockPx, lockPx, lockPx),
+                                UiInk.Secondary * 0.85f);
+            }
             // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
             // The house Secondary ink for an inactive label — the private lilac at 90 % sat under the
             // 6:1 floor and in a hue no token has (chrome-12).
             _ui.TextCenterBig(_batch, _ui.ShortenBig(Nav[i].Label, NavRailWidth - NavLabelInset * 2, labelH), r.Center.X, labelY,
                               !unlocked ? UiInk.Secondary * 0.4f : on ? NavGold : UiInk.Secondary, labelH);
+
+            // ── THE HUNT TILE IS ALIVE, because the fight is (playtest 2026-09-09: "it wasn't clear
+            //    that the HUNT screen is the main combat screen while navigating other menus"). Three
+            //    signals, none of them a play-by-play: a thin health bar in the tile's own foot band,
+            //    a red wash when the champion is bitten, and a gold one when a wave falls. Only while
+            //    the player is somewhere ELSE — on the hunt itself all three would be a second, worse
+            //    copy of the arena's own readouts.
+            if (activity == Activity.Hunt && !on)
+            {
+                var hurt = UiMotion.Pulse(NavHuntHurtKey);
+                if (hurt > 0f) _ui.Fill(_batch, r, UiInk.Danger * (0.30f * UiMotion.Smooth(hurt)));
+                var cleared = UiMotion.Pulse(NavHuntClearKey);
+                if (cleared > 0f)
+                    _ui.Fill(_batch, r, UiInk.Accent * ((_navHuntBoss ? 0.30f : 0.18f) * UiMotion.Smooth(cleared)));
+
+                // THE BAR SITS IN THE FOOT BAND the label already leaves (NavLabelFoot is unscaled, so
+                // this room exists at every density profile and nothing else has to move).
+                var life = Math.Clamp(_expedition.ChampionHealthFraction, 0f, 1f);
+                var barW = NavRailWidth - 52;
+                _ui.Bar(_batch, r.X + 26, r.Bottom - 7, barW, 4, life,
+                        _expedition.ChampionDowned ? UiInk.Danger : UiInk.Good);
+            }
 
             // The price, on the tile, so the rail teaches the progression without being clicked. Hover
             // only — nine requirement lines drawn permanently is the wall this pass exists to remove.
@@ -8492,7 +8562,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // the VAULT on the frame it opens. Never on the lit tile: the player is already there, and
             // the banner at the top of that screen is the mark's payload. A tile visited this session
             // drops its mark even with the banner still open — the mark means "you have not looked".
-            var activity = NavActivity[i];
             // A rung ABOUT this tile's screen marks it for as long as the rung shows — visited or not; the
             // lesson is waiting on that screen, and the mark is how the rail says so (UX V2 P0.7).
             var rungSends = _guideStep is { } rung && Tutorial.HasGuidance(rung) && Tutorial.Sends(rung, navGuide) == activity;
@@ -8557,11 +8626,54 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>The rail's tiles, top to bottom: the indices into <see cref="Nav"/> of every revealed activity.</summary>
+    /// <summary>
+    /// Which tiles the rail draws — ALL of them, always, in the rail's own order.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to filter by <c>_revealed</c>, so a fresh save's rail was THE HUNT and nothing else
+    /// and every later tile shifted the ones under it up a slot as it arrived. Playtest 2026-09-09:
+    /// <i>"We removed the screen buttons from the left panel, having them appear only later, but
+    /// that's a bad approach because the player doesn't know something will be added there. All
+    /// buttons should remain visible, perhaps with a chain overlay indicating they are locked."</i>
+    /// </para>
+    /// <para>
+    /// <b>This reverses a decision made three days earlier, and the two complaints are not actually in
+    /// conflict.</b> The earlier one (<c>Unlocks</c>: <i>"Hemen oyunun içine atıldım ve bilmeme rağmen
+    /// kafam karıştı"</i> — nine live destinations at once is not a menu, it is a wall) was about
+    /// COGNITIVE LOAD AT THE POINT OF USE. This one is about the ABSENT MAP: a rail that grows gives no
+    /// sense of the shape of the game. So: the SHAPE is revealed from the first frame, the CAPABILITY
+    /// is still gated. Eleven tiles always drawn, the unearned ones visibly bound, each saying its own
+    /// price on hover and refusing out loud when clicked.
+    /// </para>
+    /// <para>
+    /// <b><c>_revealed</c> is NOT deleted</b> — it stops being a draw filter and becomes what it was
+    /// always half doing: the ledger behind <c>Reveal.Newly</c>'s notice and the NEW mark's "you have
+    /// not looked" reading. Removing it would silence every reveal in the game.
+    /// </para>
+    /// </remarks>
+    /// <summary>The gold tick on the HUNT tile whenever a wave is cleared, from any screen.</summary>
+    private static readonly int NavHuntClearKey = HashCode.Combine("nav.hunt.clear");
+
+    /// <summary>The red flash on the HUNT tile when the champion is bitten, from any screen.</summary>
+    private static readonly int NavHuntHurtKey = HashCode.Combine("nav.hunt.hurt");
+
+    /// <summary>Was the wave that just cleared a boss? Its tick is brighter and lasts longer.</summary>
+    private bool _navHuntBoss;
+
+    /// <summary>Last frame's "seconds since bitten", so the flash fires on the bite rather than every frame.</summary>
+    private float _navHuntSinceHit = 99f;
+
+    /// <summary>The one-shot armed when a screen opens — the tile's chain springs off over its life.</summary>
+    private static int NavBreakKey(Activity a) => HashCode.Combine("nav.break", (int)a);
+
+    /// <summary>How long the chain strip runs. Its eight frames close inward; a reveal plays it back.</summary>
+    private const float NavChainSeconds = 0.55f;
+
     private List<int> NavSlots()
     {
         var slots = new List<int>(Nav.Length);
-        for (var i = 0; i < Nav.Length; i++)
-            if (_revealed.Contains(NavActivity[i])) slots.Add(i);
+        for (var i = 0; i < Nav.Length; i++) slots.Add(i);
         return slots;
     }
 }

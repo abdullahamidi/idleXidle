@@ -960,6 +960,26 @@ public sealed class HuntScreen
     public bool HasReward => _rewards.Count > 0;
     public WaveReward TakeReward() => _rewards.Dequeue();
 
+    // ── WHAT THE REST OF THE GAME MAY ASK ABOUT THE FIGHT ─────────────────────────────────────────
+    //
+    // The champion fights on EVERY screen (Game1 ticks the expedition above every overlay), and until
+    // 2026-09-09 nothing outside this file could tell. Playtest: "It wasn't clear that the HUNT screen
+    // is the main combat screen while navigating other menus. We need a live feedback mechanism to
+    // show that combat is happening there." Three read-onlys is the whole of the plumbing that was
+    // missing — the facts were already being recomputed sixty times a second, behind private fields.
+
+    /// <summary>The champion's health, 0..1 — what the arena's own bar draws.</summary>
+    public float ChampionHealthFraction => _replay?.HealthFractionOf(0) ?? 1f;
+
+    /// <summary>Seconds since the champion was last bitten. Zero on the frame it happens.</summary>
+    public float SinceChampionHit => _enemySinceHit;
+
+    /// <summary>Is the champion down and regrouping right now?</summary>
+    public bool ChampionDowned => _mode == Mode.Downed;
+
+    /// <summary>The wave being fought — the number a rail badge would say.</summary>
+    public int WaveNow => _replayWave;
+
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
     {

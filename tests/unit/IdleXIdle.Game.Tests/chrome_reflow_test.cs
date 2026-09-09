@@ -102,6 +102,18 @@ public class ChromeReflowTests
             // And no two tiles share a pixel.
             var previous = (Rectangle)rect.Invoke(null, new object[] { tiles - 2 })!;
             Assert.True(previous.Bottom <= last.Y, $"nav tiles {previous} and {last} overlap at {percent}%");
+
+            // THE HUNT TILE'S LIVE BAR sits in the foot band the label already leaves, so it costs the
+            // tile no geometry at any profile — and it must not print through the label above it or
+            // off the tile below. (Playtest 2026-09-09: the rail shows that the fight is running.)
+            var first = (Rectangle)rect.Invoke(null, new object[] { 0 })!;
+            var barTop = first.Bottom - 7;
+            Assert.True(barTop + 4 <= first.Bottom,
+                        $"the HUNT tile's health bar runs past its own foot at {percent}%");
+            Assert.True(barTop >= first.Bottom - foot,
+                        $"the HUNT tile's health bar at {percent}% is above the {foot} px foot band and would cross the label");
+            Assert.True(Read<int>("NavRailWidth") - 52 >= 4,
+                        "the bar is narrower than UiKit.Bar will draw");
         }
         finally { UiMetrics.Apply(100); }
     }

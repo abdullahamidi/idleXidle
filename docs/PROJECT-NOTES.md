@@ -196,6 +196,10 @@ nobody can open would be the one way this change is quietly catastrophic.
   never stored, so it is correct on every pre-existing save. Nine rail destinations from frame
   one is what produced "thrown straight in and confused". Each opens with a panel explaining
   what it is, what you do there and why you should care (three sentences minimum, asserted).
+  **Amended 2026-09-09:** every tile is now DRAWN from the first frame — the unearned ones bound
+  in chains with a padlock, their price on hover, refusing out loud when clicked — because a rail
+  that grows never shows the shape of the game ("the player doesn't know something will be added
+  there"). The SHAPE is revealed; the CAPABILITY is still gated, one at a time, exactly as above.
 - **The champion starts with ONE skill**, not four. Slots 2/3/4 arrive with their own note.
 - **The fight screen names what a skill does.** Every row read `AUTO`, which is true of every
   skill in the game; it now carries the Form headline from `BuildGlossary`.
