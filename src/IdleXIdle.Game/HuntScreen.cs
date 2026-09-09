@@ -1000,13 +1000,15 @@ public sealed class HuntScreen
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
         // stage, so the entrance has something to be an entrance from.
-        _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
+        if (_devArrivalPose is { } posed) _enemyEnter = posed;   // held for the shutter (DevPoseArrival)
+        else _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
         _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         // The flash holds while the fall fixture is posing it — a capture must be able to photograph
         // the one frame it exists to check (does the flash cover the WHOLE screen, corners included).
         if (!DevShowFall) _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
-        _fellTimer = Math.Max(0f, _fellTimer - dt);
+        if (_devHoldFellPlate) _fellTimer = DownedSeconds + FellBannerSeconds;   // held for the shutter
+        else _fellTimer = Math.Max(0f, _fellTimer - dt);
         _vfx.Update(dt);
         for (var i = 0; i < _callouts.Count; i++) { var c = _callouts[i]; c.Life -= dt * 1.6f; _callouts[i] = c; }
         _callouts.RemoveAll(c => c.Life <= 0f);
@@ -1199,6 +1201,23 @@ public sealed class HuntScreen
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _nextChampStrikeMs = _replay.NextChampionStrikeAfter(0f);
         _callouts.Clear();
+
+        // ── THE WAVE ARRIVES. Enemies slide in from off-stage and fade up over ~0.8 s, and the replay
+        //    is held until they have landed (UpdateFight's gate on _enemyEnter) so the champion never
+        //    swings at empty air.
+        //
+        //    THIS USED TO LIVE AT ONE CALL SITE — the between-waves break, and nowhere else. StartRun
+        //    reaches BeginWave too, on first launch, on a region change, and after EVERY death, and
+        //    none of those got an arrival: the creatures were simply THERE, at rest, at full opacity,
+        //    on frame one. Playtest 2026-09-09: "enemies spawn instantly when we start; they don't
+        //    walk in." The mechanism was built, correct and tested-adjacent, and never reached the two
+        //    moments the player actually named. Setting it here means every wave open arrives the same
+        //    way, whatever opened it.
+        //
+        //    A capture must not inherit it: a fixture seeks to an instant inside a fight, and a 0.8 s
+        //    gate in front of the playhead would freeze every fight* shot on frame zero of an entrance.
+        //    DevStart clears it (see below).
+        _enemyEnter = 1f;
     }
 
     /// <summary>The host rolled a chest for the boss just felled — upgrade the banner to the reward beat.</summary>
@@ -1453,7 +1472,7 @@ public sealed class HuntScreen
             _enemyWindup = 0f;
             _clipName = null;   // a clip never survives the wave it was swung in
             _breakTimer -= dt;
-            if (_breakTimer <= 0f) { BeginWave(); _enemyEnter = 1f; }
+            if (_breakTimer <= 0f) BeginWave();   // ...which arms the arrival itself now
             return;
         }
 
@@ -2722,13 +2741,20 @@ public sealed class HuntScreen
     /// <summary>The boss: a square figure standing on its own anchor, with the same lunge as any creature.</summary>
     private void LayoutBoss()
     {
-        var lunge = (int)(_enemyLunge * -40f);
+        // THE BOSS ARRIVES TOO. This read only the lunge, so a boss appeared at rest on its own mark
+        // while every ordinary wave slid in — the one wave in five with a horn and a banner was also
+        // the only one that popped. The entrance is the same rectangle offset the row uses, eased the
+        // same way, so the two presentations cannot drift.
+        var lunge = (int)(_enemyLunge * -40f) + (int)(_enemyEnter * _enemyEnter * BossEnterOffset);
         _creatureBoxes[0] = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge,
                                           BossAnchor.Y - BossTargetBodyHeight,
                                           BossTargetBodyHeight, BossTargetBodyHeight);
         _rowCentreX = BossAnchor.X;
         _rowTopY = _creatureBoxes[0].Y;
     }
+
+    /// <summary>How far off-stage-right a boss starts its arrival. Wider than the row's, because it is one figure.</summary>
+    private const float BossEnterOffset = 260f;
 
     /// <summary>The boss's idle strip, or null when the region has no boss art.</summary>
     private string? BossReferenceStrip
@@ -4538,14 +4564,33 @@ public sealed class HuntScreen
         var face = hot && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
         _ui.Plate(b, face, Ember, fade);
         var titleRow = Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6));
-        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", face.X + pad, face.Y + top + (titleRow - UiTypography.Pitch(UiTypography.StageLabel)) / 2,
+        // THE TITLE FOLLOWS THE RUN. The champion is back up 1.6 s after the fall and this plate stands
+        // for 9.1 s — deliberately, so two lines can be read and the log opened — so for seven and a
+        // half seconds it said FELL AT WAVE 40 over a live wave 1 while the header underneath said
+        // WAVE 1. Two contradictory wave numbers, at the one moment a player is asking what happened.
+        // Once the new descent is running the plate becomes the news it now IS: where you went back to.
+        var regrouped = _mode != Mode.Downed;
+        var title = regrouped ? $"BACK TO WAVE {RestartWave}" : $"FELL AT WAVE {_fellWave}";
+        _ui.TextBig(b, title, face.X + pad, face.Y + top + (titleRow - UiTypography.Pitch(UiTypography.StageLabel)) / 2,
                     Ember * fade, UiTypography.StageLabel, TextFace.Display);
-        var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
+        var limit = regrouped
+            ? $"FELL AT WAVE {_fellWave} — NOTHING IS LOST. THE FULL REPORT IS IN THE LOG."
+            : _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
         _ui.TextBig(b, _ui.ShortenBig(limit, face.Width - pad * 2, UiTypography.Body), face.X + pad,
                     face.Y + top + titleRow, Bone * fade, UiTypography.Body);
         if (_ui.Button(b, door, "READ THE LOG", hit, clicked, true, ButtonStyle.Primary)) WantsLog = true;
         else if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
+
+    /// <summary>
+    /// The wave the next descent will open at — read LIVE, never cached at the moment of the fall.
+    /// </summary>
+    /// <remarks>
+    /// The host revalidates <see cref="StartWave"/> against the Memory Dust every frame, and every
+    /// StartRun re-charges the checkpoint — so the answer can change between one death and the next.
+    /// A number cached when the champion fell could promise a checkpoint it can no longer afford.
+    /// </remarks>
+    private int RestartWave => Math.Max(1, StartWave);
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>
@@ -4556,7 +4601,11 @@ public sealed class HuntScreen
     /// </remarks>
     private (string Text, Color Tint)? RunState()
     {
-        if (_mode == Mode.Downed) return ("RECOVERING", Ember);
+        // THE PROMISE IS MADE BEFORE THE CHANGE, not after it. "RECOVERING" said something was
+        // happening and not what; the run restarts at a wave the player never chose and can change
+        // between deaths (the checkpoint is re-charged in Dust on every StartRun, so a descent that
+        // could afford wave 30 last time may open at 1 this time with nothing said).
+        if (_mode == Mode.Downed) return ($"RECOVERING — BACK TO WAVE {RestartWave}", Ember);
         if (WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
         return null;
     }
@@ -5455,6 +5504,63 @@ public sealed class HuntScreen
     /// </remarks>
     public bool DevShowFall { get; set; }
 
+    /// <summary>
+    /// DEV: pose the wave's ARRIVAL at <paramref name="progress"/> — 1 fully off-stage, 0 just landed.
+    /// </summary>
+    /// <remarks>
+    /// The entrance had no fixture at all: DevStart clears it (a fight pose must not sit behind a
+    /// 0.8-second gate), and every other capture lands mid-fight. So the one state the player named —
+    /// "enemies spawn instantly when we start; they don't walk in" — was also a state no capture mode
+    /// could photograph before or after the change.
+    /// </remarks>
+    public void DevPoseArrival(float progress)
+    {
+        // REMEMBERED, not just assigned. The capture host restarts a DevStart run once on its first
+        // live frame (it pushes the region's enemy baseline), and that restart runs StartRun -> DevStart
+        // again — which clears the entrance. A posed value written once is wiped before the shutter;
+        // the held value is re-asserted every frame instead.
+        _devArrivalPose = Math.Clamp(progress, 0f, 1f);
+        _enemyEnter = _devArrivalPose.Value;
+        // AND THE PLAYHEAD GOES BACK TO THE WAVE'S START. An arrival happens BEFORE the fight, and
+        // DevStart leaves the replay 900 ms in — deliberately, so an ordinary fight pose catches a
+        // fight rather than an empty stage. Posed at 900 ms the wave was already nearly over and the
+        // first capture of this fixture photographed three empty health bars.
+        _playheadMs = 0f;
+        _callouts.Clear();
+        // HELD, or the shutter never sees it. The entrance decays at 1.25/second and a capture renders
+        // 60 frames before it saves, so a posed value is long gone by the time the picture is taken —
+        // the same reason DevHoldReport exists. Holding changes when the beat ENDS, not what it shows.
+        _devHoldArrival = true;
+    }
+
+    private bool _devHoldArrival;
+    private float? _devArrivalPose;
+
+    /// <summary>
+    /// DEV: run to a death, then let the champion get back up — the frame the fall plate outlives.
+    /// </summary>
+    /// <remarks>
+    /// This is the state playtest 2026-09-09 is about: for 7.5 seconds the plate said FELL AT WAVE 40
+    /// while the header under it said WAVE 1 and a live wave one was being fought behind both. Posing
+    /// it needs a death AND the recovery beat spent, which is the opposite of what DevShowFall holds.
+    /// </remarks>
+    public void DevRunToRegroup(Hunter hunter)
+    {
+        DevRunToDeath(hunter);
+        DevHoldReport = false;
+        _downedTimer = 0f;
+        _mode = Mode.Fighting;
+        StartRun(hunter);
+        _replayWave = _run?.Wave + 1 ?? 1;
+        // HELD, because the host wipes it. The capture host pushes the region's Source every frame and
+        // the first live frame reads as a REGION CHANGE, whose branch clears _fellTimer outright — the
+        // fall's presentation belongs to the region it happened in. So the plate this fixture exists to
+        // photograph was gone before the shutter, and the capture showed an ordinary wave one.
+        _devHoldFellPlate = true;
+    }
+
+    private bool _devHoldFellPlate;
+
     /// <param name="fallProgress">
     /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO suppresses the
     /// report, so the collapse can be photographed uncovered — the report is a large centred panel and
@@ -5533,6 +5639,11 @@ public sealed class HuntScreen
         _enemyBaseDamage = edmg;
         _lastSource = EnemySource;
         StartRun(hunter);
+        // NO ARRIVAL UNDER THE RIG. BeginWave arms the entrance for every wave open, and UpdateFight
+        // holds the replay until it has finished — so a fixture that seeks 900 ms into a wave would
+        // photograph frame zero of an entrance instead of the fight it poses. Every fight* capture
+        // goes through here. The one fixture that WANTS an entrance keeps its posed value.
+        _enemyEnter = _devArrivalPose ?? 0f;
         _playheadMs = 900f;
     }
 

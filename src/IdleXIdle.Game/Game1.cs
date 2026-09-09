@@ -1919,7 +1919,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightarrive" or "fightregroup" or "fightaura" or "fightflash"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "warrenlocked" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
@@ -2276,7 +2276,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "trainingreset") _hunter.AddMaterial(Material.Crystal, 1);
                 }
 
-                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog"
+                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightarrive" or "fightregroup" or "fightaura" or "fightflash" or "fightshield" or "runlog"
                     or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug")
                 {
                     // `vfxdebug` is `fightshield` PLUS the VFX contract's own overlay (brief §70): the
@@ -2452,7 +2452,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
                     // No toast over `fightshield`: it would sit on the very strip the capture is for.
-                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
+                    if (sm is not ("fightreport" or "fightfall" or "fightarrive" or "fightregroup" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
@@ -2513,6 +2513,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                                System.Globalization.CultureInfo.InvariantCulture, out var v)
                             ? v : 0.6f;
                         _expedition.DevRunToDeath(_hunter, fallProgress: t);
+                    }
+                    else if (sm == "fightarrive")
+                    {
+                        // THE ENTRANCE. RH_SHOT_T is how far off-stage the wave still is: 1 fully off,
+                        // 0.35 most of the way in, 0 landed. DevStart clears the gate so a fight pose is
+                        // not stuck behind it, so this puts it back deliberately.
+                        _expedition.DevStart(_hunter, 1400f, 14f);
+                        var at = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                                                System.Globalization.NumberStyles.Float,
+                                                System.Globalization.CultureInfo.InvariantCulture, out var av)
+                            ? av : 0.55f;
+                        _expedition.DevPoseArrival(at);
+                    }
+                    else if (sm == "fightregroup")
+                    {
+                        // THE FRAME THE FALL PLATE OUTLIVES: a new descent already running underneath a
+                        // plate that describes the old one. Before this change the two printed different
+                        // wave numbers at the same instant, and no capture mode could pose it.
+                        _expedition.DevRunToRegroup(_hunter);
+
                     }
                     else if (sm == "runlog")
                     {
@@ -4161,7 +4181,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (Unlocks.IsOpen(Activity.Build, facts))
             foreach (var granted in Vows.Granted)
                 if (_discoveredVows.Add(granted.Id) && _grantsBaselined)
-                    PostVowReveal(granted, offered: true);
+                    // SILENT UNDER THE RIG unless a capture asked for this one, exactly as a rail
+                    // reveal is (RH_SHOT_REVEAL below). A fixture that opens the BUILD screen offers
+                    // this Vow on its first frame, and the toast stands in the notice lane — which is
+                    // where the fall plate stands too, so it hid the state `fightregroup` exists to
+                    // photograph. RH_SHOT_REVEAL=Vow announces it deliberately.
+                    if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), "Vow", StringComparison.OrdinalIgnoreCase))
+                        PostVowReveal(granted, offered: true);
 
         // KEYSTONES. TRANSITIONAL: the trait tree still stands this phase and its keystone nodes are
         // still buyable, so what it has taught is unioned in as well. That term goes when the tree does.
