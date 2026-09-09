@@ -1355,12 +1355,20 @@ public sealed class TrainingScreen
         }
         else if (crystals < price)
         {
-            _ui.TextBig(b, _ui.ShortenBig(cost, textW, UiTypography.Body), tx, lineY, Bone, UiTypography.Body);
+            // THE LAST CLAUSE IS THE WARNING. Cut from the right this sentence loses "THE GLEAM YOU
+            // SPENT DOES NOT COME BACK", which is the whole reason it is being asked. It steps down a
+            // rung instead; the row is one line and there is nowhere to wrap to.
+            _ui.TextBig(b, _ui.ShortenBig(cost, textW, _ui.FitRung(cost, textW, UiTypography.Body)), tx, lineY,
+                        Bone, _ui.FitRung(cost, textW, UiTypography.Body));
             _ui.Button(b, button, $"NEEDS {price:N0} CRYSTAL", hit, clicked, enabled: false);
         }
         else
         {
-            _ui.TextBig(b, _ui.ShortenBig(cost, textW, UiTypography.Body), tx, lineY, Bone, UiTypography.Body);
+            // THE LAST CLAUSE IS THE WARNING. Cut from the right this sentence loses "THE GLEAM YOU
+            // SPENT DOES NOT COME BACK", which is the whole reason it is being asked. It steps down a
+            // rung instead; the row is one line and there is nowhere to wrap to.
+            _ui.TextBig(b, _ui.ShortenBig(cost, textW, _ui.FitRung(cost, textW, UiTypography.Body)), tx, lineY,
+                        Bone, _ui.FitRung(cost, textW, UiTypography.Body));
             if (_ui.Button(b, button, $"RESET — {price:N0} CRYSTAL", hit, clicked))
             {
                 _resetArmed = true;

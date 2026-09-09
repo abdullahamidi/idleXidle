@@ -504,8 +504,22 @@ public sealed class ForgeScreen
     private static Rectangle MergeBtn =>
         new(UiKit.ContentLeft(BagPanel), SalvageJunkBtn.Y - UiMetrics.Gap - BagFootH, BagContentW, BagFootH);
 
-    /// <summary>Where the merge preview line sits — and the floor the list stops at.</summary>
-    private static int MergePreviewY => MergeBtn.Y - UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(2);
+    /// <summary>
+    /// How many lines the merge preview is allowed. TWO since 2026-09-09, and it is a MEASURED budget.
+    /// </summary>
+    /// <remarks>
+    /// The preview says three things — what the merge makes, what level it comes out at, and that the
+    /// prefix is re-rolled — and on one line it lost the last two whole: at 100 % it read
+    /// "…1 UNCOMMON WEAPON · LEV…", at 150 % "…1 UNCOMMON…". Truncation is silent, so the sentence had
+    /// been half-drawn for as long as it has existed and nothing said so; the truncation ledger
+    /// (RH_UI_TEXT=1) is what finally listed it. The bag pays one row for the second line, which
+    /// <see cref="BagRows"/> takes off automatically because it is derived from this.
+    /// </remarks>
+    private const int MergePreviewLines = 2;
+
+    /// <summary>Where the merge preview sits — and the floor the list stops at.</summary>
+    private static int MergePreviewY =>
+        MergeBtn.Y - MergePreviewLines * UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(2);
 
     /// <summary>
     /// How many rows fit between the header and the foot.
@@ -2070,7 +2084,8 @@ public sealed class ForgeScreen
             var textY = face.Y + (face.Height - UiTypography.Body) / 2 - 1;
             var pad = UiMetrics.Space(8);
             var nameRoom = face.Right - pad - _ui.MeasureBig(right, UiTypography.Body) - UiMetrics.Space(16) - textX;
-            _ui.TextBig(b, _ui.ShortenBig(gem ? GemCraft.NameOf(it) : ItemNaming.FullName(it), nameRoom, UiTypography.Body),
+            _ui.TextBig(b, gem ? _ui.ShortenBig(GemCraft.NameOf(it), nameRoom, UiTypography.Body)
+                               : _ui.FitItemName(it, nameRoom, UiTypography.Body),
                         textX, textY, sel ? Bone : rc, UiTypography.Body);
             _ui.TextRightBig(b, right, face.Right - pad, textY, rightInk, UiTypography.Body);
         }
@@ -2112,8 +2127,15 @@ public sealed class ForgeScreen
             var line = $"NEXT: 3 {RarityNames[(int)tr.Rarity]} INTO 1 {RarityNames[(int)tr.Rarity + 1]} {kind}"
                        + (el is { } e ? $" · {e.ToString().ToUpperInvariant()}" : "")
                        + $" · LEVEL {tr.Trio.Max(i => i.ItemLevel)} · A NEW RANDOM PREFIX";
-            _ui.TextBig(b, _ui.ShortenBig(line, BagContentW, UiTypography.Secondary),
-                        UiKit.ContentLeft(BagPanel), MergePreviewY, Slate, UiTypography.Secondary);
+            // WRAPPED INTO ITS BUDGET, never cut to one line: every clause here is a consequence of
+            // pressing the button above it, and the two the cut removed were the two the player could
+            // not have guessed (the level it lands at, and that the prefix is re-rolled).
+            var py = MergePreviewY;
+            foreach (var l in _ui.WrapBig(line, BagContentW, UiTypography.Secondary).Take(MergePreviewLines))
+            {
+                _ui.TextBig(b, l, UiKit.ContentLeft(BagPanel), py, Slate, UiTypography.Secondary);
+                py += UiTypography.Pitch(UiTypography.Secondary);
+            }
         }
         else
             _ui.TextBig(b, _ui.ShortenBig("YOU NEED THREE OF THE SAME GRADE.", BagContentW, UiTypography.Secondary),
@@ -2417,10 +2439,16 @@ public sealed class ForgeScreen
             _ui.Plate(b, face, on ? UiInk.Accent : null);
             Touch(b, r, face, hover);
             if (on) _ui.Fill(b, new Rectangle(face.X, face.Bottom - 3, face.Width, 3), Gold);
-            // A THING YOU CLICK, at the rung things you click are set in, centred on the tab.
-            _ui.TextCenterBig(b, _ui.ShortenBig(TabNames[i], face.Width - UiMetrics.Space(12), UiTypography.NavigationLabel),
-                              face.Center.X, face.Y + (face.Height - UiTypography.NavigationLabel) / 2, on ? Gold : hover ? Bone : Slate,
-                              UiTypography.NavigationLabel, TextFace.Strong);
+            // A THING YOU CLICK, at the rung things you click are set in — and it SHRINKS rather than
+            // losing letters. Four tabs across this column at UI SCALE 150 leave 117 px each, and the
+            // first one read "UPGRA…": a verb with its ending cut off, on the button that performs it.
+            // FitRung steps down the ladder to the largest size the whole word fits at (UiTypography's
+            // own rule for a control, which until now nothing implemented).
+            var tabRoom = face.Width - UiMetrics.Space(12);
+            var tabRung = _ui.FitRung(TabNames[i], tabRoom, UiTypography.NavigationLabel);
+            _ui.TextCenterBig(b, _ui.ShortenBig(TabNames[i], tabRoom, tabRung),
+                              face.Center.X, face.Y + (face.Height - tabRung) / 2, on ? Gold : hover ? Bone : Slate,
+                              tabRung, TextFace.Strong);
             // Switching tabs withdraws any question the old tab was asking — see NormaliseConfirm.
             if (UiKit.ClickedIn(r, hit, clicked) && !on) { _tab = (Tab)i; _confirm = null; _socketAsk = null; }
         }

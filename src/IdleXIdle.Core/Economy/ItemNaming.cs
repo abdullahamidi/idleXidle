@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Loot;
@@ -85,6 +85,31 @@ public static class ItemNaming
             item.Element?.ToString().ToUpperInvariant(),
             TypeWord(item),
         };
+        return string.Join(" ", parts.Where(p => !string.IsNullOrEmpty(p)));
+    }
+
+    /// <summary>
+    /// The name with its PREFIX dropped — what a row says when the full name will not fit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A ladder, not a cut. The three parts of a name are not equal: the slot word is the item's
+    /// IDENTITY ("GLOVES"), the element is what it belongs to ("BODY"), and the prefix is a modifier
+    /// the inspector spells out in full anyway ("FOCUSED"). Cutting from the right takes them in
+    /// exactly the wrong order — "FOCUSED BODY GLOVES" became "FOCUSED BODY…", which names a modifier
+    /// and an element and no item at all.
+    /// </para>
+    /// <para>
+    /// Found by the truncation ledger (RH_UI_TEXT=1) after the body face changed on 2026-09-09: the
+    /// wider face pushed three-word names past the bag row's 200 px at UI SCALE 150. The narrower face
+    /// had been hiding a bad reduction rather than a good layout, so the fix is the reduction.
+    /// </para>
+    /// </remarks>
+    public static string ShortName(ItemInstance? item)
+    {
+        if (item is null) return "";
+        if (item.BaseType == ItemBaseType.Gem) return FullName(item);
+        var parts = new[] { item.Element?.ToString().ToUpperInvariant(), TypeWord(item) };
         return string.Join(" ", parts.Where(p => !string.IsNullOrEmpty(p)));
     }
 

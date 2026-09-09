@@ -200,6 +200,16 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
 [ -n "$RH_SHOT_MOTION" ] && RH_ENV+=(RH_SHOT_MOTION="$RH_SHOT_MOTION")
+# RH_UI_TEXT=1 prints the TRUNCATION LEDGER for whatever this shot drew — every label the layout
+# could not fit, worst share lost first (see src/IdleXIdle.Game/UiTextLedger.cs). Truncation is the
+# one layout fault that leaves no trace in the source, because the source is a correct call.
+[ -n "$RH_UI_TEXT" ] && RH_ENV+=(RH_UI_TEXT="$RH_UI_TEXT")
+# RH_UI_BUDGET=1 prints the raster ledger the same way (BRIEF sec.74).
+[ -n "$RH_UI_BUDGET" ] && RH_ENV+=(RH_UI_BUDGET="$RH_UI_BUDGET")
+# The gear screen's poses, including `drag`, which is the only way to photograph a carried item.
+[ -n "$RH_SHOT_GEAR_POSE" ] && RH_ENV+=(RH_SHOT_GEAR_POSE="$RH_SHOT_GEAR_POSE")
+[ -n "$RH_SHOT_TRAIT_DRAG" ] && RH_ENV+=(RH_SHOT_TRAIT_DRAG="$RH_SHOT_TRAIT_DRAG")
+[ -n "$RH_SHOT_REVEAL_WEARABLE" ] && RH_ENV+=(RH_SHOT_REVEAL_WEARABLE="$RH_SHOT_REVEAL_WEARABLE")
 [ -n "$RH_SHOT_SCROLL" ] && RH_ENV+=(RH_SHOT_SCROLL="$RH_SHOT_SCROLL")
 [ -n "$RH_SHOT_HELD" ] && RH_ENV+=(RH_SHOT_HELD="$RH_SHOT_HELD")
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
@@ -257,5 +267,12 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
 # `tour`: the screen and the card. The game resolves the mode to that screen's own fixture.
 [ -n "$TOUR_TAB" ] && RH_ENV+=(RH_SHOT_TAB="$TOUR_TAB" RH_SHOT_STEP="$TOUR_STEP")
-dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
+# THE LEDGERS PRINT TO STDOUT, and this line used to throw stdout away — so RH_UI_TEXT=1 and
+# RH_UI_BUDGET=1 ran, measured, printed, and were discarded by the harness that asked for them.
+# With either dial on the run's output is kept; otherwise it is as quiet as it ever was.
+if [ -n "$RH_UI_TEXT" ] || [ -n "$RH_UI_BUDGET" ]; then
+  dn run --project src/IdleXIdle.Game --no-build 2>/dev/null | grep -E '^(ui|text)	' || true
+else
+  dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
+fi
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -1925,7 +1925,12 @@ public sealed class UiKit
         if (MeasureBig(text, px) <= width) return text;
         var s = text;
         while (s.Length > 1 && MeasureBig(s + "…", px) > width) s = s[..^1];
-        return s.TrimEnd() + "…";
+        var cut = s.TrimEnd() + "…";
+        // EVERY CUT IS RECORDED WHEN THE DIAL IS ON. This method always succeeds — a label that does
+        // not fit comes back shorter and nothing anywhere says so — which makes truncation the one
+        // layout fault that leaves no trace in the source. RH_UI_TEXT=1 turns it into a list.
+        if (UiTextLedger.On) UiTextLedger.Note(text, cut, width, px);
+        return cut;
     }
 
     /// <summary>The caption a built-in row wears after its stat word — one spelling for every screen.</summary>
@@ -1969,6 +1974,52 @@ public sealed class UiKit
     /// <summary>The same ladder, ending in a cut when the row has no second line to give.</summary>
     public string FitLabel(string label, int room, int px)
         => TryFitLabel(label, room, px, out var fitted) ? fitted : ShortenBig(label, room, px);
+
+    /// <summary>
+    /// THE LARGEST RUNG AT WHICH THE WHOLE WORD FITS — a control's label shrinks, it does not lose letters.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="UiTypography.NavigationLabel"/> has said this since the ladder was written — <i>"one
+    /// size for every control; it shrinks only when the label genuinely does not fit, and never below
+    /// <see cref="UiTypography.Caption"/>"</i> — and nothing implemented it. Controls called
+    /// <see cref="ShortenBig"/> instead, which cuts, so at 150 % the Forge's first tab read
+    /// <c>UPGRA…</c>: a verb with its ending missing on the button that performs it, which is worse than
+    /// the same verb one rung smaller in every way.
+    /// </para>
+    /// <para>
+    /// Steps DOWN the real ladder rather than scaling freely, so a shrunk label still lands on a size the
+    /// rest of the screen uses. Returns <paramref name="px"/> unchanged when the label already fits, and
+    /// the floor when nothing does — at which point the caller's box is genuinely too small and cutting
+    /// is the honest answer.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// An item's name in the room it has: the whole name, else the name without its prefix, else a cut.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="TryFitLabel"/>, and for the same reason: a name reduces by dropping
+    /// its least load-bearing part rather than by losing its last word. See
+    /// <see cref="Core.Economy.ItemNaming.ShortName"/> for which part that is and why.
+    /// </remarks>
+    public string FitItemName(Core.Loot.ItemInstance? item, int room, int px)
+    {
+        var full = Core.Economy.ItemNaming.FullName(item);
+        if (MeasureBig(full, px) <= room) return full;
+        var shorter = Core.Economy.ItemNaming.ShortName(item);
+        return MeasureBig(shorter, px) <= room ? shorter : ShortenBig(full, room, px);
+    }
+
+    public int FitRung(string label, int room, int px)
+    {
+        if (string.IsNullOrEmpty(label) || room <= 0) return px;
+        foreach (var rung in new[] { px, UiTypography.Body, UiTypography.Secondary, UiTypography.Caption })
+        {
+            if (rung > px) continue;                  // never louder than the caller asked for
+            if (MeasureBig(label, rung) <= room) return rung;
+        }
+        return UiTypography.Caption;
+    }
 
     /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
     /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because

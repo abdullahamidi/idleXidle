@@ -1433,6 +1433,11 @@ public sealed class LoadoutScreen
                 var nameW = _ui.MeasureBig(vname, UiTypography.Body);
                 if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spare;
                 if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spareShort;
+                // ...AND THE LAST RUNG DROPS THE TAIL WHOLE RATHER THAN CUTTING THE NAME. The ladder's
+                // own rule two lines up is that the Source word stays because it is identity — so is the
+                // VARIATION's name, and at UI SCALE 150 this row was ending on "NU…" for NUMB while
+                // still printing "0/3" beside it. A count is worth less than the thing it counts.
+                if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = "";
                 vname = _ui.ShortenBig(vname, room - fixedW - _ui.MeasureBig(tail, UiTypography.Body), UiTypography.Body);
                 _ui.TextBig(b, vname, x3, y3, Bone, UiTypography.Body); x3 += _ui.MeasureBig(vname, UiTypography.Body);
                 _ui.TextBig(b, dot, x3, y3, Slate, UiTypography.Body); x3 += _ui.MeasureBig(dot, UiTypography.Body);
@@ -1559,7 +1564,9 @@ public sealed class LoadoutScreen
         // Shortened against the room LEFT of it, so a bigger profile trims the sentence instead of printing it
         // through the word SKILLS.
         var headRoom = SkillsW - _ui.MeasureBig("SKILLS", UiTypography.Secondary) - UiMetrics.Space(24);
-        _ui.TextRightBig(b, _ui.ShortenBig(learnedHead, headRoom, UiTypography.Secondary), SkillsX + SkillsW, SkillsHeadY, Slate, UiTypography.Secondary);
+        // "…MORE ON THE MAST…" pointed at nothing. The head shrinks rather than losing the door it names.
+        var headRung = _ui.FitRung(learnedHead, headRoom, UiTypography.Secondary);
+        _ui.TextRightBig(b, _ui.ShortenBig(learnedHead, headRoom, headRung), SkillsX + SkillsW, SkillsHeadY, Slate, headRung);
 
         // Everything under the head is one column that scrolls when the library and the tree together are
         // taller than the plate (150 %, and 125 % with a tree open) — nothing is shrunk to fit (brief §17).
@@ -1641,12 +1648,19 @@ public sealed class LoadoutScreen
             var tail = isEquipped ? _ui.MeasureBig(badgeText, UiTypography.Caption) + edgePad : 0;
             var nameX = tile.X + nameLeft;
             var nameY = nameY0(tile);
-            _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Right - edgePad - tail - nameX, UiTypography.Body), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
+            // THE SKILL'S NAME IS THE TILE'S ONLY IDENTIFIER. "NUMB" became "NU…" in 63 px at 150 %.
+            var nameRoomT = tile.Right - edgePad - tail - nameX;
+            var nameRungT = _ui.FitRung(def.Name, nameRoomT, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(def.Name, nameRoomT, nameRungT), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, nameRungT);
             var sub = have ? (def.TakesABeat ? "ACTIVE" : "PASSIVE") : LockLine(def, longLock);
             // The state line at Secondary, never fine print, and never the refusal red: a kept level is
             // good news (build-04). The lock badge and the Slate name already say LOCKED.
             var subInk = have ? Slate : Bone;
-            _ui.TextBig(b, _ui.ShortenBig(sub, tile.Right - edgePad - tail - nameX, UiTypography.Secondary), nameX, subY, subInk, UiTypography.Secondary);
+            // ACTIVE / PASSIVE / LOCKED · LEVEL n — a STATE, and a state cut in half says nothing:
+            // at UI SCALE 150 this tile read "ACTI…" and "PASSI…" in 75 px. It steps down the ladder.
+            var subRoom = tile.Right - edgePad - tail - nameX;
+            var subRung = _ui.FitRung(sub, subRoom, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(sub, subRoom, subRung), nameX, subY, subInk, subRung);
             if (isEquipped) _ui.TextRightBig(b, badgeText, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
             Tip(shown, hit, have ? $"{def.Name} — {def.Line}" : LockTip(def));
         }
@@ -1809,7 +1823,10 @@ public sealed class LoadoutScreen
                 // name gives way to the state, so the two never print through each other at a bigger profile.
                 var chipState = owned ? "OWNED" : can ? "READY" : taken ? $"LEVEL {level + 1}" : "CHOOSE FIRST";
                 var chipRoom = chip.Width - chipPad * 2 - _ui.MeasureBig(chipState, UiTypography.Caption) - UiMetrics.Space(10);
-                _ui.TextBig(b, _ui.ShortenBig(r.Name.ToUpperInvariant(), chipRoom, UiTypography.Secondary), chip.X + chipPad, chip.Y + (chip.Height - UiTypography.Secondary) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, UiTypography.Secondary);
+                // A REINFORCEMENT'S NAME is what the player is choosing between — "PUNCH THR…" is not a
+            // choice, it is a riddle. The chip's word shrinks; the chip does not eat it.
+            var rRung = _ui.FitRung(r.Name.ToUpperInvariant(), chipRoom, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(r.Name.ToUpperInvariant(), chipRoom, rRung), chip.X + chipPad, chip.Y + (chip.Height - rRung) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, rRung);
                 _ui.TextRightBig(b, chipState, chip.Right - chipPad, chip.Y + (chip.Height - UiTypography.Caption) / 2, owned ? Met : can ? Gold : Slate, UiTypography.Caption);
                 Tip(shownChip, hit, $"{r.Name} — {r.Line}");
             }

@@ -1126,7 +1126,9 @@ public sealed class WarrenScreen
                 }
                 else
                 {
-                    _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, card.Width - UiMetrics.Space(24), UiTypography.Headline),
+                    // SOUNDING CHAMBER read "SOUNDING CHAM…" at 150 %. A facility's name is the card.
+                    _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, card.Width - UiMetrics.Space(24),
+                                                        _ui.FitRung(f.Info.Name, card.Width - UiMetrics.Space(24), UiTypography.Headline)),
                                       card.Center.X, rows.NameY, Bone, UiTypography.Headline);
                     _ui.TextRightBig(b, "LOCKED", card.Right - CardPadX, rows.RowY + (UiTypography.Body - UiTypography.Caption) / 2,
                                      UiInk.Disabled, UiTypography.Caption);
@@ -1179,7 +1181,8 @@ public sealed class WarrenScreen
             else if (lift > 0f) _ui.Fill(b, inner, Color.White * (0.07f * lift));
             // The name is ALWAYS legible: unselected cards drew it in Slate, so "not selected" read as
             // "unavailable" on seven of the eight.
-            _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, drawn.Width - UiMetrics.Space(24), UiTypography.Headline),
+            _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, drawn.Width - UiMetrics.Space(24),
+                                                _ui.FitRung(f.Info.Name, drawn.Width - UiMetrics.Space(24), UiTypography.Headline)),
                               drawn.Center.X, rows.NameY, Bone, UiTypography.Headline);
 
             ResGlyph(b, new Rectangle(drawn.X + CardPadX, rows.RowY + 2, UiMetrics.IconSmall, UiMetrics.IconSmall), f.Info.Produces, rc);

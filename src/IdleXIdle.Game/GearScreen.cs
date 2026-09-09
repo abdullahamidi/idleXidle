@@ -1235,8 +1235,13 @@ public sealed class GearScreen
         }
         var il = wornAll.Count > 0 ? (int)Math.Round(wornAll.Average(i => i.ItemLevel)) : 0;
         var countX = strip.X + UiMetrics.Space(16);
-        _ui.TextBig(b, _ui.ShortenBig($"{wornAll.Count} / 8 EQUIPPED  ·  AVERAGE ITEM LEVEL {il}", chipX - UiMetrics.Space(12) - countX, UiTypography.Body),
-                    countX, strip.Y + (strip.Height - UiTypography.Body) / 2, Bone, UiTypography.Body);
+        // The set chips take the right of this strip, so what is left SHRINKS rather than dropping the
+        // AVERAGE ITEM LEVEL clause — the half of the line a player cannot read anywhere else.
+        var footLine = $"{wornAll.Count} / 8 EQUIPPED  ·  AVERAGE ITEM LEVEL {il}";
+        var footRoom = chipX - UiMetrics.Space(12) - countX;
+        var footRung = _ui.FitRung(footLine, footRoom, UiTypography.Body);
+        _ui.TextBig(b, _ui.ShortenBig(footLine, footRoom, footRung),
+                    countX, strip.Y + (strip.Height - footRung) / 2, Bone, footRung);
 
         // TWO UTILITY ACTIONS, secondary: named for what they do (§65). Each is off when it would do
         // nothing, and says why under the pointer (§29) — a button that clicks and changes nothing is the

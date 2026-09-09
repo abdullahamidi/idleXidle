@@ -1837,6 +1837,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ? $"BOOT OK — save loaded, hunter level {_hunter.HunterLevel}, "
               + $"{_bootCheckScreensSeen} screens drawn, deepest wave {_deepestEver}"
             : $"BOOT OK — no save present, started fresh, {_bootCheckScreensSeen} screens drawn");
+        // RH_UI_TEXT=1: every label the boot's own sweep of all fourteen screens could not fit. This is
+        // where the truncation ledger is worth the most — the capture path photographs one screen, and
+        // this one draws every screen the game has.
+        UiTextLedger.Dump();
         Exit();
     }
 
@@ -6594,6 +6598,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // RH_UI_BUDGET=1: the raster ledger for whatever this shot drew (BRIEF sec.74). Printed
             // after the frame so it reports the screen that was actually photographed.
             UiRasterLedger.Dump();
+            // RH_UI_TEXT=1: every label this shot could not fit. The truncation ledger — see UiTextLedger.
+            UiTextLedger.Dump();
             Exit();
         }
 

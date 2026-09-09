@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -552,7 +552,12 @@ public sealed class RosterScreen
             // ShortenBig embodies, applied to the rung instead of the letters.
             var bodyH = UiTypography.Pitch(UiTypography.Body);
             var nameW = card.Width - NameInset * 2;
-            var nameRung = _ui.WrapBig(c.ShortName, nameW, UiTypography.Headline).Count > 1 ? UiTypography.Body : UiTypography.Headline;
+            // MEASURED, NOT WRAPPED. The old test asked WrapBig whether the name took two lines — and
+            // WrapBig cannot break a word that has no spaces, so METRONOME, OATHBOUND and THORNWALL all
+            // reported "one line" and were ellipsised at Headline instead of stepping down. Only the
+            // two-word names were ever caught. FitRung asks the question the test meant to ask: what is
+            // the largest rung the whole name fits at?
+            var nameRung = _ui.FitRung(c.ShortName, nameW, UiTypography.Headline);
             var headlineH = UiTypography.Pitch(nameRung);
             const int nameRows = 1;
 
@@ -580,8 +585,13 @@ public sealed class RosterScreen
             // The identity label: the hunter's own innate, which is unique to them — unlike the road or
             // the tier line, which the card used to spend two rows on.
             if (showLabel)
-                _ui.TextCenterBig(b, _ui.ShortenBig(c.PassiveName, nameW, UiTypography.Body),
-                                  card.Center.X, ny + headlineH * nameRows, Slate, UiTypography.Body);
+            {
+                // The innate's name is the card's second identifier — MANY MOUTHS read "MANY MOUT…" at
+                // 150 %. Same rule as the name above it: shrink, do not cut.
+                var innateRung = _ui.FitRung(c.PassiveName, nameW, UiTypography.Body);
+                _ui.TextCenterBig(b, _ui.ShortenBig(c.PassiveName, nameW, innateRung),
+                                  card.Center.X, ny + headlineH * nameRows, Slate, innateRung);
+            }
 
             DrawStatusBand(b, c, new Rectangle(card.X, statusTop, card.Width, bandH), unlocked, active);
 
@@ -768,7 +778,10 @@ public sealed class RosterScreen
         y += headH + UiMetrics.Space(6);
 
         // 2 NAME
-        _ui.TextBig(b, _ui.ShortenBig(c.Name, width, UiTypography.Headline), left, y,
+        // A HUNTER'S NAME, on the screen whose whole job is telling them apart: METRONOME read
+        // "METRONO…" and OATHBOUND "OATHBOU…" at 150 %. Names shrink here, they do not lose letters.
+        var nameRung = _ui.FitRung(c.Name, width, UiTypography.Headline);
+        _ui.TextBig(b, _ui.ShortenBig(c.Name, width, nameRung), left, y,
                     active ? Gold : unlocked ? Bone : Slate, UiTypography.Headline);
         y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(2);
 
