@@ -261,7 +261,7 @@ public sealed record SaveGame
     public float MasteryPanY { get; init; }
 
     /// <summary>
-    /// First-run guide rungs the player closed by hand, as <c>TutorialStep</c> NAMES.
+    /// First-run guide rungs the player closed by hand — the retired ladder's step NAMES.
     /// </summary>
     /// <remarks>
     /// Names rather than ordinals, so reordering the enum can never silently dismiss a different
@@ -300,6 +300,34 @@ public sealed record SaveGame
     /// screen they had. Written by the host; read once, on load.
     /// </remarks>
     public List<string> RevealedScreens { get; init; } = new();
+
+    // ── ONBOARDING: the four things the lesson catalogue cannot derive. ──────────────────────────
+    //
+    // Everything else it reads is a monotone fact this save already carries — stats trained, items
+    // worn, gems set, regions conquered — so completion needs no stored state machine and a save that
+    // loads mid-lesson reconstructs itself. These four cannot be reconstructed from anything.
+
+    /// <summary>SKIP GUIDANCE: the player asked the game to stop coaching. Presentation only.</summary>
+    /// <remarks>
+    /// It silences prompts and nothing else. No fact is fabricated, no gate moves, no reward is
+    /// granted: every lesson stays honestly incomplete underneath, which is why this is one global
+    /// switch rather than a dozen local dismissals that each pretend a mechanic was learned.
+    /// </remarks>
+    public bool GuidanceOff { get; init; }
+
+    /// <summary>Has the run log ever been opened? The first half of the loop this game is about.</summary>
+    /// <remarks>
+    /// Not derivable: opening a report changes nothing in the world. Old saves are SEEDED true when
+    /// their progression proves the loop was long since lived (<c>OnboardingLessons.SeedFallLoopAsLived</c>),
+    /// so a veteran is never walked through READ THE LOG.
+    /// </remarks>
+    public bool ReportOpenedEver { get; init; }
+
+    /// <summary>A real build, training, gear or mastery change was made after the first fall.</summary>
+    public bool ChangedAfterFall { get; init; }
+
+    /// <summary>...and a descent was started after that change. The loop, closed.</summary>
+    public bool RetriedAfterChange { get; init; }
 
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }

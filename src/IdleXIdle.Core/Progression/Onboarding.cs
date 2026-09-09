@@ -462,7 +462,14 @@ public static class Onboarding
     /// cleared wave counts as having seen it. Asked ONCE, at the moment the title closes — the intro
     /// must not vanish because the first wave happened to clear while the player was reading card three.
     /// </remarks>
-    public static bool IntroDue(TutorialFacts f, bool introSeen) => !introSeen && f.WavesCleared < 1;
+    /// <remarks>
+    /// <b>NOTHING IN THE GAME CALLS THIS ANY MORE.</b> The mandatory intro is gone — a fresh save now
+    /// begins on the fight with one short observation instead of eight modal cards — and the tours it
+    /// belonged to live behind LEARN THIS SCREEN. It survives for <see cref="SeedExplained"/>, which
+    /// still has to tell a save written before the intro existed from one that skipped it, and for the
+    /// capture rig, which poses the intro by number.
+    /// </remarks>
+    public static bool IntroDue(int wavesCleared, bool introSeen) => !introSeen && wavesCleared < 1;
 
     /// <summary>The explained-list key for a screen.</summary>
     public static string ScreenKey(Activity screen) => screen.ToString();
@@ -550,8 +557,7 @@ public static class Onboarding
         // card would promise a free socket the Forge then refuses (review 2026-08-26). This holds for
         // every save, not only the ones from before the intro.
         if (freeSocketUsed) set.Add(GemTourKey);
-        var returningFromBefore = !introSeen
-            && !IntroDue(new TutorialFacts(WavesCleared: f.WavesCleared), false);
+        var returningFromBefore = !introSeen && !IntroDue(f.WavesCleared, false);
         if (!returningFromBefore) return set;
 
         foreach (var screen in Unlocks.Open(f)) set.Add(ScreenKey(screen));
@@ -596,19 +602,20 @@ public static class Onboarding
            && (TourDue(screen, explained) is not null || BannerFor(screen, f, explained) is not null);
 
     /// <summary>
-    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause: while
-    /// a guide rung is showing, the tile it <see cref="Tutorial.Sends"/> the player to wears the mark too.
+    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause:
+    /// while a lesson is showing, the tile it sends the player to wears the mark too.
     /// </summary>
     /// <remarks>
-    /// UX V2 P0.7. A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over
-    /// the Forge). Now it renders only on the screen it is about; everywhere else, the rung is this mark
-    /// on the tile it points at — the rail says where, the screen says what.
+    /// A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over the
+    /// Forge). It renders only on the screen it is about; everywhere else the tile carries it — the
+    /// rail says where, the screen says what. <paramref name="lessonSends"/> is the screen the coach's
+    /// current lesson asks for, or null: the caller resolves it, so this file needs no opinion about
+    /// which lesson is showing or why.
     /// </remarks>
     public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained,
-                             TutorialStep? showing, TutorialFacts tf)
+                             Activity? lessonSends)
         => IsNew(screen, f, explained)
-           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
-               && showing is { } s && Tutorial.HasGuidance(s) && Tutorial.Sends(s, tf) == screen);
+           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f) && lessonSends == screen);
 
     /// <summary>
     /// The one line this screen says about its own state right now, or null when nothing is true.

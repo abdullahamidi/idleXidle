@@ -894,24 +894,10 @@ public sealed class HuntScreen
         return HuntOverlay.None;
     }
 
-    /// <summary>
-    /// The first-run lesson to show, or null once the player has outgrown the guide.
-    /// </summary>
-    /// <remarks>
-    /// Drawn on the HUNT screen because that is where a new player is actually looking — the guide's
-    /// first and most important sentence is that the fight needs nothing from them, and a prompt about
-    /// that belongs over the fight, not behind a menu they have no reason to open.
-    /// </remarks>
-    /// <summary>
-    /// UNUSED — the guide moved to the host as shared chrome (Game1.DrawHuntLesson / DrawHintSlot).
-    /// </summary>
-    /// <remarks>
-    /// Kept as a deliberate tombstone rather than deleted silently, because the capture fixtures and
-    /// the scene audits both reference "the guide on the hunt screen" and the next person to look for
-    /// it here should find out where it went rather than conclude the feature was cut.
-    /// </remarks>
-    [Obsolete("The guide is drawn by Game1 (DrawHuntLesson on the HUNT, DrawHintSlot on a menu screen). Setting this does nothing.")]
-    public TutorialStep? Guide { get; set; }
+    // THE GUIDE IS NOT HERE. It moved to the host as shared chrome — Game1.DrawHuntLesson over the
+    // fight, Game1.DrawHintSlot on a menu screen — and the settable property that stood here as a
+    // tombstone went with the tutorial ladder it was typed on. A capture fixture or an audit looking
+    // for "the guide on the hunt screen" wants OnboardingDirector and those two draws.
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
     /// <summary>

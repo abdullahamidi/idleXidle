@@ -204,8 +204,22 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # could not fit, worst share lost first (see src/IdleXIdle.Game/UiTextLedger.cs). Truncation is the
 # one layout fault that leaves no trace in the source, because the source is a correct call.
 [ -n "$RH_UI_TEXT" ] && RH_ENV+=(RH_UI_TEXT="$RH_UI_TEXT")
+# RH_SHOT_LESSON=<OnboardingLessonId> holds one onboarding lesson on screen, so its card, its brackets
+# and its reflow can be photographed at 100 / 125 / 150. Most lessons depend on facts no fixture has.
+[ -n "$RH_SHOT_LESSON" ] && RH_ENV+=(RH_SHOT_LESSON="$RH_SHOT_LESSON")
 # RH_UI_BUDGET=1 prints the raster ledger the same way (BRIEF sec.74).
 [ -n "$RH_UI_BUDGET" ] && RH_ENV+=(RH_UI_BUDGET="$RH_UI_BUDGET")
+# RH_SAVE_DIR=<dir> points the whole save system at another folder — an EMPTY one is the only way to
+# photograph what a genuinely new account sees, which is the state the onboarding redesign is about
+# and the one no fixture can reach (every fixture starts from a dressed save):
+#
+#   RH_SAVE_DIR="$(cygpath -w "$TEMP/fresh")" bash tools/asset-pipeline/capture.sh fight out.png
+[ -n "${RH_SAVE_DIR:-}" ] && RH_ENV+=(RH_SAVE_DIR="$RH_SAVE_DIR")
+# RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson
+# (eligible / shown / completed / muted / skipped) and one milestone row, ftue_loop_lived — did this
+# player open their first failure report, change something, and go back down. There is no analytics
+# sink in this project; the console is the sink.
+[ -n "$RH_LESSON_LEDGER" ] && RH_ENV+=(RH_LESSON_LEDGER="$RH_LESSON_LEDGER")
 # The gear screen's poses, including `drag`, which is the only way to photograph a carried item.
 [ -n "$RH_SHOT_GEAR_POSE" ] && RH_ENV+=(RH_SHOT_GEAR_POSE="$RH_SHOT_GEAR_POSE")
 [ -n "$RH_SHOT_TRAIT_DRAG" ] && RH_ENV+=(RH_SHOT_TRAIT_DRAG="$RH_SHOT_TRAIT_DRAG")
@@ -270,8 +284,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # THE LEDGERS PRINT TO STDOUT, and this line used to throw stdout away — so RH_UI_TEXT=1 and
 # RH_UI_BUDGET=1 ran, measured, printed, and were discarded by the harness that asked for them.
 # With either dial on the run's output is kept; otherwise it is as quiet as it ever was.
-if [ -n "$RH_UI_TEXT" ] || [ -n "$RH_UI_BUDGET" ]; then
-  dn run --project src/IdleXIdle.Game --no-build 2>/dev/null | grep -E '^(ui|text)	' || true
+if [ -n "$RH_UI_TEXT" ] || [ -n "$RH_UI_BUDGET" ] || [ -n "$RH_LESSON_LEDGER" ]; then
+  dn run --project src/IdleXIdle.Game --no-build 2>/dev/null | grep -E '^(ui|text|lesson)	' || true
 else
   dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
 fi

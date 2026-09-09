@@ -35,7 +35,10 @@ public class OnboardingTest
     [Fact]
     public void test_a_fresh_save_is_due_the_intro()
     {
-        Assert.True(Onboarding.IntroDue(new TutorialFacts(), introSeen: false));
+        // NOTHING CALLS THIS ON A REAL PLAYTHROUGH ANY MORE — the mandatory eight-card opening is gone
+        // and the fresh journey begins on the fight. IntroDue survives for the returning-save seeding
+        // in SeedExplained and for the capture rig, and this pins the answer it still has to give.
+        Assert.True(Onboarding.IntroDue(0, introSeen: false));
     }
 
     [Fact]
@@ -43,14 +46,14 @@ public class OnboardingTest
     {
         // A save written before the intro existed carries IntroSeen = false and real progress. Teaching
         // that player where the hunter stands is the interruption the intro replaced.
-        Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 1), introSeen: false));
-        Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 400), introSeen: false));
+        Assert.False(Onboarding.IntroDue(1, introSeen: false));
+        Assert.False(Onboarding.IntroDue(400, introSeen: false));
     }
 
     [Fact]
     public void test_a_seen_intro_is_never_due_again()
     {
-        Assert.False(Onboarding.IntroDue(new TutorialFacts(), introSeen: true));
+        Assert.False(Onboarding.IntroDue(0, introSeen: true));
     }
 
     [Fact]

@@ -161,7 +161,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Core/Progression/Unlocks; these three fields are the whole of the presentation.
 
     /// <summary>The first-run guide's current rung, recomputed every frame. Null once outgrown.</summary>
-    private TutorialStep? _guideStep;
+    // ── ONBOARDING. Core holds the catalogue of what is TRUE; the director holds what is SAID. ───
+    private readonly OnboardingDirector _coach = new();
+
+    /// <summary>SKIP GUIDANCE — presentation only. It fabricates no fact and moves no gate.</summary>
+    private bool _guidanceOff;
+
+    /// <summary>The three fall-loop facts the catalogue cannot derive, and the save therefore keeps.</summary>
+    private bool _reportOpenedEver;
+    private bool _changedAfterFall;
+    private bool _retriedAfterChange;
+
+    /// <summary>
+    /// What the build looked like at the moment of the first fall, so a real CHANGE can be told from
+    /// a player poking around.
+    /// </summary>
+    /// <remarks>
+    /// MAKE ONE CHANGE completes on a state delta, not on a screen being opened: ranks trained, worn
+    /// pieces, mastery spent, or the woven build's revision. Any of the four moving is a change, which
+    /// is what lets the lesson say "make ONE change" without naming which subsystem — the player picks
+    /// the lever, exactly as the report refuses to prescribe one.
+    /// </remarks>
+    private (int Ranks, int Worn, int Mastery, int BuildRev)? _fallSnapshot;
+
+    /// <summary>Falls this account has taken — the run log is the record, and it is monotone.</summary>
+    private int _fallsSeen;
 
     /// <summary>Toast for clicking a rail tile that is not open yet — it names its own price.</summary>
     private string _lockedMsg = "";
@@ -1055,14 +1079,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Seeded from chests on a pre-P10 save: every opened chest was a felled boss, so the floor
         // is honest — and a MAGPIE chase already underway keeps most of its steps.
         _bossesFelled = save.BossesFelled > 0 ? save.BossesFelled : save.ChestsOpened;
-        // The guide rungs the player closed by hand — names, so a reordered enum can never
-        // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
+        // THE RETIRED LADDER'S DISMISSED RUNGS, read and written back untouched. The names mean
+        // nothing to the lesson catalogue — completion is a fact now, and a closed card completes
+        // nothing — but they are carried across a save/load cycle so that rolling this build back does
+        // not lose what an old player had closed. Nothing reads them.
         _dismissedGuide.Clear();
-        foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(Tutorial.ModernRungName(rung));
+        foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(rung);
         // The intro flag is a plain field; the explained list is PARKED, because seeding it asks the
         // unlock gates, and those read the Forge's inventory — a screen LoadContent has not built yet.
         // Seeded in SeedExplained, from ApplyRestoredState, once the bag is real.
         _introSeen = save.IntroSeen;
+        _guidanceOff = save.GuidanceOff;
+        _reportOpenedEver = save.ReportOpenedEver;
+        _changedAfterFall = save.ChangedAfterFall;
+        _retriedAfterChange = save.RetriedAfterChange;
         _pendingExplained = save.ExplainedScreens.Select(Onboarding.ModernScreenKey).ToList();
         _pendingRevealed = save.RevealedScreens.ToList();
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
@@ -1222,12 +1252,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void SeedNewGame()
     {
-        // NAME WHAT IS OPEN, not what is locked. This said "PRESS B TO PICK SKILLS" while the BUILD
-        // screen stays locked until wave 5 (Unlocks) — so the very first thing the game told a new
-        // player was an instruction the game itself then refused. The one thing that IS open from
-        // frame one is the fight, and watching it is genuinely the job.
-        _bootMessage = "YOUR HUNTER IS ALREADY FIGHTING\nWATCH THE FIRST WAVES — SCREENS OPEN AS YOU PLAY";
-        _bootColor = Gold;
+        // NO FIRST-BOOT TOAST. It said "YOUR HUNTER IS ALREADY FIGHTING / WATCH THE FIRST WAVES —
+        // SCREENS OPEN AS YOU PLAY", which is the right thing to say and is now said by the coach's own
+        // first lesson (YOUR HUNTER FIGHTS FOR YOU) — in the SAME SLOT, one behind the other. Two
+        // surfaces saying one thing in one place, in sequence, is how a player learns to stop reading
+        // the slot. The lesson wins: it is a card with an ×, it stays until the first wave is actually
+        // cleared rather than fading on a timer, and it is the one voice onboarding has now.
+        //
+        // The second half — that screens open as you play — is the rail's job: a locked tile names what
+        // opens it when it is pressed, and a newly opened one wears an unread dot until it is visited.
+        // (Before this, the message named what was LOCKED: "PRESS B TO PICK SKILLS", while BUILD stays
+        // shut until wave 5. The first thing the game said was an instruction it then refused.)
 
         // THE WELCOME GIFT: one chest in the vault from the first frame (playtest 2026-08-26: "the
         // VAULT tutorial talks about chests but there are none"). Its contents are catalogue data, not
@@ -1356,6 +1391,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ChampionGleamRate = _champGleamRate,
             DismissedGuideRungs = _dismissedGuide.OrderBy(s => s).ToList(),
             IntroSeen = _introSeen,
+            GuidanceOff = _guidanceOff,
+            ReportOpenedEver = _reportOpenedEver,
+            ChangedAfterFall = _changedAfterFall,
+            RetriedAfterChange = _retriedAfterChange,
             ExplainedScreens = _explained.OrderBy(s => s).ToList(),
             RevealedScreens = Reveal.Names(_revealed),
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -1515,7 +1554,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // leaves _swallowInput latched TRUE — and the title screen's keys all read through it. The
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
         _swallowInput = false;
-        _guideStep = null;
+        _coach.Reset();
+        _guidanceOff = false;
+        _reportOpenedEver = false;
+        _changedAfterFall = false;
+        _retriedAfterChange = false;
+        _fallSnapshot = null;
+        _retryFrom = null;
+        _fallsSeen = 0;
         _dismissedGuide.Clear();
         _conquerMsg = "";
         _lockedMsg = "";
@@ -1613,8 +1659,40 @@ public class Game1 : Microsoft.Xna.Framework.Game
     protected override void OnExiting(object sender, ExitingEventArgs args)
     {
         Save();
+        DumpLessonLedger();
         base.OnExiting(sender, args);
     }
+
+    /// <summary>
+    /// RH_LESSON_LEDGER=1 — what onboarding actually did this session, on the way out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One line per lesson the session touched (eligible, shown, completed, muted, skipped) and one
+    /// milestone line. It is printed rather than posted: this project has no analytics sink, and adding
+    /// one to answer a playtest question would be a larger commitment than the question is worth. A
+    /// tester runs with the dial set and reads the console; that is the whole mechanism.
+    /// </para>
+    /// <para>
+    /// THE FIGURE WORTH READING IS THE LAST LINE. Not "did they finish the tutorial" — there is no
+    /// tutorial to finish — but <c>ftue_loop_lived</c>: did this player open their first failure
+    /// report, change something because of it, and go back down. That is the loop the game is, and a
+    /// session that never reaches it is the failure onboarding exists to prevent.
+    /// </para>
+    /// </remarks>
+    private void DumpLessonLedger()
+    {
+        // ONCE. The rig's exit path calls this and then calls Exit(), which calls OnExiting, which
+        // calls it again — printing the whole ledger twice and making every count in it look doubled
+        // to anybody reading the console rather than counting the rows.
+        if (_ledgerDumped) return;
+        if (Environment.GetEnvironmentVariable("RH_LESSON_LEDGER") is not { Length: > 0 }) return;
+        _ledgerDumped = true;
+        foreach (var row in _coach.Telemetry(LessonFactsNow())) Console.WriteLine(row);
+    }
+
+    /// <summary>Has the ledger been printed? Both exit paths run on the way out of a rig shot.</summary>
+    private bool _ledgerDumped;
 
     protected override void LoadContent()
     {
@@ -1757,9 +1835,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _explained.Add(key);
         _pendingExplained = null;
 
+        // ── AND THE FALL LOOP, FOR A SAVE THAT PREDATES IT. ─────────────────────────────────────
+        //
+        // The three fall-loop facts are the only onboarding state the save keeps, and a file written
+        // before they existed carries none of them — so a player with three regions conquered would be
+        // met by READ THE LOG, which is the game announcing it has not been watching. Seeded true when
+        // real progression proves the loop was long since lived. A genuinely new save is not seeded:
+        // living that loop once is the whole point of the first session.
+        if (!_reportOpenedEver && OnboardingLessons.SeedFallLoopAsLived(LessonFactsNow()))
+        {
+            _reportOpenedEver = _changedAfterFall = _retriedAfterChange = true;
+            _fallsSeen = _expedition?.Log.Entries.Count ?? 0;
+        }
+
         // The one-time migration: a player from before the intro is past it. Marked so the seeding
         // above does not repeat on every launch, quietly marking screens they opened but never read.
-        if (!_introSeen && !Onboarding.IntroDue(GuideFacts(), false)) _introSeen = true;
+        if (!_introSeen && !Onboarding.IntroDue(_deepestEver, false)) _introSeen = true;
     }
 
     /// <summary>Frames survived under RH_BOOTCHECK. See <see cref="BootCheck"/>.</summary>
@@ -1886,6 +1977,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // where the truncation ledger is worth the most — the capture path photographs one screen, and
         // this one draws every screen the game has.
         UiTextLedger.Dump();
+        DumpLessonLedger();   // RH_LESSON_LEDGER=1: what onboarding said during the boot soak
         Exit();
     }
 
@@ -3428,39 +3520,43 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        // THE INTRO DECISION, once, on the first gameplay frame after the title closes — whichever way it
-        // closed (BEGIN THE HUNT, a fixture, the boot check). The fixture `intro` poses a card by number.
+        // ── NO TOUR STARTS ITSELF ANY MORE. ─────────────────────────────────────────────────────
+        //
+        // A fresh save used to open onto a fight and, eight seconds later, an eight-card modal about
+        // the hunter, the enemies, the health bar, Gleam, the skills, the rewards, the rail and the
+        // lesson slot — before the player had watched a single wave. Every other screen then did the
+        // same on its first open: four cards before you could equip anything, four before you could
+        // upgrade anything.
+        //
+        // The first experience is now the fight itself, and the coach says one short thing at a time
+        // (OnboardingDirector). THE TOURS SURVIVE WHOLE — their copy is good and recently corrected —
+        // as LEARN THIS SCREEN, the ? beside the settings gear, which is where somebody who wants the
+        // whole screen explained can ask for it. `_introDecided` remains so the rig can still pose a
+        // card by number.
         if (!_introDecided)
         {
             _introDecided = true;
-            var wanted = CaptureRig ? ShotMode == "intro" : Onboarding.IntroDue(GuideFacts(), _introSeen);
-            if (wanted) BeginTour(Activity.Hunt);
+            if (CaptureRig && ShotMode == "intro") BeginTour(Activity.Hunt);
         }
 
-        // EVERY OTHER SCREEN'S TOUR starts the first time that screen is on top while its tour is still
-        // owed — asked of the explained list every frame, so no navigation path can forget to ask, and a
-        // screen opened by a hotkey, the rail or an errand button is toured all the same. Never over the
-        // help, the settings, a chest reveal or the expedition log: a tour is about the screen the player
-        // is looking at, and none of those is a screen.
-        if (!_tourActive && !_showHelp && !_showSettings && !WelcomeUp && !_forge.RevealActive && !_expedition.LogOpen
+        // THE CAPTURE RIG still starts a screen's tour on demand — RH_SHOT_MODE=tour owes exactly one
+        // screen through SeedExplained, and nothing else in the game does.
+        if (CaptureRig && !_tourActive && ShotMode == "tour"
             && Onboarding.TourDue(ScreenActivity(), _explained) is not null)
             BeginTour(ScreenActivity());
-
-        // THE FIRST GEM. Its lesson is a second, smaller tour of the FORGE, owed from the moment a gem
-        // is held (derived — Onboarding.GemTourDue) and given the first time the Forge is on top after
-        // that, once its own tour is done. It arrives with the SOCKET tab open, so the light falls on
-        // the tab the card names and the bag beside it lists the gem.
-        var gemsHeld = GemsHeld();
-        if (!_tourActive && !_showHelp && !_showSettings && !WelcomeUp && !_forge.RevealActive && !_expedition.LogOpen
+        if (CaptureRig && !_tourActive && ShotMode == "gemtour"
             && ScreenActivity() == Activity.Forge && _showForge
-            && Onboarding.GemTourDue(gemsHeld, _explained) is { } gemKey)
+            && Onboarding.GemTourDue(GemsHeld(), _explained) is { } gemKey)
         {
             _forge.RequestSocketTab();
             BeginTour(Activity.Forge, Onboarding.GemTourFor(_forge.FreeSocketUsed), gemKey);
         }
 
         // And the moment the first one DROPS, a line at the top says where it goes — never a panel —
-        // and the FORGE tile earns its NEW mark back even if the Forge was visited earlier this session.
+        // and the FORGE tile earns its unread dot back even if the Forge was visited earlier this
+        // session. The DEED itself is the coach's FirstGemSocket lesson, which waits on a gem being
+        // set and not on this notice being read.
+        var gemsHeld = GemsHeld();
         if (gemsHeld > _gemsHeldLast && Onboarding.GemTourDue(gemsHeld, _explained) is not null)
         {
             PostNotice("A GEM DROPPED",
@@ -3679,6 +3775,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _swallowInput = true;
         }
 
+        // ...AND THE ? BESIDE IT, on the same terms and for the same reason: it sits over the screen,
+        // so its click is spent here rather than falling through to whatever it covers.
+        if (!_swallowInput && TakeLearnClick()) _swallowInput = true;
+
         // THE HINT SLOT at the top of a menu screen — a slot note, the lesson about this screen, or a hint
         // from real state — closes with its × (a note and a lesson are remembered in the save; a hint for
         // the session), and a click anywhere else on it is spent: it sits over the screen's own controls,
@@ -3744,6 +3844,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
             {
+                // READ THE LOG, ANSWERED. Opening a report changes nothing in the world, so this is one
+                // of the three onboarding facts the save has to keep — and it is the first half of the
+                // only FTUE milestone worth measuring: opened the report, changed something, went back
+                // down. It latches once and is never unlatched.
+                if (!_reportOpenedEver) { _reportOpenedEver = true; Save(); }
                 // ALL NINE, not seven. _showRoster and _showLoadout were missing, so opening the log from
                 // the roster or the weave left that screen live underneath it — and because the log is
                 // drawn in the same batch, OverlayActive stayed true and the batch kept the OVERLAY
@@ -4171,49 +4276,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                    .Count();
     }
 
-    /// <summary>
-    /// What the first-run guide knows about this player.
-    /// </summary>
-    /// <remarks>
-    /// Every field is read from state the save ALREADY carries, so the guide needed no new persisted
-    /// field and no migration — and a player who is already deep into the game arrives with every step
-    /// satisfied rather than being taught the loop they have been playing for hours.
-    ///
-    /// Two are deliberately proxies. "Felled a boss" is read as having reached the first boss wave,
-    /// because bosses are every fifth wave and depth is what the save keeps. "Touched the build" is read
-    /// as having SPENT a mastery point, which cannot happen without opening the build screen — the
-    /// woven skills themselves are seeded on a new game, so counting those would mark the lesson done
-    /// before the player had seen it.
-    /// </remarks>
-    private TutorialFacts GuideFacts() => new(
-        WavesCleared: _deepestEver,
-        Gleam: _hunter.Gleam,
-        BuildChoices: BuildChoicesNow(),
-        StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
-        ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
-        ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
-        // A CHEST WAITING is now its own fact, because the guide has a rung about opening one. The step
-        // it feeds shows during the wait as well as after it — a 20% drop off a boss every fifth wave is
-        // tens of waves, and the guide going quiet for all of them was the reported bug.
-        ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
-        // THE GEM DEED'S TWO FACTS, counted apart. A LOOSE gem in the bag is what makes the rung
-        // actionable; a gem SET into something is what completes it. Counting them together would let
-        // the rung satisfy itself the moment a gem dropped — the lesson marked done before the player
-        // had done anything, which is exactly the failure the rung ladder's own remarks describe.
-        GemsHeld: _forge?.Inventory.Count(GemCraft.IsGem) ?? 0,
-        GemsSet: (_forge?.Inventory.Sum(i => i.Gems.Count) ?? 0)
-                 + Enum.GetValues<GearSlot>().Sum(sl => _hunter.Worn(sl)?.Gems.Count ?? 0),
-        // WAS `_mastery.Spent > 0`, WHICH MEASURED THE WRONG SYSTEM. The step says "press B for BUILD,
-        // then WEAVE", and weaving a skill touches _loadout — it never touches the mastery tree. So a
-        // player who did exactly what they were told stayed on that prompt forever, while a player who
-        // idly poked the tree in minute one completed a step they were never shown. It also went
-        // BACKWARDS on a respec, which the tree offers free and unlimited.
-        //
-        // The real signal is "the build is no longer the one you were handed": a second skill woven, or
-        // the first one changed away from the starter's Body Strike.
-        SkillsWoven: BuildDiffersFromStarter() ? 1 : 0,
-        DeepestWave: _deepestEver,
-        RegionsConquered: _world.ConqueredIds.Count);
 
     /// <summary>Has the player actually changed their weave, rather than keeping what they were given?</summary>
     /// <remarks>
@@ -4707,9 +4769,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showTitle || _tourActive || _showHelp || _showSettings || !OverlayActive) return null;
         if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
         var screen = ScreenActivity();
-        var tf = GuideFacts();
-        if (_guideStep is { } step && Tutorial.HasGuidance(step) && Tutorial.Sends(step, tf) == screen)
-            return new SlotContent(SlotKind.Lesson, step.ToString(), Tutorial.Title(step), Tutorial.Body(step, tf));
+        // THE ONE LESSON THE DIRECTOR CHOSE, if the deed it asks for happens on this screen. The
+        // director has already decided there is exactly one; this only asks whether it belongs here.
+        if (_coach.Showing is { } lesson && OnboardingLessons.Sends(lesson) == screen)
+            return new SlotContent(SlotKind.Lesson, lesson.ToString(),
+                                   OnboardingLessons.Title(lesson), LessonLine(lesson));
         if (Onboarding.HintFor(screen, HintFactsNow()) is { } hint && !_dismissedHints.Contains(hint.Key))
             return new SlotContent(SlotKind.Hint, hint.Key, hint.Text, "");
         return null;
@@ -4721,7 +4785,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         switch (slot.Kind)
         {
             case SlotKind.Note: _explained.Add(slot.Key); Save(); break;
-            case SlotKind.Lesson: _dismissedGuide.Add(slot.Key); _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide); Save(); break;
+            // A CLOSED CARD IS SILENCE, NEVER COMPLETION. The fact stays false and the deed stays
+            // undone; the player who wants no coaching at all has SKIP GUIDANCE in Settings, which is
+            // one honest switch rather than a dozen little lies about what they have learned.
+            case SlotKind.Lesson:
+                if (Enum.TryParse<OnboardingLessonId>(slot.Key, out var muted)) _coach.Mute(muted);
+                break;
             default: _dismissedHints.Add(slot.Key); break;
         }
         _sound.Play("sfx_click", 0.6f);
@@ -4793,6 +4862,151 @@ public class Game1 : Microsoft.Xna.Framework.Game
             SkillLevelsToSpend: levelsFree);
     }
 
+    /// <summary>
+    /// Everything the lesson catalogue reads, gathered from the live game.
+    /// </summary>
+    /// <remarks>
+    /// Every field but the four persisted ones is derived here and now, which is why onboarding needs
+    /// no state machine: a save that loads in the middle of a lesson reconstructs its own eligibility
+    /// from the world, and a deed done before the prompt appeared is simply already complete.
+    /// </remarks>
+    private LessonFacts LessonFactsNow()
+    {
+        var known = _mastery?.AvailableSkills().Count ?? 0;
+        var signature = _characters.Active?.SignatureSkillId;
+        var shared = _loadout.Skills.Count(k => k.SkillId is { } id && id != signature);
+        var slots = Math.Max(0, Math.Min(Unlocks.SkillSlots(GuideUnlockFacts()), 1 + known) - _loadout.Skills.Count);
+
+        // A VARIATION OFFERED IS A LEVEL WAITING ON A WOVEN SKILL — the one decision in this game the
+        // player is never told they can make, and the reason it has a lesson of its own.
+        var offered = 0;
+        var chosen = 0;
+        foreach (var woven in _loadout.Skills)
+        {
+            if (woven.SkillId is not { } id || SkillCatalogue.Find(id) is not { } def) continue;
+            if (_skillProgress?.VariationOf(def) is not null) chosen++;
+            else if ((_skillProgress?.FreeOn(id) ?? 0) >= 1) offered++;
+        }
+
+        return new LessonFacts(
+            WavesCleared: _deepestEver,
+            DeepestWave: _deepestEver,
+            Gleam: _hunter.Gleam,
+            StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
+            BossesFelled: _bossesFelled,
+            ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
+            // OPENED, counted from what opening one leaves behind: a bag item or a worn piece. The
+            // FTUE may not wait on a 20% drop roll, and it does not — a new save is seeded a welcome
+            // chest, so this lesson is actionable in the first minute.
+            ChestsOpened: (_forge?.Inventory.Count ?? 0) > 0 ? 1 : 0,
+            ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
+            ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
+            GemsHeld: _forge?.Inventory.Count(GemCraft.IsGem) ?? 0,
+            GemsSet: (_forge?.Inventory.Sum(i => i.Gems.Count) ?? 0)
+                     + Enum.GetValues<GearSlot>().Sum(sl => _hunter.Worn(sl)?.Gems.Count ?? 0),
+            MasterySpent: _mastery?.Spent ?? 0,
+            MasteryPointsFree: _mastery?.Available ?? 0,
+            SharedSkillsEquipped: shared,
+            // LIVE ACCESS, not a latch: a respec that gives a road back takes its skill with it, so the
+            // lesson stops asking for something the tree no longer reaches.
+            SharedSkillsAvailable: known,
+            EmptySkillSlots: slots,
+            VariationsChosen: chosen,
+            VariationsOffered: offered,
+            KeystonesDiscovered: _discoveredKeystones.Count,
+            KeystonesWorn: _loadout.KeystoneIds.Count,
+            RegionsConquered: _world.ConqueredIds.Count,
+            RegionsOpen: Regions.All.Count(r => _world.IsUnlocked(r.Id)),
+            // ENTERED is where a wave was actually fought, which is what TRAVEL asks for — a region
+            // that is merely unlocked has taught nothing.
+            RegionsEntered: Regions.All.Count(r => _world.RegionFarm(r.Id).BestDepth > 0),
+            TraitsDiscovered: _traitLedger?.DiscoveredCount ?? 0,
+            TraitsEquipped: _traitLedger?.LoadoutOf(_characters.ActiveId).Count ?? 0,
+            HuntersOwned: _characters.Unlocked.Count,
+            HunterSwitches: _characters.ActiveId == CharacterRoster.StarterId ? 0 : 1,
+            WarrenOpen: Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts()),
+            // THE CAMP IS TAUGHT AFTER IT HAS PAID, never before — a Warren tour given to somebody it
+            // has done nothing for is a theory; after a payout it answers a question they already have.
+            WarrenPaidOffline: _welcome is { WarrenOpen: true } w
+                               && (w.Warren.Gleam > 0 || w.Warren.Dust > 0 || w.Warren.Scrap > 0 || w.Warren.Essence > 0),
+            WarrenVisited: _visited.Contains(Activity.Warren),
+            Falls: _fallsSeen,
+            ReportOpenedEver: _reportOpenedEver,
+            ChangedAfterFall: _changedAfterFall,
+            RetriedAfterChange: _retriedAfterChange,
+            GuidanceOff: _guidanceOff);
+    }
+
+    /// <summary>
+    /// Watch the loop the whole game is about: fall, read, change, retry.
+    /// </summary>
+    /// <remarks>
+    /// Three facts nothing else in the game records, each latched once and never unlatched. The change
+    /// is a DELTA against a snapshot taken at the fall, so opening a screen is not a change and closing
+    /// a card is not a change — only moving a rank, a worn piece, a node or the woven build is.
+    /// </remarks>
+    private void WatchTheFallLoop()
+    {
+        var falls = _expedition?.Log.Entries.Count ?? 0;
+        if (falls > _fallsSeen)
+        {
+            _fallsSeen = falls;
+            // The first fall is the one that matters: snapshot what the build was, so the change that
+            // answers the report can be recognised whatever subsystem it happens in.
+            _fallSnapshot ??= BuildSnapshot();
+        }
+
+        if (_fallsSeen == 0 || _retriedAfterChange) return;
+
+        if (!_changedAfterFall && _fallSnapshot is { } was && BuildSnapshot() != was)
+        {
+            _changedAfterFall = true;
+            _retryFrom = _expedition?.RunsStarted ?? 0;
+            Save();
+        }
+        else if (_changedAfterFall && _retryFrom is { } started && (_expedition?.RunsStarted ?? 0) > started)
+        {
+            _retriedAfterChange = true;
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// SIGNATURE — said the first time the hunter's own skill actually fires, and never again.
+    /// </summary>
+    /// <remarks>
+    /// The old ladder announced the signature skill when the fight began, which is a claim rather than
+    /// a demonstration: the player is told they have a unique skill before they have seen one go off.
+    /// The fact this reads is <see cref="SkillProgress.UsesOf"/>, which the simulation writes when the
+    /// skill is cast — so the sentence lands on a thing that has just happened on screen.
+    /// </remarks>
+    /// <remarks>
+    /// AFTER THE FIRST WAVE, NOT DURING IT. The signature usually fires within seconds of the opening,
+    /// and raising it there would take the slot off YOUR HUNTER FIGHTS FOR YOU three seconds in — the
+    /// first thing said, and the only one about the whole game rather than one skill. The window is
+    /// then the first few waves of a first descent, which is also what keeps it away from a returning
+    /// save: a player who has fallen, or gone deeper than a boss, is not told about their own skill.
+    /// </remarks>
+    private void RaiseSignatureBeat()
+    {
+        if (_guidanceOff || _fallsSeen > 0) return;
+        if (_deepestEver < 1 || _deepestEver > OnboardingLessons.BossEvery) return;
+        if (_characters.Active?.SignatureSkillId is not { } sig) return;
+        if ((_skillProgress?.UsesOf(sig) ?? 0) < 1) return;
+        _coach.Raise(OnboardingLessonId.SignatureSeen);
+    }
+
+    /// <summary>The four numbers a real change moves. Any one of them differing is a change.</summary>
+    private (int Ranks, int Worn, int Mastery, int BuildRev) BuildSnapshot()
+        => (Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
+            Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
+            _mastery?.Spent ?? 0,
+            _loadout.Skills.Count * 97 + _loadout.KeystoneIds.Count * 31
+            + _loadout.Skills.Sum(k => k.SkillId?.GetHashCode() ?? 0));
+
+    /// <summary>The descent count at the moment the change landed — the retry is the next one after it.</summary>
+    private int? _retryFrom;
+
     // ── The HUNT's lesson card (UX V2 P0.7) ────────────────────────────────────────────────────
     //
     // The fight's own rungs — Watch, MeetABoss, Conquer, and OpenChest while no chest is held — are the
@@ -4800,21 +5014,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // card with an ×, and yield to the boot and notice toasts (a queue, not a stack).
 
     /// <summary>The fight rung to show on the HUNT this frame, or null.</summary>
-    private TutorialStep? HuntLessonShowing()
+    private OnboardingLessonId? HuntLessonShowing()
     {
         if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
         if (_expedition.LogOpen) return null;
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
-        if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return null;
-        // A rung about another screen is that screen's business (and its tile's NEW mark), not the fight's.
-        return Tutorial.Sends(step, GuideFacts()) is null ? step : null;
+        if (_coach.Showing is not { } step) return null;
+        // A lesson about another screen is that screen's business (and its tile's dot), not the fight's.
+        return OnboardingLessons.Sends(step) is null ? step : null;
     }
 
     /// <summary>Where the lesson card hangs: the toast slot, as tall as its wrapped body.</summary>
-    private Rectangle HuntLessonRect(TutorialStep step)
+    private Rectangle HuntLessonRect(OnboardingLessonId step)
     {
-        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), ToastWidth - CardPadX - CardCloseLane, UiTypography.Secondary);
+        var body = _ui.WrapBig(LessonLine(step), ToastWidth - CardPadX - CardCloseLane, UiTypography.Secondary);
         return new Rectangle(ToastLeft, ToastTop, ToastWidth, CardHeight(body.Count));
     }
 
@@ -4824,14 +5038,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>One fight rung as a card — the live one, or the intro's preview of what a lesson looks like.</summary>
-    private void DrawLessonCard(TutorialStep step, float alpha)
+    private void DrawLessonCard(OnboardingLessonId step, float alpha)
     {
         var r = HuntLessonRect(step);
-        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - CardPadX - CardCloseLane, UiTypography.Secondary);
+        var body = _ui.WrapBig(LessonLine(step), r.Width - CardPadX - CardCloseLane, UiTypography.Secondary);
         // The QUIET plate with the gold rule, the same surface the boot toast wears in this slot — one
         // surface per toast slot (release polish 2026-09-05, hunt-07).
         _ui.Plate(_batch, r, UiInk.Accent * alpha, alpha);
-        _ui.TextBig(_batch, Tutorial.Title(step), r.X + CardPadX, r.Y + CardTitleTop, UiInk.Accent * alpha, UiTypography.Body);
+        _ui.TextBig(_batch, OnboardingLessons.Title(step), r.X + CardPadX, r.Y + CardTitleTop, UiInk.Accent * alpha, UiTypography.Body);
         var ty = r.Y + CardBodyTop;
         foreach (var line in body)
         {
@@ -4841,13 +5055,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _ui.CloseButton(_batch, HintCloseRect(r), ChromeMouse, false);   // drawn here; the click is handled in Update
     }
 
-    /// <summary>Close a fight lesson for good — remembered in the save, like closing any rung.</summary>
-    private void CloseLesson(TutorialStep step)
+    /// <summary>
+    /// A lesson's body: the deed, then the one line that answers "why should I care?".
+    /// </summary>
+    /// <remarks>
+    /// Both halves are usually empty — an Observe lesson asks for nothing and most guided ones need no
+    /// justification — so this is a short line far more often than it is two. That is the point: the
+    /// prompt it replaced spent three sentences and a keyboard shortcut telling somebody to train a
+    /// stat, and a prompt nobody finishes reading teaches nothing.
+    /// </remarks>
+    private static string LessonLine(OnboardingLessonId id)
     {
-        _dismissedGuide.Add(step.ToString());
-        _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
+        var action = OnboardingLessons.Action(id);
+        var why = OnboardingLessons.Why(id);
+        if (action.Length == 0) return why;
+        return why.Length == 0 ? action : $"{action}  ·  {why}";
+    }
+
+    /// <summary>Close a fight lesson for good — remembered in the save, like closing any rung.</summary>
+    private void CloseLesson(OnboardingLessonId step)
+    {
+        // Silences this one lesson's presentation for the session. It completes nothing — see the note
+        // on the slot's close, and OnboardingDirector.Mute.
+        _coach.Mute(step);
         _sound.Play("sfx_click", 0.6f);
-        Save();
     }
 
     /// <summary>
@@ -5263,6 +5494,39 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return lit.Length > 0 ? lit : new[] { Rectangle.Intersect(OverlayToCanvas(own[0], Vector2.Zero), canvas) };
     }
 
+    /// <summary>
+    /// A guided lesson's marker on the REAL control it is asking about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same corner brackets a tour draws, on the same semantic rectangle, resolved by the same
+    /// screen — so the thing that is lit is the thing that takes the click, at every UI density, and
+    /// no coordinate is written down anywhere in this file. A screen that reflows at 150 % moves its
+    /// own rectangle and the light moves with it.
+    /// </para>
+    /// <para>
+    /// <b>And it does not scrim.</b> A HardGuide is not a modal: the fight goes on, the rail works, the
+    /// player can walk away and come back, and Settings — which is where SKIP GUIDANCE lives — is never
+    /// unreachable. What the guide does is point at a real control and wait for a real deed; what it
+    /// must never do is build a room the player cannot leave.
+    /// </para>
+    /// </remarks>
+    private void DrawCoachSpotlight()
+    {
+        if (_coach.Showing is not { } id || _tourActive || _showTitle || _showSettings || _showHelp) return;
+        if (OnboardingLessons.Mode(id) == LessonMode.Observe) return;
+        if (OnboardingLessons.Sends(id) != ScreenActivity()) return;
+        if (OnboardingLessons.Target(id) is not { } target) return;
+
+        foreach (var hole in TourSpotlights(ScreenActivity(), target))
+        {
+            // The whole-canvas fallback means the screen could not resolve this target — better to
+            // mark nothing than to bracket the entire page and point at everything at once.
+            if (hole.Width >= 1900 && hole.Height >= 1060) continue;
+            TourBrackets(hole);
+        }
+    }
+
     /// <summary>Darken the whole canvas except the given holes.</summary>
     /// <remarks>
     /// Cut into horizontal bands at every hole edge; inside each band, fill the x-runs no hole covers.
@@ -5357,7 +5621,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The last card points at where lessons appear — so a lesson appears there. It is the first
         // rung, the very card that will be standing in that light when the intro ends: the light
         // lifts and nothing has moved. (The live card itself is suppressed while the intro is up.)
-        if (step.Target == TourTarget.LessonSlot) DrawLessonCard(TutorialStep.Watch, 1f);
+        if (step.Target == TourTarget.LessonSlot) DrawLessonCard(OnboardingLessonId.FirstFight, 1f);
 
         DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
         // THE RING IS A POINTER, NOT A BUTTON. It used to be a solid gold outline — the same shape
@@ -5631,7 +5895,32 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
         // drawn as chrome by the host now (the HUNT's lesson card, a menu screen's hint slot, the rail's NEW mark), because a guide that vanishes the
         // moment you obey it reads as a guide that has stopped working.
-        _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
+        // ── THE COACH RUNS ON THE CLOCK, AND NOTHING WAITS FOR IT. ──────────────────────────────
+        //
+        // One lesson chosen per frame from live facts, and the simulation neither knows nor cares: no
+        // wave is delayed, no animation is awaited, no gate is moved. Deleting this line would make the
+        // game silent and leave every other behaviour identical, which is the test of the split.
+        // RH_SHOT_LESSON=<OnboardingLessonId> poses one lesson for the shutter — see the note on
+        // OnboardingDirector.Forced. Read every frame so the fixture's own dressing cannot clear it.
+        if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_LESSON") is { Length: > 0 } posed
+            && Enum.TryParse<OnboardingLessonId>(posed, true, out var poseId))
+        {
+            _coach.Forced = poseId;
+            // ...AND THE SLOT IS CLEARED FOR IT. The lesson card yields to the boot toast and to a
+            // notice — one surface per slot, a queue rather than a stack — and every fight fixture
+            // opens with a welcome toast in exactly that slot. A pose that photographed the toast
+            // instead of the lesson would prove nothing about the lesson.
+            _bootTimer = 0f;
+            _noticeTimer = 0f;
+        }
+
+        WatchTheFallLoop();
+        RaiseSignatureBeat();
+        _coach.Update((float)gameTime.ElapsedGameTime.TotalSeconds, LessonFactsNow(),
+                      new OnboardingDirector.Busy(
+                          RewardUp: _forge.RevealActive || WelcomeUp,
+                          ModalUp: _showSettings || _showHelp || _tourActive || _showTitle,
+                          ReportUp: _expedition.LogOpen));
 
         _forge.Tuning = ForgeTuning.Default with
         {
@@ -5818,6 +6107,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 spoil.Charter is { } c2 ? Charters.Name(c2) : null);
 
             // THE CAREER'S BOSS TALLY (P10) — deterministic, unlike the chest roll beneath it.
+            // AND THE FIRST ONE IS AN OBSERVE BEAT: the boss is the game's own rhythm made visible, so
+            // it is named the once, on the frame it is felled, and never mentioned again. Raised BEFORE
+            // the tally moves, because "is this the first?" is a question about the tally as it was.
+            if (r.IsBoss && _bossesFelled == 0) _coach.Raise(OnboardingLessonId.FirstBoss);
             if (r.IsBoss) _bossesFelled++;
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
@@ -5863,6 +6156,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Conquest: the deepest the champion has held this region. Fires once, unlocks the next region.
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
         {
+            // THE FIRST CONQUEST IS OBSERVED, NOT TAUGHT. It opens the map, the camp, the roster and
+            // usually the first keystone in one frame, and the old ladder answered that by explaining
+            // all of them — which is the moment the game stopped being playable and became a manual.
+            // The beat says one sentence about what just happened; the only LESSON that follows is
+            // TRAVEL TO THE NEXT REGION, and the rest wait on the rail with an unread dot until the
+            // player walks into them. Raised before Conquer, because "is this the first?" is a
+            // question about the count as it stands.
+            if (_world.ConqueredIds.Count == 0) _coach.Raise(OnboardingLessonId.FirstRegionConquest);
             var unlocked = _world.Conquer(_activeRegion);
             _dust.AddDust(CorruptionScaling.ConquestDust(_world.CorruptionTier));
             _sound.PlayFirst(1f, "sfx_conquer", "sfx_levelup");
@@ -6656,6 +6957,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawSettingsGear();    // the corner gear — settings from any screen, including mid-hunt
+        DrawLearnButton();     // ...and the ? beside it, which is where the screen tours live now
+        DrawCoachSpotlight();  // the guided lesson's brackets, on the screen's own control
         DrawHexNav();   // the shared nav bar, over every screen
 
         // The chest burst, over the rail and over whatever screen is open — it is the one moment the
@@ -6735,6 +7038,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             UiRasterLedger.Dump();
             // RH_UI_TEXT=1: every label this shot could not fit. The truncation ledger — see UiTextLedger.
             UiTextLedger.Dump();
+            // RH_LESSON_LEDGER=1: the onboarding counters for the state this shot posed.
+            DumpLessonLedger();
             Exit();
         }
 
@@ -7182,6 +7487,45 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static Rectangle SettingsGear => new(UiKit.PageRight(78 - 60) - UiMetrics.Control(60), 16, UiMetrics.Control(60), UiMetrics.Control(60));
 
     /// <summary>
+    /// LEARN THIS SCREEN — the ? beside the gear, and the only way a screen tour starts now.
+    /// </summary>
+    /// <remarks>
+    /// The tours used to fire themselves the first time a screen opened: four cards before the player
+    /// could equip anything, four more before they could upgrade anything, eight on the Hunt before
+    /// the first wave. The copy in them is good and was corrected recently, so none of it was thrown
+    /// away — it moved BEHIND this button, where somebody who wants a screen explained can ask, and
+    /// nobody else is stopped. One control rather than a per-screen affordance, because it has to sit
+    /// in the same place on all eleven screens for anybody to learn it is there.
+    /// </remarks>
+    private static Rectangle LearnButton
+        => new(LearnButtonLeft, PillRowTop + (PillHeight - LearnButtonSize) / 2, LearnButtonSize, LearnButtonSize);
+
+    /// <summary>
+    /// The ?'s edge — a small button, deliberately.
+    /// </summary>
+    /// <remarks>
+    /// Every pixel it takes comes off the currency row, which at 150 % is already three ornate capsules
+    /// wide and ends a hand's breadth from MASTERY TREE, the longest screen title in the game. At the
+    /// standard control height the row crossed into it. It is exactly
+    /// <see cref="UiMetrics.HitTargetMinimum"/> — the smallest edge an interactive target may have, at
+    /// every profile — and not one pixel less.
+    /// </remarks>
+    private static int LearnButtonSize => UiMetrics.HitTargetMinimum;
+
+    /// <summary>
+    /// The ?'s left edge, and the wall the currency row stops at.
+    /// </summary>
+    /// <remarks>
+    /// THE CHROME ROW IS A CHAIN, and a control added to it has to take its room rather than sit on
+    /// top of the neighbour: the first cut of this button was hung off the gear at the same y as the
+    /// capsules, which put a ? through the MATERIALS pill on every screen. Both the button and
+    /// <see cref="PillRowRight"/> derive from this one number, so the two cannot drift apart, and the
+    /// room is reserved even on a screen with no tour behind the button — a row of capsules that
+    /// shifted sideways when the ? appeared would be worse than the gap.
+    /// </remarks>
+    private static int LearnButtonLeft => SettingsGear.X - UiMetrics.Space(8) - LearnButtonSize;
+
+    /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
     /// </summary>
     /// <remarks>
@@ -7354,8 +7698,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var motionOn = !ReducedMotion;
         changed |= ToggleRow("INTERFACE MOTION", f.RightX, sy, f.RightW, ref motionOn, rowClick);
         if (motionOn == ReducedMotion) ReducedMotion = !motionOn;
+        sy += f.TogglePitch;
+
+        // ── SKIP GUIDANCE, and it is one switch on purpose. ─────────────────────────────────────
+        //
+        // A player who already knows this game should be able to play it without being coached, and
+        // the honest way to offer that is ONE global setting — not a dozen little dismissals that each
+        // quietly pretend a mechanic was learned. Turning it on silences every prompt and changes
+        // nothing else: no fact is fabricated, no gate moves, no reward is granted, and every lesson
+        // stays truthfully incomplete underneath. Turning it back on resumes exactly where the player
+        // actually is, because the catalogue derives that from the world rather than from a script.
+        //
+        // It points the same way as the four switches above it: ON is guidance, OFF is silence.
+        var guidanceOn = !_guidanceOff;
+        if (ToggleRow("GUIDANCE", f.RightX, sy, f.RightW, ref guidanceOn, rowClick))
+        {
+            _guidanceOff = !guidanceOn;
+            Save();
+        }
         if (changed) SaveDisplay();
-        _ui.TextBig(_batch, "TURN INTERFACE MOTION OFF TO HOLD IDLE ANIMATIONS STILL", f.RightX, f.AccessCaptionY + dy,
+        _ui.TextBig(_batch, "GUIDANCE OFF STOPS EVERY PROMPT — IT UNLOCKS AND GRANTS NOTHING", f.RightX, f.AccessCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
         if (f.Scrolls)
@@ -7771,6 +8133,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>The corner gear — the way back to settings from any screen, including mid-hunt.</summary>
+    /// <summary>The ? that opens this screen's own tour, when it has one and nothing modal is up.</summary>
+    private void DrawLearnButton()
+    {
+        if (!LearnOffered()) return;
+        var r = LearnButton;
+        var hover = r.Contains(ChromeMouse);
+        _ui.Plate(_batch, r, hover ? UiInk.Accent : null);
+        _ui.TextCenterBig(_batch, "?", r.Center.X, r.Y + (r.Height - UiTypography.Headline) / 2,
+                          hover ? UiInk.Accent : UiInk.Secondary, UiTypography.Headline);
+        if (hover) _ui.TextRight(_batch, "LEARN THIS SCREEN", r.Right, r.Bottom + 8, NavGold);
+    }
+
+    /// <summary>Is the ? live right now? Drawing and hit-testing ask the same question.</summary>
+    private bool LearnOffered()
+        => !_showSettings && !_showHelp && !_showTitle && !_tourActive && !WelcomeUp
+           && !_forge.RevealActive && !_expedition.LogOpen
+           && Onboarding.TourFor(ScreenActivity()).Count > 0;
+
+    /// <summary>Take the ? if it was pressed. Returns true when the click was spent.</summary>
+    private bool TakeLearnClick()
+    {
+        if (!MouseClicked || !LearnOffered() || !LearnButton.Contains(ChromeMouse)) return false;
+        // The screen's own tour, started by hand. It is marked explained on the way out exactly as
+        // before, so asking twice is allowed and the rail's dot still means "you have not looked".
+        BeginTour(ScreenActivity());
+        _sound.Play("sfx_click", 0.7f);
+        return true;
+    }
+
     private void DrawSettingsGear()
     {
         if (_showSettings || _showHelp) return;   // a modal owns the frame
@@ -8131,8 +8522,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static Rectangle s_gleamPillRect = new(1640, 4, 200, 84);
     /// <summary>What UiKit.Pill wraps around a value: its left pad, the icon, the gap, the right pad — the capsule's own proportions.</summary>
     private static int PillCapsuleChrome => UiKit.PillChrome(PillHeight);
-    /// <summary>The row's right end: a breath left of the settings gear, so the two can never share a pixel.</summary>
-    private static int PillRowRight => SettingsGear.X - 16;
+    /// <summary>
+    /// The row's right end: a breath left of the ? and the gear, so none of the three shares a pixel.
+    /// </summary>
+    /// <remarks>
+    /// It was <c>SettingsGear.X - 16</c>, which was right while the gear was the only thing in the
+    /// corner. LEARN THIS SCREEN now sits between them — see <see cref="LearnButtonLeft"/>, which this
+    /// reads rather than re-deriving, so a change to either lands on both.
+    /// </remarks>
+    private static int PillRowRight => LearnButtonLeft - 16;
     /// <summary>The least the row's left end may be: clear of the stage header (x 630..1190) with a breath.</summary>
     private const int PillChainMinLeft = 1210;
 
@@ -8744,8 +9142,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);
         _noticeLaneOpen = UiMotion.Ease(NoticeLaneKey, showing ? 1f : 0f, UiMotion.Transition);
         if (!showing && _noticeLaneOpen <= 0f) _noticeLaneFull = 0;
-        UiKit.NoticeLane = (int)MathF.Ceiling(_noticeLaneFull * _noticeLaneOpen / OverlayScale);
+
+        // ...AND THE SLOT HAS A LANE OF ITS OWN, for the same reason. The band above the page reserves
+        // room for a ONE-LINE slot (UiKit.PageTopBase), which is all the slot ever held while it carried
+        // hints; a card with a BODY is a title plus a wrapped line and reaches past it. The old answer
+        // was that it may cover the top of the screen's content — fine for a caption, wrong for a
+        // CONTROL, and the VAULT puts OPEN ALL, CHEST FILTER and TRADER in exactly that band. A lesson
+        // that half-covers the button it is telling you to press is worse than no lesson.
+        var wantSlot = SlotLanePage();
+        if (wantSlot > 0) _slotLaneFull = wantSlot;
+        _slotLaneOpen = UiMotion.Ease(SlotLaneKey, wantSlot > 0 ? 1f : 0f, UiMotion.Transition);
+        if (wantSlot == 0 && _slotLaneOpen <= 0f) _slotLaneFull = 0;
+
+        UiKit.NoticeLane = Math.Max((int)MathF.Ceiling(_noticeLaneFull * _noticeLaneOpen / OverlayScale),
+                                    (int)MathF.Ceiling(_slotLaneFull * _slotLaneOpen));
         UiKit.PageTop = UiKit.PageTopBase + UiKit.NoticeLane;
+    }
+
+    /// <summary>The slot's motion key — its lane eases open and shut like the notice's.</summary>
+    private static readonly int SlotLaneKey = HashCode.Combine("slot", "lane");
+
+    /// <summary>How open the slot's lane is, 0..1.</summary>
+    private float _slotLaneOpen;
+
+    /// <summary>The slot lane's full height in PAGE pixels while it opens and shuts.</summary>
+    private int _slotLaneFull;
+
+    /// <summary>
+    /// How far past the band a slot WITH A BODY reaches, in page pixels — the room the page owes it.
+    /// </summary>
+    /// <remarks>
+    /// Measured against <see cref="UiKit.PageTopBase"/> and never against <see cref="UiKit.PageTop"/>:
+    /// the lane is added to PageTop, so reading PageTop here would make the lane feed itself. A one-line
+    /// hint returns zero by construction — the band is sized for exactly that — so only a note or a
+    /// lesson card moves the page, and only while it is up.
+    /// </remarks>
+    private int SlotLanePage()
+    {
+        if (SlotShowing() is not { } slot || slot.Body.Length == 0) return 0;
+        var bottom = ScreenBannerTop(ScreenDrawsSubtitle)
+                     + CardHeight(_ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary).Count);
+        return Math.Max(0, (int)MathF.Ceiling(bottom / OverlayScale) + UiMetrics.Space(6) - UiKit.PageTopBase);
     }
 
     /// <summary>The notice toast's height for the notice showing now, from its own lines.</summary>
@@ -8820,7 +9257,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var active = NavActive();
         var navFacts = GuideUnlockFacts();
-        var navGuide = GuideFacts();   // once per frame, not once per tile   // once per frame, not once per tile
         var navGems = GemsHeld();            // the first-gem lesson marks the FORGE tile the same way
         // ONLY THE REVEALED TILES, stacked from the top in the rail's own order (the journey,
         // 2026-09-06). A tile the player has never had a reason to use is not drawn: a fresh save's
@@ -8958,7 +9394,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // drops its mark even with the banner still open — the mark means "you have not looked".
             // A rung ABOUT this tile's screen marks it for as long as the rung shows — visited or not; the
             // lesson is waiting on that screen, and the mark is how the rail says so (UX V2 P0.7).
-            var rungSends = _guideStep is { } rung && Tutorial.HasGuidance(rung) && Tutorial.Sends(rung, navGuide) == activity;
+            var rungSends = _coach.Showing is { } rung && OnboardingLessons.Sends(rung) == activity;
             var isNew = !on && unlocked
                         && (((Onboarding.IsNew(activity, navFacts, _explained)
                               || (activity == Activity.Forge && Onboarding.GemTourDue(navGems, _explained) is not null))

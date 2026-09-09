@@ -90,20 +90,19 @@ public class GemTourTest
     }
 
     [Fact]
-    public void test_the_chest_rung_points_at_a_waiting_chest_and_still_explains_the_wait()
+    public void test_the_chest_lesson_is_eligible_on_a_chest_in_hand_and_not_on_a_drop_roll()
     {
-        var waiting = Tutorial.Body(TutorialStep.OpenChest, new TutorialFacts(ChestsHeld: 1));
-        var none = Tutorial.Body(TutorialStep.OpenChest, new TutorialFacts(ChestsHeld: 0));
+        // WHAT THIS TEST USED TO BE. The ladder's chest rung had two bodies — one for the wait and one
+        // for a chest already held — because it spoke DURING a 20% drop roll that could last tens of
+        // waves, and going silent for all of them was a reported bug. The lesson has no wait to speak
+        // through: it is eligible only when a chest is actually in the vault, which a fresh save has
+        // from the welcome gift, so the critical path never depends on a roll.
+        var holding = new LessonFacts(WavesCleared: 5, DeepestWave: 5, ChestsHeld: 1, HuntersOwned: 1);
+        Assert.Contains(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(holding));
+        Assert.Equal(Activity.Vault, OnboardingLessons.Sends(OnboardingLessonId.FirstChestOpen));
 
-        Assert.Contains("waiting", waiting, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("VAULT", waiting);
-        Assert.Equal(Tutorial.Body(TutorialStep.OpenChest), none);
-        Assert.NotEqual(waiting, none);
-        Assert.Equal(Activity.Vault, Tutorial.Sends(TutorialStep.OpenChest, new TutorialFacts(ChestsHeld: 1)));
-
-        // Every other rung reads the same whichever way it is asked.
-        foreach (var step in Enum.GetValues<TutorialStep>().Where(s => s != TutorialStep.OpenChest))
-            Assert.Equal(Tutorial.Body(step), Tutorial.Body(step, new TutorialFacts(ChestsHeld: 1)));
+        var empty = holding with { ChestsHeld = 0 };
+        Assert.DoesNotContain(OnboardingLessonId.FirstChestOpen, OnboardingLessons.EligibleNow(empty));
     }
 
     [Fact]

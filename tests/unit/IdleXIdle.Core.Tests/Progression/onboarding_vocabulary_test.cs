@@ -176,35 +176,42 @@ public class onboarding_vocabulary_test
     }
 
     [Fact]
-    public void test_the_deed_rung_waits_for_the_deed_and_not_for_the_drop()
+    public void test_the_gem_lesson_waits_for_the_deed_and_not_for_the_drop()
     {
         // "We need to force the player to interact with certain elements... require the player to
         // equip the gem so they learn the mechanic." Holding a gem must NOT satisfy it; setting one
         // must. And it must stay silent while there is no gem to set, or it is a lesson about nothing.
-        var noGem = new TutorialFacts(WavesCleared: 20, DeepestWave: 20, StatsTrained: 1,
-                                      ItemsOwned: 1, ItemsWorn: 1, Gleam: 500);
-        Assert.NotEqual(TutorialStep.SetAGem, Tutorial.Showing(noGem));
+        var noGem = new LessonFacts(WavesCleared: 20, DeepestWave: 20, StatsTrained: 1,
+                                    ItemsOwned: 1, ItemsWorn: 1, Gleam: 500, HuntersOwned: 1,
+                                    ReportOpenedEver: true, ChangedAfterFall: true, RetriedAfterChange: true);
+        Assert.DoesNotContain(OnboardingLessonId.FirstGemSocket, OnboardingLessons.EligibleNow(noGem));
 
         var holding = noGem with { GemsHeld = 1 };
-        Assert.Equal(TutorialStep.SetAGem, Tutorial.Showing(holding));
+        Assert.Equal(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(holding));
 
         var set = holding with { GemsHeld = 0, GemsSet = 1 };
-        Assert.NotEqual(TutorialStep.SetAGem, Tutorial.Showing(set));
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstGemSocket, set));
+        Assert.NotEqual(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(set));
 
-        // ...and it points at the screen the deed is done on.
-        Assert.Equal(Activity.Forge, Tutorial.Sends(TutorialStep.SetAGem, holding));
+        // ...and it points at the screen the deed is done on, and at the control it is done with.
+        Assert.Equal(Activity.Forge, OnboardingLessons.Sends(OnboardingLessonId.FirstGemSocket));
+        Assert.NotNull(OnboardingLessons.Target(OnboardingLessonId.FirstGemSocket));
     }
 
     [Fact]
-    public void test_the_deed_rung_can_always_be_escaped()
+    public void test_the_gem_lesson_can_always_be_escaped_and_escaping_teaches_nothing()
     {
-        // An idle game whose thesis is that it plays without you must never TRAP anybody. The rung is
-        // a dismissible card, not a gate: closing it by hand skips it for good, and the fight goes on
-        // behind it either way.
-        var holding = new TutorialFacts(WavesCleared: 20, DeepestWave: 20, StatsTrained: 1,
-                                        ItemsOwned: 1, ItemsWorn: 1, GemsHeld: 1);
-        Assert.Equal(TutorialStep.SetAGem, Tutorial.Showing(holding));
-        Assert.NotEqual(TutorialStep.SetAGem,
-                        Tutorial.Showing(holding, new[] { TutorialStep.SetAGem.ToString() }));
+        // An idle game whose thesis is that it plays without you must never TRAP anybody. Two ways
+        // out, and NEITHER of them lies about what the player has learned: the card's own × mutes this
+        // one lesson for the session, and SKIP GUIDANCE silences all of them for good. In both cases
+        // the gem is still unset, and every gate that reads that fact is untouched.
+        var holding = new LessonFacts(WavesCleared: 20, DeepestWave: 20, StatsTrained: 1,
+                                      ItemsOwned: 1, ItemsWorn: 1, GemsHeld: 1, HuntersOwned: 1,
+                                      ReportOpenedEver: true, ChangedAfterFall: true, RetriedAfterChange: true);
+        Assert.Equal(OnboardingLessonId.FirstGemSocket, OnboardingLessons.Next(holding));
+
+        Assert.Null(OnboardingLessons.Next(holding, new[] { OnboardingLessonId.FirstGemSocket }));
+        Assert.Null(OnboardingLessons.Next(holding with { GuidanceOff = true }));
+        Assert.False(OnboardingLessons.Completed(OnboardingLessonId.FirstGemSocket, holding));
     }
 }
