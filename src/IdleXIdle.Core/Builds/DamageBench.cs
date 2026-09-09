@@ -35,6 +35,19 @@ public static class DamageBench
 
     private const int Seed = 1234;
 
+    /// <summary>How many seeded runs the reading averages. See the remarks: crit is a rolled event.</summary>
+    /// <remarks>
+    /// One run stopped being a stable number on 2026-09-09, when critical hits became rolled events
+    /// rather than a folded expected-value multiplier. A single seed then reads one sample of a random
+    /// sum: cheap for a fast multi-hit build (a few percent) and expensive for a slow heavy one, whose
+    /// window holds only a handful of hits. Averaging <c>Runs</c> seeded runs puts the reading back
+    /// under a percent of its own mean without inventing a second estimator — every run is still the
+    /// real <see cref="SoloBattle.ResolveWave"/>, and the seeds are fixed, so the bench is reproducible
+    /// to the byte. THE PLAYER READS THIS NUMBER on the character screen, so a jittering figure would
+    /// be read as the build changing when nothing had.
+    /// </remarks>
+    public const int Runs = 24;
+
     /// <summary>Measure the build's damage against the reference dummy over one full tick window.</summary>
     public static DamageReadout Measure(Build build, Hunter hunter, ExpeditionTuning? tuning = null)
     {
@@ -44,14 +57,20 @@ public static class DamageBench
 
         // The one mint helper, shared with the live screen so the bench cannot drift from the game.
         var hp = SoloBattle.ChampionHealth(build, hunter);
-        var champ = new Champion { MaxHealth = hp, Health = hp };
 
-        // enemyDamage 0 and an interval far past the window so the dummy's (zero) swing never interferes.
-        var (_, events) = SoloBattle.ResolveWave(
-            champ, build, hunter, DummyHealth, enemyDamage: 0f, enemyIntervalMs: 100_000,
-            t, new Random(Seed));
+        long total = 0;
+        for (var run = 0; run < Runs; run++)
+        {
+            var champ = new Champion { MaxHealth = hp, Health = hp };
+            // enemyDamage 0 and an interval far past the window so the dummy's (zero) swing never interferes.
+            var (_, events) = SoloBattle.ResolveWave(
+                champ, build, hunter, DummyHealth, enemyDamage: 0f, enemyIntervalMs: 100_000,
+                t, new Random(Seed + run * 7919));
 
-        var total = events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => (long)e.Amount);
+            total += events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => (long)e.Amount);
+        }
+
+        total /= Runs;
         var seconds = t.TickCeilingMs / 1000f;
         return new DamageReadout(total, seconds, seconds > 0f ? total / seconds : 0f);
     }

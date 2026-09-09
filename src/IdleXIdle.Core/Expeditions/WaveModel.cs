@@ -391,6 +391,10 @@ public enum BattleEventKind
 /// WHAT DEALT IT, typed — the same <see cref="Builds.HitSource"/> the fight already routes every
 /// landing through. Null on every event that is not a Strike.
 /// </param>
+/// <param name="Crit">
+/// WAS IT A CRITICAL HIT — the grade, which is a different question from <paramref name="Hit"/>'s
+/// provenance and therefore its own field rather than another <see cref="Builds.HitSource"/> value.
+/// </param>
 /// <remarks>
 /// The Strike used to carry only <see cref="FromSkill"/>, a boolean whose doc said "a skill dealt it"
 /// while the sim set it from <c>!swing</c> — so a carry, a bleed, a reflect and THE ANVIL's DEADWEIGHT
@@ -399,7 +403,8 @@ public enum BattleEventKind
 /// fourth consumer asking a different question would have inherited it. The provenance is on the event
 /// now and the boolean is derived from it, so nothing moved and nothing has to guess.
 /// </remarks>
-public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs, Builds.HitSource? Hit = null)
+public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs, Builds.HitSource? Hit = null,
+                                          bool Crit = false)
 {
     /// <summary>
     /// A Strike that is NOT the champion's basic swing — a cast, an aura tick, a trap bite, and equally

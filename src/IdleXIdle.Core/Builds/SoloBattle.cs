@@ -918,12 +918,18 @@ public static class SoloBattle
         // four times would make the tithe strongest on the build that committed least.
         var swornVows = tithe > 0f ? build.Vows.Count : 0;
 
-        // CRIT × FOCUS, folded to a deterministic expected-value factor on SKILL damage (chance × extra),
-        // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
-        // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
+        // CRIT IS A ROLLED EVENT (2026-09-09). It used to be folded to a deterministic expected-value
+        // factor — every skill hit multiplied by 1 + chance × (mult − 1) — which kept the sim
+        // reproducible and made the stat a lie: at the playtester's 12 % every hit was a silent ×1.06
+        // and NO hit in the game had ever been a critical. The Training screen said "12.0% of your hits
+        // are critical right now", two trait cards promised critical hits as events, and the hunt could
+        // not have drawn one if it happened. Reproducibility is kept a different way: ONE child stream,
+        // minted from a single draw of the wave's own seeded Random, so a wave costs the shared stream
+        // exactly one draw whatever its hit count and the descent stays a pure function of its seed.
         var critChance = CritChance(hunter, shape);
         var critMult = CritMultiplier(hunter) + shape.BonusCritDamagePercent / 100f;   // MIND 3p
-        var critFactor = 1f + critChance * (critMult - 1f);
+        var critRng = new Random(rng.Next());
+        // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
         var defenseFactor = DefenseMitigationConstant / (DefenseMitigationConstant + hunter.Defense);
 
         // VOW COSTS. A Vow that grants power must charge for it, or it is a stat with good PR. FRAGILITY is
@@ -991,6 +997,14 @@ public static class SoloBattle
         var ampFrontFull = 0f;     // SIGN/ANCHOR — the front enemy's own deeper mark
         var ampCritKeeps = false;  // SIGN/PERFECT CLAUSE
         var deadThisWave = 0;      // FIELD/REMNANT — enemies this wave has already lost
+
+        // ── THE CRITICAL HIT, decided once per landing. RollCrit writes the pair below immediately
+        //    before the hit's damage is amplified; Amp reads it (PERFECT CLAUSE spends a charge only
+        //    on a hit that did NOT crit) and LandOn is handed it explicitly, so a derived landing —
+        //    a carry, a bleed, a reflect, a DEADWEIGHT release — cannot inherit the last rolled hit's
+        //    grade. One decision, three readers, no stale state. ─────────────────────────────────────
+        var hitCrit = false;       // did the landing about to happen roll a critical
+        var hitCritFactor = 1f;    // what that critical multiplies the hit by (1 when it is not one)
 
         // ── THE SIX SET LADDERS (ElementSets). One typed field per rule the design names — not a
         //    generic buff runtime, and not six engines: every rung below is written in the vocabulary
@@ -1326,12 +1340,12 @@ public static class SoloBattle
                 // was a lottery ticket; a number of hits is a promise the build can be built around.
                 if (amped && ampHitsLeft > 0f)
                 {
-                    // PERFECT CLAUSE, under this sim's crit model. Crit here is an EXPECTED VALUE
-                    // (see critFactor) rather than a rolled event, so "a critical hit does not spend a
-                    // charge" cannot be a branch — it is the expectation of one: the charge is spent
-                    // at the rate a hit is NOT a crit. Deterministic, and it makes crit chance feed
+                    // PERFECT CLAUSE — a critical hit is empowered without spending one of them. Now
+                    // the branch the card always described: since crit became a rolled event
+                    // (RollCrit, which runs immediately before this) the charge is either spent whole
+                    // or kept whole, and charges are integers again. It still makes crit chance feed
                     // SPEND, which is the interaction the reinforcement is for.
-                    ampHitsLeft -= ampCritKeeps ? MathF.Max(0.05f, 1f - critChance) : 1f;
+                    ampHitsLeft -= ampCritKeeps && hitCrit ? 0f : 1f;
                     if (ampHitsLeft <= 0f) ampUntil = 0;   // spent: the window closes on the count
                 }
                 else if (amped && ampHitsLeft <= 0f && ampCountsHits)
@@ -1507,7 +1521,74 @@ public static class SoloBattle
         // ASSASSINATE's execution were all basic attacks (review 2026-08-30); a third boolean for the
         // one derived hit that needed counting was the last straw (2026-09-07). Derived sources —
         // Carry, Deadweight, Bleed, Reflect, Other — deal their damage and generate nothing.
-        void LandOn(WaveCreature? target, float dmg, int atMs, HitSource source, bool ignoresArmour = false)
+        /// <summary>
+        /// Decide whether the landing about to happen is a CRITICAL HIT, and how hard.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Called once immediately before each hit is amplified and landed, and ONLY for the two
+        /// provenances the champion deals directly: a skill's hit and the basic swing. A derived
+        /// landing — a carried overkill, a poison tick, a reflected bite, a DEADWEIGHT release —
+        /// never rolls: it already inherited whatever the hit that generated it was worth, and
+        /// letting it roll again would pay the same critical twice.
+        /// </para>
+        /// <para>
+        /// <b>THE SWING CRITS.</b> The player is told "how often a hit becomes a critical hit" and
+        /// "X% of your hits are critical right now"; the basic attack is the metronome the eye
+        /// follows between casts, so a swing that can never crit keeps the stat feeling dead however
+        /// honest the skills become. This is a real, small power increase (a swing now carries its
+        /// own 1 + p(m−1) in expectation) rather than a re-expression, and it is deliberate.
+        /// </para>
+        /// <para>
+        /// The two rules that used to be written as expectations are branches again, which is how
+        /// their cards always read them. THE CERTAIN HAND spends the wave's one guaranteed critical
+        /// and suppresses the roll (it must not be paid twice); MIND's FOCUS bank grows by its whole
+        /// step on a hit that did not crit and empties on one that did, and CERTAINTY at the cap
+        /// forces the next one outright.
+        /// </para>
+        /// </remarks>
+        void RollCrit(HitSource source)
+        {
+            hitCrit = false;
+            hitCritFactor = 1f;
+            if (source is not (HitSource.Primary or HitSource.Swing)) return;
+
+            var fromSkill = source == HitSource.Primary;
+
+            // THE CERTAIN HAND — once a wave, the hand does not guess. Skill hits only, and it
+            // neither banks FOCUS nor spends it, which is why it is tested before the bank below.
+            if (fromSkill && traits.FirstHitOfWaveCritMultiplier > 0f && !traitFirstCritSpent)
+            {
+                traitFirstCritSpent = true;
+                hitCrit = true;
+                hitCritFactor = critMult * traits.FirstHitOfWaveCritMultiplier;
+                return;
+            }
+
+            var chance = critChance;
+            if (fromSkill && shape.FocusPerHitPercent > 0f)
+            {
+                // MIND 4p FOCUS — the less you have been critting, the closer the next one is.
+                chance = Math.Min(MaxCritChance, critChance + mindFocus / 100f);
+                // MIND 5p CERTAINTY — at the ceiling the next hit crits outright and the climb
+                // restarts. It empties the bank, so it cannot chain into itself.
+                if (shape.CertaintyAtFocusCap && mindFocus >= shape.FocusCapPercent)
+                {
+                    mindFocus = 0f;
+                    hitCrit = true;
+                    hitCritFactor = critMult;
+                    return;
+                }
+            }
+
+            hitCrit = chance > 0f && critRng.NextDouble() < chance;
+            if (hitCrit) { hitCritFactor = critMult; mindFocus = 0f; }
+            else if (fromSkill && shape.FocusPerHitPercent > 0f)
+                mindFocus = MathF.Min(shape.FocusCapPercent, mindFocus + shape.FocusPerHitPercent);
+        }
+
+        void LandOn(WaveCreature? target, float dmg, int atMs, HitSource source, bool ignoresArmour = false,
+                    bool crit = false)
         {
             if (target is null || !target.Alive) return;
             var fromSkill = source == HitSource.Primary;
@@ -1518,43 +1599,11 @@ public static class SoloBattle
             // AFTER it, so a hit never lands the weight it is itself about to leave.
             var owedDeadweight = source is HitSource.Primary or HitSource.Swing ? target.StoredDeadweight : 0f;
 
-            // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
-            // call this with fromSkill:false). Applied first, so a crit stings with more poison too.
-            // THE CERTAIN HAND — once a wave, the hand does not guess. It is the one hit in the fight
-            // that is NOT an expected value: crit here is a share of every hit (see critFactor), and
-            // "always crits" is the one statement that cannot be written as a share. Sited above the
-            // FOCUS block on purpose, so the certain hit neither banks focus nor spends it.
-            if (fromSkill && traits.FirstHitOfWaveCritMultiplier > 0f && !traitFirstCritSpent)
-            {
-                traitFirstCritSpent = true;
-                dmg *= critMult * traits.FirstHitOfWaveCritMultiplier;
-            }
-            else if (fromSkill)
-            {
-                // MIND 4p FOCUS and 5p CERTAINTY. A critical here is an EXPECTED VALUE, not a rolled
-                // event (see critFactor), so "a hit that does not crit" is not a branch — it is a
-                // SHARE of every hit, and that share is exactly what FOCUS banks. A build already
-                // critting often climbs slowly, which is the reset clause the design wrote, expressed
-                // as the expectation it actually has. CERTAINTY is the one hit that is not an
-                // expectation at all: at the ceiling the next one crits outright and the climb restarts,
-                // and because it empties FOCUS it cannot chain into itself.
-                if (shape.FocusPerHitPercent > 0f)
-                {
-                    var chance = Math.Min(MaxCritChance, critChance + mindFocus / 100f);
-                    if (shape.CertaintyAtFocusCap && mindFocus >= shape.FocusCapPercent)
-                    {
-                        chance = 1f;
-                        mindFocus = 0f;
-                    }
-                    else
-                    {
-                        mindFocus = MathF.Min(shape.FocusCapPercent,
-                                              mindFocus + shape.FocusPerHitPercent * (1f - critChance));
-                    }
-                    dmg *= 1f + chance * (critMult - 1f);
-                }
-                else dmg *= critFactor;
-            }
+            // THE CRITICAL HIT, already decided by RollCrit for this landing (skill hit or basic
+            // swing; never a carry, a bleed, a reflect or a DEADWEIGHT release). Applied first, so a
+            // critical stings with more poison too. `crit` is passed in rather than read off the
+            // wave-local pair, so a derived landing cannot inherit the grade of the hit that made it.
+            if (crit) dmg *= hitCritFactor;
 
             // VENOM poisons on SKILL hits only (the card says "SKILL HITS POISON FOR N% OF THE HIT",
             // and N is the larger of VenomBasePoison and the worn magnitude) — never on the auto-attack,
@@ -1564,11 +1613,12 @@ public static class SoloBattle
             // false twice over.
             if (fromSkill && venomFrac > 0f) poison += dmg * venomFrac;
 
-            // THE OPENED VEIN — the cut you meant to make goes on being made. Paid at the RATE the hit
-            // criticals, for the same reason PERFECT CLAUSE is: crit is an expectation in this sim, so
-            // "critical hits leave the enemy bleeding" is the expectation of one rather than a branch.
-            // Feeds the same standing poison pool everything else does — one pool, not a second one.
-            if (fromSkill && traits.CritToBleed > 0f) poison += dmg * critChance * traits.CritToBleed;
+            // THE OPENED VEIN — the cut you meant to make goes on being made. Now exactly what the card
+            // says: a critical hit, and only a critical hit, leaves the enemy bleeding. It reads `dmg`
+            // AFTER the critical multiplier, so the bleed is a share of the big hit rather than of an
+            // average one — the trait's mean output rises by the crit multiplier, which is the price of
+            // making the sentence true. Feeds the same standing poison pool everything else does.
+            if (fromSkill && crit && traits.CritToBleed > 0f) poison += dmg * traits.CritToBleed;
 
             // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
             // it entirely — a bleed tick is small by construction and flat armour would erase it, which
@@ -1636,7 +1686,7 @@ public static class SoloBattle
             var idx = IndexOf(target);
             // THE PROVENANCE THE FIGHT ALREADY HAS, carried rather than flattened: FromSkill is derived
             // from it and keeps exactly the value !swing gave it, so no consumer changes.
-            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, source));
+            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, source, crit));
             if (!target.Alive)
             {
                 alive--;
@@ -1935,6 +1985,9 @@ public static class SoloBattle
                 for (var h = 0; h < want && c.Alive; h++)
                 {
                     landed++;
+                    // The grade is decided BEFORE the hit is amplified, because Amp's PERFECT CLAUSE
+                    // spends (or keeps) its charge on the answer.
+                    RollCrit(source);
                     var hit = raw * Amp(absMs, skillSource, skillDef, c);
                     // CLEANUP — read per HIT, not per target, so with CLUSTER's five arrows the ones
                     // that land after the target crosses the line are the ones that get the bonus.
@@ -1945,7 +1998,7 @@ public static class SoloBattle
                     //    and pays EVERY skill hit; laying happens after the landing, so a hit never
                     //    feeds itself. ──
                     if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
-                    LandOn(c, hit, atMs, source, ignoresArmour: ignoresArmour);
+                    LandOn(c, hit, atMs, source, ignoresArmour: ignoresArmour, crit: hitCrit);
                     if (fromSkill) SignatureLay(c, skillSource);
                     dealt += hit;
                 }

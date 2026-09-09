@@ -1350,15 +1350,28 @@ public sealed class HuntScreen
     /// re-reading off a screenshot. Three rules in one line:
     /// <list type="bullet">
     /// <item>a plain blow is its number and nothing else;</item>
-    /// <item>a graded blow names its grade — CRITICAL when the odds were beaten, and the SKILL'S OWN
-    /// NAME when a Reaction produced it, because there a crit is the expected value (§63): a Reaction
-    /// answers EVERY bite, so captioning it CRITICAL taught the player that a critical is the ordinary
-    /// case and left the skill that actually fired unnamed. The grade is unchanged; only the word;</item>
-    /// <item>a cast that landed more than once folds into one number with its count ("-635 ×5", §21).</item>
+    /// <item>a REACTION's blow is captioned with the skill's own name ("-4 JAWS") — a Reaction answers
+    /// every bite, so it is drawn a size up on every one of them, and calling that CRITICAL taught the
+    /// player that a critical is the ordinary case while leaving the skill that actually fired
+    /// unnamed;</item>
+    /// <item>a CRITICAL hit says CRITICAL. Until 2026-09-09 this word was unreachable: the screen's
+    /// <c>crit</c> flag meant "a Reaction produced it" and its true branch always replaced the word
+    /// with the Reaction's name, so the one caption the game had for a critical hit could never be
+    /// drawn — and the sim rolled none to draw it for. Both halves are fixed; the grade now comes off
+    /// <see cref="IdleXIdle.Core.Expeditions.BattleEvent.Crit"/>, and a Reaction that also crits says
+    /// both;</item>
+    /// <item>a cast that landed more than once folds into one number with its count ("-635 ×5", §21).
+    /// Criticals fold with criticals only, so a mixed instant prints two honest numbers rather than
+    /// one that grades the whole sum by its luckiest hit.</item>
     /// </list>
     /// </remarks>
     public static string DamageCalloutText(int total, bool crit, int hits, string? critWord = null)
-        => (crit ? $"-{total:N0} {critWord ?? "CRITICAL"}" : $"-{total:N0}") + (hits > 1 ? $" ×{hits}" : "");
+    {
+        var text = $"-{total:N0}";
+        if (critWord is { Length: > 0 }) text += " " + critWord;
+        if (crit) text += " CRITICAL";
+        return text + (hits > 1 ? $" ×{hits}" : "");
+    }
 
     /// <summary>
     /// A floating combat number over the creature a Strike event hit — THE EVENT'S OWN AMOUNT, which is
@@ -1589,7 +1602,12 @@ public sealed class HuntScreen
                         // five numbers up one column and the player read a flurry instead of a total.
                         // They are summed here and drawn as "-635 ×5" — the total is what the fight did,
                         // and the count is what makes it legible as one cast rather than one hit.
-                        var crit = e.FromSkill && e.AtMs == trapAtMs;
+                        // THE GRADE AND THE CAPTION ARE TWO QUESTIONS. `crit` is the fight's own answer
+                        // — the roll, carried on the event — and `reaction` is which skill produced the
+                        // blow. They used to be one boolean whose true branch deleted the word CRITICAL,
+                        // which is why the game could not draw a critical hit even once it had one.
+                        var crit = e.Crit;
+                        var reaction = e.FromSkill && e.AtMs == trapAtMs;
                         var skill = e.FromSkill && e.AtMs == skillAtMs;
                         var hits = 1;
                         var total = e.Amount;
@@ -1599,11 +1617,18 @@ public sealed class HuntScreen
                             if (o.AtMs != e.AtMs) break;              // the batch is in time order
                             if (o.Kind != BattleEventKind.Strike || o.Slot != e.Slot || o.Amount <= 0) continue;
                             if (o.FromSkill != e.FromSkill) continue; // a swing and a cast stay separate
+                            if (o.Crit != e.Crit) continue;           // ...and so do a critical and a plain hit
                             total += o.Amount;
                             hits++;
                             _summed.Add(kj);        // its own turn still flashes and sounds; it draws no number
                         }
-                        if (!_summed.Contains(bi)) SpawnDamage(total, e.Slot, crit, skill, hits, crit ? trapName : null);
+                        if (!_summed.Contains(bi))
+                        {
+                            SpawnDamage(total, e.Slot, crit, skill, hits, reaction ? trapName : null);
+                            // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
+                            // sound the file is named for had never once accompanied a critical hit.
+                            if (crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                        }
                     }
                     // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
@@ -1647,7 +1672,10 @@ public sealed class HuntScreen
                     PlaySkillVfx(castDef, castSk.Source, castTarget);
                     Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
-                    if (isReaction) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow
+                    // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
+                    // to the roll now (see the Strike case), and the answer keeps the cast's own thud
+                    // pitched up, so the two events stay tellable apart by ear.
+                    if (isReaction) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
                     if (isReaction) { trapAtMs = e.AtMs; trapName = castDef.Name; }   // ...and a reaction's are graded up, under its OWN name
                     break;

@@ -216,9 +216,15 @@ public class trait_pacing_benchmark_test
                   Ranks: 25, GearDamage: 1.8f, GearHealth: 1.25f, Weave: Weave.Motley, GearCritPercent: 0f, Vows: true,
                   RegionIndex: 1, Runs: 50, Conquered: 3, Mastered: 1, Sets: 1),
 
+        // 80 -> 100 descents on 2026-09-09. The LATE age is the only shield-shaped one in the career,
+        // so it alone feeds ShieldAbsorbedPools, and STANDING PLATE wants 220 of them. At 80 descents
+        // the career finished on 215.7 — inside the noise of a fight that now rolls its critical hits
+        // — so the shield family's last trait awakened or did not depending on the dice. A bench that
+        // can only just pose a condition is reporting on itself; twenty more descents of the age that
+        // owns the counter give it real margin, and no threshold in the catalogue moved.
         new Stage("LATE", "the third region, and the defensive rebuild: 32 ranks, shield and reflect woven",
                   Ranks: 32, GearDamage: 2.4f, GearHealth: 1.35f, Weave: Weave.Defence, GearCritPercent: 0f, Vows: true,
-                  RegionIndex: 2, Runs: 80, Conquered: 4, Mastered: 2, Sets: 1),
+                  RegionIndex: 2, Runs: 100, Conquered: 4, Mastered: 2, Sets: 1),
 
         new Stage("DEVELOPED", "near-full breadth: 40 ranks, the fourth region, the critical rebuild",
                   Ranks: 40, GearDamage: 3.0f, GearHealth: 1.4f, Weave: Weave.Critical, GearCritPercent: 20f, Vows: true,
@@ -380,7 +386,7 @@ public class trait_pacing_benchmark_test
     /// <summary>
     /// Live one whole career, checkpointing at the end of each age.
     /// </summary>
-    private static IReadOnlyList<Checkpoint> RunCareer()
+    private static (IReadOnlyList<Checkpoint> Curve, TraitLedger Ledger) RunCareer()
     {
         var ledger = new TraitLedger();
         var watch = new TraitWatch(ledger) { CharacterId = CharacterId };
@@ -466,7 +472,7 @@ public class trait_pacing_benchmark_test
                 ledger.Of(TraitCounter.PureWaves)));
         }
 
-        return checkpoints;
+        return (checkpoints, ledger);
     }
 
     private static string Name(string id) => TraitCatalogue.Find(id)?.Name ?? id;
@@ -476,7 +482,7 @@ public class trait_pacing_benchmark_test
     [Fact]
     public void test_trait_pacing_one_career_awakens_the_measured_curve()
     {
-        var curve = RunCareer();
+        var (curve, ledger) = RunCareer();
 
         _out.WriteLine("THE DISCOVERY CURVE — one account, seven ages, real cleared waves");
         _out.WriteLine("");
@@ -503,6 +509,14 @@ public class trait_pacing_benchmark_test
         _out.WriteLine("");
         _out.WriteLine($"NEVER AWAKENED IN THE WHOLE CAREER ({never.Count}):");
         foreach (var id in never) _out.WriteLine($"     ? {Name(id)}   [{id}]");
+        _out.WriteLine("");
+        // WHAT THE FIGHT ACTUALLY FED THE LEDGER. Printed, never asserted: when a trait does not
+        // awaken, the only useful next question is "how far short, and of which counter" — and this
+        // answers it without a second run. STANDING PLATE finished 2% under its threshold once, and
+        // reading that number is what said the age was too short rather than the threshold too high.
+        _out.WriteLine("COUNTERS AT THE END OF THE CAREER:");
+        foreach (var counter in Enum.GetValues<TraitCounter>())
+            _out.WriteLine($"     {counter,-28} {ledger.Of(counter),12:0.##}");
 
         // ── THE ASSERTIONS ───────────────────────────────────────────────────────────────────────
         //
@@ -624,11 +638,17 @@ public class trait_pacing_benchmark_test
     private const int CurrentFirstChoice = 3;
     private const int CurrentEarlyMid = 6;
     private const int CurrentMid = 13;
-    private const int CurrentLate = 22;
+    private const int CurrentLate = 23;
     private const int CurrentDeveloped = 26;
 
     /// <summary>The PURE accumulator at the end of the FIRST CHOICE age — every wave that age cleared.</summary>
-    private const double CurrentFirstChoicePure = 149;
+    /// <remarks>
+    /// 149 -&gt; 151 on 2026-09-09, when critical hits became rolled events: the same seeded career
+    /// clears two more waves in that age because its damage is no longer a smooth expectation. The
+    /// number this pins is still "every wave the age cleared" — the assertion above reads it against
+    /// <c>by["FIRST CHOICE"].Waves</c>, which moved with it.
+    /// </remarks>
+    private const double CurrentFirstChoicePure = 151;
 
     /// <summary>The age THE SINGLE NOTE awakens in.</summary>
     private const string CurrentSingleNoteAge = "FIRST CHOICE";
@@ -706,6 +726,6 @@ public class trait_pacing_benchmark_test
             string.Join(" | ", c.Select(x =>
                 $"{x.Stage.Name}:{x.Runs}:{x.Waves}:{x.Total}:{x.PureWaves}:{string.Join(",", x.NewIds)}"));
 
-        Assert.Equal(Flatten(RunCareer()), Flatten(RunCareer()));
+        Assert.Equal(Flatten(RunCareer().Curve), Flatten(RunCareer().Curve));
     }
 }

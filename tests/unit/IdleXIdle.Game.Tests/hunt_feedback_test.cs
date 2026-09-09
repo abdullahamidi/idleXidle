@@ -31,10 +31,20 @@ public class HuntFeedbackTests
     {
         // A Reaction answers every bite, so its blow is graded up on EVERY bite — captioning that
         // CRITICAL taught the player that a critical is the ordinary case and left the skill that
-        // actually fired unnamed. Same grade, the skill's word.
-        var text = HuntScreen.DamageCalloutText(4, crit: true, hits: 1, critWord: "JAWS");
+        // actually fired unnamed. The skill's word, and no grade it did not earn.
+        var text = HuntScreen.DamageCalloutText(4, crit: false, hits: 1, critWord: "JAWS");
         Assert.Equal("-4 JAWS", text);
         Assert.DoesNotContain("CRITICAL", text);
+    }
+
+    [Fact]
+    public void test_a_reaction_that_also_crits_says_both()
+    {
+        // The two questions are separate since 2026-09-09 — WHICH SKILL landed it, and WHETHER the
+        // roll beat the odds. A Reaction can do both, and before the split the caption could say
+        // only one of them (and in practice never CRITICAL, because the flag that chose between them
+        // meant "a Reaction").
+        Assert.Equal("-4 JAWS CRITICAL", HuntScreen.DamageCalloutText(4, crit: true, hits: 1, critWord: "JAWS"));
     }
 
     [Fact]
@@ -42,7 +52,7 @@ public class HuntFeedbackTests
     {
         // §21: one creature, one instant, one number — with the count that makes it read as one cast.
         Assert.Equal("-635 ×5", HuntScreen.DamageCalloutText(635, crit: false, hits: 5));
-        Assert.Equal("-635 JAWS ×5", HuntScreen.DamageCalloutText(635, crit: true, hits: 5, critWord: "JAWS"));
+        Assert.Equal("-635 JAWS ×5", HuntScreen.DamageCalloutText(635, crit: false, hits: 5, critWord: "JAWS"));
         Assert.Equal("-635 CRITICAL ×5", HuntScreen.DamageCalloutText(635, crit: true, hits: 5));
     }
 
