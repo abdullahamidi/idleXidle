@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -41,6 +41,14 @@ public sealed record SaveGame
     // a file below 5 predates them and is seeded (OnboardingLessons.FirstVersionWithFallLoopFacts).
     // The bump earns its keep twice over — it is also what makes SnapshotBeforeUpgrade copy every v4
     // file aside before the first autosave rewrites it.
+    // 6 = the authored opening (2026-09-10). The first minutes became a written sequence that can pause
+    // the fight, force navigation and hand the player their first chest from the first boss — so a
+    // career now carries a CURSOR (OpeningStage), a one-shot prologue flag and a one-shot gift latch.
+    // A file written before all that has no cursor to read, and a player at wave three hundred must
+    // not be shown a prologue: this number is what tells the two apart
+    // (OpeningScript.FirstVersionWithOpeningState, frozen at 6 for the same reason its two siblings
+    // are frozen). It also moves the welcome gift OFF the new-game seed, so a v5 file that still holds
+    // an unopened welcome chest keeps it and is never given a second one.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -347,6 +355,47 @@ public sealed record SaveGame
 
     /// <summary>...and a descent was started after that change. The loop, closed.</summary>
     public bool RetriedAfterChange { get; init; }
+
+    // ── THE AUTHORED OPENING. Three facts and a list; everything else it needs is derived. ───────
+
+    /// <summary>Has the illustrated prologue been played (or skipped) for this career?</summary>
+    /// <remarks>
+    /// One shot per career, and separate from the tutorial: SKIP CINEMATIC lands on BEGIN THE HUNT and
+    /// still leaves the opening to play. Reset by START A NEW GAME, because a new career is a new
+    /// beginning in every sense.
+    /// </remarks>
+    public bool PrologueSeen { get; init; }
+
+    /// <summary>
+    /// How far the authored opening got, as an <c>OpeningStage</c> ORDINAL. 0 = never started.
+    /// </summary>
+    /// <remarks>
+    /// The ordinal rather than the name, because this is a position in a sequence and the sequence is
+    /// the product decision — <c>OpeningScript.StageOf</c> resolves anything this build does not
+    /// recognise forward to Complete rather than into a forced step whose deed is already done.
+    /// The cursor is not the truth, either: on load it is walked forward over every stage whose deed
+    /// the save can prove was performed.
+    /// </remarks>
+    public int OpeningStage { get; init; }
+
+    /// <summary>Has the tutorial boss's one-time welcome gift already been granted?</summary>
+    /// <remarks>
+    /// A latch, not a count. The gift used to be seeded at frame one, before the player had done
+    /// anything; it comes from the first boss now, and it must come exactly once however many bosses
+    /// fall, however many descents are made, and however often the game is reloaded between them.
+    /// </remarks>
+    public bool WelcomeGiftGranted { get; init; }
+
+    /// <summary>
+    /// Contextual tutorials the player has finished, by NAME.
+    /// </summary>
+    /// <remarks>
+    /// Names rather than ordinals, the same law as <see cref="ExplainedScreens"/> and
+    /// <see cref="DismissedGuideRungs"/>: reordering an enum must never silently mark a different
+    /// lesson as learned. Most contextual teaching is reconstructed from real facts and needs nothing
+    /// here; this is for the few whose deed leaves no lasting trace.
+    /// </remarks>
+    public List<string> TutorialsDone { get; init; } = new();
 
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }

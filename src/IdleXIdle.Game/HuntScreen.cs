@@ -995,6 +995,37 @@ public sealed class HuntScreen
     /// <summary>Is the champion down and regrouping right now?</summary>
     public bool ChampionDowned => _mode == Mode.Downed;
 
+    // ── WHAT AN AUTHORED OPENING WAITS FOR. ─────────────────────────────────────────────────────
+    //
+    // Three readings and one dial, all of them about PRESENTATION — where the animation has got to,
+    // and where the playhead is. The simulation is untouched: the wave was resolved before any of
+    // this ran, and holding the replay changes what is on screen, never what happened.
+
+    /// <summary>
+    /// Park the playhead one millisecond short of the next beat of this kind. Null to run freely.
+    /// </summary>
+    /// <remarks>
+    /// Set by the host from the authored script, cleared by it the moment the player continues. The
+    /// screen does not know what a tutorial is; it knows how to wait.
+    /// </remarks>
+    public BattleEventKind? HoldBeforeKind { get; set; }
+
+    /// <summary>Is the playhead actually parked against <see cref="HoldBeforeKind"/> this frame?</summary>
+    public bool ReplayHeld { get; private set; }
+
+    /// <summary>
+    /// Has the wave's pack finished walking on and settled into its combat position?
+    /// </summary>
+    /// <remarks>
+    /// The fight already waits for this before anyone swings (the _enemyEnter hold above), so an
+    /// authored step that waits for it is watching the same moment the game does: the entrance plays
+    /// whole, and the explanation lands after it and before the first blow.
+    /// </remarks>
+    public bool EnemySettled => _run is not null && _replay is not null && _enemyEnter <= 0f && _breakTimer <= 0f;
+
+    /// <summary>Is a BOSS the thing standing there?</summary>
+    public bool BossOnStage => _isBossWave;
+
     /// <summary>
     /// Is the FALL PLATE up — the panel that names the wave, diagnoses the run and offers READ THE LOG?
     /// </summary>
@@ -1591,7 +1622,26 @@ public sealed class HuntScreen
             _nextChampStrikeMs = _replay.NextChampionStrikeAfter(seek);
         }
 
-        _playheadMs += dt * 1000f * _speedMul;
+        // ── THE BARRIER. ────────────────────────────────────────────────────────────────────────
+        //
+        // An authored step can ask the replay to stop one millisecond short of the next beat of a
+        // given kind, so the player is told what is about to happen BEFORE it happens. Events cross on
+        // `AtMs <= toMs` (WaveReplay.Advance), so parking at `AtMs - 1` provably never crosses one —
+        // and lifting the barrier crosses it on the very next frame, with the cast, its callout and
+        // its effect all landing together instead of having been watched three times already.
+        //
+        // A CLAMP, NOT AN EARLY RETURN. The two holds above this line return, and each has to
+        // hand-clear _enemyWindup and _clipName because of it. Clamping leaves the windup, the
+        // champion's clip and every rail readout frozen CONSISTENTLY at the held instant: a creature
+        // caught mid-swing stays mid-swing instead of snapping back to idle.
+        var advanced = _playheadMs + dt * 1000f * _speedMul;
+        if (HoldBeforeKind is { } barrier)
+        {
+            var at = _replay.NextEventOfKindAfter(_playheadMs, barrier);
+            if (at != int.MaxValue) advanced = MathF.Min(advanced, at - 1f);
+        }
+        ReplayHeld = advanced <= _playheadMs + 0.0001f;
+        _playheadMs = advanced;
 
         // ── THE READY CROSSING, ARMED HERE AND NOWHERE ELSE. A pulse belongs to Update: a Draw that
         //    armed one would re-arm it every frame and the medallion would swell for as long as you

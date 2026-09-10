@@ -371,6 +371,17 @@ public sealed class GearScreen
     private int _tab;
     private int _invScroll;
     private string? _selectedId;
+
+    /// <summary>
+    /// Has the player ever CLICKED an item on this screen? Not the same as one being selected.
+    /// </summary>
+    /// <remarks>
+    /// The screen selects the first item for you when it opens (see Filtered's fallback below), so
+    /// "something is selected" is true a frame after arriving and proves nothing. An authored step
+    /// that asks the player to READ an item is asking for a click, and this is the only fact that
+    /// distinguishes the two. Latched, never cleared: reading is done once.
+    /// </remarks>
+    public bool ItemClickedEver { get; private set; }
     private ItemInstance? _hovered;
     private string? _tip;
     private Rectangle _tipAt;
@@ -631,6 +642,7 @@ public sealed class GearScreen
                 if (idx >= list.Count) break;
                 if (!InvCellRect(vis).Contains(hit)) continue;
                 _selectedId = list[idx].InstanceId;
+                ItemClickedEver = true;
                 OpenMenu(list[idx].InstanceId, InvCellRect(vis));
                 return;
             }
@@ -664,7 +676,7 @@ public sealed class GearScreen
 
         // A worn slot: select it. (Taking off is the inspector's TAKE OFF, or the menu — one gesture, said.)
         foreach (var (slot, _, col, row) in SlotLayout)
-            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; _feedback.Cue("sfx_click"); return; }
+            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; ItemClickedEver = true; _feedback.Cue("sfx_click"); return; }
 
         for (var vis = 0; vis < InvCols * InvRows; vis++)
         {

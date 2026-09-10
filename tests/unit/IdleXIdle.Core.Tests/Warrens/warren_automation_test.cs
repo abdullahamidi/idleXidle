@@ -165,17 +165,22 @@ public class WarrenAutomationTest
     [Fact]
     public void test_the_forge_is_free_and_always_was()
     {
-        // The brief's premise that the Forge hides behind a trait purchase does not hold: it opens on a
-        // chest ever held or two items owned, and no node ever gated it. Only the node NAME lied.
+        // The brief's premise that the Forge hides behind a trait purchase does not hold: no node ever
+        // gated it. Only the node NAME lied.
+        //
+        // RE-PINNED 2026-09-10 (was "a chest ever held, or two items owned"). A chest is the VAULT's
+        // business until it has been opened: every one of the Forge's four jobs needs an ITEM on the
+        // bench, so the chest clause opened the screen onto NOTHING ON THE BENCH — and, worse, it made
+        // the tutorial boss break two chains in the same instant.
         Assert.False(Unlocks.IsOpen(Activity.Forge, new UnlockFacts()));
-        Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ChestsEverHeld: 1)));
-        Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 2)));
+        Assert.False(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ChestsEverHeld: 1)));
+        Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 1)));
         Assert.True(Unlocks.IsOpen(Activity.Forge, new UnlockFacts(ItemsOwned: 2, TraitsDiscovered: 0)));
 
-        // AND ITS CAPTION NAMES BOTH CLAUSES. It used to name only the chest.
+        // AND ITS CAPTION NAMES WHAT IT NOW ASKS FOR — an item, and only an item.
         var caption = Unlocks.Requirement(Activity.Forge);
-        Assert.Contains("chest", caption, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("item", caption, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chest", caption, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

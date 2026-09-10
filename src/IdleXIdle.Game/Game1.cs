@@ -135,7 +135,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// bought a trait (Enter on TRAITS), sold the bench item (S on the FORGE) or walked into a region
     /// (Enter on the MAP) underneath the scrim (review 2026-08-26).
     /// </summary>
-    private KeyboardState ScreenKeys => _tourActive ? default : _keys;
+    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -163,6 +163,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The first-run guide's current rung, recomputed every frame. Null once outgrown.</summary>
     // ── ONBOARDING. Core holds the catalogue of what is TRUE; the director holds what is SAID. ───
     private readonly OnboardingDirector _coach = new();
+
+    /// <summary>
+    /// THE AUTHORED OPENING. It owns the player until it is finished; the coach is silent for all of it.
+    /// </summary>
+    /// <remarks>
+    /// Two layers, deliberately. This one is an ordered script that may stop the fight, take every
+    /// control but one and open a screen the rail has not unlocked yet — the first five minutes are
+    /// authored and the order IS the teaching. <see cref="_coach"/> is the long tail: contextual,
+    /// fact-driven, never modal, and it does not speak while this is running.
+    /// </remarks>
+    private readonly OpeningDirector _opening = new();
 
     /// <summary>SKIP GUIDANCE — presentation only. It fabricates no fact and moves no gate.</summary>
     private bool _guidanceOff;
@@ -3689,7 +3700,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Every staffed farm runs, every frame, on every screen — including mid-combat. This is the
         // whole point of an idle game, and once you have conquered regions, all of them farm at once.
-        TickWarren(dt);
+        // ...AND THE CAMP STANDS STILL WITH IT. A paused tutorial that let the Warren keep paying
+        // would be visible progression during a frozen frame, which is exactly what "the player must
+        // see a frozen game" forbids. (Offline production is untouched — that is a different clock,
+        // and the opening suppresses it separately by not releasing the career into idle time yet.)
+        if (!_opening.HoldsFight) TickWarren(dt);
 
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
@@ -3745,7 +3760,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // A TOUR IS THE ONLY THING THAT SETS THIS TRUE FOR A WHOLE FRAME. The notice toasts and the
         // slot-note banner are deliberately not modal: a toast never touches this flag, and the banner
         // only spends the one click that lands on it (below, beside the hint slot's close).
-        _swallowInput = _tourActive;
+        // A TOUR OR THE AUTHORED OPENING. The opening is the second thing in this game allowed to
+        // own a frame, and it is allowed for the reason the tour is: while it holds the player it is
+        // the only thing being asked of them. A LiveExplain step owns nothing — see OwnsInput.
+        _swallowInput = _tourActive || _opening.OwnsInput;
         // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
         // developer happens to press in the sixty frames advances the card — a capture asked for card
         // five came back as card six. The rig poses a card by number; it never plays.
@@ -3955,7 +3973,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // which only runs when that screen is the one on top, so a click in the Forge cannot fall
         // through into the fight without any flag being threaded down for it.
         _regionProgression = RegionProgressionOf(_region);
-        UpdateExpedition(gameTime);
+        // ── THE AUTHORED HOLD. ──────────────────────────────────────────────────────────────────
+        //
+        // The player must SEE a frozen game, not a still frame with a simulation running behind it.
+        // This one call is the whole fight: HuntScreen begins the descent lazily inside it
+        // (`if (_run is null) StartRun(hunter)`), so skipping it before the first frame means the run
+        // has never begun — RunsStarted stays 0 and there is nothing to unwind when the hold lifts.
+        // Mid-fight it means no wave starts, no reward is credited and no income accrues, so nothing
+        // piles up to be applied in a burst afterwards.
+        //
+        // CORE IS UNTOUCHED. The wave was resolved deterministically before any of this; holding
+        // changes what is on screen and never what happened. Headless and offline simulation cannot
+        // tell the difference because they never call this method.
+        if (!_opening.HoldsFight) UpdateExpedition(gameTime);
 
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
         // farms tick above; the champion ticks on the line above this one. What must not happen is the
@@ -7039,7 +7069,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool _swallowInput;
 
     private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
-    private bool MouseRightClicked => _rightClicked && !_showSettings;
+
+    /// <summary>
+    /// The click a FORCED step allows through — the one production control it is asking for.
+    /// </summary>
+    /// <remarks>
+    /// A ForceAction step is not a modal that happens to have a hole in it: every other control is
+    /// genuinely dead, and the one the deed needs is genuinely alive, in its own place, drawn and
+    /// hit-tested from the same rectangle as always. There is no tutorial-only button anywhere in this
+    /// design, so the deed the player performs IS the deed the game records.
+    /// </remarks>
+    private bool ForcedClick(Rectangle control)
+        => _clicked && !_showSettings && !_showHelp && !WelcomeUp && _opening.ForcedTarget is not null
+           && control.Contains(ChromeMouse);
+
+    private bool MouseRightClicked => _rightClicked && !_showSettings && !_opening.OwnsInput;
 
 
     /// <summary>
@@ -7415,7 +7459,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         switch (i)
         {
-            case 0: _showTitle = false; break; // PLAY / CONTINUE
+            // PLAY / CONTINUE. A FRESH CAREER DOES NOT LAND IN A FIGHT: it lands in the prologue, and
+            // BEGIN THE HUNT is the deliberate press that follows it. `_hasSave` is already the exact
+            // "this is a brand-new career" fact and is already false on the path with no CONTINUE.
+            case 0:
+                _showTitle = false;
+                if (!_hasSave && _opening.Stage == OpeningStage.NotStarted) _opening.Begin();
+                break;
             case 1: _showSettings = true; break;
             default: Exit(); break;
         }
@@ -9296,8 +9346,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
     };
 
     /// <summary>Is the rail tile at this index open to the player yet?</summary>
+    /// <summary>
+    /// May this tile be pressed? The ONE predicate the whole rail reads — the dimming, the chain, the
+    /// requirement toast, the click and the eleven hotkeys.
+    /// </summary>
+    /// <remarks>
+    /// The authored opening adds one term and takes one away. It ADDS a grant, because it walks the
+    /// player into the VAULT and the GEAR screen at the exact moment each becomes the thing being
+    /// taught — the tile has to be pressable a frame before <see cref="Unlocks"/> would say so, and
+    /// the chains break on the tutorial's beat rather than on a fact's. It TAKES the rest away, because
+    /// a forced step means one tile is live and the other ten are not.
+    /// </remarks>
     private bool NavUnlocked(int i)
-        => i < 0 || i >= NavActivity.Length || Unlocks.IsOpen(NavActivity[i], GuideUnlockFacts());
+    {
+        if (i < 0 || i >= NavActivity.Length) return true;
+        var activity = NavActivity[i];
+        if (_opening.ForcedNav is { } only) return activity == only;
+        return _openingGrants.Contains(activity) || Unlocks.IsOpen(activity, GuideUnlockFacts());
+    }
+
+    /// <summary>
+    /// Screens the authored opening has opened ahead of their own unlock fact.
+    /// </summary>
+    /// <remarks>
+    /// Never a substitute for the fact — the VAULT's real gate is a chest that really exists and the
+    /// GEAR screen's is an item that really exists, and both become true within a beat of the grant.
+    /// This exists so the chain can break ON THE TUTORIAL'S WORD rather than a frame later, which is
+    /// the difference between "the boss left you a chest, here is where it went" and two unrelated
+    /// animations in the same second.
+    /// </remarks>
+    private readonly HashSet<Activity> _openingGrants = new();
 
     private void OpenNav(int i)
     {

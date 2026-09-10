@@ -163,7 +163,7 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_five()
+    public void test_the_current_save_version_is_six()
     {
         // RE-PINNED 2026-09-09 (was four). The bump is what makes an OLDER build refuse a new file as
         // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
@@ -177,6 +177,8 @@ public class SkillIdentityMigrationTest
         // conquered a region before their first fall was being seeded as a veteran, losing the lesson
         // the first session exists to teach. This number is that discriminator; see
         // OnboardingLessons.FirstVersionWithFallLoopFacts, which is frozen at it.
-        Assert.Equal(5, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-10 (was five): the authored opening gave a career a cursor, and a file
+        // written before it has none. See OpeningScript.FirstVersionWithOpeningState.
+        Assert.Equal(6, SaveGame.CurrentVersion);
     }
 }

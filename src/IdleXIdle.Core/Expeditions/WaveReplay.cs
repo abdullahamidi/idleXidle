@@ -386,6 +386,17 @@ public sealed class WaveReplay
         }
     }
 
+    /// <summary>
+    /// When the next beat of this kind lands, or <see cref="int.MaxValue"/> if none remains.
+    /// </summary>
+    /// <remarks>
+    /// The presentation asks this to park the playhead just short of a beat it wants the player to
+    /// SEE arrive — the first Signature cast, told about before it happens rather than after the third
+    /// time. Nothing about a tutorial enters this file: it is a question about the wave's own event
+    /// list, and the answer is a millisecond.
+    /// </remarks>
+    public int NextEventOfKindAfter(float ms, BattleEventKind kind) => NextAfter(ms, kind);
+
     private int NextAfter(float ms, BattleEventKind kind)
     {
         foreach (var e in _events)

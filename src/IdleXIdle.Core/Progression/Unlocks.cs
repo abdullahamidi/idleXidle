@@ -155,7 +155,13 @@ public static class Unlocks
 
         // Chests are what the Forge is FOR. Also opened by owning items, because salvaging is the other
         // half of it and a player with junk and no chest still has a reason to be here.
-        Activity.Forge => f.ChestsEverHeld >= 1 || f.ItemsOwned >= 2,
+        // AN ITEM, NEVER A CHEST. This read `ChestsEverHeld >= 1 || ItemsOwned >= 2`, so the boss that
+        // gave you your first chest opened the VAULT and the FORGE in the same instant — two chains
+        // breaking at once, for a screen that would have opened onto NOTHING ON THE BENCH. Every one
+        // of the Forge's four jobs needs an ITEM: SALVAGE takes one wearable, UPGRADE and RE-ROLL take
+        // one plus a price, SOCKET takes one Rare-or-better plus a gem. A chest is the VAULT's
+        // business until it has been opened.
+        Activity.Forge => f.ItemsOwned >= 1,
 
         // WHEN THERE IS A REAL CHOICE. A hunter starts with one skill — its signature — and one slot;
         // a Build screen then is a page with one row and nothing to put in it. The screen opens the
@@ -210,7 +216,7 @@ public static class Unlocks
         Activity.Vault => "Earn a chest from a boss",
         // BOTH CLAUSES, because the gate has two. It opens on a chest ever held OR two items owned,
         // and naming only the chest sent a player who already had the Forge open looking for a boss.
-        Activity.Forge => "Earn a chest, or find two items",
+        Activity.Forge => "Find an item",
         Activity.Build => "Learn a second skill, or find a keystone or a vow",
         Activity.Mastery => "Earn three mastery points by going deeper",
         Activity.Map => "Conquer a region",
