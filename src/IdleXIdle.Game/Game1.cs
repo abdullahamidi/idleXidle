@@ -1305,11 +1305,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void SeedNewGame()
     {
         // NO FIRST-BOOT TOAST. It said "YOUR HUNTER IS ALREADY FIGHTING / WATCH THE FIRST WAVES —
-        // SCREENS OPEN AS YOU PLAY", which is the right thing to say and is now said by the coach's own
-        // first lesson (YOUR HUNTER FIGHTS FOR YOU) — in the SAME SLOT, one behind the other. Two
-        // surfaces saying one thing in one place, in sequence, is how a player learns to stop reading
-        // the slot. The lesson wins: it is a card with an ×, it stays until the first wave is actually
-        // cleared rather than fading on a timer, and it is the one voice onboarding has now.
+        // SCREENS OPEN AS YOU PLAY", and both halves of it are now false as well as duplicated: a
+        // fresh career does not land in a fight at all, it lands in the prologue, and the fight is
+        // held still until the authored opening has introduced the thing on the stage. What the toast
+        // was for is said by the opening's own first beats, on the frame each one is true.
         //
         // The second half — that screens open as you play — is the rail's job: a locked tile names what
         // opens it when it is pressed, and a newly opened one wears an unread dot until it is visited.
@@ -3803,7 +3802,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // shape twice before, under the modal panel this replaced. Swallow the input; never skip
         // the frame.
         //
-        // The champion keeps fighting behind it. An idle game does not pause to talk to you.
+        // The champion keeps fighting behind it: the return summary is news, and news does not stop
+        // the world. (The AUTHORED OPENING is the one thing in this game that does stop it — see
+        // OpeningDirector.HoldsFight — and it is not this.)
         // THE ORDER HERE IS THE WHOLE FIX. The first version of the panel this replaced cleared a local
         // flag inside the dismissal branch and then assigned _swallowInput from it — so on the very
         // frame the dismissing click was consumed, _swallowInput came out FALSE while _clicked was
@@ -5730,6 +5731,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // BLAZES rather than holds: full scrim on arrival, fading out after CoachBlazeSeconds and
         // leaving the brackets and the card. Re-armed whenever the lesson changes or the player walks
         // onto a different screen — which is exactly when there is something new to look at.
+        //
+        // THE AUTHORED OPENING DOES THE OPPOSITE, and the difference is not a disagreement. A beat of
+        // the opening is WAITING FOR ONE PRESS and will get it in seconds, so its scrim holds until it
+        // does; a coaching lesson is waiting for a deed the player may not perform for an hour, and a
+        // scrim that held for that would be a broken game. Same method, two clocks. (The two never run
+        // at once: the coach is silent for the whole of the opening.)
         var blaze = Math.Clamp(_coachBlaze / CoachBlazeFade, 0f, 1f);
         if (blaze > 0f)
             DrawScrimAround(holes, CoachScrim * (UiMotion.Reduced ? 1f : UiMotion.Smooth(blaze)));

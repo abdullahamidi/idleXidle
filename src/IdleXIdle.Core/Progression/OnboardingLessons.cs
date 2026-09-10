@@ -260,23 +260,24 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstBoss => false,       // an Observe beat the arena raises; see the note below
         // ── THE OPENING IS AN ORDER, NOT A RACE. ────────────────────────────────────────────────
         //
-        // A new account owns the welcome chest from frame one, so on priority alone the chest lesson
-        // won the moment the fight lesson was satisfied — at wave 1, two waves before TRAINING even
-        // opens. The journey came out as FIGHT -> OPEN CHEST -> EQUIP -> TRAIN, which teaches the loot
-        // loop before the decision loop and leaves the one screen the whole game is built on until
-        // last. The intended order is FIGHT -> TRAIN -> OPEN -> EQUIP: watch it fight, make one
-        // decision, then be paid for it.
+        // The welcome chest used to sit in a new account's vault from frame one, so on priority alone
+        // the chest lesson won the moment the fight lesson was satisfied — at wave 1, two waves before
+        // TRAINING even opens. The journey came out as FIGHT -> OPEN CHEST -> EQUIP -> TRAIN, which
+        // teaches the loot loop before the decision loop and leaves the one screen the whole game is
+        // built on until last. The intended order is FIGHT -> TRAIN -> OPEN -> EQUIP: watch it fight,
+        // make one decision, then be paid for it.
         //
-        // Priority alone cannot express that, because the chest is ELIGIBLE before training is. So the
-        // chest waits on the deed rather than on the ranking. It gates nothing: the VAULT is open, its
-        // tile carries the chest count, and a player who opens the chest early simply completes this
-        // lesson without ever being asked.
+        // THAT PREMISE IS GONE (2026-09-10). The gift comes from the tutorial boss now, so no chest
+        // can exist before wave five and the inversion cannot happen by that route at all. These two
+        // gates stay because a chest can still arrive EARLY BY ANOTHER ROUTE — a rolled boss drop, a
+        // shared code, a trader purchase — and because a player who ends the tutorial in Settings on
+        // their first minute should still meet the game in this order. They gate nothing: the VAULT
+        // opens on a chest and its tile carries the count, so anyone who opens one early simply
+        // completes the lesson without ever being asked.
         OnboardingLessonId.FirstChestOpen => f.ChestsHeld >= 1 && f.StatsTrained >= 1,
-        // ...AND SO DOES THE ITEM, for the same reason and against a harder case: the VAULT is open
-        // from frame one and its tile wears an unread mark, so a curious player can open the welcome
-        // chest at wave 0 and own a weapon before TRAINING exists. Gating only the chest left EQUIP
-        // ONE ITEM (78) outranking TRAIN ANY STAT ONCE (76), and the journey came out
-        // FIGHT -> EQUIP -> TRAIN — the same inversion, reached by a different route.
+        // ...AND SO DOES THE ITEM. Gating only the chest left EQUIP ONE ITEM (78) outranking TRAIN ANY
+        // STAT ONCE (76), and the journey came out FIGHT -> EQUIP -> TRAIN — the same inversion,
+        // reached by a different route.
         OnboardingLessonId.FirstItemEquip => f.ItemsOwned >= 1 && f.StatsTrained >= 1,
 
         // ── THE TRIO. Each waits on the one before it, because they are one sequence. ────────────

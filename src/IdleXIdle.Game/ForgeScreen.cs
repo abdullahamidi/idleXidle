@@ -4405,10 +4405,13 @@ public sealed class ForgeScreen
     /// The tint each rarity's frame is drawn with, so the ring itself carries rarity.
     /// </summary>
     /// <remarks>
-    /// <b>THE FIVE RARITY FRAME TEXTURES ARE THE SAME PICTURE.</b> ui_frame_rarity_common through
-    /// _legendary are five files with one warm gold-and-bone ring between them, drawn untinted — so
-    /// "rarity frame" was a name, not a signal, and rarity's only real mark on an item was a few pixels
-    /// of coloured bar beside it. The largest shape in every cell said nothing.
+    /// <b>THE FIVE RARITY FRAME TEXTURES ARE FIVE DIFFERENT RINGS, AND ALL FIVE ARE GOLD.</b>
+    /// ui_frame_rarity_common through _legendary each carry a little more ornament than the last —
+    /// that part is a real ladder — but every one of them is the same warm gold-and-bone metal, so
+    /// drawn untinted "rarity frame" was a name and not a signal, and rarity's only mark on an item
+    /// was a few pixels of coloured bar beside it. The largest shape in every cell said nothing.
+    /// (An older note here claimed the five files were one picture; they are not, and were not when
+    /// it was written — what they share is the metal, which is what the tint is for.)
     ///
     /// Tinting works here only because the art's brightest pixels are near-white (sampled 239,221,199),
     /// not saturated gold: a multiply against a near-white ring can reach any hue, while a multiply
@@ -4417,6 +4420,9 @@ public sealed class ForgeScreen
     ///
     /// Indexed by <c>(int)Rarity</c>, in the same order as FrameKey.
     /// </remarks>
+    /// <summary>The niche a dark item stands in, so its silhouette has something to be dark against.</summary>
+    private static readonly Color ItemShelf = UiInk.Rule * 0.9f;
+
     private static readonly Color[] FrameTint =
     {
         new(0xD2, 0xCE, 0xC2),   // Common — neutral bone, so it reads as "no claim"
@@ -4431,6 +4437,22 @@ public sealed class ForgeScreen
     {
         var frame = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
         if (frame is not null) b.Draw(frame, box, FrameTint[(int)item.Rarity]);
+
+        // ── A SHELF BEHIND THE ITEM, because the items are DARK and so is the cell. ─────────────
+        //
+        // Almost every wearable in this game is painted as near-black iron on transparency, and the
+        // rarity frame's own interior is opaque black — so a helm, a boot and a blade all read as an
+        // empty cell with a gold ring round it, at every size, on every surface. Playtest: the item
+        // art needs work; half of it was never actually visible.
+        //
+        // The fix is one flat plate the house already owns, inset to sit INSIDE the frame's inner
+        // ornament so nothing of the frame is covered. It is drawn here rather than in each caller
+        // because every item surface in the game — bag, paper doll, socket box, reveal card, tooltip,
+        // chest dossier — draws its icon through this one method.
+        var shelfPad = frame is null ? 0 : Math.Max(4, box.Width * 15 / 100);
+        if (frame is not null)
+            _ui.Fill(b, new Rectangle(box.X + shelfPad, box.Y + shelfPad,
+                                      box.Width - 2 * shelfPad, box.Height - 2 * shelfPad), ItemShelf);
 
         // A STAT GEM wears the MEDALLION OF ITS STAT — a fist for damage, a star for critical chance.
         // Six of them shipped in assets/art/ItemsLoot/glyphs/affix and nothing in the game ever asked
