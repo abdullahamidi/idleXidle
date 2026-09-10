@@ -85,6 +85,32 @@ public enum OnboardingLessonId
 
     /// <summary>Taught after the camp has actually paid, never before.</summary>
     FirstWarrenReturn,
+
+    // ── THE BACK HALF (coverage pass, 2026-09-10). Six systems the game shipped with no voice at
+    //    all: a player reached each of them and was told nothing about any of them. Every one is
+    //    answered by a fact the account already proves, and every one waits for the moment it can
+    //    actually be acted on — which for four of these is a long way in. ──────────────────────────
+
+    // NO "OPEN THE FORGE" CARD, and that is a decision rather than an omission. The screen has four
+    // jobs and a card naming them is the opening lecture this catalogue exists to replace — the rule
+    // is already written down and already tested (onboarding_targets: no lesson marks ForgeTabs).
+    // Each job is taught when it first matters instead: the gem by FirstGemSocket, which points at the
+    // BAG where the gem is, and salvage by FirstAutoSell, which is the same idea without a screen.
+
+    /// <summary>The camp taught the vault to sell, and the switch is still off.</summary>
+    FirstAutoSell,
+
+    /// <summary>A Vow is known and none is sworn — the one rule the player writes themselves.</summary>
+    FirstVowSworn,
+
+    /// <summary>A specialisation is affordable and none is taken. One per Hunter, forever.</summary>
+    FirstSpecialisation,
+
+    /// <summary>The stall has stock and nothing has been bought from it.</summary>
+    FirstTraderVisit,
+
+    /// <summary>The world is conquered and the taps have never been opened.</summary>
+    FirstCorruptionOffer,
 }
 
 /// <summary>
@@ -157,7 +183,34 @@ public readonly record struct LessonFacts(
     bool RetriedAfterChange = false,
 
     /// <summary>The global SKIP GUIDANCE setting. Silences presentation; changes no gameplay fact.</summary>
-    bool GuidanceOff = false);
+    bool GuidanceOff = false,
+
+    // ── THE BACK HALF'S FACTS. Each pair is "can this be done" and "has it been done". ───────────
+
+    /// <summary>Has the camp reached the facility level that lets the vault sell for you?</summary>
+    bool AutoSellUnlocked = false,
+    /// <summary>...and is the switch on? The facility unlocks it; the player turns it on.</summary>
+    bool AutoSellOn = false,
+
+    /// <summary>Vows the account has met.</summary>
+    int VowsKnown = 0,
+    /// <summary>Vows sworn on the woven build right now.</summary>
+    int VowsSworn = 0,
+
+    /// <summary>Can a Specialisation be taken THIS INSTANT — the tree's own CanTake, not a guess?</summary>
+    bool SpecialisationReachable = false,
+    /// <summary>Has this Hunter chosen its discipline? One per Hunter, and it does not come back.</summary>
+    bool SpecialisationTaken = false,
+
+    /// <summary>Does the stall have anything on it this week?</summary>
+    bool TraderStocked = false,
+    /// <summary>How many of its slots have been bought.</summary>
+    int TraderBought = 0,
+
+    /// <summary>Every region conquered and the world not yet deepened — the valve can be opened.</summary>
+    bool CanDeepenWorld = false,
+    /// <summary>How far it has been opened.</summary>
+    int CorruptionTier = 0);
 
 /// <summary>
 /// THE LESSON CATALOGUE: what is true, what is actionable, and which one matters most.
@@ -235,6 +288,13 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => f.TraitsEquipped >= 1,
         OnboardingLessonId.FirstHunterInteraction => f.HunterSwitches >= 1,
         OnboardingLessonId.FirstWarrenReturn => f.WarrenVisited,
+
+        // THE BACK HALF. Each one is finished by the deed itself, never by the card being closed.
+        OnboardingLessonId.FirstAutoSell => f.AutoSellOn,
+        OnboardingLessonId.FirstVowSworn => f.VowsSworn >= 1,
+        OnboardingLessonId.FirstSpecialisation => f.SpecialisationTaken,
+        OnboardingLessonId.FirstTraderVisit => f.TraderBought >= 1,
+        OnboardingLessonId.FirstCorruptionOffer => f.CorruptionTier >= 1,
         _ => true,
     };
 
@@ -305,6 +365,31 @@ public static class OnboardingLessons
         // NEVER BEFORE THE CAMP HAS PAID. A Warren tour given to somebody the Warren has done nothing
         // for is a theory; given after an offline payout it answers a question they already have.
         OnboardingLessonId.FirstWarrenReturn => f.WarrenOpen && f.WarrenPaidOffline,
+
+        // ── THE BACK HALF. Every one of these waits on the thing it asks for EXISTING. ──────────
+        //
+        // A prompt that arrives before it can be obeyed is noise, and the back half is where that is
+        // easiest to get wrong: these systems open long after the player has learned to trust the
+        // prompts, so one that cannot be acted on costs more here than it would have in minute two.
+
+        // AUTO-SELL is a facility's permission and a player's decision, and it is offered only once
+        // the pile it would thin actually exists. Never while the bag is small: selling from an empty
+        // bag teaches nothing and risks the one item they own.
+        OnboardingLessonId.FirstAutoSell => f.AutoSellUnlocked && f.ItemsOwned >= 8,
+
+        // A VOW is the only rule the player writes for themselves, and it needs a skill to write it
+        // on — a build with one woven skill has nowhere to put one.
+        OnboardingLessonId.FirstVowSworn => f.VowsKnown >= 1 && f.SharedSkillsEquipped >= 1,
+
+        // A SPECIALISATION is asked for by the tree, not by a threshold: the catalogue is consulted
+        // for a node that can be taken at this instant, so the card cannot arrive one point early.
+        OnboardingLessonId.FirstSpecialisation => f.SpecialisationReachable,
+
+        // THE STALL is weekly and its stock is real: no stock, no card.
+        OnboardingLessonId.FirstTraderVisit => f.TraderStocked && f.Gleam >= 1,
+
+        // THE VALVE only exists once the whole world is held, which is the point of it.
+        OnboardingLessonId.FirstCorruptionOffer => f.CanDeepenWorld,
         _ => false,
     };
 
@@ -344,6 +429,18 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => 36,
         OnboardingLessonId.FirstWarrenReturn => 30,
         OnboardingLessonId.FirstHunterInteraction => 20,
+
+        // ── THE BACK HALF RANKS BELOW EVERYTHING THE FIRST HOUR TEACHES. ────────────────────────
+        //
+        // Not because it matters less, but because it arrives later and must never outrank a lesson
+        // the player is in the middle of. Within the band the order is how soon each becomes true:
+        // the FORGE opens on the third item, auto-sell on a facility level, a vow on a woven skill,
+        // a specialisation deep in the tree, the stall on a week, and the valve on a whole world.
+        OnboardingLessonId.FirstAutoSell => 26,
+        OnboardingLessonId.FirstVowSworn => 24,
+        OnboardingLessonId.FirstSpecialisation => 22,
+        OnboardingLessonId.FirstTraderVisit => 16,
+        OnboardingLessonId.FirstCorruptionOffer => 14,
         _ => 0,
     };
 
@@ -361,6 +458,15 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstWarrenReturn => LessonMode.SoftGuide,
         OnboardingLessonId.FirstKeystoneChoice => LessonMode.SoftGuide,
         OnboardingLessonId.FirstRegionTravel => LessonMode.SoftGuide,
+
+        // THE BACK HALF IS SOFT, ALL OF IT. These are offers rather than instructions — a player who
+        // has held a whole region does not need a bracket round a button, and four of the six are
+        // decisions (a Vow, a discipline, a purchase, the valve) that it would be wrong to push.
+        OnboardingLessonId.FirstAutoSell => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstVowSworn => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstSpecialisation => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstTraderVisit => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstCorruptionOffer => LessonMode.SoftGuide,
 
         _ => LessonMode.HardGuide,
     };
@@ -380,6 +486,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => Activity.Traits,
         OnboardingLessonId.FirstHunterInteraction => Activity.Roster,
         OnboardingLessonId.FirstWarrenReturn => Activity.Warren,
+
+        OnboardingLessonId.FirstAutoSell => Activity.Vault,
+        OnboardingLessonId.FirstVowSworn => Activity.Build,
+        OnboardingLessonId.FirstSpecialisation => Activity.Mastery,
+        OnboardingLessonId.FirstTraderVisit => Activity.Vault,
+        OnboardingLessonId.FirstCorruptionOffer => Activity.Map,
         _ => null,
     };
 
@@ -424,6 +536,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => TourTarget.TraitCollection,
         OnboardingLessonId.FirstHunterInteraction => TourTarget.ChampionCards,
         OnboardingLessonId.FirstWarrenReturn => TourTarget.Facilities,
+
+        OnboardingLessonId.FirstAutoSell => TourTarget.VaultButtons,
+        OnboardingLessonId.FirstVowSworn => TourTarget.Vows,
+        OnboardingLessonId.FirstSpecialisation => TourTarget.Specialisations,
+        OnboardingLessonId.FirstTraderVisit => TourTarget.VaultButtons,
+        OnboardingLessonId.FirstCorruptionOffer => TourTarget.RegionChain,
         _ => null,
     };
 
@@ -451,6 +569,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => "A TRAIT HAS AWAKENED",
         OnboardingLessonId.FirstHunterInteraction => "A NEW HUNTER HAS JOINED",
         OnboardingLessonId.FirstWarrenReturn => "THE WARREN WORKED",
+
+        OnboardingLessonId.FirstAutoSell => "IT CAN SELL FOR YOU",
+        OnboardingLessonId.FirstVowSworn => "A VOW IS A RULE",
+        OnboardingLessonId.FirstSpecialisation => "CHOOSE A DISCIPLINE",
+        OnboardingLessonId.FirstTraderVisit => "SOMEBODY IS SELLING",
+        OnboardingLessonId.FirstCorruptionOffer => "THE WORLD IS YOURS",
         _ => "",
     };
 
@@ -472,6 +596,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => "CHOOSE ONE TRAIT",
         OnboardingLessonId.FirstHunterInteraction => "TRY ANOTHER HUNTER",
         OnboardingLessonId.FirstWarrenReturn => "OPEN WARREN",
+
+        OnboardingLessonId.FirstAutoSell => "TURN ON AUTO-SELL",
+        OnboardingLessonId.FirstVowSworn => "SWEAR ONE VOW",
+        OnboardingLessonId.FirstSpecialisation => "TAKE ONE SPECIALISATION",
+        OnboardingLessonId.FirstTraderVisit => "LOOK AT THE STALL",
+        OnboardingLessonId.FirstCorruptionOffer => "DEEPEN THE WORLD",
         _ => "",
     };
 
@@ -487,6 +617,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstItemEquip => "The fight only reads what is worn.",
         OnboardingLessonId.FirstGemSocket => "Your first socket is free.",
         OnboardingLessonId.FirstWarrenReturn => "It paid while you were away.",
+
+        OnboardingLessonId.FirstAutoSell => "Junk becomes materials on its own.",
+        OnboardingLessonId.FirstVowSworn => "A rule a skill keeps, and pays for.",
+        OnboardingLessonId.FirstSpecialisation => "One per Hunter. It never comes back.",
+        OnboardingLessonId.FirstTraderVisit => "New stock every week.",
+        OnboardingLessonId.FirstCorruptionOffer => "Harder and richer. You can close it.",
         _ => "",
     };
 

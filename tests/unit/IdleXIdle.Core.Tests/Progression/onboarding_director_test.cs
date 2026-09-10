@@ -578,4 +578,112 @@ public class onboarding_director_test
         Assert.Equal(OnboardingLessons.FirstRankCost, Hunter.CostOfRank(0, new ProgressionTuning()));
         Assert.Equal(OnboardingLessons.BossEvery, ExpeditionTuning.Default.BossEvery);
     }
+
+    // ── THE BACK HALF ────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The five systems the coverage pass gave a voice to, and the fact each waits on.</summary>
+    private static readonly (OnboardingLessonId Id, LessonFacts Can, LessonFacts Done)[] BackHalf =
+    {
+        (OnboardingLessonId.FirstAutoSell,
+         new LessonFacts(ItemsOwned: 9, AutoSellUnlocked: true),
+         new LessonFacts(ItemsOwned: 9, AutoSellUnlocked: true, AutoSellOn: true)),
+
+        (OnboardingLessonId.FirstVowSworn,
+         new LessonFacts(SharedSkillsEquipped: 1, VowsKnown: 2),
+         new LessonFacts(SharedSkillsEquipped: 1, VowsKnown: 2, VowsSworn: 1)),
+
+        (OnboardingLessonId.FirstSpecialisation,
+         new LessonFacts(SpecialisationReachable: true),
+         new LessonFacts(SpecialisationReachable: true, SpecialisationTaken: true)),
+
+        (OnboardingLessonId.FirstTraderVisit,
+         new LessonFacts(Gleam: 4000, TraderStocked: true),
+         new LessonFacts(Gleam: 4000, TraderStocked: true, TraderBought: 1)),
+
+        (OnboardingLessonId.FirstCorruptionOffer,
+         new LessonFacts(CanDeepenWorld: true),
+         new LessonFacts(CanDeepenWorld: true, CorruptionTier: 1)),
+    };
+
+    [Fact]
+    public void test_a_back_half_lesson_waits_for_its_system_to_exist()
+    {
+        // The back half is where a premature prompt costs the most: these systems open long after the
+        // player has learned to trust the cards, so one that cannot be obeyed poisons every card after
+        // it. On an empty account none of the five is eligible, and none of them is COMPLETE either —
+        // silence has to be honest about what has not been learned.
+        var empty = new LessonFacts();
+        foreach (var (id, _, _) in BackHalf)
+        {
+            Assert.DoesNotContain(id, OnboardingLessons.EligibleNow(empty));
+            Assert.False(OnboardingLessons.Completed(id, empty), $"{id} completes on an empty account");
+        }
+    }
+
+    [Fact]
+    public void test_a_back_half_lesson_arrives_when_it_can_be_acted_on_and_ends_on_the_deed()
+    {
+        foreach (var (id, can, done) in BackHalf)
+        {
+            Assert.Contains(id, OnboardingLessons.EligibleNow(can));
+            Assert.False(OnboardingLessons.Completed(id, can), $"{id} is complete before the deed");
+            Assert.True(OnboardingLessons.Completed(id, done), $"{id} does not complete on its own deed");
+        }
+    }
+
+    [Fact]
+    public void test_the_back_half_never_outranks_the_first_hour()
+    {
+        // A card about the trader must never win over READ THE LOG. Every one of these arrives while
+        // the player is in the middle of something older and more urgent, so the whole band ranks
+        // below the lowest first-hour lesson.
+        var firstHour = new[]
+        {
+            OnboardingLessonId.FirstFight, OnboardingLessonId.FirstChestOpen,
+            OnboardingLessonId.FirstItemEquip, OnboardingLessonId.FirstTrainingPurchase,
+            OnboardingLessonId.FirstFailureReport, OnboardingLessonId.FirstMasterySpend,
+            OnboardingLessonId.FirstRegionTravel, OnboardingLessonId.FirstKeystoneChoice,
+        };
+        var floor = firstHour.Min(OnboardingLessons.Priority);
+        foreach (var (id, _, _) in BackHalf)
+            Assert.True(OnboardingLessons.Priority(id) < floor,
+                        $"{id} ({OnboardingLessons.Priority(id)}) outranks a first-hour lesson ({floor})");
+    }
+
+    [Fact]
+    public void test_the_back_half_offers_rather_than_instructs()
+    {
+        // Four of the five are DECISIONS — a Vow, a discipline, a purchase, the valve — and the fifth
+        // is a switch. None of them is a step in a sequence the player is being walked through, so
+        // none of them takes the HardGuide's bracket-and-wait shape.
+        foreach (var (id, _, _) in BackHalf)
+            Assert.Equal(LessonMode.SoftGuide, OnboardingLessons.Mode(id));
+    }
+
+    [Fact]
+    public void test_the_back_half_says_where_it_is_and_what_it_lights()
+    {
+        // A lesson about a screen the player is not on has to name that screen, or the guide points
+        // at nothing; and it has to name a control there, or the spotlight lights the whole page.
+        foreach (var (id, _, _) in BackHalf)
+        {
+            Assert.NotNull(OnboardingLessons.Sends(id));
+            Assert.NotNull(OnboardingLessons.Target(id));
+            Assert.NotEqual("", OnboardingLessons.Title(id));
+            Assert.NotEqual("", OnboardingLessons.Action(id));
+        }
+    }
+
+    [Fact]
+    public void test_the_forge_is_never_lectured()
+    {
+        // The coverage pass deliberately did NOT add an "OPEN THE FORGE" card. The screen has four
+        // jobs and naming them all is the opening lecture this catalogue replaced; each is taught
+        // when it first matters instead. Recorded here so a later pass has to argue with it rather
+        // than rediscover it.
+        var toTheForge = OnboardingLessons.All.Where(id => OnboardingLessons.Sends(id) == Activity.Forge).ToArray();
+        Assert.Equal(new[] { OnboardingLessonId.FirstGemSocket }, toTheForge);
+        // ...and the one that does goes for a DEED, pointing at the bag the gem is in.
+        Assert.Equal(TourTarget.Bag, OnboardingLessons.Target(OnboardingLessonId.FirstGemSocket));
+    }
 }

@@ -5095,7 +5095,28 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             ReportOpenedEver: _reportOpenedEver,
             ChangedAfterFall: _changedAfterFall,
             RetriedAfterChange: _retriedAfterChange,
-            GuidanceOff: _guidanceOff);
+            GuidanceOff: _guidanceOff,
+
+            // ── THE BACK HALF (coverage pass): six systems that had no voice at all. ────────────
+            //
+            // Every one of these is asked of the object that owns the answer rather than remembered
+            // in a field of its own — the Forge's gate, the camp's facility level, the woven build's
+            // sworn list, the tree's own CanTake, the stall's stock, the world's valve. A lesson that
+            // read a copy would be a lesson that could disagree with the game.
+            AutoSellUnlocked: WarrenAutomation.AutoSellAtOrBelow(_warren) is not null,
+            AutoSellOn: _autoSellOn,
+            VowsKnown: _vowMenu.Count,
+            VowsSworn: _loadout.SwornVows.Count,
+            // THE TREE'S OWN RULE, not a threshold. CanTake already answers "points, road and the
+            // one-discipline law", so the card cannot arrive a single point early or a ring too soon.
+            SpecialisationReachable: _mastery is not null
+                                     && MasteryCatalog.Nodes.Any(n => n.Kind == MasteryKind.Specialisation
+                                                                      && _mastery.CanTake(n.Id)),
+            SpecialisationTaken: _mastery?.Affinity() is not null,
+            TraderStocked: _vault?.TraderStock.Count > 0,
+            TraderBought: _traderBought.Count,
+            CanDeepenWorld: _world.CanDeepenCorruption,
+            CorruptionTier: _world.CorruptionTier);
     }
 
     /// <summary>
