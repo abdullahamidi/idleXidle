@@ -105,6 +105,7 @@ public partial class Game1
         {
             if (!CaptureRig) return null;
             if (Environment.GetEnvironmentVariable("RH_SHOT_OPENING") is not { Length: > 0 } name) return null;
+            if (string.Equals(name, "live", StringComparison.OrdinalIgnoreCase)) return null;   // not a pose: it runs
             if (Enum.TryParse<OpeningStage>(name, true, out var stage) && OpeningScript.Running(stage)) return stage;
             throw new InvalidOperationException(
                 $"RH_SHOT_OPENING='{name}' is not a running OpeningStage. Known: "
@@ -169,6 +170,17 @@ public partial class Game1
         // THE RIG NEVER PLAYS THE OPENING. Every fixture dresses a save and photographs a screen; an
         // authored beat over it would be in every capture the project has. RH_SHOT_OPENING is the one
         // exception, and it is the whole reason the opening can be looked at — see PosedOpeningStage.
+        // RH_SHOT_OPENING=live LETS IT ACTUALLY RUN under a harness. Every other harness path either
+        // skips the opening or freezes one beat of it for the shutter — so the LIVE machine, the thing
+        // a player meets, was the one part of this with no headless validation at all. Read outside
+        // the CaptureRig branch because the boot check is a different harness with no RH_SHOT.
+        if (string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_OPENING"), "live", StringComparison.OrdinalIgnoreCase))
+        {
+            _opening.Begin();
+            _openingWas = _opening.Stage;
+            return;
+        }
+
         if (CaptureRig)
         {
             if (PosedOpeningStage is { } posed) _opening.Restore(posed);
@@ -291,6 +303,7 @@ public partial class Game1
     private void TakeOpeningInput()
     {
         if (!_opening.OwnsInput || CaptureRig) return;
+
 
         // THE WAY OUT, first and unconditionally.
         var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);

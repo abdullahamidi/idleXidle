@@ -208,4 +208,38 @@ if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; 
   exit 1
 fi
 
+# ── AND THE AUTHORED OPENING, LIVE. ────────────────────────────────────────────────────────────
+#
+# Every other harness path either skips the opening (the shutter, so it is not in 400 captures) or
+# freezes one beat of it for a photograph. Neither runs the MACHINE — the per-frame update, the
+# fight hold, the replay barrier, the screen grants and the surface — which is the part a player
+# actually meets and was the only part of this with no headless check at all. This lane starts a
+# brand-new career INSIDE the opening and soaks it for the full boot walk: the fight is held from
+# the arrival on, so a hold that deadlocked the frame or a card that threw would take the process
+# down here rather than on someone's first launch.
+OPENING="${TEMP:-/tmp}/rh_bootcheck_opening"
+mkdir -p "$OPENING"
+rm -f "$OPENING/save.json"
+
+opening_out="$(timeout 120 bash -c '
+  . tools/shellenv.sh || exit 1
+  RH_ENV=(RH_BOOTCHECK=1 RH_SHOT_OPENING=live RH_SAVE_DIR="$1")
+  dn run --project src/IdleXIdle.Game --no-build
+' _ "$(winpath "$OPENING")" 2>&1)"
+opening_rc=$?
+
+echo "$opening_out" | grep -E "BOOT OK|Unhandled|Exception" | head -3
+
+if [ $opening_rc -ne 0 ] || ! echo "$opening_out" | grep -q "BOOT OK"; then
+  echo "THE AUTHORED OPENING CANNOT BE ENTERED — a brand-new career cannot start the game." >&2
+  echo "$opening_out" | tail -20 >&2
+  exit 1
+fi
+echo "the authored opening runs live, and the frame survives it."
+
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE OPENING LANE TOUCHED THE PLAYER'S SAVE." >&2
+  exit 1
+fi
+
 echo "boot green — reads, writes, reads back what it wrote, and migrates by version."
