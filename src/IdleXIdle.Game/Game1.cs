@@ -6252,6 +6252,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // no capture can make, so it had never been photographed; the chrome fix that moved the log
         // medallion moved this toast with it, and a band nobody has looked at is a band nobody has
         // checked. Written every frame, so the fixture's own dressing cannot clear it.
+        // RH_SHOT_BREAK=<Activity>[:<0..1>] holds the NAV CHAIN'S BREAK part-played. It is nine tenths
+        // of a second on a frame that happens once per screen per career, so it had no way of being
+        // looked at; re-posed every frame here, so the fixture's own dressing cannot outrun it.
+        if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_BREAK") is { Length: > 0 } breakSpec)
+        {
+            var bits = breakSpec.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var who = Enum.TryParse<Activity>(bits[0], true, out var ba)
+                ? ba
+                : throw new InvalidOperationException(
+                    $"RH_SHOT_BREAK='{bits[0]}' is not an Activity. Known: " + string.Join(", ", Enum.GetNames<Activity>()) + ".");
+            var part = bits.Length > 1 && float.TryParse(bits[1], System.Globalization.NumberStyles.Float,
+                                                         System.Globalization.CultureInfo.InvariantCulture, out var bp) ? bp : 0.5f;
+            UiMotion.PoseFlash(NavBreakKey(who), part, NavChainSeconds);
+        }
+
         if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_LOCKED") is { Length: > 0 } lockedName)
         {
             var locked = Enum.TryParse<Activity>(lockedName, true, out var la)
@@ -9801,41 +9816,28 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else
                 _ui.Diamond(_batch, new Rectangle(iconBox.X + 4, iconBox.Y + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
 
-            // ── A LOCKED TILE IS BOUND, and the binding BREAKS when the screen opens. ────────────
+            // ── A LOCKED TILE IS CHAINED SHUT, and the chain BREAKS when the screen opens. ───────
             //
-            // The chain is the existing fx_bind_chain strip a sworn Vow already uses — a ring that
-            // contracts inward over eight frames — so a lock is the same idiom as a promise being
-            // made, and a reveal plays it in REVERSE: the ring springs open as the tile arrives. It is
-            // drawn on the ICON BOX rather than the tile because the art is 1:1 and the icon box is
-            // square; stretched to a 180x98 tile every link would be an ellipse.
+            // IT USED TO BE A RING AROUND THE ICON — the fx_bind_chain strip a sworn Vow uses, drawn on
+            // the square icon box because the art is 1:1 and the tile is not. Rejected outright at
+            // review: a circle on a 180x98 rectangle reads as a decoration ON the icon, not as a
+            // restraint on the TILE, and the thing the player is being refused is the tile.
             //
-            // The padlock goes INSIDE the icon box's lower-right quadrant, never the top-left corner:
-            // at 125 % and 150 % the band above the icon is 8 px and that corner belongs to the NEW
-            // chip, which yields there already.
+            // So the tile is bound the way a door is: one run of real chain straight across it, link by
+            // link, at the icon's own height. The run is BUILT rather than stretched — two forged links,
+            // one wide and one upright, alternating and overlapping — so it is a chain at every UI
+            // density instead of an ellipse at two of them, and it never needs a seam.
             //
             // THE BREAK IS DRAWN ON AN UNLOCKED TILE, which is the only kind of tile it can happen to.
             // Armed by Reveal.Newly, and Reveal.Newly fires on the frame the gate OPENS — so a break
             // guarded by `if (!unlocked)` was a flourish that could never once play: by the time it was
-            // armed the branch that reads it was already closed. It draws whenever the tile is bound OR
-            // the pulse is still running, and only the padlock is locked-only.
-            //
-            // The strip closes over its eight frames (frame 0 is the open ring, frame 7 the shut one —
-            // the sworn Vow's own use of it in LoadoutScreen reads the same way), so BOUND holds it at
-            // the end and the break walks it BACKWARDS to the open ring while fading out. It used to run
-            // 0 -> 7 on the break, which is the closing animation played a second time.
+            // armed the branch that reads it was already closed.
             var breaking = UiMotion.Pulse(NavBreakKey(activity));
             if (!unlocked || breaking > 0f)
             {
-                var bound = breaking > 0f ? UiMotion.Smooth(breaking) : 1f;   // 1 = shut, 0 = sprung open
-                _ui.AnimSprite(_batch, "fx_bind_chain_strip8_512", iconBox,
-                               bound * NavChainSeconds, 8f, loop: false,
-                               NavGold * (0.55f * (unlocked ? bound : 1f)));
-            }
-            if (!unlocked)
-            {
-                var lockPx = Math.Max(10, iconPx / 2);
-                _ui.LockGlyph(_batch, new Rectangle(iconBox.Right - lockPx, iconBox.Bottom - lockPx, lockPx, lockPx),
-                                UiInk.Secondary * 0.85f);
+                // 0 while bound, 1 at the end of the break — how far the two halves have parted.
+                var apart = breaking > 0f ? 1f - UiMotion.Smooth(breaking) : 0f;
+                DrawNavChain(r, iconBox.Center.Y, iconPx, apart, unlocked);
             }
             // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
             // The house Secondary ink for an inactive label — the private lilac at 90 % sat under the
@@ -10035,8 +10037,75 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The one-shot armed when a screen opens — the tile's chain springs off over its life.</summary>
     private static int NavBreakKey(Activity a) => HashCode.Combine("nav.break", (int)a);
 
-    /// <summary>How long the chain strip runs. Its eight frames close inward; a reveal plays it back.</summary>
-    private const float NavChainSeconds = 0.55f;
+    /// <summary>
+    /// One run of chain across a rail tile, and the one-shot that tears it in half.
+    /// </summary>
+    /// <param name="tile">The whole 180x98 tile — the chain spans it, because the tile is what is bound.</param>
+    /// <param name="centreY">Where the run lies, in canvas space: the icon's own centre line.</param>
+    /// <param name="iconPx">The icon's size at this profile, which the links are sized from.</param>
+    /// <param name="apart">0 while bound, 1 at the end of the break.</param>
+    /// <param name="broken">Is this a break in progress? Then the padlock falls instead of hanging.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>Built, never stretched.</b> Two forged links alternate — a wide one lying flat, an upright one
+    /// turned edge-on — each overlapping the last, so the run is a chain at any width and at any UI
+    /// scale. A single wide texture stretched to the tile would be one long ellipse at 100 % and a
+    /// different long ellipse at 150 %.
+    /// </para>
+    /// <para>
+    /// <b>The break is one shot and it is a break.</b> The run parts at the middle and the two halves
+    /// are dragged out past the tile's edges, fading as they go, while the padlock drops out from under
+    /// them. Links whose centre has left the tile are simply not drawn, so nothing is ever painted over
+    /// the neighbouring tile or out into the page. Reduced Motion holds the bound frame and fades it —
+    /// §32 allows a fade and nothing else, and a chain that vanishes with no event at all would leave
+    /// the reveal unexplained.
+    /// </para>
+    /// </remarks>
+    private void DrawNavChain(Rectangle tile, int centreY, int iconPx, float apart, bool broken)
+    {
+        var fade = 1f - apart;
+        if (fade <= 0.01f) return;
+        if (UiMotion.Reduced) apart = 0f;   // the hold frame: it stays put and fades out
+
+        var h = Math.Max(8, iconPx * 5 / 8);
+        var wide = Math.Max(8, h * 4 / 3);
+        var tall = Math.Max(5, h * 2 / 3);
+        var step = Math.Max(4, wide * 3 / 5);
+        var shove = (int)(apart * tile.Width * 0.62f);
+        // COLD AND UNDER-LIT. The chain is the reason the tile is out of reach, and the brightest
+        // thing on a locked tile should never be the restraint.
+        var ink = new Color(0xC4, 0xC6, 0xD0) * (0.68f * fade);
+
+        var index = 0;
+        for (var x = tile.X + step / 2; x < tile.Right; x += step, index++)
+        {
+            var flat = index % 2 == 0;
+            var w = flat ? wide : tall;
+            var cx = x + (x < tile.Center.X ? -shove : shove);
+            if (cx < tile.X || cx > tile.Right) continue;   // gone off the tile: not drawn, never clipped
+            var box = new Rectangle(cx - w / 2, centreY - h / 2, w, h);
+            if (!_ui.Icon(_batch, flat ? "ui_chain_link_wide" : "ui_chain_link_tall", box, ink))
+                _ui.Fill(_batch, new Rectangle(box.X, centreY - Math.Max(2, h / 6), w, Math.Max(3, h / 3)), ink);
+        }
+
+        // THE PADLOCK HANGS FROM THE RUN, at the tile's own centre, and falls out of it when the chain
+        // parts. It was in the icon box's lower-right quadrant, which is where a badge goes.
+        var lockPx = Math.Max(10, iconPx / 2);
+        var drop = broken ? (int)(apart * apart * lockPx * 3f) : 0;
+        _ui.LockGlyph(_batch, new Rectangle(tile.Center.X - lockPx / 2, centreY - lockPx / 3 + drop, lockPx, lockPx),
+                      UiInk.Secondary * (0.95f * fade));
+    }
+
+    /// <summary>
+    /// How long the chain's break runs, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// It was 0.55, which was the eight-frame strip's length — at eight frames a second that reached
+    /// frame four, so the strip's last three frames had never once been drawn. There is no strip now
+    /// and this is simply how long the two halves take to leave: long enough to be seen as an event
+    /// beside the notice that says what opened, short enough not to hold up the rail.
+    /// </remarks>
+    private const float NavChainSeconds = 0.9f;
 
     private List<int> NavSlots()
     {

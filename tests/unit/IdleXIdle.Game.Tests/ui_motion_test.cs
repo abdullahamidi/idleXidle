@@ -98,4 +98,35 @@ public class UiMotionEaseTests
         Assert.InRange(UiMotion.Transition, 0.150f, 0.220f);
         Assert.InRange(UiMotion.Reward, 0.250f, 0.450f);
     }
+
+    /// <summary>
+    /// A ONE-SHOT CAN BE HELD PART-PLAYED, or the frames in the middle of it are never looked at.
+    /// </summary>
+    /// <remarks>
+    /// The rail's chain break was 0.55 s of an eight-frame strip running at eight frames a second, so
+    /// it reached frame four and the last three frames had never once been drawn — for months, in a
+    /// shipped build, with nothing able to notice. PoseFlash is the answer to that class of fault:
+    /// the rig re-poses the instant every frame and the shutter finds it wherever it is asked for.
+    /// </remarks>
+    [Fact]
+    public void test_a_one_shot_can_be_posed_at_any_point_in_its_life()
+    {
+        const int key = 90210;
+        const float len = 0.9f;
+
+        UiMotion.PoseFlash(key, 0f, len);
+        Assert.Equal(1f, UiMotion.Pulse(key), 3);        // the frame it fired
+
+        UiMotion.PoseFlash(key, 1f, len);
+        Assert.Equal(0f, UiMotion.Pulse(key), 3);        // the frame it ends
+
+        UiMotion.PoseFlash(key, 0.25f, len);
+        Assert.Equal(0.75f, UiMotion.Pulse(key), 3);
+
+        // Out of range is clamped rather than throwing: a rig dial takes whatever a developer types.
+        UiMotion.PoseFlash(key, 4f, len);
+        Assert.Equal(0f, UiMotion.Pulse(key), 3);
+        UiMotion.PoseFlash(key, -4f, len);
+        Assert.Equal(1f, UiMotion.Pulse(key), 3);
+    }
 }

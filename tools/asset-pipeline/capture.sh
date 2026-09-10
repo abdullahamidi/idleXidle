@@ -233,6 +233,12 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #   RH_SHOT_OPENING=ForceChestOpen  bash tools/asset-pipeline/capture.sh vaultfirst out.png
 #
 # RH_SHOT_BEAT=<n> picks which PROLOGUE beat, for RH_SHOT_OPENING=Prologue (0 .. the last).
+# RH_SHOT_BREAK=<Activity>[:<0..1>] holds the rail tile's CHAIN BREAK part-played — the nine-tenths
+# of a second in which a screen's chain tears in half and its padlock drops. It fires once per screen
+# per career, on a frame nothing can schedule:
+#
+#   RH_SHOT_BREAK=Vault:0.45 bash tools/asset-pipeline/capture.sh fight build/shots/break.png
+[ -n "${RH_SHOT_BREAK:-}" ] && RH_ENV+=(RH_SHOT_BREAK="$RH_SHOT_BREAK")
 [ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
 [ -n "${RH_SHOT_BEAT:-}" ] && RH_ENV+=(RH_SHOT_BEAT="$RH_SHOT_BEAT")
 # RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson

@@ -109,6 +109,21 @@ public static class UiMotion
     public static float Pulse(int key)
         => Pulses.TryGetValue(key, out var p) && p.Length > 0f ? Math.Clamp(p.Life / p.Length, 0f, 1f) : 0f;
 
+    /// <summary>
+    /// RIG ONLY: hold a one-shot PART-PLAYED, so a single frame of it can be photographed.
+    /// </summary>
+    /// <param name="key">The pulse's key.</param>
+    /// <param name="part">0 = the frame it fired, 1 = the frame it ends.</param>
+    /// <param name="seconds">The one-shot's own length.</param>
+    /// <remarks>
+    /// A one-shot exists for a fraction of a second on a frame nobody can schedule, which is exactly
+    /// the kind of state this project has repeatedly shipped wrong because nothing could pose it. The
+    /// capture rig re-poses it every frame, so the shutter finds the same instant however long the
+    /// fixture takes to get there.
+    /// </remarks>
+    public static void PoseFlash(int key, float part, float seconds)
+        => Pulses[key] = (seconds * (1f - Math.Clamp(part, 0f, 1f)), seconds);
+
     /// <summary>True while a pulse is running — for a screen that wants "just changed" as a yes/no.</summary>
     public static bool Pulsing(int key) => Pulses.ContainsKey(key);
 
