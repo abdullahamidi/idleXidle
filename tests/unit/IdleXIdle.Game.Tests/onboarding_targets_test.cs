@@ -137,13 +137,49 @@ public class OnboardingTargetTests
             Assert.NotEqual(LessonMode.Observe, OnboardingLessons.Mode(id));
         }
 
-        // THE FIRST OF THEM POINTS AT A REAL DOOR. IT FELL / READ THE LOG is a HardGuide, and a
-        // HardGuide with no target lights nothing at all — which is what it did until now.
+        // ...AND ALL THREE POINT AT SOMETHING, because the copy now rides beside a light and a light
+        // needs a hole. IT FELL marks the door to the report; MAKE ONE CHANGE marks the RAIL, since a
+        // change is a rank, a worn piece, a node or the weave and those live on four different
+        // screens; GO AGAIN marks the champion, who is the one doing it.
         Assert.Equal(TourTarget.LogButton, OnboardingLessons.Target(OnboardingLessonId.FirstFailureReport));
+        Assert.Equal(TourTarget.NavRail, OnboardingLessons.Target(OnboardingLessonId.FirstPostFailureChange));
+        Assert.Equal(TourTarget.Champion, OnboardingLessons.Target(OnboardingLessonId.FirstRetry));
+    }
 
-        // The other two ask for a change and a descent; neither is one control, so neither marks one.
-        Assert.Null(OnboardingLessons.Target(OnboardingLessonId.FirstPostFailureChange));
-        Assert.Null(OnboardingLessons.Target(OnboardingLessonId.FirstRetry));
+    [Fact]
+    public void test_every_lesson_names_something_to_light()
+    {
+        // THE PLAYTEST THIS PINS. "The message box at the top is not read and not taken seriously —
+        // act as if it does not exist." So the copy moved beside a spotlight, and a spotlight needs a
+        // hole: a lesson with no Target and no other screen to send the player to would fall back to
+        // the very slot the playtest said nobody reads. Every lesson must name one or the other.
+        foreach (var id in OnboardingLessons.All)
+        {
+            var lights = OnboardingLessons.Target(id) is not null || OnboardingLessons.Sends(id) is not null;
+            Assert.True(lights, $"{id} has nothing to light, so its words would go back in the toast slot");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_observe_beats_light_a_real_part_of_the_fight(int percent)
+    {
+        // They ask for nothing, but they are ABOUT something, and a remark beside a lit champion is
+        // read where a toast is not. All four live on the HUNT, so the HUNT must answer for all four.
+        UiMetrics.Apply(percent);
+        foreach (var id in OnboardingLessons.All)
+        {
+            if (OnboardingLessons.Mode(id) != LessonMode.Observe) continue;
+            Assert.Equal("", OnboardingLessons.Action(id));      // still asks for nothing
+            var target = OnboardingLessons.Target(id);
+            Assert.NotNull(target);
+            var lit = HuntScreen.Spotlights(target!.Value);
+            Assert.True(lit.Length > 0, $"{id}: the HUNT does not answer for {target} at {percent}%");
+            foreach (var r in lit)
+                Assert.True(r.Width > 0 && r.Height > 0 && !(r.Width >= 1900 && r.Height >= 1060),
+                            $"{id}: {target} is empty or the whole canvas at {percent}% ({r})");
+        }
+        UiMetrics.Apply(100);
     }
 
     [Theory]

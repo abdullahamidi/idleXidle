@@ -3835,7 +3835,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Draw so the click is swallowed before any screen hit-tests it.
         if (!_showSettings && !_showHelp && !_swallowInput && _clicked)
         {
-            if (SlotShowing() is { } slot)
+            // THE COACH'S CARD FIRST, because it is drawn over everything else and its close is the
+            // only click it owns. The card is NOT modal: a click anywhere else — including the lit
+            // control it is pointing at — falls straight through to the screen, which is the whole
+            // difference between this and a tour.
+            if (_coach.Showing is { } lit && CoachLightsIt(lit) && _coachCard != Rectangle.Empty
+                && HintCloseRect(_coachCard).Contains(ChromeMouse))
+            {
+                CloseLesson(lit);
+                _swallowInput = true;
+            }
+            else if (SlotShowing() is { } slot)
             {
                 var rect = HintSlotRect(slot);
                 if (HintCloseRect(rect).Contains(ChromeMouse)) { CloseSlot(slot); _swallowInput = true; }
@@ -4825,7 +4835,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var screen = ScreenActivity();
         // THE ONE LESSON THE DIRECTOR CHOSE, if the deed it asks for happens on this screen. The
         // director has already decided there is exactly one; this only asks whether it belongs here.
-        if (_coach.Showing is { } lesson && OnboardingLessons.Sends(lesson) == screen)
+        if (_coach.Showing is { } lesson && OnboardingLessons.Sends(lesson) == screen && !CoachLightsIt(lesson))
             return new SlotContent(SlotKind.Lesson, lesson.ToString(),
                                    OnboardingLessons.Title(lesson), LessonLine(lesson));
         if (Onboarding.HintFor(screen, HintFactsNow()) is { } hint && !_dismissedHints.Contains(hint.Key))
@@ -5090,6 +5100,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
         if (_coach.Showing is not { } step) return null;
+        // THE SPOTLIGHT SAYS IT INSTEAD, wherever it can. The toast slot is the place the playtest
+        // said is not read; a lesson that has something to light carries its own words beside the
+        // light. This card is what is left for the few that light nothing.
+        if (CoachLightsIt(step)) return null;
         // A lesson about another screen is that screen's business (and its tile's dot), not the fight's.
         return OnboardingLessons.Sends(step) is null ? step : null;
     }
@@ -5615,33 +5629,140 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawCoachSpotlight()
     {
-        if (_coach.Showing is not { } id || _tourActive || _showTitle || _showSettings || _showHelp) return;
-        // ...AND NEVER OVER THE OPEN REPORT. READ THE LOG deliberately survives the log being opened
-        // (OnboardingDirector.BelongsToTheMoment) so the card is not yanked away mid-click, but the
-        // report is a full-screen surface: brackets drawn on top of it would frame a button that is
-        // no longer visible underneath.
-        if (_expedition.LogOpen) return;
-        if (OnboardingLessons.Mode(id) == LessonMode.Observe) return;
-        // ...AND NEVER WITHOUT ITS CARD. A lesson whose card lives on the fight yields the toast slot
-        // to the welcome toast and to a notice — a queue, not a stack — and brackets with no card
-        // beside them are a light on an unlabelled button. One rule, asked once: if the card is not
-        // being drawn this frame, neither is its light. (READ THE LOG is the case that made this
-        // visible: it is the first fall-loop lesson to have a target at all, and a returning player
-        // who has fallen meets it under seven seconds of welcome toast.)
-        if (OnboardingLessons.Sends(id) is null && HuntLessonShowing() != id) return;
-        // A NULL Sends MEANS THE FIGHT ITSELF, which is the HUNT. The fall trio keeps a null Sends —
-        // that is what makes HuntLessonShowing draw their cards — so resolving their lights needs this
-        // fallback rather than a Sends that would delete the very card being bracketed.
-        if ((OnboardingLessons.Sends(id) ?? Activity.Hunt) != ScreenActivity()) return;
-        if (OnboardingLessons.Target(id) is not { } target) return;
+        if (_coach.Showing is not { } id || !CoachLightsIt(id)) return;
+        var holes = CoachHoles(id);
+        if (holes.Length == 0) return;   // nothing to light: the card path says it instead
 
-        foreach (var hole in TourSpotlights(ScreenActivity(), target))
+        // ── DARKEN EVERYTHING, LIGHT THE ONE THING. ─────────────────────────────────────────────
+        //
+        // Playtest 2026-09-10: "there are places you mark with a yellow box but they get lost in the
+        // picture — the method where we darken the screen and light only the region we want is more
+        // effective." It is the tour's own method, and it was withheld here because a lesson can wait
+        // indefinitely and a permanently dark screen is intolerable in a game you leave running. So it
+        // BLAZES rather than holds: full scrim on arrival, fading out after CoachBlazeSeconds and
+        // leaving the brackets and the card. Re-armed whenever the lesson changes or the player walks
+        // onto a different screen — which is exactly when there is something new to look at.
+        var blaze = Math.Clamp(_coachBlaze / CoachBlazeFade, 0f, 1f);
+        if (blaze > 0f)
+            DrawScrimAround(holes, CoachScrim * (UiMotion.Reduced ? 1f : UiMotion.Smooth(blaze)));
+
+        // The brackets stay, and against the scrim they finally read. A viewfinder, never an outline:
+        // an outline is what this game puts round a SELECTED control.
+        foreach (var hole in holes) TourBrackets(hole);
+
+        DrawCoachCard(id, holes);
+    }
+
+    /// <summary>How long the scrim holds at full before it fades away, in seconds.</summary>
+    private const float CoachBlazeSeconds = 6f;
+
+    /// <summary>The fade's own length — the tail of the blaze, eased out.</summary>
+    private const float CoachBlazeFade = 0.8f;
+
+    /// <summary>The coach's scrim. Lighter than the tour's, because nothing here is modal.</summary>
+    private static readonly Color CoachScrim = new Color(0x05, 0x03, 0x0A) * 0.66f;
+
+    /// <summary>Seconds of scrim left on the lesson being lit.</summary>
+    private float _coachBlaze;
+
+    /// <summary>What the blaze is armed for — the lesson, and the screen it was armed on.</summary>
+    private OnboardingLessonId? _blazeFor;
+    private Activity _blazeOn = Activity.Hunt;
+
+    /// <summary>Where the coach's copy card is this frame, for the click that closes it.</summary>
+    private Rectangle _coachCard = Rectangle.Empty;
+
+    /// <summary>
+    /// Re-arm the blaze when there is something new to look at. Called once a frame.
+    /// </summary>
+    /// <remarks>
+    /// Two things count as new: a different lesson, and the same lesson seen from a different screen.
+    /// Walking onto TRAINING while TRAIN ANY STAT ONCE is up moves the light off a rail tile and onto
+    /// the rows themselves, which is worth blazing for a second time.
+    /// </remarks>
+    private void TickCoachBlaze(float dt)
+    {
+        var here = ScreenActivity();
+        if (_coach.Showing != _blazeFor || here != _blazeOn)
         {
-            // The whole-canvas fallback means the screen could not resolve this target — better to
-            // mark nothing than to bracket the entire page and point at everything at once.
-            if (hole.Width >= 1900 && hole.Height >= 1060) continue;
-            TourBrackets(hole);
+            _blazeFor = _coach.Showing;
+            _blazeOn = here;
+            _coachBlaze = _coach.Showing is null ? 0f : CoachBlazeSeconds;
+            return;
         }
+        if (_coachBlaze > 0f) _coachBlaze = MathF.Max(0f, _coachBlaze - dt);
+    }
+
+    /// <summary>
+    /// Is this lesson's copy carried by the SPOTLIGHT rather than by a card in the toast slot?
+    /// </summary>
+    /// <remarks>
+    /// Deliberately geometry-free. <see cref="SlotShowing"/> and <see cref="HuntLessonShowing"/> ask
+    /// this to decide whether to draw the lesson themselves, and they are called from the page's own
+    /// lane arithmetic — resolving a rectangle here would make the lane depend on a rectangle that
+    /// depends on the lane. It asks only what the catalogue says and which screen is on top.
+    /// </remarks>
+    private bool CoachLightsIt(OnboardingLessonId id)
+    {
+        if (_tourActive || _showTitle || _showSettings || _showHelp || WelcomeUp || _expedition.LogOpen) return false;
+        if (_forge.RevealActive) return false;
+        if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
+            return NavSlots().Contains(Array.IndexOf(NavActivity, sends));   // the tile must be on the rail
+        return OnboardingLessons.Target(id) is not null;
+    }
+
+    /// <summary>What the lesson lights on the screen the player is actually looking at.</summary>
+    /// <remarks>
+    /// A lesson about ANOTHER screen lights that screen's rail tile — the only part of it on this page,
+    /// and the thing that has to be pressed to get there. A lesson about this one lights its own
+    /// control. The whole-canvas answer means the screen does not know the target: better to light
+    /// nothing than to darken the page and cut a hole the size of the page.
+    /// </remarks>
+    private Rectangle[] CoachHoles(OnboardingLessonId id)
+    {
+        if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
+        {
+            var slot = NavSlots().IndexOf(Array.IndexOf(NavActivity, sends));
+            return slot >= 0 ? new[] { NavHexRect(slot) } : Array.Empty<Rectangle>();
+        }
+        if (OnboardingLessons.Target(id) is not { } target) return Array.Empty<Rectangle>();
+        var own = TourSpotlights(ScreenActivity(), target);
+        return own.Any(h => h.Width >= 1900 && h.Height >= 1060) ? Array.Empty<Rectangle>() : own;
+    }
+
+    /// <summary>
+    /// The lesson's words, beside the light rather than in the slot nobody reads.
+    /// </summary>
+    /// <remarks>
+    /// The tour's plate and the tour's placement (<see cref="TourCardRect"/> — below the hole, then
+    /// right, then left, then above), because a card under the thing it names reads as a label. It
+    /// carries the same close button the slot card did, and closing it means the same thing: this one
+    /// lesson goes quiet for the session, and no fact is touched.
+    /// </remarks>
+    private void DrawCoachCard(OnboardingLessonId id, Rectangle[] holes)
+    {
+        var pad = UiMetrics.Space(20);
+        var width = Math.Min(UiMetrics.Control(TourCardWidth), UiKit.Page.Width / 2);
+        var body = _ui.WrapBig(LessonLine(id), width - pad * 2 - CardCloseLane, UiTypography.Body);
+        var height = pad + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4)
+                     + Math.Max(1, body.Count) * UiTypography.Pitch(UiTypography.Body) + pad;
+
+        // Off the chrome row it is not pointing at, and off the fight's skill dock.
+        var avoid = new List<Rectangle> { new(NavRailWidth, 0, 1920 - NavRailWidth, ChromeRowBottom + UiMetrics.Space(8)) };
+        if (ScreenActivity() == Activity.Hunt) avoid.Add(HuntScreen.DockRect);
+        _coachCard = TourCardRect(holes, avoid, width, height);
+
+        _ui.Fill(_batch, _coachCard, SlotGround);
+        _ui.Plate(_batch, _coachCard, UiInk.Accent);
+        _ui.TextBig(_batch, OnboardingLessons.Title(id), _coachCard.X + pad, _coachCard.Y + pad,
+                    UiInk.Accent, UiTypography.Headline);
+        var y = _coachCard.Y + pad + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
+        foreach (var line in body)
+        {
+            _ui.TextBig(_batch, line, _coachCard.X + pad, y, UiInk.Primary, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
+        }
+        _ui.CloseButton(_batch, HintCloseRect(_coachCard), ChromeMouse, false);
     }
 
     /// <summary>Darken the whole canvas except the given holes.</summary>
@@ -6056,6 +6177,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         WatchTheFallLoop();
         RaiseSignatureBeat();
+        TickCoachBlaze((float)gameTime.ElapsedGameTime.TotalSeconds);
         _coach.Update((float)gameTime.ElapsedGameTime.TotalSeconds, LessonFactsNow(),
                       new OnboardingDirector.Busy(
                           RewardUp: _forge.RevealActive || WelcomeUp,

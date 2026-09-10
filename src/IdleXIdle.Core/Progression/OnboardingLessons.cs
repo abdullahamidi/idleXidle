@@ -391,10 +391,26 @@ public static class OnboardingLessons
     /// </remarks>
     public static TourTarget? Target(OnboardingLessonId id) => id switch
     {
-        // THE ONE FALL-LOOP LESSON WITH A CONTROL. Its Sends stays null — the fight itself is where it
-        // belongs, and Game1's HuntLessonShowing draws the card only for a null Sends — so the host
-        // reads a null Sends as "the HUNT" when it resolves this light.
+        // ── EVERY LESSON NAMES SOMETHING TO LIGHT. ──────────────────────────────────────────────
+        //
+        // Playtest 2026-09-10: "the message box at the top does not attract attention, is not read and
+        // is not taken seriously — act as if it does not exist, or do not put important things there."
+        // So nothing important lives there any more: the host darkens the screen and cuts a hole
+        // around what the lesson is about, and the copy rides beside the hole. That only works if
+        // there is a hole, so the four OBSERVE beats name their subject too — they ask for nothing,
+        // but they are ABOUT something, and a remark with a light is read where a toast is not.
+        OnboardingLessonId.FirstFight => TourTarget.Champion,
+        OnboardingLessonId.SignatureSeen => TourTarget.Skills,
+        OnboardingLessonId.FirstBoss => TourTarget.Enemies,
+        OnboardingLessonId.FirstRegionConquest => TourTarget.Enemies,
+
+        // THE FALL TRIO keeps its null Sends — the fight itself is where it belongs, and the host
+        // reads a null Sends as "the HUNT" when it resolves these lights.
         OnboardingLessonId.FirstFailureReport => TourTarget.LogButton,
+        // MAKE ONE CHANGE is the one instruction that names no single control: a change is a rank, a
+        // worn piece, a node or the weave, on four different screens. The rail is where all four are.
+        OnboardingLessonId.FirstPostFailureChange => TourTarget.NavRail,
+        OnboardingLessonId.FirstRetry => TourTarget.Champion,
         OnboardingLessonId.FirstTrainingPurchase => TourTarget.TrainingRows,
         OnboardingLessonId.FirstChestOpen => TourTarget.ChestCards,
         OnboardingLessonId.FirstItemEquip => TourTarget.Inventory,
