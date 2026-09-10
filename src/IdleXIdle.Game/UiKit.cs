@@ -921,6 +921,26 @@ public sealed class UiKit
         else Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk);
     }
 
+    /// <summary>
+    /// A full-canvas background drawn SLIGHTLY OVERSIZE and panned — a slow camera over a still.
+    /// </summary>
+    /// <param name="zoom">How much bigger than the canvas the still is drawn, 1.0 being exact.</param>
+    /// <param name="panY">Where the oversize is spent vertically: 0 shows the top, 1 the bottom.</param>
+    /// <remarks>
+    /// The cinematic's only camera. There is no parallax layer to move here — these are single stills —
+    /// so the motion is the frame drifting across one, which is what a slow push on a matte painting
+    /// is. Reduced Motion holds it at a fixed frame by passing a constant pan; the still is unchanged.
+    /// </remarks>
+    public void BackgroundPanned(SpriteBatch b, string key, float zoom, float panY, Color tint)
+    {
+        if (Assets.Get(key) is not { } bg) { Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk); return; }
+        var w = (int)(1920 * Math.Max(1f, zoom));
+        var h = (int)(1080 * Math.Max(1f, zoom));
+        var r = new Rectangle(-(w - 1920) / 2, -(int)((h - 1080) * Math.Clamp(panY, 0f, 1f)), w, h);
+        UiRasterLedger.Note(key, bg.Width, bg.Height, w, h, "UiKit.BackgroundPanned");
+        b.Draw(bg, r, tint);
+    }
+
     /// <summary>A translucent scrim over the whole screen — used to dim a reused background.</summary>
     /// <remarks>Sized to the full 1920×1080 physical canvas: at scale-1 (settings modal) it fills exactly, and
     /// at scale-4 (a batch-B screen dimming its scene) the oversize is a harmless uniform overdraw, clipped.</remarks>

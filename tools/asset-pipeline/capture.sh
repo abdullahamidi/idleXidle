@@ -223,6 +223,18 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # RH_SHOT_BOSSCALL=1 holds the BOSS INCOMING announcement up on any fight fixture — a second and a
 # half of the break before a boss wave, on a timer no capture could otherwise reach.
 [ -n "${RH_SHOT_BOSSCALL:-}" ] && RH_ENV+=(RH_SHOT_BOSSCALL="$RH_SHOT_BOSSCALL")
+# RH_SHOT_OPENING=<OpeningStage> poses one beat of the AUTHORED OPENING over whatever fixture the mode
+# dressed, and FREEZES the cursor there so a gate the fixture already satisfies cannot advance it
+# before the shutter. The rig skips the opening entirely without this, which is correct for every
+# other capture in the project and is exactly why the opening needed a dial of its own — a state no
+# capture can pose has never been looked at. Stage names come from OpeningScript.OpeningStage:
+#
+#   RH_SHOT_OPENING=IntroduceHunter bash tools/asset-pipeline/capture.sh fight build/shots/o1.png
+#   RH_SHOT_OPENING=ForceChestOpen  bash tools/asset-pipeline/capture.sh vaultfirst out.png
+#
+# RH_SHOT_BEAT=<n> picks which PROLOGUE beat, for RH_SHOT_OPENING=Prologue (0 .. the last).
+[ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
+[ -n "${RH_SHOT_BEAT:-}" ] && RH_ENV+=(RH_SHOT_BEAT="$RH_SHOT_BEAT")
 # RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson
 # (eligible / shown / completed / muted / skipped) and one milestone row, ftue_loop_lived — did this
 # player open their first failure report, change something, and go back down. There is no analytics

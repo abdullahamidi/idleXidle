@@ -1,0 +1,625 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
+using IdleXIdle.Core.Economy;
+using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Progression;
+
+namespace IdleXIdle.Game;
+
+/// <summary>
+/// THE AUTHORED OPENING, AS THE HOST PLAYS IT: the facts it reads, the holds it applies, the input it
+/// takes, and the one surface it draws.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="OpeningScript"/> is the writing and <see cref="OpeningDirector"/> is the cursor; both are
+/// testable without a graphics device and neither can touch the game. This half is the part that can:
+/// it gathers the frame's facts, hands them to the cursor, and then obeys whatever the cursor says —
+/// stop the fight, park the replay a millisecond short of a beat, open a screen ahead of its unlock,
+/// narrow the pointer to one production rectangle.
+/// </para>
+/// <para>
+/// It is a separate file rather than another thousand lines of <c>Game1.cs</c> because the opening is a
+/// mode: while it runs, several of this class's ordinary rules are suspended, and the suspensions
+/// should be readable in one place instead of scattered through a nine-thousand-line frame.
+/// </para>
+/// </remarks>
+public partial class Game1
+{
+    // ── STATE ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>How many wave rewards this career has been paid, ever. The FIRST one is a lesson.</summary>
+    /// <remarks>
+    /// Counted rather than inferred from the purse: gleam arrives from the Warren, from offline time
+    /// and from a chest as well as from a wave, and "the pile went up" is a different fact from "your
+    /// Hunter cleared something and was paid for it", which is the one the beat is about.
+    /// </remarks>
+    private int _rewardsCredited;
+
+    /// <summary>Seconds left of the arrival's held tableau.</summary>
+    private float _arrivalDwell;
+
+    /// <summary>How long the world stands still on arrival before the first word is said, in seconds.</summary>
+    /// <remarks>
+    /// The champion is on the stage and nothing is happening to it. Long enough to be a shot and short
+    /// enough that a returning player does not read it as a hang; the fight behind it is frozen, so
+    /// nothing is lost to it and nothing accrues during it.
+    /// </remarks>
+    private const float ArrivalDwellSeconds = 1.7f;
+
+    /// <summary>The stage the host has already run the entry effects for.</summary>
+    private OpeningStage _openingWas = OpeningStage.NotStarted;
+
+    /// <summary>Has the illustrated prologue been played (or skipped) for this career?</summary>
+    private bool _prologueSeen;
+
+    /// <summary>Which prologue beat is on screen, and how long it has been there.</summary>
+    private int _prologueBeat;
+    private float _prologueClock;
+
+    /// <summary>Has the one-time welcome gift already come from the tutorial boss?</summary>
+    private bool _welcomeGiftGranted;
+
+    /// <summary>Contextual tutorials finished by name — carried across a save so a later build can read it.</summary>
+    private readonly HashSet<string> _tutorialsDone = new(StringComparer.Ordinal);
+
+    /// <summary>The opening's card, its button, and the prologue's two — hit-tested next frame.</summary>
+    private Rectangle _openingCard;
+    private Rectangle _openingButton;
+    private Rectangle _prologueNext;
+    private Rectangle _prologueSkip;
+
+    /// <summary>Seconds of full scrim left on a LIVE beat, which cannot hold one indefinitely.</summary>
+    private float _openingBlaze;
+
+    /// <summary>How long a live beat's scrim holds before it fades off the running fight.</summary>
+    private const float OpeningBlazeSeconds = 3.2f;
+
+    /// <summary>The fade's own length — the tail of the blaze, eased out.</summary>
+    private const float OpeningBlazeFade = 0.7f;
+
+    /// <summary>The opening's scrim. The tour's weight: while it holds the player, it is the only thing.</summary>
+    private static readonly Color OpeningScrim = new Color(0x05, 0x03, 0x0A) * 0.80f;
+
+    /// <summary>Is the opening the thing on screen right now?</summary>
+    /// <remarks>
+    /// Never over the settings or help panel. Settings is where the opening can be ended, and a scrim
+    /// that covered the one panel able to end it would be the soft lock this whole design forbids.
+    /// </remarks>
+    private bool OpeningUp => _opening.Running && !_showTitle && !_showSettings && !_showHelp;
+
+    /// <summary>
+    /// RIG ONLY: <c>RH_SHOT_OPENING=&lt;OpeningStage&gt;</c> — the authored beat to pose, or null.
+    /// </summary>
+    /// <remarks>
+    /// An unknown name THROWS with the list of stages rather than posing nothing, because a capture
+    /// that silently photographs the ordinary game is worse than no capture: it goes into the baseline
+    /// as evidence that a beat was looked at.
+    /// </remarks>
+    private static OpeningStage? PosedOpeningStage
+    {
+        get
+        {
+            if (!CaptureRig) return null;
+            if (Environment.GetEnvironmentVariable("RH_SHOT_OPENING") is not { Length: > 0 } name) return null;
+            if (Enum.TryParse<OpeningStage>(name, true, out var stage) && OpeningScript.Running(stage)) return stage;
+            throw new InvalidOperationException(
+                $"RH_SHOT_OPENING='{name}' is not a running OpeningStage. Known: "
+                + string.Join(", ", OpeningScript.Steps.Select(s => s.Stage)) + ".");
+        }
+    }
+
+    /// <summary>RIG ONLY: <c>RH_SHOT_BEAT=&lt;n&gt;</c> — which prologue beat the shutter wants.</summary>
+    private static int PosedPrologueBeat
+        => int.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_BEAT"), out var n)
+            ? Math.Clamp(n, 0, OpeningScript.Prologue.Count - 1)
+            : 0;
+
+    // ── FACTS ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everything an authored beat might be waiting for, gathered once from production state.
+    /// </summary>
+    /// <remarks>
+    /// Not one of these is a tutorial variable. The arrival's settling is the fight screen's own run
+    /// having started plus a dwell nothing else can see; the enemy standing is the hold the fight
+    /// already waits on before anyone swings; the signature being imminent is the replay's own report
+    /// that the barrier is holding it. That is what keeps this a layer ON the game rather than a
+    /// puppet show beside it — every gate is answered by the thing the player is actually looking at.
+    /// </remarks>
+    private OpeningFacts OpeningFactsNow() => new(
+        Screen: ScreenActivity(),
+        ArrivalSettled: _expedition.RunStarted && _arrivalDwell <= 0f,
+        EnemySettled: _expedition.EnemySettled,
+        RewardsCredited: _rewardsCredited,
+        SignatureHeld: _expedition.ReplayHeld,
+        WavesCleared: _deepestEver,
+        BossSettled: _expedition.BossOnStage && _expedition.EnemySettled,
+        BossesFelled: _bossesFelled,
+        ChestsOpened: _forge?.ChestsOpened ?? 0,
+        ItemSelected: _gear?.ItemClickedEver ?? false,
+        ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null));
+
+    // ── THE LOADED CAREER ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Decide where in the opening a loaded career actually stands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The version decides, never the progression.</b> A file written before
+    /// <c>OpeningScript.FirstVersionWithOpeningState</c> carries no cursor at all, and the question
+    /// "has this player lived the opening?" has to be answered some other way — from what they have
+    /// done. A file at or past it is believed exactly as written, including the brand-new career that
+    /// quit during the arrival, which is the case a progression guess gets wrong. This is the third
+    /// migration in this codebase to carry that rule and the first two were both bugs before they
+    /// were rules.
+    /// </para>
+    /// <para>
+    /// <b>And the cursor is still not the truth.</b> Even a believed cursor is walked forward over
+    /// every beat whose deed the save can prove was already performed, so a career that opened the
+    /// chest and quit before the autosave caught it is never asked to open it again.
+    /// </para>
+    /// </remarks>
+    private void SeedOpening()
+    {
+        // THE RIG NEVER PLAYS THE OPENING. Every fixture dresses a save and photographs a screen; an
+        // authored beat over it would be in every capture the project has. RH_SHOT_OPENING is the one
+        // exception, and it is the whole reason the opening can be looked at — see PosedOpeningStage.
+        if (CaptureRig)
+        {
+            if (PosedOpeningStage is { } posed) _opening.Restore(posed);
+            else { _opening.SkipToEnd(); _prologueSeen = true; }
+            _openingWas = _opening.Stage;
+            return;
+        }
+
+        if (_saveVersionSeen < OpeningScript.FirstVersionWithOpeningState)
+        {
+            var lived = OpeningScript.SeedOpeningAsLived(GuideUnlockFacts(), _saveVersionSeen);
+            if (lived) { _opening.SkipToEnd(); _prologueSeen = true; }
+            else _opening.Begin();   // an old file with nothing done is a player who never started
+            _openingWas = _opening.Stage;
+            return;
+        }
+
+        _opening.Restore(OpeningScript.StageOf(_pendingOpeningStage));
+        _opening.FastForwardOverDoneDeeds(OpeningFactsNow());
+        _openingWas = _opening.Stage;
+        _pendingOpeningStage = 0;
+    }
+
+    // ── THE FRAME ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Run the opening for this frame: apply what the current beat holds, take its input, step it on.
+    /// </summary>
+    /// <remarks>
+    /// Called EARLY — before the fight advances, before the Warren ticks and before the input authority
+    /// is recomputed — because everything downstream reads the decision made here. A beat that means to
+    /// freeze the game has to have said so before the game moves.
+    /// </remarks>
+    private void UpdateOpening(float dt)
+    {
+        // ── THE SHUTTER POSES A BEAT AND THE BEAT HOLDS STILL FOR IT. ───────────────────────────
+        //
+        // A state no capture can pose has never been looked at, and this codebase has been bitten by
+        // that repeatedly. So the rig can park the cursor on any authored stage — and the cursor is
+        // then FROZEN, because half of these beats are gated on a fact the fixture's own dressing
+        // satisfies (an enemy standing, a chest in the vault), and a posed stage that advanced before
+        // frame sixty would photograph the next one. Nothing else changes: the holds, the grants and
+        // the whole surface below run exactly as they do in play.
+        if (PosedOpeningStage is { } pose)
+        {
+            if (_opening.Stage != pose) { _opening.Restore(pose); _openingWas = OpeningStage.NotStarted; }
+            EnterOpeningStage();
+            _prologueBeat = PosedPrologueBeat;
+            _arrivalDwell = 0f;
+            _openingBlaze = OpeningBlazeSeconds;
+            _prologueClock = 1f;
+            _expedition.HoldBeforeKind = _opening.HoldsReplayBefore;
+            _openingGrants.Clear();
+            if (_opening.GrantsScreen is { } posedGrant) _openingGrants.Add(posedGrant);
+            return;
+        }
+
+        EnterOpeningStage();
+
+        if (!_opening.Running)
+        {
+            _expedition.HoldBeforeKind = null;
+            _openingGrants.Clear();
+            return;
+        }
+
+        // The arrival's own clock only runs once there is something to look at.
+        if (_arrivalDwell > 0f && _expedition.RunStarted) _arrivalDwell = Math.Max(0f, _arrivalDwell - dt);
+        if (_openingBlaze > 0f) _openingBlaze = Math.Max(0f, _openingBlaze - dt);
+        if (_opening.Stage == OpeningStage.Prologue) _prologueClock += dt;
+
+        // WHAT THE BEAT HOLDS. Both of these are read by systems further down this frame.
+        _expedition.HoldBeforeKind = _opening.HoldsReplayBefore;
+        _openingGrants.Clear();
+        if (_opening.GrantsScreen is { } grant) _openingGrants.Add(grant);
+
+        TakeOpeningInput();
+        _opening.Update(OpeningFactsNow());
+        EnterOpeningStage();
+    }
+
+    /// <summary>Side effects owed to a stage the cursor has just moved onto.</summary>
+    private void EnterOpeningStage()
+    {
+        if (_opening.Stage == _openingWas) return;
+        var was = _openingWas;
+        _openingWas = _opening.Stage;
+
+        _arrivalDwell = _opening.Stage == OpeningStage.Arrival ? ArrivalDwellSeconds : 0f;
+        _openingBlaze = OpeningBlazeSeconds;
+        _openingCard = _openingButton = Rectangle.Empty;
+
+        // THE PROLOGUE IS ONE-SHOT, and it is marked read on the way OUT of it rather than on the way
+        // in: a career that quit halfway through the story has not seen the story.
+        if (was == OpeningStage.Prologue) { _prologueSeen = true; Save(); }
+
+        // AND THE END IS WRITTEN DOWN IMMEDIATELY. The autosave is ten seconds wide and the last beat
+        // of the opening is followed by the player walking away satisfied.
+        if (_opening.Stage == OpeningStage.Complete) Save();
+    }
+
+    // ── INPUT ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The one press an authored beat accepts, and the two doors that stay open behind it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Raw key and mouse edges, like the tour's: <c>Pressed()</c> and <c>MouseClicked</c> both read
+    /// <c>_swallowInput</c>, which this beat is the reason for. Everything not named here is spent —
+    /// a click that lands anywhere else does nothing at all, which is what makes the lit control the
+    /// only control.
+    /// </para>
+    /// <para>
+    /// <b>The two doors.</b> ESCAPE and the settings gear still work, on every beat, because Settings is
+    /// where the opening can be ended and a tutorial you cannot leave is a worse product than no
+    /// tutorial. Neither grants anything; see the GUIDANCE switch.
+    /// </para>
+    /// </remarks>
+    private void TakeOpeningInput()
+    {
+        if (!_opening.OwnsInput || CaptureRig) return;
+
+        // THE WAY OUT, first and unconditionally.
+        var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);
+        if (escape || (_clicked && SettingsGear.Contains(ChromeMouse)))
+        {
+            _showSettings = true;
+            _settingsEscSpent = true;
+            _sound.Play("sfx_click", 0.6f);
+            return;
+        }
+        if (_showSettings || _showHelp) return;
+
+        var keyGo = (_keys.IsKeyDown(Keys.Space) && _prevKeys.IsKeyUp(Keys.Space))
+                    || (_keys.IsKeyDown(Keys.Enter) && _prevKeys.IsKeyUp(Keys.Enter));
+
+        if (_opening.Stage == OpeningStage.Prologue)
+        {
+            if (_clicked && _prologueSkip.Contains(ChromeMouse)) { SkipPrologue(); return; }
+            if (keyGo || (_clicked && _prologueNext.Contains(ChromeMouse))) NextPrologueBeat();
+            return;
+        }
+
+        // Every other acknowledged beat — the BEGIN gate and every PauseExplain — advances from its own
+        // button, from SPACE and from ENTER, and from nothing else.
+        if (_opening.WantsAcknowledgement || _opening.Stage == OpeningStage.AwaitBegin)
+        {
+            if (keyGo || (_clicked && _openingButton.Contains(ChromeMouse)))
+            {
+                _opening.Acknowledge();
+                _sound.Play("sfx_click", 0.7f);
+            }
+        }
+    }
+
+    /// <summary>One beat on, or out of the prologue at its end.</summary>
+    private void NextPrologueBeat()
+    {
+        _sound.Play("sfx_click", 0.6f);
+        if (_prologueBeat + 1 < OpeningScript.Prologue.Count)
+        {
+            _prologueBeat++;
+            _prologueClock = 0f;
+            return;
+        }
+        _opening.Acknowledge();
+    }
+
+    /// <summary>
+    /// SKIP CINEMATIC — and it skips the CINEMATIC.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not SKIP TUTORIAL. A player who does not want the story very often does want to be
+    /// shown the game, and a single control that did both would make the story a hostage. This one
+    /// lands on BEGIN THE HUNT with the whole opening still ahead of it; the other lives in Settings.
+    /// </remarks>
+    private void SkipPrologue()
+    {
+        _prologueBeat = OpeningScript.Prologue.Count - 1;
+        _opening.Acknowledge();
+        _sound.Play("sfx_click", 0.6f);
+    }
+
+    /// <summary>
+    /// The click a FORCED step lets through to the screen that owns the control.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is the one the light is cut from, which is the one the screen drew, which is the
+    /// one the screen hit-tests — the same rectangle three times, at every UI density, because it is
+    /// asked for once. There is no tutorial-only button in this design, so the deed the player performs
+    /// IS the deed the game records, and a step that were somehow lit over the wrong control would take
+    /// no click at all rather than take one on the tutorial's behalf.
+    /// </remarks>
+    private bool ForcedScreenClick()
+        => _clicked && !_showSettings && !_showHelp && !WelcomeUp
+           && _opening.ForcedTarget is not null
+           && OpeningHoles().Any(h => h.Contains(ChromeMouse));
+
+    // ── WHAT IS LIT ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The production rectangles this beat is about, in canvas space — empty when it is about nothing.
+    /// </summary>
+    /// <remarks>
+    /// Three sources, all of them the game's own. A forced navigation lights the RAIL TILE it wants,
+    /// where it stands, this frame. A beat aimed at the rail lights the tile the chain is heading for
+    /// (<c>OpeningScript.NextForcedScreen</c>) rather than the whole rail, because "chests wait in the
+    /// VAULT" is about one tile. Everything else asks the screen that owns the target, through the
+    /// same <see cref="TourSpotlights"/> the tours and the coach use.
+    /// </remarks>
+    private Rectangle[] OpeningHoles()
+    {
+        if (_opening.Step is not { } step) return Array.Empty<Rectangle>();
+
+        if (step.Mode == TutorialStepMode.ForceNavigate && step.Screen is { } want) return NavTile(want);
+        if (step.Target == TourTarget.NavRail)
+            return OpeningScript.NextForcedScreen(step.Stage) is { } soon ? NavTile(soon) : Array.Empty<Rectangle>();
+        if (step.Target is not { } target) return Array.Empty<Rectangle>();
+        if (step.Screen is { } on && on != ScreenActivity()) return Array.Empty<Rectangle>();
+
+        var own = TourSpotlights(ScreenActivity(), target);
+        // The whole-canvas answer means the screen does not know this target: light nothing rather than
+        // darken the page and cut a hole the size of the page.
+        return own.Any(h => h.Width >= 1900 && h.Height >= 1060) ? Array.Empty<Rectangle>() : own;
+    }
+
+    /// <summary>One rail tile, where it stands right now — or nothing, if the rail is not showing it.</summary>
+    private Rectangle[] NavTile(Activity activity)
+    {
+        var slot = NavSlots().IndexOf(Array.IndexOf(NavActivity, activity));
+        return slot >= 0 ? new[] { NavHexRect(slot) } : Array.Empty<Rectangle>();
+    }
+
+    // ── THE SURFACE ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The opening's one drawn surface: the prologue, the BEGIN gate, or a beat's light and card.
+    /// </summary>
+    /// <remarks>
+    /// Drawn last of the chrome, over the rail and the pills, for the reason a tour is: while a beat
+    /// holds the player it is the only thing being asked of them. A LIVE beat is the exception it looks
+    /// like — its scrim BLAZES and fades, leaving the brackets and the card over a fight that never
+    /// stopped, because a permanently dark screen over a running game is intolerable.
+    /// </remarks>
+    private void DrawOpening()
+    {
+        if (!OpeningUp) return;
+
+        switch (_opening.Stage)
+        {
+            case OpeningStage.Prologue: DrawPrologue(); return;
+            case OpeningStage.AwaitBegin: DrawBeginGate(); return;
+        }
+
+        if (_opening.Step is not { } step || step.Title.Length == 0) return;
+        // A narrated beat belongs to its screen. Wandering off during a LIVE one is allowed; the words
+        // simply wait, because a card about the Hunter's health on the FORGE screen explains nothing.
+        // A FORCED NAVIGATION IS THE EXCEPTION, and it is not really one: its Screen is the
+        // DESTINATION, so by definition it is drawn on the screen the player has not left yet.
+        if (step.Mode != TutorialStepMode.ForceNavigate
+            && step.Screen is { } on && on != ScreenActivity()) return;
+
+        var holes = OpeningHoles();
+        var live = step.Mode == TutorialStepMode.LiveExplain;
+        // A LIVE BEAT WITH NOTHING TO LIGHT DARKENS NOTHING. The full-canvas scrim is the modal
+        // beats' answer to "the card is the only thing here"; over a running fight it is a black
+        // screen with a caption, which is worse than no scrim at all.
+        var weight = live ? Math.Clamp(_openingBlaze / OpeningBlazeFade, 0f, 1f) : 1f;
+        if (weight > 0f && (holes.Length > 0 || !live))
+        {
+            var ink = OpeningScrim * (live && !UiMotion.Reduced ? UiMotion.Smooth(weight) : weight);
+            if (holes.Length > 0) DrawScrimAround(holes, ink);
+            else _ui.Fill(_batch, new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height), ink);
+        }
+        foreach (var hole in holes) TourBrackets(hole);
+
+        DrawOpeningCard(step, holes);
+    }
+
+    /// <summary>The beat's words, beside the light, with the one control that ends it.</summary>
+    private void DrawOpeningCard(OpeningStep step, Rectangle[] holes)
+    {
+        var pad = UiMetrics.Space(24);
+        var width = Math.Min(UiMetrics.Control(TourCardWidth), UiKit.Page.Width / 2);
+        var body = _ui.WrapBig(step.Body, width - pad * 2, UiTypography.Body);
+        var bodyTop = pad + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        var acts = _opening.WantsAcknowledgement || step.Mode == TutorialStepMode.ForceNavigate
+                   || step.Mode == TutorialStepMode.ForceAction;
+        var btnH = UiMetrics.Control(44);
+        var footer = acts ? UiMetrics.Space(16) + btnH : 0;
+        var height = bodyTop + Math.Max(1, body.Count) * UiTypography.Pitch(UiTypography.Body) + footer + pad;
+
+        // Off the chrome row it is not pointing at, and off the fight's skill dock.
+        var avoid = new List<Rectangle> { new(NavRailWidth, 0, 1920 - NavRailWidth, ChromeRowBottom + UiMetrics.Space(8)) };
+        if (ScreenActivity() == Activity.Hunt) avoid.Add(HuntScreen.DockRect);
+        _openingCard = holes.Length > 0
+            ? TourCardRect(holes, avoid, width, height)
+            : new Rectangle((UiKit.Page.Width + NavRailWidth - width) / 2, (UiKit.Page.Height - height) / 2, width, height);
+
+        _ui.Fill(_batch, _openingCard, SlotGround);
+        _ui.Plate(_batch, _openingCard, UiInk.Accent);
+        _ui.TextBig(_batch, step.Title, _openingCard.X + pad, _openingCard.Y + pad, UiInk.Accent, UiTypography.Headline);
+
+        var y = _openingCard.Y + bodyTop;
+        foreach (var line in body)
+        {
+            _ui.TextBig(_batch, line, _openingCard.X + pad, y, UiInk.Primary, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
+        }
+
+        if (!acts) { _openingButton = Rectangle.Empty; return; }
+
+        // A PAUSED BEAT HAS A BUTTON; A FORCED ONE DOES NOT — its button is the lit control, and a
+        // second one beside the card would be the tutorial-only control this design does not have.
+        if (_opening.WantsAcknowledgement)
+        {
+            var btnW = Math.Min(_openingCard.Width - pad * 2, UiMetrics.Control(240));
+            _openingButton = new Rectangle(_openingCard.Right - pad - btnW, _openingCard.Bottom - pad - btnH + UiMetrics.Space(6), btnW, btnH);
+            // Drawn only — the press is spent in the input pass, which owns the whole frame.
+            _ui.Button(_batch, _openingButton, "CONTINUE", ChromeMouse, false, true, ButtonStyle.Primary);
+            return;
+        }
+
+        _openingButton = Rectangle.Empty;
+        _ui.TextBig(_batch, "THE LIT CONTROL IS THE ONE", _openingCard.X + pad,
+                    _openingCard.Bottom - pad - btnH + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(6),
+                    UiInk.Secondary, UiTypography.Secondary);
+    }
+
+    /// <summary>
+    /// THE PROLOGUE: six beats over a dark ground, once per career.
+    /// </summary>
+    /// <remarks>
+    /// It says nothing about a button, a screen or a resource — every word of it is
+    /// <c>design/narrative/world.md</c>, and the teaching starts on the other side of BEGIN THE HUNT.
+    /// The illustration is owed (the art pass), and the beat's shape is built for it: the plate below
+    /// is the subtitle band, and the space above it is the frame the picture goes in.
+    /// </remarks>
+    private void DrawPrologue()
+    {
+        var page = new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height);
+        _ui.Fill(_batch, page, new Color(0x05, 0x04, 0x09));
+
+        var index = Math.Clamp(_prologueBeat, 0, OpeningScript.Prologue.Count - 1);
+        var beat = OpeningScript.Prologue[index];
+
+        // A BEAT FADES UP. Reduced Motion keeps the fade — §32 allows exactly this one — and drops
+        // nothing else, because there is nothing else here to drop yet.
+        var up = Math.Clamp(_prologueClock / 0.45f, 0f, 1f);
+        var ink = UiMotion.Reduced ? 1f : UiMotion.Smooth(up);
+
+        // THE PICTURE, AND A SLOW CAMERA OVER IT. Each beat is shown against a place the game already
+        // has — the constellation of the six, a torn seam, the Hollow itself — rather than against a
+        // black rectangle. Reduced Motion holds the frame still.
+        var drift = UiMotion.Reduced ? 0.5f : Math.Clamp(_prologueClock / 11f, 0f, 1f);
+        _ui.BackgroundPanned(_batch, PrologueArt(index), 1.10f, 0.30f + 0.34f * drift,
+                             new Color(120, 118, 128) * ink);
+        _ui.Fill(_batch, page, new Color(0x05, 0x04, 0x09) * 0.42f);
+
+        // The letterbox: the frame the illustration hangs in.
+        var band = UiMetrics.Control(120);
+        _ui.Fill(_batch, new Rectangle(0, 0, page.Width, band), new Color(0x02, 0x02, 0x04));
+        _ui.Fill(_batch, new Rectangle(0, page.Height - band, page.Width, band), new Color(0x02, 0x02, 0x04));
+
+        var pad = UiMetrics.Space(40);
+        var width = Math.Min(UiMetrics.Control(900), page.Width - pad * 4);
+        var lines = _ui.WrapBig(beat.Body, width, UiTypography.Body);
+        var titleY = page.Height / 2 + UiMetrics.Space(40);
+        _ui.TextCenterBig(_batch, beat.Title, page.Width / 2, titleY, UiInk.Accent * ink, UiTypography.ScreenTitle, TextFace.Display);
+
+        var y = titleY + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(18);
+        foreach (var line in lines)
+        {
+            _ui.TextCenterBig(_batch, line, page.Width / 2, y, UiInk.Primary * ink, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
+        }
+
+        // How far through the story we are — six dots, because six unexplained fades is a hang.
+        var dot = UiMetrics.Control(8);
+        var gap = UiMetrics.Space(10);
+        var run = OpeningScript.Prologue.Count * dot + (OpeningScript.Prologue.Count - 1) * gap;
+        for (var i = 0; i < OpeningScript.Prologue.Count; i++)
+            _ui.Fill(_batch, new Rectangle(page.Width / 2 - run / 2 + i * (dot + gap), y + UiMetrics.Space(24), dot, dot),
+                     i <= _prologueBeat ? UiInk.Accent : UiInk.Secondary * 0.5f);
+
+        var btnH = UiMetrics.Control(48);
+        var btnW = UiMetrics.Control(220);
+        var last = _prologueBeat + 1 >= OpeningScript.Prologue.Count;
+        _prologueNext = new Rectangle(page.Width / 2 - btnW / 2, page.Height - band - UiMetrics.Space(28) - btnH, btnW, btnH);
+        _ui.Button(_batch, _prologueNext, last ? "BEGIN" : "NEXT", ChromeMouse, false, true, ButtonStyle.Primary);
+
+        _prologueSkip = new Rectangle(page.Width - UiMetrics.Space(40) - UiMetrics.Control(240),
+                                      page.Height - band + UiMetrics.Space(28), UiMetrics.Control(240), UiMetrics.Control(40));
+        _ui.Button(_batch, _prologueSkip, "SKIP CINEMATIC", ChromeMouse, false);
+    }
+
+    /// <summary>
+    /// The still each prologue beat is shown against — one of the game's own places.
+    /// </summary>
+    /// <remarks>
+    /// Art KEYS live in the host, never in the script: <see cref="OpeningScript"/> is copy, and copy
+    /// that named a PNG would tie the writing to the pipeline. These are the existing environment
+    /// plates rather than six new illustrations, and they are chosen for what the beat is about — the
+    /// six pressures against the constellation, the tear against the shadow arena, the Hollow against
+    /// its own. Bespoke prologue art is owed, and it lands here, behind one method.
+    /// </remarks>
+    private static string PrologueArt(int beat) => beat switch
+    {
+        0 => "bg_constellation",   // the six, as the game already draws them
+        1 => "bg_regionmap",       // the network, laid out
+        2 => "bg_arena_shadow",    // a seam that tore
+        3 => "bg_title",           // the Hunter
+        4 => "bg_arena_body",      // standing, and what standing costs
+        _ => "bg_arena_nature",    // Verdant Hollow
+    };
+
+    /// <summary>
+    /// THE GATE: the deliberate press that starts the career.
+    /// </summary>
+    /// <remarks>
+    /// A fresh save used to land in a fight already in progress with a seven-second toast over it. The
+    /// press is the point — the first thing the player does in this game is choose to go down.
+    /// </remarks>
+    private void DrawBeginGate()
+    {
+        var page = new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height);
+        _ui.Fill(_batch, page, OpeningScrim);
+
+        var pad = UiMetrics.Space(40);
+        var width = Math.Min(UiMetrics.Control(760), page.Width - pad * 4);
+        var body = _ui.WrapBig("Your Hunter goes down and stands. Everything else is what you decide about her.",
+                               width - pad * 2, UiTypography.Body);
+        var btnH = UiMetrics.Control(56);
+        var height = pad + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(14)
+                     + body.Count * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(28) + btnH + pad;
+        _openingCard = new Rectangle((page.Width + NavRailWidth - width) / 2, (page.Height - height) / 2, width, height);
+
+        _ui.Fill(_batch, _openingCard, SlotGround);
+        _ui.Plate(_batch, _openingCard, UiInk.Accent);
+        _ui.TextCenterBig(_batch, "VERDANT HOLLOW", _openingCard.Center.X, _openingCard.Y + pad,
+                          UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
+        var y = _openingCard.Y + pad + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(14);
+        foreach (var line in body)
+        {
+            _ui.TextCenterBig(_batch, line, _openingCard.Center.X, y, UiInk.Primary, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
+        }
+
+        var btnW = Math.Min(_openingCard.Width - pad * 2, UiMetrics.Control(320));
+        _openingButton = new Rectangle(_openingCard.Center.X - btnW / 2, _openingCard.Bottom - pad - btnH, btnW, btnH);
+        _ui.Button(_batch, _openingButton, "BEGIN THE HUNT", ChromeMouse, false, true, ButtonStyle.Primary);
+    }
+}

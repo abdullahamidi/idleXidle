@@ -94,6 +94,47 @@ public sealed class OpeningDirector
     /// </remarks>
     public bool HoldsFight => Running && Mode is not TutorialStepMode.LiveExplain;
 
+    /// <summary>
+    /// The beat the replay must not cross yet, or null to let it run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two authored windows. From the arrival until the enemy has been introduced, nothing may HIT the
+    /// Hunter — the player is being shown the stage, not a fight, and a blow landing during an
+    /// explanation is the explanation arriving late. And immediately before the first Signature cast,
+    /// which is the moment the whole redesign exists for: the barrier parks the playhead one
+    /// millisecond short of the real event, the player is told what is about to happen, and releasing
+    /// it crosses the event with the cast, its callout and its effect all landing together.
+    /// </para>
+    /// <para>
+    /// No combat balance moves for this. The wave was resolved before the barrier existed and its
+    /// event list is untouched; what is held is a millisecond of presentation.
+    /// </para>
+    /// </remarks>
+    public BattleEventKind? HoldsReplayBefore => _stage switch
+    {
+        OpeningStage.Arrival or OpeningStage.IntroduceHunter
+            or OpeningStage.AwaitFirstEnemy or OpeningStage.IntroduceEnemy => BattleEventKind.EnemyStrike,
+        OpeningStage.AwaitSignature or OpeningStage.IntroduceSignature => BattleEventKind.Skill,
+        _ => null,
+    };
+
+    /// <summary>Screens the opening has to open ahead of their own unlock fact, at this stage.</summary>
+    /// <remarks>
+    /// The VAULT's real gate is a chest that really exists and GEAR's is an item that really exists,
+    /// and each becomes true within a beat of the grant. The grant is what lets the chain break ON THE
+    /// TUTORIAL'S WORD — "it left a chest, here is where it went" — instead of a frame later, beside
+    /// an unrelated animation.
+    /// </remarks>
+    public Activity? GrantsScreen => _stage switch
+    {
+        OpeningStage.IntroduceChest or OpeningStage.ForceVault or OpeningStage.ForceChestOpen
+            or OpeningStage.IntroduceItem => Activity.Vault,
+        OpeningStage.ForceGear or OpeningStage.ForceItemSelect or OpeningStage.ExplainItem
+            or OpeningStage.ForceEquip or OpeningStage.ShowEquipped => Activity.Gear,
+        _ => null,
+    };
+
     /// <summary>Does the opening own the mouse and the keyboard this frame?</summary>
     public bool OwnsInput => Running && Mode is not TutorialStepMode.LiveExplain;
 
@@ -182,6 +223,14 @@ public sealed class OpeningDirector
     {
         if (!Running) return;
         if (Step is not { } step) { _stage = OpeningScript.After(_stage); return; }
+
+        // A NARRATED LIVE BEAT IS NOT SPENT WHILE NOBODY IS LOOKING AT IT. A LiveExplain takes no
+        // control, so the player is free to walk off to the FORGE while "YOUR HUNTER'S LIFE" waits on
+        // the next cleared wave — and the wave clears anyway, because the fight is running. Holding
+        // the gate until they are back on the beat's own screen costs nothing (the game is not
+        // paused) and is the difference between a lesson delivered and a lesson quietly burned.
+        if (step.Mode is TutorialStepMode.LiveExplain && step.Title.Length > 0
+            && step.Screen is { } narratedOn && f.Screen != narratedOn) return;
 
         if (!Satisfied(step.Gate, f)) return;
 

@@ -280,7 +280,7 @@ public static class OpeningScript
                         "At zero the descent ends and it gets back up. You lose nothing you earned."),
 
         new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
-                        Activity.Hunt, TourTarget.Enemies,
+                        Activity.Hunt, TourTarget.StageHeader,
                         "HOW DEEP YOU ARE",
                         "The wave you are on, and how far this region is from being yours."),
 
@@ -342,6 +342,67 @@ public static class OpeningScript
                         "WORN",
                         "Your Hunter is carrying it now. Go and see what it changes."),
     };
+
+    /// <summary>One beat of the illustrated prologue: a heading and the line under it.</summary>
+    public readonly record struct PrologueBeat(string Title, string Body);
+
+    /// <summary>
+    /// THE STORY, BEFORE THE GAME. Six beats, once per career.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every line here is <c>design/narrative/world.md</c> said out loud, and nothing in it is
+    /// invented: the six pressures, the joints that hold a place level by remembering its shape, the
+    /// tear, and a Hunter as the reference a joint measures itself against. It is here rather than in
+    /// the host because it is COPY — the same reason the steps are here — and because the one thing a
+    /// prologue must never do is drift away from what the rest of the game says it is.
+    /// </para>
+    /// <para>
+    /// It says nothing about a control, a screen or a resource. Teaching starts after BEGIN THE HUNT;
+    /// this is the reason any of it matters.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlyList<PrologueBeat> Prologue = new[]
+    {
+        new PrologueBeat("SIX PRESSURES",
+                         "Under every place in this world lies one of six pressures. "
+                         + "Where one lies too close, the place above it forgets what it was."),
+        new PrologueBeat("THE JOINTS",
+                         "An older order drove joints into those places to hold them level. "
+                         + "A joint works by remembering the shape a place is supposed to have."),
+        new PrologueBeat("THE NETWORK FAILED",
+                         "The joints tore. What rises through a torn one is corruption — "
+                         + "a pressure coming up through a place with nothing left to say no."),
+        new PrologueBeat("A HUNTER",
+                         "A Hunter is a person the network learned by heart. "
+                         + "It sends one down, and it leaves her there to stand."),
+        new PrologueBeat("SHE STANDS",
+                         "Stand deep enough, for long enough, and the joint remembers. "
+                         + "Nothing else has ever worked, and it is not kind."),
+        new PrologueBeat("VERDANT HOLLOW",
+                         "The first joint that ever held, and the one the camp was dug into. "
+                         + "It is where you begin."),
+    };
+
+    /// <summary>
+    /// The screen the next forced navigation asks for, from this stage on — or null.
+    /// </summary>
+    /// <remarks>
+    /// What a beat aimed at <c>TourTarget.NavRail</c> is really about. "It left a chest — chests wait
+    /// in the VAULT" wants the VAULT'S TILE lit, not the whole rail, and the tile it wants is by
+    /// definition the one the very next forced step is going to make the player press. Read from the
+    /// script rather than written down twice, so re-ordering the chain moves the light with it.
+    /// </remarks>
+    public static Activity? NextForcedScreen(OpeningStage stage)
+    {
+        var reached = false;
+        foreach (var s in Steps)
+        {
+            if (s.Stage == stage) reached = true;
+            if (reached && s.Mode == TutorialStepMode.ForceNavigate && s.Screen is { } want) return want;
+        }
+        return null;
+    }
 
     /// <summary>The step for a stage, or null for a stage the script does not author.</summary>
     public static OpeningStep? Find(OpeningStage stage)

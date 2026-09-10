@@ -42,7 +42,7 @@ namespace IdleXIdle.Game;
 /// nothing could reach them, because nothing pointed out that they were unreachable.
 /// </para>
 /// </remarks>
-public class Game1 : Microsoft.Xna.Framework.Game
+public partial class Game1 : Microsoft.Xna.Framework.Game
 {
     private const int CanvasWidth = 480;
     private const int CanvasHeight = 270;
@@ -193,6 +193,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <see cref="OnboardingLessons.SeedFallLoopAsLived"/> for why a version and not a guess.
     /// </remarks>
     private int _saveVersionSeen = SaveGame.CurrentVersion;
+
+    /// <summary>The opening cursor as the file wrote it, parked until the screens exist to check it.</summary>
+    /// <remarks>
+    /// Parked for the same reason the explained list is: resolving it asks what the player has already
+    /// DONE — chests opened, items worn — and those live on screens Initialize has not built yet.
+    /// Spent in <see cref="SeedOpening"/>, from ApplyRestoredState.
+    /// </remarks>
+    private int _pendingOpeningStage;
 
     /// <summary>
     /// What the build looked like at the moment of the first fall, so a real CHANGE can be told from
@@ -775,7 +783,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private bool _showWelcome;
 
     /// <summary>The welcome panel is on screen: pending, and no tour has the screen. Under a tour it waits its turn.</summary>
-    private bool WelcomeUp => _showWelcome && !_tourActive;
+    private bool WelcomeUp => _showWelcome && !_tourActive && !_opening.Running;
     private float _bootTimer;   // the "welcome back" toast — a few seconds after boot, then it fades
 
     /// <summary>
@@ -1120,6 +1128,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // unlock gates, and those read the Forge's inventory — a screen LoadContent has not built yet.
         // Seeded in SeedExplained, from ApplyRestoredState, once the bag is real.
         _introSeen = save.IntroSeen;
+        // THE AUTHORED OPENING, parked the same way and for the same reason. The cursor is not the
+        // truth — the deeds are — so it is walked forward over anything already done (SeedOpening).
+        _prologueSeen = save.PrologueSeen;
+        _pendingOpeningStage = save.OpeningStage;
+        // ...AND THE VERSION IS WHAT SAYS "ALREADY GRANTED" FOR EVERY OLDER FILE. Before v6 the gift
+        // was seeded into the vault of every new game at frame one, so a v5 file has had it — whether
+        // the chest is still sitting there unopened, was opened long ago, or was sold. Answering this
+        // from progression instead ("no welcome chest in the bag") would hand a second gift to every
+        // returning player who had already opened theirs. See OpeningScript.FirstVersionWithOpeningState.
+        _welcomeGiftGranted = save.WelcomeGiftGranted
+                              || save.Version < OpeningScript.FirstVersionWithOpeningState;
+        _tutorialsDone.Clear();
+        foreach (var done in save.TutorialsDone) _tutorialsDone.Add(done);
         _guidanceOff = save.GuidanceOff;
         _reportOpenedEver = save.ReportOpenedEver;
         _changedAfterFall = save.ChangedAfterFall;
@@ -1295,13 +1316,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // (Before this, the message named what was LOCKED: "PRESS B TO PICK SKILLS", while BUILD stays
         // shut until wave 5. The first thing the game said was an instruction it then refused.)
 
-        // THE WELCOME GIFT: one chest in the vault from the first frame (playtest 2026-08-26: "the
-        // VAULT tutorial talks about chests but there are none"). Its contents are catalogue data, not
-        // a roll — the starter's plainest weapon — so the vault's first visit, its tour and the guide's
-        // "open a chest" rung are all true in the first minute. PARKED like every restored thing: the
-        // Forge that holds the pile is built in LoadContent, and this runs from Initialize. Only here,
-        // on a NEW game — an existing save's vault is whatever it saved, never a retroactive gift.
-        _pendingChests = GiftChests.NewGameChests().ToList();
+        // THE WELCOME GIFT NO LONGER EXISTS AT FRAME ONE — IT COMES FROM THE FIRST BOSS.
+        //
+        // It used to be seeded here, so a career opened with an unopened chest in a vault the player
+        // had never been told about, earned by nothing. That reversed the only order this game has:
+        // the boss is the game's own rhythm, the chest is what a boss leaves, and the VAULT is where a
+        // chest waits. Handing all three over before the first wave meant the tutorial's own sentence
+        // — "it left a chest" — described something that had been sitting there since launch, and it
+        // opened the VAULT's chain at a moment when nothing had happened.
+        //
+        // Granted instead on the frame the tutorial boss falls (see the reward loop's welcome-gift
+        // latch), through the real vault path, exactly once per career. A brand-new game seeds
+        // NOTHING now.
     }
 
     private List<ItemInstance>? _pendingInventory;
@@ -1422,6 +1448,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ChampionGleamRate = _champGleamRate,
             DismissedGuideRungs = _dismissedGuide.OrderBy(s => s).ToList(),
             IntroSeen = _introSeen,
+            PrologueSeen = _prologueSeen,
+            OpeningStage = (int)_opening.Stage,
+            WelcomeGiftGranted = _welcomeGiftGranted,
+            TutorialsDone = _tutorialsDone.OrderBy(s => s, StringComparer.Ordinal).ToList(),
             GuidanceOff = _guidanceOff,
             ReportOpenedEver = _reportOpenedEver,
             ChangedAfterFall = _changedAfterFall,
@@ -1588,6 +1618,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
         _swallowInput = false;
         _coach.Reset();
+        // ...AND THE OPENING RUNS AGAIN, WHOLE. A new career is a new beginning in every sense: the
+        // story is unread, the cursor is at nothing, the gift is ungranted, and the title's PLAY item
+        // starts it over (ChooseTitleItem reads _hasSave, which this reset has just cleared).
+        _opening.Reset();
+        _openingWas = OpeningStage.NotStarted;
+        _openingGrants.Clear();
+        _pendingOpeningStage = 0;
+        _prologueSeen = false;
+        _prologueBeat = 0;
+        _prologueClock = 0f;
+        _welcomeGiftGranted = false;
+        _tutorialsDone.Clear();
+        _rewardsCredited = 0;
+        _arrivalDwell = 0f;
+        _openingBlaze = 0f;
+        _openingCard = _openingButton = _prologueNext = _prologueSkip = Rectangle.Empty;
         _guidanceOff = false;
         _reportOpenedEver = false;
         _changedAfterFall = false;
@@ -1808,6 +1854,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingTreeCamera is { } cam) _masteryScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
         SeedExplained();
+        SeedOpening();
     }
 
     /// <summary>
@@ -3651,7 +3698,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // while the tutorial is active, and the player misses this; we need a way to indicate that the
         // game has started." Holding the clock is the whole fix: the nudge now lands the instant the
         // scrim lifts, which is the first moment it could be read.
-        if (_bootTimer > 0f && !_tourActive) _bootTimer = Math.Max(0f, _bootTimer - dt);
+        // ── THE AUTHORED OPENING RUNS FIRST, because everything below reads its decision. ───────
+        //
+        // The fight advance, the Warren tick, the input authority and the rail's gate all ask this
+        // object what the current beat allows, and a beat that means to freeze the game has to have
+        // said so before the game moves.
+        UpdateOpening(dt);
+
+        if (_bootTimer > 0f && !_tourActive && !_opening.Running) _bootTimer = Math.Max(0f, _bootTimer - dt);
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
         // Notice toasts: one at a time, each for NoticeSeconds, the next one only once the last has
         // gone. Ticks here, past the title return, so only seconds of actual play count.
@@ -3679,7 +3733,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // the page two lanes and squeezed four labels into ellipses at 150 %. So the reveal, which
         // waits for a click, holds the band; the notice, which is a few seconds, waits — AND ITS CLOCK
         // IS HELD, so it lands the moment the card closes rather than expiring unseen behind it.
-        if (_noticeTimer > 0f && !NoticeHeld) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
+        if (_noticeTimer > 0f && !NoticeHeld && !_opening.Running) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
         {
             _notice = _noticeQueue.Dequeue();
@@ -3985,7 +4039,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // CORE IS UNTOUCHED. The wave was resolved deterministically before any of this; holding
         // changes what is on screen and never what happened. Headless and offline simulation cannot
         // tell the difference because they never call this method.
-        if (!_opening.HoldsFight) UpdateExpedition(gameTime);
+        // ...AND EXACTLY ONE FRAME OF IT GETS THROUGH BEFORE THE FIRST HOLD. The descent starts
+        // lazily inside the fight screen, so a hold applied before it began would freeze an empty
+        // stage; one frame puts the champion there in its idle stance with the wave's pack still off
+        // to the right, which IS the arrival tableau. Every frame after it is held.
+        if (!_opening.HoldsFight || !_expedition.RunStarted) UpdateExpedition(gameTime);
 
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
         // farms tick above; the champion ticks on the line above this one. What must not happen is the
@@ -4016,7 +4074,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _gear.Mastery = _mastery;
             _gear.DiscoveredKeystones = _keystoneMenu;
             _gear.KnownVows = _vowMenu;
-            _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+            _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked || ForcedScreenClick(), MouseRightClicked, MouseWheel, _hunter);
             PlayCue(_gear.ConsumeCue());
 
             // A SET FINISHED IS NEWS, ONCE. The screen decides when a five-piece set is first complete
@@ -4141,7 +4199,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _vault.TraderStock = _traderStock;
             _vault.TraderBought = _traderBought;
 
-            _vault.Update(dt, _forge.UnopenedChests, PageCursor, MouseClicked, MouseWheel);
+            _vault.Update(dt, _forge.UnopenedChests, PageCursor, MouseClicked || ForcedScreenClick(), MouseWheel);
 
             // A stall purchase: pay in materials, and the good goes to the FORGE bench like any
             // other loot — the vault shows chests, not items.
@@ -6143,7 +6201,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // records that they were pressed — a fight screen that opened chests itself would be a second
         // Forge, and the errand belongs to the screen that owns the verb.
         // Indices, not names — they moved when MASTERY was inserted at 4. VAULT is 5 now.
-        if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(5); }
         // The empty vault's door out. Same shape as the HUNT's: the screen records the intent in Draw,
         // the host reads it one frame later — only the host may change screens.
         if (_vault.WantsHunt) { _vault.WantsHunt = false; OpenNav(0); }
@@ -6211,7 +6268,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _coach.Update((float)gameTime.ElapsedGameTime.TotalSeconds, LessonFactsNow(),
                       new OnboardingDirector.Busy(
                           RewardUp: _forge.RevealActive || WelcomeUp,
-                          ModalUp: _showSettings || _showHelp || _tourActive || _showTitle,
+                          // ...AND THE AUTHORED OPENING OUTRANKS IT ENTIRELY. Only one guided
+                          // sequence owns the player at a time, and while the first minutes are
+                          // written the contextual catalogue has nothing to add that is not either
+                          // already being said or being said too early.
+                          ModalUp: _showSettings || _showHelp || _tourActive || _showTitle || _opening.Running,
                           ReportUp: _expedition.LogOpen));
 
         _forge.Tuning = ForgeTuning.Default with
@@ -6349,6 +6410,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         while (_expedition.HasReward)
         {
             var r = _expedition.TakeReward();
+            // AND SO DOES THE OPENING. "WAVES PAY GLEAM" is a beat about being PAID FOR A WAVE, which
+            // is a narrower fact than the purse going up — the Warren, offline time and a chest all do
+            // that, and none of them is what the card is pointing at.
+            _rewardsCredited++;
             // THE RAIL LEARNS EVERY WAVE THE FIGHT CLEARS. No new plumbing: this loop already runs on
             // every screen and already carries the wave and whether it was a boss — the HUNT tile just
             // had no way to know. A boss's tick lives longer and lands brighter.
@@ -6403,6 +6468,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // it is named the once, on the frame it is felled, and never mentioned again. Raised BEFORE
             // the tally moves, because "is this the first?" is a question about the tally as it was.
             if (r.IsBoss && _bossesFelled == 0) _coach.Raise(OnboardingLessonId.FirstBoss);
+            // ── THE WELCOME GIFT, FROM THE BOSS THAT EARNED IT. ─────────────────────────────────
+            //
+            // A LATCH, not a count: exactly one gift per career however many bosses fall, however many
+            // descents are made, and however often the game is reloaded between them (the latch is
+            // saved on the frame it flips, and every pre-v6 file is seeded latched — its gift was
+            // handed out at frame one under the old rule and must never be handed out twice).
+            //
+            // Through the ordinary vault path, and it is deliberately NOT conditional on the boss's
+            // own rolled drop: that roll is a chance and this is a promise. The chest that arrives is
+            // the catalogue's welcome gift, whose contents are decided rather than rolled, which is
+            // what lets the beats that follow — open the chest, read the item, wear it — be authored
+            // at all.
+            if (r.IsBoss && !_welcomeGiftGranted)
+            {
+                _welcomeGiftGranted = true;
+                _forge.AddChest(GiftChests.WelcomeChest(def.Theme, def.Id));
+                _expedition.FlashChest();
+                Save();
+            }
             if (r.IsBoss) _bossesFelled++;
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
@@ -7070,19 +7154,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
 
-    /// <summary>
-    /// The click a FORCED step allows through — the one production control it is asking for.
-    /// </summary>
-    /// <remarks>
-    /// A ForceAction step is not a modal that happens to have a hole in it: every other control is
-    /// genuinely dead, and the one the deed needs is genuinely alive, in its own place, drawn and
-    /// hit-tested from the same rectangle as always. There is no tutorial-only button anywhere in this
-    /// design, so the deed the player performs IS the deed the game records.
-    /// </remarks>
-    private bool ForcedClick(Rectangle control)
-        => _clicked && !_showSettings && !_showHelp && !WelcomeUp && _opening.ForcedTarget is not null
-           && control.Contains(ChromeMouse);
-
     private bool MouseRightClicked => _rightClicked && !_showSettings && !_opening.OwnsInput;
 
 
@@ -7299,6 +7370,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // LAST of the chrome, so a tour's scrim and spotlight sit over everything — including the
         // nav rail the intro has a card about.
         DrawTour();
+        // ...AND THE AUTHORED OPENING OVER EVEN THAT. Only one of the two can be running — a tour is
+        // asked for from a screen the opening has not released yet — but the order is stated rather
+        // than assumed, because the opening is the one that can freeze the game underneath it.
+        DrawOpening();
 
         _batch.End();
 
@@ -8030,14 +8105,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // actually is, because the catalogue derives that from the world rather than from a script.
         //
         // It points the same way as the four switches above it: ON is guidance, OFF is silence.
+        // AND WHILE THE AUTHORED OPENING RUNS, THIS IS ALSO SKIP TUTORIAL. One switch stays one
+        // switch: turning guidance off ends the opening where the player actually stands and does
+        // nothing else — no item is granted, no unlock is moved, no boss is credited. A player who
+        // skips before the first boss simply has no welcome gift yet, because that gift comes from
+        // the boss now. (SKIP CINEMATIC is a different control, on the prologue, and skips only the
+        // story — see SkipPrologue.)
         var guidanceOn = !_guidanceOff;
-        if (ToggleRow("GUIDANCE", f.RightX, sy, f.RightW, ref guidanceOn, rowClick))
+        if (ToggleRow(_opening.Running ? "GUIDANCE — SKIP TUTORIAL" : "GUIDANCE", f.RightX, sy, f.RightW, ref guidanceOn, rowClick))
         {
             _guidanceOff = !guidanceOn;
+            if (_guidanceOff && _opening.Running) { _opening.SkipToEnd(); _openingWas = _opening.Stage; }
             Save();
         }
         if (changed) SaveDisplay();
-        _ui.TextBig(_batch, "GUIDANCE OFF STOPS EVERY PROMPT — IT UNLOCKS AND GRANTS NOTHING", f.RightX, f.AccessCaptionY + dy,
+        _ui.TextBig(_batch,
+                    _opening.Running
+                        ? "GUIDANCE OFF ENDS THE TUTORIAL WHERE YOU STAND — IT UNLOCKS AND GRANTS NOTHING"
+                        : "GUIDANCE OFF STOPS EVERY PROMPT — IT UNLOCKS AND GRANTS NOTHING",
+                    f.RightX, f.AccessCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
         if (f.Scrolls)
@@ -9358,10 +9444,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// a forced step means one tile is live and the other ten are not.
     /// </remarks>
     private bool NavUnlocked(int i)
+        => _opening.ForcedNav is { } only
+            ? i >= 0 && i < NavActivity.Length && NavActivity[i] == only
+            : NavOpen(i);
+
+    /// <summary>
+    /// Is this tile OPEN — by its own fact, or because the opening opened it early? The ART reads this.
+    /// </summary>
+    /// <remarks>
+    /// Split from <see cref="NavUnlocked"/> because a forced beat narrows what is PRESSABLE without
+    /// changing what is OPEN. Drawing the narrowing would hang a padlock on TRAINING — a screen this
+    /// player unlocked an hour ago — for the twenty seconds it takes to open a chest, which is a lie
+    /// about the game's own state. The scrim is what says "not now"; the padlock says "not yet".
+    /// </remarks>
+    private bool NavOpen(int i)
     {
         if (i < 0 || i >= NavActivity.Length) return true;
         var activity = NavActivity[i];
-        if (_opening.ForcedNav is { } only) return activity == only;
         return _openingGrants.Contains(activity) || Unlocks.IsOpen(activity, GuideUnlockFacts());
     }
 
@@ -9659,7 +9758,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var r = NavHexRect(slot);
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
-            var unlocked = NavUnlocked(i);
+            var unlocked = NavOpen(i);
             var activity = NavActivity[i];
             // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
             if (slot > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
@@ -9875,12 +9974,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void HandleNavClick()
     {
-        if (!MouseClicked || _showSettings || _showHelp) return;
+        if (_showSettings || _showHelp) return;
+        // A FORCED NAVIGATION LETS EXACTLY ONE TILE THROUGH the authority that killed the rest. The
+        // tile is the game's own, in its own place, taking its own click — there is no tutorial-only
+        // button in this design — and a press on any OTHER tile is swallowed in silence rather than
+        // answered with "GEAR IS NOT OPEN YET" while the card says OPEN THE VAULT.
+        var forced = _opening.ForcedNav;
+        if (!MouseClicked && !(forced is not null && _clicked && !WelcomeUp)) return;
         // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor — slot by slot, the
         // same mapping the drawing used, so what lights up is what takes the click.
         var slots = NavSlots();
         for (var slot = 0; slot < slots.Count; slot++)
-            if (NavHexRect(slot).Contains(ChromeMouse)) { OpenNav(slots[slot]); return; }
+            if (NavHexRect(slot).Contains(ChromeMouse))
+            {
+                if (forced is { } only && NavActivity[slots[slot]] != only) return;
+                OpenNav(slots[slot]);
+                return;
+            }
     }
 
     /// <summary>The rail's tiles, top to bottom: the indices into <see cref="Nav"/> of every revealed activity.</summary>

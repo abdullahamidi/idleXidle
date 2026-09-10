@@ -493,9 +493,6 @@ public sealed class HuntScreen
     /// scale, a spacing compression and two clamps, and every place that re-derived it got a different
     /// answer from the one on screen.
     /// </remarks>
-    /// <summary>Set when the rail's reward buttons are pressed — the host navigates, the screen does not.</summary>
-    public bool WantsVault { get; set; }
-
     /// <summary>Set by the SPEND POINTS button — the host opens the MASTERY tree (the E screen).</summary>
     /// <remarks>
     /// The button used to set <see cref="WantsBuild"/> and the host sent the player to the BUILD
@@ -773,6 +770,10 @@ public sealed class HuntScreen
             Inflated(StageHeader, 10),
         },
         TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
+        // THE HEADER ALONE — where the region, the wave and the conquest bar are. Enemies above lights
+        // the creatures AND this, because a card about what is being fought wants both; a card about
+        // DEPTH wants only the panel the number is in.
+        TourTarget.StageHeader => new[] { Inflated(StageHeader, 10) },
         // THE GLEAM CAPSULE ALONE — the card is titled GLEAM and says Gleam pays for training, and
         // the light used to frame all three pills beside it (playtest 2026-09-09). Read from the row
         // the host just drew, so the card's claim and the lit rectangle cannot drift apart again.
@@ -1025,6 +1026,17 @@ public sealed class HuntScreen
 
     /// <summary>Is a BOSS the thing standing there?</summary>
     public bool BossOnStage => _isBossWave;
+
+    /// <summary>
+    /// Has a descent actually begun? False until the first Update, because the run starts lazily.
+    /// </summary>
+    /// <remarks>
+    /// The arrival tableau needs exactly one frame of the fight and then stillness: one frame puts a
+    /// champion on the stage in its idle stance with the wave's pack still off to the right, which IS
+    /// the arrival. The host reads this so it can let that single frame through and hold every one
+    /// after it.
+    /// </remarks>
+    public bool RunStarted => _run is not null && _replay is not null;
 
     /// <summary>
     /// Is the FALL PLATE up — the panel that names the wave, diagnoses the run and offers READ THE LOG?
@@ -1331,7 +1343,9 @@ public sealed class HuntScreen
         // THE VAULT, not the Forge. Chests moved to the VAULT screen when it was carved off the Forge, and
         // this line kept sending players to the FORGE tab to open one (release polish 2026-09-05). No key
         // hint either: the doors name no keys in their labels — the tour and the help sheet teach the
-        // keys (UX guide §14) — and the right column's OPEN VAULT door is the click this line points at.
+        // keys (UX guide §14) — and the VAULT TILE on the rail, which is wearing a fresh count badge as
+        // this banner is posted, is the click this line points at. (The right column had a second door
+        // labelled OPEN VAULT; it was removed with the authored opening — one room, one door.)
         _bannerText = "BOSS DOWN — A CHEST IS WAITING IN THE VAULT";
         _bannerTimer = 2.4f;
     }
@@ -4734,7 +4748,7 @@ public sealed class HuntScreen
     {
         var chestRow = ChestCount > 0 && VaultOpen;
         var pointsRow = Mastery.Available > 0 && MasteryOpen;
-        var doors = (chestRow ? 1 : 0) + (pointsRow ? 1 : 0);
+        var doors = pointsRow ? 1 : 0;   // the chest's door is the VAULT tile now — see below
 
         var top = UiTypography.PanelTitleTop;
         var idleBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.PrimaryValue);
@@ -4784,20 +4798,19 @@ public sealed class HuntScreen
         }
         y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
-        // THE FIRST DOOR IS THE SCREEN'S PRIMARY: a chest waiting is the one thing this screen asks the
-        // player to do, so its door is lit; the points door is lit only when it is the sole door
-        // (release polish 2026-09-05, hunt-10).
-        if (chestRow)
-        {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), "OPEN VAULT", hit, clicked, true, ButtonStyle.Primary)) WantsVault = true;
-            y += DoorPitch;
-        }
-        if (pointsRow)
-        {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked,
-                           true, chestRow ? ButtonStyle.Secondary : ButtonStyle.Primary))
-                WantsMastery = true;
-        }
+        // THE VAULT DOOR IS GONE FROM HERE, and it is the rail tile now.
+        //
+        // A chest waiting had TWO doors in this game — a button in this column and the VAULT tile on
+        // the rail, which carries its own count badge — and the authored opening has to point at one
+        // of them. The tile is the one that is always there, on every screen, at every depth, in the
+        // place the player will look for it for the rest of the game; a button that exists only on
+        // this screen and only while a chest happens to be waiting teaches nothing they can reuse.
+        // Two doors to one room also meant the teaching had to name a place ("the right column") that
+        // stops existing the moment the chest is opened. The line above still SAYS a chest is ready.
+        if (pointsRow
+            && _ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked,
+                          true, ButtonStyle.Primary))
+            WantsMastery = true;
     }
 
     // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────

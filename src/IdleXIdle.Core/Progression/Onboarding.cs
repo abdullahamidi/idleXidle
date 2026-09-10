@@ -41,6 +41,16 @@ public enum TourTarget
     /// </remarks>
     LogButton,
 
+    /// <summary>
+    /// THE STAGE HEADER — the region, the wave, and how far the conquest has come.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="Enemies"/>, which lights the creatures AND the header because a card
+    /// about what is being fought wants both. A card about DEPTH wants the header alone: the number
+    /// it is naming is in there, and lighting the pack beside it says the pack is the answer.
+    /// </remarks>
+    StageHeader,
+
     // ── TRAINING ──
     /// <summary>The training rows: one per stat, grouped, each with what it is now and after a rank.</summary>
     TrainingRows,

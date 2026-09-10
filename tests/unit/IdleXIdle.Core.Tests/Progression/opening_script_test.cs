@@ -242,4 +242,75 @@ public class OpeningScriptTest
         Assert.True(OpeningScript.FirstVersionWithOpeningState <= SaveGame.CurrentVersion,
                     "the opening cannot first be persisted in a version that does not exist yet");
     }
+
+    [Fact]
+    public void test_the_prologue_is_the_world_and_never_a_control()
+    {
+        // FOUR TO SIX BEATS, and every one of them about the place rather than the interface. The
+        // teaching starts on the other side of BEGIN THE HUNT; a prologue that mentioned a button
+        // would be a tutorial wearing a story's clothes, which is the thing the redesign replaced.
+        Assert.InRange(OpeningScript.Prologue.Count, 4, 6);
+
+        var forbidden = new[]
+        {
+            "CLICK", "BUTTON", "SCREEN", "TILE", "TAB", "MENU", "GLEAM", "CHEST", "VAULT",
+            "EQUIP", "TRAINING", "WAVE", "HOTKEY", "SHORTCUT", "PRESS ",
+        };
+        foreach (var beat in OpeningScript.Prologue)
+        {
+            Assert.NotEqual("", beat.Title);
+            Assert.NotEqual("", beat.Body);
+            // A HEADING, not a sentence — the same rule the steps keep.
+            Assert.InRange(beat.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length, 1, 5);
+            Assert.Equal(beat.Title.ToUpperInvariant(), beat.Title);
+            // Longer than a step's body, because this one is being read rather than acted on — but
+            // still a subtitle, which is two sentences at a readable width.
+            Assert.InRange(beat.Body.Length, 20, 165);
+
+            var text = (beat.Title + " " + beat.Body).ToUpperInvariant();
+            foreach (var word in forbidden)
+                Assert.DoesNotContain(word, text, StringComparison.Ordinal);
+        }
+
+        // AND IT ENDS WHERE THE GAME BEGINS. The last beat names the place the arrival lands in, so
+        // the cut from the story to the stage is a continuation rather than a subject change.
+        Assert.Contains("VERDANT HOLLOW", OpeningScript.Prologue[^1].Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void test_a_rail_beat_points_at_the_tile_the_chain_is_heading_for()
+    {
+        // "IT LEFT A CHEST — chests wait in the VAULT" wants ONE tile lit, not the whole rail, and the
+        // tile it wants is by definition the one the next forced step makes the player press. Read
+        // from the script so re-ordering the chain moves the light with it.
+        Assert.Equal(Activity.Vault, OpeningScript.NextForcedScreen(OpeningStage.IntroduceChest));
+        Assert.Equal(Activity.Vault, OpeningScript.NextForcedScreen(OpeningStage.ForceVault));
+        Assert.Equal(Activity.Gear, OpeningScript.NextForcedScreen(OpeningStage.IntroduceItem));
+        Assert.Equal(Activity.Gear, OpeningScript.NextForcedScreen(OpeningStage.ForceGear));
+
+        // Past the last forced step there is nothing left to point at, and past the end of the script
+        // there is no script — neither may invent a tile.
+        Assert.Null(OpeningScript.NextForcedScreen(OpeningStage.ShowEquipped));
+        Assert.Null(OpeningScript.NextForcedScreen(OpeningStage.Complete));
+
+        // EVERY beat that lights the rail has somewhere for that light to land. A rail beat with no
+        // destination would darken the page and cut no hole, which is the failure the whole-canvas
+        // sentinel exists to make visible.
+        foreach (var step in OpeningScript.Steps.Where(s => s.Target == TourTarget.NavRail))
+            Assert.NotNull(OpeningScript.NextForcedScreen(step.Stage));
+    }
+
+    [Fact]
+    public void test_the_depth_beat_lights_the_header_and_not_the_pack()
+    {
+        // "HOW DEEP YOU ARE" is about the wave number and the conquest bar, both of which live in the
+        // stage header. It pointed at Enemies, whose spotlight is the creatures AND the header — so
+        // the card about depth lit the thing it was not about, twice as brightly.
+        var depth = Assert.IsType<OpeningStep>(OpeningScript.Find(OpeningStage.IntroduceStage));
+        Assert.Equal(TourTarget.StageHeader, depth.Target);
+
+        // ...and the beat before it, which IS about the creatures, still points at them.
+        var enemies = Assert.IsType<OpeningStep>(OpeningScript.Find(OpeningStage.IntroduceEnemy));
+        Assert.Equal(TourTarget.Enemies, enemies.Target);
+    }
 }
