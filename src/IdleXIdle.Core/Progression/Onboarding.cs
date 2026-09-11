@@ -141,6 +141,25 @@ public enum TourTarget
     ChampionDetail,
     /// <summary>The BECOME THEM button.</summary>
     BecomeThem,
+
+    // ── THE AUTHORED OPENING: one control each, and the host says which ──
+    /// <summary>
+    /// One item's cell in the GEAR bag — the item a step is about. The host knows which item, so it
+    /// asks the screen where that cell is drawn; no static layout can answer it.
+    /// </summary>
+    InventoryItem,
+    /// <summary>The GEAR inspector's EQUIP button, and nothing else on the panel.</summary>
+    EquipButton,
+    /// <summary>
+    /// One chest's card in the VAULT — the chest a step is about, resolved by the host the way
+    /// <see cref="InventoryItem"/> is.
+    /// </summary>
+    ChestCard,
+    /// <summary>
+    /// The chest's REVEAL card — what just came out of it. Host chrome drawn over whichever screen
+    /// the chest was opened on, so the host resolves it, in canvas space.
+    /// </summary>
+    RevealedItem,
 }
 
 /// <summary>One card of a tour: what it points at, its title, and its two or three short sentences.</summary>

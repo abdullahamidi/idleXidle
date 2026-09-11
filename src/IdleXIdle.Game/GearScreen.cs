@@ -212,6 +212,9 @@ public sealed class GearScreen
         TourTarget.PaperDoll => new[] { EquippedPanel },
         TourTarget.Inventory => new[] { InventoryPanel },
         TourTarget.ItemDetail => new[] { DetailPanel },
+        // EQUIP, ALONE. The inspector around it carries UPGRADE, REFORGE and SALVAGE; a step that lit the
+        // whole panel let all three through, and one SALVAGE would destroy the item it was waiting on.
+        TourTarget.EquipButton => new[] { EquipBtn },
         // The doll's foot strip: worn count, average level, and a chip per live set rung. It is where
         // a set announces itself, so it is what the SET card lights.
         TourTarget.GearSets => new[] { FooterStrip },
@@ -352,6 +355,22 @@ public sealed class GearScreen
     private Rectangle InvCellRect(int i)
         => new(InvX + i % InvCols * (InvCell + InvGap), InvTop + i / InvCols * (InvCell + InvGap), InvCell, InvCell);
 
+    /// <summary>
+    /// Where one item's cell is drawn in the bag right now, in page space — or null when the item is not
+    /// in the bag, not on the active tab, or scrolled out of view.
+    /// </summary>
+    /// <remarks>
+    /// The same rectangle the grid draws and the click hit-tests (<see cref="InvCellRect"/>), so a light
+    /// cut from it is exactly the control that takes the click.
+    /// </remarks>
+    public Rectangle? CellOf(string itemId, Hunter hunter)
+    {
+        var list = Filtered(hunter);
+        var idx = list.FindIndex(i => i.InstanceId == itemId);
+        var vis = idx - _invScroll * InvCols;
+        return idx < 0 || vis < 0 || vis >= InvCols * InvRows ? null : InvCellRect(vis);
+    }
+
     // ── THE INSPECTOR'S ACTIONS: the verb row and the one primary button, anchored to the panel's bottom. ──
     private static int DetX => UiKit.ContentLeft(DetailPanel);
     private static int DetW => UiKit.ContentRight(DetailPanel) - DetX;
@@ -372,16 +391,48 @@ public sealed class GearScreen
     private int _invScroll;
     private string? _selectedId;
 
+    /// <summary>The item the inspector is showing — the screen's own selection — or null.</summary>
+    public string? SelectedItemId => _selectedId;
+
     /// <summary>
-    /// Has the player ever CLICKED an item on this screen? Not the same as one being selected.
+    /// The item the PLAYER chose — a click in the bag or on the doll, the menu, a drag — or null while
+    /// the inspector shows only what the screen picked for them.
     /// </summary>
     /// <remarks>
-    /// The screen selects the first item for you when it opens (see Filtered's fallback below), so
-    /// "something is selected" is true a frame after arriving and proves nothing. An authored step
-    /// that asks the player to READ an item is asking for a click, and this is the only fact that
-    /// distinguishes the two. Latched, never cleared: reading is done once.
+    /// <para>
+    /// The screen selects the first item for you when it opens (see the adoption in Update), so
+    /// "something is selected" is true a frame after arriving and proves nothing. A step that asks the
+    /// player to pick an item is asking for a click, and this is the one reading that can tell the two
+    /// apart: it IS the real selection, reported only when a player's gesture made it.
+    /// </para>
+    /// <para>
+    /// It replaces a latch (ItemClickedEver) that only two of the three pick gestures ever set — a
+    /// LEFT click on a bag cell selected the item and set nothing, so the opening's "click the item"
+    /// waited forever on a click the player had already made (playtest 2026-09-11).
+    /// </para>
     /// </remarks>
-    public bool ItemClickedEver { get; private set; }
+    public string? PickedItemId => _picked ? _selectedId : null;
+    private bool _picked;
+
+    /// <summary>
+    /// Does the screen pick an item for the player when nothing is selected? True in play.
+    /// </summary>
+    /// <remarks>
+    /// Off while a step is asking the player to choose (the host sets it). The inspector then reads
+    /// NOTHING SELECTED until the click, so the click visibly fills it — and a selection the screen
+    /// made on its own is withdrawn rather than passed off as the player's.
+    /// </remarks>
+    public bool AutoSelect { get; set; } = true;
+
+    /// <summary>
+    /// May a press pick a piece up and carry it? The host turns it off while the opening owns the pointer.
+    /// </summary>
+    /// <remarks>
+    /// A drop on the doll is an equip. While the opening holds the player to one lit control, a drag
+    /// from the lit cell to its slot would wear the item past the step that asked for a click — which
+    /// would then wait forever on an item that is no longer in the bag.
+    /// </remarks>
+    public bool AllowCarry { get; set; } = true;
     private ItemInstance? _hovered;
     private string? _tip;
     private Rectangle _tipAt;
@@ -423,6 +474,7 @@ public sealed class GearScreen
                    ?? AllSlots.Select(hunter.Worn).FirstOrDefault(w => w?.InstanceId == itemId);
         if (item is null) return;
         _selectedId = itemId;
+        _picked = true;   // a drop is the player's own gesture
 
         foreach (var (slot, _, col, row) in SlotLayout)
         {
@@ -574,9 +626,15 @@ public sealed class GearScreen
 
         var list = Filtered(hunter);
 
-        // The selection is adopted only when the item is GONE from the bag, not merely off-tab.
+        // A SELECTION THE SCREEN MADE IS NOT KEPT WHILE THE PLAYER IS BEING ASKED TO MAKE ONE.
+        if (!AutoSelect && !_picked) _selectedId = null;
+        // The selection is adopted only when the item is GONE from the bag, not merely off-tab — and an
+        // adopted one is the screen's choice, never the player's, until a gesture of theirs replaces it.
         if (_selectedId is null || (Wearable().All(i => i.InstanceId != _selectedId) && AllSlots.Select(hunter.Worn).All(w => w?.InstanceId != _selectedId)))
-            _selectedId = list.FirstOrDefault()?.InstanceId;
+        {
+            _selectedId = AutoSelect ? list.FirstOrDefault()?.InstanceId : null;
+            _picked = false;
+        }
 
         var rows = (list.Count + InvCols - 1) / InvCols;
         _invScroll = UiKit.Scrolled(_invScroll, wheel != 0 && InventoryPanel.Contains(hit) ? Math.Sign(wheel) : 0, InvRows, rows);
@@ -591,7 +649,10 @@ public sealed class GearScreen
         //
         // This method returns from a dozen places once it has spent a click, so the drag has to be
         // handled above all of them or a release would be eaten by whichever branch happened to match.
-        var held = UiKit.MouseHeld;
+        // NO CARRY WHILE THE OPENING OWNS THE POINTER (AllowCarry): a hand already holding a piece lets
+        // go of it WITHOUT dropping it, and a new press picks nothing up.
+        if (!AllowCarry) { _carryId = null; _carryFromSlot = null; _carryMoved = false; }
+        var held = AllowCarry && UiKit.MouseHeld;
         var pressed = held && !_wasHeld;
         var releasedDrag = !held && _wasHeld;
         _wasHeld = held;
@@ -642,7 +703,7 @@ public sealed class GearScreen
                 if (idx >= list.Count) break;
                 if (!InvCellRect(vis).Contains(hit)) continue;
                 _selectedId = list[idx].InstanceId;
-                ItemClickedEver = true;
+                _picked = true;
                 OpenMenu(list[idx].InstanceId, InvCellRect(vis));
                 return;
             }
@@ -650,6 +711,7 @@ public sealed class GearScreen
                 if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } wornItem)
                 {
                     _selectedId = wornItem.InstanceId;
+                    _picked = true;
                     OpenMenu(wornItem.InstanceId, SlotRect(col, row));
                     return;
                 }
@@ -669,20 +731,26 @@ public sealed class GearScreen
         for (var i = 0; i < Tabs.Length; i++)
             if (TabRect(i).Contains(hit))
             {
-                _tab = i; _invScroll = 0; _selectedId = Filtered(hunter).FirstOrDefault()?.InstanceId;
+                // A new tab is the SCREEN'S choice of what to show first, never the player's pick.
+                _tab = i; _invScroll = 0;
+                _selectedId = AutoSelect ? Filtered(hunter).FirstOrDefault()?.InstanceId : null;
+                _picked = false;
                 _feedback.Cue("sfx_click");
                 return;
             }
 
         // A worn slot: select it. (Taking off is the inspector's TAKE OFF, or the menu — one gesture, said.)
         foreach (var (slot, _, col, row) in SlotLayout)
-            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; ItemClickedEver = true; _feedback.Cue("sfx_click"); return; }
+            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; _picked = true; _feedback.Cue("sfx_click"); return; }
 
+        // A BAG CELL: THE PLAYER'S PICK. This is the gesture every other one mirrors, and it was the one
+        // that never said so — it selected the item and reported nothing, so a step waiting for "click
+        // the item" waited on a click the player had already made (playtest 2026-09-11).
         for (var vis = 0; vis < InvCols * InvRows; vis++)
         {
             var idx = _invScroll * InvCols + vis;
             if (idx >= list.Count) break;
-            if (InvCellRect(vis).Contains(hit)) { _selectedId = list[idx].InstanceId; _feedback.Cue("sfx_click"); return; }
+            if (InvCellRect(vis).Contains(hit)) { _selectedId = list[idx].InstanceId; _picked = true; _feedback.Cue("sfx_click"); return; }
         }
 
         if (Selected(hunter) is { } sel)

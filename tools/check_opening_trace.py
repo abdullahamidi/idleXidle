@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Read an opening trace (RH_OPENING_TRACE) back and fail on the orders the 2026-09-11 pass fixed.
+
+    py tools/check_opening_trace.py build/shots/opening_flow/100/trace.txt
+
+The trace is one line per thing that happened, frame-stamped: "F <frame> <EVENT> <key=value ...>".
+It is written by Game1.OpeningRig.cs while a synthetic hand plays a fresh career through the real
+input path. Each check below is an ORDER a screenshot cannot prove:
+
+  GLEAM      the first clear's final EnemyDown < its last fall finished <= the GLEAM card
+             < the next wave's entrance, and the next wave only after CONTINUE
+  SIGNATURE  the hold engaged <= the card < CONTINUE < the held cast crossed; the career's first
+             cast IS the held one, it crossed exactly once, and nothing was drawn over it
+             (HEALTH) before it had played
+  GEAR       nothing was the player's pick before their click; the click picked the Welcome Gift;
+             ITEM STATS came after the pick; EQUIP wore it; CONTINUE returned to the hunt
+  EVERY STEP each clicked beat advanced on its first click, and nothing stalled
+"""
+import re
+import sys
+
+WELCOME = "itm_gift_welcome_weapon"
+
+
+def load(path):
+    events = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            m = re.match(r"F (\d+) (\S+)\s*(.*)$", line.strip())
+            if m:
+                events.append((int(m.group(1)), m.group(2), m.group(3)))
+    return events
+
+
+def kv(rest):
+    return dict(part.split("=", 1) for part in rest.split() if "=" in part)
+
+
+def main(path):
+    ev = load(path)
+    fails = []
+
+    def check(ok, msg):
+        print(("PASS  " if ok else "FAIL  ") + msg)
+        if not ok:
+            fails.append(msg)
+
+    def first(kind, pred=lambda rest: True, after=-1):
+        for frame, k, rest in ev:
+            if k == kind and frame > after and pred(rest):
+                return frame
+        return None
+
+    def stage(name):
+        return first("STAGE", lambda r: r == name)
+
+    def clicks(prefix, after=-1):
+        return [f for f, k, r in ev if k == "CLICK" and r.startswith(prefix + " ") and f > after]
+
+    # ── IT FINISHED ─────────────────────────────────────────────────────────────────────────────
+    check(any(k == "COMPLETE" for _, k, _ in ev), "the opening reached Complete")
+    stalls = [r for _, k, r in ev if k == "STALL"]
+    check(not stalls, "no stage stalled" + (f" (stalled: {stalls[0]})" if stalls else ""))
+
+    # ── GLEAM ───────────────────────────────────────────────────────────────────────────────────
+    card = stage("IntroduceResources")
+    kills = [f for f, k, _ in ev if k == "ENEMY_DOWN" and card is not None and f < card]
+    kill = kills[-1] if kills else None
+    falls = first("FALLS_PLAYED", after=kill - 1) if kill is not None else None
+    ack = (clicks("IntroduceResources", card) or [None])[0] if card is not None else None
+    nxt = first("WAVE_BEGIN", after=card) if card is not None else None
+    traced = None not in (card, kill, falls, ack, nxt)
+    check(traced, f"the first clear was traced (kill={kill} falls={falls} card={card} ack={ack} next={nxt})")
+    if traced:
+        check(kill < falls <= card,
+              f"GLEAM waited for the last fall to finish (kill {kill} < fall done {falls} <= card {card})")
+        check(card < nxt and ack < nxt,
+              f"the next wave waited for GLEAM to be answered (card {card}, continue {ack}, next wave {nxt})")
+
+    # ── THE BOSS: "A CHEST DROPPED" waits for the boss's fall, exactly as GLEAM waits for the first ──
+    chest_card = stage("IntroduceChest")
+    boss_kills = [f for f, k, _ in ev if k == "ENEMY_DOWN" and chest_card is not None and f < chest_card]
+    boss_kill = boss_kills[-1] if boss_kills else None
+    boss_falls = first("FALLS_PLAYED", after=boss_kill - 1) if boss_kill is not None else None
+    check(None not in (chest_card, boss_kill, boss_falls) and boss_kill < boss_falls <= chest_card,
+          f"A CHEST DROPPED waited for the boss's fall (kill {boss_kill} < fall done {boss_falls} <= card {chest_card})")
+
+    # ── SIGNATURE ───────────────────────────────────────────────────────────────────────────────
+    held = next(((f, kv(r)) for f, k, r in ev if k == "HELD" and kv(r).get("kind") == "Skill"), None)
+    sig = stage("IntroduceSignature")
+    sig_ack = (clicks("IntroduceSignature", sig) or [None])[0] if sig is not None else None
+    casts = [(f, kv(r)) for f, k, r in ev if k == "SKILL"]
+    check(held is not None and sig is not None and sig_ack is not None and bool(casts),
+          f"the Signature beat was traced (held={held and held[0]} card={sig} continue={sig_ack} casts={len(casts)})")
+    if held is not None and sig is not None and sig_ack is not None and casts:
+        held_frame, held_kv = held
+        at, wave = held_kv.get("at"), held_kv.get("wave")
+        first_cast_frame, first_cast = casts[0]
+        check(held_frame <= sig < sig_ack, f"hold {held_frame} <= card {sig} < continue {sig_ack}")
+        # SHORT OF THE WIND-UP, not one millisecond short of the event (the 2026-09-11 bug): the cast's
+        # clip starts one contact-length (~780 ms at the opening's tempo) ahead of its event.
+        lead = int(at) - int(float(held_kv.get("playhead", at))) if at is not None else 0
+        check(lead >= 300, f"the hold parked ahead of the cast's wind-up (lead {lead} ms before the event)")
+        check(first_cast_frame > sig_ack,
+              f"no Signature cast was shown before CONTINUE (first cast at frame {first_cast_frame}, continue at {sig_ack})")
+        check(first_cast.get("at") == at and first_cast.get("wave") == wave,
+              f"the first cast of the career is the held one (held at={at} wave={wave}; "
+              f"first cast at={first_cast.get('at')} wave={first_cast.get('wave')})")
+        # ...counted inside the one wave the hold was in: from CONTINUE to that wave's end. A Hunter who
+        # later falls and walks the waves again can cast at the same millisecond of a later wave two.
+        wave_end = first("WAVE_BEGIN", after=sig_ack) or 10**9
+        same = [f for f, c in casts if c.get("at") == at and sig_ack < f < wave_end]
+        check(len(same) == 1, f"the held cast crossed exactly once ({len(same)} crossings before the next wave)")
+        landed = first("RELEASED_PLAYED", after=sig_ack)
+        health = stage("IntroduceHealth")
+        check(landed is not None and health is not None and first_cast_frame <= landed <= health,
+              f"nothing was drawn over the cast until it had played (cast {first_cast_frame}, "
+              f"played {landed}, next card {health})")
+
+    # ── GEAR ────────────────────────────────────────────────────────────────────────────────────
+    sel = stage("ForceItemSelect")
+    explain = stage("ExplainItem")
+    equip = stage("ForceEquip")
+    shown = stage("ShowEquipped")
+    done = stage("Complete")
+    pick_click = (clicks("ForceItemSelect", sel) or [None])[0] if sel is not None else None
+    pick = first("GEAR_SELECTED", lambda r: kv(r).get("picked") == WELCOME, after=(sel or 0) - 1)
+    check(None not in (sel, pick_click, pick, explain),
+          f"the pick was traced (step={sel} click={pick_click} pick={pick} explain={explain})")
+    if None not in (sel, pick_click, pick, explain):
+        early = [r for f, k, r in ev if k == "GEAR_SELECTED" and sel <= f < pick_click and kv(r).get("picked") != "-"]
+        check(not early, "nothing counted as the player's pick before their click" + (f" ({early[0]})" if early else ""))
+        check(pick_click <= pick <= explain,
+              f"the click picked the Welcome Gift and ITEM STATS followed (click {pick_click}, pick {pick}, card {explain})")
+    equip_click = (clicks("ForceEquip", equip) or [None])[0] if equip is not None else None
+    worn = first("WORN", lambda r: kv(r).get("n") == "1", after=(equip or 0) - 1)
+    check(None not in (equip, equip_click, worn, shown) and equip_click <= worn <= shown,
+          f"EQUIP wore the item and the step followed (click {equip_click}, worn {worn}, next {shown})")
+    # ON or after: the last CONTINUE navigates in the same frame the cursor reaches Complete.
+    back = first("SCREEN", lambda r: r == "Hunt", after=done - 1) if done is not None else None
+    check(back is not None, f"CONTINUE on the last card returned to the hunt (complete {done}, hunt {back})")
+
+    # ── THE HUNTER'S OWN FALLS — not an order failure, but never silent ──────────────────────────
+    downs = [(f, r) for f, k, r in ev if k == "HUNTER_DOWN"]
+    for f, r in downs:
+        print(f"WARN  the Hunter fell during the opening at frame {f} ({r}) and started the descent again")
+
+    # ── EVERY CLICKED BEAT MOVED ON ITS FIRST CLICK ─────────────────────────────────────────────
+    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1"]
+    check(not extra, "every clicked beat advanced on its first click" + (f" (again: {extra[0]})" if extra else ""))
+
+    print(f"{len(fails)} failed" if fails else "opening trace: every order holds")
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(__doc__)
+        sys.exit(2)
+    sys.exit(main(sys.argv[1]))

@@ -1197,9 +1197,34 @@ public sealed class ForgeScreen
     /// the clock and who calls the draw. Both are the host's job now, so the reveal plays WHERE THE
     /// PLAYER PRESSED — which is the only place it means anything.
     /// </remarks>
+    /// <summary>The single-chest reveal card's rectangle as last drawn, in canvas space.</summary>
+    /// <remarks>Read by the host to light the card; meaningful only while <see cref="RevealActive"/>.</remarks>
+    public Rectangle RevealCardRect { get; private set; }
+
+    /// <summary>
+    /// Keep a single chest's card standing once it has fully arrived. The host sets it while a card is
+    /// ABOUT the reveal ("YOUR FIRST ITEM"), so the item stays on screen for as long as that is read.
+    /// </summary>
+    /// <remarks>
+    /// The same moment the pointer hold latches at (<see cref="RevealSettledAt"/>): the burst and the
+    /// drops play whole first, and a skip (<see cref="AdvanceReveal"/>) still lets it go.
+    /// </remarks>
+    public bool HoldRevealOpen { get; set; }
+
+    /// <summary>Seconds after the crack at which the card has fully arrived — the last drop settled.</summary>
+    private float RevealSettledAt()
+    {
+        var burstEnds = _revealBrief ? 0.46f : BurstEnds;
+        var cardIn = _revealBrief ? 0.14f : CardIn;
+        var stagger = _revealBrief ? 0.08f : ItemStagger;
+        return burstEnds + cardIn + MathF.Max(Math.Max(0, _revealItems.Count - 1) * stagger + 0.18f, _revealBrief ? 0.25f : 0.5f);
+    }
+
     public void TickReveal(float dt)
     {
         if (_revealTimer <= 0f || _revealFrozen) return;
+        if (HoldRevealOpen && !_revealClosing && !_revealBrief && !_revealSummary
+            && _revealHold - _revealTimer >= RevealSettledAt()) return;
         // THE CLOCK STOPS UNDER THE POINTER. A card that dissolves while the player is reading it — or
         // reaching for the SELL button on it — is the exact bug the reveal's new buttons would otherwise
         // become a trap for. Set by the draw (see DrawReveal); cleared the frame the pointer leaves.
@@ -3854,6 +3879,7 @@ public sealed class ForgeScreen
         var closeH = UiMetrics.Control(56);
         var cardH = closeOff + closeH + UiMetrics.Space(42);
         var full = new Rectangle(960 - cardW / 2, (1080 - cardH) / 2, cardW, cardH);   // ui-page-ok: host chrome, canvas space
+        RevealCardRect = full;
 
         // THE HOLD. Only once the card has FINISHED arriving — the plate landing is not enough. The
         // first cut latched at burstEnds + cardIn, which is the moment the plate lands and the moment
@@ -3862,8 +3888,7 @@ public sealed class ForgeScreen
         // waits for the last drop to settle and for the material count-up to finish, and a CASCADE
         // entry never latches at all — it carries no buttons (`acts` is false while _revealBrief), so
         // a pointer parked mid-screen would stall the whole OPEN ALL for nothing.
-        var settled = burstEnds + cardIn
-                      + MathF.Max(Math.Max(0, n - 1) * stagger + 0.18f, _revealBrief ? 0.25f : 0.5f);
+        var settled = RevealSettledAt();   // one formula, shared with the host's hold (TickReveal)
         var arrived = !_revealBrief && t >= settled;
         var pointerIn = arrived && !_revealClosing && full.Contains(mouse);
         _revealPointerHold = pointerIn;

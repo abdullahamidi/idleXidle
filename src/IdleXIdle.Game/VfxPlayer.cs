@@ -48,6 +48,9 @@ public sealed class VfxPlayer
         public required float SecondsPerFrame { get; init; }
         public float Elapsed;
 
+        /// <summary>Its place in the order effects were launched (1, 2, 3 …) — see <see cref="Launched"/>.</summary>
+        public long Seq;
+
         /// <summary>How long this has waited for a subject nobody published. Its own clock does not run.</summary>
         public float Waiting;
 
@@ -230,7 +233,33 @@ public sealed class VfxPlayer
                      VfxSubject? travelTo = null, float? fps = null)
     {
         if (!Enabled) return;
-        if (Spawn(p, assetKey, subject, tint, travelTo, fps) is { } a) _active.Add(a);
+        if (Spawn(p, assetKey, subject, tint, travelTo, fps) is { } a)
+        {
+            a.Seq = ++_launched;
+            _active.Add(a);
+        }
+    }
+
+    private long _launched;
+
+    /// <summary>The sequence number of the last effect <see cref="Play"/> launched — 0 before the first.</summary>
+    /// <remarks>
+    /// Read it either side of a call to know which effects that call launched, then ask
+    /// <see cref="AnyPlaying"/> whether any of them is still on screen. It is how the fight waits for
+    /// ONE cast's own effect to finish without keeping a timer that could drift from the strip's length.
+    /// </remarks>
+    public long Launched => _launched;
+
+    /// <summary>
+    /// Is any effect launched after <paramref name="after"/>, up to and including <paramref name="upTo"/>,
+    /// still playing? False for an empty range, and after <see cref="Clear"/>.
+    /// </summary>
+    public bool AnyPlaying(long after, long upTo)
+    {
+        if (upTo <= after) return false;
+        foreach (var a in _active)
+            if (a.Seq > after && a.Seq <= upTo) return true;
+        return false;
     }
 
     /// <summary>

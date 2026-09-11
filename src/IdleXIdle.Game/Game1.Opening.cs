@@ -18,8 +18,8 @@ namespace IdleXIdle.Game;
 /// <see cref="OpeningScript"/> is the writing and <see cref="OpeningDirector"/> is the cursor; both are
 /// testable without a graphics device and neither can touch the game. This half is the part that can:
 /// it gathers the frame's facts, hands them to the cursor, and then obeys whatever the cursor says —
-/// stop the fight, park the replay a millisecond short of a beat, open a screen ahead of its unlock,
-/// narrow the pointer to one production rectangle.
+/// stop the fight, park the replay ahead of a beat's wind-up, keep the next wave off the stage, open a
+/// screen ahead of its unlock, narrow the pointer to one production rectangle.
 /// </para>
 /// <para>
 /// It is a separate file rather than another thousand lines of <c>Game1.cs</c> because the opening is a
@@ -35,7 +35,9 @@ public partial class Game1
     /// <remarks>
     /// Counted rather than inferred from the purse: gleam arrives from the Warren, from offline time
     /// and from a chest as well as from a wave, and "the pile went up" is a different fact from "your
-    /// Hunter cleared something and was paid for it", which is the one the beat is about.
+    /// Hunter cleared something and was paid for it", which is the one the beat is about. It is also
+    /// the opening's count of waves the player has SEEN cleared: the descent counts its depth when a
+    /// wave is pushed, which is a whole wave before anyone watches it end.
     /// </remarks>
     private int _rewardsCredited;
 
@@ -84,6 +86,9 @@ public partial class Game1
     /// <summary>The opening's scrim. The tour's weight: while it holds the player, it is the only thing.</summary>
     private static readonly Color OpeningScrim = new Color(0x05, 0x03, 0x0A) * 0.80f;
 
+    /// <summary>How far every lit rectangle is grown past its control, so the frame art sits inside the light.</summary>
+    private const int SpotlightHalo = 10;
+
     /// <summary>Is the opening the thing on screen right now?</summary>
     /// <remarks>
     /// Never over the settings or help panel. Settings is where the opening can be ended, and a scrim
@@ -125,24 +130,73 @@ public partial class Game1
     /// Everything an authored beat might be waiting for, gathered once from production state.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Not one of these is a tutorial variable. The arrival's settling is the fight screen's own run
     /// having started plus a dwell nothing else can see; the enemy standing is the hold the fight
     /// already waits on before anyone swings; the signature being imminent is the replay's own report
-    /// that the barrier is holding it. That is what keeps this a layer ON the game rather than a
-    /// puppet show beside it — every gate is answered by the thing the player is actually looking at.
+    /// that the barrier is holding it.
+    /// </para>
+    /// <para>
+    /// <b>Two kinds of fact, never confused.</b> A GAMEPLAY fact — a reward credited, an item worn — is
+    /// true the frame it happens. A PRESENTATION fact — the clear has been shown, the released cast has
+    /// played — is true once the player has SEEN it happen, and the fight screen is the only thing that
+    /// knows when that is. Every card about a moment waits on the second kind; the playtest of
+    /// 2026-09-11 was two cards that waited on the first.
+    /// </para>
     /// </remarks>
     private OpeningFacts OpeningFactsNow() => new(
         Screen: ScreenActivity(),
         ArrivalSettled: _expedition.RunStarted && _arrivalDwell <= 0f,
         EnemySettled: _expedition.EnemySettled,
         RewardsCredited: _rewardsCredited,
-        SignatureHeld: _expedition.ReplayHeld,
-        WavesCleared: _deepestEver,
+        ClearShown: _expedition.ClearShown,
+        SignatureHeld: _expedition.ReplayHeld && _expedition.HoldBeforeKind == BattleEventKind.Skill,
+        // ...and never waits on a release that was never made: a hold and its release live on the fight
+        // screen and die with the process, so with no hold in play there is nothing left to land.
+        SignatureLanded: _expedition.ReleasedBeatPlayed || !_expedition.HoldInPlay,
         BossSettled: _expedition.BossOnStage && _expedition.EnemySettled,
         BossesFelled: _bossesFelled,
         ChestsOpened: _forge?.ChestsOpened ?? 0,
-        ItemSelected: _gear?.ItemClickedEver ?? false,
+        ItemSelected: OpeningItemPicked(),
         ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null));
+
+    /// <summary>
+    /// Is the item the GEAR beats are about the GEAR screen's own selection, put there by the player?
+    /// </summary>
+    /// <remarks>
+    /// Read, never written: the screen's selection and whether a player's gesture made it are the
+    /// screen's (<see cref="GearScreen.PickedItemId"/>), and nothing in the opening can set either. So
+    /// the step cannot move on while the inspector shows nothing, and it cannot be moved on by anything
+    /// but the real click on the real cell.
+    /// </remarks>
+    private bool OpeningItemPicked()
+        => _gear is { PickedItemId: { } picked } && OpeningLitItem() is { } lit && picked == lit;
+
+    /// <summary>
+    /// The item the GEAR beats are about: the welcome gift — or, if some other chest was opened in its
+    /// place, the first piece in the bag this Hunter can wear. Null when there is nothing to point at.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is not decoration. The tutorial boss's own chest roll can drop a second chest beside
+    /// the gift, and an opening that could only ever point at the gift would then be waiting on an item
+    /// the player does not have.
+    /// </remarks>
+    private string? OpeningLitItem()
+    {
+        if (_forge is null || _gear is null) return null;
+        var welcome = GiftChests.Welcome.Items[0].InstanceId;
+        if (_forge.Inventory.Any(i => i.InstanceId == welcome)) return welcome;
+        var wearer = _gear.Character;   // the champion the doll shows, which is the one being played
+        return _forge.Inventory.FirstOrDefault(i => Gear.SlotFor(i.BaseType) is not null && Gear.CanWear(wearer, i))?.InstanceId;
+    }
+
+    /// <summary>
+    /// The chest the VAULT beat is about: the welcome gift while it is unopened, else the best chest held.
+    /// </summary>
+    private Chest? OpeningLitChest()
+        => _forge is null ? null
+           : _forge.UnopenedChests.FirstOrDefault(c => string.Equals(c.Gift, GiftChests.WelcomeKey, StringComparison.OrdinalIgnoreCase))
+             ?? ChestDossiers.BestFirst(_forge.UnopenedChests).FirstOrDefault();
 
     // ── THE LOADED CAREER ────────────────────────────────────────────────────────────────────────
 
@@ -155,9 +209,15 @@ public partial class Game1
     /// <c>OpeningScript.FirstVersionWithOpeningState</c> carries no cursor at all, and the question
     /// "has this player lived the opening?" has to be answered some other way — from what they have
     /// done. A file at or past it is believed exactly as written, including the brand-new career that
-    /// quit during the arrival, which is the case a progression guess gets wrong. This is the third
-    /// migration in this codebase to carry that rule and the first two were both bugs before they
-    /// were rules.
+    /// quit during the arrival, which is the case a progression guess gets wrong. And a v6 cursor is
+    /// read in v6's own numbering (<see cref="OpeningScript.StageOf(int, int)"/>).
+    /// </para>
+    /// <para>
+    /// <b>A believed cursor is still not resumed on a moment that is gone.</b> A beat about something
+    /// the fight or a screen was showing — the replay held before the first cast, the cast playing out,
+    /// a chest's reveal — is resumed on the wait that sets it up again
+    /// (<see cref="OpeningScript.ResumeStage"/>). Done here and not in the director's Restore, which the
+    /// capture rig uses to pose exact stages.
     /// </para>
     /// <para>
     /// <b>And the cursor is still not the truth.</b> Even a believed cursor is walked forward over
@@ -198,7 +258,7 @@ public partial class Game1
             return;
         }
 
-        _opening.Restore(OpeningScript.StageOf(_pendingOpeningStage));
+        _opening.Restore(OpeningScript.ResumeStage(OpeningScript.StageOf(_pendingOpeningStage, _saveVersionSeen)));
         _opening.FastForwardOverDoneDeeds(OpeningFactsNow());
         _openingWas = _opening.Stage;
         _pendingOpeningStage = 0;
@@ -207,7 +267,7 @@ public partial class Game1
     // ── THE FRAME ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Run the opening for this frame: apply what the current beat holds, take its input, step it on.
+    /// Run the opening for this frame: take its input, step it on, and apply what the beat holds.
     /// </summary>
     /// <remarks>
     /// Called EARLY — before the fight advances, before the Warren ticks and before the input authority
@@ -232,9 +292,7 @@ public partial class Game1
             _arrivalDwell = 0f;
             _openingBlaze = OpeningBlazeSeconds;
             _prologueClock = 1f;
-            _expedition.HoldBeforeKind = _opening.HoldsReplayBefore;
-            _openingGrants.Clear();
-            if (_opening.GrantsScreen is { } posedGrant) _openingGrants.Add(posedGrant);
+            ApplyOpeningHolds();
             return;
         }
 
@@ -242,8 +300,7 @@ public partial class Game1
 
         if (!_opening.Running)
         {
-            _expedition.HoldBeforeKind = null;
-            _openingGrants.Clear();
+            ReleaseOpeningHolds();
             return;
         }
 
@@ -252,14 +309,61 @@ public partial class Game1
         if (_openingBlaze > 0f) _openingBlaze = Math.Max(0f, _openingBlaze - dt);
         if (_opening.Stage == OpeningStage.Prologue) _prologueClock += dt;
 
-        // WHAT THE BEAT HOLDS. Both of these are read by systems further down this frame.
-        _expedition.HoldBeforeKind = _opening.HoldsReplayBefore;
-        _openingGrants.Clear();
-        if (_opening.GrantsScreen is { } grant) _openingGrants.Add(grant);
-
         TakeOpeningInput();
         _opening.Update(OpeningFactsNow());
         EnterOpeningStage();
+
+        // WHAT THE BEAT HOLDS — decided AFTER this frame's press and this frame's facts, and read by
+        // the fight, the Warren and the rail further down this same frame. It used to be written
+        // before the press was read, so the frame a card was answered still ran under that card's
+        // hold, and the release reached the fight a frame late.
+        if (!_opening.Running) { ReleaseOpeningHolds(); return; }
+        ApplyOpeningHolds();
+
+        // A BEAT THAT HOLDS THE PLAYER STANDS ON ITS OWN SCREEN. Its card is drawn only there and every
+        // other control is dead, so a paused or forced beat whose screen is not the one on top was a room
+        // with no door: IntroduceChest met on the VAULT the player had just walked into, or a reload into
+        // "SELECT THE ITEM" that lands on the HUNT (adversarial review, 2026-09-11). The opening takes the
+        // player there instead — the one navigation it makes on its own, and only ever to the screen the
+        // beat is about. A forced NAVIGATION is exempt: its screen is the tile the player must press.
+        if (_opening.Mode is TutorialStepMode.PauseExplain or TutorialStepMode.ForceAction
+            && _opening.Screen is { } own && !_showTitle && !_showSettings && !_showHelp
+            && ScreenActivity() != own && Array.IndexOf(NavActivity, own) is var slot and >= 0 && NavUnlocked(slot))
+            OpenNav(slot);
+    }
+
+    /// <summary>Write what the current beat holds where the systems further down this frame read it.</summary>
+    private void ApplyOpeningHolds()
+    {
+        _expedition.HoldBeforeKind = _opening.HoldsReplayBefore;
+        // Only after the clear the beat is about: the boss beat holds a BOSS wave's clear, never the
+        // wave-one clear of a Hunter who lost to it and started again (see HoldsNextWaveAfter).
+        _expedition.HoldNextWave = _opening.HoldsNextWaveAfter(bossWave: _expedition.BossOnStage);
+        _openingGrants.Clear();
+        if (_opening.GrantsScreen is { } grant) _openingGrants.Add(grant);
+        if (_gear is not null)
+        {
+            // THE INSPECTOR WAITS FOR THE PICK. While the player is being sent to GEAR and asked to
+            // click the item, the screen chooses nothing on its own — so the click visibly fills an
+            // empty inspector, and a selection the screen made is never mistaken for one they made.
+            _gear.AutoSelect = _opening.Stage is not (OpeningStage.ForceGear or OpeningStage.ForceItemSelect);
+            // ...and no piece can be carried while the opening owns the pointer: a drop on the doll is
+            // an equip, and it would wear the item past the step that asked for a click.
+            _gear.AllowCarry = !_opening.OwnsInput;
+        }
+        // THE REVEAL STAYS UP WHILE "YOUR FIRST ITEM" IS READ — the card lights it and talks about it,
+        // and the reveal's own clock would otherwise dissolve it under the words.
+        if (_forge is not null) _forge.HoldRevealOpen = _opening.Stage == OpeningStage.IntroduceItem;
+    }
+
+    /// <summary>The opening is not running: nothing is held, nothing is granted, the screens are their own.</summary>
+    private void ReleaseOpeningHolds()
+    {
+        _expedition.HoldBeforeKind = null;
+        _expedition.HoldNextWave = false;
+        _openingGrants.Clear();
+        if (_gear is not null) { _gear.AutoSelect = true; _gear.AllowCarry = true; }
+        if (_forge is not null) _forge.HoldRevealOpen = false;
     }
 
     /// <summary>Side effects owed to a stage the cursor has just moved onto.</summary>
@@ -276,6 +380,17 @@ public partial class Game1
         // THE PROLOGUE IS ONE-SHOT, and it is marked read on the way OUT of it rather than on the way
         // in: a career that quit halfway through the story has not seen the story.
         if (was == OpeningStage.Prologue) { _prologueSeen = true; Save(); }
+
+        // "YOUR FIRST ITEM" IS ABOUT THE REVEAL, AND ITS CONTINUE ENDS IT. The chest's reveal card stops
+        // its clock under the pointer, so a hand resting on CONTINUE kept it up through the forced walk to
+        // GEAR — where it covered the very cell "SELECT THE ITEM" lights, with its own SELL and EQUIP
+        // buttons under the brackets (seen at 125 %, 2026-09-11). The reveal's own skip, not a new path.
+        if (was == OpeningStage.IntroduceItem) _forge?.AdvanceReveal();
+
+        // BACK TO THE HUNT, AND THE CONTINUE IS THE WAY BACK. The last card says where the player goes
+        // next, so answering it goes there — the one navigation the opening makes for the player, and
+        // only once they have pressed for it. A SKIP from any other beat leaves them where they stand.
+        if (was == OpeningStage.ShowEquipped && _opening.Stage == OpeningStage.Complete && !CaptureRig) OpenNav(0);
 
         // AND THE END IS WRITTEN DOWN IMMEDIATELY. The autosave is ten seconds wide and the last beat
         // of the opening is followed by the player walking away satisfied.
@@ -374,12 +489,26 @@ public partial class Game1
     /// one the screen hit-tests — the same rectangle three times, at every UI density, because it is
     /// asked for once. There is no tutorial-only button in this design, so the deed the player performs
     /// IS the deed the game records, and a step that were somehow lit over the wrong control would take
-    /// no click at all rather than take one on the tutorial's behalf.
+    /// no click at all rather than take one on the tutorial's behalf. The light's HALO is not part of
+    /// the control (<see cref="ClickableOf"/>).
     /// </remarks>
     private bool ForcedScreenClick()
         => _clicked && !_showSettings && !_showHelp && !WelcomeUp
            && _opening.ForcedTarget is not null
-           && OpeningHoles().Any(h => h.Contains(ChromeMouse));
+           && OpeningHoles().Any(h => ClickableOf(h).Contains(ChromeMouse));
+
+    /// <summary>The CONTROL inside a lit rectangle: the light less its halo.</summary>
+    /// <remarks>
+    /// The halo is for the eye — the frame art sits inside the light. A forced click that counted it
+    /// reached whatever lay in that ring: under "EQUIP IT", a one-to-three-pixel strip of the UPGRADE /
+    /// REFORGE / SALVAGE row, one click from sending the player to the FORGE with no card to follow
+    /// (adversarial review, 2026-09-11). So the click is tested against the control itself.
+    /// </remarks>
+    internal static Rectangle ClickableOf(Rectangle lit)
+    {
+        lit.Inflate(-SpotlightHalo, -SpotlightHalo);
+        return lit;
+    }
 
     // ── WHAT IS LIT ──────────────────────────────────────────────────────────────────────────────
 
@@ -389,9 +518,10 @@ public partial class Game1
     /// <remarks>
     /// Three sources, all of them the game's own. A forced navigation lights the RAIL TILE it wants,
     /// where it stands, this frame. A beat aimed at the rail lights the tile the chain is heading for
-    /// (<c>OpeningScript.NextForcedScreen</c>) rather than the whole rail, because "chests wait in the
-    /// VAULT" is about one tile. Everything else asks the screen that owns the target, through the
-    /// same <see cref="TourSpotlights"/> the tours and the coach use.
+    /// (<c>OpeningScript.NextForcedScreen</c>) rather than the whole rail, because "open it in the
+    /// Vault" is about one tile. Everything else asks the screen that owns the target, through the
+    /// same <see cref="TourSpotlights"/> the tours and the coach use — including the targets only the
+    /// host can name (the item's cell, the chest's card, the reveal), which it resolves there too.
     /// </remarks>
     private Rectangle[] OpeningHoles()
     {
@@ -506,8 +636,9 @@ public partial class Game1
             return;
         }
 
+        // A FORCED BEAT SAYS WHAT TO DO WITH ITS HANDS, in words a first-time player cannot misread.
         _openingButton = Rectangle.Empty;
-        _ui.TextBig(_batch, "THE LIT CONTROL IS THE ONE", _openingCard.X + pad,
+        _ui.TextBig(_batch, "CLICK WHAT IS HIGHLIGHTED", _openingCard.X + pad,
                     _openingCard.Bottom - pad - btnH + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(6),
                     UiInk.Secondary, UiTypography.Secondary);
     }
@@ -604,7 +735,8 @@ public partial class Game1
     /// </summary>
     /// <remarks>
     /// A fresh save used to land in a fight already in progress with a seven-second toast over it. The
-    /// press is the point — the first thing the player does in this game is choose to go down.
+    /// press is the point — the first thing the player does in this game is choose to go down. Its line
+    /// is plain: the story has just ended, and from here every word is about what is on the screen.
     /// </remarks>
     private void DrawBeginGate()
     {
@@ -613,8 +745,7 @@ public partial class Game1
 
         var pad = UiMetrics.Space(40);
         var width = Math.Min(UiMetrics.Control(760), page.Width - pad * 4);
-        var body = _ui.WrapBig("Your Hunter goes down and stands. Everything else is what you decide about her.",
-                               width - pad * 2, UiTypography.Body);
+        var body = _ui.WrapBig("This is where your hunt begins.", width - pad * 2, UiTypography.Body);
         var btnH = UiMetrics.Control(56);
         var height = pad + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(14)
                      + body.Count * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(28) + btnH + pad;

@@ -24,4 +24,5 @@ catch (Exception ex)
     Console.Error.Flush();
     return 1;
 }
-return 0;
+// The game's own verdict, when something set one (the opening rig's STALL exits 3); 0 otherwise.
+return Environment.ExitCode;

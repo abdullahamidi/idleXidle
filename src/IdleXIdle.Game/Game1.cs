@@ -878,8 +878,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         // Prefs before anything draws — the player should never see the default window flash past.
         // Skipped under RH_SHOT: a screenshot run must render at a known size regardless of what the
-        // developer's machine happens to be set to.
-        if (Environment.GetEnvironmentVariable("RH_SHOT") is null)
+        // developer's machine happens to be set to. So is an AUTOPLAYED opening (Game1.OpeningRig.cs):
+        // it films at the UI scale it was asked for, and it must neither read nor write the player's
+        // display preferences.
+        if (Environment.GetEnvironmentVariable("RH_SHOT") is null && !Autoplay)
         {
             var prefs = Display.Load();
             (_displayMode, _windowSize) = (prefs.Mode, prefs.Window);
@@ -2070,7 +2072,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     protected override void Update(GameTime gameTime)
     {
         _keys = Keyboard.GetState();
-        _mouse = Mouse.GetState();
+        // THE OPENING RIG (Game1.OpeningRig.cs, dev only): the trace samples what the last frame did,
+        // and the autoplayed hand — when it is on — IS the mouse this frame, fed to the same field the
+        // real one is. Inert without RH_OPENING_*.
+        if (OpeningRigOn) OpeningRigFrame();
+        _mouse = Autoplay ? _autoMouse : Mouse.GetState();
         ReadCursor();
         // PRESSED IS A STATE NO CAPTURE COULD POSE. The mouse button comes from the real device, so
         // every screen's pressed face — UiKit.Button's own, and the seven screens that draw their own
@@ -3722,6 +3728,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // standing there bound since the first launch, so the reveal is a thing the player can
                 // SEE happen on the rail rather than a row quietly appearing under the last one.
                 UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
+                OpeningRigMark($"NAV_BREAK {opened}", $"break_{opened}", 60, 2);   // dev: the opening rig's trace and film
                 if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
                     PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
             }
@@ -5681,6 +5688,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private Rectangle[] TourSpotlights(Activity screen, TourTarget target)
     {
+        // THE CHEST'S REVEAL CARD is host chrome, drawn in canvas space over whichever screen opened the
+        // chest — so it never goes through a screen's overlay transform. Nothing lit when no reveal is up.
+        if (target == TourTarget.RevealedItem)
+        {
+            if (!_forge.RevealActive || _forge.RevealCardRect.IsEmpty) return new[] { new Rectangle(0, 0, 1920, 1080) };
+            var reveal = _forge.RevealCardRect;
+            reveal.Inflate(SpotlightHalo, SpotlightHalo);
+            return new[] { reveal };
+        }
+
         if (target == TourTarget.MasteryTile)
         {
             // The tile, where it stands on the rail — or, while the tree is not revealed yet, the
@@ -5690,7 +5707,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return new[] { NavHexRect(slot >= 0 ? slot : slots.Count) };
         }
 
-        var own = screen switch
+        // THE AUTHORED OPENING'S OWN CONTROLS: one item's cell, and one chest's card. The host knows
+        // WHICH item and WHICH chest a beat is about; the screen knows where it drew them. Both come
+        // back in the screen's page space and go through the same transform as every other light, so
+        // the lit rectangle and the clicked rectangle are still one rectangle.
+        Rectangle[]? hostOwned = (screen, target) switch
+        {
+            (Activity.Gear, TourTarget.InventoryItem)
+                => OpeningLitItem() is { } item && _gear.CellOf(item, _hunter) is { } cell ? new[] { cell } : Array.Empty<Rectangle>(),
+            (Activity.Vault, TourTarget.ChestCard)
+                => OpeningLitChest() is { } chest && _vault.CardOf(chest, _forge.UnopenedChests) is { } card ? new[] { card } : Array.Empty<Rectangle>(),
+            _ => null,
+        };
+        var own = hostOwned ?? screen switch
         {
             Activity.Hunt => HuntScreen.Spotlights(target),
             Activity.Training => TrainingScreen.Spotlights(target),
@@ -5714,7 +5743,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var lit = own.Select(r =>
         {
             var c = OverlayToCanvas(r, Vector2.Zero);
-            c.Inflate(10, 10);
+            c.Inflate(SpotlightHalo, SpotlightHalo);   // for the eye only — a forced click drops it (ClickableOf)
             return Rectangle.Intersect(c, canvas);
         }).Where(c => c.Width > 0 && c.Height >= UiMetrics.Control(60)).ToArray();
         return lit.Length > 0 ? lit : new[] { Rectangle.Intersect(OverlayToCanvas(own[0], Vector2.Zero), canvas) };
@@ -6510,7 +6539,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // AND THE FIRST ONE IS AN OBSERVE BEAT: the boss is the game's own rhythm made visible, so
             // it is named the once, on the frame it is felled, and never mentioned again. Raised BEFORE
             // the tally moves, because "is this the first?" is a question about the tally as it was.
-            if (r.IsBoss && _bossesFelled == 0) _coach.Raise(OnboardingLessonId.FirstBoss);
+            // ...UNLESS THE AUTHORED OPENING HAS ALREADY SAID IT. Its own BOSS WAVE card is the first-boss
+            // beat; the coach's observe card, held back while the opening ran, arrived the moment it ended
+            // and said the same thing again (seen on the autoplayed opening, 2026-09-11). A player who
+            // skipped the tutorial before the boss still gets it.
+            if (r.IsBoss && _bossesFelled == 0 && !_opening.Running) _coach.Raise(OnboardingLessonId.FirstBoss);
             // ── THE WELCOME GIFT, FROM THE BOSS THAT EARNED IT. ─────────────────────────────────
             //
             // A LATCH, not a count: exactly one gift per career however many bosses fall, however many
@@ -7082,7 +7115,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void ReadCursor()
     {
         (float X, float Y) chrome, page;
-        if (PosedCursor is { } posed)
+        if (Autoplay && _autoCursor is { } hand)
+        {
+            // THE AUTOPLAYED HAND (Game1.OpeningRig.cs): a canvas point, through the one frame transform
+            // every screen hit-tests with — the hand cannot click anything a mouse could not.
+            chrome = (hand.X, hand.Y);
+            page = _frame.CanvasToPage(hand.X, hand.Y);
+        }
+        else if (PosedCursor is { } posed)
         {
             // Through the frame — the one transform the renderer and the real mouse use — so the two
             // dials can never disagree with the screen by a formula of their own.
@@ -7419,6 +7459,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DrawOpening();
 
         _batch.End();
+
+        // THE OPENING RIG'S FILM (Game1.OpeningRig.cs): the finished canvas, when a moment asked for it.
+        if (OpeningRigOn) OpeningFilmShot();
 
         // DEV SCREENSHOT HOOK: set RH_SHOT=<path> to dump one upscaled frame after ~1s, then exit.
         // Used to verify rendering headlessly; harmless and inert without the env var.

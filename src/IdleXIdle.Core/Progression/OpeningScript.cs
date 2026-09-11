@@ -63,11 +63,30 @@ public enum StageGate
     /// <summary>The first creature finished walking on and is standing in its combat position.</summary>
     EnemySettled,
 
-    /// <summary>A creature died and its reward has been credited where the player can see it.</summary>
-    FirstRewardCredited,
+    /// <summary>
+    /// A wave has paid AND the player has watched it finish: the last creature's fall has played
+    /// through and faded, and what the wave paid has landed.
+    /// </summary>
+    /// <remarks>
+    /// Two facts, and the second is the lesson. The purse is paid on the kill's own frame, which is the
+    /// right moment for the economy and the wrong one for "cleared waves give you Gleam": a card raised
+    /// on the credit alone froze the last creature one frame into its fall (playtest 2026-09-11). The
+    /// host answers the second half from the fight screen's own presentation, never from a timer.
+    /// </remarks>
+    FirstRewardShown,
 
-    /// <summary>The replay is holding one millisecond before the first Signature cast.</summary>
+    /// <summary>The replay is holding just short of the first Signature cast — before any of it shows.</summary>
     SignatureImminent,
+
+    /// <summary>
+    /// The cast the replay was held before has been let go and has PLAYED: that same event crossed and
+    /// the Hunter's cast animation finished.
+    /// </summary>
+    /// <remarks>
+    /// What stops the next beat's card from being drawn over the moment the previous one promised.
+    /// "It activates automatically" is followed by the cast, on its own, with nothing on top of it.
+    /// </remarks>
+    SignatureLanded,
 
     /// <summary>A wave has been cleared since the step began — used to let a live lesson expire.</summary>
     OneWaveCleared,
@@ -75,7 +94,13 @@ public enum StageGate
     /// <summary>The tutorial boss has arrived and is standing.</summary>
     BossSettled,
 
-    /// <summary>The tutorial boss is dead.</summary>
+    /// <summary>
+    /// The tutorial boss is dead — and, live, its fall has been SHOWN, the way the first clear's is.
+    /// </summary>
+    /// <remarks>
+    /// On a reload the deed alone answers it: a fall is a moment on a screen, and after a load that
+    /// moment has not happened at all.
+    /// </remarks>
     BossFelled,
 
     /// <summary>The player is standing on the screen this step named.</summary>
@@ -84,7 +109,9 @@ public enum StageGate
     /// <summary>A chest has actually been opened.</summary>
     ChestOpened,
 
-    /// <summary>An item is selected in the GEAR inventory.</summary>
+    /// <summary>
+    /// The item the step lit is the GEAR screen's selection, and the player's own click put it there.
+    /// </summary>
     ItemSelected,
 
     /// <summary>Something is worn.</summary>
@@ -96,7 +123,8 @@ public enum StageGate
 /// Deliberately a fixed enum rather than a list of ids: the opening is a sequence, and a sequence
 /// whose order can be recomputed is a sequence that will be recomputed wrongly. The persisted save
 /// stores the ordinal of the stage the player reached, so adding a stage in the middle is a migration
-/// decision rather than an accident — see <see cref="OpeningScript.StageOf"/>.
+/// decision rather than an accident. It has been made once — <see cref="WatchSignature"/>, save
+/// version 7 — and <see cref="OpeningScript.StageOf(int, int)"/> is where the older numbering is read.
 /// </remarks>
 public enum OpeningStage
 {
@@ -112,71 +140,74 @@ public enum OpeningStage
     /// <summary>The one-time arrival into Verdant Hollow.</summary>
     Arrival = 3,
 
-    /// <summary>THIS IS YOUR HUNTER. Paused.</summary>
+    /// <summary>YOUR HUNTER. Paused.</summary>
     IntroduceHunter = 4,
 
     /// <summary>Waiting for the first creature to finish walking on.</summary>
     AwaitFirstEnemy = 5,
 
-    /// <summary>ENEMIES COME IN WAVES. Paused, before the first blow lands.</summary>
+    /// <summary>ENEMIES. Paused, before the first blow lands.</summary>
     IntroduceEnemy = 6,
 
-    /// <summary>Waiting for the first kill to pay.</summary>
+    /// <summary>Waiting for the first wave to pay, and for its clear to finish being shown.</summary>
     AwaitFirstReward = 7,
 
-    /// <summary>WAVES PAY GLEAM. Paused, on the capsule that just moved.</summary>
+    /// <summary>GLEAM. Paused, on the capsule that just moved, with the next wave held back.</summary>
     IntroduceResources = 8,
 
-    /// <summary>The replay is held one millisecond short of the first Signature cast.</summary>
+    /// <summary>The replay is held just short of the first Signature cast.</summary>
     AwaitSignature = 9,
 
-    /// <summary>SIGNATURE SKILL. Paused. Releasing it fires the real cast.</summary>
+    /// <summary>SIGNATURE SKILL. Paused, before the cast. CONTINUE lets the real cast go.</summary>
     IntroduceSignature = 10,
 
-    /// <summary>YOUR LIFE. Live, over a running fight.</summary>
-    IntroduceHealth = 11,
+    /// <summary>The released cast plays out, whole, with nothing drawn over it.</summary>
+    WatchSignature = 11,
+
+    /// <summary>HEALTH. Live, over a running fight.</summary>
+    IntroduceHealth = 12,
 
     /// <summary>THE HUNT. Live, on the stage header.</summary>
-    IntroduceStage = 12,
+    IntroduceStage = 13,
 
     /// <summary>Waiting for the tutorial boss to arrive.</summary>
-    AwaitBoss = 13,
+    AwaitBoss = 14,
 
     /// <summary>BOSS WAVE. Paused, before it swings.</summary>
-    IntroduceBoss = 14,
+    IntroduceBoss = 15,
 
     /// <summary>Waiting for the boss to fall.</summary>
-    AwaitBossFelled = 15,
+    AwaitBossFelled = 16,
 
-    /// <summary>A CHEST DROPPED. Paused, on the chest the boss left.</summary>
-    IntroduceChest = 16,
+    /// <summary>A CHEST DROPPED. Paused, on the VAULT tile the chest went to.</summary>
+    IntroduceChest = 17,
 
     /// <summary>OPEN THE VAULT. Only the VAULT tile is live.</summary>
-    ForceVault = 17,
+    ForceVault = 18,
 
-    /// <summary>OPEN THE CHEST. Only the chest card is live.</summary>
-    ForceChestOpen = 18,
+    /// <summary>OPEN THE CHEST. Only the chest's own card is live.</summary>
+    ForceChestOpen = 19,
 
-    /// <summary>YOUR FIRST ITEM. Paused, on what came out.</summary>
-    IntroduceItem = 19,
+    /// <summary>YOUR FIRST ITEM. Paused, on the reveal of what came out, which is held open while it is read.</summary>
+    IntroduceItem = 20,
 
     /// <summary>OPEN GEAR. Only the GEAR tile is live.</summary>
-    ForceGear = 20,
+    ForceGear = 21,
 
-    /// <summary>READ IT. Only the inventory is live.</summary>
-    ForceItemSelect = 21,
+    /// <summary>SELECT THE ITEM. Only the item's own cell is live.</summary>
+    ForceItemSelect = 22,
 
-    /// <summary>WHAT IT SAYS. Paused, on the item's own reading.</summary>
-    ExplainItem = 22,
+    /// <summary>ITEM STATS. Paused, on the inspector the click filled.</summary>
+    ExplainItem = 23,
 
-    /// <summary>WEAR IT. Only the equip control is live.</summary>
-    ForceEquip = 23,
+    /// <summary>EQUIP IT. Only the EQUIP button is live.</summary>
+    ForceEquip = 24,
 
-    /// <summary>WORN. Paused, on the paper doll.</summary>
-    ShowEquipped = 24,
+    /// <summary>BACK TO THE HUNT. Paused, on the paper doll; CONTINUE returns to the fight.</summary>
+    ShowEquipped = 25,
 
     /// <summary>The opening is over and normal play is released.</summary>
-    Complete = 25,
+    Complete = 26,
 }
 
 /// <summary>One authored beat: what it says, what it lights, and what lets it go.</summary>
@@ -186,7 +217,7 @@ public enum OpeningStage
 /// <param name="Screen">The screen it happens on, or null for "wherever the player is".</param>
 /// <param name="Target">The production region it lights, or null for a step with nothing to light.</param>
 /// <param name="Title">Two to five words.</param>
-/// <param name="Body">One or two short sentences. Never a paragraph.</param>
+/// <param name="Body">One or two short, literal sentences. Never a paragraph, never a metaphor.</param>
 public readonly record struct OpeningStep(
     OpeningStage Stage,
     TutorialStepMode Mode,
@@ -213,6 +244,12 @@ public readonly record struct OpeningStep(
 /// optional tours already do. There is no rectangle, no timing, no input and no MonoGame in this
 /// file — which is what lets the headless simulation, the offline hunt and every Core test stay
 /// completely unaware that a tutorial exists.
+/// </para>
+/// <para>
+/// <b>The words are plain on purpose.</b> The prologue may be atmospheric; a card the player has to
+/// act on may not. Each body is one or two short literal sentences about the one thing that is lit —
+/// no metaphor, no dash-joined clauses, nothing about a system the player has not seen yet. The
+/// playtest that set this rule (2026-09-11) stopped on "No two waves are made of the same thing."
 /// </para>
 /// <para>
 /// <b>Training is deliberately absent.</b> Its facts may well become true during the opening — three
@@ -246,43 +283,52 @@ public static class OpeningScript
 
         new OpeningStep(OpeningStage.IntroduceHunter, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.Champion,
-                        "THIS IS YOUR HUNTER",
-                        "It fights on its own — you never press attack. What you decide is how it grows."),
+                        "YOUR HUNTER",
+                        "Your Hunter fights automatically. You choose how they grow."),
 
         new OpeningStep(OpeningStage.AwaitFirstEnemy, TutorialStepMode.LiveExplain, StageGate.EnemySettled,
                         Activity.Hunt, null, "", ""),
 
         new OpeningStep(OpeningStage.IntroduceEnemy, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.Enemies,
-                        "ENEMIES COME IN WAVES",
-                        "Clear one and the next arrives. No two waves are made of the same thing."),
+                        "ENEMIES",
+                        "Enemies arrive in waves. Every fifth wave is a boss."),
 
-        new OpeningStep(OpeningStage.AwaitFirstReward, TutorialStepMode.LiveExplain, StageGate.FirstRewardCredited,
+        // THE CLEAR IS WATCHED BEFORE IT IS NAMED: the last fall plays through and fades, the haul
+        // lands, and only then does the card arrive — with the next wave held back behind it.
+        new OpeningStep(OpeningStage.AwaitFirstReward, TutorialStepMode.LiveExplain, StageGate.FirstRewardShown,
                         Activity.Hunt, null, "", ""),
 
         new OpeningStep(OpeningStage.IntroduceResources, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.CurrencyPills,
-                        "WAVES PAY GLEAM",
-                        "Every wave your Hunter clears pays Gleam. It is what you grow with."),
+                        "GLEAM",
+                        "Cleared waves give you Gleam. You spend Gleam to grow stronger."),
 
+        // THE CAST IS NAMED BEFORE ANY OF IT IS SHOWN: the replay parks ahead of the cast's own wind-up,
+        // CONTINUE lets that same event go, and nothing is drawn over it until it has played.
         new OpeningStep(OpeningStage.AwaitSignature, TutorialStepMode.LiveExplain, StageGate.SignatureImminent,
                         Activity.Hunt, null, "", ""),
 
         new OpeningStep(OpeningStage.IntroduceSignature, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.Skills,
-                        "ITS OWN SKILL",
-                        "Every Hunter has one skill nobody else can use. It fires on its own timer — watch."),
+                        "SIGNATURE SKILL",
+                        "This skill belongs to this Hunter. It activates automatically."),
+
+        new OpeningStep(OpeningStage.WatchSignature, TutorialStepMode.LiveExplain, StageGate.SignatureLanded,
+                        Activity.Hunt, null, "", ""),
 
         // ── LIVE. The fight runs underneath these; they leave on their own. ──────────────────────
         new OpeningStep(OpeningStage.IntroduceHealth, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
                         Activity.Hunt, TourTarget.HunterHud,
-                        "YOUR HUNTER'S LIFE",
-                        "At zero the descent ends and it gets back up. You lose nothing you earned."),
+                        "HEALTH",
+                        // THE HUD'S OWN WORDS. A fall reads "RECOVERING — BACK TO WAVE 1" on a fresh career;
+                        // "descent" is a word nothing on this screen shows (review 2026-09-11).
+                        "If Health reaches zero, your Hunter falls. They recover and start again from wave 1."),
 
         new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
                         Activity.Hunt, TourTarget.StageHeader,
-                        "HOW DEEP YOU ARE",
-                        "The wave you are on, and how far this region is from being yours."),
+                        "THE HUNT",
+                        "This shows your wave and your progress through the region."),
 
         // ── THE TUTORIAL BOSS, which is simply the game's own first boss. ────────────────────────
         new OpeningStep(OpeningStage.AwaitBoss, TutorialStepMode.LiveExplain, StageGate.BossSettled,
@@ -290,57 +336,66 @@ public static class OpeningScript
 
         new OpeningStep(OpeningStage.IntroduceBoss, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.Enemies,
-                        "A BOSS",
-                        "Every fifth wave. Harder, and it leaves something behind."),
+                        "BOSS WAVE",
+                        "Bosses are tougher enemies. This one carries a special reward."),
 
         new OpeningStep(OpeningStage.AwaitBossFelled, TutorialStepMode.LiveExplain, StageGate.BossFelled,
                         Activity.Hunt, null, "", ""),
 
         new OpeningStep(OpeningStage.IntroduceChest, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.NavRail,
-                        "IT LEFT A CHEST",
-                        "Chests wait in the VAULT until you open them."),
+                        "A CHEST DROPPED",
+                        "The boss dropped a chest. Open it in the Vault."),
 
         // ── FORCED. One control is live at a time, and it is the real one. ───────────────────────
         new OpeningStep(OpeningStage.ForceVault, TutorialStepMode.ForceNavigate, StageGate.OnScreen,
                         Activity.Vault, null,
                         "OPEN THE VAULT",
-                        "Your chest is in there."),
+                        "Your chest is waiting here."),
 
         new OpeningStep(OpeningStage.ForceChestOpen, TutorialStepMode.ForceAction, StageGate.ChestOpened,
-                        Activity.Vault, TourTarget.ChestCards,
+                        Activity.Vault, TourTarget.ChestCard,
                         "OPEN THE CHEST",
-                        "See what the boss left you."),
+                        "Open it to reveal your reward."),
 
+        // THE ITEM ITSELF IS LIT — the chest's reveal card, held open while this is read. Lighting the
+        // chest row instead lit "THE VAULT IS EMPTY" the moment the reveal faded (review 2026-09-11).
         new OpeningStep(OpeningStage.IntroduceItem, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
-                        Activity.Vault, TourTarget.ChestCards,
+                        Activity.Vault, TourTarget.RevealedItem,
                         "YOUR FIRST ITEM",
-                        "Gear is how a Hunter carries what you have earned."),
+                        "Items only help when equipped. Let's look at this one first."),
 
         new OpeningStep(OpeningStage.ForceGear, TutorialStepMode.ForceNavigate, StageGate.OnScreen,
                         Activity.Gear, null,
                         "OPEN GEAR",
-                        "Everything you own is worn from here."),
+                        "Your new item is here."),
 
+        // ONE CARD ASKS FOR THE CLICK AND THE NEXT ONE EXPLAINS WHAT IT OPENED. The inspector is empty
+        // until the player picks the item; a card that named its fields before then would be pointing
+        // at something that is not on the screen yet.
         new OpeningStep(OpeningStage.ForceItemSelect, TutorialStepMode.ForceAction, StageGate.ItemSelected,
-                        Activity.Gear, TourTarget.Inventory,
-                        "READ IT FIRST",
-                        "Click the item to see what it actually does."),
+                        Activity.Gear, TourTarget.InventoryItem,
+                        "SELECT THE ITEM",
+                        "Click the item to see its stats."),
 
+        // THE WORDS THE PANEL PRINTS. Its top line reads "COMMON BLADE · NATURE · LEVEL 1" and its
+        // stats sit under the heading WHAT IT DOES — the card names those, never a term the panel lacks.
         new OpeningStep(OpeningStage.ExplainItem, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Gear, TourTarget.ItemDetail,
-                        "WHAT AN ITEM SAYS",
-                        "Its GRADE, its LEVEL, and the ELEMENT it carries."),
+                        "ITEM STATS",
+                        // The panel's own heading sits early on the first line, so no card width can
+                        // wrap it into "WHAT IT / DOES" (seen at 100 %, 2026-09-11).
+                        "The top line shows rarity, element and level. WHAT IT DOES lists the stats."),
 
         new OpeningStep(OpeningStage.ForceEquip, TutorialStepMode.ForceAction, StageGate.ItemWorn,
-                        Activity.Gear, TourTarget.ItemDetail,
-                        "WEAR IT",
-                        "The fight only reads what is worn."),
+                        Activity.Gear, TourTarget.EquipButton,
+                        "EQUIP IT",
+                        "Equip the item to use its stats."),
 
         new OpeningStep(OpeningStage.ShowEquipped, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Gear, TourTarget.PaperDoll,
-                        "WORN",
-                        "Your Hunter is carrying it now. Go and see what it changes."),
+                        "BACK TO THE HUNT",
+                        "Your Hunter is stronger now."),
     };
 
     /// <summary>One beat of the illustrated prologue: a heading and the line under it.</summary>
@@ -388,8 +443,8 @@ public static class OpeningScript
     /// The screen the next forced navigation asks for, from this stage on — or null.
     /// </summary>
     /// <remarks>
-    /// What a beat aimed at <c>TourTarget.NavRail</c> is really about. "It left a chest — chests wait
-    /// in the VAULT" wants the VAULT'S TILE lit, not the whole rail, and the tile it wants is by
+    /// What a beat aimed at <c>TourTarget.NavRail</c> is really about. "The boss dropped a chest — open
+    /// it in the Vault" wants the VAULT'S TILE lit, not the whole rail, and the tile it wants is by
     /// definition the one the very next forced step is going to make the player press. Read from the
     /// script rather than written down twice, so re-ordering the chain moves the light with it.
     /// </remarks>
@@ -441,6 +496,51 @@ public static class OpeningScript
         => Enum.IsDefined(typeof(OpeningStage), saved) ? (OpeningStage)saved : OpeningStage.Complete;
 
     /// <summary>
+    /// A persisted ordinal read back as a stage, in the numbering of the file that wrote it.
+    /// </summary>
+    /// <param name="saved">The ordinal the file carries.</param>
+    /// <param name="fileVersion">The Version of the file that was LOADED.</param>
+    /// <remarks>
+    /// <see cref="OpeningStage.WatchSignature"/> is the first stage ever inserted mid-sequence. A file
+    /// written before it (version 6) numbered IntroduceHealth as 11 and Complete as 25, so every
+    /// ordinal from 11 up is read one place further on. Read as written, a v6 player on IntroduceHealth
+    /// would resume waiting for a cast that already landed, and a finished v6 opening would reopen on
+    /// its last card.
+    /// </remarks>
+    public static OpeningStage StageOf(int saved, int fileVersion)
+        => StageOf(fileVersion < FirstVersionWithSignatureWatch && saved >= (int)OpeningStage.WatchSignature
+                       ? saved + 1
+                       : saved);
+
+    /// <summary>
+    /// The stage a LOADED cursor resumes on: the saved one, unless that beat's moment cannot exist
+    /// after a load.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Some beats are about something the fight or a screen is showing RIGHT NOW — the first creature
+    /// standing, the replay held before a cast, the cast playing out, a boss on the stage, a chest's
+    /// reveal — and a relaunch has none of them: the descent starts again and the reveal has closed.
+    /// Resumed ON such a beat, its card pointed at nothing; on the Signature it soft-locked the fight,
+    /// because the release that beat waits for can only be made in the session that made the hold
+    /// (adversarial review, 2026-09-11).
+    /// </para>
+    /// <para>
+    /// Each maps back to the wait that sets its moment up again — so the replay is held before the
+    /// next cast, the card is shown before it, and CONTINUE releases it in this session — or, for the
+    /// item's reveal, forward to the step that takes the player to the item.
+    /// </para>
+    /// </remarks>
+    public static OpeningStage ResumeStage(OpeningStage saved) => saved switch
+    {
+        OpeningStage.IntroduceEnemy => OpeningStage.AwaitFirstEnemy,
+        OpeningStage.IntroduceSignature or OpeningStage.WatchSignature => OpeningStage.AwaitSignature,
+        OpeningStage.IntroduceBoss => OpeningStage.AwaitBoss,
+        OpeningStage.IntroduceItem => OpeningStage.ForceGear,
+        _ => saved,
+    };
+
+    /// <summary>
     /// Should a loaded save be treated as having already lived the opening?
     /// </summary>
     /// <param name="f">The account's progression, as corroboration.</param>
@@ -467,4 +567,10 @@ public static class OpeningScript
     /// opening would be marked as having finished it.
     /// </remarks>
     public const int FirstVersionWithOpeningState = 6;
+
+    /// <summary>
+    /// THE FIRST SAVE VERSION WHOSE CURSOR COUNTS <see cref="OpeningStage.WatchSignature"/>. Frozen.
+    /// </summary>
+    /// <remarks>A literal for the reason <see cref="FirstVersionWithOpeningState"/> is one.</remarks>
+    public const int FirstVersionWithSignatureWatch = 7;
 }

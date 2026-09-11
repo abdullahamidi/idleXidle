@@ -598,6 +598,8 @@ public sealed class HuntScreen
         public CalloutLane Lane;
         /// <summary>A tag for a callout that may be ADDED TO after it is posted — the hunter's own damage number.</summary>
         public int Id;
+        /// <summary>Part of a cleared wave's haul (ShowSpoils): the clear is not SHOWN while one is still rising.</summary>
+        public bool Spoil;
     }
 
     // ── THE HUNTER'S OWN DAMAGE NUMBER (2026-09-06). ─────────────────────────────────────────────────
@@ -1025,7 +1027,21 @@ public sealed class HuntScreen
     public bool EnemySettled => _run is not null && _replay is not null && _enemyEnter <= 0f && _breakTimer <= 0f;
 
     /// <summary>Is a BOSS the thing standing there?</summary>
-    public bool BossOnStage => _isBossWave;
+    /// <remarks>
+    /// Computed from the wave Update keeps current (BeginWave sets <c>_replayWave</c>) — never from the
+    /// copy Draw caches, which stops moving the moment the player is on another screen. The fight runs on
+    /// every screen, and a reading of it that is stale off the HUNT held the wrong break (review 2026-09-11).
+    /// </remarks>
+    public bool BossOnStage => DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
+
+    /// <summary>
+    /// Is a hold in play in THIS session — a beat held now, or one let go and not yet played?
+    /// </summary>
+    /// <remarks>
+    /// The hold and its release live on this instance and die with the process. A reader that waits on
+    /// <see cref="ReleasedBeatPlayed"/> can ask this too, so it never waits on a release nobody made.
+    /// </remarks>
+    public bool HoldInPlay => _heldAtMs is not null || (_releasedAtMs is not null && !ReleasedBeatPlayed);
 
     /// <summary>
     /// Has a descent actually begun? False until the first Update, because the run starts lazily.
@@ -1037,6 +1053,87 @@ public sealed class HuntScreen
     /// after it.
     /// </remarks>
     public bool RunStarted => _run is not null && _replay is not null;
+
+    /// <summary>The timestamp of the beat the barrier is holding the replay short of, or null.</summary>
+    /// <remarks>
+    /// Set while <see cref="ReplayHeld"/>: the playhead is strictly before this millisecond AND before
+    /// the beat's own wind-up (see <see cref="ReplayBarrier"/>), so nothing of it is on screen yet.
+    /// </remarks>
+    public int? HeldEventAtMs { get; private set; }
+
+    /// <summary>
+    /// Has the beat the barrier last held been let go, crossed, and PLAYED — the Hunter's clip for it done?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The host waits on this before it draws anything else over the fight: a card that arrives the
+    /// frame the cast crosses covers the cast it was promising (playtest 2026-09-11, HEALTH over HARD
+    /// HANDS). PLAYED means all of the cast the player can see: the Hunter's clip aimed at it has run
+    /// out, the effect it launched has finished, and — when the blow ended the wave, as the first cast
+    /// of a fresh career does — the fall it caused has played through and faded.
+    /// </para>
+    /// <para>A beat that no clip was aimed at, and that launched nothing, has played the moment it crosses.</para>
+    /// </remarks>
+    public bool ReleasedBeatPlayed
+    {
+        get
+        {
+            // LATCHED. Once the released beat has played it stays played until the next hold: the
+            // conditions below read live state (a clip, the break), and a later clip that happened to
+            // aim at the same millisecond of another wave would otherwise un-play it.
+            if (!_releasedPlayed && _releasedAtMs is { } released && _releasedCrossed
+                && !(_clipName is not null && _clipBeatMs == released)
+                && !_vfx.AnyPlaying(_releasedFxFrom, _releasedFxTo)
+                && (_breakTimer <= 0f || FallsPlayed))
+                _releasedPlayed = true;
+            return _releasedPlayed;
+        }
+    }
+    private bool _releasedPlayed;
+
+    /// <summary>
+    /// Keep a cleared wave's stage empty until the host lets the next wave in. False in play.
+    /// </summary>
+    /// <remarks>
+    /// The break between waves still plays every beat of its own — the fall, the haul, the empty stage
+    /// (<see cref="ClearBeat.Tick"/>); this only stops it handing over. The screen does not know what a
+    /// tutorial is; it knows how to wait.
+    /// </remarks>
+    public bool HoldNextWave { get; set; }
+
+    /// <summary>Has every creature that fell in this wave played its fall through, lain there and faded?</summary>
+    public bool FallsPlayed => ClearBeat.FallsPlayed(_anim, _diedAt.Values, FallSeconds);
+
+    /// <summary>
+    /// Has the wave the fight just cleared finished being SHOWN? Every fall played and faded, the haul
+    /// risen and gone, the stage empty — false during a fight and false on a fall.
+    /// </summary>
+    /// <remarks>
+    /// The PRESENTATION boundary. The purse is paid on the kill's own frame (the reward is queued the
+    /// moment the replay runs out); this is the later moment at which the player has actually SEEN the
+    /// clear, and it is what a sentence about the clear waits for.
+    /// </remarks>
+    public bool ClearShown
+        => _mode == Mode.Fighting && _replay is { Finished: true } && _outcome == WaveOutcome.Cleared
+           && _breakTimer > 0f && FallsPlayed && !_callouts.Any(c => c.Spoil);
+
+    /// <summary>Waves this screen has begun replaying, ever. A monotone count the host can watch.</summary>
+    public int WavesBegun { get; private set; }
+
+    /// <summary>EnemyDown beats the replay has crossed, ever.</summary>
+    public int EnemyDownsSeen { get; private set; }
+
+    /// <summary>Skill beats the replay has crossed, ever — each one a callout, an effect and a cue.</summary>
+    public int SkillCastsSeen { get; private set; }
+
+    /// <summary>The in-wave timestamp of the last Skill beat crossed, or -1.</summary>
+    public int LastSkillCastAtMs { get; private set; } = -1;
+
+    /// <summary>The wave number being shown.</summary>
+    public int WaveShown => _replayWave;
+
+    /// <summary>Where the replay's playhead stands in the wave, in milliseconds.</summary>
+    public float PlayheadMs => _playheadMs;
 
     /// <summary>
     /// Is the FALL PLATE up — the panel that names the wave, diagnoses the run and offers READ THE LOG?
@@ -1284,6 +1381,7 @@ public sealed class HuntScreen
         _auraFxKey = fieldSk?.Def.FxKey;
         _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
 
+        WavesBegun++;
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
         _waveStartHealth = startHealth[0];   // for a posed seek's rebuild (DevSeek) — see UpdateFight
         _waveEnemyHp = enemyHp;
@@ -1396,6 +1494,7 @@ public sealed class HuntScreen
                 Life = SpoilsBeat + 0.35f - slot * 0.06f,
                 Px = px,
                 Lane = CalloutLane.Enemy,
+                Spoil = true,   // the clear is not SHOWN while this is still rising (ClearShown)
             });
             slot++;
         }
@@ -1589,8 +1688,9 @@ public sealed class HuntScreen
         {
             _enemyWindup = 0f;
             _clipName = null;   // a clip never survives the wave it was swung in
-            _breakTimer -= dt;
-            if (_breakTimer <= 0f) BeginWave();   // ...which arms the arrival itself now
+            // ...AND THE HOST MAY KEEP THE NEXT PACK OFF THE STAGE (HoldNextWave): the break plays every
+            // beat of its own, then rests on the empty stage until it is let go.
+            if (ClearBeat.Tick(ref _breakTimer, dt, HoldNextWave)) BeginWave();   // ...which arms the arrival itself now
             return;
         }
 
@@ -1638,24 +1738,33 @@ public sealed class HuntScreen
 
         // ── THE BARRIER. ────────────────────────────────────────────────────────────────────────
         //
-        // An authored step can ask the replay to stop one millisecond short of the next beat of a
-        // given kind, so the player is told what is about to happen BEFORE it happens. Events cross on
-        // `AtMs <= toMs` (WaveReplay.Advance), so parking at `AtMs - 1` provably never crosses one —
-        // and lifting the barrier crosses it on the very next frame, with the cast, its callout and
-        // its effect all landing together instead of having been watched three times already.
+        // An authored step can ask the replay to stop short of the next beat of a given kind, so the
+        // player is told what is about to happen BEFORE it happens — and short of that beat's own
+        // WIND-UP, not only of its millisecond (ReplayBarrier). A cast's clip starts one contact-length
+        // ahead of its event, so the old park one millisecond short froze the Hunter mid-cast under
+        // the very card that was meant to come first (playtest 2026-09-11). Lifting the barrier lets
+        // the wind-up begin, and the SAME event crosses on its contact frame with callout and effect.
         //
         // A CLAMP, NOT AN EARLY RETURN. The two holds above this line return, and each has to
         // hand-clear _enemyWindup and _clipName because of it. Clamping leaves the windup, the
         // champion's clip and every rail readout frozen CONSISTENTLY at the held instant: a creature
         // caught mid-swing stays mid-swing instead of snapping back to idle.
-        var advanced = _playheadMs + dt * 1000f * _speedMul;
-        if (HoldBeforeKind is { } barrier)
+        var free = _playheadMs + dt * 1000f * _speedMul;
+        var hold = ReplayBarrier.Advance(_replay, _playheadMs, free, HoldBeforeKind, _leadMs ??= PresentationLeadMs);
+        // THE HOLD LET GO. The host clears the kind on the frame the card is answered; the beat that was
+        // being held is remembered, so the host can wait for it to PLAY and not merely to cross.
+        if (HoldBeforeKind is null && _heldAtMs is { } letGo)
         {
-            var at = _replay.NextEventOfKindAfter(_playheadMs, barrier);
-            if (at != int.MaxValue) advanced = MathF.Min(advanced, at - 1f);
+            _releasedAtMs = letGo;
+            _releasedCrossed = false;
+            _releasedPlayed = false;
+            _releasedFxFrom = _releasedFxTo = 0;
+            _heldAtMs = null;
         }
-        ReplayHeld = advanced <= _playheadMs + 0.0001f;
-        _playheadMs = advanced;
+        if (hold.HeldAtMs is { } heldAt) { _heldAtMs = heldAt; _releasedAtMs = null; _releasedPlayed = false; }
+        ReplayHeld = hold.Held;
+        HeldEventAtMs = hold.HeldAtMs;
+        _playheadMs = hold.PlayheadMs;
 
         // ── THE READY CROSSING, ARMED HERE AND NOWHERE ELSE. A pulse belongs to Update: a Draw that
         //    armed one would re-arm it every frame and the medallion would swell for as long as you
@@ -1852,10 +1961,16 @@ public sealed class HuntScreen
                     break;
                 case BattleEventKind.Skill:
                 {
+                    SkillCastsSeen++;
+                    LastSkillCastAtMs = e.AtMs;
                     // THE SLOT IS THE IDENTITY. The event names which equipped skill acted; name,
                     // art, colour and kind all come from the skill itself — the old payload was a
                     // (Source, Form) ordinal pair, and two skills of one style collided on it.
                     if (e.Slot < 0 || e.Slot >= _waveSkills.Count) break;
+                    // THE RELEASED CAST'S OWN EFFECTS are the ones launched from here to the end of this
+                    // case — remembered so the host can wait for exactly those to finish (ReleasedBeatPlayed).
+                    var fxBefore = _vfx.Launched;
+                    var released = _releasedAtMs == e.AtMs;
                     var castSk = _waveSkills[e.Slot];
                     var castDef = castSk.Def;
                     // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
@@ -1871,6 +1986,7 @@ public sealed class HuntScreen
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     PlaySkillVfx(castDef, castSk.Source, castTarget);
+                    if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
                     Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
                     // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
@@ -1904,6 +2020,7 @@ public sealed class HuntScreen
                     // body half a second later — after the fall, not instead of it. Playtest: "düşman
                     // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
                     _diedAt[e.Slot] = _anim;
+                    EnemyDownsSeen++;
                     // A boss has its own fall (sfx_boss_down: deeper, longer, a second thump when the mass lands)
                     // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
                     if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
@@ -1991,6 +2108,15 @@ public sealed class HuntScreen
                 _vfx.Play(ShotShieldFx == "gain" ? VfxProfiles.ShieldGain : VfxProfiles.ShieldAbsorb,
                           FxFor("shield"), VfxSubject.Champion, Steel, fps: PosedFxFps);
             }
+        }
+
+        // THE RELEASED BEAT HAS CROSSED — latched here, after the batch, so the range of effects it
+        // launched closes over everything its beat set off: the cast's own strip, the blow's impact and,
+        // when it killed, the plume over the fall. ReleasedBeatPlayed waits on exactly that range.
+        if (_releasedAtMs is { } releasedAt && !_releasedCrossed && _playheadMs >= releasedAt)
+        {
+            _releasedCrossed = true;
+            _releasedFxTo = _vfx.Launched;
         }
 
         if (!_replay.Finished) return;
@@ -2569,6 +2695,22 @@ public sealed class HuntScreen
     private const float DeathFps = 10f;              // 8 frames in 0.8 s
     private const float DeathHoldSeconds = 0.6f;     // the body lies there
     private const float DeathFadeSeconds = 0.45f;    // then fades out
+
+    /// <summary>A fall's whole length — its clip, the body lying there, the fade. What a SHOWN clear waits on.</summary>
+    /// <remarks>
+    /// 1.85 s against a 1.1 s break: in ordinary play the next wave arrives over the tail of the last
+    /// fall, which is fine for the fortieth wave and wrong for the one a card is about to name. The
+    /// authored opening keeps that wave's stage empty until this has run (HoldNextWave).
+    /// </remarks>
+    internal const float FallSeconds = 8f / DeathFps + DeathHoldSeconds + DeathFadeSeconds;
+
+    // ── THE HELD BEAT, AND THE ONE THAT WAS LET GO (the authored opening's barrier; see UpdateFight). ──
+    private int? _heldAtMs;                        // the beat the barrier held, until the host lets it go
+    private int? _releasedAtMs;                    // ...then which beat that was
+    private bool _releasedCrossed;                 // has the playhead crossed it since the release?
+    private long _releasedFxFrom, _releasedFxTo;   // the effects its crossing launched (VfxPlayer.Launched)
+    private int? _clipBeatMs;                      // the beat the committed champion clip is aimed at
+    private Func<int, float>? _leadMs;             // PresentationLeadMs, cached — no delegate per frame
 
     /// <summary>The layout box laid out for creature <paramref name="slot"/> this frame.</summary>
     private Rectangle CreatureBox(int slot)
@@ -5408,10 +5550,17 @@ public sealed class HuntScreen
             _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat));
             _clipStartMs = trapMs;
             _clipName = "trap";
+            _clipBeatMs = (int)trapMs;
             return;
         }
 
         if (beatMs is null) return;
+
+        // NOTHING OF A HELD BEAT IS SHOWN. While the barrier holds the replay short of a beat, the clip
+        // aimed at it — or at anything after it — does not begin. The park already sits ahead of the
+        // wind-up; this is for the playhead that was inside that window when the hold arrived, which
+        // stands in idle rather than half-way through a cast the card has not introduced yet.
+        if (ReplayHeld && HeldEventAtMs is { } heldAt && beatMs.Value >= heldAt) return;
 
         // EVERY action fills its share of the BEAT (ClipShareOfBeat): the sim acts on the
         // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
@@ -5423,13 +5572,46 @@ public sealed class HuntScreen
         // more, so it plays close to its authored second.
         var share = clip == "attack" ? ClipShareOfBeat : SkillClipShareOfBeat;
         var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * share));
-        var contactMs = ClipMs * ContactFraction / baseSpeed;
+        var contactMs = ContactMs(cast: clip != "attack");
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
 
         _clipSpeed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
         _clipStartMs = _playheadMs;
         _clipName = clip;
+        _clipBeatMs = (int)beatMs.Value;
+    }
+
+    /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
+    /// <remarks>
+    /// The ONE formula both the clip commitment above and the replay barrier's lead read, so the park the
+    /// barrier chooses is exactly where the cast would have begun — a second copy could drift, and a
+    /// barrier a few milliseconds late would show the first frames of the wind-up under the card.
+    /// </remarks>
+    private float ContactMs(bool cast)
+    {
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * (cast ? SkillClipShareOfBeat : ClipShareOfBeat)));
+        return ClipMs * ContactFraction / baseSpeed;
+    }
+
+    /// <summary>
+    /// How long before the beat at <paramref name="atMs"/> its presentation begins — the replay barrier's lead.
+    /// </summary>
+    /// <remarks>
+    /// A cast's is its clip's contact length: the Hunter starts the cast that far ahead so the blow lands on
+    /// the beat. A Reaction has none — its clip plays AFTER the bite it answers (the trap commitment) — and
+    /// nothing else is animated ahead of its own millisecond.
+    /// </remarks>
+    private float PresentationLeadMs(int atMs)
+    {
+        if (HoldBeforeKind != BattleEventKind.Skill || _run is null) return 0f;
+        foreach (var e in _run.LastWaveEvents)
+        {
+            if (e.AtMs != atMs || e.Kind != BattleEventKind.Skill) continue;
+            if (e.Slot < 0 || e.Slot >= _waveSkills.Count) return 0f;
+            return _waveSkills[e.Slot].Def.Kind == SkillKind.Reaction ? 0f : ContactMs(cast: true);
+        }
+        return 0f;
     }
 
     /// <summary>

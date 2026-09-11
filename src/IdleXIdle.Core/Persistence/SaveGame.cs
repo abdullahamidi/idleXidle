@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -49,6 +49,11 @@ public sealed record SaveGame
     // (OpeningScript.FirstVersionWithOpeningState, frozen at 6 for the same reason its two siblings
     // are frozen). It also moves the welcome gift OFF the new-game seed, so a v5 file that still holds
     // an unopened welcome chest keeps it and is never given a second one.
+    // 7 = the signature watch (2026-09-11). The opening gained a stage in the MIDDLE of its sequence —
+    // WatchSignature, the released cast playing out with nothing drawn over it — so every stored cursor
+    // from IntroduceHealth up moved one place. A v6 cursor is read through OpeningScript.StageOf(saved,
+    // fileVersion), which puts it back on the beat it meant; this number is what tells the two
+    // numberings apart (OpeningScript.FirstVersionWithSignatureWatch, frozen at 7).
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }

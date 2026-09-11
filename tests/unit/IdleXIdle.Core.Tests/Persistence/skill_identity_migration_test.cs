@@ -163,7 +163,7 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_six()
+    public void test_the_current_save_version_is_seven()
     {
         // RE-PINNED 2026-09-09 (was four). The bump is what makes an OLDER build refuse a new file as
         // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
@@ -179,6 +179,8 @@ public class SkillIdentityMigrationTest
         // OnboardingLessons.FirstVersionWithFallLoopFacts, which is frozen at it.
         // RE-PINNED 2026-09-10 (was five): the authored opening gave a career a cursor, and a file
         // written before it has none. See OpeningScript.FirstVersionWithOpeningState.
-        Assert.Equal(6, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-11 (was six): that cursor gained a stage mid-sequence, and a v6 file's
+        // ordinals are read in their own numbering. See OpeningScript.FirstVersionWithSignatureWatch.
+        Assert.Equal(7, SaveGame.CurrentVersion);
     }
 }

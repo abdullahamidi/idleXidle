@@ -22,8 +22,8 @@ namespace IdleXIdle.Core.Tests.Progression;
 /// </para>
 /// <para>
 /// So the opening is written down. These tests pin the sequence itself, the copy rule that keeps each
-/// beat to one idea, and the migration law the whole family of onboarding facts shares: the file's
-/// VERSION decides who is a veteran, never a guess made from progression.
+/// beat to one plain idea, and the migration law the whole family of onboarding facts shares: the
+/// file's VERSION decides who is a veteran, never a guess made from progression.
 /// </para>
 /// </remarks>
 public class OpeningScriptTest
@@ -57,8 +57,9 @@ public class OpeningScriptTest
     public void test_the_authored_order_is_the_one_the_playtest_asked_for()
     {
         // The sequence, named: story, arrival, hunter, enemy, resources, the signature BEFORE it
-        // fires, the live readouts, the boss, its chest, the vault, the gear. Written out rather than
-        // derived, because this list IS the product decision — if it changes, it should change here.
+        // fires and then the cast on its own, the live readouts, the boss, its chest, the vault, the
+        // gear. Written out rather than derived, because this list IS the product decision — if it
+        // changes, it should change here.
         var order = OpeningScript.Steps.Select(s => s.Stage).ToArray();
         Assert.Equal(new[]
         {
@@ -66,7 +67,7 @@ public class OpeningScriptTest
             OpeningStage.IntroduceHunter,
             OpeningStage.AwaitFirstEnemy, OpeningStage.IntroduceEnemy,
             OpeningStage.AwaitFirstReward, OpeningStage.IntroduceResources,
-            OpeningStage.AwaitSignature, OpeningStage.IntroduceSignature,
+            OpeningStage.AwaitSignature, OpeningStage.IntroduceSignature, OpeningStage.WatchSignature,
             OpeningStage.IntroduceHealth, OpeningStage.IntroduceStage,
             OpeningStage.AwaitBoss, OpeningStage.IntroduceBoss, OpeningStage.AwaitBossFelled,
             OpeningStage.IntroduceChest,
@@ -88,9 +89,19 @@ public class OpeningScriptTest
         Assert.Equal(OpeningStage.IntroduceSignature, OpeningScript.Steps[i + 1].Stage);
         Assert.Equal(TutorialStepMode.PauseExplain, OpeningScript.Steps[i + 1].Mode);
 
+        // ...AND THE CAST THEN PLAYS ON ITS OWN. The beat after the card is silent and waits for the
+        // released cast to have played, so the next card cannot be drawn over the moment the last
+        // one promised (playtest 2026-09-11: HEALTH's scrim blazed over the cast it followed).
+        var watch = OpeningScript.Steps[i + 2];
+        Assert.Equal(OpeningStage.WatchSignature, watch.Stage);
+        Assert.Equal(TutorialStepMode.LiveExplain, watch.Mode);
+        Assert.Equal(StageGate.SignatureLanded, watch.Gate);
+        Assert.Equal("", watch.Title);
+        Assert.Null(watch.Target);
+
         // ...and it is the LAST paused beat before the boss, so the player consciously watches the
         // cast and then gets the fight back.
-        Assert.Equal(TutorialStepMode.LiveExplain, OpeningScript.Steps[i + 2].Mode);
+        Assert.Equal(TutorialStepMode.LiveExplain, OpeningScript.Steps[i + 3].Mode);
     }
 
     [Fact]
@@ -106,10 +117,12 @@ public class OpeningScriptTest
     }
 
     [Fact]
-    public void test_the_resource_lesson_waits_for_a_reward_the_player_can_see()
+    public void test_the_resource_lesson_waits_for_a_reward_the_player_has_watched_land()
     {
+        // PAID IS NOT SEEN. The gate is the clear having been SHOWN, not the purse having moved —
+        // the purse moves on the kill's own frame, with the last creature one frame into its fall.
         var wait = OpeningScript.Steps.Single(s => s.Stage == OpeningStage.AwaitFirstReward);
-        Assert.Equal(StageGate.FirstRewardCredited, wait.Gate);
+        Assert.Equal(StageGate.FirstRewardShown, wait.Gate);
 
         // ONLY GLEAM. The capsule row is what is lit, and at this point in a fresh career Gleam is the
         // only thing in it — teaching Scrap or Essence here would name something the player does not
@@ -160,6 +173,52 @@ public class OpeningScriptTest
     }
 
     [Fact]
+    public void test_every_forced_deed_lights_one_control_and_not_the_panel_around_it()
+    {
+        // THE LIT CONTROL IS THE ONE THAT TAKES THE CLICK. A forced step that lit a whole panel let
+        // every control on it through: under "EQUIP IT" the inspector's own SALVAGE was live, and one
+        // click could destroy the only item the opening was waiting for. Each deed lights its control.
+        var deeds = OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceAction)
+                                       .ToDictionary(s => s.Stage, s => s.Target);
+        Assert.Equal(TourTarget.ChestCard, deeds[OpeningStage.ForceChestOpen]);
+        Assert.Equal(TourTarget.InventoryItem, deeds[OpeningStage.ForceItemSelect]);
+        Assert.Equal(TourTarget.EquipButton, deeds[OpeningStage.ForceEquip]);
+
+        // ...and the card that EXPLAINS the item lights the inspector, which the click has just filled.
+        Assert.Equal(TourTarget.ItemDetail, OpeningScript.Find(OpeningStage.ExplainItem)!.Value.Target);
+
+        // ...and "YOUR FIRST ITEM" lights the item: the reveal card, not the chest row it came out of,
+        // which showed "THE VAULT IS EMPTY" the moment the reveal faded under the words.
+        Assert.Equal(TourTarget.RevealedItem, OpeningScript.Find(OpeningStage.IntroduceItem)!.Value.Target);
+    }
+
+    [Fact]
+    public void test_a_reload_resumes_a_moment_on_the_wait_that_sets_it_up_again()
+    {
+        // A BEAT ABOUT WHAT THE SCREEN WAS SHOWING CANNOT BE RESUMED ON. The replay held before the
+        // first cast, the cast playing out, the enemy standing, the boss standing and the chest's reveal
+        // all die with the process. Resumed on its own card, the Signature beat waited on a held cast
+        // that no reloaded fight would ever produce (adversarial review, 2026-09-11).
+        Assert.Equal(OpeningStage.AwaitSignature, OpeningScript.ResumeStage(OpeningStage.IntroduceSignature));
+        Assert.Equal(OpeningStage.AwaitSignature, OpeningScript.ResumeStage(OpeningStage.WatchSignature));
+        Assert.Equal(OpeningStage.AwaitFirstEnemy, OpeningScript.ResumeStage(OpeningStage.IntroduceEnemy));
+        Assert.Equal(OpeningStage.AwaitBoss, OpeningScript.ResumeStage(OpeningStage.IntroduceBoss));
+        // The reveal is the one moment that is resumed FORWARD: the chest it came out of is already open.
+        Assert.Equal(OpeningStage.ForceGear, OpeningScript.ResumeStage(OpeningStage.IntroduceItem));
+
+        foreach (var stage in Enum.GetValues<OpeningStage>())
+        {
+            var resumed = OpeningScript.ResumeStage(stage);
+            // A resume is a place to stand, not a step: resuming it again goes nowhere.
+            Assert.Equal(resumed, OpeningScript.ResumeStage(resumed));
+            // ...and every beat that is not about a vanished moment is resumed exactly where it was saved.
+            if (stage is not (OpeningStage.IntroduceSignature or OpeningStage.WatchSignature or OpeningStage.IntroduceEnemy
+                              or OpeningStage.IntroduceBoss or OpeningStage.IntroduceItem))
+                Assert.Equal(stage, resumed);
+        }
+    }
+
+    [Fact]
     public void test_every_beat_that_speaks_is_one_idea_and_one_action()
     {
         // ONE MOMENT. ONE IDEA. ONE ACTION. No encyclopedia cards: a paused beat is a title and at
@@ -171,17 +230,58 @@ public class OpeningScriptTest
             Assert.InRange(step.Title.Split(' ').Length, 1, 5);
             Assert.True(step.Body.Length <= 110, $"{step.Stage}'s body is a paragraph: \"{step.Body}\"");
             Assert.InRange(step.Body.Count(c => c == '.'), 1, 2);
-            _out.WriteLine($"{step.Stage,-22} {step.Mode,-14} {step.Title}");
+            _out.WriteLine($"{step.Stage,-22} {step.Mode,-14} {step.Title,-18} {step.Body}");
 
             // AND IT TEACHES A CONCEPT, NEVER A SHORTCUT. "PRESS K TO OPEN VAULT" is what the real
-            // control being lit exists to replace. The word itself is fine — "you never press attack"
-            // is the concept — so what is forbidden is naming a KEY.
+            // control being lit exists to replace. What is forbidden is naming a KEY.
             var text = (step.Title + " " + step.Body).ToUpperInvariant();
             foreach (var key in new[] { "PRESS B", "PRESS K", "PRESS F", "PRESS T", "PRESS L", "PRESS V",
                                         "PRESS G", "PRESS M", "PRESS R", "PRESS W", "PRESS ESC",
                                         "HOTKEY", "SHORTCUT" })
                 Assert.DoesNotContain(key, text, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void test_every_card_the_player_acts_on_is_short_and_literal()
+    {
+        // THE PLAYTEST OF 2026-09-11: "No two waves are made of the same thing." A new player should
+        // not have to interpret a sentence while they are learning the controls. The cinematic may be
+        // atmospheric; a card they have to act on is SHORT, LITERAL, CONCRETE, and ONE IDEA AT A TIME.
+        // So: no dash-joined or semicolon-joined clauses, no sentence past ten words, and none of the
+        // phrasings that were rejected by name.
+        string[] rejected =
+        {
+            "NO TWO WAVES", "SAME THING", "READ IT", "READ THIS", "ACTUALLY", "NOTHING IS LOST",
+            "YOU LOSE NOTHING", "LOSE NOTHING", "WATCH.", "THE LIT CONTROL", "NOBODY ELSE",
+        };
+        foreach (var step in OpeningScript.Steps.Where(s => s.Title.Length > 0))
+        {
+            var text = step.Title + " " + step.Body;
+            Assert.DoesNotContain("—", text);
+            Assert.DoesNotContain("–", text);
+            Assert.DoesNotContain(";", text);
+            foreach (var phrase in rejected)
+                Assert.DoesNotContain(phrase, text.ToUpperInvariant(), StringComparison.Ordinal);
+
+            foreach (var sentence in step.Body.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var words = sentence.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+                Assert.True(words <= 10, $"{step.Stage}: \"{sentence}.\" is {words} words — say it shorter");
+            }
+        }
+    }
+
+    [Fact]
+    public void test_the_enemy_card_says_it_plainly()
+    {
+        var enemy = OpeningScript.Find(OpeningStage.IntroduceEnemy)!.Value;
+        Assert.DoesNotContain("No two waves are made of the same thing.", enemy.Body, StringComparison.OrdinalIgnoreCase);
+        // What it does say is the rhythm the player is about to watch: waves, and the fifth one.
+        Assert.Contains("wave", enemy.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("boss", enemy.Body, StringComparison.OrdinalIgnoreCase);
+        // "Every fifth wave" is only true while the game's cadence is five (pinned below).
+        Assert.Contains("fifth", enemy.Body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -199,7 +299,7 @@ public class OpeningScriptTest
         // NOT AN EXTRA ENCOUNTER. The game already makes every fifth wave a boss; the tutorial boss is
         // simply the first of those, so the cadence afterwards is untouched and the player has seen
         // four ordinary waves before it arrives.
-        Assert.Equal(ExpeditionTuning.Default.BossEvery, OpeningScript.TutorialBossWave);
+        Assert.Equal(OpeningScript.TutorialBossWave, ExpeditionTuning.Default.BossEvery);
         Assert.True(WaveScaling.IsBossWave(OpeningScript.TutorialBossWave, ExpeditionTuning.Default));
         Assert.False(WaveScaling.IsBossWave(OpeningScript.TutorialBossWave - 1, ExpeditionTuning.Default));
     }
@@ -214,6 +314,38 @@ public class OpeningScriptTest
         Assert.Equal(OpeningStage.Prologue, OpeningScript.StageOf((int)OpeningStage.Prologue));
         Assert.Equal(OpeningStage.Complete, OpeningScript.StageOf(9_999));
         Assert.Equal(OpeningStage.Complete, OpeningScript.StageOf(-3));
+    }
+
+    [Fact]
+    public void test_a_version_six_cursor_is_read_in_its_own_numbering()
+    {
+        // WatchSignature is the first stage ever inserted mid-sequence. A v6 file numbered the stages
+        // without it, so its ordinals are spelled out here exactly as that build wrote them: each must
+        // come back as the stage of the SAME NAME, never the one that now carries its number.
+        string[] v6 =
+        {
+            "NotStarted", "Prologue", "AwaitBegin", "Arrival", "IntroduceHunter", "AwaitFirstEnemy",
+            "IntroduceEnemy", "AwaitFirstReward", "IntroduceResources", "AwaitSignature", "IntroduceSignature",
+            "IntroduceHealth", "IntroduceStage", "AwaitBoss", "IntroduceBoss", "AwaitBossFelled",
+            "IntroduceChest", "ForceVault", "ForceChestOpen", "IntroduceItem", "ForceGear", "ForceItemSelect",
+            "ExplainItem", "ForceEquip", "ShowEquipped", "Complete",
+        };
+        for (var ordinal = 0; ordinal < v6.Length; ordinal++)
+            Assert.Equal(v6[ordinal], OpeningScript.StageOf(ordinal, OpeningScript.FirstVersionWithOpeningState).ToString());
+
+        // ...and a file of this build is read exactly as written, WatchSignature included.
+        foreach (var stage in Enum.GetValues<OpeningStage>())
+            Assert.Equal(stage, OpeningScript.StageOf((int)stage, SaveGame.CurrentVersion));
+    }
+
+    [Fact]
+    public void test_the_signature_watch_version_is_frozen_at_seven()
+    {
+        // A literal, like its siblings: written against CurrentVersion, the next bump would start
+        // shifting cursors that were already written in the new numbering.
+        Assert.Equal(7, OpeningScript.FirstVersionWithSignatureWatch);
+        Assert.True(OpeningScript.FirstVersionWithSignatureWatch <= SaveGame.CurrentVersion,
+                    "the new numbering cannot first be persisted in a version that does not exist yet");
     }
 
     [Fact]
@@ -280,7 +412,7 @@ public class OpeningScriptTest
     [Fact]
     public void test_a_rail_beat_points_at_the_tile_the_chain_is_heading_for()
     {
-        // "IT LEFT A CHEST — chests wait in the VAULT" wants ONE tile lit, not the whole rail, and the
+        // "A CHEST DROPPED — open it in the Vault" wants ONE tile lit, not the whole rail, and the
         // tile it wants is by definition the one the next forced step makes the player press. Read
         // from the script so re-ordering the chain moves the light with it.
         Assert.Equal(Activity.Vault, OpeningScript.NextForcedScreen(OpeningStage.IntroduceChest));
@@ -303,9 +435,9 @@ public class OpeningScriptTest
     [Fact]
     public void test_the_depth_beat_lights_the_header_and_not_the_pack()
     {
-        // "HOW DEEP YOU ARE" is about the wave number and the conquest bar, both of which live in the
-        // stage header. It pointed at Enemies, whose spotlight is the creatures AND the header — so
-        // the card about depth lit the thing it was not about, twice as brightly.
+        // "THE HUNT" is about the wave number and the conquest bar, both of which live in the stage
+        // header. It pointed at Enemies, whose spotlight is the creatures AND the header — so the card
+        // about depth lit the thing it was not about, twice as brightly.
         var depth = Assert.IsType<OpeningStep>(OpeningScript.Find(OpeningStage.IntroduceStage));
         Assert.Equal(TourTarget.StageHeader, depth.Target);
 

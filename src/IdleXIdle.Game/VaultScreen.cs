@@ -492,6 +492,25 @@ public sealed class VaultScreen
     /// <summary>How many cards this page actually shows — the last page is usually short.</summary>
     private int OnPage(int count) => Math.Clamp(count - _scroll, 0, PerPage);
 
+    /// <summary>
+    /// Where one chest's card is drawn right now, in page space — or null when that chest is not held
+    /// or its card is scrolled out of view.
+    /// </summary>
+    /// <remarks>
+    /// The card IS the button (see Update: a click anywhere on it opens that chest), so this is the
+    /// rectangle a click on that chest lands in. The same stacking and ordering the grid uses — a
+    /// chest's card is its stack's card, found by record equality like the host's open.
+    /// </remarks>
+    public Rectangle? CardOf(Chest chest, IReadOnlyList<Chest> chests)
+    {
+        ArgumentNullException.ThrowIfNull(chests);
+        var sorted = ChestDossiers.Stacked(chests).Select(st => st.Sample).ToList();
+        var idx = sorted.FindIndex(c => c == chest);
+        var onPage = OnPage(sorted.Count);
+        var vis = idx - _scroll;
+        return idx < 0 || vis < 0 || vis >= onPage ? null : Card(vis, onPage);
+    }
+
     /// <summary>How many rows the whole pile takes.</summary>
     private static int TotalRows(int count) => (count + Cols - 1) / Cols;
 
@@ -1188,7 +1207,9 @@ public sealed class VaultScreen
         _ui.TextCenterBig(b, $"CHESTS COME FROM BOSSES — ABOUT ONE BOSS IN {oneIn} DROPS ONE.",
                           frame.Center.X, y, Slate, UiTypography.Body);
         y += UiTypography.Pitch(UiTypography.Body);
-        _ui.TextCenterBig(b, "AND FROM GIFTS — A NEW GAME IS GIVEN ONE.",
+        // TRUE SINCE 2026-09-10: the welcome gift is the first boss's, not the new game's — and this line
+        // is on screen in the opening, right after the card that says the boss dropped it.
+        _ui.TextCenterBig(b, "AND FROM GIFTS — THE FIRST BOSS LEAVES ONE.",
                           frame.Center.X, y, Slate, UiTypography.Body);
 
         // Your own filter, if it is throwing chests away, said in the room where they would have been.
