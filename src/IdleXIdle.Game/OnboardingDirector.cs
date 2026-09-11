@@ -200,6 +200,11 @@ public sealed class OnboardingDirector
         {
             if (busy.RewardUp || busy.ModalUp || busy.ReportUp) next = null;
         }
+        // ...AND NOTHING IS SAID OVER A MODAL, not even a lesson that belongs to the moment. Those
+        // exemptions were written for the run log and the reward panel, and they let READ THE LOG through
+        // the authored opening's own ModalUp — mid-opening, right after the tutorial boss's first win
+        // (autoplayed opening, 2026-09-11). It waits, and is said when the modal hands the game back.
+        if (busy.ModalUp) next = null;
         if (_quiet > 0f) next = null;
 
         if (next != _showing)

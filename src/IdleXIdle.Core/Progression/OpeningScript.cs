@@ -323,7 +323,7 @@ public static class OpeningScript
                         "HEALTH",
                         // THE HUD'S OWN WORDS. A fall reads "RECOVERING — BACK TO WAVE 1" on a fresh career;
                         // "descent" is a word nothing on this screen shows (review 2026-09-11).
-                        "If Health reaches zero, your Hunter falls. They recover and start again from wave 1."),
+                        "If Health reaches zero, your Hunter falls. They start again from wave 1."),
 
         new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
                         Activity.Hunt, TourTarget.StageHeader,

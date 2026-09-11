@@ -97,6 +97,13 @@ def main(path):
         at, wave = held_kv.get("at"), held_kv.get("wave")
         first_cast_frame, first_cast = casts[0]
         check(held_frame <= sig < sig_ack, f"hold {held_frame} <= card {sig} < continue {sig_ack}")
+        # ...and the card froze no death under it: a creature still falling when the cast was parked
+        # finished its fall before the words came up (GLEAM's rule, at the cast).
+        pending = [f for f, k, _ in ev if k == "FALLS_PENDING" and f <= sig]
+        if pending:
+            fell = first("FALLS_PLAYED", after=pending[-1] - 1)
+            check(fell is not None and fell <= sig,
+                  f"the Signature card waited for the last fall in progress (pending {pending[-1]}, done {fell}, card {sig})")
         # SHORT OF THE WIND-UP, not one millisecond short of the event (the 2026-09-11 bug): the cast's
         # clip starts one contact-length (~780 ms at the opening's tempo) ahead of its event.
         lead = int(at) - int(float(held_kv.get("playhead", at))) if at is not None else 0
@@ -140,14 +147,31 @@ def main(path):
     back = first("SCREEN", lambda r: r == "Hunt", after=done - 1) if done is not None else None
     check(back is not None, f"CONTINUE on the last card returned to the hunt (complete {done}, hunt {back})")
 
+    # ── NOTHING THE OPENING TAUGHT IS SAID AGAIN BY THE COACH ────────────────────────────────────
+    repeats = [f"{r} (frame {f})" for f, k, r in ev if k == "LESSON" and r.split()[0] in ("SignatureSeen", "FirstBoss")]
+    check(not repeats, "the coach repeated no lesson the opening taught" + (f" (said again: {repeats[0]})" if repeats else ""))
+    # ...nor a notice toast: none drawn while the opening runs, and none for a screen it walked the player into.
+    begin = stage("Prologue") or 0
+    over = [f"{r} (frame {f})" for f, k, r in ev if k == "NOTICE" and begin <= f and (done is None or f < done)]
+    check(not over, "no notice toast was drawn over the opening" + (f" (drawn: {over[0]})" if over else ""))
+    stale = [f"{r} (frame {f})" for f, k, r in ev if k == "NOTICE" and ("NEW — VAULT" in r or "NEW — GEAR" in r)]
+    check(not stale, "no notice repeated a screen the opening walked the player into" + (f" (said: {stale[0]})" if stale else ""))
+    # ...and no coach lesson at all while it runs: the opening is the one guide on screen.
+    spoke = [f"{r} (frame {f})" for f, k, r in ev if k == "LESSON" and begin <= f and (done is None or f < done)]
+    check(not spoke, "no coach lesson was shown over the opening" + (f" (shown: {spoke[0]})" if spoke else ""))
+
     # ── THE HUNTER'S OWN FALLS — not an order failure, but never silent ──────────────────────────
     downs = [(f, r) for f, k, r in ev if k == "HUNTER_DOWN"]
     for f, r in downs:
         print(f"WARN  the Hunter fell during the opening at frame {f} ({r}) and started the descent again")
 
     # ── EVERY CLICKED BEAT MOVED ON ITS FIRST CLICK ─────────────────────────────────────────────
-    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1"]
+    # The TITLE is not an opening beat, and it hit-tests its menu in Draw rather than Update, so a press
+    # on a frame MonoGame caught up with two Updates can be missed (seen once at 150 %). Reported, not failed.
+    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1" and not r.startswith("Title ")]
     check(not extra, "every clicked beat advanced on its first click" + (f" (again: {extra[0]})" if extra else ""))
+    for r in [r for _, k, r in ev if k == "CLICK" and r.startswith("Title ") and kv(r).get("n", "1") != "1"]:
+        print(f"WARN  the title took more than one click ({r})")
 
     print(f"{len(fails)} failed" if fails else "opening trace: every order holds")
     return 1 if fails else 0

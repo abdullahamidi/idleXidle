@@ -130,6 +130,60 @@ public class OpeningFlowSeamsTest
     }
 
     [Fact]
+    public void test_no_card_about_the_fight_is_raised_over_a_death_still_being_shown()
+    {
+        // GLEAM waited for the last fall; the Signature card did not, and froze a creature's dissolve under
+        // its words for as long as it was read. Both now wait on the fight's own presentation boundary.
+        var host = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.Opening.cs"));
+        Assert.Contains("ClearShown: _expedition.ClearShown", host, StringComparison.Ordinal);
+        Assert.Contains("_expedition.HoldBeforeKind == BattleEventKind.Skill && _expedition.FallsPlayed", host, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void test_the_coach_does_not_queue_a_lesson_the_opening_is_teaching()
+    {
+        // An observe beat raised during the opening waited it out and was said again the moment it
+        // ended. The two the opening teaches are only ever raised when it is not running.
+        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
+        Assert.Contains("if (_guidanceOff || _fallsSeen > 0 || _opening.Running) return;", game, StringComparison.Ordinal);
+        Assert.Contains("_bossesFelled == 0 && !_opening.Running) _coach.Raise(OnboardingLessonId.FirstBoss)", game, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void test_no_notice_is_drawn_over_the_opening_or_repeats_a_screen_it_walks_into()
+    {
+        // The notice's clock was already held while the opening ran; its toast and its lane were not, so
+        // it stood frozen under every card and pushed GEAR's doll out of existence at 150 %.
+        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
+        Assert.Contains("_noticeTimer > 0f && !NoticeHeld && !_opening.Running", game, StringComparison.Ordinal);
+        Assert.Contains("var showing = OverlayActive && !_tourActive && !_opening.Running", game, StringComparison.Ordinal);
+        Assert.Contains("if (_opening.Running) return;", game, StringComparison.Ordinal);
+        // The boot line is the same: not drawn over the opening, and spent when the opening completes.
+        Assert.Contains("if (_opening.Running) return;\n        var fade = Math.Clamp(_bootTimer / 1.2f", game.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        var host = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.Opening.cs"));
+        Assert.Contains("if (_opening.Stage == OpeningStage.Complete) { _bootTimer = 0f; Save(); }", host, StringComparison.Ordinal);
+        // A lit lesson waits for a notice toast rather than being drawn under it (one surface per slot).
+        Assert.Contains("if (NoticeToastHolds) { _coachCard = Rectangle.Empty; return; }", game, StringComparison.Ordinal);
+        Assert.Contains("if (_coachBlaze > 0f && !NoticeToastHolds)", game, StringComparison.Ordinal);
+        // ...and the unlock notice for a screen the opening walks the player into is not posted at all.
+        Assert.Contains("&& !OpeningWalksInto(opened))", game, StringComparison.Ordinal);
+        var walked = OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceNavigate).Select(s => s.Screen).ToHashSet();
+        Assert.True(walked.SetEquals(new Activity?[] { Activity.Vault, Activity.Gear }),
+                    "the opening walks the player into VAULT and GEAR, and no other screen");
+    }
+
+    [Fact]
+    public void test_training_is_never_painted_with_nothing_pushed()
+    {
+        // The boot check's screen walk opened TRAINING on a frame that left Update before the screen's
+        // block, and Draw resolved a build from a null Loadout. The push now happens where it is painted.
+        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs")).Replace("\r\n", "\n");
+        Assert.Contains("PushTrainingState();   // never painted with nothing pushed — see PushTrainingState\n"
+                        + "            _training.Draw(", game, StringComparison.Ordinal);
+        Assert.Contains("PushTrainingState();\n            _training.Update(", game, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void test_the_welcome_gift_is_the_item_the_gear_beats_point_at()
     {
         // The item the opening lights, selects and equips is the gift the tutorial boss leaves — one

@@ -3729,7 +3729,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // SEE happen on the rail rather than a row quietly appearing under the last one.
                 UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
                 OpeningRigMark($"NAV_BREAK {opened}", $"break_{opened}", 60, 2);   // dev: the opening rig's trace and film
-                if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
+                if ((!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
+                    && !OpeningWalksInto(opened))
                     PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
             }
 
@@ -4257,15 +4258,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         if (_showTraining)
         {
-            _training.Loadout = _loadout;
-            _training.Mastery = _mastery;
-            _training.DiscoveredKeystones = _keystoneMenu;
-            _training.KnownVows = _vowMenu;
-            _training.Character = _characters.Active;
             // (HighestWave / ChestsOpened / MasteryPoints are gone with the PROGRESS panel — they
             //  are the Map's, the Vault's and the Mastery tree's numbers, and none of them moves
             //  when you train.)
-            _training.SkillLevels = _skillProgress;   // the live screen resolved a build without them
+            PushTrainingState();
             _training.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseWheel, _hunter);
             if (_training.Dirty) { _training.ClearDirty(); Save(); }
             Latch(gameTime);
@@ -5178,7 +5174,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void RaiseSignatureBeat()
     {
-        if (_guidanceOff || _fallsSeen > 0) return;
+        // NOT WHILE THE OPENING RUNS: it has its own SIGNATURE SKILL card for this cast. Raised under it,
+        // the observe beat waited out the opening and arrived the moment it ended, saying the same thing
+        // over BACK TO THE HUNT (seen on the autoplayed opening, 2026-09-11) — FirstBoss's rule, again.
+        if (_guidanceOff || _fallsSeen > 0 || _opening.Running) return;
         if (_deepestEver < 1 || _deepestEver > OnboardingLessons.BossEvery) return;
         if (_characters.Active?.SignatureSkillId is not { } sig) return;
         if ((_skillProgress?.UsesOf(sig) ?? 0) < 1) return;
@@ -5557,7 +5556,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
         // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
         if (_tourActive) return;
+        // ...nor over the authored opening, for the same reason and with the same held clock: the news
+        // waits, and lands when the opening hands the game back (it stood frozen under every card).
+        if (_opening.Running) return;
         if (NoticeHeld) return;   // the band belongs to a slot reveal; the clock is held with it
+        if (OpeningRigOn) _rigNoticeDrawn = _notice.Head;   // dev: the opening rig's trace
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         // IN THE LANE on a menu screen (ReserveNoticeLane): the toast stands where the body's first row
@@ -5771,6 +5774,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_coach.Showing is not { } id || !CoachLightsIt(id)) return;
         var holes = CoachHoles(id);
         if (holes.Length == 0) return;   // nothing to light: the card path says it instead
+        // ONE SURFACE PER SLOT — A QUEUE, NOT A STACK — as the HUNT's own lesson card already knows
+        // (HuntLessonShowing). On the fight the notice toast and a card beside the run-log button share
+        // one band, and READ THE LOG was drawn under TRAINING's notice the moment the opening handed the
+        // game back (autoplayed opening, 150 %, 2026-09-11). The light waits; its blaze waits with it.
+        if (NoticeToastHolds) { _coachCard = Rectangle.Empty; return; }
 
         // ── DARKEN EVERYTHING, LIGHT THE ONE THING. ─────────────────────────────────────────────
         //
@@ -5835,8 +5843,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _coachBlaze = _coach.Showing is null ? 0f : CoachBlazeSeconds;
             return;
         }
-        if (_coachBlaze > 0f) _coachBlaze = MathF.Max(0f, _coachBlaze - dt);
+        if (_coachBlaze > 0f && !NoticeToastHolds) _coachBlaze = MathF.Max(0f, _coachBlaze - dt);
     }
+
+    /// <summary>Is a notice toast on screen, so a lit lesson waits its turn (see DrawNoticeToast)?</summary>
+    private bool NoticeToastHolds => _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld && !_opening.Running;
 
     /// <summary>
     /// Is this lesson's copy carried by the SPOTLIGHT rather than by a card in the toast slot?
@@ -6757,6 +6768,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Update reads !_tourActive), so it lands the instant the scrim lifts rather than expiring
         // behind the cards.
         if (_tourActive) return;
+        // ...nor over the authored opening, whose Update holds the same clock: drawn, it stood frozen
+        // under every card and across the lit GEAR panel at 150 % (autoplayed opening, 2026-09-11).
+        if (_opening.Running) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
         // Rev 4 §18.4: a FIXED two-line welcome-back toast at (590,165,740,82) — never a full-width band,
         // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
@@ -7379,6 +7393,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         else if (_showGear) _gear.Draw(_batch, PageCursor, _hunter);
         else if (_showTraining)
         {
+            PushTrainingState();   // never painted with nothing pushed — see PushTrainingState
             _training.Draw(_batch, PageCursor, _hunter, MouseClicked);
 
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
@@ -7614,6 +7629,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>RIG ONLY: the frame being drawn, so a screen can apply a posed seek just before the shutter.</summary>
     internal static int ShotFrameNow { get; private set; }
+
+    /// <summary>Hand the TRAINING screen everything it resolves a build from.</summary>
+    /// <remarks>
+    /// Called by the Update that runs the screen AND by the Draw that paints it. A frame that opened
+    /// TRAINING and then left Update before reaching the screen's block painted it with nothing pushed:
+    /// a NullReferenceException on a fresh career, caught by the boot check's screen walk (2026-09-11).
+    /// The same references every frame, so pushing twice costs nothing.
+    /// </remarks>
+    private void PushTrainingState()
+    {
+        _training.Loadout = _loadout;
+        _training.Mastery = _mastery;
+        _training.DiscoveredKeystones = _keystoneMenu;
+        _training.KnownVows = _vowMenu;
+        _training.Character = _characters.Active;
+        _training.SkillLevels = _skillProgress;   // the live screen resolved a build without them
+    }
 
     // ── Title screen ──────────────────────────────────────────────────────────────────────────
     private void ChooseTitleItem(int i)
@@ -9709,7 +9741,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void ReserveNoticeLane()
     {
-        var showing = OverlayActive && !_tourActive && !_showTitle && !_showHelp && !_showSettings && !WelcomeUp
+        // Not while the opening runs, whose clock already holds the notice (Update): a lane opened for a
+        // toast nobody may read pushed every page down under the opening's cards — at 150 % it left the
+        // GEAR doll that BACK TO THE HUNT lights no height at all (autoplayed opening, 2026-09-11).
+        var showing = OverlayActive && !_tourActive && !_opening.Running && !_showTitle && !_showHelp && !_showSettings && !WelcomeUp
                       && _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld
                       && !(_showMastery && _masteryScreen.SpecialisationOpen);
         if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);

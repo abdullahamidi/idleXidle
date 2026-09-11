@@ -150,7 +150,11 @@ public partial class Game1
         EnemySettled: _expedition.EnemySettled,
         RewardsCredited: _rewardsCredited,
         ClearShown: _expedition.ClearShown,
-        SignatureHeld: _expedition.ReplayHeld && _expedition.HoldBeforeKind == BattleEventKind.Skill,
+        // HELD, AND NOTHING STILL FALLING. The barrier parks the cast wherever the wave has got to, which
+        // can be a moment after another creature's killing blow; a card raised there froze that death's
+        // dissolve under the words for as long as the card was read (seen at 100 %, 2026-09-11). The
+        // replay stays parked while the fight's own presentation plays the fall out — GLEAM's rule.
+        SignatureHeld: _expedition.ReplayHeld && _expedition.HoldBeforeKind == BattleEventKind.Skill && _expedition.FallsPlayed,
         // ...and never waits on a release that was never made: a hold and its release live on the fight
         // screen and die with the process, so with no hold in play there is nothing left to land.
         SignatureLanded: _expedition.ReleasedBeatPlayed || !_expedition.HoldInPlay,
@@ -189,6 +193,19 @@ public partial class Game1
         var wearer = _gear.Character;   // the champion the doll shows, which is the one being played
         return _forge.Inventory.FirstOrDefault(i => Gear.SlotFor(i.BaseType) is not null && Gear.CanWear(wearer, i))?.InstanceId;
     }
+
+    /// <summary>
+    /// Is the running opening about to walk the player into this screen itself?
+    /// </summary>
+    /// <remarks>
+    /// Then the screen's unlock notice is not posted. It would wait out the opening behind its held
+    /// clock and arrive after it, telling the player to "read it before you crack it" about a chest
+    /// they have just opened. A player who skipped the tutorial is not being walked anywhere, and
+    /// hears it.
+    /// </remarks>
+    private bool OpeningWalksInto(Activity screen)
+        => _opening.Running
+           && OpeningScript.Steps.Any(s => s.Mode == TutorialStepMode.ForceNavigate && s.Screen == screen);
 
     /// <summary>
     /// The chest the VAULT beat is about: the welcome gift while it is unopened, else the best chest held.
@@ -394,7 +411,10 @@ public partial class Game1
 
         // AND THE END IS WRITTEN DOWN IMMEDIATELY. The autosave is ten seconds wide and the last beat
         // of the opening is followed by the player walking away satisfied.
-        if (_opening.Stage == OpeningStage.Complete) Save();
+        //
+        // ...AND THE BOOT LINE IS SPENT WITH IT. Its clock was held for the whole opening, and "NO SAVE
+        // FOUND. STARTING FRESH." two minutes into a career, over BACK TO THE HUNT, is news about nothing.
+        if (_opening.Stage == OpeningStage.Complete) { _bootTimer = 0f; Save(); }
     }
 
     // ── INPUT ────────────────────────────────────────────────────────────────────────────────────

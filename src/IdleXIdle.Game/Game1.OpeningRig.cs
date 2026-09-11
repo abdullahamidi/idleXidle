@@ -103,7 +103,10 @@ public partial class Game1
     private int _trBeat = -1;
     private int _trWaves = -1, _trDowns = -1, _trCasts = -1, _trRewards = -1, _trChests = -1, _trWorn = -1;
     private bool _trFalls, _trShown, _trHeld, _trLanded, _trHoldNext, _trCard, _trDowned;
-    private string _trSelected = "?", _trPicked = "?";
+    private string _trSelected = "?", _trPicked = "?", _trLesson = "-", _trNotice = "-";
+
+    /// <summary>The notice toast the last Draw actually painted, or null — set by DrawNoticeToast.</summary>
+    private string? _rigNoticeDrawn;
 
     /// <summary>One frame of the rig: note what the last frame did, then decide the hand for this one.</summary>
     private void OpeningRigFrame()
@@ -179,6 +182,7 @@ public partial class Game1
             }
             _trDowns = h.EnemyDownsSeen;
         }
+        if (h.ChampionDowned && !_trDowned) Burst("hunter_down", 0, 240, 8);   // what the player sees when it falls
         Edge(h.ChampionDowned, ref _trDowned, $"HUNTER_DOWN wave={h.WaveShown} boss={h.BossOnStage}", "HUNTER_UP");
         Edge(h.FallsPlayed, ref _trFalls, "FALLS_PLAYED", "FALLS_PENDING");
         Edge(h.ClearShown, ref _trShown, "CLEAR_SHOWN", null);
@@ -214,6 +218,13 @@ public partial class Game1
         }
         var worn = Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null);
         if (worn != _trWorn) { if (_trWorn >= 0) Trace($"WORN n={worn}"); _trWorn = worn; }
+
+        // THE COACH, TOO: a lesson the opening already taught must never be said again after it.
+        var lesson = _coach.Showing?.ToString() ?? "-";
+        if (lesson != _trLesson) { if (lesson != "-") Trace($"LESSON {lesson} screen={screen}"); _trLesson = lesson; }
+        // ...and the notice toast, as painted (only its arrivals: a catch-up frame paints nothing).
+        if (_rigNoticeDrawn is { Length: > 0 } notice && notice != _trNotice) { Trace($"NOTICE {notice}"); _trNotice = notice; }
+        _rigNoticeDrawn = null;
 
         var card = OpeningUp && !_openingCard.IsEmpty;
         if (card != _trCard)

@@ -277,6 +277,24 @@ public class OnboardingTargetTests
     }
 
     [Fact]
+    public void test_nothing_is_said_over_a_modal_not_even_a_lesson_that_belongs_to_the_moment()
+    {
+        // The authored opening is ModalUp. The fall lessons' exemption is for the run log and the reward
+        // panel; it let READ THE LOG through the opening after the tutorial boss's first win.
+        var d = new OnboardingDirector();
+        var fell = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1, Falls = 1 };
+        for (var i = 0; i < 30; i++)
+        {
+            d.Update(1 / 60f, fell, new OnboardingDirector.Busy(RewardUp: false, ModalUp: true, ReportUp: false));
+            Assert.Null(d.Showing);
+        }
+
+        // ...and it is said the moment the modal hands the game back.
+        d.Update(1 / 60f, fell, Idle);
+        Assert.Equal(OnboardingLessonId.FirstFailureReport, d.Showing);
+    }
+
+    [Fact]
     public void test_muting_a_card_silences_it_and_completes_nothing()
     {
         var d = new OnboardingDirector();
