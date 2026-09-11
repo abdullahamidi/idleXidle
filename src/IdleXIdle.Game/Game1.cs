@@ -9887,17 +9887,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else
                 _ui.Diamond(_batch, new Rectangle(iconBox.X + 4, iconBox.Y + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
 
-            // ── A LOCKED TILE IS CHAINED SHUT, and the chain BREAKS when the screen opens. ───────
+            // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
+            // The house Secondary ink for an inactive label — the private lilac at 90 % sat under the
+            // 6:1 floor and in a hue no token has (chrome-12).
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(Nav[i].Label, NavRailWidth - NavLabelInset * 2, labelH), r.Center.X, labelY,
+                              !unlocked ? UiInk.Secondary * 0.4f : on ? NavGold : UiInk.Secondary, labelH);
+
+            // ── A LOCKED TILE IS CHAINED SHUT, and the chains SPRING OFF when the screen opens. ─────
             //
-            // IT USED TO BE A RING AROUND THE ICON — the fx_bind_chain strip a sworn Vow uses, drawn on
-            // the square icon box because the art is 1:1 and the tile is not. Rejected outright at
-            // review: a circle on a 180x98 rectangle reads as a decoration ON the icon, not as a
-            // restraint on the TILE, and the thing the player is being refused is the tile.
-            //
-            // So the tile is bound the way a door is: one run of real chain straight across it, link by
-            // link, at the icon's own height. The run is BUILT rather than stretched — two forged links,
-            // one wide and one upright, alternating and overlapping — so it is a chain at every UI
-            // density instead of an ellipse at two of them, and it never needs a seam.
+            // Two designs were rejected before this one: a RING around the icon (a decoration ON the
+            // icon, not a restraint on the TILE), then ONE STRAIGHT RUN across the tile at the icon's
+            // height (a belt, whose break slid two halves sideways). The tile is bound the way a door
+            // is now — two runs on different diagonals across the whole button (NavChain owns the
+            // geometry, and the Game tests pin it) — and AFTER THE LABEL, because a chain on a button
+            // lies over what is printed on it.
             //
             // THE BREAK IS DRAWN ON AN UNLOCKED TILE, which is the only kind of tile it can happen to.
             // Armed by Reveal.Newly, and Reveal.Newly fires on the frame the gate OPENS — so a break
@@ -9905,16 +9908,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // armed the branch that reads it was already closed.
             var breaking = UiMotion.Pulse(NavBreakKey(activity));
             if (!unlocked || breaking > 0f)
-            {
-                // 0 while bound, 1 at the end of the break — how far the two halves have parted.
-                var apart = breaking > 0f ? 1f - UiMotion.Smooth(breaking) : 0f;
-                DrawNavChain(r, iconBox.Center.Y, iconPx, apart, unlocked);
-            }
-            // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
-            // The house Secondary ink for an inactive label — the private lilac at 90 % sat under the
-            // 6:1 floor and in a hue no token has (chrome-12).
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(Nav[i].Label, NavRailWidth - NavLabelInset * 2, labelH), r.Center.X, labelY,
-                              !unlocked ? UiInk.Secondary * 0.4f : on ? NavGold : UiInk.Secondary, labelH);
+                DrawNavChain(r, breaking > 0f ? 1f - breaking : 0f);   // 0 while bound, 1 once the tile is clear
 
             // ── THE HUNT TILE IS ALIVE, because the fight is (playtest 2026-09-09: "it wasn't clear
             //    that the HUNT screen is the main combat screen while navigating other menus"). Three
@@ -10109,62 +10103,25 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private static int NavBreakKey(Activity a) => HashCode.Combine("nav.break", (int)a);
 
     /// <summary>
-    /// One run of chain across a rail tile, and the one-shot that tears it in half.
+    /// The chains on a rail tile that is not open yet, and the one-shot that springs them off.
     /// </summary>
-    /// <param name="tile">The whole 180x98 tile — the chain spans it, because the tile is what is bound.</param>
-    /// <param name="centreY">Where the run lies, in canvas space: the icon's own centre line.</param>
-    /// <param name="iconPx">The icon's size at this profile, which the links are sized from.</param>
-    /// <param name="apart">0 while bound, 1 at the end of the break.</param>
-    /// <param name="broken">Is this a break in progress? Then the padlock falls instead of hanging.</param>
+    /// <param name="tile">The whole 180x98 tile — the chains span it, because the tile is what is bound.</param>
+    /// <param name="progress">0 while bound, rising to 1 over the break; at 1 the tile is clear.</param>
     /// <remarks>
-    /// <para>
-    /// <b>Built, never stretched.</b> Two forged links alternate — a wide one lying flat, an upright one
-    /// turned edge-on — each overlapping the last, so the run is a chain at any width and at any UI
-    /// scale. A single wide texture stretched to the tile would be one long ellipse at 100 % and a
-    /// different long ellipse at 150 %.
-    /// </para>
-    /// <para>
-    /// <b>The break is one shot and it is a break.</b> The run parts at the middle and the two halves
-    /// are dragged out past the tile's edges, fading as they go, while the padlock drops out from under
-    /// them. Links whose centre has left the tile are simply not drawn, so nothing is ever painted over
-    /// the neighbouring tile or out into the page. Reduced Motion holds the bound frame and fades it —
-    /// §32 allows a fade and nothing else, and a chain that vanishes with no event at all would leave
-    /// the reveal unexplained.
-    /// </para>
+    /// Only the host's half: which tile, how far along, and the batch. Where every link lies, which way
+    /// each half recoils and what Reduced Motion keeps is <see cref="NavChain"/>'s, a pure function the
+    /// Game tests pin (nav_chain_test.cs) — a one-shot that plays once per screen per career is exactly
+    /// the state a screenshot alone has let this project ship wrong.
     /// </remarks>
-    private void DrawNavChain(Rectangle tile, int centreY, int iconPx, float apart, bool broken)
+    private void DrawNavChain(Rectangle tile, float progress)
     {
-        var fade = 1f - apart;
-        if (fade <= 0.01f) return;
-        if (UiMotion.Reduced) apart = 0f;   // the hold frame: it stays put and fades out
-
-        var h = Math.Max(8, iconPx * 5 / 8);
-        var wide = Math.Max(8, h * 4 / 3);
-        var tall = Math.Max(5, h * 2 / 3);
-        var step = Math.Max(4, wide * 3 / 5);
-        var shove = (int)(apart * tile.Width * 0.62f);
-        // COLD AND UNDER-LIT. The chain is the reason the tile is out of reach, and the brightest
-        // thing on a locked tile should never be the restraint.
-        var ink = new Color(0xC4, 0xC6, 0xD0) * (0.68f * fade);
-
-        var index = 0;
-        for (var x = tile.X + step / 2; x < tile.Right; x += step, index++)
-        {
-            var flat = index % 2 == 0;
-            var w = flat ? wide : tall;
-            var cx = x + (x < tile.Center.X ? -shove : shove);
-            if (cx < tile.X || cx > tile.Right) continue;   // gone off the tile: not drawn, never clipped
-            var box = new Rectangle(cx - w / 2, centreY - h / 2, w, h);
-            if (!_ui.Icon(_batch, flat ? "ui_chain_link_wide" : "ui_chain_link_tall", box, ink))
-                _ui.Fill(_batch, new Rectangle(box.X, centreY - Math.Max(2, h / 6), w, Math.Max(3, h / 3)), ink);
-        }
-
-        // THE PADLOCK HANGS FROM THE RUN, at the tile's own centre, and falls out of it when the chain
-        // parts. It was in the icon box's lower-right quadrant, which is where a badge goes.
-        var lockPx = Math.Max(10, iconPx / 2);
-        var drop = broken ? (int)(apart * apart * lockPx * 3f) : 0;
-        _ui.LockGlyph(_batch, new Rectangle(tile.Center.X - lockPx / 2, centreY - lockPx / 3 + drop, lockPx, lockPx),
-                      UiInk.Secondary * (0.95f * fade));
+        // AT REST EVERY LINK LIES WHOLLY ON THE TILE (NavChain lays them so), and the batch is left alone.
+        // A break throws its halves out across the tile's edges, so a break alone pays for a clipped
+        // batch — two boundaries, for nine tenths of a second, once per screen per career — and nothing
+        // it throws lands on the neighbouring tile or out on the page.
+        if (progress > 0f) BeginChromeClip(tile);
+        NavChain.Draw(_batch, _ui, tile, NavChain.LinkLength, progress, UiMotion.Reduced);
+        if (progress > 0f) EndChromeClip();
     }
 
     /// <summary>
