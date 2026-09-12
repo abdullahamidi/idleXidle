@@ -75,6 +75,7 @@ only be added here once actually integrated:
 <!-- Quick reference linking to full ADRs in docs/architecture/ -->
 - ADR-001 pure-logic Core (Accepted) · ADR-002 cutout animation rig (Accepted) · ADR-003 pixel-perfect render path (Superseded) · ADR-004 warren economy (Superseded)
 - ADR-005 UI SCALE is a density profile, the cursor is mapped once, motion has one vocabulary (Accepted 2026-09-01) — `docs/architecture/ADR-005-ui-density-profile-and-one-cursor.md`
+- ADR-006 Draw must not consume input: Update owns every edge, and both halves read one geometry (Accepted 2026-09-12) — `docs/architecture/ADR-006-draw-must-not-consume-input.md`
 
 ## Engine Specialists
 

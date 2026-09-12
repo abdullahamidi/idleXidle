@@ -1729,11 +1729,25 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// Draw the WARREN nav destination: the facility-production dashboard.
     /// </summary>
     /// <remarks>
-    /// The dashboard performs its upgrade in the DRAW pass (the same place Forge does its Refine), so the
-    /// spend + <see cref="Warren.Upgrade"/> happen here, right after Draw sets the request. Gleam and
-    /// Dust spend from their real balances.
+    /// The dashboard's own clicks — and with them the spend + <see cref="Warren.Upgrade"/> — are resolved
+    /// in UPDATE now (2026-09-12, ADR-006: draw must not consume input), so this only feeds the model and
+    /// draws. Gleam and Dust still spend from their real balances, in UpdateWarren.
     /// </remarks>
     private void DrawWarren()
+    {
+        FeedWarren();
+        _warrenScreen.Draw(_batch, PageCursor);
+    }
+
+    /// <summary>
+    /// Hand the dashboard the state it renders and decides against.
+    /// </summary>
+    /// <remarks>
+    /// Called from BOTH halves of the frame. Game1's Update returns early while a host modal is up
+    /// (<c>if (_showSettings || _showHelp)</c>), so on those frames DrawWarren runs and the Warren's
+    /// Update does not — a feed only in Update would paint the dashboard against a stale model.
+    /// </remarks>
+    private void FeedWarren()
     {
         _warren.ConqueredRegions = _world.ConqueredIds.Count;
         _warrenScreen.Warren = _warren;
@@ -1748,18 +1762,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.DustOwned = _dust.MemoryDust;
-        _warrenScreen.Draw(_batch, PageCursor, MouseClicked);
-        PlayCue(_warrenScreen.ConsumeCue());   // an upgrade that landed, or a refusal
-
-        if (_warrenScreen.ConsumeUpgrade() is { } kind
-            && _warren.CanUpgrade(kind, _hunter.Gleam, _dust.MemoryDust))
-        {
-            var c = _warren.UpgradeCost(kind);
-            _hunter.SpendGleam(c.Gleam);
-            _dust.Spend(c.Dust);
-            _warren.Upgrade(kind);
-            Save();
-        }
     }
 
     protected override void OnExiting(object sender, ExitingEventArgs args)
@@ -2122,6 +2124,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // where every screen's action buttons (Forge Sell/Merge, Farm Hatch/Assign/Evolve, …) are
         // detected. Latching into a field keeps the click live through this frame's Draw.
         _clicked = _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+        // ...and with it the "this edge opened a modal" mark, which lives exactly as long as the edge.
+        _modalOpenedNow = false;
 
         // THE BOOT CHECK SWITCHES SCREENS HERE, at the top, and the position took two tries to get
         // right. At the END of Update it flipped a flag after the `if (_showX)` blocks that hand each
@@ -3832,6 +3836,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
         if (WelcomeUp && (Pressed(Keys.Enter) || Pressed(Keys.Space))) _showWelcome = false;   // CONTINUE by key
+        // ...AND BY MOUSE, HERE. It used to be decided inside DrawWelcomePanel, so on a catch-up tick
+        // (Update, Update, Draw) the edge was gone before the button was tested and the panel ignored
+        // the press. Raw `_clicked`, as the drawn button used: this panel IS the modal.
+        if (WelcomeUp && _clicked && _welcomeContinue.Contains(ChromeMouse)) _showWelcome = false;
         // THE WELCOME IS A MODAL FOR INPUT, NOT FOR THE FRAME. It is up on the very first frame after a load,
         // and an early return here would skip the block below that feeds every screen its dependencies —
         // the first Draw would then hit a null (the boot check caught exactly that). So the frame runs on
@@ -3951,6 +3959,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _showSettings = true;
             _swallowInput = true;
+            _modalOpenedNow = true;   // the panel's own input runs later this Update — see the field
         }
 
         // ...AND THE ? BESIDE IT, on the same terms and for the same reason: it sits over the screen,
@@ -4078,7 +4087,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // THE CHEST REVEAL RUNS EVERYWHERE TOO, and for the same reason as the champion below it: a
         // beat that only advances on one screen is a beat the player watches somewhere they did not
         // start it. Ticked before any overlay branch can return.
-        _forge.TickReveal((float)gameTime.ElapsedGameTime.TotalSeconds);
+        _forge.TickReveal((float)gameTime.ElapsedGameTime.TotalSeconds, _hunter);
 
         // THE CHAMPION FIGHTS EVERYWHERE. Ticked here, before any overlay can early-return, so a run
         // keeps clearing waves and paying out while you're in the Forge, the tree, or another region's
@@ -4104,10 +4113,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // to the right, which IS the arrival tableau. Every frame after it is held.
         if (!_opening.HoldsFight || !_expedition.RunStarted) UpdateExpedition(gameTime);
 
+        // ── THE FIGHT SCREEN'S OWN UI INPUT: the EXPEDITION LOG medallion, the utility rail's door and
+        //    the fall plate's READ THE LOG. Deliberately OUTSIDE the hold above — the log must stay
+        //    openable on a frame the authored opening is holding the fight — and deliberately ABOVE the
+        //    menu branches' `Latch(); return;`, so it runs on every frame whatever screen is up. A modal
+        //    already makes MouseClicked false, so nothing fires under one.
+        //
+        //    `huntOnTop` is the screen gate, and it is load-bearing: _expedition.Draw and DrawLog are
+        //    reached only from the draw chain's terminal `else`, so without it a click in the FORGE
+        //    would fall through into the fight's HUD. !OverlayActive IS that terminal branch's
+        //    condition. The LOG is deliberately not gated by it — DrawLog is drawn over every screen,
+        //    and HuntScreen returns early while the log is open.
+        _expedition.TakeInput(ChromeMouse, MouseClicked, MouseWheel, huntOnTop: !OverlayActive);
+
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
         // farms tick above; the champion ticks on the line above this one. What must not happen is the
         // hotkeys and buttons underneath the panel continuing to respond.
-        if (_showSettings || _showHelp) { Latch(gameTime); return; }   // the help (F1) is a modal too
+        // THE TWO HOST MODALS DECIDE HERE, not in their Draw. The panel eats the frame's input and
+        // not the frame (the farms and the champion tick above), so this is the last thing that runs.
+        if (_showSettings || _showHelp)
+        {
+            if (_showSettings) UpdateSettings();
+            else if (_showHelp)
+            {
+                // The help panel's two inputs: its close icon (F1 and Esc close it too, from the block
+                // above) and its wheel, against the view the paint measured.
+                if (_clicked && _helpClose.Contains(ChromeMouse)) _showHelp = false;
+                if (_helpMaxScroll > 0 && MouseWheel != 0 && _helpView.Contains(ChromeMouse))
+                    _helpScroll = Math.Clamp(_helpScroll - MouseWheel * UiMetrics.RowHeight, 0, _helpMaxScroll);
+            }
+            Latch(gameTime);
+            return;   // the help (F1) is a modal too
+        }
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
 
@@ -4314,6 +4351,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             PushTrainingState();
             _training.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseWheel, _hunter);
             if (_training.Dirty) { _training.ClearDirty(); Save(); }
+
+            // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The
+            // model (geometric cost, rank cap) has always been here; until now nothing in the game
+            // called it. TRAIN has its own cue (two notes up) instead of the ordinary click, and the
+            // screen's own cue carries the refusal when the gleam is not there.
+            //
+            // DRAINED HERE, not in Draw. It spent Gleam and wrote the save from the paint pass, which
+            // is the mutation half of ADR-006: a Draw must be safe to run with no Update before it.
+            if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_train", 0.8f); Save(); }
+            PlayCue(_training.ConsumeCue());
+            if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
             Latch(gameTime);
             return;
         }
@@ -4363,6 +4411,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.MasteryTaken = _mastery.Taken;
             _loadoutScreen.Update(PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
             if (_loadoutScreen.Dirty) { _loadoutScreen.ClearDirty(); Save(); }
+            PlayCue(_loadoutScreen.ConsumeCue());   // the refusal LAW 13 already says in words
             // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showMastery)`, and
             // _showMastery and _showLoadout are mutually exclusive on every path that opens this screen —
             // so the flag was set and never read, the BACK button did nothing, and the stale flag then
@@ -4378,6 +4427,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _roster.Mastery = _mastery;   // so the inspector can say a starting skill is ALREADY KNOWN
             _roster.Hunter = _hunter;     // so it can count the worn pieces a switch would shed
             _roster.Update(PageCursor, MouseClicked, _characters);
+            PlayCue(_roster.ConsumeCue(), 0.6f);   // SET ACTIVE is a navigation: the rail's own page tick
             // THE SWITCH ANNOUNCES ITSELF on the channel every other arrival uses, instead of a stray
             // line printed inside the panel. Polled in Update, not Draw, so nothing fires from a draw
             // pass; the one-frame delay is invisible.
@@ -4390,10 +4440,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         if (_showTraits)
         {
-            // THE NEW TRAITS SCREEN DOES ITS WORK IN Draw, like the Vault and the Forge: it is a
-            // board of tiles and one reading panel, with no camera to drive and no held drag. Its cue
-            // and its Dirty flag are read at the foot of its Draw call. This block stays so the
-            // screen still swallows the frame's hotkeys.
+            // THE TRAITS SCREEN ANSWERS ITS CLICKS HERE, not in its Draw. A catch-up tick runs Update
+            // twice and Draw once, so an edge hit-tested from a draw pass is silently dropped — and on
+            // this screen the DRAG was the worse half, because a release resolved from a paint pass
+            // EQUIPPED a trait. The block still swallows the frame's hotkeys, as it always did.
+            _traitScreen.Update(_traitLedger, _characters.ActiveId, PageCursor, MouseClicked, MouseWheel);
+            PlayCue(_traitScreen.ConsumeCue(), 0.9f);
+            // WEARING A TRAIT IS A SAVE. It is per-character state and the only place it lives is
+            // the file; the ten-second autosave would get there eventually, and "eventually" is
+            // how a crash costs someone their build.
+            //
+            // READ HERE AND NOT AT THE FOOT OF Draw: the screen clears Dirty at the TOP of its Update,
+            // so a catch-up tick's second Update would wipe the flag before a draw-side read saw it —
+            // and on a tick where this block does not run, a stale true would re-fire Save() from
+            // every Draw. Read straight after the Update that set it, this is exactly-once, which is
+            // the pattern MASTERY and GEAR already use.
+            if (_traitScreen.Dirty) Save();
             Latch(gameTime);
             return;
         }
@@ -4425,7 +4487,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
             // these gates; the keys did not. (Adversarial review, pass four.)
             _forge.Update(gameTime, ScreenKeys, PageCursor, MouseClicked, MouseWheel, _hunter,
-                          inputLocked: _swallowInput || _showSettings || WelcomeUp || _forge.RevealActive);
+                          inputLocked: _swallowInput || _showSettings || WelcomeUp || _forge.RevealActive,
+                          rightClicked: MouseRightClicked);
+            // Each operation names itself — upgrade, re-roll, socket, salvage — instead of every one of
+            // them borrowing the same hammer.
+            PlayCue(_forge.ConsumeCue(), 0.9f);
             // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
             if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
             Latch(gameTime);
@@ -4434,8 +4500,31 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         if (_showWarren)
         {
-            // WARREN is the facility-production dashboard. Production runs every frame in TickWarren; the
-            // dashboard handles its clicks in Draw (like Forge/Stats), so it needs no Update here.
+            // WARREN is the facility-production dashboard. Production runs every frame in TickWarren; its
+            // own input — a card picked, a refusal, the UPGRADE that spends — is resolved HERE, because
+            // draw must not consume an input edge: a catch-up tick runs Update twice and Draw once, and
+            // the second Update erases the edge the single Draw would have hit-tested (ADR-006).
+            FeedWarren();
+            _warrenScreen.Update(PageCursor, MouseClicked, MouseWheel);
+            PlayCue(_warrenScreen.ConsumeCue());   // an upgrade that landed, or a refusal
+
+            // The spend happens in the same half of the frame as the ask, so the next Update's Settle()
+            // sees the level it asked for actually land and lights what changed.
+            if (_warrenScreen.ConsumeUpgrade() is { } kind
+                && _warren.CanUpgrade(kind, _hunter.Gleam, _dust.MemoryDust))
+            {
+                var c = _warren.UpgradeCost(kind);
+                _hunter.SpendGleam(c.Gleam);
+                _dust.Spend(c.Dust);
+                _warren.Upgrade(kind);
+                Save();
+                // ARM THE FEEDBACK IN THE SAME HALF-FRAME AS THE SPEND. Settle() already ran at the top
+                // of the Update that asked, so without this the frame the upgrade lands paints the new
+                // output, cost and wall with nothing animating, and the rise then plays from the new
+                // figures a frame later — a visible step backwards on exactly the numbers the feedback
+                // exists to show moving.
+                _warrenScreen.SettleNow();
+            }
             Latch(gameTime);
             return;
         }
@@ -6989,8 +7078,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (resume is not null)
             _ui.TextCenterBig(_batch, resume, r.Center.X, y, Gold, UiTypography.Headline);
 
-        var btn = new Rectangle(x, r.Bottom - pad - button, cw, button);
-        if (_ui.Button(_batch, btn, "CONTINUE", ChromeMouse, _clicked, true, ButtonStyle.Primary)) _showWelcome = false;
+        // DRAWN ONLY: the press is taken in Update against this same rectangle — see _welcomeContinue.
+        _welcomeContinue = new Rectangle(x, r.Bottom - pad - button, cw, button);
+        _ui.Button(_batch, _welcomeContinue, "CONTINUE", ChromeMouse, clicked: false, true, ButtonStyle.Primary);
     }
 
     /// <summary>A return tile's height: an icon box, the figure, and the word under it, at the profile.</summary>
@@ -7341,6 +7431,41 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>True while a modal explanation is up — every input path below reads it.</summary>
     private bool _swallowInput;
 
+    /// <summary>
+    /// A MODAL WAS OPENED BY THIS VERY CLICK EDGE, so the panel it opened must not also act on it.
+    /// </summary>
+    /// <remarks>
+    /// One edge, at most one action. The settings gear sets it: without it, the click that opens the
+    /// panel is still live when the panel's own input runs later in the SAME Update, and lands on
+    /// whatever row happens to sit under the gear's corner. It was latent while the panel decided its
+    /// clicks in Draw — Draw runs after the whole of Update, but the edge was still the same one — and
+    /// moving that decision into Update is what made it worth closing rather than describing.
+    /// Cleared at the top of every Update; <c>_swallowInput</c> cannot do this job, because it is also
+    /// true while the authored opening owns the frame and SETTINGS is the opening's one way out.
+    /// </remarks>
+    private bool _modalOpenedNow;
+
+    /// <summary>
+    /// The HELP panel's close icon and the WELCOME panel's CONTINUE, as Draw last laid them out —
+    /// hit-tested in Update on the next frame.
+    /// </summary>
+    /// <remarks>
+    /// THE ONE GEOMETRY, CACHED RATHER THAN RE-DERIVED. Both panels size themselves from MEASURED text
+    /// (the help columns wrap against the panel's width; the welcome panel's height is its tiles, its
+    /// camp lines and its resume line), so a pure layout function for either would have to re-run the
+    /// measurement — a second geometry system, which is the one thing this pass must not build. Storing
+    /// the rectangle the paint actually used makes "what is drawn" and "what is hit-tested" the same
+    /// object by construction. The same idiom, for the same reason, as the opening's own
+    /// <c>_openingButton</c> / <c>_prologueNext</c> (Game1.Opening.cs) — and safe here because neither
+    /// rectangle can move without the content moving, and both controls have a keyboard twin handled in
+    /// Update (F1 / Esc, and ENTER / SPACE) that never depended on Draw at all.
+    /// </remarks>
+    private Rectangle _helpClose, _welcomeContinue;
+
+    /// <summary>The HELP panel's scrolling view and its overflow, as Draw last measured them.</summary>
+    private Rectangle _helpView;
+    private int _helpMaxScroll;
+
     private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
 
     private bool MouseRightClicked => _rightClicked && !_showSettings && !_opening.OwnsInput;
@@ -7450,35 +7575,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
         if (_showForge)
         {
-            _forge.Draw(_batch, _hunter, PageCursor, MouseClicked, MouseRightClicked);
-            // Each operation names itself — upgrade, re-roll, socket, salvage — instead of every one of
-            // them borrowing the same hammer.
-            PlayCue(_forge.ConsumeCue(), 0.9f);
+            _forge.Draw(_batch, _hunter, PageCursor);
         }
         else if (_showWorld) DrawWorld();
         else if (_showTraits)
         {
+            // PAINT ONLY. Every click, the wheel, the drag, the cue and the save are resolved in the
+            // `if (_showTraits)` block of Update.
             _traitScreen.Draw(_batch, _traitLedger, _characters.ActiveId,
-                              _characters.Active?.Name ?? "YOUR HUNTER", PageCursor, MouseClicked, MouseWheel);
-            PlayCue(_traitScreen.ConsumeCue(), 0.9f);
-            // WEARING A TRAIT IS A SAVE. It is per-character state and the only place it lives is
-            // the file; the ten-second autosave would get there eventually, and "eventually" is
-            // how a crash costs someone their build.
-            if (_traitScreen.Dirty) Save();
+                              _characters.Active?.Name ?? "YOUR HUNTER", PageCursor);
         }
         else if (_showRoster)
         {
             _roster.Progress = QuestSnapshot();
             _roster.Mastery = _mastery;
             _roster.Hunter = _hunter;
-            _roster.Draw(_batch, _characters, PageCursor, MouseClicked);
-            PlayCue(_roster.ConsumeCue(), 0.6f);   // SET ACTIVE is a navigation: the rail's own page tick
+            _roster.Draw(_batch, _characters, PageCursor);
         }
-        else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, PageCursor, MouseClicked);
+        else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, PageCursor);
         else if (_showLoadout)
         {
-            _loadoutScreen.Draw(_batch, PageCursor, MouseClicked);
-            PlayCue(_loadoutScreen.ConsumeCue());   // the refusal LAW 13 already says in words
+            _loadoutScreen.Draw(_batch, PageCursor);
         }
         else if (_showWarren) DrawWarren();
         else if (_showMastery) _masteryScreen.Draw(_batch, PageCursor);
@@ -7486,15 +7603,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         else if (_showTraining)
         {
             PushTrainingState();   // never painted with nothing pushed — see PushTrainingState
-            _training.Draw(_batch, PageCursor, _hunter, MouseClicked);
-
-            // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
-            // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
-            // TRAIN has its own cue (two notes up) instead of the ordinary click, and the screen's
-            // own cue carries the refusal when the gleam is not there.
-            if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_train", 0.8f); Save(); }
-            PlayCue(_training.ConsumeCue());
-            if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
+            _training.Draw(_batch, PageCursor, _hunter);
         }
         else
         {
@@ -7504,12 +7613,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _expedition.OverlayFloor = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive
                 ? ToastTop + ToastHeight + UiMetrics.Space(8)
                 : HuntLessonShowing() is { } lessonUp ? HuntLessonRect(lessonUp).Bottom + UiMetrics.Space(8) : 0;
-            _expedition.Draw(_batch, ChromeMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
+            _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
         }
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
         // overlay a player opens to think rather than to act.
-        _expedition.DrawLog(_batch, ChromeMouse, MouseClicked);
+        _expedition.DrawLog(_batch, ChromeMouse);
         _batch.End();
 
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
@@ -7767,7 +7876,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _showTitle = false;
                 if (!_hasSave && _opening.Stage == OpeningStage.NotStarted) _opening.Begin();
                 break;
-            case 1: _showSettings = true; break;
+            case 1: _showSettings = true; _modalOpenedNow = true; break;   // see _modalOpenedNow
             default: Exit(); break;
         }
     }
@@ -8159,6 +8268,356 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// dims rather than vanishing so the panel doesn't reflow under the cursor. Every row grows a
     /// hover explanation after a short delay — see <see cref="DrawSettingsTips"/>.
     /// </remarks>
+    // ── THE SETTINGS PANEL'S INPUT, IN UPDATE ────────────────────────────────────────────────────
+    //
+    // Every control on this panel used to be decided inside DrawSettings, on the raw click edge, and
+    // its own doc comment said why: "Drawn (not updated) because UiKit.Button hit-tests as it renders
+    // — the click edge is latched in Update precisely so Draw can read it." That reasoning holds only
+    // for a tick that updates once. MonoGame's fixed timestep makes AT LEAST ONE Update and exactly
+    // one Draw, so a frame over budget runs Update twice: the first latches the edge, Latch() copies
+    // _mouse into _prevMouse, the second recomputes the edge as FALSE, and the single Draw that
+    // follows tests an edge that no longer exists. A press held three to six frames never re-arms, so
+    // the press is simply lost. The title screen shipped with exactly that bug.
+    //
+    // WHAT KEEPS THE TWO HALVES HONEST is that they read the SAME geometry: SettingsFrameNow() was
+    // already a pure static layout of every rectangle on the panel, and the only thing added to it
+    // here is the scroll offset (SettingsRow) and the three control rects that used to be computed
+    // inside the draw-and-decide helpers (SettingsToggleButton, SettingsSliderGrab,
+    // SettingsDropdownRow). Nothing is a literal, and nothing is measured twice.
+
+    /// <summary>A panel row at the current scroll — the one offset both halves apply.</summary>
+    private Rectangle SettingsRow(Rectangle r) => new(r.X, r.Y - _settingsScroll, r.Width, r.Height);
+
+    /// <summary>An ON/OFF row's button: the right end of the row's width. Shared with <see cref="DrawToggleRow"/>.</summary>
+    private static Rectangle SettingsToggleButton(int x, int y, int width)
+    {
+        var w = UiMetrics.Control(116);
+        return new Rectangle(x + width - w, y, w, UiMetrics.RowHeight);
+    }
+
+    /// <summary>A slider's grab zone — the track, generously padded. Shared with <see cref="DrawSliderRow"/>.</summary>
+    private static Rectangle SettingsSliderGrab(Rectangle track)
+    {
+        var gx = UiMetrics.Space(10);
+        var gy = UiMetrics.Space(6);
+        return new Rectangle(track.X - gx, track.Y - gy, track.Width + gx * 2, track.Height + gy * 2);
+    }
+
+    /// <summary>The k-th accessibility switch's row — the hover zone and the row the button sits in.</summary>
+    private Rectangle SettingsToggleZone(SettingsFrame f, int k)
+        => SettingsRow(new Rectangle(f.RightX, f.ToggleY + k * f.TogglePitch, f.RightW, UiMetrics.RowHeight));
+
+    /// <summary>
+    /// ONE SWITCH IN THE ACCESSIBILITY COLUMN: what it says, what it reads, and what it writes.
+    /// </summary>
+    /// <remarks>
+    /// A table rather than six hand-written pairs, because Update and Draw both walk it and six
+    /// duplicated label/field pairings is six chances for the two halves to disagree about which row
+    /// is which. <c>Pref</c> marks the four that are DISPLAY preferences and are persisted together by
+    /// one <c>SaveDisplay()</c> after the walk, exactly as the old <c>changed |= …</c> did; GUIDANCE
+    /// writes the SAVE instead and does its own work.
+    /// </remarks>
+    private readonly record struct SettingsSwitch(string Label, Func<bool> On, Action<bool> Set, bool Pref);
+
+    /// <summary>The six switches, in the order they are stacked.</summary>
+    private SettingsSwitch[] SettingsSwitches() => new[]
+    {
+        new SettingsSwitch("DAMAGE NUMBERS", () => _showDamageNumbers, v => _showDamageNumbers = v, true),
+        new SettingsSwitch("SKILL NAMES", () => _showSkillCallouts, v => _showSkillCallouts = v, true),
+        new SettingsSwitch("FIGHT EFFECTS", () => _showHitEffects, v => _showHitEffects = v, true),
+        new SettingsSwitch("RED FLASH", () => _showScreenFlash, v => _showScreenFlash = v, true),
+        // EVERY SWITCH IN THIS COLUMN POINTS THE SAME WAY: ON grants the thing. The stored preference
+        // is still REDUCED MOTION (DisplaySettings persists motion=0|1 and every screen reads
+        // ReducedMotion) — inverting a saved value would silently flip the preference of every player
+        // who has already set one. Only the label and its sense are inverted, here, once.
+        new SettingsSwitch("INTERFACE MOTION", () => !ReducedMotion, v => ReducedMotion = !v, true),
+        // GUIDANCE is one switch on purpose, and while the authored opening runs it is also SKIP
+        // TUTORIAL. Turning it off ends the opening where the player stands and does nothing else: no
+        // item granted, no unlock moved, no boss credited.
+        new SettingsSwitch(_opening.Running ? "GUIDANCE — SKIP TUTORIAL" : "GUIDANCE",
+                           () => !_guidanceOff,
+                           v =>
+                           {
+                               _guidanceOff = !v;
+                               if (_guidanceOff && _opening.Running) { _opening.SkipToEnd(); _openingWas = _opening.Stage; }
+                               Save();
+                           },
+                           false),
+    };
+
+    /// <summary>The three display modes, in the order the MODE list offers them.</summary>
+    private static readonly DisplayMode[] SettingsModes =
+        { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
+
+    /// <summary>MODE's list, and which row is current.</summary>
+    private (string[] Names, int Index) SettingsModeList()
+        => (new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" }, Array.IndexOf(SettingsModes, _displayMode));
+
+    /// <summary>WINDOW SIZE's offered sizes, their labels, and which is current.</summary>
+    private (WindowSize[] Sizes, string[] Labels, int Index) SettingsSizeList()
+    {
+        var desktop = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+        var sizes = Display.OfferedWindowSizes(desktop.Width, desktop.Height);
+        var labels = new string[sizes.Length];
+        for (var i = 0; i < labels.Length; i++)
+            labels[i] = Display.WindowSizeLabel(sizes[i], desktop.Width, desktop.Height);
+        return (sizes, labels, Array.IndexOf(sizes, _windowSize));
+    }
+
+    /// <summary>
+    /// An open dropdown's box and how many of its options fit — the geometry, with nothing decided.
+    /// </summary>
+    /// <remarks>
+    /// Pure: <see cref="DropdownList"/> used to compute this while painting AND pick from it. Both
+    /// halves read it now, so the row the player clicks is the row they saw.
+    /// </remarks>
+    private static (Rectangle List, int Rows) SettingsDropdownBox(Rectangle field, int options)
+    {
+        var top = field.Bottom + DropGap;
+        var room = SettingsPanel.Bottom - UiKit.PanelCorner - top - DropListInset * 2;
+        var rows = Math.Clamp(room / DropRowHeight, 1, Math.Max(1, options));
+        return (new Rectangle(field.X, top, field.Width, rows * DropRowHeight + DropListInset * 2), rows);
+    }
+
+    /// <summary>The k-th visible row of an open dropdown list.</summary>
+    private static Rectangle SettingsDropdownRow(Rectangle list, int rows, int k, bool scrolling)
+    {
+        var inner = new Rectangle(list.X + DropListInset, list.Y + DropListInset,
+                                  list.Width - DropListInset * 2, rows * DropRowHeight);
+        var rowW = inner.Width - (scrolling ? UiMetrics.ScrollbarWidth + UiMetrics.Space(6) : 0);
+        return new Rectangle(inner.X, inner.Y + k * DropRowHeight, rowW, DropRowHeight);
+    }
+
+    /// <summary>
+    /// THE SETTINGS PANEL'S WHOLE INPUT PASS. Runs from Update while the panel is up; Draw paints the
+    /// result and decides nothing.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately reads the RAW <c>_clicked</c> rather than <see cref="MouseClicked"/>, as the draw
+    /// half did, because this panel IS the modal that gate exists for. The one thing it must not act on
+    /// is the edge that OPENED it — see <see cref="_modalOpenedNow"/>.
+    /// </remarks>
+    private void UpdateSettings()
+    {
+        var f = SettingsFrameNow();
+        var mouse = ChromeMouse;
+        // A click reaches the ordinary rows only while no dropdown list is open: the open list is drawn
+        // over them, so its clicks — and the click that closes it — are swallowed here. And never the
+        // edge that opened the panel.
+        var uiClick = _clicked && _settingsDropdown == 0 && !_modalOpenedNow;
+
+        // ── THE SCROLL, before anything is hit-tested against it. ───────────────────────────────
+        var maxScroll = f.Scrolls ? Math.Max(0, f.ContentHeight - f.View.Height) : 0;
+        if (maxScroll > 0 && _settingsDropdown == 0 && MouseWheel != 0 && f.View.Contains(mouse))
+            _settingsScroll -= MouseWheel * UiMetrics.RowHeight;
+        // DEV: pose the panel scrolled (RH_SHOT_SCROLL=<rows>|end) so the two rows that sit under the
+        // clip line at 150 % can be photographed at all.
+        if (RigActive && maxScroll > 0
+            && Environment.GetEnvironmentVariable("RH_SHOT_SCROLL") is { Length: > 0 } posed)
+            _settingsScroll = posed.Equals("end", StringComparison.OrdinalIgnoreCase) ? maxScroll
+                : int.TryParse(posed, out var rows) ? rows * UiMetrics.RowHeight
+                : _settingsScroll;
+        _settingsScroll = Math.Clamp(_settingsScroll, 0, maxScroll);
+
+        var rowsVisible = !f.Scrolls || f.View.Contains(mouse);
+        var rowClick = uiClick && rowsVisible;
+
+        // ── DISPLAY ────────────────────────────────────────────────────────────────────────────
+        var modeRow = SettingsRow(f.ModeRow);
+        var sizeRow = SettingsRow(f.SizeRow);
+        var windowed = _displayMode == DisplayMode.Windowed;
+
+        // UI SCALE applies AT ONCE, so the next frame is laid out at the new profile. The edge is spent
+        // here and the rows below are tested against the geometry it just replaced — which is why this
+        // returns rather than falling on through: at the new profile every rectangle under the cursor
+        // is a different control, and one press must never press two.
+        if (UiKit.ClickedIn(SettingsRow(f.ScaleRow), mouse, rowClick))
+        {
+            CycleUiScale();
+            SaveDisplay();
+            return;
+        }
+
+        // ── AUDIO. Click the track to jump the handle, hold to drag it; persist once, on release. ──
+        var fxTrack = SettingsRow(f.FxTrack);
+        var musicTrack = SettingsRow(f.MusicTrack);
+        if (rowClick && SettingsSliderGrab(fxTrack).Contains(mouse)) _dragSlider = 1;
+        if (rowClick && SettingsSliderGrab(musicTrack).Contains(mouse)) _dragSlider = 2;
+        if (_mouse.LeftButton == ButtonState.Pressed)
+        {
+            if (_dragSlider == 1 && SliderValueAt(fxTrack, mouse) is { } fx && fx != _sfxVolume)
+            {
+                _sfxVolume = fx;
+                _sound.SfxVolume = _sfxVolume / 100f;   // live, so the drag previews the new level
+            }
+            else if (_dragSlider == 2 && SliderValueAt(musicTrack, mouse) is { } mu && mu != _musicVolume)
+            {
+                _musicVolume = mu;
+                _sound.MusicVolume = _musicVolume / 100f;   // the playing bed follows the drag instantly
+            }
+        }
+        // The drag ends when the button does. One write per drag, not sixty.
+        if (_dragSlider != 0 && _mouse.LeftButton == ButtonState.Released)
+        {
+            if (_dragSlider == 1) _sound.PlayFirst(1f, "sfx_click", "sfx_forge");
+            _dragSlider = 0;
+            SaveDisplay();
+        }
+
+        // ── GAMEPLAY ───────────────────────────────────────────────────────────────────────────
+        if (UiKit.ClickedIn(SettingsRow(f.AskBtn), mouse, rowClick))
+        {
+            _askBeforeScrap = !_askBeforeScrap;
+            _forge.AskBeforeScrap = _askBeforeScrap;
+            SaveDisplay();
+        }
+
+        // ── ACCESSIBILITY, and GUIDANCE under it: one walk of the same table Draw walks. ────────
+        var switches = SettingsSwitches();
+        var changed = false;
+        for (var k = 0; k < switches.Length; k++)
+        {
+            var zone = SettingsToggleZone(f, k);
+            if (!UiKit.ClickedIn(SettingsToggleButton(zone.X, zone.Y, zone.Width), mouse, rowClick)) continue;
+            switches[k].Set(!switches[k].On());
+            changed |= switches[k].Pref;
+            break;   // the switches do not overlap; one edge, one switch
+        }
+        if (changed) SaveDisplay();
+
+        // ── THE FOOTER: outside the clip, so it is always on the panel. ─────────────────────────
+        if (_resetArmTimer <= 0f && UiKit.ClickedIn(f.CopyFeedback, mouse, uiClick))
+        {
+            // The failure is NOT silent (the weave's copy button's rule): no clipboard, no lie.
+            _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
+                ? "COPIED — PASTE IT TO THE DEVELOPER"
+                : "COPY FAILED — TRY AGAIN";
+            _feedbackToastTimer = 4f;
+        }
+
+        // DANGER ZONE. Armed, the confirmation is the only click that goes through; any other click
+        // disarms it.
+        if (_resetArmTimer > 0f)
+        {
+            if (UiKit.ClickedIn(f.NewGameArmed, mouse, uiClick))
+            {
+                _resetArmTimer = 0f;
+                _wantsNewGame = true;
+            }
+            else if (_clicked && !_modalOpenedNow)
+            {
+                _resetArmTimer = 0f;
+            }
+        }
+        else if (UiKit.ClickedIn(f.NewGame, mouse, uiClick))
+        {
+            _resetArmTimer = ResetArmSeconds;
+        }
+
+        if (UiKit.ClickedIn(f.Close, mouse, uiClick))
+        {
+            _showSettings = false;
+            _settingsDropdown = 0;
+            return;
+        }
+
+        // Esc opens this panel rather than quitting, so the game needs a door that says what it does.
+        // Hidden on the title, whose own menu has QUIT and whose Hunter may not exist yet to save.
+        if (!_showTitle && UiKit.ClickedIn(f.Quit, mouse, uiClick))
+        {
+            Save();
+            Exit();
+            return;
+        }
+
+        // ── THE OPEN DROPDOWN, last: it is drawn over every row below it, and `uiClick` above has
+        //    already kept those rows from seeing this edge. ───────────────────────────────────────
+        if (_settingsDropdown == 1)
+        {
+            var (names, index) = SettingsModeList();
+            if (TakeDropdownInput(modeRow, names.Length, index) is { } pick && pick != index)
+            {
+                _displayMode = SettingsModes[pick];
+                ApplyDisplay();
+                SaveDisplay();
+            }
+        }
+        else if (_settingsDropdown == 2)
+        {
+            var (sizes, labels, index) = SettingsSizeList();
+            if (TakeDropdownInput(sizeRow, labels.Length, index) is { } pick && pick != index
+                && pick >= 0 && pick < sizes.Length)
+            {
+                _windowSize = sizes[pick];
+                ApplyDisplay();
+                SaveDisplay();
+            }
+        }
+        else if (_clicked && rowsVisible && !_modalOpenedNow)
+        {
+            // No list open: a click on a closed row opens its list, with the cursor unplaced so the
+            // list puts it on the value the player already has.
+            if (modeRow.Contains(mouse)) OpenDropdown(1);
+            else if (windowed && sizeRow.Contains(mouse)) OpenDropdown(2);
+        }
+    }
+
+    /// <summary>Where on a track a cursor sits, 0..100 — the slider's one reading, shared by both halves.</summary>
+    private static int? SliderValueAt(Rectangle track, Point mouse)
+        => track.Width <= 0 ? null : Math.Clamp((int)MathF.Round((mouse.X - track.X) * 100f / track.Width), 0, 100);
+
+    /// <summary>
+    /// AN OPEN DROPDOWN'S INPUT: the arrow cursor, the wheel, and the pick. Returns the chosen index
+    /// when the list committed this frame, and closes the list; null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The cursor and the scroll are state the LIST owns, so they are settled here before Draw reads
+    /// them — which is also why the list's own scroll clamp moved out of the paint.
+    /// </remarks>
+    private int? TakeDropdownInput(Rectangle field, int options, int currentIndex)
+    {
+        if (options <= 0) { CloseDropdown(); return null; }
+
+        // The cursor lands on the current value the first frame the list is up.
+        if (_dropCursor < 0 || _dropCursor >= options) _dropCursor = Math.Max(0, currentIndex);
+        if (_dropMove != 0)
+        {
+            _dropCursor = ((_dropCursor + _dropMove) % options + options) % options;
+            _dropMove = 0;
+        }
+
+        var (list, rows) = SettingsDropdownBox(field, options);
+        if (rows < options && MouseWheel != 0) _dropScroll -= MouseWheel;
+        _dropScroll = Math.Clamp(_dropScroll, 0, Math.Max(0, options - rows));
+        if (_dropCursor < _dropScroll) _dropScroll = _dropCursor;
+        else if (_dropCursor >= _dropScroll + rows) _dropScroll = _dropCursor - rows + 1;
+
+        // ENTER commits whatever the arrow keys have lit (the edge is taken in Update, above).
+        if (_dropCommit)
+        {
+            _dropCommit = false;
+            var chosen = _dropCursor;
+            CloseDropdown();
+            return chosen;
+        }
+
+        var scrolling = rows < options;
+        var mouse = ChromeMouse;
+        for (var k = 0; k < rows; k++)
+        {
+            var r = SettingsDropdownRow(list, rows, k, scrolling);
+            if (r.Contains(mouse)) _dropCursor = _dropScroll + k;   // the mouse and the keys share one cursor
+            if (!_clicked || _modalOpenedNow || !r.Contains(mouse)) continue;
+            var picked = _dropScroll + k;
+            CloseDropdown();
+            return picked;
+        }
+
+        // A click anywhere else — the closed field included — just closes the list.
+        if (_clicked && !_modalOpenedNow) CloseDropdown();
+        return null;
+    }
+
     private void DrawSettings()
     {
         var f = SettingsFrameNow();
@@ -8168,9 +8627,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _ui.TextCenterBig(_batch, "SETTINGS", panel.Center.X, panel.Y + UiTypography.ModalTitleTop,
                           Gold, UiTypography.PanelTitle);
 
-        // A click reaches the ordinary rows only while no dropdown list is open. The open list is
-        // drawn over them, so its clicks — and the click that closes it — must be swallowed here.
-        var uiClick = _clicked && _settingsDropdown == 0;
+        // NOTHING ON THIS PANEL IS DECIDED HERE. Every control's press is taken in UpdateSettings,
+        // against the same SettingsFrameNow() rectangles this paints — see that method for why a click
+        // read from Draw is lost on a catch-up tick. These two constants keep the drawn widgets in
+        // their hover-and-press-face-only form, which is what `clicked: false` means to UiKit.Button.
         var mouse = ChromeMouse;
 
         // The COPIED confirmation, in the header row beside the close icon — the one line no row shares.
@@ -8180,26 +8640,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                              Gold, UiTypography.Secondary);
 
         // ── THE SCROLL. When the rows outgrow the room above the QUIT row (150 %), they scroll under
-        //    the header: a wheel notch is one list row, the range is the overflow, and a click lands
-        //    only where a row is actually visible. Nothing scrolls at 100 % or 125 %.
-        var maxScroll = f.Scrolls ? Math.Max(0, f.ContentHeight - f.View.Height) : 0;
-        if (maxScroll > 0 && _settingsDropdown == 0 && MouseWheel != 0 && f.View.Contains(mouse))
-            _settingsScroll -= MouseWheel * UiMetrics.RowHeight;
-        // DEV ONLY: pose the panel scrolled, so the state a 150 % player actually reaches can be
-        // photographed. RH_SHOT_SCROLL=<rows>, and "end" for the bottom of the list — the two rows
-        // that sit under the clip line at 150 % (COPY FEEDBACK CODE, START A NEW GAME) are otherwise
-        // a state no capture mode can pose, which in this project is the same as a state nobody has
-        // ever looked at. The same variable name the map and the warren already use for the same job.
-        if (RigActive && maxScroll > 0
-            && Environment.GetEnvironmentVariable("RH_SHOT_SCROLL") is { Length: > 0 } posed)
-            _settingsScroll = posed.Equals("end", StringComparison.OrdinalIgnoreCase) ? maxScroll
-                : int.TryParse(posed, out var rows) ? rows * UiMetrics.RowHeight
-                : _settingsScroll;
-        _settingsScroll = Math.Clamp(_settingsScroll, 0, maxScroll);
+        //    the header. The wheel is taken in UpdateSettings, which also clamps and poses it
+        //    (RH_SHOT_SCROLL); this reads the settled offset through the one shared helper.
         var dy = -_settingsScroll;
+        Rectangle Row(Rectangle r) => SettingsRow(r);
+        // Presentation only: the hover tips are suppressed while the cursor is outside the scrolled
+        // view, so a tip never points at a row the clip has hidden.
         var rowsVisible = !f.Scrolls || f.View.Contains(mouse);
-        var rowClick = uiClick && rowsVisible;
-        Rectangle Row(Rectangle r) => new(r.X, r.Y + dy, r.Width, r.Height);
 
         // ── GROUPED BY PURPOSE, IN TWO COLUMNS (brief §36). Left: what the game looks and sounds
         //    like. Right: how it behaves, what it shows in a fight, and the one destructive door. ──
@@ -8241,11 +8688,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // applies AT ONCE: the next frame is laid out at the new profile, this row included.
         var scaleRow = Row(f.ScaleRow);
         Label("UI SCALE", f.LeftX, scaleRow.Y + (scaleRow.Height - UiTypography.Body) / 2, Bone);
-        if (_ui.Button(_batch, scaleRow, Display.UiScaleLabel(_uiScalePercent), mouse, rowClick))
-        {
-            CycleUiScale();
-            SaveDisplay();
-        }
+        _ui.Button(_batch, scaleRow, Display.UiScaleLabel(_uiScalePercent), mouse, clicked: false);
         _ui.TextBig(_batch, "AUTO PICKS 125% IN A SMALL WINDOW", f.LeftX, f.ScaleCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
@@ -8253,28 +8696,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Group("AUDIO", f.LeftX, f.AudioY + dy, f.ColW);
 
         var fxTrack = Row(f.FxTrack);
-        var fx = SliderRow("EFFECTS VOLUME", fxTrack, _sfxVolume, 1, rowClick, f.LeftX);
-        if (fx >= 0 && fx != _sfxVolume)
-        {
-            _sfxVolume = fx;
-            _sound.SfxVolume = _sfxVolume / 100f;   // live, so the release click previews the new level
-        }
-
+        DrawSliderRow("EFFECTS VOLUME", fxTrack, _sfxVolume, f.LeftX);
         var musicTrack = Row(f.MusicTrack);
-        var mu = SliderRow("MUSIC VOLUME", musicTrack, _musicVolume, 2, rowClick, f.LeftX);
-        if (mu >= 0 && mu != _musicVolume)
-        {
-            _musicVolume = mu;
-            _sound.MusicVolume = _musicVolume / 100f;   // the playing bed follows the drag instantly
-        }
-
-        // The drag ends when the button does. Persist ONCE here, not on every dragged frame.
-        if (_dragSlider != 0 && _mouse.LeftButton == ButtonState.Released)
-        {
-            if (_dragSlider == 1) _sound.PlayFirst(1f, "sfx_click", "sfx_forge");
-            _dragSlider = 0;
-            SaveDisplay();
-        }
+        DrawSliderRow("MUSIC VOLUME", musicTrack, _musicVolume, f.LeftX);
 
         // ── GAMEPLAY ─────────────────────────────────────────────────────────────────────────────
         Group("GAMEPLAY", f.RightX, f.GameplayY + dy, f.RightW);
@@ -8282,69 +8706,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The label takes what the button leaves — it can never print through it.
         Label(_ui.ShortenBig("ASK BEFORE SELL OR SALVAGE", askBtn.X - UiMetrics.Space(12) - f.RightX, UiTypography.Body),
               f.RightX, f.AskLabelY + dy, Bone);
-        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, rowClick))
-        {
-            _askBeforeScrap = !_askBeforeScrap;
-            _forge.AskBeforeScrap = _askBeforeScrap;
-            SaveDisplay();
-        }
+        _ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, clicked: false);
 
-        // ── ACCESSIBILITY. The fight's text and effects, and the motion switch. ──────────────────
+        // ── ACCESSIBILITY, and GUIDANCE under it. ────────────────────────────────────────────────
+        //
+        // Five switches then GUIDANCE, one per row, each the full column width — two to a row they
+        // were 260 px apart and the second label sat under the first row's button. Walked from
+        // SettingsSwitches(), the one table UpdateSettings also walks, so the row the player presses
+        // and the row that is painted are the same row by construction. Each label's sense — why ON
+        // means ON down the whole column, and why GUIDANCE is also SKIP TUTORIAL while the opening
+        // runs — is explained on that table.
         Group("ACCESSIBILITY", f.RightX, f.AccessY + dy, f.RightW);
-        // Five switches, one per row, each the full column width. Two to a row they were 260 px
-        // apart and the second label sat under the first row's button.
-        var changed = false;
-        var sy = f.ToggleY + dy;
-        changed |= ToggleRow("DAMAGE NUMBERS", f.RightX, sy, f.RightW, ref _showDamageNumbers, rowClick);
-        sy += f.TogglePitch;
-        changed |= ToggleRow("SKILL NAMES", f.RightX, sy, f.RightW, ref _showSkillCallouts, rowClick);
-        sy += f.TogglePitch;
-        changed |= ToggleRow("FIGHT EFFECTS", f.RightX, sy, f.RightW, ref _showHitEffects, rowClick);
-        sy += f.TogglePitch;
-        changed |= ToggleRow("RED FLASH", f.RightX, sy, f.RightW, ref _showScreenFlash, rowClick);
-        sy += f.TogglePitch;
-        // ── EVERY SWITCH IN THIS COLUMN POINTS THE SAME WAY. ─────────────────────────────────────
-        //
-        // Four of the five read "ON = you get this", and REDUCED MOTION read "ON = you get LESS", so
-        // the column's honest maximum was four ONs and an OFF and its honest minimum was four OFFs and
-        // an ON. Playtest 2026-09-09: "everything is ON but reduced motion is OFF — when I want it all
-        // I turn everything ON, when I want none I turn everything OFF. Something there is illogical."
-        //
-        // The switch is named for the thing it grants rather than for the thing it withholds, so ON is
-        // ON down the whole column. The SETTING behind it is untouched — DisplaySettings still persists
-        // `motion=0|1` as REDUCED MOTION, and Game1.ReducedMotion is still the flag every screen reads —
-        // because inverting a saved value would silently flip the preference of every player who has
-        // already set one. Only the label and its sense are inverted, here, at the one place it is read
-        // by a human.
-        var motionOn = !ReducedMotion;
-        changed |= ToggleRow("INTERFACE MOTION", f.RightX, sy, f.RightW, ref motionOn, rowClick);
-        if (motionOn == ReducedMotion) ReducedMotion = !motionOn;
-        sy += f.TogglePitch;
-
-        // ── SKIP GUIDANCE, and it is one switch on purpose. ─────────────────────────────────────
-        //
-        // A player who already knows this game should be able to play it without being coached, and
-        // the honest way to offer that is ONE global setting — not a dozen little dismissals that each
-        // quietly pretend a mechanic was learned. Turning it on silences every prompt and changes
-        // nothing else: no fact is fabricated, no gate moves, no reward is granted, and every lesson
-        // stays truthfully incomplete underneath. Turning it back on resumes exactly where the player
-        // actually is, because the catalogue derives that from the world rather than from a script.
-        //
-        // It points the same way as the four switches above it: ON is guidance, OFF is silence.
-        // AND WHILE THE AUTHORED OPENING RUNS, THIS IS ALSO SKIP TUTORIAL. One switch stays one
-        // switch: turning guidance off ends the opening where the player actually stands and does
-        // nothing else — no item is granted, no unlock is moved, no boss is credited. A player who
-        // skips before the first boss simply has no welcome gift yet, because that gift comes from
-        // the boss now. (SKIP CINEMATIC is a different control, on the prologue, and skips only the
-        // story — see SkipPrologue.)
-        var guidanceOn = !_guidanceOff;
-        if (ToggleRow(_opening.Running ? "GUIDANCE — SKIP TUTORIAL" : "GUIDANCE", f.RightX, sy, f.RightW, ref guidanceOn, rowClick))
-        {
-            _guidanceOff = !guidanceOn;
-            if (_guidanceOff && _opening.Running) { _opening.SkipToEnd(); _openingWas = _opening.Stage; }
-            Save();
-        }
-        if (changed) SaveDisplay();
+        var switches = SettingsSwitches();
+        for (var k = 0; k < switches.Length; k++)
+            DrawToggleRow(switches[k].Label, SettingsToggleZone(f, k), switches[k].On());
         _ui.TextBig(_batch,
                     _opening.Running
                         ? "GUIDANCE OFF ENDS THE TUTORIAL WHERE YOU STAND — IT UNLOCKS AND GRANTS NOTHING"
@@ -8366,14 +8741,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _ui.TextBig(_batch, _ui.ShortenBig("EVERY KEY IS LISTED IN HELP (F1) · KEYS CANNOT BE REBOUND YET", f.ColW, UiTypography.Secondary),
                     f.LeftX, f.KeysNoteY, Slate, UiTypography.Secondary);
         var copyBtn = f.CopyFeedback;
-        if (_resetArmTimer <= 0f && _ui.Button(_batch, copyBtn, "COPY FEEDBACK CODE", mouse, uiClick))
-        {
-            // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
-            _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
-                ? "COPIED — PASTE IT TO THE DEVELOPER"
-                : "COPY FAILED — TRY AGAIN";
-            _feedbackToastTimer = 4f;
-        }
+        if (_resetArmTimer <= 0f) _ui.Button(_batch, copyBtn, "COPY FEEDBACK CODE", mouse, clicked: false);
         _ui.TextBig(_batch, "SENDS THE DEVELOPER YOUR BUILD AND PROGRESS", f.LeftX,
                     copyBtn.Bottom + UiMetrics.Space(8), Slate, UiTypography.Secondary);
 
@@ -8392,38 +8760,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _ui.TextCenterBig(_batch, _ui.ShortenBig("SURE? THIS DELETES YOUR SAVE — CLICK AGAIN", armed.Width - dangerPad * 2, UiTypography.Body),
                               armed.Center.X, armed.Center.Y - UiTypography.Body * 27 / 40,
                               Color.White, UiTypography.Body);
-            if (UiKit.ClickedIn(armed, mouse, uiClick))
-            {
-                _resetArmTimer = 0f;
-                _wantsNewGame = true;
-            }
-            else if (_clicked)
-            {
-                _resetArmTimer = 0f;   // any click that is not the confirmation disarms
-            }
         }
         else
         {
             _ui.TextBig(_batch, _ui.ShortenBig("DELETES THIS SAVE AND STARTS OVER. NOTHING COMES BACK.", danger.Width - dangerPad * 2, UiTypography.Body),
                         danger.X + dangerPad, danger.Y + f.DangerTextY, Bone, UiTypography.Body);
-            if (_ui.Button(_batch, newGame, "START A NEW GAME", mouse, uiClick))
-                _resetArmTimer = ResetArmSeconds;
+            _ui.Button(_batch, newGame, "START A NEW GAME", mouse, clicked: false);
         }
 
-        if (_ui.CloseButton(_batch, f.Close, mouse, uiClick))
-        {
-            _showSettings = false;
-            _settingsDropdown = 0;
-        }
+        _ui.CloseButton(_batch, f.Close, mouse, clicked: false);
 
         // Esc no longer quits (it opens THIS panel), so the game needs a door that says what it does.
         // Hidden on the title screen, whose own menu already has QUIT — and whose Hunter may not exist
         // yet to save. It is the game's exit — the door Esc used to be — and it still saves on the way out.
-        if (!_showTitle && _ui.Button(_batch, f.Quit, "QUIT TO DESKTOP", mouse, uiClick))
-        {
-            Save();
-            Exit();
-        }
+        if (!_showTitle) _ui.Button(_batch, f.Quit, "QUIT TO DESKTOP", mouse, clicked: false);
 
         // Which build this is — the same stamp the feedback code carries, so "which version are you
         // on" is answerable from a screenshot. Under the panel while the page has room for it; when the
@@ -8440,36 +8790,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         //    option applies and closes; any other click just closes — and either way the rows under
         //    the list never see it (uiClick above). ──
         var openList = Rectangle.Empty;
-        if (_settingsDropdown == 1)
-        {
-            openList = DropdownList(modeRow, modeNames, modeIdx, pick =>
-            {
-                var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
-                if (_displayMode == modes[pick]) return;
-                _displayMode = modes[pick];
-                ApplyDisplay();
-                SaveDisplay();
-            });
-        }
+        if (_settingsDropdown == 1) openList = DrawDropdownList(modeRow, modeNames, modeIdx);
         else if (_settingsDropdown == 2)
         {
-            var labels = new string[sizes.Length];
-            for (var i = 0; i < labels.Length; i++)
-                labels[i] = Display.WindowSizeLabel(sizes[i], desktop.Width, desktop.Height);
-            openList = DropdownList(sizeRow, labels, Array.IndexOf(sizes, _windowSize), pick =>
-            {
-                if (_windowSize == sizes[pick]) return;
-                _windowSize = sizes[pick];
-                ApplyDisplay();
-                SaveDisplay();
-            });
-        }
-        else if (_clicked && rowsVisible)
-        {
-            // No list open: a click on a closed row opens its list, with the cursor unplaced so the
-            // list puts it on the value the player already has.
-            if (modeRow.Contains(mouse)) OpenDropdown(1);
-            else if (windowed && sizeRow.Contains(mouse)) OpenDropdown(2);
+            var (_, labels, index) = SettingsSizeList();
+            openList = DrawDropdownList(sizeRow, labels, index);
         }
 
         // ── HOVER EXPLANATIONS — one plain sentence per row, near the cursor, after a short rest.
@@ -8598,55 +8923,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// failure. The window is capped to the room under the field; the wheel and the arrow keys move it.
     /// </para>
     /// </remarks>
-    private Rectangle DropdownList(Rectangle field, string[] options, int currentIndex, Action<int> pick)
+    private Rectangle DrawDropdownList(Rectangle field, string[] options, int currentIndex)
     {
-        if (options.Length == 0) { CloseDropdown(); return Rectangle.Empty; }
+        if (options.Length == 0) return Rectangle.Empty;
 
-        // The cursor lands on the current value the first frame the list is up.
-        if (_dropCursor < 0 || _dropCursor >= options.Length) _dropCursor = Math.Max(0, currentIndex);
-        if (_dropMove != 0)
-        {
-            _dropCursor = ((_dropCursor + _dropMove) % options.Length + options.Length) % options.Length;
-            _dropMove = 0;
-        }
-
-        // How many rows fit between the field and the bottom of the settings panel.
-        var top = field.Bottom + DropGap;
-        var room = SettingsPanel.Bottom - UiKit.PanelCorner - top - DropListInset * 2;
-        var rows = Math.Clamp(room / DropRowHeight, 1, options.Length);
-
-        if (rows < options.Length && MouseWheel != 0) _dropScroll -= MouseWheel;
-        _dropScroll = Math.Clamp(_dropScroll, 0, options.Length - rows);
-        if (_dropCursor < _dropScroll) _dropScroll = _dropCursor;
-        else if (_dropCursor >= _dropScroll + rows) _dropScroll = _dropCursor - rows + 1;
-
-        var list = new Rectangle(field.X, top, field.Width, rows * DropRowHeight + DropListInset * 2);
+        // THE SAME BOX AND THE SAME ROWS UpdateSettings hit-tests (SettingsDropdownBox /
+        // SettingsDropdownRow). The cursor and the scroll were settled there, before this paint.
+        var (list, rows) = SettingsDropdownBox(field, options.Length);
         // The frame's own centre is opaque, so it IS the list's surface — no flat rectangle underneath,
         // which would square off the corners the ornament is shaped around.
         _ui.PanelQuiet(_batch, list);
 
-        var mouse = ChromeMouse;
-        var inner = new Rectangle(list.X + DropListInset, list.Y + DropListInset,
-                                  list.Width - DropListInset * 2, rows * DropRowHeight);
-        // A list that scrolls gives its rows up a lane on the right for the house scrollbar.
         var scrolling = rows < options.Length;
-        var rowW = inner.Width - (scrolling ? UiMetrics.ScrollbarWidth + UiMetrics.Space(6) : 0);
         var mark = UiMetrics.Control(10);   // the diamond on the value you already have
-
-        if (_dropCommit)
-        {
-            _dropCommit = false;
-            var chosen = _dropCursor;
-            CloseDropdown();
-            pick(chosen);
-            return list;
-        }
-
         for (var k = 0; k < rows; k++)
         {
             var i = _dropScroll + k;
-            var r = new Rectangle(inner.X, inner.Y + k * DropRowHeight, rowW, DropRowHeight);
-            if (r.Contains(mouse)) _dropCursor = i;   // the mouse and the arrow keys share one cursor
+            if (i >= options.Length) break;
+            var r = SettingsDropdownRow(list, rows, k, scrolling);
             var lit = i == _dropCursor;
 
             if (lit)
@@ -8660,20 +8954,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _ui.TextBig(_batch, _ui.ShortenBig(options[i], r.Right - DropPadX - (r.X + DropPadX + mark + UiMetrics.Space(12)), DropTextPx),
                         r.X + DropPadX + mark + UiMetrics.Space(12), r.Center.Y - DropTextPx * 27 / 40,
                         lit ? Gold : Bone, DropTextPx);
-
-            if (!_clicked || !r.Contains(mouse)) continue;
-            CloseDropdown();
-            pick(i);
-            return list;
         }
 
         // The scrollbar, only when there is something to scroll — a bar that is always full is noise.
         if (scrolling)
+        {
+            var inner = new Rectangle(list.X + DropListInset, list.Y + DropListInset,
+                                      list.Width - DropListInset * 2, rows * DropRowHeight);
             _ui.ScrollBar(_batch, new Rectangle(inner.Right - UiMetrics.ScrollbarWidth, inner.Y, UiMetrics.ScrollbarWidth, inner.Height),
                           _dropScroll, rows, options.Length);
-
-        // A click anywhere else — the closed field included — just closes the list.
-        if (_clicked) CloseDropdown();
+        }
         return list;
     }
 
@@ -8686,16 +8976,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// see and cannot fit around: regrouped into two columns, the settings panel put two of these
     /// buttons outside the panel and one on top of the next label. The row owns its width now.
     /// </remarks>
-    private bool ToggleRow(string label, int x, int y, int width, ref bool value, bool clicked)
+    private void DrawToggleRow(string label, Rectangle row, bool on)
     {
-        var h = UiMetrics.RowHeight;
         var w = UiMetrics.Control(116);
-        _ui.TextBig(_batch, _ui.ShortenBig(label, width - w - UiMetrics.Space(12), UiTypography.Body), x,
-                    y + (h - UiTypography.Body) / 2, Bone, UiTypography.Body);
-        var btn = new Rectangle(x + width - w, y, w, h);
-        if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, clicked)) return false;
-        value = !value;
-        return true;
+        _ui.TextBig(_batch, _ui.ShortenBig(label, row.Width - w - UiMetrics.Space(12), UiTypography.Body), row.X,
+                    row.Y + (row.Height - UiTypography.Body) / 2, Bone, UiTypography.Body);
+        // THE SAME RECTANGLE UpdateSettings PRESSES — one helper, asked twice (SettingsToggleButton).
+        _ui.Button(_batch, SettingsToggleButton(row.X, row.Y, row.Width), on ? "ON" : "OFF", ChromeMouse, clicked: false);
     }
 
     /// <summary>
@@ -8707,7 +8994,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// modal. Persisting happens on RELEASE, back in DrawSettings, so a drag is one write, not sixty.
     /// The percent label updates live as the handle moves.
     /// </remarks>
-    private int SliderRow(string label, Rectangle track, int current, int dragId, bool clickable, int labelX)
+    private void DrawSliderRow(string label, Rectangle track, int current, int labelX)
     {
         var textY = track.Y + (track.Height - UiTypography.Body) / 2;
         _ui.TextBig(_batch, label, labelX, textY, Bone, UiTypography.Body);
@@ -8721,15 +9008,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var knob = UiMetrics.Control(16);
         _ui.Diamond(_batch, new Rectangle(track.X + fillW - knob / 2, track.Center.Y - knob / 2, knob, knob), Bone);
         _ui.TextBig(_batch, $"{current}%", track.Right + UiMetrics.Space(14), textY, Slate, UiTypography.Body);
-
-        var mouse = ChromeMouse;
-        var grabX = UiMetrics.Space(10);
-        var grabY = UiMetrics.Space(6);
-        var grab = new Rectangle(track.X - grabX, track.Y - grabY, track.Width + grabX * 2, track.Height + grabY * 2);
-        if (clickable && _clicked && grab.Contains(mouse)) _dragSlider = dragId;
-        if (_dragSlider == dragId && _mouse.LeftButton == ButtonState.Pressed)
-            return Math.Clamp((int)MathF.Round((mouse.X - track.X) * 100f / track.Width), 0, 100);
-        return -1;
     }
 
     /// <summary>Hover explanations for every settings row — one plain sentence each.</summary>
@@ -9286,7 +9564,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _mapScreen.Message = _conquerMsg;
     }
 
-    /// <summary>Act on the Map screen's ENTER / DEEPEN requests (set by keyboard in Update or buttons in Draw).</summary>
+    /// <summary>Act on the Map screen's ENTER / DEEPEN requests — all raised in its Update, keyboard and pointer alike.</summary>
     private void ConsumeMapRequests()
     {
         // Selecting a region, leaving for the hunt, being refused by a locked one, and a region that
@@ -9344,9 +9622,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawWorld()
     {
+        // PAINT ONLY. PushMapState stays — Draw reads World / ActiveRegion / HunterPower / DustOwned /
+        // Message from it — but the screen raises nothing here any more, so there is nothing to consume:
+        // every request, keyboard and pointer alike, is raised in UpdateWorld below.
         PushMapState();
-        _mapScreen.Draw(_batch, PageCursor, MouseClicked);
-        ConsumeMapRequests();
+        _mapScreen.Draw(_batch, PageCursor);
     }
 
     // ── THE HELP SHEET (F1) ────────────────────────────────────────────────────────────────────
@@ -9480,7 +9760,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var view = new Rectangle(panel.X + UiTypography.PanelPadX, panel.Y + headerH,
                                  panel.Width - UiTypography.PanelPadX * 2, panel.Bottom - padBottom - (panel.Y + headerH));
         var maxScroll = scrolls ? Math.Max(0, contentH - view.Height) : 0;
-        if (maxScroll > 0 && MouseWheel != 0 && view.Contains(mouse)) _helpScroll -= MouseWheel * UiMetrics.RowHeight;
+        // THE WHEEL IS TAKEN IN UPDATE, against the view and the overflow this paint measured (see
+        // _helpView / _helpMaxScroll). Reading a wheel delta here would lose a notch on a catch-up
+        // tick exactly as a click was lost, and scrolling is the only way to reach the bottom columns.
+        _helpView = view;
+        _helpMaxScroll = maxScroll;
         _helpScroll = Math.Clamp(_helpScroll, 0, maxScroll);
 
         _ui.Panel(_batch, panel);
@@ -9521,8 +9805,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                           _helpScroll, view.Height, contentH);
         }
 
-        // The house close icon, anchored in the corner above anything that scrolls. F1 and Esc close it too.
-        if (_ui.CloseButton(_batch, UiKit.CloseRect(panel), mouse, _clicked)) _showHelp = false;
+        // The house close icon, anchored in the corner above anything that scrolls. F1 and Esc close it
+        // too. DRAWN ONLY: the press is taken in Update against the rectangle stored on the next line,
+        // which is this same rectangle — see _helpClose.
+        _helpClose = UiKit.CloseRect(panel);
+        _ui.CloseButton(_batch, _helpClose, mouse, clicked: false);
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────────────────────────────

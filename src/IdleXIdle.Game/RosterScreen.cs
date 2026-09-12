@@ -366,7 +366,7 @@ public sealed class RosterScreen
         return true;
     }
 
-    public void Draw(SpriteBatch b, CharacterState state, Point mouse, bool clicked)
+    public void Draw(SpriteBatch b, CharacterState state, Point mouse)
     {
         ArgumentNullException.ThrowIfNull(state);
         _anim += 1f / 60f;
@@ -380,7 +380,7 @@ public sealed class RosterScreen
         //  honest version of it now sits in the state block, beside the button it de-risks.)
 
         DrawGrid(b, state, hit);
-        DrawDetail(b, state, hit, clicked);
+        DrawDetail(b, state, hit);
         if (DevRosterDebug)
             foreach (var r in new[] { GridPlate, Inspector })
             {
@@ -688,7 +688,7 @@ public sealed class RosterScreen
     private static string RoadLine(Character c)
         => (c.Lean is { } br ? $"{BranchName(br)} ROAD" : "NO ROAD — EVERY ROAD FITS") + " · " + ItemClasses.WearsLine(c.Class);
 
-    private void DrawDetail(SpriteBatch b, CharacterState state, Point hit, bool clicked)
+    private void DrawDetail(SpriteBatch b, CharacterState state, Point hit)
     {
         _ui.PanelQuiet(b, Inspector);
         var c = CharacterRoster.Get(_selectedId);
@@ -850,7 +850,7 @@ public sealed class RosterScreen
         // control that invites a click with no answer; the state block above already said both.
         // The press is TAKEN IN UPDATE on this same rect (see Update); here the button only shows
         // its hover and its press, so nothing — no switch, no cue, no highlight — starts from Draw.
-        if (showButton) _ui.Button(b, ActionRect, "SET ACTIVE", hit, clicked, true, ButtonStyle.Primary);
+        if (showButton) _ui.Button(b, ActionRect, "SET ACTIVE", hit, clicked: false, true, ButtonStyle.Primary);
     }
 
     /// <summary>How many worn pieces this hunter could not wear — what a switch to them sheds.</summary>

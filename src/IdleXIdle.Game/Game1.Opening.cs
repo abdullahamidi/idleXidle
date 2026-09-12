@@ -446,6 +446,7 @@ public partial class Game1
         {
             _showSettings = true;
             _settingsEscSpent = true;
+            _modalOpenedNow = true;   // one edge, one action: the panel must not also act on it
             _sound.Play("sfx_click", 0.6f);
             return;
         }

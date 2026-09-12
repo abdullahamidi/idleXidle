@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
+// NO Microsoft.Xna.Framework.Input HERE, ON PURPOSE. This screen reads no input device of its own any
+// more: the host hands it a cursor, a click and a wheel delta in TakeInput, and nothing else. Adding
+// this using back is the first half of putting a device read into a paint — which is the bug this file
+// was combed for on 2026-09-12 (see TakeInput, and tools/check_draw_purity.py).
 using IdleXIdle.Core.Animation;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
@@ -898,6 +901,19 @@ public sealed class HuntScreen
     // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
     private enum HuntOverlay { None, HunterDown, BossIncoming, WaveCleared }
+
+    /// <summary>
+    /// The major overlay the last paint resolved — read by <see cref="TakeInput"/>, so the fall plate's
+    /// click is tested against the plate that was actually on the screen.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ResolveOverlay"/> needs the host's banner suppression, and only <see cref="Draw"/> is
+    /// handed that. Deriving the answer a second time from a flag the input half does not have would let
+    /// the hit test and the paint disagree about whether there is a plate at all; remembering the answer
+    /// the paint gave cannot.
+    /// </remarks>
+    private HuntOverlay _paintedOverlay;
+
     private HuntOverlay ResolveOverlay(bool welcome)
     {
         if (welcome) return HuntOverlay.None;
@@ -1173,7 +1189,7 @@ public sealed class HuntScreen
     };
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    /// <summary>Advance the fight. Takes no input — this screen's clicks are handled in Draw.</summary>
+    /// <summary>Advance the fight. Takes no input — this screen's clicks are resolved in <see cref="TakeInput"/>.</summary>
     /// <remarks>
     /// <b>IT USED TO TAKE FOUR INPUT PARAMETERS AND READ NONE OF THEM</b> — keys, mouse, clicked and
     /// wheel, all dead. Click handling migrated into Draw (DrawBattleControls) and the Update-side
@@ -1187,10 +1203,11 @@ public sealed class HuntScreen
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
-        // The wheel's notches since last frame, for the log's scroll regions. A delta, not a position.
-        var wheelNow = Mouse.GetState().ScrollWheelValue;
-        _wheel = (wheelNow - _wheelLast) / 120;
-        _wheelLast = wheelNow;
+        // THE WHEEL IS NOT SAMPLED HERE ANY MORE. It used to be read off Mouse.GetState() in this
+        // method, which the host calls only while the fight is allowed to run — so the log's scroll
+        // columns went dead for the whole of the authored hold, and any stretch without an Update
+        // turned the notches accumulated in the meantime into one enormous jump the next time it ran.
+        // The host hands the frame's delta to <see cref="TakeInput"/> now, beside the click.
         // _strikeTime WAS THE OLD SWING CLOCK and is gone. It was armed by the impact and counted down,
         // so the clip played entirely AFTER the blow it was meant to deliver. The champion now runs on
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
@@ -1247,6 +1264,56 @@ public sealed class HuntScreen
                 if (_downedTimer <= 0f) StartRun(hunter);
                 break;
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Take the frame's UI input. THE ONLY PLACE THIS SCREEN CONSUMES AN INPUT EDGE.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>DRAW MUST NOT CONSUME INPUT.</b> MonoGame's fixed timestep calls Update at least once and
+    /// Draw exactly once per tick, so a frame over budget runs Update twice and Draw once — and the
+    /// host latches the click edge at the top of Update and overwrites the previous mouse state at the
+    /// bottom of it. A hit test inside a Draw therefore tests an edge the second Update has already
+    /// recomputed as false, and because a press is held for three to six frames it never re-arms: the
+    /// click is silently dropped. The title screen shipped with exactly that bug (fixed 2026-09-12).
+    /// Every control on this screen is decided here now; its Draw methods paint the same rectangles
+    /// and still hover and depress, but they cannot fire.
+    /// </para>
+    /// <para>
+    /// Called from the host's Update on EVERY frame, and deliberately NOT from <see cref="Update"/>:
+    /// that one is skipped while the authored opening holds the fight, and the EXPEDITION LOG's
+    /// medallion has to answer a click on a held frame.
+    /// </para>
+    /// <para>
+    /// <paramref name="huntOnTop"/> is the host's <c>!OverlayActive</c> — the same condition its draw
+    /// chain uses to reach <see cref="Draw"/>. The screen's own HUD (the medallion, the right rail's
+    /// door, the fall plate) answers only when the HUNT is the screen on top, so a click in the Forge
+    /// cannot fall through into the fight. The LOG does not read it: the log is drawn over every
+    /// screen and stays live wherever it was opened from.
+    /// </para>
+    /// </remarks>
+    public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)
+    {
+        // THE LOG FIRST, AND ALONE. Under its full-screen scrim the rail and the plate are furniture —
+        // the same `!_logOpen` gate the paint applies, kept as an early return.
+        if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }
+
+        // AND THE REMEMBERED OVERLAY GOES STALE THE MOMENT THE SCREEN DOES. While another screen is on
+        // top this one paints nothing, so there is no plate; clearing it here means the frame the player
+        // navigates BACK cannot hit-test a plate whose nine seconds ran out while they were away.
+        if (!huntOnTop) { _paintedOverlay = HuntOverlay.None; return; }
+        // The paint's own guard: before the first descent there is no HUD to hit.
+        if (_run is null || _replay is null || _champ is null) return;
+
+        // IN THE ORDER THE HUD PASS PAINTS THEM (see the foot of Draw): the medallion, the right rail,
+        // then the fall plate.
+        if (UiKit.ClickedIn(LogButtonRect, mouse, clicked)) WantsLog = true;
+        TakeRailInput(mouse, clicked);
+        // The plate the LAST PAINT actually put on screen, not a second derivation of it: ResolveOverlay
+        // needs the host's banner suppression, which only Draw is handed.
+        if (_paintedOverlay == HuntOverlay.HunterDown) TakeFallPlateInput(mouse, clicked);
     }
 
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
@@ -2263,7 +2330,7 @@ public sealed class HuntScreen
 
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
+    public void Draw(SpriteBatch b, Point mouse, string regionName, string enemyArt = "", bool suppressBanner = false)
     {
         _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
@@ -2278,6 +2345,7 @@ public sealed class HuntScreen
 
         _isBossWave = DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
         var overlay = ResolveOverlay(suppressBanner);
+        _paintedOverlay = overlay;   // the fall plate's hit test reads it — see TakeInput
         // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws
         // none. Dev warning only — never a Debug.Assert (a failed assert aborts the game's Debug build).
         if (suppressBanner && overlay != HuntOverlay.None)
@@ -2305,15 +2373,16 @@ public sealed class HuntScreen
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
-        DrawLogButton(b, hit, clicked && !_logOpen);
-        // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no errands.
-        DrawRightColumn(b, hit, clicked && !_logOpen);
+        DrawLogButton(b, hit);
+        // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no
+        // errands. TakeInput keeps that gate: with the log open it returns before the rail is reached.
+        DrawRightColumn(b, hit);
         DrawSkillDock(b);
         HeaderStackBottom = StageHeaderBottomY;                   // the strip or the boss bar lowers it
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         DrawEnemyLine(b);                                          // the wave's live strip under the header
         if (!_logOpen) DrawEnemyInspector(b, hit);                 // the hovered creature's live numbers and statuses
-        if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit, clicked && !_logOpen);
+        if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit);
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
@@ -3764,12 +3833,10 @@ public sealed class HuntScreen
     /// </summary>
     private int _logNumbersFirst, _logDiffFirst;
 
-    /// <summary>
-    /// The mouse wheel's notches this frame, read in <see cref="Update"/>. The host hands this screen a
-    /// cursor and a click and nothing else; the log's scroll regions need the wheel, so the screen reads
-    /// the wheel's DELTA itself — a delta is not a cursor and converts nothing (LAW 6 is about position).
-    /// </summary>
-    private int _wheel, _wheelLast;
+    // THE WHEEL IS A PARAMETER NOW, NOT A FIELD. `_wheel` was sampled off Mouse.GetState() in Update
+    // and read by DrawReportPanel — a field whose only job was to smuggle an input edge into the paint,
+    // which is the shape this pass removes. The host's own per-frame delta reaches the two scroll
+    // columns through TakeInput → TakeLogInput → ScrollReport, and nothing else ever sees it.
 
     /// <summary>
     /// The EXPEDITION LOG: a full-screen read of one run's report, with a way to walk back through the others.
@@ -3791,7 +3858,7 @@ public sealed class HuntScreen
     /// runs — the entire reason to keep them — harder, not easier.
     /// </para>
     /// </remarks>
-    public void DrawLog(SpriteBatch b, Point mouse, bool clicked)
+    public void DrawLog(SpriteBatch b, Point mouse)
     {
         if (!_logOpen) return;
 
@@ -3810,7 +3877,7 @@ public sealed class HuntScreen
 
         // ZONE A — the header row: what this screen is; which run, of how many; the close icon.
         _ui.TextBig(b, "EXPEDITION LOG", x0, panel.Y + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle, TextFace.Display);
-        if (_ui.CloseButton(b, close, hit, clicked)) WantsLog = true;   // walks the same host path the L key does
+        _ui.CloseButton(b, close, hit, false);   // painted here; TakeLogInput decides it, and walks the same host path the L key does
 
         if (Log.Count == 0)
         {
@@ -3822,15 +3889,18 @@ public sealed class HuntScreen
             return;
         }
 
-        _logIndex = Math.Clamp(_logIndex, 0, Log.Count - 1);
-        var shown = Log.Entries[_logIndex];
-        var older = Log.OlderThan(_logIndex);
+        // A LOCAL, NOT THE FIELD. The clamp is semantic state and it is written in TakeLogInput, which
+        // runs before this every frame the log is open; reading it through a local keeps the paint from
+        // writing anything at all.
+        var index = Math.Clamp(_logIndex, 0, Log.Count - 1);
+        var shown = Log.Entries[index];
+        var older = Log.OlderThan(index);
         var region = Regions.Find(shown.RegionId)?.Name ?? shown.RegionId;
-        var entry = $"ENTRY {_logIndex + 1} OF {Log.Count}";
+        var entry = $"ENTRY {index + 1} OF {Log.Count}";
         _ui.TextRightBig(b, region.Length > 0 ? $"{region.ToUpperInvariant()}  ·  {entry}" : entry,
                          close.X - UiMetrics.Space(20), panel.Y + UiTypography.ModalTitleTop + UiMetrics.Space(6), Slate, UiTypography.Body);
 
-        DrawReportPanel(b, panel, shown, older, hit);
+        DrawReportPanel(b, panel, shown, older);
 
         // ZONE E — the footer: paging on the left as ordinary buttons; the doors on the right, ADJUST BUILD
         // the one primary decision this screen offers. No RETRY — the hunter already regroups. ANCHORED to
@@ -3838,18 +3908,64 @@ public sealed class HuntScreen
         // under a scroll region (brief §18).
         var fy = LogFooterY(panel);
         var bh = LogButtonHeight;
-        var prev = new Rectangle(x0, fy, UiMetrics.Space(180), bh);
-        var next = new Rectangle(x0 + UiMetrics.Space(196), fy, UiMetrics.Space(180), bh);
-        if (_ui.Button(b, prev, "‹  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1) && _logIndex < Log.Count - 1) { _logIndex++; _logNumbersFirst = _logDiffFirst = 0; }
-        if (_ui.Button(b, next, "NEWER  ›", hit, clicked, enabled: _logIndex > 0) && _logIndex > 0) { _logIndex--; _logNumbersFirst = _logDiffFirst = 0; }
+        var foot = LogFooter(panel);   // THE SAME FOUR RECTS TakeLogInput HIT-TESTS
+        _ui.Button(b, foot.Older, "‹  OLDER", hit, false, enabled: index < Log.Count - 1);
+        _ui.Button(b, foot.Newer, "NEWER  ›", hit, false, enabled: index > 0);
         // A disabled arrow says why, beside itself (huntstates-10).
-        var edge = Log.Count == 1 ? "THE ONLY ENTRY" : _logIndex == 0 ? "THIS IS THE NEWEST" : _logIndex == Log.Count - 1 ? "THIS IS THE OLDEST" : "";
+        var edge = Log.Count == 1 ? "THE ONLY ENTRY" : index == 0 ? "THIS IS THE NEWEST" : index == Log.Count - 1 ? "THIS IS THE OLDEST" : "";
         if (edge.Length > 0)
-            _ui.TextBig(b, edge, next.Right + UiMetrics.Space(16), fy + (bh - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, edge, foot.Newer.Right + UiMetrics.Space(16), fy + (bh - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
+        _ui.Button(b, foot.Build, "ADJUST BUILD", hit, false, true, ButtonStyle.Primary);
+        _ui.Button(b, foot.Gear, "GEAR", hit, false);
+    }
+
+    /// <summary>The LOG's footer controls — paging on the left, the two doors on the right.</summary>
+    /// <remarks>
+    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawLog"/> paints these rectangles and
+    /// <see cref="TakeLogInput"/> hit-tests them. Anchored to the panel's foot at every profile, so the
+    /// doors never sit under a scroll region (brief §18).
+    /// </remarks>
+    private readonly record struct LogFooterRects(Rectangle Older, Rectangle Newer, Rectangle Build, Rectangle Gear);
+
+    private static LogFooterRects LogFooter(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        var x1 = UiKit.ContentRight(panel);
+        var fy = LogFooterY(panel);
+        var bh = LogButtonHeight;
         var build = new Rectangle(x1 - UiMetrics.Space(280), fy, UiMetrics.Space(280), bh);
-        var gear = new Rectangle(build.X - UiMetrics.Space(16) - UiMetrics.Space(200), fy, UiMetrics.Space(200), bh);
-        if (_ui.Button(b, build, "ADJUST BUILD", hit, clicked, true, ButtonStyle.Primary)) { _logOpen = false; WantsBuild = true; }
-        if (_ui.Button(b, gear, "GEAR", hit, clicked)) { _logOpen = false; WantsGear = true; }
+        return new LogFooterRects(
+            new Rectangle(x0, fy, UiMetrics.Space(180), bh),
+            new Rectangle(x0 + UiMetrics.Space(196), fy, UiMetrics.Space(180), bh),
+            build,
+            new Rectangle(build.X - UiMetrics.Space(16) - UiMetrics.Space(200), fy, UiMetrics.Space(200), bh));
+    }
+
+    /// <summary>
+    /// The LOG's own input — the close icon, the two scroll columns, the paging arrows and the doors, in
+    /// the order <see cref="DrawLog"/> paints them.
+    /// </summary>
+    /// <remarks>
+    /// Reached from <see cref="TakeInput"/> without the <c>huntOnTop</c> gate, because the log is drawn
+    /// over whatever screen it was opened from (the host's L handler closes the menu screens, but its
+    /// nav keys do not close the log) and its controls have to keep answering there.
+    /// </remarks>
+    private void TakeLogInput(Point mouse, bool clicked, int wheel)
+    {
+        var panel = LogPanel;
+        if (UiKit.ClickedIn(UiKit.CloseRect(panel), mouse, clicked)) WantsLog = true;   // the same host path the L key walks
+        if (Log.Count == 0) return;
+
+        // THE CLAMP LIVES HERE. An index a trimmed log has put out of range is semantic state, and a
+        // paint that writes state is what this pass removes; the paint reads a local clamp instead.
+        _logIndex = Math.Clamp(_logIndex, 0, Log.Count - 1);
+        ScrollReport(panel, Log.Entries[_logIndex], Log.OlderThan(_logIndex), mouse, wheel);
+
+        var foot = LogFooter(panel);
+        if (UiKit.ClickedIn(foot.Older, mouse, clicked) && _logIndex < Log.Count - 1) { _logIndex++; _logNumbersFirst = _logDiffFirst = 0; }
+        if (UiKit.ClickedIn(foot.Newer, mouse, clicked) && _logIndex > 0) { _logIndex--; _logNumbersFirst = _logDiffFirst = 0; }
+        if (UiKit.ClickedIn(foot.Build, mouse, clicked)) { _logOpen = false; WantsBuild = true; }
+        if (UiKit.ClickedIn(foot.Gear, mouse, clicked)) { _logOpen = false; WantsGear = true; }
     }
 
     /// <summary>
@@ -3930,22 +4046,156 @@ public sealed class HuntScreen
         RunLimit.Armour => 0, RunLimit.Reach => 2, RunLimit.Sustain => 3, RunLimit.Stalled => 4, _ => -1,
     };
 
+    // ── THE REPORT'S VERTICAL GEOMETRY, as pure arithmetic off the panel. ─────────────────────────
+    //    Both halves read it: the wheel is applied to the two columns in ScrollReport and the rows are
+    //    laid out from the very same numbers in DrawReportPanel, so the column that scrolls is always
+    //    the column the pointer was over and the rows that move are the rows that were drawn.
+
+    /// <summary>ZONE B — the outcome band, at the top of the report's content.</summary>
+    private static Rectangle ReportBand(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        return new Rectangle(x0, panel.Y + LogBandTop, UiKit.ContentRight(panel) - x0,
+                             UiMetrics.Space(24) + UiTypography.RegionTitle);
+    }
+
+    /// <summary>The ENDED BY line, under the band.</summary>
+    private static int ReportEndedByY(Rectangle panel) => ReportBand(panel).Bottom + UiMetrics.Space(14);
+
+    /// <summary>The diagnosis plate's own inset.</summary>
+    private static int ReportDiagPad => UiMetrics.Space(14);
+
+    /// <summary>ZONE C — the diagnosis plate: the limit's name, the verdict, and what to look at.</summary>
+    private static Rectangle ReportDiag(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        return new Rectangle(x0, ReportEndedByY(panel) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14),
+                             UiKit.ContentRight(panel) - x0,
+                             ReportDiagPad + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body)
+                             + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10));
+    }
+
+    /// <summary>ZONE D — where the two columns and their heads begin.</summary>
+    private static int ReportColumnsTop(Rectangle panel) => ReportDiag(panel).Bottom + UiMetrics.Space(20);
+
+    /// <summary>The first row of either column: under the column's head, its hairline and a breath.</summary>
+    private static int ReportRowsTop(Rectangle panel)
+        => ReportColumnsTop(panel) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6) + UiMetrics.Space(8);
+
+    /// <summary>The floor both columns stop at, clear of the footer's doors.</summary>
+    private static int ReportFooterTop(Rectangle panel) => LogFooterY(panel) - UiMetrics.Space(16);
+
+    /// <summary>The numbers column's width — the 100 % split (620 of 1120) kept as a share.</summary>
+    private static int ReportLeftW(Rectangle panel) => (UiKit.ContentRight(panel) - UiKit.ContentLeft(panel)) * 620 / 1120;
+
+    /// <summary>The diff column's left edge.</summary>
+    private static int ReportRightX(Rectangle panel) => UiKit.ContentLeft(panel) + ReportLeftW(panel) + UiMetrics.Space(40);
+
+    /// <summary>What the pointer has to be inside for the wheel to move THE NUMBERS.</summary>
+    private static Rectangle NumbersHot(Rectangle panel)
+    {
+        var top = ReportColumnsTop(panel);
+        return new Rectangle(UiKit.ContentLeft(panel), top, ReportLeftW(panel), ReportFooterTop(panel) - top);
+    }
+
+    /// <summary>What the pointer has to be inside for the wheel to move SINCE YOUR LAST RUN HERE.</summary>
+    private static Rectangle DiffHot(Rectangle panel)
+    {
+        var top = ReportColumnsTop(panel);
+        var rightX = ReportRightX(panel);
+        return new Rectangle(rightX, top, UiKit.ContentRight(panel) - rightX, ReportFooterTop(panel) - top);
+    }
+
+    /// <summary>A column's measured rhythm: the row pitch, and how many rows there is room for.</summary>
+    private readonly record struct ScrollRhythm(int Pitch, int Visible);
+
+    /// <summary>
+    /// THE RHYTHM COMES FROM THE ROOM THERE IS (brief §17): the house pitch when the rows fit, tighter
+    /// down to a floor when they do not, and past the floor the column scrolls under the wheel.
+    /// </summary>
+    private static ScrollRhythm NumbersScroll(Rectangle panel, int count)
+    {
+        var pitchMax = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(18);
+        var pitchMin = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        var room = Math.Max(0, ReportFooterTop(panel) - ReportRowsTop(panel));
+        var pitch = Math.Clamp(room / Math.Max(1, count), pitchMin, pitchMax);
+        return new ScrollRhythm(pitch, Math.Min(count, room / pitch));
+    }
+
+    /// <summary>The diff column's rhythm — two lines to an entry, and the same clamp-to-the-room rule.</summary>
+    private static ScrollRhythm DiffScroll(Rectangle panel, int count)
+    {
+        var diffMax = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(8);
+        var diffMin = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(2);
+        var room = Math.Max(0, ReportFooterTop(panel) - ReportRowsTop(panel));
+        var pitch = Math.Clamp(room / Math.Max(1, count), diffMin, diffMax);
+        return new ScrollRhythm(pitch, Math.Min(count, room / pitch));
+    }
+
+    /// <summary>
+    /// THE NUMBERS' rows. Gathered here rather than inside the paint so the count the scroll measure
+    /// uses and the rows the paint lays out can never disagree — a row added to this list scrolls.
+    /// </summary>
+    /// <remarks>
+    /// SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one question — what
+    /// the wave landed, and what it landed ON. Never shown at zero: a build with no shield would
+    /// otherwise read a row of nothing every run and learn to skip past the rows.
+    /// </remarks>
+    private static List<(string Label, string Figure, string Unit)> ReportRows(RunReport r)
+    {
+        var rows = new List<(string Label, string Figure, string Unit)>
+        {
+            ("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage"),
+            ("AVERAGE HIT", $"{r.AverageHitSize:F0}", ""),
+            ("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast"),
+            ("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health"),
+            ("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds"),
+        };
+        if (r.ShieldAbsorbedFraction > 0f)
+            rows.Insert(4, ("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed"));
+        return rows;
+    }
+
+    /// <summary>
+    /// The wheel, over the report's two scroll columns — the one place either first-row index is moved.
+    /// </summary>
+    /// <remarks>
+    /// It used to live in <see cref="DrawReportPanel"/>, reading a <c>_wheel</c> field the screen
+    /// sampled for itself: a paint that consumed an input edge, which on a catch-up tick is a notch the
+    /// player never gets back. The clamp moved with it, because a paint that writes a scroll position is
+    /// a paint that mutates state.
+    /// </remarks>
+    private void ScrollReport(Rectangle panel, RunReport r, RunReport? previous, Point mouse, int wheel)
+    {
+        var rows = ReportRows(r).Count;
+        _logNumbersFirst = UiKit.Scrolled(_logNumbersFirst, NumbersHot(panel).Contains(mouse) ? wheel : 0,
+                                          NumbersScroll(panel, rows).Visible, rows);
+
+        var entries = r.DiffEntries(previous).Count();
+        _logDiffFirst = UiKit.Scrolled(_logDiffFirst, DiffHot(panel).Contains(mouse) ? wheel : 0,
+                                       DiffScroll(panel, entries).Visible, entries);
+    }
+
     /// <summary>
     /// The report, as the log shows it: the outcome band, the diagnosis, the numbers and the diff side by side.
     /// Nothing here is measured; every number is <see cref="RunReport"/>'s. The footer is the caller's.
     /// </summary>
-    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous, Point hit)
+    /// <remarks>
+    /// It takes no cursor and no edge any more: the wheel over its two columns is applied in
+    /// <see cref="ScrollReport"/>, from Update, and every vertical anchor here comes from the same
+    /// Report* helpers that measure it — so the rows that move are the rows that were drawn.
+    /// </remarks>
+    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous)
     {
         var x0 = UiKit.ContentLeft(panel);
         var x1 = UiKit.ContentRight(panel);
-        var w = x1 - x0;
         var pad = UiMetrics.Space(24);   // the inset of text inside the band and the diagnosis plate
 
         // ZONE B — the outcome band. FELL, in the title: every entry is the end of a run and must say so.
         // Ember for a fall, gold for a stall (the clock ran out, the hunter stood); a record is a chip.
         var stalled = r.Outcome == WaveOutcome.Stalled;
         var tint = stalled ? Gold : Ember;
-        var band = new Rectangle(x0, panel.Y + LogBandTop, w, UiMetrics.Space(24) + UiTypography.RegionTitle);
+        var band = ReportBand(panel);
         // The house plate with the outcome's accent, and its wash inside — the same component as the
         // diagnosis plate fourteen pixels under it, not a second treatment (huntstates-09).
         _ui.Plate(b, band, tint);
@@ -3967,18 +4217,17 @@ public sealed class HuntScreen
         var affixes = r.WallAffixes.Count > 0
             ? string.Join(", ", r.WallAffixes.Select(AffixWords))
             : "NO AFFIX";
-        var y = band.Bottom + UiMetrics.Space(14);
+        var y = ReportEndedByY(panel);
         var ax = Runs(b, x0, y, UiTypography.Body,
             ("ENDED BY   ", Slate),
             ($"{r.WallArchetype.ToString().ToUpperInvariant()} × {r.WallCreatures}", UiKit.Vellum),
             ("   ·   ", Slate));
         _ui.TextBig(b, _ui.ShortenBig(affixes, x1 - ax, UiTypography.Body), ax, y, Bone, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
 
         // ZONE C — the diagnosis: the limit's NAME, the verdict SENTENCE, and what to LOOK AT. A quiet plate
         // with the gold rule — this gold means "the thing that matters", and it is the only gold below the band.
-        var diagPad = UiMetrics.Space(14);
-        var diag = new Rectangle(x0, y, w, diagPad + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10));
+        var diagPad = ReportDiagPad;
+        var diag = ReportDiag(panel);
         _ui.Plate(b, diag, tint);   // the outcome's own colour: it names the failure (huntstates-05); gold stays on the title and ADJUST BUILD
         var dx = diag.X + pad;
         var dy = diag.Y + diagPad;
@@ -3987,57 +4236,38 @@ public sealed class HuntScreen
         _ui.TextBig(b, _ui.ShortenBig(r.Verdict(), diag.Width - pad * 2, UiTypography.Body), dx, dy, Bone, UiTypography.Body);
         dy += UiTypography.Pitch(UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig($"WHAT TO LOOK AT — {LookAt(r.Limit)}", diag.Width - pad * 2, UiTypography.Secondary), dx, dy, Slate, UiTypography.Secondary);
-        y = diag.Bottom + UiMetrics.Space(20);
+        y = ReportColumnsTop(panel);
 
         // ZONE D — two columns. LEFT: the numbers, each a lever; the row the diagnosis names wears the rule.
         // The split is the 100 % one (620 of 1120) kept as a share, so a wider panel widens both columns.
-        var leftW = w * 620 / 1120;
-        var rightX = x0 + leftW + UiMetrics.Space(40);
+        var leftW = ReportLeftW(panel);
+        var rightX = ReportRightX(panel);
         var rightW = x1 - rightX;
-        var footerTop = LogFooterY(panel) - UiMetrics.Space(16);
 
         _ui.TextBig(b, $"THE NUMBERS  ·  LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x0, y, Slate, UiTypography.Body);
-        var ty = y + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
-        Hairline(b, x0, ty, leftW, Slate * 0.45f);
-        ty += UiMetrics.Space(8);
+        var ty = ReportRowsTop(panel);
+        Hairline(b, x0, ty - UiMetrics.Space(8), leftW, Slate * 0.45f);
 
-        // THE ROWS, gathered before they are drawn: their labels size the figure column, and their count
-        // sets the rhythm. SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one
-        // question — what the wave landed, and what it landed ON. Never shown at zero: a build with no
-        // shield would otherwise read a row of nothing every run and learn to skip past the rows.
-        var rows = new List<(string Label, string Figure, string Unit)>
-        {
-            ("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage"),
-            ("AVERAGE HIT", $"{r.AverageHitSize:F0}", ""),
-            ("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast"),
-            ("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health"),
-            ("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds"),
-        };
-        var litRow = LimitRow(r.Limit);   // indexes the five rows above; the shield row is inserted AFTER it is resolved
-        if (r.ShieldAbsorbedFraction > 0f)
-        {
-            rows.Insert(4, ("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed"));
-            if (litRow >= 4) litRow++;
-        }
+        // THE ROWS, gathered by ReportRows so the scroll measure counts exactly what is drawn.
+        var rows = ReportRows(r);
+        var litRow = LimitRow(r.Limit);   // indexes the five base rows; the shield row is inserted AFTER it is resolved
+        if (r.ShieldAbsorbedFraction > 0f && litRow >= 4) litRow++;
         // The figures' right edge: the house 330 at 100 %, or further right when the profile's labels need it.
         var labelW = rows.Max(row => _ui.MeasureBig(row.Label, UiTypography.Body));
         var figureW = rows.Max(row => _ui.MeasureBig(row.Figure, UiTypography.Headline));
         var xv = x0 + Math.Max(UiMetrics.Space(330), labelW + UiMetrics.Space(16) + figureW);
-        // THE RHYTHM COMES FROM THE ROOM THERE IS (brief §17): the house pitch when the rows fit, tighter
-        // down to a floor when they do not, and past the floor the column scrolls under the wheel — the
-        // footer's doors are never covered. At 100 % every row fits at the house pitch, as before.
-        var pitchMax = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(18);
-        var pitchMin = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
-        var roomH = Math.Max(0, footerTop - ty);
-        var rowPitch = Math.Clamp(roomH / Math.Max(1, rows.Count), pitchMin, pitchMax);
-        var visible = Math.Min(rows.Count, roomH / rowPitch);
-        var leftHot = new Rectangle(x0, y, leftW, footerTop - y).Contains(hit);
-        _logNumbersFirst = UiKit.Scrolled(_logNumbersFirst, leftHot ? _wheel : 0, visible, rows.Count);
+        // THE RHYTHM AND THE SCROLL ARE ONE MEASURE (NumbersScroll) — the wheel is applied to it in
+        // ScrollReport, from Update, and the rows are laid out from it here. `first` is a CLAMP, not a
+        // wheel read: ScrollReport has already moved the index this frame.
+        var rhythm = NumbersScroll(panel, rows.Count);
+        var rowPitch = rhythm.Pitch;
+        var visible = rhythm.Visible;
+        var first = UiKit.Scrolled(_logNumbersFirst, 0, visible, rows.Count);
         var scrolls = rows.Count > visible;
         var rowRight = x0 + leftW - (scrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
         var drop = UiMetrics.Space(5);   // a Body label's baseline nudge beside a Headline figure
         var rowsTop = ty;
-        for (var i = _logNumbersFirst; i < Math.Min(rows.Count, _logNumbersFirst + visible); i++)
+        for (var i = first; i < Math.Min(rows.Count, first + visible); i++)
         {
             var (label, figure, unit) = rows[i];
             if (i == litRow) _ui.Fill(b, new Rectangle(x0 - UiMetrics.Space(14), ty - UiMetrics.Space(4), 4, rowPitch - UiMetrics.Space(8)), tint);
@@ -4048,14 +4278,13 @@ public sealed class HuntScreen
             Hairline(b, x0, ty - UiMetrics.Space(10), rowRight - x0, Slate * 0.18f);
         }
         if (scrolls)
-            _ui.ScrollBar(b, new Rectangle(x0 + leftW - UiMetrics.ScrollbarWidth, rowsTop, UiMetrics.ScrollbarWidth, visible * rowPitch), _logNumbersFirst, visible, rows.Count);
+            _ui.ScrollBar(b, new Rectangle(x0 + leftW - UiMetrics.ScrollbarWidth, rowsTop, UiMetrics.ScrollbarWidth, visible * rowPitch), first, visible, rows.Count);
 
         // RIGHT: what changed since the last run here — the core concept, ranked as such.
         // The same head as THE NUMBERS beside it — two peer columns, one rung, one ink (huntstates-05).
         _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", rightX, y, Slate, UiTypography.Body);
-        var ry = y + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
-        Hairline(b, rightX, ry - UiMetrics.Space(4), rightW, Slate * 0.45f);
-        ry += UiMetrics.Space(8);
+        var ry = ReportRowsTop(panel);
+        Hairline(b, rightX, ry - UiMetrics.Space(8) - UiMetrics.Space(4), rightW, Slate * 0.45f);
         var entries = r.DiffEntries(previous).ToList();
         if (entries.Count == 0)
         {
@@ -4069,17 +4298,14 @@ public sealed class HuntScreen
         // CLAMPED TO THE ROOM THERE ACTUALLY IS, above the footer: a row added to RunReport's diff must never
         // go under the frame. The same rhythm as the numbers: the house pitch when the entries fit, tighter
         // down to a floor when they do not, and past the floor they scroll under the wheel.
-        var diffMax = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(8);
-        var diffMin = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(2);
-        var diffRoom = Math.Max(0, footerTop - ry);
-        var diffPitch = Math.Clamp(diffRoom / Math.Max(1, entries.Count), diffMin, diffMax);
-        var diffVisible = Math.Min(entries.Count, diffRoom / diffPitch);
-        var rightHot = new Rectangle(rightX, y, rightW, footerTop - y).Contains(hit);
-        _logDiffFirst = UiKit.Scrolled(_logDiffFirst, rightHot ? _wheel : 0, diffVisible, entries.Count);
+        var diffRhythm = DiffScroll(panel, entries.Count);
+        var diffPitch = diffRhythm.Pitch;
+        var diffVisible = diffRhythm.Visible;
+        var diffFirst = UiKit.Scrolled(_logDiffFirst, 0, diffVisible, entries.Count);   // a clamp, not a wheel read
         var diffScrolls = entries.Count > diffVisible;
         var entryRight = rightX + rightW - (diffScrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
         var diffTop = ry;
-        for (var i = _logDiffFirst; i < Math.Min(entries.Count, _logDiffFirst + diffVisible); i++)
+        for (var i = diffFirst; i < Math.Min(entries.Count, diffFirst + diffVisible); i++)
         {
             var e = entries[i];
             _ui.TextBig(b, DiffLabel(e.Label), rightX, ry, Slate, UiTypography.Body);
@@ -4097,7 +4323,7 @@ public sealed class HuntScreen
             ry += diffPitch;
         }
         if (diffScrolls)
-            _ui.ScrollBar(b, new Rectangle(rightX + rightW - UiMetrics.ScrollbarWidth, diffTop, UiMetrics.ScrollbarWidth, diffVisible * diffPitch), _logDiffFirst, diffVisible, entries.Count);
+            _ui.ScrollBar(b, new Rectangle(rightX + rightW - UiMetrics.ScrollbarWidth, diffTop, UiMetrics.ScrollbarWidth, diffVisible * diffPitch), diffFirst, diffVisible, entries.Count);
     }
 
     /// <summary>
@@ -4495,7 +4721,7 @@ public sealed class HuntScreen
     /// button is offered only while none of them is up — which the host guarantees by not routing clicks
     /// here under a modal.
     /// </remarks>
-    private void DrawLogButton(SpriteBatch b, Point hit, bool clicked)
+    private void DrawLogButton(SpriteBatch b, Point hit)
     {
         var r = LogButtonRect;
         var hot = r.Contains(hit);
@@ -4522,7 +4748,7 @@ public sealed class HuntScreen
         // A hover tip that a panel eats is worse than no tip: it says there is more to read and then
         // hides it. It is remembered here and drawn last (see the foot of Draw).
         _logTipAt = hot ? r : null;   // the BUTTON, not the pointer: the tip stands still while you read it
-        if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
+        // NO HIT TEST HERE. LogButtonRect is the one geometry; TakeInput tests this very rectangle.
     }
 
     /// <summary>Where the LOG button's hover tip is owed this frame, or null — drawn at the top of the HUD pass.</summary>
@@ -4899,22 +5125,33 @@ public sealed class HuntScreen
     /// <summary>The utility's bottom edge as last drawn (+ margin) — the right column's true extent, for the tour.</summary>
     private static int s_railBottom = 368;
 
-    /// <summary>Right utility: the idle rate, what is waiting, and the doors to it.</summary>
+    /// <summary>
+    /// The right rail's measured layout — the panel, its text anchors, and its one door.
+    /// </summary>
     /// <remarks>
-    /// A reward whose screen is locked is hidden — not greyed, not clickable-into-a-refusal. A door this
-    /// column advertises must open; until the host says the screen is unlocked, the errand is not offered.
+    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawRightColumn"/> paints from it and
+    /// <see cref="TakeRailInput"/> hit-tests the same <c>PointsDoor</c>. The whole vertical walk lives
+    /// in <see cref="MeasureRail"/> so the paint does no layout arithmetic of its own and the door
+    /// cannot drift away from the rows above it.
     /// </remarks>
-    private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
+    private readonly record struct RailPlan(
+        Rectangle Panel, int X, int W,
+        bool ChestRow, bool PointsRow, bool TwoLines,
+        string Chests, string Points, string Both,
+        int IdleLabelY, int IdleValueY, int RewardsLabelY, int RewardLineY,
+        Rectangle PointsDoor);
+
+    private RailPlan MeasureRail()
     {
         var chestRow = ChestCount > 0 && VaultOpen;
         var pointsRow = Mastery.Available > 0 && MasteryOpen;
-        var doors = pointsRow ? 1 : 0;   // the chest's door is the VAULT tile now — see below
+        var doors = pointsRow ? 1 : 0;   // the chest's door is the VAULT tile now — see DrawRightColumn
 
         var top = UiTypography.PanelTitleTop;
         var idleBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.PrimaryValue);
         // THE REWARDS LINE SPLITS IN TWO when the two facts do not share a line at this profile — at
         // 150 % "1 CHEST READY · 7 POI…" was ellipsised over the two doors that say the same facts
-        // (huntstates-03). The panel is summed from its blocks, so the doors move down with it.
+        // (huntstates-03). The panel is summed from its blocks, so the door moves down with it.
         var chests = $"{ChestCount} CHEST{(ChestCount == 1 ? "" : "S")} READY";
         var points = $"{Mastery.Available} MASTERY POINT{(Mastery.Available == 1 ? "" : "S")}";
         var both = chestRow && pointsRow ? $"{chests} · {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}" : "";
@@ -4923,40 +5160,62 @@ public sealed class HuntScreen
         var rewardBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body) * (twoLines ? 2 : 1);
         var doorBlock = doors > 0 ? UiMetrics.Space(8) + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
         var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + UiMetrics.Space(10) + rewardBlock + doorBlock + UtilityPad);
-        // PINNED to the medium frame: this panel's height follows the profile while its width is a page
-        // anchor, so its aspect crossed 1.30 at 125 % and it alone switched to the crested square frame
-        // beside three siblings that did not (release polish 2026-09-05, hunt-02).
-        _ui.PanelQuiet(b, panel, artKey: "ui_panel_medium");
-        s_railBottom = panel.Bottom + 10;
-        _utilityPanel = panel;   // the inspector, drawn after this column, keeps clear of it
 
         var x = panel.X + UtilityPad;
         var w = panel.Width - UtilityPad * 2;
-        var y = panel.Y + top;
+        var idleLabelY = panel.Y + top;
+        var idleValueY = idleLabelY + UiTypography.Pitch(UiTypography.Secondary);
+        var rewardsLabelY = idleValueY + UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(10);
+        var rewardLineY = rewardsLabelY + UiTypography.Pitch(UiTypography.Secondary);
+        var doorY = rewardLineY + UiTypography.Pitch(UiTypography.Body) * (twoLines ? 2 : 1) + UiMetrics.Space(8);
 
-        _ui.TextBig(b, "IDLE", x, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
+        return new RailPlan(panel, x, w, chestRow, pointsRow, twoLines, chests, points, both,
+                            idleLabelY, idleValueY, rewardsLabelY, rewardLineY,
+                            pointsRow ? new Rectangle(x, doorY, w, DoorHeight) : Rectangle.Empty);
+    }
+
+    /// <summary>The rail's one errand: SPEND n POINTS. Decided here, painted in <see cref="DrawRightColumn"/>.</summary>
+    private void TakeRailInput(Point mouse, bool clicked)
+    {
+        var p = MeasureRail();
+        if (p.PointsRow && UiKit.ClickedIn(p.PointsDoor, mouse, clicked)) WantsMastery = true;
+    }
+
+    /// <summary>Right utility: the idle rate, what is waiting, and the door to it.</summary>
+    /// <remarks>
+    /// A reward whose screen is locked is hidden — not greyed, not clickable-into-a-refusal. A door this
+    /// column advertises must open; until the host says the screen is unlocked, the errand is not offered.
+    /// It lays nothing out itself: every anchor and the door's rectangle come from
+    /// <see cref="MeasureRail"/>, which <see cref="TakeRailInput"/> reads too.
+    /// </remarks>
+    private void DrawRightColumn(SpriteBatch b, Point hit)
+    {
+        var p = MeasureRail();
+        // PINNED to the medium frame: this panel's height follows the profile while its width is a page
+        // anchor, so its aspect crossed 1.30 at 125 % and it alone switched to the crested square frame
+        // beside three siblings that did not (release polish 2026-09-05, hunt-02).
+        _ui.PanelQuiet(b, p.Panel, artKey: "ui_panel_medium");
+        s_railBottom = p.Panel.Bottom + 10;
+        _utilityPanel = p.Panel;   // the inspector, drawn after this column, keeps clear of it
+
+        _ui.TextBig(b, "IDLE", p.X, p.IdleLabelY, Slate, UiTypography.Secondary);
         var gem = UiMetrics.Control(30);   // the gleam icon beside the rate — an icon box, at the profile
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(x, y + UiMetrics.Space(5), gem, gem), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", x + gem + UiMetrics.Space(10), y, Bone, UiTypography.PrimaryValue);
-        y += UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(10);
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(p.X, p.IdleValueY + UiMetrics.Space(5), gem, gem), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", p.X + gem + UiMetrics.Space(10), p.IdleValueY, Bone, UiTypography.PrimaryValue);
 
-        _ui.TextBig(b, "REWARDS", x, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextBig(b, "REWARDS", p.X, p.RewardsLabelY, Slate, UiTypography.Secondary);
         // NOTHING WAITING in Slate, not the Empty ink: a sentence under the contrast floor with no
         // shape beside it read as disabled text (release polish 2026-09-05, hunt-11).
-        if (twoLines)
+        if (p.TwoLines)
         {
-            _ui.TextBig(b, _ui.ShortenBig(chests, w, UiTypography.Body), x, y, Bone, UiTypography.Body);
-            y += UiTypography.Pitch(UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig(points, w, UiTypography.Body), x, y, Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(p.Chests, p.W, UiTypography.Body), p.X, p.RewardLineY, Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(p.Points, p.W, UiTypography.Body), p.X, p.RewardLineY + UiTypography.Pitch(UiTypography.Body), Bone, UiTypography.Body);
         }
         else
         {
-            var line = both.Length > 0 ? both : chestRow ? chests : pointsRow ? points : "NOTHING WAITING";
-            _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : Slate, UiTypography.Body);
+            var line = p.Both.Length > 0 ? p.Both : p.ChestRow ? p.Chests : p.PointsRow ? p.Points : "NOTHING WAITING";
+            _ui.TextBig(b, _ui.ShortenBig(line, p.W, UiTypography.Body), p.X, p.RewardLineY, p.PointsRow ? Bone : Slate, UiTypography.Body);
         }
-        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
         // THE VAULT DOOR IS GONE FROM HERE, and it is the rail tile now.
         //
@@ -4967,10 +5226,13 @@ public sealed class HuntScreen
         // this screen and only while a chest happens to be waiting teaches nothing they can reuse.
         // Two doors to one room also meant the teaching had to name a place ("the right column") that
         // stops existing the moment the chest is opened. The line above still SAYS a chest is ready.
-        if (pointsRow
-            && _ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked,
-                          true, ButtonStyle.Primary))
-            WantsMastery = true;
+        //
+        // PAINTED WITH clicked: false — the pressed face comes from the static UiKit.MouseHeld, so this
+        // is visually identical to the old form and can no longer fire. TakeRailInput decides it.
+        // ON ONE LINE on purpose: the draw-purity gate judges a widget by its edge ARGUMENT, and a call
+        // split across lines cannot be read from one line, so it is reported rather than cleared.
+        var spend = $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}";
+        if (p.PointsRow) _ui.Button(b, p.PointsDoor, spend, hit, false, true, ButtonStyle.Primary);
     }
 
     // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────
@@ -4986,9 +5248,41 @@ public sealed class HuntScreen
     // and a sentence — at 150 % the three-row plate lay across the hunter's face and the reaper's
     // shoulders (release polish 2026-09-05, huntstates-01).
     private static int FallPlateHeight
-        => UiMetrics.Space(14) + Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6))
-         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
+        => FallTop + Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6))
+         + UiTypography.Pitch(UiTypography.Body) + FallTop;
     private static int FallDoorHeight => UiMetrics.ButtonHeightSmall;
+    /// <summary>The plate's own insets — shared by its height, its text and its door, so none can drift.</summary>
+    private static int FallPad => UiMetrics.Space(24);
+    private static int FallTop => UiMetrics.Space(14);
+
+    /// <summary>
+    /// READ THE LOG — the plate's primary door, on its title row.
+    /// </summary>
+    /// <remarks>
+    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawFallPlate"/> paints this rectangle (and tests
+    /// it to keep the plate's own hover off it) and <see cref="TakeFallPlateInput"/> hit-tests it.
+    /// </remarks>
+    private Rectangle FallDoor
+    {
+        get
+        {
+            var r = FallPlate;
+            return new Rectangle(r.Right - FallPad - UiMetrics.Control(200), r.Y + FallTop, UiMetrics.Control(200), FallDoorHeight);
+        }
+    }
+
+    /// <summary>
+    /// The fallen screen's one action: READ THE LOG, or a click anywhere else on the plate.
+    /// </summary>
+    /// <remarks>
+    /// The door is tested FIRST and the plate only <c>else</c>, exactly as the paint used to — one edge
+    /// raises <see cref="WantsLog"/> once, and the host's own L handling is what opens the log.
+    /// </remarks>
+    private void TakeFallPlateInput(Point mouse, bool clicked)
+    {
+        if (UiKit.ClickedIn(FallDoor, mouse, clicked)) WantsLog = true;
+        else if (UiKit.ClickedIn(FallPlate, mouse, clicked)) WantsLog = true;
+    }
 
     /// <summary>
     /// Two lines over the fight when the champion falls: the wave, and the MAIN LIMIT with the verdict
@@ -4996,12 +5290,12 @@ public sealed class HuntScreen
     /// the log applies. The whole plate is a door to the log; no buttons stand over the arena because the
     /// champion is already getting up (the doors live in the LOG's footer).
     /// </summary>
-    private void DrawFallPlate(SpriteBatch b, Point hit, bool clicked)
+    private void DrawFallPlate(SpriteBatch b, Point hit)
     {
         var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
         var r = FallPlate;
-        var pad = UiMetrics.Space(24);
-        var top = UiMetrics.Space(14);
+        var pad = FallPad;
+        var top = FallTop;
         // THE WHOLE PLATE IS THE DOOR, so it carries the states a door carries (§25, §27). It had only
         // HOVER (READ THE LOG brightens); PRESSED now drops the FACE 2 px while the mouse is held, the
         // way every UiKit.Button does, so a click on the only clickable thing on the fallen screen
@@ -5013,7 +5307,7 @@ public sealed class HuntScreen
         // THE DOOR IS A PRIMARY BUTTON on the title row: the fallen state's one action was a grey text
         // link in the plate's corner, and nothing on the screen was lit (huntstates-02). The plate stays
         // a door too, so a click anywhere on it still opens the log.
-        var door = new Rectangle(r.Right - pad - UiMetrics.Control(200), r.Y + top, UiMetrics.Control(200), FallDoorHeight);
+        var door = FallDoor;
         var hot = r.Contains(hit) && !door.Contains(hit);
         var face = hot && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
         _ui.Plate(b, face, Ember, fade);
@@ -5037,8 +5331,8 @@ public sealed class HuntScreen
             : _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
         _ui.TextBig(b, _ui.ShortenBig(limit, face.Width - pad * 2, UiTypography.Body), face.X + pad,
                     face.Y + top + titleRow, Bone * fade, UiTypography.Body);
-        if (_ui.Button(b, door, "READ THE LOG", hit, clicked, true, ButtonStyle.Primary)) WantsLog = true;
-        else if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
+        // PAINTED WITH clicked: false; TakeFallPlateInput decides both the door and the plate behind it.
+        _ui.Button(b, door, "READ THE LOG", hit, false, true, ButtonStyle.Primary);
     }
 
     /// <summary>

@@ -1259,7 +1259,7 @@ public sealed class LoadoutScreen
     /// </summary>
     private float _vowPower = 1f;
 
-    public void Draw(SpriteBatch b, Point mouse, bool clicked)
+    public void Draw(SpriteBatch b, Point mouse)
     {
         var hit = mouse;
         _tip = null;

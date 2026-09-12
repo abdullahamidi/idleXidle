@@ -82,14 +82,14 @@ public sealed class WarrenScreen
     /// names what just happened and the host plays it, the same shape TraitsScreen hands back.
     /// </summary>
     /// <remarks>
-    /// Two moments, both semantic and both fired outside <c>Draw</c>'s per-frame path: an upgrade that
-    /// LANDED (the model's level actually moved) is <c>sfx_upgrade</c>; an upgrade the player asked for
-    /// and could not have — the capped UPGRADE button, a locked card — is <c>sfx_error</c>. Nothing here
-    /// plays a sound for merely looking at a card.
+    /// Two moments, both semantic and both named from <see cref="Update"/>, never from the draw pass: an
+    /// upgrade that LANDED (the model's level actually moved) is <c>sfx_upgrade</c>; an upgrade the player
+    /// asked for and could not have — the capped UPGRADE button, a locked card — is <c>sfx_error</c>.
+    /// Nothing here plays a sound for merely looking at a card.
     /// </remarks>
     private string? _cue;
 
-    /// <summary>Take the pending sound cue, if any. Call it after <see cref="Draw"/>, once a frame.</summary>
+    /// <summary>Take the pending sound cue, if any. Call it after <see cref="Update"/>, once a frame.</summary>
     public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
 
     private FacilityKind _selected = FacilityKind.Nursery;
@@ -120,7 +120,7 @@ public sealed class WarrenScreen
     /// </summary>
     /// <remarks>
     /// Snapshotted when the player clicks UPGRADE (the values that are true one instant BEFORE the
-    /// spend), because the host applies the upgrade after <see cref="Draw"/> returns and by the next
+    /// spend), because the host applies the upgrade after <see cref="Update"/> returns and by the next
     /// frame the old numbers are gone. <c>Milestone</c> is read from Core — the facility's own
     /// <c>MilestoneTier</c> crossing — never from a "% 5" written here.
     /// </remarks>
@@ -140,14 +140,36 @@ public sealed class WarrenScreen
     /// Fire the feedback for an upgrade that actually landed, and let a finished one go.
     /// </summary>
     /// <remarks>
-    /// The screen has no <c>Update</c> of its own (the host draws it and consumes its request), so the
-    /// EVENT it keys on is the model's own change: the level the player asked for is now on the
+    /// <para>
+    /// The EVENT it keys on is the model's own change: the level the player asked for is now on the
     /// facility. That can happen exactly once per request, which is what keeps the pulse one-per-event
-    /// rather than something the draw pass re-arms.
+    /// rather than something a draw pass re-arms. It runs from <see cref="Update"/>, once a frame,
+    /// BEFORE this frame's clicks are resolved — the order it has always had.
+    /// </para>
+    /// <para>
+    /// A REQUEST THE HOST HAS NOT TAKEN YET IS STILL PENDING (2026-09-12). MonoGame's fixed timestep can
+    /// run Update twice for one Draw, so the ask and the host's answer are not guaranteed to be one
+    /// frame apart any more. Waiting on <c>_upgradeRequest</c> having been consumed means a catch-up
+    /// tick cannot drop the feedback for an upgrade that really landed — and in the ordinary case,
+    /// where the host takes the request in the same frame it was raised, this changes nothing.
+    /// </para>
     /// </remarks>
+    /// <summary>
+    /// ARM THE FEEDBACK FOR AN UPGRADE THE HOST HAS JUST APPLIED, in the same half-frame as the spend.
+    /// </summary>
+    /// <remarks>
+    /// The spend used to happen after Draw, so the next Update's <see cref="Settle"/> caught it and the
+    /// figures animated. With the click resolved in Update (ADR-006) the host spends INSIDE the same
+    /// Update, after Settle has already run — so without this the frame the upgrade lands paints the new
+    /// output, the new cost and the new wall with nothing armed, and the animation then plays backwards
+    /// from the new values on the frame after. The host calls this immediately after
+    /// <c>Warren.Upgrade</c>; it is idempotent, and it is a no-op when nothing was asked.
+    /// </remarks>
+    public void SettleNow() => Settle();
+
     private void Settle()
     {
-        if (_asked is { } a)
+        if (_asked is { } a && _upgradeRequest is null)
         {
             _asked = null;
             var f = Warren.Facility(a.Kind);
@@ -497,16 +519,39 @@ public sealed class WarrenScreen
     /// <summary>RH_SHOT_GRID_SCROLL=&lt;page px&gt;: the grid scrolled, for the fixture that shows a card half under the strip.</summary>
     private static readonly int PosedGridScroll = int.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_GRID_SCROLL"), out var ps) ? ps : 0;
 
-    /// <summary>The grid's scroll, in page pixels down from the top row.</summary>
+    /// <summary>The grid's scroll, in page pixels down from the top row. Turned in <see cref="Update"/>.</summary>
     private int _gridScroll;
     private bool _scrollPosed;
+
+    /// <summary>The scroll the grid is laid out at: the field, clamped to what the page can give up.</summary>
+    /// <remarks>
+    /// ONE READING FOR BOTH HALVES. The clamp used to be a WRITE at the top of <c>Draw</c> ("the page
+    /// may have grown back"), which is a mutation the draw pass is not allowed to make.
+    /// <see cref="Update"/> owns the field now; reading it back through the clamp keeps the paint right
+    /// on a frame where Update did not run at all — the UI SCALE is changed from the settings modal, and
+    /// Game1's Update returns before this screen while that modal is open, so the profile can change
+    /// under a page that is still being drawn.
+    /// </remarks>
+    private int GridScroll => Math.Clamp(_gridScroll, 0, GridOverflow);
 
     private RasterizerState? _clip;
     private RasterizerState Clip => _clip ??= new RasterizerState { ScissorTestEnable = true };
 
     private Rectangle Card(int i) =>
         new(GridPanel.X + GridPad + i % 4 * (CardW + CardGap),
-            GridPanel.Y + GridPad + i / 4 * (CardH + CardGap) - _gridScroll, CardW, CardH);
+            GridPanel.Y + GridPad + i / 4 * (CardH + CardGap) - GridScroll, CardW, CardH);
+
+    /// <summary>
+    /// WHAT THE PLAYER CAN SEE OF A CARD, which is the only part of it that answers to anything: the
+    /// card clipped to the grid's visible band. Empty for a card scrolled wholly out of sight.
+    /// </summary>
+    /// <remarks>
+    /// THE ONE HIT RECTANGLE (2026-09-12). It was an expression inside the card loop, so
+    /// <see cref="Update"/> could only have resolved a card's click by copying it — and a copied
+    /// rectangle drifts from the drawn one the first time the clip or the scroll changes. Both halves
+    /// call this instead: a card can never be hit where it is not drawn.
+    /// </remarks>
+    private Rectangle CardVisible(int i) => UiKit.VisibleWithin(Card(i), GridVisible);
 
     /// <summary>
     /// WHERE A CARD'S ROWS SIT, from the height it was given. The name, the resource row, the figure and
@@ -816,52 +861,116 @@ public sealed class WarrenScreen
     // report. The foot row is only about a real absence now, and says nothing when there has not been
     // one. (What one more level buys is on the facility card, beside the level being bought.)
 
-    // ── THE WHEEL. The host latches the wheel once a frame and hands it to the screens whose Update
-    //    takes it; this screen's entry point predates any of them and takes only the cursor and the
-    //    click, so the notches are latched here from the same source the host reads. It is the wheel
-    //    only — the cursor is the parameter, hit-tested as it is. (A `wheel` argument on Draw, passed
-    //    from Game1.MouseWheel, is the shared shape this should take.) ─────────────────────────────
-    private int _wheelPrev;
-    private long _wheelSeenAt;
+    // ── THE WHEEL ARRIVES AS AN ARGUMENT NOW (2026-09-12). This screen used to latch its own notches
+    //    inside Draw, off Mouse.GetState(), with a 250 ms resync so a wheel turned on another screen
+    //    could not arrive here as one leap — because its entry point predated every other screen's
+    //    Update and took only the cursor and the click. Game1 latches the same notches once a frame,
+    //    on every screen, from _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue (Game1.MouseWheel),
+    //    so there is nothing stale left to resync against: the host's latch is the shared shape, and
+    //    Update takes it. ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// A gap longer than this between two frames means the screen was not being drawn — the player was
-    /// elsewhere — and the wheel they turned there must not arrive here as one leap through the list.
+    /// EVERY DECISION THIS SCREEN MAKES: a card picked, a refusal answered, the wheel turned, and the
+    /// UPGRADE that has the host spend Gleam and Dust. None of it is in <see cref="Draw"/>.
     /// </summary>
-    private const int WheelResyncMs = 250;
-
-    private int WheelNotches()
-    {
-        var v = Microsoft.Xna.Framework.Input.Mouse.GetState().ScrollWheelValue;
-        var now = Environment.TickCount64;
-        var stale = now - _wheelSeenAt > WheelResyncMs;   // also the first frame ever, which latches only
-        _wheelSeenAt = now;
-        var notches = stale ? 0 : (v - _wheelPrev) / 120;   // one notch is 120, as Game1 reads it
-        _wheelPrev = v;
-        return notches;
-    }
-
-    public void Draw(SpriteBatch b, Point mouse, bool clicked)
+    /// <remarks>
+    /// <para>
+    /// WHY IT IS NOT IN DRAW (2026-09-12). MonoGame's fixed timestep makes at least one call to Update
+    /// and exactly one to Draw per tick, and the host latches the click EDGE at the top of Update and
+    /// overwrites its previous mouse state at the end of it. So on a frame over budget Update runs
+    /// twice and Draw once: the second Update recomputes the edge as FALSE, and the single Draw that
+    /// follows hit-tests an edge that no longer exists. A press is held three to six frames, so it
+    /// never re-arms and the input is silently dropped. The title screen shipped with exactly that
+    /// bug. Calling <see cref="Draw"/> three times with no Update between now changes nothing
+    /// semantic: it computes geometry, reads state, reads the cursor, and derives hover.
+    /// </para>
+    /// <para>
+    /// THE ORDER IS THE ORDER DRAW HAD, because that is what one edge = at most one action depends on.
+    /// <see cref="Settle"/> first (the host applied or refused last frame's request between then and
+    /// now, and what changed must light before this frame's clicks can ask for anything else), then
+    /// the rig's pose, then the wheel, then the grid's eight cards in index order, then the inspector.
+    /// Every rectangle here is the one the paint uses — <see cref="CardVisible"/> for a card,
+    /// <see cref="MeasureInspector"/> for the inspector's rows and its button.
+    /// </para>
+    /// </remarks>
+    public void Update(Point mouse, bool clicked, int wheel)
     {
         // The cursor arrives in page space (Game1.PageCursor); it is hit-tested as it is.
         var hit = mouse;
-        _hover = -1;
         // The host applied (or refused) last frame's request between then and now: light what changed
         // BEFORE this frame's clicks can ask for anything else.
         Settle();
         PoseForTheRig();
+        // THE SAME TWO MEASURES THE PAINT RUNS, and they must run HERE too. Every rectangle this method
+        // hit-tests is derived from them: _awayLines sets StripHeight, which sets GridPanel, which sets
+        // CardW/CardH/GridOverflow/GridVisible and therefore CardVisible(i) and UpgradeBtn. Measured in
+        // the paint alone, a frame on which the strip's away-lines or the rail's line count CHANGED
+        // would hit-test last frame's grid and paint this frame's — the geometry drift this whole pass
+        // exists to prevent. Both are pure measurement over the profile and the model, so running them
+        // twice costs a little arithmetic and cannot disagree.
         MeasureStrip();
         MeasureRail();
         // The rig cannot hold a mouse button down, so the PRESSED state of every control on the page —
         // this screen's cards and the kit's own button — would be unphotographable without this.
         if (PosedPress) UiKit.MouseHeld = true;
-        // Latched every frame so a notch turned over the grid is not applied later over the inspector.
-        var notches = WheelNotches();
-        var wheel = InspectorPanel.Contains(hit) ? notches : 0;
-        if (GridPanel.Contains(hit) && notches != 0)
-            _gridScroll = Math.Clamp(_gridScroll - notches * UiMetrics.Control(48), 0, GridOverflow);
+
+        // ── THE WHEEL is spent where the cursor is: the grid scrolls in page pixels, the inspector by
+        //    rows. Read once so a notch turned over the grid is not applied over the inspector as well.
+        var inspectorWheel = InspectorPanel.Contains(hit) ? wheel : 0;
+        if (GridPanel.Contains(hit) && wheel != 0)
+            _gridScroll = Math.Clamp(_gridScroll - wheel * UiMetrics.Control(48), 0, GridOverflow);
         if (PosedGridScroll > 0 && !_scrollPosed) { _gridScroll = PosedGridScroll; _scrollPosed = true; }
         _gridScroll = Math.Clamp(_gridScroll, 0, GridOverflow);   // the page may have grown back
+
+        // ── THE GRID's eight cards, in the order they are drawn in, each answering only on the part of
+        //    itself the player can actually see (CardVisible — the same call the loop paints against).
+        var i = 0;
+        foreach (var f in Warren.AllFacilities)
+        {
+            var index = i++;
+            if (!UiKit.ClickedIn(CardVisible(index), hit, clicked)) continue;
+            // A CLICK ON A LOCKED CARD IS AN ANSWER, not silence: the reason lights (the chip on the
+            // card, which already says what would open it) and the host plays the refusal. Selection is
+            // unchanged — a locked facility has no inspector.
+            if (!Warren.IsUnlocked(f.Kind)) { Refuse(f.Kind); continue; }
+            // A new selection opens its inspector at the top, wherever the last one was scrolled to.
+            if (f.Kind != _selected) { _selected = f.Kind; _inspectorFirst = 0; }
+        }
+
+        // A locked selection can only arrive by state reset (the grid never selects a locked card); fall
+        // back to the first open facility rather than posing a locked one. It used to be a write inside
+        // DrawInspector, which is a mutation the draw pass may not make.
+        if (!Warren.IsUnlocked(_selected))
+            _selected = Warren.AllFacilities.First(x => Warren.IsUnlocked(x.Kind)).Kind;
+
+        // ── THE INSPECTOR, measured with the one call its paint measures with.
+        var ins = MeasureInspector();
+        // Its rows scroll under the wheel when the reading is taller than its room (150 %, and 125 % for
+        // a capped facility); the refusal line and the one button stay anchored where they were. The
+        // call runs whether or not a notch was turned, because it is also the clamp.
+        _inspectorFirst = UiKit.Scrolled(_inspectorFirst, inspectorWheel, ins.LastPage, ins.Total);
+        // ASKING FOR WHAT YOU CANNOT HAVE IS ANSWERED, not ignored. UiKit.Button never reports a click
+        // on a disabled control (correctly — it must not fire), so the refusal is caught here: the one
+        // line that already says why pulses once, and the host plays the refusal sound.
+        if (UiKit.ClickedIn(ins.Cta, hit, clicked))
+        {
+            if (ins.Afford && !ins.Capped) Ask(ins.Facility);   // snapshot what is true BEFORE the spend
+            else Refuse(_selected);
+        }
+    }
+
+    public void Draw(SpriteBatch b, Point mouse)
+    {
+        // The cursor arrives in page space (Game1.PageCursor); it is hit-tested as it is.
+        var hit = mouse;
+        _hover = -1;
+        // THE TWO MEASURES STAY HERE, deliberately. Each writes only a cached layout value this same
+        // frame's paint reads, and each must run on a frame where Update did not: UI SCALE is a density
+        // profile changed from the settings modal, and Game1's Update returns before this screen while
+        // that modal is open. The strip's height and the rail's are the profile's, so a measure that
+        // only ran from Update would paint the old profile's rhythm behind the new one.
+        MeasureStrip();
+        MeasureRail();
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "WARREN", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
@@ -870,8 +979,8 @@ public sealed class WarrenScreen
         //  strip's own last line, said with the figures from the absence that actually happened.)
 
         DrawSummary(b);
-        DrawGrid(b, hit, clicked);
-        DrawInspector(b, hit, clicked, wheel);
+        DrawGrid(b, hit);
+        DrawInspector(b, hit);
         // THE FACILITY DETAIL RAIL says the hovered card; nothing floats over the grid.
         DrawRail(b);
         if (DevWarrenDebug) DrawDebug(b);
@@ -1104,7 +1213,9 @@ public sealed class WarrenScreen
     }
 
     // ── THE GRID. Eight cards, each answering "can I upgrade this one?" without being clicked. ──
-    private void DrawGrid(SpriteBatch b, Point hit, bool clicked)
+    //    The clicks themselves are resolved in Update, against CardVisible — the same call this loop
+    //    hovers and paints against, so the drawn card and the hit card are one rectangle.
+    private void DrawGrid(SpriteBatch b, Point hit)
     {
         // QUIET, not ornate: this is a grid of things to pick between, and it wore the gold frame
         // while the column that explains them wore the brown.
@@ -1135,8 +1246,8 @@ public sealed class WarrenScreen
             var card = Card(index);
             // CLIP-AWARE (2026-09-06): what the player can SEE of the card is what takes the hover, the
             // click and the tip — a card scrolled under the strip, or under the caption band, answers
-            // only in its visible part, and a wholly hidden one not at all (UiKit.VisibleWithin).
-            var visible = UiKit.VisibleWithin(card, GridVisible);
+            // only in its visible part, and a wholly hidden one not at all (see CardVisible).
+            var visible = CardVisible(index);
             var open = Warren.IsUnlocked(f.Kind);
             // ── THE STANDARD STATES (§25–§29), on a card the kit does not draw for us. HOVER is a thin
             //    luminance lift eased in over ~100 ms, the same one UiKit.Button gets, so a card is
@@ -1166,9 +1277,9 @@ public sealed class WarrenScreen
                 // disabled control has to stay readable and has to say why (§29), and the reason is the
                 // chip at the bottom of this card.
                 _ui.Fill(b, inner, Color.Black * 0.25f);
-                // A CLICK ON A LOCKED CARD IS AN ANSWER, not silence: the reason lights and the host
-                // plays the refusal. Selection is unchanged — a locked facility has no inspector.
-                if (UiKit.ClickedIn(visible, hit, clicked)) Refuse(f.Kind);
+                // A CLICK ON A LOCKED CARD IS AN ANSWER, not silence — resolved in Update, against the
+                // same `visible` rectangle this card is drawn and hovered on. What is left here is the
+                // answer being SHOWN: the chip that says what would open it, lit.
                 var lockedLit = RefusalLit(f.Kind);
                 // Centred in the space the LOCKED badge leaves, not in the whole card — BREEDING
                 // CHAMBER at Headline reached the badge and the two words touched. And when that space
@@ -1225,9 +1336,8 @@ public sealed class WarrenScreen
                 continue;
             }
 
+            // The selection itself is made in Update; this is what being selected LOOKS like.
             var sel = f.Kind == _selected;
-            // A new selection opens its inspector at the top, wherever the last one was scrolled to.
-            if (UiKit.ClickedIn(visible, hit, clicked) && !sel) { _selected = f.Kind; _inspectorFirst = 0; }
             var rc = ResColor(f.Info.Produces);
 
             _ui.Plate(b, drawn);
@@ -1535,29 +1645,53 @@ public sealed class WarrenScreen
         }
     }
 
-    private void DrawInspector(SpriteBatch b, Point hit, bool clicked, int wheel)
+    // THE REFUSAL WRAPS, NEVER SHORTENS: it is the one line that says why the button is off, and at
+    // 150 % the narrower inspector cut it to "THE WARREN CANNOT PASS YOUR DEE...". Its room is the
+    // longer of the two sentences' wrapped height — one line at 100 and 125 %, two at 150 — and is
+    // reserved whether or not a refusal is showing, so the rows above it never move between one
+    // facility and the next.
+    private const string CappedRefusal = "THE WARREN CANNOT PASS YOUR DEEPEST WAVE.";
+    private const string PoorRefusal = "YOU CANNOT PAY FOR THIS LEVEL YET.";
+
+    /// <summary>
+    /// THE INSPECTOR'S ONE BUTTON — UPGRADE, or the wave it is waiting for. <see cref="Update"/>
+    /// resolves both the spend and the refusal against this rectangle and
+    /// <see cref="DrawInspector"/> paints the button on it, so the two can never drift.
+    /// </summary>
+    private Rectangle UpgradeBtn
+    {
+        get
+        {
+            var panel = InspectorPanel;
+            var x = UiKit.ContentLeft(panel);
+            return new Rectangle(x, panel.Bottom - UiMetrics.PanelPadding - UiMetrics.ButtonHeightPrimary,
+                                 UiKit.ContentRight(panel) - x, UiMetrics.ButtonHeightPrimary);
+        }
+    }
+
+    /// <summary>
+    /// The inspector, measured: the facility it shows, its rows (into <see cref="_rows"/>), the column
+    /// they were built to, the room above the refusal line, the last first-row the wheel may reach,
+    /// and the button.
+    /// </summary>
+    /// <remarks>
+    /// ONE MEASUREMENT, TWO READERS (2026-09-12). Every figure here is derived from the one before it —
+    /// the rows give up the scrollbar's lane only once they overflow, and the room they overflow is what
+    /// the refusal line's own wrapped height leaves — so a copy of this arithmetic in
+    /// <see cref="Update"/> would drift from the paint the first time a sentence wrapped differently,
+    /// and the wheel would then be travelling against a list the paint does not have. Both halves call
+    /// this instead; the row list is rebuilt from scratch on every call, and nothing in it is input.
+    /// </remarks>
+    private InspectorLayout MeasureInspector()
     {
         var panel = InspectorPanel;
-        _ui.PanelQuiet(b, panel);
-        // A locked selection can only arrive by state reset (the grid never selects a locked card);
-        // fall back to the first open facility rather than posing a locked one.
-        if (!Warren.IsUnlocked(_selected))
-            _selected = Warren.AllFacilities.First(x => Warren.IsUnlocked(x.Kind)).Kind;
         var f = Warren.Facility(_selected);
-
         var x = UiKit.ContentLeft(panel);
         var w = UiKit.ContentRight(panel) - x;
-        var cta = new Rectangle(x, panel.Bottom - UiMetrics.PanelPadding - UiMetrics.ButtonHeightPrimary, w, UiMetrics.ButtonHeightPrimary);
+        var cta = UpgradeBtn;
         var capped = Warren.IsAtLevelCap(_selected);
         var cost = f.UpgradeCost();
         var afford = GleamOwned >= cost.Gleam && DustOwned >= cost.Dust;
-        // THE REFUSAL WRAPS, NEVER SHORTENS: it is the one line that says why the button is off, and at
-        // 150 % the narrower inspector cut it to "THE WARREN CANNOT PASS YOUR DEE...". Its room is the
-        // longer of the two sentences' wrapped height — one line at 100 and 125 %, two at 150 — and is
-        // reserved whether or not a refusal is showing, so the rows above it never move between one
-        // facility and the next.
-        const string CappedRefusal = "THE WARREN CANNOT PASS YOUR DEEPEST WAVE.";
-        const string PoorRefusal = "YOU CANNOT PAY FOR THIS LEVEL YET.";
         var refusalRows = Math.Clamp(Math.Max(_ui.WrapBig(CappedRefusal, w, UiTypography.Body).Count,
                                               _ui.WrapBig(PoorRefusal, w, UiTypography.Body).Count), 1, 2);
         var refusalY = cta.Y - UiMetrics.Space(8) - refusalRows * UiTypography.Pitch(UiTypography.Body);
@@ -1586,39 +1720,53 @@ public sealed class WarrenScreen
             if (h > room) break;
             maxFirst = i;
         }
-        var lastPage = total - maxFirst;
-        _inspectorFirst = UiKit.Scrolled(_inspectorFirst, wheel, lastPage, total);
+        return new InspectorLayout(f, capped, afford, x, w, rowsW, top, floor, room,
+                                   refusalY, refusalRows, total, total - maxFirst, cta);
+    }
 
-        var y = top;
-        for (var i = _inspectorFirst; i < total; i++)
+    /// <summary>What <see cref="MeasureInspector"/> measured — read by <see cref="Update"/> and by the paint.</summary>
+    private readonly record struct InspectorLayout(Facility Facility, bool Capped, bool Afford,
+                                                   int X, int W, int RowsW, int Top, int Floor, int Room,
+                                                   int RefusalY, int RefusalRows, int Total, int LastPage,
+                                                   Rectangle Cta);
+
+    private void DrawInspector(SpriteBatch b, Point hit)
+    {
+        var panel = InspectorPanel;
+        _ui.PanelQuiet(b, panel);
+        var ins = MeasureInspector();
+        var x = ins.X;
+        var w = ins.W;
+
+        // THE FIRST ROW SHOWN is the field read back through the same UiKit.Scrolled the wheel turns it
+        // with, at zero notches — which is exactly the clamp. Update owns the field; taking the clamp
+        // here keeps the rows on screen on a frame where Update did not run (the UI SCALE is changed
+        // from the settings modal, and this page is drawn behind it without being updated).
+        var first = UiKit.Scrolled(_inspectorFirst, 0, ins.LastPage, ins.Total);
+        var y = ins.Top;
+        for (var i = first; i < ins.Total; i++)
         {
             var r = _rows[i];
-            if (y + r.H > floor) break;
+            if (y + r.H > ins.Floor) break;
             // A heading is never the last thing on the page with nothing under it: it waits for the
             // scroll that brings its first row along.
-            if (r.Kind == RowKind.Head && i + 1 < total && y + r.H + _rows[i + 1].H > floor) break;
-            DrawRow(b, in r, x, y, rowsW);
+            if (r.Kind == RowKind.Head && i + 1 < ins.Total && y + r.H + _rows[i + 1].H > ins.Floor) break;
+            DrawRow(b, in r, x, y, ins.RowsW);
             y += r.H;
         }
-        if (rowsW < w)
-            _ui.ScrollBar(b, new Rectangle(x + w - UiMetrics.ScrollbarWidth, top, UiMetrics.ScrollbarWidth, room),
-                          _inspectorFirst, lastPage, total);
+        if (ins.RowsW < w)
+            _ui.ScrollBar(b, new Rectangle(x + w - UiMetrics.ScrollbarWidth, ins.Top, UiMetrics.ScrollbarWidth, ins.Room),
+                          first, ins.LastPage, ins.Total);
 
-        // ASKING FOR WHAT YOU CANNOT HAVE IS ANSWERED, not ignored. UiKit.Button never reports a click
-        // on a disabled control (correctly — it must not fire), so the refusal is caught here: the one
-        // line that already says why pulses once, and the host plays the refusal sound.
-        var canUpgrade = afford && !capped;
-        if (!canUpgrade && UiKit.ClickedIn(cta, hit, clicked)) Refuse(_selected);
         var refusalLit = RefusalLit(_selected);
-
-        if (!afford || capped)
+        if (!ins.Afford || ins.Capped)
         {
-            var ry = refusalY;
+            var ry = ins.RefusalY;
             if (refusalLit > 0f)
-                _ui.Fill(b, new Rectangle(x - UiMetrics.Space(6), refusalY - 2,
-                                          w + UiMetrics.Space(12), refusalRows * UiTypography.Pitch(UiTypography.Body)),
+                _ui.Fill(b, new Rectangle(x - UiMetrics.Space(6), ins.RefusalY - 2,
+                                          w + UiMetrics.Space(12), ins.RefusalRows * UiTypography.Pitch(UiTypography.Body)),
                          Ember * (0.26f * refusalLit));
-            foreach (var line in _ui.WrapBig(capped ? CappedRefusal : PoorRefusal, w, UiTypography.Body).Take(refusalRows))
+            foreach (var line in _ui.WrapBig(ins.Capped ? CappedRefusal : PoorRefusal, w, UiTypography.Body).Take(ins.RefusalRows))
             {
                 _ui.TextBig(b, line, x, ry, Color.Lerp(Ember, Flare, 0.55f * refusalLit), UiTypography.Body);
                 ry += UiTypography.Pitch(UiTypography.Body);
@@ -1627,9 +1775,13 @@ public sealed class WarrenScreen
 
         // The label IS the reason when capped — a button reading DEPTH LOCKED told the player a state,
         // not a next step.
-        if (_ui.Button(b, cta, capped ? $"REACH WAVE {Warren.DepthForNextLevel(_selected)}" : "UPGRADE",
-                       hit, clicked, enabled: canUpgrade, ButtonStyle.Primary))
-            Ask(f);   // snapshot what is true BEFORE the spend, then let the host apply it
+        //
+        // PAINTED WITH `clicked: false`, like every button on the reference screens: UiKit.Button's
+        // `clicked` argument affects only its RETURN value, and the pressed face comes from the static
+        // UiKit.MouseHeld — so a drawn-only button is pixel-identical to a live one, and the click that
+        // spends Gleam and Dust is Update's alone.
+        var label = ins.Capped ? $"REACH WAVE {Warren.DepthForNextLevel(_selected)}" : "UPGRADE";
+        _ui.Button(b, ins.Cta, label, hit, false, ins.Afford && !ins.Capped, ButtonStyle.Primary);
     }
 
     /// <summary>

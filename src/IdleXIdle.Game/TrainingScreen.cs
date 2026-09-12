@@ -198,6 +198,20 @@ public sealed class TrainingScreen
         new(38, Top, InspectorPanel.X - ColumnGap - 38, ResetBar.Y - FooterGap - Top);
 
     /// <summary>
+    /// The inspector's call to action, anchored to the panel's foot — the ONE rectangle the paint frames
+    /// and <see cref="UpdateInspector"/> hit-tests.
+    /// </summary>
+    private static Rectangle InspectorCta
+    {
+        get
+        {
+            var left = UiKit.ContentLeft(InspectorPanel);
+            return new Rectangle(left, InspectorPanel.Bottom - UiMetrics.Space(24) - UiMetrics.ButtonHeightPrimary,
+                                 UiKit.ContentRight(InspectorPanel) - left, UiMetrics.ButtonHeightPrimary);
+        }
+    }
+
+    /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
     /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
     /// </summary>
@@ -237,16 +251,17 @@ public sealed class TrainingScreen
     private string? _cue;
 
     /// <summary>
-    /// A NEED button was clicked, or Enter pressed on a row that costs more than the purse holds. Draw
-    /// only records it; the next Update turns it into the cue and the pill's one Ember flash.
+    /// A NEED button was clicked, or Enter pressed on a row that costs more than the purse holds. The
+    /// input half only records it; the next Update turns it into the cue and the pill's one Ember flash.
     /// </summary>
     private bool _refused;
 
     /// <summary>
-    /// What the row and the pill SHOWED the frame a TRAIN was requested — taken in Draw, where the figures
-    /// are, and answered in the next Update: if the Hunter's rank grew, the host bought it, and the
-    /// feedback plays from these values to the live ones. Shown, not true, values: a second click while
-    /// the first tick is still moving continues from where the number is, not from where it was.
+    /// What the row and the pill SHOWED the frame a TRAIN was requested — taken by
+    /// <see cref="SnapPending"/> at the tail of the Update that asked, and answered in the next one: if
+    /// the Hunter's rank grew, the host bought it, and the feedback plays from these values to the
+    /// live ones. Shown, not true, values: a second click while the first tick is still moving
+    /// continues from where the number is, not from where it was.
     /// </summary>
     private readonly record struct Pending(HunterStat Stat, int Rank, float Gleam, float Now, float After, float RankShown);
 
@@ -261,8 +276,15 @@ public sealed class TrainingScreen
     /// <summary>How much of the refusal flash is left this frame, 1 → 0. Read in Update, drawn in Draw.</summary>
     private float _refuseGlow;
 
-    /// <summary>The GLEAM figure the header drew this frame — mid-tick, the number a snapshot continues from.</summary>
-    private float _gleamShown;
+    /// <summary>
+    /// The GLEAM figure the pill SHOWS — mid-tick, the number a snapshot continues from.
+    /// </summary>
+    /// <remarks>
+    /// A read, not a field the paint fills in. The snapshot is taken in <see cref="Update"/> now, where
+    /// the paint's leftovers are not available, and one expression cannot disagree with itself.
+    /// </remarks>
+    private float GleamShown(Hunter hunter) =>
+        _fx.Live ? TrainFeedback.Mix(_fx.GleamFrom, hunter.Gleam, _fx.Progress) : hunter.Gleam;
 
     /// <summary>The salt a row's hover ease is keyed under — by stat, so a scroll does not restart the fade.</summary>
     private const int RowHoverSalt = 0x7A11;
@@ -347,27 +369,34 @@ public sealed class TrainingScreen
 
     /// <summary>
     /// Set when the selection moved by a path other than a click (the keys, the first draw, a capture's
-    /// RH_SHOT_SELECT), so a scrolled list brings the selected row into view on the next draw.
+    /// RH_SHOT_SELECT), so a scrolled list brings the selected row into view on the next Update.
     /// </summary>
     private bool _revealSelected;
 
     /// <summary>
-    /// The wheel notches this frame, latched here for <see cref="Draw"/> to spend on whichever scroll
-    /// region the cursor is over — the list or the inspector's prose. Only Draw hit-tests.
-    /// </summary>
-    private int _wheel;
-
-    /// <summary>
-    /// The keyboard path: up and down move the selection, Enter buys, Escape withdraws the armed reset.
+    /// EVERY input this screen takes: the keyboard — up and down move the selection, Enter buys, Escape
+    /// withdraws the armed reset — and then every click, every wheel notch and every scroll clamp, in the
+    /// order the three paint halves used to resolve them.
     /// </summary>
     /// <remarks>
-    /// Deliberately does NOT hit-test the mouse — only Draw does, and check_mouse_space.py's entry-point
-    /// set stays as it is.
+    /// <para>
+    /// DRAW MUST NOT CONSUME INPUT. MonoGame's fixed timestep makes at least one call to Update and
+    /// exactly one to Draw per tick, and the host recomputes the click edge at the top of every Update —
+    /// so on a frame over budget the second Update erases the edge and the single Draw that follows
+    /// hit-tests nothing. A TRAIN that spends Gleam, a row select, a wheel notch and the irreversible
+    /// RESET were all resolved inside <see cref="Draw"/> until this pass, and every one of them was
+    /// silently dropped on a slow frame.
+    /// </para>
+    /// <para>
+    /// They are resolved here now, against the SAME rectangles the paint uses — <see cref="LayoutList"/>,
+    /// <see cref="BuyRect"/>, <see cref="InspectorCta"/>, <see cref="ResetButton"/> — so what is drawn is
+    /// what is hit-tested. Nothing about the gating changed: the <paramref name="clicked"/> edge arrives
+    /// already narrowed by the host, and is passed through exactly as given.
+    /// </para>
     /// </remarks>
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
         ArgumentNullException.ThrowIfNull(hunter);
-        _wheel = wheel;
         DevPose(hunter);
         var order = Order;
         var at = _selected is { } s ? Math.Max(0, Array.IndexOf(order, s)) : 0;
@@ -384,10 +413,18 @@ public sealed class TrainingScreen
         if (Pressed(Keys.Escape)) CancelConfirm();
 
         // ── THE FEEDBACK, advanced here with the host's dt — never from Draw. ────────────────────
-        // A request is answered one frame later: Draw asked, the host spent (or did not), and the rank
-        // is the proof. Every from-value was photographed by Draw at the click; every to-value is the
-        // live one the rows read anyway, so the tick cannot end anywhere but on the truth.
-        if (_pending is { } p)
+        // A request is answered one frame later: this half asked, the host spent (or did not), and the
+        // rank is the proof. Every from-value was photographed by SnapPending at the moment of the ask;
+        // every to-value is the live one the rows read anyway, so the tick cannot end anywhere but on
+        // the truth.
+        //
+        // `_trainRequest is null` ASKS WHETHER THE HOST HAS HAD ITS TURN. A frame over budget runs
+        // Update twice, and the second one would otherwise consume the snapshot the first had just
+        // taken — reading a rank the host has not been asked for yet, finding it unchanged, and
+        // throwing the feedback away. The purchase would still go through; only its number-tick and
+        // flash would vanish. On an ordinary tick the request is always null here, because the host's
+        // ConsumeTrain runs after Draw.
+        if (_trainRequest is null && _pending is { } p)
         {
             _pending = null;
             if (hunter.RankOf(p.Stat) > p.Rank) _fx.Start(p.Stat, p.Gleam, p.Now, p.After, p.RankShown);
@@ -401,6 +438,158 @@ public sealed class TrainingScreen
         }
         _fx.Advance(_devPhase);
         _refuseGlow = _devPhase is { } phase && _devRefuseLit ? 1f - phase : UiMotion.Pulse(RefuseKey);
+
+        // ── THE MOUSE, in the order the three paint halves used to take it. ──────────────────────
+        // The panel is never empty (§82): it opens on the first thing you could actually buy. Settled
+        // here rather than in the paint, because a selection is state and a paint may not change state.
+        if (_selected is null) { _revealSelected = true; _selected = DefaultSelection(hunter); }
+        UpdateList(mouse, wheel, clicked, hunter);
+        UpdateInspector(mouse, wheel, clicked, hunter);
+        UpdateReset(mouse, clicked, hunter);
+        // LAST, once, for whichever of the four paths asked for a rank: a click on a row's TRAIN, the
+        // inspector's call to action, Enter, or a posed capture.
+        SnapPending(hunter);
+    }
+
+    /// <summary>The row the panel opens on when nothing has been picked: the first thing the purse can buy.</summary>
+    /// <remarks>
+    /// <see cref="Array.Find{T}(T[], Predicate{T})"/> answers <c>default(HunterStat)</c> — AttackPower,
+    /// ordinal 0 — when nothing is affordable, which is why the old third <c>??= AttackPower</c> line
+    /// under it could never fire. Same answer, one step.
+    /// </remarks>
+    private static HunterStat DefaultSelection(Hunter hunter) => Array.Find(Order, s => hunter.CanTrain(s));
+
+    /// <summary>
+    /// The stat the inspector is reading — the one Update settled, or the default until it has. ONE
+    /// expression, so the paint and the hit test can never be looking at different rows.
+    /// </summary>
+    private HunterStat Selection(Hunter hunter) => _selected ?? DefaultSelection(hunter);
+
+    /// <summary>
+    /// THE LIST'S INPUT: the wheel over the panel, the keyboard reveal, the scroll clamp, and a click on
+    /// a row — its TRAIN button, its NEED refusal, or its plate.
+    /// </summary>
+    private void UpdateList(Point hit, int wheel, bool clicked, Hunter hunter)
+    {
+        // THE ROWS SCROLL at the profiles the panel cannot hold them all — 125 % and 150 % (brief §9,
+        // §17) — and a keyboard move brings its row into view. The clamp lives here, not in the paint:
+        // three paints with no Update between them must leave the offset exactly where they found it.
+        if (ListScrolls)
+        {
+            if (wheel != 0 && ListPanel.Contains(hit)) _listFirst = Math.Clamp(_listFirst - wheel, 0, ListMaxFirst);
+            if (_revealSelected) RevealRow(Selection(hunter));
+            _listFirst = Math.Clamp(_listFirst, 0, ListMaxFirst);
+        }
+        else _listFirst = 0;
+        _revealSelected = false;
+
+        if (!clicked) return;
+        // THE SAME LAYOUT THE PAINT WALKS — one solve, two callers, so a row cannot be drawn in one
+        // place and hit-tested in another.
+        var laid = LayoutList(ListFirst);
+        for (var n = 0; n < laid.Count; n++)
+        {
+            var (i, _, row) = laid[n];
+            if (Entries[i].Stat < 0) continue;
+            var stat = Groups[Entries[i].Group].Stats[Entries[i].Stat];
+            if (BuyRect(row).Contains(hit))
+            {
+                if (hunter.CanTrain(stat)) _trainRequest = stat;
+                // A click on NEED is a refusal: felt at the pill, heard as sfx_error — never silent
+                // (§29). A MAXED row is not refused — nothing was asked for.
+                else if (hunter.RankOf(stat) < hunter.StatRankCap) _refused = true;
+                return;
+            }
+            // A click anywhere else in the row SELECTS it — click selects, the button commits (D5).
+            if (row.Contains(hit)) { _selected = stat; return; }
+        }
+    }
+
+    /// <summary>
+    /// THE INSPECTOR'S INPUT: the prose wheel, its reset on a new stat, its clamp, and the call to
+    /// action's train-or-refuse.
+    /// </summary>
+    private void UpdateInspector(Point hit, int wheel, bool clicked, Hunter hunter)
+    {
+        var stat = Selection(hunter);
+        // A NEW STAT STARTS AT THE TOP of its own prose.
+        if (_inspectorFor != stat) { _inspectorFor = stat; _inspectorFirst = 0; }
+
+        // THE PROSE SCROLLS on the wheel over the panel. How far it CAN scroll is a text measurement —
+        // how many wrapped lines the paint fitted between the header and the state block — so no
+        // rectangle derives it and only the paint can know it (see <see cref="_proseReach"/>). The notch
+        // and the clamp are spent here; the paint clamps its OWN local first line against the reach it
+        // has just measured, so an offset out of range is never drawn.
+        if (wheel != 0 && InspectorPanel.Contains(hit)) _inspectorFirst -= wheel;
+        _inspectorFirst = Math.Clamp(_inspectorFirst, 0, _proseReach);
+
+        // The same predicate UiKit.Button answered with: enabled, over the rect, on the edge.
+        if (!UiKit.ClickedIn(InspectorCta, hit, clicked)) return;
+        if (hunter.CanTrain(stat)) _trainRequest = stat;
+        else if (hunter.RankOf(stat) < hunter.StatRankCap) _refused = true;
+    }
+
+    /// <summary>
+    /// THE RESET FOOTER'S INPUT: the dev pose, the arm standing itself down, the arming first press and
+    /// the confirming second one.
+    /// </summary>
+    /// <remarks>
+    /// The two presses are preserved exactly — the arming sits in the <c>else</c> of the armed branch, so
+    /// one edge can still only ever do one of the two, and any click that is not the confirmation stands
+    /// the reset down. The button fires only in the one branch the paint draws it live in: something to
+    /// reset, and the Crystal to pay for it. The other two branches draw it off, and a button drawn off
+    /// never returned true.
+    /// </remarks>
+    private void UpdateReset(Point hit, bool clicked, Hunter hunter)
+    {
+        if (_devArmPending) { _resetArmed = true; _resetArmedAtMs = Environment.TickCount64; _devArmPending = false; }
+        if (!ResetArmedNow) _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this
+
+        if (_resetArmed)
+        {
+            if (UiKit.ClickedIn(ResetButton, hit, clicked))
+            {
+                _resetArmed = false;
+                _resetRequest = true;
+            }
+            else if (clicked) _resetArmed = false;   // any click that is not the confirmation disarms
+            return;
+        }
+
+        if (hunter.TotalTrainedRanks > 0
+            && hunter.MaterialOf(Material.Crystal) >= hunter.TrainingResetCrystalCost
+            && UiKit.ClickedIn(ResetButton, hit, clicked))
+        {
+            _resetArmed = true;
+            _resetArmedAtMs = Environment.TickCount64;
+        }
+    }
+
+    /// <summary>
+    /// The from-values a TRAIN's feedback plays out of, photographed once at the tail of the Update that
+    /// asked for it — SHOWN values, so a second rank bought while the first tick is still moving carries
+    /// on from where the number is rather than jumping back to where it was.
+    /// </summary>
+    /// <remarks>
+    /// The paint used to take this snapshot twice, in the row and again in the inspector, with identical
+    /// formulas — the inspector's copy existed because Enter can ask for a row scrolled out of the list.
+    /// One call covers all four paths. The build is resolved here only on a frame a rank is actually
+    /// asked for, which is at most one frame per press, and the paint resolves the same build every
+    /// frame regardless.
+    /// </remarks>
+    private void SnapPending(Hunter hunter)
+    {
+        if (_trainRequest is not { } stat) return;
+        var build = Loadout.ToBuild(Mastery, Character, SkillLevels, DiscoveredKeystones, KnownVows);
+        var mods = build.Resolve(hunter);
+        var (_, _, nowV, aftV) = Effect(stat, hunter, build, mods, build.Shape);
+        var playing = _fx.Playing(stat);
+        var rank = hunter.RankOf(stat);
+        _pending = new Pending(
+            stat, rank, GleamShown(hunter),
+            playing ? TrainFeedback.Mix(_fx.NowFrom, nowV, _fx.Progress) : nowV,
+            playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV,
+            playing ? TrainFeedback.Mix(_fx.RankFrom, rank, _fx.Progress) : rank);
     }
 
     /// <summary>DEV: apply the capture dials once — see <see cref="_devTrainPending"/>.</summary>
@@ -420,7 +609,7 @@ public sealed class TrainingScreen
         }
     }
 
-    public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
+    public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
         ArgumentNullException.ThrowIfNull(hunter);
         // THE CURSOR ARRIVES IN PAGE SPACE — the space every rect here is authored in — mapped once by
@@ -445,21 +634,15 @@ public sealed class TrainingScreen
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 
-        // The panel is never empty (§82): it opens on the first thing you could actually buy.
-        if (_selected is null) _revealSelected = true;
-        _selected ??= Array.Find(Order, s => hunter.CanTrain(s));
-        _selected ??= HunterStat.AttackPower;
-
-        DrawList(b, hunter, build, mods, shape, hit, clicked);
-        DrawInspector(b, hunter, build, mods, shape, hit, clicked);
-        DrawReset(b, hunter, hit, clicked);
+        DrawList(b, hunter, build, mods, shape, hit);
+        DrawInspector(b, hunter, build, mods, shape, hit);
+        DrawReset(b, hunter, hit);
         if (DevStatsDebug) DrawDebug(b);
         if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
     }
 
     /// <summary>Every trainable stat, grouped by what it changes, each row saying NOW and AFTER.</summary>
-    private void DrawList(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
-                          Point hit, bool clicked)
+    private void DrawList(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape, Point hit)
     {
         _ui.PanelQuiet(b, ListPanel);
         var left = UiKit.ContentLeft(ListPanel);
@@ -477,8 +660,7 @@ public sealed class TrainingScreen
         // instead, because the purse is the answer to "why not". Each fades once; Reduced Motion keeps
         // the fade and drops the tick.
         var glow = _fx.Live ? _fx.Glow : 0f;
-        _gleamShown = _fx.Live ? TrainFeedback.Mix(_fx.GleamFrom, hunter.Gleam, _fx.Progress) : hunter.Gleam;
-        var purse = _fx.Live ? $"GLEAM  {MathF.Round(_gleamShown):N0}" : $"GLEAM  {hunter.Gleam:N0}";
+        var purse = _fx.Live ? $"GLEAM  {MathF.Round(GleamShown(hunter)):N0}" : $"GLEAM  {hunter.Gleam:N0}";
         var purseInk = Tint(Bone, glow);
         if (_refuseGlow > 0f) purseInk = Color.Lerp(purseInk, Ember, _refuseGlow);
         if (glow > 0f || _refuseGlow > 0f)
@@ -506,32 +688,15 @@ public sealed class TrainingScreen
         // all: nothing is clipped against the panel's foot, and a caption is never left orphaned at the
         // bottom without the first row it introduces.
         if (ListScrolls)
-        {
-            if (_wheel != 0 && ListPanel.Contains(hit)) _listFirst = Math.Clamp(_listFirst - _wheel, 0, ListMaxFirst);
-            if (_revealSelected && _selected is { } sel) RevealRow(sel);
-            _listFirst = Math.Clamp(_listFirst, 0, ListMaxFirst);
             _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, RowsTop, UiMetrics.ScrollbarWidth, RowsAvail),
-                          _listFirst, Entries.Length - ListMaxFirst, Entries.Length);
-        }
-        else _listFirst = 0;
-        _revealSelected = false;
+                          ListFirst, Entries.Length - ListMaxFirst, Entries.Length);
 
-        var y = RowsTop;
-        var bottom = RowsTop + RowsAvail;
-        // THE LEFTOVER GOES INTO THE GROUP GAPS. An entry is drawn whole or not at all, so when the next
-        // one does not fit the drawn ones ended above a band of bare panel (45 px at 125 %) with the
-        // scroll track running through it. The room is shared out over the group gaps between the drawn
-        // entries instead, so the list ends on its floor (release polish 2026-09-05, training-03).
-        int drawnH = 0, closes = 0, last = _listFirst - 1;
-        for (var i = _listFirst; i < Entries.Length && EntryFits(i, bottom - RowsTop - drawnH); i++)
+        // ONE LAYOUT. The wheel, the keyboard reveal and the clamp are UpdateList's; where the entries
+        // land is LayoutList's, and UpdateList walks the very same list to decide what was clicked.
+        var laid = LayoutList(ListFirst);
+        for (var n = 0; n < laid.Count; n++)
         {
-            drawnH += EntryH(i);
-            if (Entries[i].Closes && i + 1 < Entries.Length) closes++;
-            last = i;
-        }
-        var spare = last >= 0 && last + 1 < Entries.Length && closes > 0 ? Math.Max(0, bottom - RowsTop - drawnH) / closes : 0;
-        for (var i = _listFirst; i <= last; i++)
-        {
+            var (i, y, row) = laid[n];
             var (g, k, _) = Entries[i];
             if (k < 0)
             {
@@ -539,13 +704,59 @@ public sealed class TrainingScreen
                 _ui.Fill(b, new Rectangle(left, y + UiTypography.Pitch(UiTypography.Secondary) - 2, RowW, 1), Dim);
             }
             else
-                DrawRow(b, hunter, build, mods, shape, Groups[g].Stats[k], new Rectangle(left, y, RowW, RowH), hit, clicked);
-            y += EntryH(i) + (Entries[i].Closes && i < last ? spare : 0);
+                DrawRow(b, hunter, build, mods, shape, Groups[g].Stats[k], row, hit);
         }
     }
 
     /// <summary>The first entry the scrolled list draws. Zero whenever the list fits.</summary>
     private int _listFirst;
+
+    /// <summary>The clamped first entry the list is laid out from — the offset BOTH halves read.</summary>
+    private int ListFirst => ListScrolls ? Math.Clamp(_listFirst, 0, ListMaxFirst) : 0;
+
+    /// <summary>One drawn entry and where it lands: its index, its top, and — for a row — its plate.</summary>
+    private readonly record struct Laid(int Index, int Y, Rectangle Row);
+
+    /// <summary>The layout's backing list. Update fills it, then the paint refills it; never walked re-entrantly.</summary>
+    private readonly List<Laid> _laid = new();
+
+    /// <summary>
+    /// WHAT IS DRAWN IS WHAT IS HIT-TESTED: the entries the list shows from <paramref name="first"/> and
+    /// where each one lands, solved once and walked by both the paint and <see cref="UpdateList"/>.
+    /// </summary>
+    /// <remarks>
+    /// THE LEFTOVER GOES INTO THE GROUP GAPS. An entry is drawn whole or not at all, so when the next one
+    /// does not fit the drawn ones ended above a band of bare panel (45 px at 125 %) with the scroll track
+    /// running through it. The room is shared out over the group gaps between the drawn entries instead,
+    /// so the list ends on its floor (release polish 2026-09-05, training-03).
+    /// </remarks>
+    private List<Laid> LayoutList(int first)
+    {
+        _laid.Clear();
+        var bottom = RowsTop + RowsAvail;
+        int drawnH = 0, closes = 0, last = first - 1;
+        for (var i = first; i < Entries.Length && EntryFits(i, bottom - RowsTop - drawnH); i++)
+        {
+            drawnH += EntryH(i);
+            if (Entries[i].Closes && i + 1 < Entries.Length) closes++;
+            last = i;
+        }
+        var spare = last >= 0 && last + 1 < Entries.Length && closes > 0 ? Math.Max(0, bottom - RowsTop - drawnH) / closes : 0;
+        var y = RowsTop;
+        for (var i = first; i <= last; i++)
+        {
+            _laid.Add(new Laid(i, y, Entries[i].Stat < 0 ? Rectangle.Empty : RowRect(y)));
+            y += EntryH(i) + (Entries[i].Closes && i < last ? spare : 0);
+        }
+        return _laid;
+    }
+
+    /// <summary>A row's plate at <paramref name="y"/> — the ONE rectangle the paint frames and the click tests.</summary>
+    private static Rectangle RowRect(int y) => new(UiKit.ContentLeft(ListPanel), y, RowW, RowH);
+
+    /// <summary>The TRAIN button inside a row — likewise one expression, read by both halves.</summary>
+    private static Rectangle BuyRect(Rectangle row) =>
+        new(row.Right - BtnW, row.Y + (row.Height - RowButtonH) / 2, BtnW, RowButtonH);
 
     /// <summary>Scroll the list the least distance that shows <paramref name="stat"/>'s row — with its caption, when it is the group's first.</summary>
     private void RevealRow(HunterStat stat)
@@ -697,11 +908,11 @@ public sealed class TrainingScreen
     private static int BtnW => Math.Min(UiMetrics.Control(224), RowW * 27 / 100);
 
     private void DrawRow(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
-                         HunterStat stat, Rectangle row, Point hit, bool clicked)
+                         HunterStat stat, Rectangle row, Point hit)
     {
-        var selected = _selected == stat;
+        var selected = Selection(hunter) == stat;
         var hot = row.Contains(hit);
-        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - RowButtonH) / 2, BtnW, RowButtonH);
+        var btn = BuyRect(row);
         var onButton = btn.Contains(hit);
         var playing = _fx.Playing(stat);
         var glow = playing ? _fx.Glow : 0f;
@@ -806,18 +1017,22 @@ public sealed class TrainingScreen
         var maxed = rank >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
         var afford = hunter.CanTrain(stat);
-        if (_ui.Button(b, btn, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
-                       hit, clicked, enabled: afford))
-            _trainRequest = stat;
-        // A click on NEED is a refusal: felt at the pill, heard as sfx_error — never silent (§29).
-        else if (!afford && !maxed && UiKit.ClickedIn(btn, hit, clicked))
-            _refused = true;
-        // A click anywhere else in the row SELECTS it — click selects, the button commits (D5).
-        else if (UiKit.ClickedIn(row, hit, clicked) && !onButton)
-            _selected = stat;
-        // The request's from-values, photographed where the figures are — a click here, Enter, or a pose.
-        if (_trainRequest == stat) _pending = new Pending(stat, rank, _gleamShown, nowShown, aftShown, rankShown);
+        // DRAWN, NOT DECIDED. The TRAIN press, the NEED refusal and the plate's select are all resolved
+        // in UpdateList, against BuyRect(row) and row — the same two rectangles this paint uses.
+        Button(b, btn, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
+               hit, afford);
     }
+
+    /// <summary>A button on this screen — painted here, decided in <see cref="Update"/>.</summary>
+    /// <remarks>
+    /// It delegates to <see cref="UiKit.Button"/> with the edge as a literal <c>false</c>, exactly as
+    /// MasteryScreen's does: that argument feeds only the return value, while the hover ease and the
+    /// pressed face come from the static <see cref="UiKit.MouseHeld"/> — so the face is pixel-identical
+    /// and the button can never fire from a paint.
+    /// </remarks>
+    private void Button(SpriteBatch b, Rectangle r, string label, Point hit, bool enabled = true,
+                        ButtonStyle style = ButtonStyle.Secondary)
+        => _ui.Button(b, r, label, hit, false, enabled, style);
 
     /// <summary>
     /// A row's label and its NOW figure — the figure in its own ink, so a flash lights the number and not
@@ -838,10 +1053,10 @@ public sealed class TrainingScreen
     // ── THE INSPECTOR — the house grammar (§6). It replaces a 640 px hover document that covered the
     //    rows beside the one it was explaining, and could only be read by holding the pointer still. ──
     private void DrawInspector(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
-                               Point hit, bool clicked)
+                               Point hit)
     {
         _ui.PanelQuiet(b, InspectorPanel);
-        if (_selected is not { } stat) return;
+        var stat = Selection(hunter);
 
         var left = UiKit.ContentLeft(InspectorPanel);
         var right = UiKit.ContentRight(InspectorPanel);
@@ -853,8 +1068,7 @@ public sealed class TrainingScreen
         // THE STATE BLOCK IS ANCHORED to the foot, the CTA under it, and the prose stops above it.
         // Flowed, it walked into the button at 125 %, where the panel is 554 px tall instead of 770 and
         // the prose fills the difference. The refusal line keeps two lines of room so a long one wraps.
-        var cta = new Rectangle(left, InspectorPanel.Bottom - UiMetrics.Space(24) - UiMetrics.ButtonHeightPrimary,
-                                width, UiMetrics.ButtonHeightPrimary);
+        var cta = InspectorCta;
         // THE REFUSAL'S ROOM IS RESERVED ONLY WHEN THERE IS A REFUSAL. Two lines were always kept for
         // it, so on the common path (the rank is affordable) 56–86 px sat blank above the button while
         // WHAT IT DOES had nothing under it at 150 % (release polish 2026-09-05, training-01).
@@ -899,20 +1113,23 @@ public sealed class TrainingScreen
         // laid out again beside a scrollbar's lane, so the 100 % wrap never moves for a lane it does not use.
         var proseTop = y;
         var proseH = floor - proseTop;
-        if (_inspectorFor != stat) { _inspectorFor = stat; _inspectorFirst = 0; }
         var textW = width;
-        if (BuildProse(stat, hunter, build, mods, shape, textW, proseH)) _inspectorFirst = 0;
+        // THE REACH IS MEASURED HERE AND SPENT IN UPDATE. The stat reset, the wheel and the clamp on the
+        // _inspectorFirst FIELD all live in UpdateInspector; this paint clamps only its own LOCAL first
+        // line, against the reach it has this instant measured, so an offset out of range is never drawn
+        // — not even on the one frame after the UI SCALE profile changes.
+        var first = 0;
+        if (BuildProse(stat, hunter, build, mods, shape, textW, proseH)) _proseReach = 0;
         else
         {
             textW = width - UiMetrics.ScrollbarWidth - UiMetrics.Gap;
             BuildProse(stat, hunter, build, mods, shape, textW, proseH);
-            var maxFirst = ProseMaxFirst(proseH);
-            if (_wheel != 0 && InspectorPanel.Contains(hit)) _inspectorFirst = Math.Clamp(_inspectorFirst - _wheel, 0, maxFirst);
-            _inspectorFirst = Math.Clamp(_inspectorFirst, 0, maxFirst);
+            _proseReach = ProseMaxFirst(proseH);
+            first = Math.Clamp(_inspectorFirst, 0, _proseReach);
             _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, proseTop, UiMetrics.ScrollbarWidth, proseH),
-                          _inspectorFirst, _prose.Count - maxFirst, _prose.Count);
+                          first, _prose.Count - _proseReach, _prose.Count);
         }
-        for (var i = _inspectorFirst; i < _prose.Count; i++)
+        for (var i = first; i < _prose.Count; i++)
         {
             var (text, ink, px, h) = _prose[i];
             if (y + ProseVisibleH(i) > floor) break;
@@ -930,11 +1147,8 @@ public sealed class TrainingScreen
         var glow = playing ? _fx.Glow : 0f;
         var (_, style, nowV, aftV) = Effect(stat, hunter, build, mods, shape);
         var rank = hunter.RankOf(stat);
-        var rankShown = playing ? TrainFeedback.Mix(_fx.RankFrom, rank, _fx.Progress) : rank;
-        var nowShown = playing ? TrainFeedback.Mix(_fx.NowFrom, nowV, _fx.Progress) : nowV;
-        var aftShown = playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV;
-        var now = Fmt(style, nowShown);
-        var after = Fmt(style, aftShown);
+        var now = Fmt(style, playing ? TrainFeedback.Mix(_fx.NowFrom, nowV, _fx.Progress) : nowV);
+        var after = Fmt(style, playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV);
         var cost = hunter.NextRankCost(stat);
 
         void Pair(string k, string v, Color ink)
@@ -976,14 +1190,9 @@ public sealed class TrainingScreen
                             left, ry, Ember, UiTypography.Secondary);
         }
 
-        if (_ui.Button(b, cta, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
-                       hit, clicked, enabled: afford, afford ? ButtonStyle.Primary : ButtonStyle.Secondary))
-            _trainRequest = stat;
-        else if (!afford && !maxed && UiKit.ClickedIn(cta, hit, clicked))
-            _refused = true;
-        // Enter and a pose ask through the selection, whose row may be scrolled out of the list: the
-        // inspector photographs the from-values too.
-        if (_trainRequest == stat) _pending = new Pending(stat, rank, _gleamShown, nowShown, aftShown, rankShown);
+        // DRAWN, NOT DECIDED: the train and the refusal are UpdateInspector's, against InspectorCta.
+        Button(b, cta, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
+               hit, afford, afford ? ButtonStyle.Primary : ButtonStyle.Secondary);
     }
 
     /// <summary>The inspector's prose this frame — one drawn line each; a null text is a hairline rule. Reused, not reallocated.</summary>
@@ -992,6 +1201,16 @@ public sealed class TrainingScreen
     /// <summary>The first prose line the inspector draws, and the stat it was scrolled for — a new stat starts at the top.</summary>
     private int _inspectorFirst;
     private HunterStat? _inspectorFor;
+
+    /// <summary>How far the prose CAN scroll, as the last paint measured it.</summary>
+    /// <remarks>
+    /// The one presentation number the paint still records, because the reach is a count of WRAPPED LINES
+    /// rather than a rectangle: Update could only learn it by laying the prose out a second time.
+    /// <see cref="UpdateInspector"/> spends the wheel against it and clamps <see cref="_inspectorFirst"/>
+    /// to it. Writing it is idempotent — three paints with no Update between them measure the same prose
+    /// and write the same number — so the "Draw changes nothing semantic" property holds.
+    /// </remarks>
+    private int _proseReach;
 
     /// <summary>
     /// Lay the selected stat's prose out at <paramref name="width"/> into <see cref="_prose"/>: the identity
@@ -1290,10 +1509,8 @@ public sealed class TrainingScreen
     ///
     /// This bar is also the only place in the game a Crystal count is visible outside a pill's hover.
     /// </remarks>
-    private void DrawReset(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    private void DrawReset(SpriteBatch b, Hunter hunter, Point hit)
     {
-        if (_devArmPending) { _resetArmed = true; _resetArmedAtMs = Environment.TickCount64; _devArmPending = false; }
-
         _ui.Plate(b, ResetBar);
 
         var ranks = hunter.TotalTrainedRanks;
@@ -1304,16 +1521,16 @@ public sealed class TrainingScreen
         // smeared its corner scrollwork into a streak; the explanation lives in text beside it. It is
         // the house button height, centred in the bar, and its width grows with its label.
         var pad = UiMetrics.Space(24);
-        var button = new Rectangle(ResetBar.Right - pad - ResetButtonW, ResetBar.Y + (ResetBar.Height - UiMetrics.ButtonHeight) / 2,
-                                   ResetButtonW, UiMetrics.ButtonHeight);
+        var button = ResetButton;
         var tx = ResetBar.X + pad;
         var textW = button.X - pad - tx;
         var titleY = ResetBar.Y + UiMetrics.Space(12);
         var lineY = titleY + UiTypography.Pitch(UiTypography.Body);
 
-        if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
-            _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this
-        if (_resetArmed)
+        // THE ARM IS READ HERE, never stood down — that is UpdateReset's. The four seconds are part of
+        // the read, so the face is exactly the one the old code drew: an expired arm paints disarmed the
+        // instant it expires, even on a frame the host skipped Update for an open modal.
+        if (ResetArmedNow)
         {
             _ui.TextBig(b, $"SURE? ALL {ranks} RANKS GO BACK TO ZERO.", tx, titleY,
                         Color.White, UiTypography.Body);
@@ -1336,12 +1553,7 @@ public sealed class TrainingScreen
             _ui.TextCenterBig(b, _ui.ShortenBig("YES, RESET — NO GLEAM BACK", armedFace.Width - 2 * UiTypography.ButtonPadX, UiTypography.Body),
                               armedFace.Center.X, armedFace.Center.Y - UiTypography.Body * 10 / 22,
                               Color.White, UiTypography.Body, TextFace.Strong);
-            if (UiKit.ClickedIn(button, hit, clicked))
-            {
-                _resetArmed = false;
-                _resetRequest = true;
-            }
-            else if (clicked) _resetArmed = false;   // any click that is not the confirmation disarms
+            // The confirming second press, and the any-click disarm, are UpdateReset's.
             return;
         }
 
@@ -1351,7 +1563,7 @@ public sealed class TrainingScreen
         {
             _ui.TextBig(b, "NOTHING TO RESET — YOU HAVE NOT TRAINED ANYTHING YET.", tx, lineY,
                         Slate, UiTypography.Body);
-            _ui.Button(b, button, "RESET", hit, clicked, enabled: false);
+            Button(b, button, "RESET", hit, enabled: false);
         }
         else if (crystals < price)
         {
@@ -1360,7 +1572,7 @@ public sealed class TrainingScreen
             // rung instead; the row is one line and there is nowhere to wrap to.
             _ui.TextBig(b, _ui.ShortenBig(cost, textW, _ui.FitRung(cost, textW, UiTypography.Body)), tx, lineY,
                         Bone, _ui.FitRung(cost, textW, UiTypography.Body));
-            _ui.Button(b, button, $"NEEDS {price:N0} CRYSTAL", hit, clicked, enabled: false);
+            Button(b, button, $"NEEDS {price:N0} CRYSTAL", hit, enabled: false);
         }
         else
         {
@@ -1369,16 +1581,29 @@ public sealed class TrainingScreen
             // rung instead; the row is one line and there is nowhere to wrap to.
             _ui.TextBig(b, _ui.ShortenBig(cost, textW, _ui.FitRung(cost, textW, UiTypography.Body)), tx, lineY,
                         Bone, _ui.FitRung(cost, textW, UiTypography.Body));
-            if (_ui.Button(b, button, $"RESET — {price:N0} CRYSTAL", hit, clicked))
-            {
-                _resetArmed = true;
-                _resetArmedAtMs = Environment.TickCount64;
-            }
+            // The arming first press is UpdateReset's, against the same ResetButton this frames.
+            Button(b, button, $"RESET — {price:N0} CRYSTAL", hit);
         }
     }
 
     /// <summary>The reset button's width — 360 at 100 %, wide enough for YES, RESET — NO GLEAM BACK at Body.</summary>
     private static int ResetButtonW => UiMetrics.Control(360);
+
+    /// <summary>
+    /// RESET ALL TRAINING's button — the ONE rectangle the ornate face, the hand-drawn armed red face and
+    /// <see cref="UpdateReset"/> all read.
+    /// </summary>
+    private static Rectangle ResetButton =>
+        new(ResetBar.Right - UiMetrics.Space(24) - ResetButtonW,
+            ResetBar.Y + (ResetBar.Height - UiMetrics.ButtonHeight) / 2, ResetButtonW, UiMetrics.ButtonHeight);
+
+    /// <summary>Whether the red are-you-sure face is live: the arm, inside the four seconds it waits in.</summary>
+    /// <remarks>
+    /// A READ, so the paint can show the expiry without writing it. <see cref="UpdateReset"/> is the one
+    /// place the flag is actually stood down.
+    /// </remarks>
+    private bool ResetArmedNow =>
+        _resetArmed && Environment.TickCount64 - _resetArmedAtMs <= (long)(ArmSeconds * 1000);
 
     // DrawProgression, LevelCard, SetHover and DrawHoverCard are gone with UX V2 P2.3.
     //

@@ -102,7 +102,15 @@ public class HuntScreenFeedbackTests
         Assert.Contains("FELL AT WAVE {_fellWave}", src);
         Assert.Contains("MAIN LIMIT \u2014 {rep.LimitLabel()}", src);
         Assert.Contains("READ THE LOG", src);
-        Assert.Contains("if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;", src);
+        // ...and the WHOLE PLATE is that door — DECIDED IN UPDATE, not in the paint (2026-09-12). A hit
+        // test inside a Draw is silently dropped on any frame the host runs Update twice and Draw once:
+        // the click edge is latched at the top of Update and recomputed as false by the second pass, and
+        // a press held three to six frames never re-arms. The plate and its button are resolved in
+        // TakeFallPlateInput now, against the very rectangles the paint draws (FallPlate, FallDoor).
+        Assert.Contains("private void TakeFallPlateInput(Point mouse, bool clicked)", src);
+        Assert.Contains("if (UiKit.ClickedIn(FallDoor, mouse, clicked)) WantsLog = true;", src);
+        Assert.Contains("else if (UiKit.ClickedIn(FallPlate, mouse, clicked)) WantsLog = true;", src);
+        Assert.DoesNotContain("private void DrawFallPlate(SpriteBatch b, Point hit, bool clicked)", src);
         // ...the log's panel carries the FELL marker...
         Assert.Contains("FELL AT WAVE {r.WallWave}", src);
         // ...and the auto-popup that covered the fall is gone.
