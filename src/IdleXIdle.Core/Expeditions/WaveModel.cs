@@ -230,6 +230,87 @@ public sealed record ExpeditionTuning
     /// <summary>A boss's health on top of the wave's own scaling. Its haul is scaled to match.</summary>
     public float BossHealthScale { get; init; } = 2.2f;
 
+    // ── THE TAUGHT WAVES: the opening stretch a career fights before it has ever felled a boss. ───
+    //
+    // BOTH DEFAULT TO OFF, and off is the game everybody else plays: TutorialWaves = 0 makes
+    // TutorialBite() the identity for every wave, so a tuning nobody has touched is byte-for-byte the
+    // tuning that shipped. The one place that turns them on is the host, and only while
+    // SaveGame.BossesFelled is still zero — see ExpeditionTuning.UntilTheFirstBossFalls.
+
+    /// <summary>
+    /// The last wave that still counts as the game teaching. Waves at or below it bite
+    /// <see cref="TutorialBiteScale"/> of what they otherwise would; 0 (the default) protects nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY THIS EXISTS, and why it is a WAVE WINDOW rather than a softer boss. A fresh career's first
+    /// descent was a guaranteed loss at the tutorial boss — not sometimes, not on a bad roll:
+    /// <b>every player, every time</b>. A wave's composition is seeded from
+    /// <c>Bands.Seed(region, wave, RunIndex)</c> and a first descent is always RunIndex 1, so the first
+    /// five waves are literally the same five waves for everyone. Measured against the live fresh
+    /// baseline (121 health / 9 damage, the one-skill starter, an 180 pool), the opening billed:
+    /// </para>
+    /// <code>
+    ///   wave 1    9      wave 4   20
+    ///   wave 2    9      wave 5  165   (the boss)
+    ///   wave 3   70      ------------
+    ///                    total   273   against a pool of 180
+    /// </code>
+    /// <para>
+    /// The champion therefore reached THORN REGENT on 72 of 180 and died there in 500 of 500 sweeps,
+    /// before the Welcome Gift it drops had ever been seen. The first boss taught
+    /// <i>"boss → guaranteed death"</i>, and it taught it before the player had been given anything to
+    /// change. That is a SEQUENCING fault in the opening, not a difficulty curve, so the repair is
+    /// scoped to the opening rather than to the boss: THORN REGENT is untouched at wave 10, 15, 20 and
+    /// in every later descent, and the whole of <see cref="BossHealthScale"/> is untouched everywhere.
+    /// </para>
+    /// <para>
+    /// <b>The BITE and not the boss's health</b>, deliberately. Thinning the boss's pool would end the
+    /// fight sooner — a shorter, smaller-looking boss, which is exactly the "visually trivial" failure.
+    /// Softening what the wave HITS FOR leaves every fight the same length, the same number of
+    /// exchanges and the same spectacle; the champion still visibly bleeds through all five waves and
+    /// still spends most of its pool on the boss.
+    /// </para>
+    /// </remarks>
+    public int TutorialWaves { get; init; }
+
+    /// <summary>
+    /// What a wave at or below <see cref="TutorialWaves"/> bites for, as a share of its real damage.
+    /// 1 (the default) is no relief at all.
+    /// </summary>
+    /// <remarks>
+    /// SWEPT, not picked. Against the real fresh descent (the one-skill starter, 121/9, 200 runs per
+    /// row) — wins, the health carried off the boss out of 180, and the wave the champion first falls
+    /// on afterwards:
+    /// <code>
+    ///   s      wins    remaining after the boss     first fall   reads as
+    ///          /200     min    med    max           (median)
+    ///   1.00    0/200     —      —      —              5         ships today: certain death
+    ///   0.70  102/200     4      4     34              6         a coin toss, and won at 4 HP
+    ///   0.60  200/200    17     26     53              7         survives on a sliver
+    ///   0.50  200/200    49     56     77              8
+    ///   0.45  200/200    55     62     83              8         &lt;- here
+    ///   0.35  200/200    87     92    107              8         over half the pool kept
+    ///   0.30  200/200   104    108    120              8         the boss stops reading as dangerous
+    /// </code>
+    /// At 0.45 over the brief's full 500 runs: <b>500 victories, 0 defeats</b>, carrying 55 / 55 / 83
+    /// of 180 off the boss (min / median / max — 31 % to 46 %), the boss fight itself running 11.2 to
+    /// 17.2 seconds across 10 to 14 champion actions, and the first natural fall landing on wave 8.
+    /// <c>first_boss_test.cs</c> is that sweep, and it fails by name.
+    /// <para>
+    /// The opening spends about 118 of the champion's 180 — two thirds of the pool — and roughly 74 of
+    /// that on the boss alone, still by far the largest bite in the first five minutes. The player
+    /// watches the bar fall to a third and holds. 0.60 and above leave a 17 HP win, which is the
+    /// "finishes at 1 HP every time" the brief rules out; 0.35 and below hand the boss back more than
+    /// half the pool and it stops being frightening. The first natural failure moves from wave 5 to
+    /// wave 8 — after the boss, after the chest, after the Welcome Gift is worn — which is the order the
+    /// opening was written for, and it keeps the FTUE's own climax alive: READ THE LOG / MAKE ONE
+    /// CHANGE / TRY AGAIN is gated on <c>LessonFacts.Falls &gt;= 1</c>, so a champion that stopped dying
+    /// would have deleted the lesson this whole repair exists to reach.
+    /// </para>
+    /// </remarks>
+    public float TutorialBiteScale { get; init; } = 1f;
+
     /// <summary>Hard stop so a fight that cannot be won can never hang the sim.</summary>
     public int TickCeilingMs { get; init; } = 120_000;
     public int TickMs { get; init; } = 100;
@@ -255,6 +336,27 @@ public sealed record ExpeditionTuning
     public IdleXIdle.Core.Builds.HealTuning Heal { get; init; } = IdleXIdle.Core.Builds.HealTuning.Default;
 
     public static ExpeditionTuning Default { get; } = new();
+
+    /// <summary>
+    /// The tuning a career fights under until it has felled its first boss — see
+    /// <see cref="TutorialWaves"/> for the measurement and the reasoning.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Named rather than open-coded because two callers need the same answer: the live descent
+    /// (<c>HuntScreen.Tuning</c>) and the offline simulation, which must fight the same game or an
+    /// absence would quietly out-earn the session it stands in for.
+    /// </para>
+    /// <para>
+    /// The window closes on a fact the save already keeps — <c>SaveGame.BossesFelled</c> — so it
+    /// survives a reload, a SKIP TUTORIAL, and a player who loses the protected boss anyway. It is
+    /// <see cref="BossEvery"/> waves wide, not a literal five: the tutorial boss IS the game's own
+    /// first boss (<c>OpeningScript.TutorialBossWave</c>), so the window must end exactly where that
+    /// wave does however the cadence is later retuned.
+    /// </para>
+    /// </remarks>
+    public static ExpeditionTuning UntilTheFirstBossFalls { get; } =
+        Default with { TutorialWaves = Default.BossEvery, TutorialBiteScale = 0.45f };
 }
 
 /// <summary>How a wave ended.</summary>
@@ -483,7 +585,24 @@ public static class WaveScaling
     /// the case for the fix is the contradiction with the design, not a dramatic shape change.
     /// </remarks>
     public static float EnemyDamageScale(int wave, ExpeditionTuning t)
-        => MathF.Pow(t.EnemyDamageScaleBase, wave);
+        => MathF.Pow(t.EnemyDamageScaleBase, wave) * TutorialBite(wave, t);
+
+    /// <summary>
+    /// What a TAUGHT wave bites for, as a share of its real damage — 1 for every wave of the game as
+    /// everybody plays it. See <see cref="ExpeditionTuning.TutorialWaves"/> for why the opening has
+    /// this window at all and how the number was solved for.
+    /// </summary>
+    /// <remarks>
+    /// Folded into <see cref="EnemyDamageScale"/> rather than applied at the call site, because that
+    /// function is already the one answer to "how hard does wave N hit" and a second, parallel damage
+    /// term is exactly how <see cref="EnemyScale"/> and this one came to disagree in the first place.
+    /// HEALTH is deliberately untouched: the fight keeps its length, its exchanges and its size.
+    /// </remarks>
+    public static float TutorialBite(int wave, ExpeditionTuning t)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        return wave > 0 && wave <= t.TutorialWaves ? MathF.Max(0f, t.TutorialBiteScale) : 1f;
+    }
 
     /// <summary>
     /// Every fifth wave is a boss. The run needs a heartbeat, not a gradient.

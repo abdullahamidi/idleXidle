@@ -144,8 +144,18 @@ public class OpeningFlowSeamsTest
     {
         // An observe beat raised during the opening waited it out and was said again the moment it
         // ended. The two the opening teaches are only ever raised when it is not running.
+        //
+        // `!_opening.Running` ALONE WAS NOT ENOUGH for the SIGNATURE beat, and a bug was hiding the
+        // hole: the raise also wanted `_deepestEver > BossEvery`, but the opening HOLDS the wave after
+        // the tutorial boss for its chest/item/equip beats, so at the frame the opening ends the deepest
+        // wave is exactly 5 and the `>` misses by one. The beat was suppressed only because the fresh
+        // Hunter LOST that boss and `_fallsSeen > 0` caught it instead; the day the boss became winnable
+        // (2026-09-12), SIGNATURE was said again over BACK TO THE HUNT and the opening-flow trace failed
+        // on it. `_bossesFelled` is the fact the window meant all along, and it is the same latch both
+        // beats now read.
         var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
-        Assert.Contains("if (_guidanceOff || _fallsSeen > 0 || _opening.Running) return;", game, StringComparison.Ordinal);
+        Assert.Contains("if (_guidanceOff || _fallsSeen > 0 || _bossesFelled > 0 || _opening.Running) return;",
+                        game, StringComparison.Ordinal);
         Assert.Contains("_bossesFelled == 0 && !_opening.Running) _coach.Raise(OnboardingLessonId.FirstBoss)", game, StringComparison.Ordinal);
     }
 

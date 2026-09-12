@@ -165,10 +165,15 @@ def main(path):
     for f, r in downs:
         print(f"WARN  the Hunter fell during the opening at frame {f} ({r}) and started the descent again")
 
-    # ── EVERY CLICKED BEAT MOVED ON ITS FIRST CLICK ─────────────────────────────────────────────
-    # The TITLE is not an opening beat, and it hit-tests its menu in Draw rather than Update, so a press
-    # on a frame MonoGame caught up with two Updates can be missed (seen once at 150 %). Reported, not failed.
-    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1" and not r.startswith("Title ")]
+    # ── EVERY CLICKED BEAT MOVED ON ITS FIRST CLICK — THE TITLE INCLUDED ────────────────────────
+    # The title used to be exempt here, because it hit-tested its menu in DRAW: a press on a frame
+    # MonoGame caught up with two Updates was latched by the first Update, erased by Latch() before the
+    # second, and gone by the time the single Draw looked for it (seen once at 150 %, where the glyph
+    # atlas is re-keyed and a frame can run over budget). The exemption was a known defect written into
+    # the harness, so the harness could not fail on it. The hit test now lives in Update beside the
+    # arrow keys (Game1's title branch), the edge is consumed in the same Update that latched it, and
+    # the exemption is gone with it — a dropped title click fails this run.
+    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1"]
     check(not extra, "every clicked beat advanced on its first click" + (f" (again: {extra[0]})" if extra else ""))
     for r in [r for _, k, r in ev if k == "CLICK" and r.startswith("Title ") and kv(r).get("n", "1") != "1"]:
         print(f"WARN  the title took more than one click ({r})")

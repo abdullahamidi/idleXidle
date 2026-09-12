@@ -119,7 +119,10 @@ public static class NavChain
     /// </summary>
     private const float Pitch = 0.60f;
 
-    /// <summary>Where the runs cross, as a share of the tile: left of centre and a little above it.</summary>
+    /// <summary>
+    /// Where the runs cross, as a share of the tile: left of centre and a little above it. The X share
+    /// is the whole story; the Y share is only a CEILING — see <see cref="CrossingPoint"/>.
+    /// </summary>
     private static readonly Vector2 Crossing = new(0.42f, 0.44f);
 
     /// <summary>
@@ -181,7 +184,7 @@ public static class NavChain
     {
         var shape = run == 0 ? Strong : Other;
         var len = Math.Max(MinLinkPx, linkPx);
-        var cross = CrossingPoint(tile);
+        var cross = CrossingPoint(tile, len);
         var dir = Along(shape.SlopeDegrees);
         if (!Range(tile, cross, dir, len, shape, out var kMin, out var kMax)) return new NavChainRun(cross, cross + dir);
         var pitch = len * Pitch;
@@ -206,7 +209,7 @@ public static class NavChain
         var broken = p > 0f;
         var len = Math.Max(MinLinkPx, linkPx);
         var pitch = len * Pitch;
-        var cross = CrossingPoint(tile);
+        var cross = CrossingPoint(tile, len);
         var reach = RecoilReach * tile.Width;
         // The halves leave from the very first frame, so that frame already shows a gap, not a flinch.
         var travel = reduced ? 0f : EaseOut(p) * reach;
@@ -312,8 +315,50 @@ public static class NavChain
 
     private static readonly List<NavChainPiece> Scratch = new(64);
 
-    private static Vector2 CrossingPoint(Rectangle tile)
-        => new(tile.X + tile.Width * Crossing.X, tile.Y + tile.Height * Crossing.Y);
+    /// <summary>
+    /// WHERE THE RUNS CROSS, and therefore where the padlock hangs: left of the tile's centre by the
+    /// authored share, and high enough that the padlock's foot rests on the same rung the ICON's foot
+    /// rests on — clear of the label at every density profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The fault this answers.</b> The crossing was a fixed share of the TILE (0.42, 0.44) and the
+    /// padlock hung under it, while the label rung grew at the TEXT rate (24 / 30 / 36) and a link — so
+    /// the padlock — grew at the SPACING rate (22 / 25 / 28). The two closed on each other one profile
+    /// at a time: 7 px of air at 100 %, touching at 125 %, and at 150 % the padlock printed over the
+    /// top of the cap band, on the first letter of a short word like MAP. The label is centred on the
+    /// tile and the padlock is not, so no label is long enough to dodge it — the clearance has to be
+    /// vertical.
+    /// </para>
+    /// <para>
+    /// <b>The rule, in the tile's own geometry.</b> <see cref="NavTileGrid.ClearBand"/> is the tile
+    /// above the label's line box, and its foot is the icon's foot. Rest the padlock's box on that foot
+    /// and the lock is exactly as clear of the label as the glyph beside it already is — no per-label
+    /// case, no measured font ink, nothing to retune when the rung changes. The authored Y share stays
+    /// as a CEILING (the crossing never drifts DOWN into a roomier band), which is why 100 % is
+    /// unmoved: 43.2 against the 43.12 it drew at before, well under half a pixel.
+    /// </para>
+    /// <para>
+    /// <b>The chains are untouched.</b> Only the point they cross at moves — the slopes, the phases, the
+    /// jitter and the snaps are exactly what the playtest accepted. Each run is still laid from the
+    /// crossing out to the tile's edges by <see cref="Range"/>, so at 150 % the pair still covers 98 %
+    /// of the tile's width and 91 % of its height; what the higher crossing costs is three links off
+    /// the shallow run's downhill tail, which the Game tests bound.
+    /// </para>
+    /// </remarks>
+    /// <param name="tile">The rail tile, canvas space.</param>
+    /// <param name="linkPx">A link's drawn length — the padlock is sized from it, so the clearance is too.</param>
+    private static Vector2 CrossingPoint(Rectangle tile, int linkPx)
+    {
+        var authored = tile.Y + tile.Height * Crossing.Y;
+        // The padlock's own box: ClaspHang below the crossing, half its height again to its foot.
+        var claspHeight = Math.Max(MinLinkPx, linkPx) * ClaspWidth * ClaspAspect;
+        var rests = NavTileGrid.Of(tile).ClearBand.Bottom - claspHeight * (ClaspHang + 0.5f);
+        // Never off the top: the shackle reaches ClaspHang - 0.5 of a padlock ABOVE the crossing.
+        var floor = tile.Y + claspHeight * (0.5f - ClaspHang);
+        return new Vector2(tile.X + tile.Width * Crossing.X,
+                           MathF.Max(floor, MathF.Min(authored, rests)));
+    }
 
     private static Vector2 Along(float degrees)
     {

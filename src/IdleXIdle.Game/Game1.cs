@@ -438,7 +438,30 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private const float PillGainSeconds = 1.4f;
 
     /// <summary>The smallest gain each pill will ever announce, before the proportional rule.</summary>
-    private static readonly long[] PillGainFloor = { 25, 25, 100 };   // scrap, dust, gleam
+    /// <remarks>
+    /// <para>
+    /// ONE ENTRY PER PILL, and the length is asserted against <see cref="PurseCount"/> below rather than
+    /// trusted. <b>It was three entries long against a six-pill row</b>, and it crashed the game:
+    /// <c>TickChromeMotion</c> indexes this by the pill, so the first time an account's ESSENCE, CORE or
+    /// CRYSTAL rose while the row was warm, <c>PillGainFloor[3]</c> threw
+    /// <c>IndexOutOfRangeException</c> out of Update and the process died.
+    /// </para>
+    /// <para>
+    /// DORMANT SINCE THE ROW GREW TO SIX. Gleam, Dust and Scrap are paid from wave one, so indices 0-2
+    /// were exercised constantly and the other three only by a salvage — which the boot soak never
+    /// reached while a fresh champion died on wave 5, and which no capture can reach because a fixture
+    /// installs its materials during the warm-up. Making the first boss winnable is what finally walked
+    /// a soak far enough to gain one, and the boot check failed on the next run.
+    /// </para>
+    /// <para>
+    /// The three new floors are 1: Essence, Core and Crystal drop in ones and twos from a salvage, so
+    /// every gain is worth the glance — a floor of 25 on Crystal would mean the pill never once said
+    /// anything. The proportional rule (a twentieth of what is held) still takes over as an account
+    /// accumulates them.
+    /// </para>
+    /// </remarks>
+    private static readonly long[] PillGainFloor =
+        { 25, 25, 100, 1, 1, 1 };   // scrap, dust, gleam, essence, core, crystal
 
     private float _noticeTimer;
 
@@ -1248,7 +1271,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             offline = OfflineHunt.Simulate(
                 ComposeBuild(),
                 _hunter, held, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
-                seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
+                seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver,
+                tuning: TuningNow());   // the same wave model the live descent will fight — see TuningNow
             champOffline = OfflineCamp.HuntCredit(offline, camp, credited);
             if (champOffline > 0) _hunter.AddGleam((int)Math.Min(int.MaxValue, champOffline));
 
@@ -3613,10 +3637,36 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 return;
             }
 
-            const int titleItems = 3; // PLAY / SETTINGS / QUIT
-            if (Pressed(Keys.Up)) _titleCursor = (_titleCursor + titleItems - 1) % titleItems;
-            if (Pressed(Keys.Down)) _titleCursor = (_titleCursor + 1) % titleItems;
+            if (Pressed(Keys.Up)) _titleCursor = (_titleCursor + TitleItems - 1) % TitleItems;
+            if (Pressed(Keys.Down)) _titleCursor = (_titleCursor + 1) % TitleItems;
             if (Pressed(Keys.Enter) || Pressed(Keys.Space)) ChooseTitleItem(_titleCursor);
+
+            // ── AND THE MOUSE, HERE, IN UPDATE. ─────────────────────────────────────────────────
+            //
+            // This hit test lived inside DrawTitle, against the same latched `_clicked`, and it could
+            // DROP A CLICK. MonoGame's default IsFixedTimeStep is never overridden in this project, and
+            // a fixed-timestep tick makes AT LEAST ONE call to Update and exactly one to Draw — so on a
+            // catch-up tick (a frame over 16.6 ms: the profile change that re-keys the glyph atlas at
+            // 150 % is a real one) Update runs twice and Draw once. The first Update latches the edge;
+            // Latch() then copies _mouse into _prevMouse; the second Update recomputes the edge as
+            // false; and the single Draw that follows hit-tests an edge that is already gone. A human
+            // holds the button for three to six frames, so it never re-arms — the press is simply lost.
+            //
+            // Consumed in the Update that latched it, the edge cannot be lost and cannot be spent
+            // twice: exactly one press edge exists per Update, and only the Update that sees it acts.
+            // The plates are laid out by TitlePlate(), which is what Draw draws — one rule, so the
+            // thing hit-tested and the thing painted can never disagree.
+            //
+            // The same shape as the prologue's own buttons (Game1.Opening.cs TakeOpeningInput), the
+            // settings gear, and every screen Mastery and Gear already converted.
+            for (var i = 0; i < TitleItems; i++)
+            {
+                var plate = TitlePlate(i);
+                if (!plate.Contains(ChromeMouse)) continue;
+                _titleCursor = i;
+                if (_clicked) { ChooseTitleItem(i); break; }
+            }
+
             if (_keys.IsKeyDown(Keys.Escape)) Exit();
             Latch(gameTime);
             return;
@@ -5170,14 +5220,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// and raising it there would take the slot off YOUR HUNTER FIGHTS FOR YOU three seconds in — the
     /// first thing said, and the only one about the whole game rather than one skill. The window is
     /// then the first few waves of a first descent, which is also what keeps it away from a returning
-    /// save: a player who has fallen, or gone deeper than a boss, is not told about their own skill.
+    /// save: a player who has fallen, felled a boss, or gone deeper than one is not told about their
+    /// own skill.
     /// </remarks>
     private void RaiseSignatureBeat()
     {
         // NOT WHILE THE OPENING RUNS: it has its own SIGNATURE SKILL card for this cast. Raised under it,
         // the observe beat waited out the opening and arrived the moment it ended, saying the same thing
         // over BACK TO THE HUNT (seen on the autoplayed opening, 2026-09-11) — FirstBoss's rule, again.
-        if (_guidanceOff || _fallsSeen > 0 || _opening.Running) return;
+        //
+        // ...AND NOT ONCE A BOSS HAS FALLEN, which is what actually closes the window. `Running` was
+        // doing half the job and a DEATH was accidentally doing the other half: the window also wanted
+        // `_deepestEver > BossEvery`, and the opening HOLDS the wave after the tutorial boss for the
+        // chest/item/equip beats — so at the frame the opening ends the deepest wave is exactly 5, the
+        // `>` misses by one, and the beat fires over BACK TO THE HUNT after all. It never showed while
+        // the fresh Hunter lost that boss (a fall spent the `_fallsSeen` guard first); the instant the
+        // boss became winnable, the duplicate appeared. `_bossesFelled` is the fact the window meant all
+        // along — persisted, monotone, and true the moment the boss the opening is about goes down.
+        if (_guidanceOff || _fallsSeen > 0 || _bossesFelled > 0 || _opening.Running) return;
         if (_deepestEver < 1 || _deepestEver > OnboardingLessons.BossEvery) return;
         if (_characters.Active?.SignatureSkillId is not { } sig) return;
         if ((_skillProgress?.UsesOf(sig) ?? 0) < 1) return;
@@ -6227,6 +6287,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _expedition.Progress = _skillProgress;
         _expedition.RegionId = def.Id;                // region id → the boss creature (boss_<region>) on boss waves
         _expedition.EnemyBias = def.CombatBias;       // region character → the enemy's bite tempo (feel + TRAP synergy)
+        _expedition.Tuning = TuningNow();             // → the wave model; taught waves until the first boss falls
         _expedition.CorruptionTier = _world.CorruptionTier;   // → creature tint, the boss's epithet, the header line
         _expedition.ShowDamageNumbers = _showDamageNumbers;   // the settings' quality-of-life switches
         _expedition.ShowSkillCallouts = _showSkillCallouts;
@@ -6687,6 +6748,37 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private static float ShotLead()
         => float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_LEAD"), System.Globalization.NumberStyles.Float,
                           System.Globalization.CultureInfo.InvariantCulture, out var lead) ? lead : 0.02f;
+
+    /// <summary>
+    /// THE WAVE MODEL THIS ACCOUNT IS FIGHTING UNDER: the game, unless it has never felled a boss.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Fresh validation, 2026-09-12: the first descent reached THORN REGENT on 72 of 180 and died there
+    /// in 500 of 500 sweeps — and it was the SAME 500, because a wave's composition is seeded from
+    /// (region, wave, RunIndex) and every career's first descent is RunIndex 1. So the first boss did
+    /// not merely tend to kill a new player; it was the same authored, unwinnable fight for all of them,
+    /// standing between the player and the chest that boss drops. The opening teaches
+    /// "boss → meaningful reward"; it was teaching "boss → guaranteed death" instead, before the player
+    /// had been handed a single thing to change. See <see cref="ExpeditionTuning.TutorialWaves"/> for
+    /// the bill, the sweep and why it is the BITE rather than the boss that is softened.
+    /// </para>
+    /// <para>
+    /// <b>The condition is <see cref="_bossesFelled"/>, not the authored opening.</b> It is a persisted,
+    /// monotone save fact, so the window survives a reload mid-opening, survives SKIP TUTORIAL (which
+    /// fabricates nothing and would otherwise hand a skipping player the same certain death), and holds
+    /// if the player somehow loses the protected boss anyway. The instant any boss falls it is closed
+    /// for the life of the career — wave 10's boss, and every later one, is the game as it shipped.
+    /// </para>
+    /// <para>
+    /// Read by the live descent and by the offline simulation both, so an absence fights the same game
+    /// the session does. (In practice an account with no boss felled has no absence worth simulating —
+    /// but a rate measured against a softer wave and then spent on a harder one is exactly the kind of
+    /// quiet divergence this codebase keeps finding, so the two paths read one function.)
+    /// </para>
+    /// </remarks>
+    private ExpeditionTuning TuningNow()
+        => _bossesFelled == 0 ? ExpeditionTuning.UntilTheFirstBossFalls : ExpeditionTuning.Default;
 
     private (float Health, float Damage) EnemyBaselineFor(string regionId)
     {
@@ -7648,6 +7740,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     // ── Title screen ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>How many plates the title offers: PLAY / CONTINUE, SETTINGS, QUIT.</summary>
+    internal const int TitleItems = 3;
+
+    /// <summary>
+    /// One title plate's rectangle, 1920-space chrome — the ONE layout, read by the hit test in Update
+    /// and by the paint in <see cref="DrawTitle"/>.
+    /// </summary>
+    /// <remarks>
+    /// Published (and static) so a test can drive the menu without a GraphicsDevice, the way
+    /// <c>SettingsFrameNow</c> and <c>ClickableOf</c> already are. Deliberately NOT scaled by
+    /// <see cref="UiMetrics"/>: a 640x96 plate is far above the hit-target floor at every profile and
+    /// the title is authored in true canvas coordinates — only its LABEL follows the density rung.
+    /// </remarks>
+    internal static Rectangle TitlePlate(int i) => new(640, 608 + i * 112, 640, 96);
+
     private void ChooseTitleItem(int i)
     {
         switch (i)
@@ -9120,7 +9228,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         for (var i = 0; i < items.Length; i++)
         {
             var selected = i == _titleCursor;
-            var box = new Rectangle(640, 608 + i * 112, 640, 96);
+            var box = TitlePlate(i);
             if (selected) _ui.Panel(_batch, box, gold: true); else _ui.PanelQuiet(_batch, box);
             // The ornate menu plates are DARK (even the gold/selected one), so both states take LIGHT text —
             // warm gold when selected, bone otherwise.
@@ -9131,9 +9239,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _ui.TextCenterBig(_batch, items[i], box.Center.X, box.Center.Y - UiTypography.Headline * 27 / 40,
                 selected ? new Color(0xF6, 0xD8, 0x88) : new Color(0xEC, 0xE6, 0xF2), UiTypography.Headline);
 
-            // Clickable as well as keyed — every other menu in the game is.
-            if (!_showSettings && UiKit.ClickedIn(box, ChromeMouse, _clicked)) ChooseTitleItem(i);
-            else if (box.Contains(ChromeMouse)) _titleCursor = i;
+            // Clickable as well as keyed — every other menu in the game is — but the hit test is NOT
+            // here. It is in Update, beside the arrow keys, because a click edge tested in Draw is lost
+            // on a catch-up tick: see the block at the title's Update branch for the whole of why.
+            // Nothing on this screen reads the mouse for anything but hover, which the cursor already
+            // carries; Draw only paints.
         }
 
         TextCenter("UP / DOWN     ENTER", 960, 984, Slate);
@@ -9824,20 +9934,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // hung 135px off the bottom of the screen.
     private static readonly int NavTileHeight = 1080 / Nav.Length;
 
-    // ── THE TILE'S GRID (UI polish P2). The label sits on the tile's foot and the icon takes what is
-    //    left above it, so the two cannot print through each other at any profile. Tile geometry — the
-    //    tile is 1080/11 = 98 px and the rail 180 wide at every profile — so these are constants, not
-    //    UiMetrics; what follows the profile is the label rung they are laid out around.
-    /// <summary>How far the label's bottom clears the tile's foot.</summary>
-    private const int NavLabelFoot = 10;
-    /// <summary>Where the icon starts under the tile's top edge at 100 %. It is the first thing to give way when the label grows.</summary>
-    private const int NavIconTop = 24;
-    /// <summary>The breath between the icon and the label.</summary>
-    private const int NavIconGap = 2;
-    /// <summary>The icon's edge: never past 48 (its art), never under 30 (a glyph stops reading).</summary>
-    private const int NavIconMax = 48, NavIconMin = 30;
+    // ── THE TILE'S GRID moved to NavTileGrid (2026-09-12). The label sits on the tile's foot and the
+    //    icon takes what is left above it, so the two cannot print through each other at any profile —
+    //    but the CHAIN on a locked tile laid itself out from the raw tile rectangle instead, and at
+    //    150 % its padlock came to rest on the first letter of a short label. Two things laying out one
+    //    tile from two rules is the fault; NavTileGrid.Of is now the only rule, and NavChain reads it.
     /// <summary>The room a label leaves at each side of the tile — the rail's 3 px seam and its mirror.</summary>
-    private const int NavLabelInset = 3;
+    private const int NavLabelInset = NavTileGrid.LabelInset;
 
     private static Rectangle NavHexRect(int i)   // a rectangular TILE (guide: package_01 nav tiles)
     {
@@ -9900,27 +10003,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _ui.Fill(_batch, r, UiInk.Accent * 0.06f);
             }
 
-            // Icon above, label below, both centred in the shorter tile.
+            // Icon above, label below, both centred in the shorter tile. ONE GRID — NavTileGrid.Of is
+            // the whole rule, and the locked tile's chain reads the same one (see NavChain).
             var iconTint = !unlocked ? Color.White * 0.22f : on ? Color.White : Color.White * 0.75f;
-            // THE TILE'S LAYOUT IS DERIVED FROM THE LABEL RUNG, not written. The label (NavigationLabel:
-            // 24 / 30 / 36 px) sits NavLabelFoot above the tile's foot and the icon takes the room between
-            // NavIconTop and the label — 38 px at 100 % on the 98 px tile, pixel-identical to the old
-            // Clamp(NavTileHeight - 60, 30, 48) at Y+24 — and it gives up its top pad before its floor,
-            // so at 150 % a 36 px label gets a 30 px icon at Y+20 rather than an icon it prints through.
-            // (Before this, the icon was sized from the tile alone and the label drawn at Bottom-34: at
-            // 150 % the label ran two pixels past the tile's foot into the next tile's divider.)
-            var labelH = UiTypography.NavigationLabel;
-            var labelY = r.Bottom - NavLabelFoot - labelH;
-            // SIZED FROM THE PROFILE, and the top pad yields first: sized from the tile's leftover the
-            // rail was the one place a bigger profile made the glyphs SMALLER — 38 px at 100 %, 30 at
-            // 150 under a 36 px word (chrome-06). Now 38 / 47 / 41, never under the icon's floor.
-            var iconPx = Math.Clamp(Math.Min(UiMetrics.Control(38), labelY - NavIconGap - r.Y - UiMetrics.Space(6)), NavIconMin, NavIconMax);
-            var iconY = labelY - NavIconGap - iconPx;
-            var iconBox = new Rectangle(r.Center.X - iconPx / 2, iconY, iconPx, iconPx);
+            var grid = NavTileGrid.Of(r);
+            var labelH = grid.LabelHeight;
+            var labelY = grid.LabelTop;
+            var iconBox = grid.Icon;
             if (_assets.Get(Nav[i].Glyph) is { } g)
                 _batch.Draw(g, iconBox, iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(iconBox.X + 4, iconBox.Y + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
+                _ui.Diamond(_batch, new Rectangle(iconBox.X + 4, iconBox.Y + 4, iconBox.Width - 8, iconBox.Height - 8), on ? NavGold : NavGem * 0.75f);
 
             // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
             // The house Secondary ink for an inactive label — the private lilac at 90 % sat under the
@@ -10007,8 +10100,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // It is a state, not an animation: it holds until the screen is visited, so it says
                 // what a six-second toast could not. Under Reduced Motion it simply does not breathe.
                 var dot = Math.Max(8, UiMetrics.Control(14));
-                var at = new Rectangle(Math.Min(r.X + UiMetrics.Space(12), r.Center.X - iconPx / 2 - NavIconGap - dot),
-                                       Math.Min(r.Y + UiMetrics.Space(14), labelY - NavIconGap - dot), dot, dot);
+                var at = new Rectangle(Math.Min(r.X + UiMetrics.Space(12), grid.Icon.Left - NavTileGrid.IconGap - dot),
+                                       Math.Min(r.Y + UiMetrics.Space(14), labelY - NavTileGrid.IconGap - dot), dot, dot);
                 // A dark seat first, so the dot reads on the tile's own art rather than merging with it.
                 _ui.Disc(_batch, new Rectangle(at.X - 2, at.Y - 2, at.Width + 4, at.Height + 4), UiInk.Ground * 0.85f);
                 _ui.Disc(_batch, at, UiInk.Danger);
@@ -10051,8 +10144,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // count in Primary, sized from the count alone, and never nearer the icon than a breath.
                 var badgeH = UiTypography.Secondary + UiMetrics.Space(7);
                 var badgeW = _ui.MeasureBig(count, UiTypography.Secondary) + UiMetrics.Space(16);
-                var badge = new Rectangle(Math.Max(r.Right - UiMetrics.Space(12) - badgeW, r.Center.X + iconPx / 2 + UiMetrics.Space(6)),
-                                          Math.Min(r.Y + UiMetrics.Space(14), labelY - NavIconGap - badgeH), badgeW, badgeH);
+                var badge = new Rectangle(Math.Max(r.Right - UiMetrics.Space(12) - badgeW, grid.Icon.Right + UiMetrics.Space(6)),
+                                          Math.Min(r.Y + UiMetrics.Space(14), labelY - NavTileGrid.IconGap - badgeH), badgeW, badgeH);
                 _ui.Plate(_batch, badge, UiInk.Accent);
                 _ui.TextCenterBig(_batch, count, badge.Center.X + 2, badge.Y + (badgeH - UiTypography.Secondary) / 2,
                                   UiInk.Primary, UiTypography.Secondary);

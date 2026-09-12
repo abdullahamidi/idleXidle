@@ -85,10 +85,13 @@ public class ChromeReflowTests
         UiMetrics.Apply(percent);
         try
         {
+            // The tile's grid moved out of Game1 into NavTileGrid (2026-09-12) so the locked tile's
+            // chain could read the same rule the icon and label do — so these are named consts now
+            // rather than private statics behind reflection.
             var tile = Read<int>("NavTileHeight");
-            var foot = Read<int>("NavLabelFoot");
-            var gap = Read<int>("NavIconGap");
-            var iconMin = Read<int>("NavIconMin");
+            const int foot = NavTileGrid.LabelFoot;
+            const int gap = NavTileGrid.IconGap;
+            const int iconMin = NavTileGrid.IconMin;
             var stack = UiTypography.NavigationLabel + foot + gap + iconMin;
             Assert.True(stack <= tile,
                         $"a nav tile is {tile} px at {percent}% but its label ({UiTypography.NavigationLabel}) + " +

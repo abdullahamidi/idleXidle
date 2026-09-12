@@ -367,6 +367,20 @@ public sealed class HuntScreen
     /// <summary>Host-fed: the region is already conquered, so the banner says CONQUERED from wave one (review 2026-08-26).</summary>
     public bool RegionConquered { get; set; }
 
+    /// <summary>
+    /// The wave model the next descent is fought under. <see cref="ExpeditionTuning.Default"/> is the
+    /// game; the host hands in <see cref="ExpeditionTuning.UntilTheFirstBossFalls"/> while the career
+    /// has never felled a boss.
+    /// </summary>
+    /// <remarks>
+    /// READ AT <c>StartRun</c>, like the enemy baseline beside it — the tuning is captured readonly by
+    /// the expedition, so it can only change between descents. That is exactly the grain the FTUE needs:
+    /// the window it opens is measured in WAVES (<see cref="ExpeditionTuning.TutorialWaves"/>) and closes
+    /// on its own at the tutorial boss, so a descent that runs on past it is at full strength from wave
+    /// six without anything having to be revoked mid-run.
+    /// </remarks>
+    public ExpeditionTuning Tuning { get; set; } = ExpeditionTuning.Default;
+
     /// <summary>The quality this descent accumulated — the tilt a chest it drops should remember.</summary>
     /// <remarks>
     /// Neutral 1.0 when there is no run, so a chest dropped outside one (a fixture, a test) rolls exactly
@@ -1289,6 +1303,10 @@ public sealed class HuntScreen
         _descent.RegionId = RegionId;
         _descent.EnemyBias = EnemyBias;
         _descent.Progress = Progress;
+        // AND THE WAVE MODEL ITSELF. Default for everybody who has ever felled a boss; the taught-waves
+        // tuning until then. Assigned HERE with the other four because the expedition captures it at
+        // construction — set it after StartRun and the descent fights the game the last one fought.
+        _descent.Tuning = Tuning;
         // The ledger the run's cleared waves feed. Refreshed with WHERE and WHO before the first
         // push, so a first awakening is stamped with the region and champion it happened to.
         _descent.TraitWatch = TraitWatch;

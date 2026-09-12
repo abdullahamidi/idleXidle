@@ -272,6 +272,82 @@ public class NavChainTests
         Assert.True(falling.Centre.Y > clasp.Centre.Y, "the padlock does not drop when the chain snaps");
     }
 
+    /// <summary>
+    /// THE PADLOCK NEVER SITS ON A WORD. The chains may lie across the label — they are binding the
+    /// button and a chain on a button lies over what is printed on it — but the LOCK is the one piece
+    /// the eye has to read as an object, and it must not land on readable glyphs at any profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fault this pins: the crossing was a fixed share of the tile while the label's rung grew at
+    /// the TEXT rate and the padlock at the SPACING rate, so the two closed on each other one profile
+    /// at a time — 7 px of air at 100 %, touching at 125 %, and at 150 % the padlock printed across the
+    /// top of a short label's cap band, on the M of MAP. Every label is centred on the tile and the
+    /// padlock is not, so no word is long enough to dodge it; the clearance has to be vertical, and it
+    /// is measured here against the label's whole line box rather than its cap ink — the stricter test,
+    /// and the one that does not move when the face does.
+    /// </para>
+    /// <para>
+    /// Measured against the TILE's own grid, never a pixel: the lock clears the label by exactly the
+    /// breath the icon beside it already takes, which is what makes it true at 125 % and 150 % without
+    /// a per-label case. MAP is the short label this was reported on; TRAINING is the longest in the
+    /// rail. Both are the same geometry — which is the point, and is why one assertion covers both.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_padlock_clears_the_tiles_label_at_every_profile(int percent)
+    {
+        UiMetrics.Apply(percent);
+        foreach (var slot in new[] { 0, 5, 8, 10 })   // the top tile, a middle one, MAP's slot, the bottom one
+        {
+            var tile = Tile(slot);
+            var grid = NavTileGrid.Of(tile);
+            var clasp = Pose(tile, 0f).Single(p => p.Sprite == NavChainSprite.Clasp);
+            var foot = clasp.Centre.Y + clasp.Thickness / 2f;
+            _out.WriteLine($"{percent}% slot {slot}: label top {grid.LabelTop - tile.Top}, padlock foot "
+                           + $"{foot - tile.Top:F1}, clearance {grid.LabelTop - foot:F1} px");
+
+            Assert.True(foot <= grid.LabelTop,
+                        $"the padlock's foot is {foot - grid.LabelTop:F1} px INTO the label's line box at {percent}%");
+            // Its head must stay on the tile too — a lock half off the top is not a lock.
+            Assert.True(clasp.Centre.Y - clasp.Thickness / 2f >= tile.Top,
+                        $"the padlock's head is off the top of {tile} at {percent}%");
+            // AND IT DID NOT SHRINK TO GET THERE. The whole point of moving the crossing rather than the
+            // clasp is that the restraint stays the size the playtest accepted.
+            Assert.True(clasp.Length >= NavChain.LinkLength * 0.7f,
+                        $"the padlock is {clasp.Length:F1} px wide against a {NavChain.LinkLength} px link at {percent}%");
+            // It still hangs in the band the icon owns — over the glyph, not in the tile's empty head.
+            Assert.True(clasp.Centre.Y <= grid.ClearBand.Bottom && clasp.Centre.Y >= grid.ClearBand.Top,
+                        $"the padlock's centre {clasp.Centre.Y} is outside the tile's clear band {grid.ClearBand} at {percent}%");
+        }
+    }
+
+    /// <summary>
+    /// 100 % IS UNTOUCHED by the clearance rule — it already had air under the lock, so the crossing
+    /// stays exactly where it was authored (0.42, 0.44) and only the two larger profiles move.
+    /// </summary>
+    /// <remarks>
+    /// The authored share is a CEILING, not a target: without this the crossing would drift DOWN into a
+    /// roomier band and the whole treatment would re-place itself on a profile that never had a problem.
+    /// </remarks>
+    [Fact]
+    public void test_the_crossing_keeps_its_authored_place_where_the_label_leaves_room()
+    {
+        UiMetrics.Apply(100);
+        var tile = Tile();
+        var meet = Meet(RunOf(tile, 0), RunOf(tile, 1));
+        Assert.Equal(tile.X + tile.Width * 0.42f, meet.X, 1);
+        Assert.Equal(tile.Y + tile.Height * 0.44f, meet.Y, 0);
+
+        // ...and at 150 % it has RISEN, which is the fix.
+        UiMetrics.Apply(150);
+        var raised = Meet(RunOf(tile, 0), RunOf(tile, 1));
+        Assert.True(raised.Y < meet.Y - 8f,
+                    $"the crossing did not rise at 150 % ({raised.Y:F1} against {meet.Y:F1})");
+        Assert.Equal(meet.X, raised.X, 1);   // sideways it does not move: the asymmetry is authored
+    }
+
     [Fact]
     public void test_every_piece_is_drawn_at_its_arts_own_aspect()
     {
