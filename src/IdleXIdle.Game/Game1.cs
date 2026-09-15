@@ -3637,6 +3637,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // Escape peels one layer: an open dropdown list first (spent in the block above),
                 // then the panel.
                 if (!_settingsEscSpent && Pressed(Keys.Escape)) _showSettings = false;
+                // The panel's controls are decided in UpdateSettings (ADR-006), and this branch
+                // returns before the modal block at the end of Update that runs it for the game --
+                // so it runs here, or a panel opened from the title paints and takes no click.
+                else UpdateSettings();
                 Latch(gameTime);
                 return;
             }

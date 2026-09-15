@@ -200,6 +200,14 @@ The current exception list is whatever `py tools/check_draw_purity.py --audit` p
 command, not this document, is the authority, so the list cannot go stale. **At the time of writing it is
 empty: zero findings, zero excused.**
 
+**A migration miss, found 2026-09-15.** The title screen's branch of `Game1.Update` returns through its
+own `Latch(); return;` before the modal block that calls `UpdateSettings()`, so a panel opened from the
+title painted and hovered but took no click at all -- the exact symptom this decision exists to remove,
+on the one path the pass did not walk. The title block now calls `UpdateSettings()` itself, and
+`tests/unit/IdleXIdle.Game.Tests/title_settings_input_test.cs` pins it. The rule for the next migration: a
+handler moved out of `Draw` must be reached from **every** `Update` branch that can paint the control,
+and the branches with an early return are the ones to check first.
+
 Screens whose press cannot be unit-tested, and what covers them instead: `WarrenScreen` and
 `ForgeScreen` measure text inside `Update`, and `TraitCollectionScreen`'s constructor null-checks its
 `UiKit`, so none can be driven by `new …(null!)` the way Mastery, Roster, Map, Training and Vault are in
