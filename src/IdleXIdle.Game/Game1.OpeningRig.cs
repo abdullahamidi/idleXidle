@@ -182,7 +182,7 @@ public partial class Game1
             }
             _trDowns = h.EnemyDownsSeen;
         }
-        if (h.ChampionDowned && !_trDowned) Burst("hunter_down", 0, 240, 8);   // what the player sees when it falls
+        if (h.ChampionDowned && !_trDowned) Burst("hunter_down", 0, 240, 8);   // what the player sees when it falls: the collapse, the black, the stage back
         Edge(h.ChampionDowned, ref _trDowned, $"HUNTER_DOWN wave={h.WaveShown} boss={h.BossOnStage}", "HUNTER_UP");
         Edge(h.FallsPlayed, ref _trFalls, "FALLS_PLAYED", "FALLS_PENDING");
         Edge(h.ClearShown, ref _trShown, "CLEAR_SHOWN", null);

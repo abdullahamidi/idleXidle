@@ -228,7 +228,5 @@ camp could hold.
   regenerates the skill tables from the catalogue; run it with `--write` after any skill rename.
 - **Blowing a copy budget.** Enchant blurbs cap at 50 characters, chest dossier lines at 52, tour
   card bodies at `MaxBodyChars`, and the Warren's rail throws if its copy needs more than two lines.
-- **Adding a third row to the fall plate.** `HuntScreen`'s own note records why it is two: at 150%
-  the three-row plate lay across the hunter's face.
 - **Treating a STALL as a death.** `WaveOutcome.Stalled` is the tick ceiling, not a fall; the log
   tints it gold and its comment says *the hunter stood*.

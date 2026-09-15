@@ -105,3 +105,92 @@ public static class ClearBeat
         return false;
     }
 }
+
+/// <summary>
+/// THE FALL, as arithmetic: how black the stage is at each instant of a death and of the descent that
+/// begins under it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Falling is part of the idle loop, so a routine death is not news to be read off a plate: the Hunter
+/// falls and is seen to have fallen, the stage fades to black, the next descent begins under the black,
+/// and the stage comes back with the Hunter already standing in it. Nothing here moves WHEN the descent
+/// restarts — <see cref="Descent.DownedSeconds"/> is spent as time by the offline simulation and the
+/// Dust for a checkpoint is charged on the restart frame — so the fade-out sits inside that beat and
+/// the restart lands on the frame it always did, at full black.
+/// </para>
+/// <para>
+/// Pure, so the timeline can be stepped frame by frame in a test and posed by the capture rig from one
+/// dial. The HUNT screen owns the two clocks and asks this what to paint; under Reduced Motion both
+/// fades are cuts to the same end state.
+/// </para>
+/// </remarks>
+public static class DeathTransition
+{
+    /// <summary>The fade to black: the LAST part of the downed beat, so the restart lands at full black.</summary>
+    public const float FadeOut = UiMotion.Reward;
+
+    /// <summary>Black held after the restart, so the reset itself is never seen.</summary>
+    public const float Hold = UiMotion.Fast;
+
+    /// <summary>The lift, over the new wave's first frames — its entrance is already walking in underneath.</summary>
+    public const float FadeIn = UiMotion.Reward;
+
+    /// <summary>
+    /// What the fade-in clock is armed to on the restart frame: the hold and then the lift — or, under
+    /// Reduced Motion, the hold alone, so the cut back ends the transition where the lift would have begun.
+    /// </summary>
+    public static float FadeInSeconds(bool reduced) => reduced ? Hold : Hold + FadeIn;
+
+    /// <summary>How black the stage is, 0..1.</summary>
+    /// <param name="downed">Is the champion in the downed beat?</param>
+    /// <param name="downedTimer">Seconds left of the downed beat; the descent restarts the frame it reaches zero.</param>
+    /// <param name="fadeInClock">Seconds left of the fade-in, counting down from <see cref="FadeInSeconds"/> on the restart frame.</param>
+    /// <param name="reduced">Reduced Motion: a cut to black where the fade would start, and a cut back after the hold.</param>
+    public static float Alpha(bool downed, float downedTimer, float fadeInClock, bool reduced)
+    {
+        if (downed)
+        {
+            if (downedTimer > FadeOut) return 0f;   // readable: the clip plays and the body lies there
+            if (reduced) return 1f;
+            return UiMotion.Smooth(1f - Math.Clamp(downedTimer / FadeOut, 0f, 1f));
+        }
+        if (fadeInClock <= 0f) return 0f;
+        if (reduced || fadeInClock >= FadeIn) return 1f;   // the hold
+        return UiMotion.Smooth(Math.Clamp(fadeInClock / FadeIn, 0f, 1f));
+    }
+
+    /// <summary>Does the transition own the stage — the downed beat, or the black and the lift after it?</summary>
+    public static bool Up(bool downed, float fadeInClock) => downed || fadeInClock > 0f;
+
+    /// <summary>One instant of the transition, for the capture rig: which clock is running and where it stands.</summary>
+    /// <param name="Restarted">Has the next descent begun — is the instant past the restart frame?</param>
+    /// <param name="DownedTimer">Where the downed beat stands, before the restart.</param>
+    /// <param name="FadeInClock">Where the fade-in stands, after it.</param>
+    /// <param name="SinceRestart">Seconds since the restart, for whatever else began on that frame (the new wave's entrance).</param>
+    public readonly record struct Pose(bool Restarted, float DownedTimer, float FadeInClock, float SinceRestart);
+
+    /// <summary>
+    /// The rig's one dial over the transition, linear in seconds: 0 the last readable instant before the
+    /// fade, 0.5 the black with the next descent already begun beneath it, 1 the stage back.
+    /// </summary>
+    /// <remarks>
+    /// The dial spans the transition's own window — from the fade's first frame to the frame the lift
+    /// ends — whether or not Reduced Motion is on, so the same instant photographs the fade and the cut
+    /// side by side. Under Reduced Motion the lift's instants are simply the stage, back.
+    /// </remarks>
+    public static Pose At(float t, bool reduced)
+    {
+        // THE DIAL'S ENDS ARE EXACT. The downed half counts forward from 0, so the first stop is the
+        // fade's own first instant (the downed timer at FadeOut, alpha zero); the lift counts what is
+        // LEFT of the window, so the last stop is a clock at exactly zero and not a float's residue of
+        // one — at 1 the transition is over, and Up says so.
+        var lift = Hold + FadeIn;
+        var span = FadeOut + lift;
+        var seconds = Math.Clamp(t, 0f, 1f) * span;
+        if (seconds < FadeOut) return new Pose(false, FadeOut - seconds, 0f, 0f);
+        var remaining = span - seconds;
+        var since = lift - remaining;
+        return new Pose(true, 0f, Math.Min(remaining, Math.Max(0f, FadeInSeconds(reduced) - since)), since);
+    }
+}

@@ -36,8 +36,8 @@ public enum TourTarget
     /// </summary>
     /// <remarks>
     /// Drawn every frame the fight draws, with no fall condition and no disabled state, which is why
-    /// READ THE LOG marks this and not the fall plate's own button: the plate lives for nine seconds
-    /// and the medallion is always there.
+    /// READ THE LOG marks this: a fall paints no door of its own over the arena, and the medallion is
+    /// always there.
     /// </remarks>
     LogButton,
 

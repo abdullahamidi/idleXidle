@@ -107,6 +107,17 @@ public class HuntFeedbackTests
     }
 
     [Fact]
+    public void test_the_death_transition_is_made_of_the_hunts_own_bands()
+    {
+        // The fall's fades name the bands rather than seconds — a Reward out, a Fast hold, a Reward in —
+        // so the Theory above still covers every duration the HUNT can spend on a death.
+        var bands = new[] { UiMotion.Fast, UiMotion.Transition, UiMotion.Reward };
+        Assert.Contains(DeathTransition.FadeOut, bands);
+        Assert.Contains(DeathTransition.Hold, bands);
+        Assert.Contains(DeathTransition.FadeIn, bands);
+    }
+
+    [Fact]
     public void test_reduced_motion_lands_on_the_same_end_state_instantly()
     {
         // §32 / the polish law: Reduced Motion is not "no feedback", it is the SAME end state with no

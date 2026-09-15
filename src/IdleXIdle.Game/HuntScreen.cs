@@ -140,14 +140,6 @@ public sealed class HuntScreen
     private const float WaveBreakSeconds = Descent.WaveBreakSeconds;
     private const float DownedSeconds = Descent.DownedSeconds;
 
-    /// <summary>How long the fallen banner outlives the recovery beat.</summary>
-    /// <remarks>
-    /// The banner replaced a full report popup whose exact complaint was "it closes before I can even
-    /// read it" — the recovery beat is 1.6 seconds. So the banner deliberately stays up into the next
-    /// descent, and the full report waits in the EXPEDITION LOG (L) for as long as the player needs.
-    /// </remarks>
-    private const float FellBannerSeconds = 7.5f;   // long enough to read two lines and decide to open the log
-
     // Spec §12: the hunter is the DOMINANT figure, bottom-centred at (560,735), ~390px tall; the enemy grounds
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
     // layout over-sized the enemy/boss ("boss too big, masked in a box") — the spec's ranges fix that.
@@ -573,12 +565,11 @@ public sealed class HuntScreen
     // the right, and a red flash when the champion falls. Without these, waves passed silently and the
     // playtest note was exactly that — "I can't tell what's happening".
     private float _enemyEnter;    // 1 → 0: how far off-screen-right the new enemy still is
+    private const float EnemyEnterPerSecond = 1.25f;   // the slide takes ~0.8 s: long enough to read as an ARRIVAL, not an appearance
     private float _bannerTimer;   // 1.2 → 0: the "WAVE N CLEARED" flash
     private string _bannerText = "";
     private float _deathFlash;    // 1 → 0: red flash on a fall — drawn over the WHOLE canvas (see Draw)
-    private float _fellTimer;     // seconds left on the fallen banner (FellBannerSeconds)
-    private int _fellWave = 1;    // the wave the champion fell at, named by that banner
-    private RunReport? _fellReport;   // the run's report, for the plate's MAIN LIMIT line
+    private int _fellWave = 1;    // the wave the champion fell at — stamped on a trait the fall awakens
     private string _enemyArt = "";
 
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
@@ -807,8 +798,8 @@ public sealed class HuntScreen
         // The lesson card hangs under the header stack (UX V2 P0.7) — the same slot the toasts use.
         TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
         // THE MEDALLION ITSELF — the same rectangle DrawLogButton draws from and UiKit.ClickedIn
-        // hit-tests, so the light and the click cannot drift apart. IT FELL / READ THE LOG is the most
-        // important prompt in the game and it pointed at nothing until this arm existed.
+        // hit-tests, so the light and the click cannot drift apart. The first failure lesson (IT FELL) is
+        // the most important prompt in the game and it pointed at nothing until this arm existed.
         TourTarget.LogButton => new[] { Inflated(LogButtonRect, 10) },
         _ => Array.Empty<Rectangle>(),
     };
@@ -902,31 +893,15 @@ public sealed class HuntScreen
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
     private enum HuntOverlay { None, HunterDown, BossIncoming, WaveCleared }
 
-    /// <summary>
-    /// The major overlay the last paint resolved — read by <see cref="TakeInput"/>, so the fall plate's
-    /// click is tested against the plate that was actually on the screen.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="ResolveOverlay"/> needs the host's banner suppression, and only <see cref="Draw"/> is
-    /// handed that. Deriving the answer a second time from a flag the input half does not have would let
-    /// the hit test and the paint disagree about whether there is a plate at all; remembering the answer
-    /// the paint gave cannot.
-    /// </remarks>
-    private HuntOverlay _paintedOverlay;
-
     private HuntOverlay ResolveOverlay(bool welcome)
     {
         if (welcome) return HuntOverlay.None;
 
-        // THE FALL IS NOT COVERED ANY MORE. A full report panel used to slide over the body and was
-        // gone with the next descent — playtest ten: "it closes before I can even read it". The report
-        // lives in the EXPEDITION LOG (L) now; the fall shows only a short banner naming the wave and
-        // pointing there. DevShowFall keeps even the banner off, so the collapse can be photographed.
-        if (_mode == Mode.Downed)
-            return DevShowFall ? HuntOverlay.None : HuntOverlay.HunterDown;
-        // The banner outlives the recovery beat (FellBannerSeconds), so it stays readable into the
-        // next descent — and it outranks the wave banner, because the fall is the news.
-        if (_fellTimer > 0f) return HuntOverlay.HunterDown;
+        // THE FALL PAINTS NOTHING HERE, AND OUTRANKS EVERYTHING. Its presentation is the collapse, the
+        // flash and the black, all read from the clocks at the foot of Draw — never from this, which the
+        // host's toast can silence. Resolving it keeps BOSS INCOMING and WAVE CLEARED off the stage until
+        // the next descent is visible; the report itself waits in the EXPEDITION LOG (L).
+        if (DeathTransitionUp) return HuntOverlay.HunterDown;
         if (DevBossCall || _bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
         if (DevForceBoss) return HuntOverlay.None;   // boss verification fixture: active combat, no wave banner
         if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
@@ -1166,16 +1141,16 @@ public sealed class HuntScreen
     public float PlayheadMs => _playheadMs;
 
     /// <summary>
-    /// Is the FALL PLATE up — the panel that names the wave, diagnoses the run and offers READ THE LOG?
+    /// Is the DEATH TRANSITION up — the downed beat, or the black and the lift that follow it?
     /// </summary>
     /// <remarks>
-    /// Published for the host, which hangs its lesson card in the same slot: the plate sits at
-    /// <c>HeaderStackBottom + Space(8)</c> and so does the card, so both drawing means two surfaces
-    /// saying READ THE LOG on top of each other. The plate wins while it is up — it is louder, it
-    /// carries the diagnosis, and its button is the deed. Same expression <see cref="ResolveOverlay"/>
-    /// uses, so the two cannot disagree about when the plate exists.
+    /// Published for the host: nothing is said over a fall. The lesson card and the coach's spotlight
+    /// yield while this is true — a prompt beside a collapsing Hunter, or brackets over a black stage,
+    /// is a second thing to look at — and <see cref="TakeInput"/> refuses this screen's own HUD under
+    /// it. The same reading <see cref="ResolveOverlay"/> and the fill at the foot of <see cref="Draw"/>
+    /// use, so the three cannot disagree about when the fall is over.
     /// </remarks>
-    public bool FallPlateUp => (_mode == Mode.Downed && !DevShowFall) || _fellTimer > 0f;
+    public bool DeathTransitionUp => DeathTransition.Up(_mode == Mode.Downed, _deathFadeIn);
 
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
@@ -1219,14 +1194,13 @@ public sealed class HuntScreen
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
         // stage, so the entrance has something to be an entrance from.
         if (_devArrivalPose is { } posed) _enemyEnter = posed;   // held for the shutter (DevPoseArrival)
-        else _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
+        else _enemyEnter = Math.Max(0f, _enemyEnter - dt * EnemyEnterPerSecond);   // the new enemy slides in over ~0.8s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
         if (!DevBossCall) _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         // The flash holds while the fall fixture is posing it — a capture must be able to photograph
         // the one frame it exists to check (does the flash cover the WHOLE screen, corners included).
         if (!DevShowFall) _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
-        if (_devHoldFellPlate) _fellTimer = DownedSeconds + FellBannerSeconds;   // held for the shutter
-        else _fellTimer = Math.Max(0f, _fellTimer - dt);
+        _deathFadeIn = Math.Max(0f, _deathFadeIn - dt);   // the black after a restart lifts; see DeathTransition
         _vfx.Update(dt);
         for (var i = 0; i < _callouts.Count; i++) { var c = _callouts[i]; c.Life -= dt * 1.6f; _callouts[i] = c; }
         _callouts.RemoveAll(c => c.Life <= 0f);
@@ -1240,10 +1214,10 @@ public sealed class HuntScreen
         {
             _lastSource = EnemySource;
             _descent.Reset();
-            // The fall's presentation belongs to the region it happened in — carried across travel,
-            // the old "YOUR CHAMPION FELL" banner outranked the new region's own banners for six
-            // seconds (review 2026-08-24). The flash clear is defensive; it decays in under a second.
-            _fellTimer = 0f;
+            // The fall's presentation belongs to the region it happened in: carried across travel, a
+            // fall's black would land on a region it did not fall in (review 2026-08-24 caught the fall
+            // banner of the day doing exactly that). The flash clear is defensive; it decays in under a second.
+            _deathFadeIn = 0f;
             _deathFlash = 0f;
         }
 
@@ -1252,6 +1226,7 @@ public sealed class HuntScreen
         _enemyBaseDamage = enemyBaseDamage;
 
         if (_run is null) StartRun(hunter);
+        HoldDeathPose();   // the posed transition is re-asserted every frame, like the arrival (`fightfade`)
 
         // Stat training moved to the CHARACTER screen (press C); this is a pure idle-watch view now.
 
@@ -1261,7 +1236,15 @@ public sealed class HuntScreen
             case Mode.Downed:
                 if (DevHoldReport) break;   // capture fixture: keep the fallen beat up instead of restarting
                 _downedTimer -= dt;
-                if (_downedTimer <= 0f) StartRun(hunter);
+                if (_downedTimer <= 0f)
+                {
+                    // THE RESTART LANDS AT FULL BLACK, on the frame the downed beat runs out — the frame it
+                    // has always been: OfflineHunt spends DownedSeconds per fall, and the Dust for a
+                    // checkpoint is charged here and spent by the host next frame. The black then holds
+                    // through the reset and lifts over the new wave's entrance (DeathTransition).
+                    _deathFadeIn = DeathTransition.FadeInSeconds(UiMotion.Reduced);
+                    StartRun(hunter);
+                }
                 break;
         }
     }
@@ -1289,31 +1272,32 @@ public sealed class HuntScreen
     /// <para>
     /// <paramref name="huntOnTop"/> is the host's <c>!OverlayActive</c> — the same condition its draw
     /// chain uses to reach <see cref="Draw"/>. The screen's own HUD (the medallion, the right rail's
-    /// door, the fall plate) answers only when the HUNT is the screen on top, so a click in the Forge
-    /// cannot fall through into the fight. The LOG does not read it: the log is drawn over every
+    /// door) answers only when the HUNT is the screen on top, so a click in the Forge cannot fall
+    /// through into the fight. The LOG does not read it: the log is drawn over every
     /// screen and stays live wherever it was opened from.
     /// </para>
     /// </remarks>
     public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)
     {
-        // THE LOG FIRST, AND ALONE. Under its full-screen scrim the rail and the plate are furniture —
+        // THE LOG FIRST, AND ALONE. Under its full-screen scrim the rail and the medallion are furniture —
         // the same `!_logOpen` gate the paint applies, kept as an early return.
         if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }
 
-        // AND THE REMEMBERED OVERLAY GOES STALE THE MOMENT THE SCREEN DOES. While another screen is on
-        // top this one paints nothing, so there is no plate; clearing it here means the frame the player
-        // navigates BACK cannot hit-test a plate whose nine seconds ran out while they were away.
-        if (!huntOnTop) { _paintedOverlay = HuntOverlay.None; return; }
+        // AND THE TRANSITION IS SNAPPED TO ITS END THE MOMENT THE SCREEN LEAVES. Update ticks this screen
+        // on every other screen too (the restart happens on its own clock wherever the player is), but
+        // nothing here paints while another screen is on top — so a lift that ran out unseen must not
+        // resume as a black frame when the player comes back.
+        if (!huntOnTop) { _deathFadeIn = 0f; return; }
+        // UNDER THE FALL, NOTHING ON THIS SCREEN ANSWERS. The medallion, the rail's doors and the
+        // inspector stand beside a collapsing Hunter and then under the black, and Draw parks the cursor
+        // for them; the host's own chrome stays live above it, and L still opens the log.
+        if (DeathTransitionUp) return;
         // The paint's own guard: before the first descent there is no HUD to hit.
         if (_run is null || _replay is null || _champ is null) return;
 
-        // IN THE ORDER THE HUD PASS PAINTS THEM (see the foot of Draw): the medallion, the right rail,
-        // then the fall plate.
+        // IN THE ORDER THE HUD PASS PAINTS THEM (see the foot of Draw): the medallion, then the right rail.
         if (UiKit.ClickedIn(LogButtonRect, mouse, clicked)) WantsLog = true;
         TakeRailInput(mouse, clicked);
-        // The plate the LAST PAINT actually put on screen, not a second derivation of it: ResolveOverlay
-        // needs the host's banner suppression, which only Draw is handed.
-        if (_paintedOverlay == HuntOverlay.HunterDown) TakeFallPlateInput(mouse, clicked);
     }
 
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
@@ -1380,7 +1364,6 @@ public sealed class HuntScreen
         if (TraitWatch is { } watch) { watch.RegionId = RegionId; watch.CharacterId = Character.Id; }
         // THE DEEPER OF THE TWO: the checkpoint the player paid for, or the wave the absence left the
         // champion standing on. Never their sum — they are two answers to the same question.
-        _runOpenedAt = Math.Max(1, Math.Max(StartWave, FreeStartWave));
         _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, Math.Max(StartWave, FreeStartWave));
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
@@ -2236,12 +2219,12 @@ public sealed class HuntScreen
         }
         else
         {
-            // Fell (or stalled). A red flash, a short breath, then the champion regroups.
+            // Fell (or stalled). A red flash, the collapse, then the stage fades to black and the next
+            // descent begins under it (DeathTransition).
             //
             // The REPORT is taken here, at the exact moment the run ended, and goes STRAIGHT into the
-            // EXPEDITION LOG. The popup that used to show it covered the fall and closed before it
-            // could be read; what the player sees now is the short fallen banner (the HunterDown
-            // overlay), which names the wave and points at the log (L), where the report keeps.
+            // EXPEDITION LOG (L). Nothing over the arena announces it: a fall is part of the idle loop,
+            // and the log keeps the report for whenever it is wanted.
             Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat));   // kept and saved — see the Log property
             // WHAT THIS DESCENT PROVED. Taken here for the same reason the report is: one frame later
             // the champion regroups onto a fresh expedition and the counter is empty.
@@ -2263,8 +2246,6 @@ public sealed class HuntScreen
             }
 
             _fellWave = Math.Max(1, _replayWave);
-            _fellReport = Log.Newest;   // the report the fall plate names (MAIN LIMIT — …)
-            _fellTimer = DownedSeconds + FellBannerSeconds;
             _deathFlash = 1f;
             _mode = Mode.Downed;
             _downedTimer = DownedSeconds;
@@ -2335,17 +2316,18 @@ public sealed class HuntScreen
         _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
-        // full resolution), so the log button, the utility doors and the fall plate hit-test it as is.
-        var hit = mouse;
+        // full resolution), so the log button and the utility doors hit-test it as is. PARKED while the
+        // death transition is up: TakeInput refuses everything this screen paints under it, and a control
+        // whose input is refused does not hover (ADR-006 — what is drawn is what is hit-tested).
+        var hit = DeathTransitionUp ? OffCanvas : mouse;
         if (_run is null || _replay is null || _champ is null) return;
 
         // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
         // callouts, flash, wave banner) so only the boss and its bar read.
-        if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; _fellTimer = 0f; }
+        if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; }
 
         _isBossWave = DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
         var overlay = ResolveOverlay(suppressBanner);
-        _paintedOverlay = overlay;   // the fall plate's hit test reads it — see TakeInput
         // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws
         // none. Dev warning only — never a Debug.Assert (a failed assert aborts the game's Debug build).
         if (suppressBanner && overlay != HuntOverlay.None)
@@ -2382,11 +2364,18 @@ public sealed class HuntScreen
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         DrawEnemyLine(b);                                          // the wave's live strip under the header
         if (!_logOpen) DrawEnemyInspector(b, hit);                 // the hovered creature's live numbers and statuses
-        if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit);
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+        // THE FALL'S BLACK, after the flash and under the host's chrome. One fill over the whole canvas —
+        // the arena, the header stack, the rails, the medallion, the scene behind — read from the two
+        // clocks and the Reduced Motion switch alone (DeathTransition), so the host's toast gate cannot
+        // silence it. Batch C paints the pills, the gear and the nav over it: their input is not
+        // blocked, so they stay live. DevShowFall holds it off so `fightfall` can photograph the
+        // collapse at any point of the beat.
+        var black = DevShowFall ? 0f : DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced);
+        if (black > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.Black * black);   // ui-page-ok: the canvas, not the page
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
         if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F9)
         // LAST, over every panel on the screen: a hover tip is an answer to the mouse, and nothing drawn
@@ -3849,7 +3838,7 @@ public sealed class HuntScreen
     /// at, from <see cref="RunReport.Limit"/> — the numbers below it explain magnitude, this explains meaning.
     /// The numbers and the diff stand side by side at readable rungs (nothing under Secondary, and Secondary
     /// only for chips), instead of the diff hanging under the table at Caption. And the DOORS live here —
-    /// ADJUST BUILD and GEAR — because this is where a player decides what to change; the fall plate over the
+    /// ADJUST BUILD and GEAR — because this is where a player decides what to change; the medallion over the
     /// arena is only the door to this screen.
     /// </para>
     /// <para>
@@ -4350,7 +4339,8 @@ public sealed class HuntScreen
         switch (overlay)
         {
             case HuntOverlay.HunterDown:
-                // Drawn in the unclipped HUD pass (DrawFallPlate), over everything, where it can be clicked.
+                // Nothing: the fall is the collapse, the flash and the black, painted at the foot of Draw
+                // from the clocks. Resolved here only so the wave's own banners stay off under it.
                 break;
             case HuntOverlay.BossIncoming:
             {
@@ -4699,7 +4689,7 @@ public sealed class HuntScreen
     /// The x then had to leave the page's centred column entirely. Below the capsules is where the
     /// locked-tile refusal lives — 900 px wide, centred, and taller at every profile because its type
     /// scales while its top does not — so a medallion at 1206 was simply covered by it for three
-    /// seconds, which is the control READ THE LOG points at. There is no band that holds all three, so
+    /// seconds, which is the control the first failure lesson points at. There is no band that holds all three, so
     /// the medallion takes the gap between that toast's right edge and the right-hand column. Its own
     /// edge follows the profile, as a hit target must.
     /// </para>
@@ -4869,11 +4859,10 @@ public sealed class HuntScreen
     /// Pure, so the rule can be tested without a font. The wave line is the ONE line in this header
     /// with no fit ladder and no clamp: the region title above it steps its rung down until it fits,
     /// and the conquest row below it reserves its bar around a measured label, but the wave line was
-    /// simply centred on 910 and drawn. At 150 % the fall variant — "WAVE 11 — RECOVERING — BACK TO
-    /// WAVE 11" — is measured at the full text rate while 910, 630, 560 and the panel's padding are
+    /// simply centred on 910 and drawn. At 150 % its longest form — the wave, a corruption tier's name
+    /// and BOSS WAVE — is measured at the full text rate while 910, 630, 560 and the panel's padding are
     /// all literals, so it grew past both of the header's rails and printed itself over the hunter's
-    /// health readout on the left and under the log medallion on the right. During the fall, which is
-    /// the single most important moment onboarding has.
+    /// health readout on the left and under the log medallion on the right.
     /// </remarks>
     internal static int WaveRowsFor(int lineWidth, int room) => lineWidth > room ? 2 : 1;
 
@@ -4948,8 +4937,7 @@ public sealed class HuntScreen
         {
             _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
             // THE LAST RESORT, on the second row only: a state that still overruns a whole row of its
-            // own steps DOWN THE RUNG LADDER rather than losing a word. "BACK TO WAVE 100" is the
-            // longest thing this can ever say and it wants the room.
+            // own steps DOWN THE RUNG LADDER rather than losing a word.
             var statePx = _ui.FitRung(st2.Text, room, UiTypography.StageLabel);
             _ui.TextCenterBig(b, st2.Text, cx, waveY + UiTypography.Pitch(UiTypography.StageLabel)
                                               + (UiTypography.StageLabel - statePx) / 2, st2.Tint, statePx);
@@ -5235,139 +5223,36 @@ public sealed class HuntScreen
         if (p.PointsRow) _ui.Button(b, p.PointsDoor, spend, hit, false, true, ButtonStyle.Primary);
     }
 
-    // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────
-    /// <summary>Under the header stack, where the toasts hang — one anchor per zone (D4). (560, +8, 800, 132) at 100 %.</summary>
-    /// <remarks>
-    /// Its height is its two lines and the READ THE LOG line under them; its width grows at the spacing
-    /// rate so the verdict sentence keeps its length at a larger profile, centred on the page and always
-    /// short of the right column at 1570.
-    /// </remarks>
-    private Rectangle FallPlate => new(960 - FallPlateWidth / 2, HeaderStackBottom + UiMetrics.Space(8), FallPlateWidth, FallPlateHeight);
-    private static int FallPlateWidth => UiMetrics.Space(800);
-    // TWO ROWS, NOT THREE: the door sits on the title row beside FELL AT WAVE, so the plate is a title
-    // and a sentence — at 150 % the three-row plate lay across the hunter's face and the reaper's
-    // shoulders (release polish 2026-09-05, huntstates-01).
-    private static int FallPlateHeight
-        => FallTop + Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6))
-         + UiTypography.Pitch(UiTypography.Body) + FallTop;
-    private static int FallDoorHeight => UiMetrics.ButtonHeightSmall;
-    /// <summary>The plate's own insets — shared by its height, its text and its door, so none can drift.</summary>
-    private static int FallPad => UiMetrics.Space(24);
-    private static int FallTop => UiMetrics.Space(14);
+    // ── The death transition (attention ownership pass, 2026-09-15). ─────────────────────────────────────
+    //    A fall is part of the idle loop, so it is not announced. The Hunter is seen to fall (the clip, the
+    //    flash); the stage fades to black over the last DeathTransition.FadeOut of the downed beat; the next
+    //    descent begins at full black on the frame the beat runs out; the black holds for DeathTransition.Hold
+    //    and lifts over DeathTransition.FadeIn while the new wave walks in. The arithmetic is DeathTransition
+    //    (PresentationBeats.cs); this screen owns the two clocks — _downedTimer and the lift below — and
+    //    paints ONE full-canvas fill from them at the foot of Draw, under the host's chrome. Under Reduced
+    //    Motion both fades are cuts. No plate, no door, no header line: the wave lane shows the wave that
+    //    fell until the restart and the new wave after it, and the report waits in the EXPEDITION LOG.
 
-    /// <summary>
-    /// READ THE LOG — the plate's primary door, on its title row.
-    /// </summary>
+    /// <summary>Seconds left of the lift after a restart — the hold, then the fade. Zero while the stage is visible.</summary>
     /// <remarks>
-    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawFallPlate"/> paints this rectangle (and tests
-    /// it to keep the plate's own hover off it) and <see cref="TakeFallPlateInput"/> hit-tests it.
+    /// Armed on the restart frame (Update's Downed case) and decayed there, zeroed by travel and the moment
+    /// another screen is on top (<see cref="TakeInput"/>), held by <see cref="DevPoseDeathTransition"/>.
     /// </remarks>
-    private Rectangle FallDoor
-    {
-        get
-        {
-            var r = FallPlate;
-            return new Rectangle(r.Right - FallPad - UiMetrics.Control(200), r.Y + FallTop, UiMetrics.Control(200), FallDoorHeight);
-        }
-    }
+    private float _deathFadeIn;
 
-    /// <summary>
-    /// The fallen screen's one action: READ THE LOG, or a click anywhere else on the plate.
-    /// </summary>
-    /// <remarks>
-    /// The door is tested FIRST and the plate only <c>else</c>, exactly as the paint used to — one edge
-    /// raises <see cref="WantsLog"/> once, and the host's own L handling is what opens the log.
-    /// </remarks>
-    private void TakeFallPlateInput(Point mouse, bool clicked)
-    {
-        if (UiKit.ClickedIn(FallDoor, mouse, clicked)) WantsLog = true;
-        else if (UiKit.ClickedIn(FallPlate, mouse, clicked)) WantsLog = true;
-    }
-
-    /// <summary>
-    /// Two lines over the fight when the champion falls: the wave, and the MAIN LIMIT with the verdict
-    /// sentence — from <see cref="RunReport.Limit"/> and <see cref="RunReport.Verdict"/>, the same thresholds
-    /// the log applies. The whole plate is a door to the log; no buttons stand over the arena because the
-    /// champion is already getting up (the doors live in the LOG's footer).
-    /// </summary>
-    private void DrawFallPlate(SpriteBatch b, Point hit)
-    {
-        var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
-        var r = FallPlate;
-        var pad = FallPad;
-        var top = FallTop;
-        // THE WHOLE PLATE IS THE DOOR, so it carries the states a door carries (§25, §27). It had only
-        // HOVER (READ THE LOG brightens); PRESSED now drops the FACE 2 px while the mouse is held, the
-        // way every UiKit.Button does, so a click on the only clickable thing on the fallen screen
-        // answers before the log gets there.
-        //
-        // THE HIT RECT NEVER MOVES (§15, LAW "draw = hit"): `r` stays authoritative for hover and for
-        // the click; only `face` is depressed. A control that moves its own target under the cursor
-        // while being pressed is a control that can be released outside itself.
-        // THE DOOR IS A PRIMARY BUTTON on the title row: the fallen state's one action was a grey text
-        // link in the plate's corner, and nothing on the screen was lit (huntstates-02). The plate stays
-        // a door too, so a click anywhere on it still opens the log.
-        var door = FallDoor;
-        var hot = r.Contains(hit) && !door.Contains(hit);
-        var face = hot && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
-        _ui.Plate(b, face, Ember, fade);
-        var titleRow = Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6));
-        // THE TITLE FOLLOWS THE RUN. The champion is back up 1.6 s after the fall and this plate stands
-        // for 9.1 s — deliberately, so two lines can be read and the log opened — so for seven and a
-        // half seconds it said FELL AT WAVE 40 over a live wave 1 while the header underneath said
-        // WAVE 1. Two contradictory wave numbers, at the one moment a player is asking what happened.
-        // Once the new descent is running the plate becomes the news it now IS: where you went back to.
-        // ...and it says where the run ACTUALLY opened, not where the next one would. RestartWave is a
-        // live read of the paid checkpoint, which is zero whenever the Dust will not cover one and which
-        // never knew about the free offline resume at all — so a descent that opened at wave 30 on the
-        // absence's own depth announced BACK TO WAVE 1 the instant it regrouped, over a header reading
-        // wave 31. _runOpenedAt is recorded by the StartRun that did it: a fact, not a forecast.
-        var regrouped = _mode != Mode.Downed;
-        var title = regrouped ? $"BACK TO WAVE {_runOpenedAt}" : $"FELL AT WAVE {_fellWave}";
-        _ui.TextBig(b, title, face.X + pad, face.Y + top + (titleRow - UiTypography.Pitch(UiTypography.StageLabel)) / 2,
-                    Ember * fade, UiTypography.StageLabel, TextFace.Display);
-        var limit = regrouped
-            ? $"FELL AT WAVE {_fellWave} — NOTHING IS LOST. THE FULL REPORT IS IN THE LOG."
-            : _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
-        _ui.TextBig(b, _ui.ShortenBig(limit, face.Width - pad * 2, UiTypography.Body), face.X + pad,
-                    face.Y + top + titleRow, Bone * fade, UiTypography.Body);
-        // PAINTED WITH clicked: false; TakeFallPlateInput decides both the door and the plate behind it.
-        _ui.Button(b, door, "READ THE LOG", hit, false, true, ButtonStyle.Primary);
-    }
-
-    /// <summary>
-    /// The wave the next descent will open at — read LIVE, never cached at the moment of the fall.
-    /// </summary>
-    /// <remarks>
-    /// The host revalidates <see cref="StartWave"/> against the Memory Dust every frame, and every
-    /// StartRun re-charges the checkpoint — so the answer can change between one death and the next.
-    /// A number cached when the champion fell could promise a checkpoint it can no longer afford.
-    /// </remarks>
-    private int RestartWave => Math.Max(1, StartWave);
-
-    /// <summary>The wave the descent now running actually opened at, stamped by <c>StartRun</c>.</summary>
-    /// <remarks>
-    /// The counterpart to <see cref="RestartWave"/>, and the reason both exist: one is a forecast about
-    /// the NEXT descent (which the host revalidates against the Dust every frame), this is a record of
-    /// THIS one. The free offline resume opens a run deeper than any checkpoint and is spent the moment
-    /// a second descent begins, so it can only ever be read back from here.
-    /// </remarks>
-    private int _runOpenedAt = 1;
+    /// <summary>Where this screen's HUD is told the cursor is while the transition is up: nowhere, so nothing hovers under the black.</summary>
+    private static readonly Point OffCanvas = new(-4096, -4096);
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>
     /// Was the right half of an EXPEDITION plate whose left half repeated the banner's wave number. The
     /// word it printed most often was "ACTIVE" — true of every frame the screen is drawn in, so it
-    /// distinguished nothing and cost a whole plate to say. Only the two states that mean something now
-    /// reach the player, and they reach them on the banner beside the wave they describe.
+    /// distinguished nothing and cost a whole plate to say. Only the one state that means something now
+    /// reaches the player, and it reaches them on the banner beside the wave it describes. A fall says
+    /// nothing here: the lane is state, not an announcement (see the death transition above).
     /// </remarks>
     private (string Text, Color Tint)? RunState()
     {
-        // THE PROMISE IS MADE BEFORE THE CHANGE, not after it. "RECOVERING" said something was
-        // happening and not what; the run restarts at a wave the player never chose and can change
-        // between deaths (the checkpoint is re-charged in Dust on every StartRun, so a descent that
-        // could afford wave 30 last time may open at 1 this time with nothing said).
-        if (_mode == Mode.Downed) return ($"RECOVERING — BACK TO WAVE {RestartWave}", Ember);
         if (DevBossCall || WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
         return null;
     }
@@ -6420,12 +6305,14 @@ public sealed class HuntScreen
     /// </remarks>
     public bool DevHoldReport { get; set; }
 
-    /// <summary>DEV: freeze in the downed beat but keep the report OFF, to photograph the fall.</summary>
+    /// <summary>DEV: freeze in the downed beat with the flash held and the black held OFF, to photograph the collapse.</summary>
     /// <remarks>
     /// Separate from <see cref="DevHoldReport"/> because the two jobs are different and conflating them
-    /// broke the capture: holding is what stops the timer running out and restarting the run, and
-    /// suppressing is what keeps the panel off the body. The first attempt cleared the hold in order to
-    /// suppress, so the beat simply expired mid-capture and photographed a fresh wave instead.
+    /// broke the capture: holding is what stops the timer running out and restarting the run, and this
+    /// is what keeps the fall's own presentation from covering the body — the flash stays at full so the
+    /// shot can prove it reaches the corners, and the black never paints whatever the clocks say. The
+    /// first attempt cleared the hold in order to suppress, so the beat simply expired mid-capture and
+    /// photographed a fresh wave instead.
     /// </remarks>
     public bool DevShowFall { get; set; }
 
@@ -6477,34 +6364,48 @@ public sealed class HuntScreen
     private float? _devArrivalPose;
 
     /// <summary>
-    /// DEV: run to a death, then let the champion get back up — the frame the fall plate outlives.
+    /// DEV: pose the DEATH TRANSITION at <paramref name="t"/> — 0 the last readable instant of the fall,
+    /// 0.5 the black with the next descent already begun beneath it, 1 the stage back (<see cref="DeathTransition.At"/>).
     /// </summary>
     /// <remarks>
-    /// This is the state playtest 2026-09-09 is about: for 7.5 seconds the plate said FELL AT WAVE 40
-    /// while the header under it said WAVE 1 and a live wave one was being fought behind both. Posing
-    /// it needs a death AND the recovery beat spent, which is the opposite of what DevShowFall holds.
+    /// Call after <see cref="DevRunToDeath"/>. Past the restart the restart is REAL: the fallen beat is let
+    /// go and StartRun opens the next descent exactly as play does, so what stands under the black is a
+    /// live wave one with its entrance walking in, not a posed corpse. HELD every frame, like the arrival
+    /// pose: the host's first live frame restarts the run on its Source push, and every fall clock would
+    /// otherwise have run out before the shutter. Reads Reduced Motion, so RH_SHOT_REDUCED=1 poses the cuts.
     /// </remarks>
-    public void DevRunToRegroup(Hunter hunter)
+    public void DevPoseDeathTransition(float t)
     {
-        DevRunToDeath(hunter);
-        DevHoldReport = false;
-        _downedTimer = 0f;
-        _mode = Mode.Fighting;
-        StartRun(hunter);
-        _replayWave = _run?.Wave + 1 ?? 1;
-        // HELD, because the host wipes it. The capture host pushes the region's Source every frame and
-        // the first live frame reads as a REGION CHANGE, whose branch clears _fellTimer outright — the
-        // fall's presentation belongs to the region it happened in. So the plate this fixture exists to
-        // photograph was gone before the shutter, and the capture showed an ordinary wave one.
-        _devHoldFellPlate = true;
+        _devDeathPose = Math.Clamp(t, 0f, 1f);
+        if (DeathTransition.At(_devDeathPose.Value, UiMotion.Reduced).Restarted && _hunter is { } hunter)
+        {
+            DevHoldReport = false;
+            _downedTimer = 0f;
+            StartRun(hunter);
+        }
+        HoldDeathPose();
     }
 
-    private bool _devHoldFellPlate;
+    /// <summary>The held transition pose, re-asserted every frame while a capture is posing one — this nullable IS the hold.</summary>
+    private float? _devDeathPose;
+
+    /// <summary>Re-assert the posed transition: its clock, and past the restart the new wave's entrance where the pose has it.</summary>
+    private void HoldDeathPose()
+    {
+        if (_devDeathPose is not { } t) return;
+        var pose = DeathTransition.At(t, UiMotion.Reduced);
+        if (pose.Restarted)
+        {
+            _deathFadeIn = pose.FadeInClock;
+            _enemyEnter = Math.Max(0f, 1f - pose.SinceRestart * EnemyEnterPerSecond);
+        }
+        else _downedTimer = pose.DownedTimer;
+    }
 
     /// <param name="fallProgress">
-    /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO suppresses the
-    /// report, so the collapse can be photographed uncovered — the report is a large centred panel and
-    /// sits directly on top of the thing this poses.
+    /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO holds the fall's
+    /// black off (<see cref="DevShowFall"/>), so the collapse can be photographed uncovered at any point of
+    /// the beat.
     /// </param>
     /// <param name="poseLimit">
     /// DEV: pose the log's diagnostic for THIS limit. The death is the real seeded one; only the single
@@ -6549,13 +6450,11 @@ public sealed class HuntScreen
             _ => report,
         };
         Log.Add(report);
-        _fellReport = Log.Newest;   // so the fall plate names the MAIN LIMIT, as it does in play
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
-        _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the fallen banner
+        _bannerTimer = 0f;   // the wave-cleared banner has no business over a fall
         _fellWave = Math.Max(1, _run.Wave + 1);
-        _replayWave = _fellWave;   // the header says the wave the plate names, not the wave DevStart played (audit P1-8)
-        _fellTimer = DownedSeconds + FellBannerSeconds;
+        _replayWave = _fellWave;   // the header says the wave that fell, not the wave DevStart played (audit P1-8)
 
         if (fallProgress is { } fp)
         {

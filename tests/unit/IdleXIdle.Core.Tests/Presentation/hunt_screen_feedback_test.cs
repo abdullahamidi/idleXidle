@@ -20,7 +20,8 @@ namespace IdleXIdle.Core.Tests.Presentation;
 /// item 2 — a reward whose screen is locked is hidden, not advertised;
 /// item 10 — the SPEND POINTS button goes to MASTERY (E), not BUILD (B);
 /// item 5 — the wave-total health bar above a swarm is gone (the per-creature pips remain);
-/// item 6 — a death writes its report to the log and shows a banner pointing there, not a popup;
+/// item 6 — a death writes its report to the log and fades the stage to black for the next descent; nothing over
+///          the arena announces it (attention ownership pass, 2026-09-15);
 /// item 9 — the death flash draws in the unclipped HUD pass, so it covers the whole screen.
 /// </para>
 /// </remarks>
@@ -74,7 +75,7 @@ public class HuntScreenFeedbackTests
         Assert.DoesNotContain("(E)\"", src);
         Assert.Contains("WantsMastery = true", src);
         // Only the LOG's ADJUST BUILD door raises WantsBuild (UX V2 P1.2); the utility never does.
-        var utility = Slice(src, "private void DrawRightColumn", "// \u2500\u2500 The fall plate");
+        var utility = Slice(src, "private void DrawRightColumn", "// \u2500\u2500 The death transition");
         Assert.DoesNotContain("WantsBuild", utility);
     }
 
@@ -91,30 +92,48 @@ public class HuntScreenFeedbackTests
     }
 
     [Fact]
-    public void test_a_fall_writes_the_report_to_the_log_and_points_there()
+    public void test_a_fall_writes_the_report_to_the_log_and_fades_the_stage_to_black()
     {
         var src = Source();
 
         // Item 6: the report goes straight to the RunLog on the frame the run ends...
         Assert.Contains("Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat))", src);
-        // ...the fall plate names the wave, the MAIN LIMIT from the report's own thresholds, and is the door
-        // to the log (UX V2 P1.1, brief §22 / D6)...
-        Assert.Contains("FELL AT WAVE {_fellWave}", src);
-        Assert.Contains("MAIN LIMIT \u2014 {rep.LimitLabel()}", src);
-        Assert.Contains("READ THE LOG", src);
-        // ...and the WHOLE PLATE is that door — DECIDED IN UPDATE, not in the paint (2026-09-12). A hit
-        // test inside a Draw is silently dropped on any frame the host runs Update twice and Draw once:
-        // the click edge is latched at the top of Update and recomputed as false by the second pass, and
-        // a press held three to six frames never re-arms. The plate and its button are resolved in
-        // TakeFallPlateInput now, against the very rectangles the paint draws (FallPlate, FallDoor).
-        Assert.Contains("private void TakeFallPlateInput(Point mouse, bool clicked)", src);
-        Assert.Contains("if (UiKit.ClickedIn(FallDoor, mouse, clicked)) WantsLog = true;", src);
-        Assert.Contains("else if (UiKit.ClickedIn(FallPlate, mouse, clicked)) WantsLog = true;", src);
-        Assert.DoesNotContain("private void DrawFallPlate(SpriteBatch b, Point hit, bool clicked)", src);
-        // ...the log's panel carries the FELL marker...
+        // ...the log's panel carries the FELL marker, where the report keeps...
         Assert.Contains("FELL AT WAVE {r.WallWave}", src);
-        // ...and the auto-popup that covered the fall is gone.
-        Assert.DoesNotContain("DrawRunReport", src);
+        // ...and NOTHING OVER THE ARENA ANNOUNCES THE FALL. Falling is part of the idle loop, so it is not
+        // news: no plate, no door over the fight, no header line forecasting the next wave, no popup. What
+        // the player sees is the collapse, the stage fading to black, and the next descent already running
+        // when it comes back (attention ownership pass, 2026-09-15).
+        foreach (var gone in new[] { "FallPlate", "FallDoor", "FellBannerSeconds", "READ THE LOG", "BACK TO WAVE", "RECOVERING", "DrawRunReport" })
+            Assert.DoesNotContain(gone, src);
+
+        // THE BLACK IS ONE FILL, in the unclipped HUD pass AFTER the flash (so it covers the rails and the
+        // panels, and the flash is the instant of death in front of nothing), read from the two clocks
+        // and the Reduced Motion switch alone — never from a click, a wheel, or the host's toast gate.
+        const string fill = "if (black > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.Black * black);";
+        var at = src.IndexOf(fill, StringComparison.Ordinal);
+        Assert.True(at >= 0, "the death transition's fill is missing");
+        Assert.Equal(at, src.LastIndexOf(fill, StringComparison.Ordinal));
+        Assert.True(at > src.IndexOf("Ember * (_deathFlash * 0.35f)", StringComparison.Ordinal), "the black is painted before the flash");
+        Assert.True(at > src.IndexOf("DrawHunterHud(b);", StringComparison.Ordinal), "the black is painted inside the arena pass — it will be scissored");
+        var reads = Slice(src, "var black = ", fill);
+        Assert.Contains("DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced)", reads);
+        Assert.DoesNotContain("clicked", reads);
+        Assert.DoesNotContain("wheel", reads);
+        Assert.DoesNotContain("suppressBanner", reads);
+
+        // ...and this screen's own HUD does not answer under it. DECIDED IN UPDATE (ADR-006): TakeInput
+        // refuses the medallion and the rail while the transition is up, after the log and after the
+        // screen gate, so a click under the black cannot fire what the black covers.
+        var input = Slice(src, "public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)", "private string _buildStamp");
+        var logGate = input.IndexOf("if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }", StringComparison.Ordinal);
+        var topGate = input.IndexOf("if (!huntOnTop) { _deathFadeIn = 0f; return; }", StringComparison.Ordinal);
+        var fallGate = input.IndexOf("if (DeathTransitionUp) return;", StringComparison.Ordinal);
+        var medallion = input.IndexOf("UiKit.ClickedIn(LogButtonRect", StringComparison.Ordinal);
+        Assert.True(logGate >= 0, "the log gate is missing from TakeInput");
+        Assert.True(topGate > logGate, "leaving the screen must snap the transition, after the log gate");
+        Assert.True(fallGate > topGate, "the death transition's refusal must follow the screen gate");
+        Assert.True(medallion > fallGate, "the medallion is hit-tested before the death transition refuses it");
     }
 
     [Fact]

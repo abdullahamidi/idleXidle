@@ -321,8 +321,8 @@ public static class OpeningScript
         new OpeningStep(OpeningStage.IntroduceHealth, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
                         Activity.Hunt, TourTarget.HunterHud,
                         "HEALTH",
-                        // THE HUD'S OWN WORDS. A fall reads "RECOVERING — BACK TO WAVE 1" on a fresh career;
-                        // "descent" is a word nothing on this screen shows (review 2026-09-11).
+                        // THE HUD'S OWN WORDS. The header's wave lane reads "WAVE 1" again after a fall on a
+                        // fresh career; "descent" is a word nothing on this screen shows (review 2026-09-11).
                         "If Health reaches zero, your Hunter falls. They start again from wave 1."),
 
         new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,

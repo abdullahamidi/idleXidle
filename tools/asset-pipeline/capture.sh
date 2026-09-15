@@ -14,6 +14,7 @@
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
 #        rosterswitch warrenready warrenfresh warrenlocked weavefresh keystonenotice
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
+#        fightfall fightfade fightarrive fightcooldown
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
 # screenshot can judge on its own, and two of the three states below could not be posed at all before:
@@ -56,8 +57,12 @@
 # `fightmulti` VOLLEY's CLUSTER folding five arrows into one "-N ×5". (`fightfive` posed the FIVE-slot
 # strip and is gone with the fifth slot itself - a build is two skills that take an action and two
 # that do not, and a fixture posing a state the game cannot produce certifies nothing.)
-# All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument). `fightreport` takes
-# RH_SHOT_LIMIT=armour|reach|sustain to pose the log's diagnostic for that limit.
+# All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument).
+# The fall poses: `fightfall` is the COLLAPSE, RH_SHOT_T its progress (0 the instant of the fall, 1 the
+# settled body, the red flash held at full). `fightfade` is the DEATH TRANSITION, RH_SHOT_T sweeping it —
+# 0 the last readable instant before the fade, 0.5 the black with the next descent already begun beneath
+# it, 1 the stage back — and RH_SHOT_REDUCED=1 poses its cuts. `fightreport` opens the EXPEDITION LOG on a
+# seeded death's report; RH_SHOT_LIMIT=armour|reach|sustain poses the log's diagnostic for that limit.
 # `fightshieldbroken` and `fightmulti` aim the shutter at an EVENT (the first SHIELD BROKEN, SPRAY's
 # cast) rather than a second: the seek applies two frames before the shot so the event is crossed live
 # on the photographed frame (the replay is rebuilt from the wave's events, so it can land anywhere).

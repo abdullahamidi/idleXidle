@@ -2218,7 +2218,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightarrive" or "fightcooldown" or "fightregroup" or "fightaura" or "fightflash"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "fightaura" or "fightflash"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "warrenlocked" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
@@ -2575,7 +2575,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "trainingreset") _hunter.AddMaterial(Material.Crystal, 1);
                 }
 
-                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightarrive" or "fightcooldown" or "fightregroup" or "fightaura" or "fightflash" or "fightshield" or "runlog"
+                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "fightaura" or "fightflash" or "fightshield" or "runlog"
                     or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug")
                 {
                     // `vfxdebug` is `fightshield` PLUS the VFX contract's own overlay (brief §70): the
@@ -2714,7 +2714,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield" or "fightshieldbroken" or "vfxdebug")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "runlog" or "fightshield" or "fightshieldbroken" or "vfxdebug")
                     {
                         var worn = new[]
                         {
@@ -2748,10 +2748,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _expedition.Progress = _skillProgress;
                     // Pose the new fight-screen UX: the welcome-back toast, and the "you have things to do"
                     // attention cue (a waiting chest + unspent mastery points).
-                    // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
-                    // arena's priority list, so it would hide the very screen that capture exists to show.
+                    // Not for the fall fixtures: the welcome-back toast outranks every arena overlay, so
+                    // it would stand over the very state those captures exist to show.
                     // No toast over `fightshield`: it would sit on the very strip the capture is for.
-                    if (sm is not ("fightreport" or "fightfall" or "fightarrive" or "fightcooldown" or "fightregroup" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
+                    if (sm is not ("fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
@@ -2789,9 +2789,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     SetActiveRegion("umbral_reach");
                     if (sm == "fightreport")
                     {
-                        // RH_SHOT_LIMIT=armour|reach|sustain poses the log's diagnostic for that limit: the
-                        // real seeded death, with the one measurement that names the limit set past its
-                        // threshold — so each of the three verdicts the log can give has a picture.
+                        // THE LOG, OPEN ON A SEEDED DEATH'S REPORT — the report's one surface. RH_SHOT_LIMIT=
+                        // armour|reach|sustain poses its diagnostic for that limit: the real seeded death,
+                        // with the one measurement that names the limit set past its threshold — so each of
+                        // the three verdicts the log can give has a picture. (`runlog` is the same door
+                        // after three descents.)
                         var limit = Environment.GetEnvironmentVariable("RH_SHOT_LIMIT")?.ToLowerInvariant() switch
                         {
                             "armour" or "armor" => RunLimit.Armour,
@@ -2800,6 +2802,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             _ => (RunLimit?)null,
                         };
                         _expedition.DevRunToDeath(_hunter, poseLimit: limit);
+                        _expedition.ToggleLog();
                     }
                     else if (sm == "fightfall")
                     {
@@ -2837,13 +2840,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             ? av : 0.55f;
                         _expedition.DevPoseArrival(at);
                     }
-                    else if (sm == "fightregroup")
+                    else if (sm == "fightfade")
                     {
-                        // THE FRAME THE FALL PLATE OUTLIVES: a new descent already running underneath a
-                        // plate that describes the old one. Before this change the two printed different
-                        // wave numbers at the same instant, and no capture mode could pose it.
-                        _expedition.DevRunToRegroup(_hunter);
-
+                        // THE DEATH TRANSITION. RH_SHOT_T sweeps it: 0 the last readable instant of the
+                        // fall, 0.5 the black with the next descent already begun beneath it, 1 the stage
+                        // back (DeathTransition.At). RH_SHOT_REDUCED=1 poses its cuts. From the restart on,
+                        // what stands under the black is a real wave one — StartRun ran — not a posed corpse.
+                        var t = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                                               System.Globalization.NumberStyles.Float,
+                                               System.Globalization.CultureInfo.InvariantCulture, out var ft)
+                            ? ft : 0.5f;
+                        _expedition.DevRunToDeath(_hunter);
+                        _expedition.DevPoseDeathTransition(t);
                     }
                     else if (sm == "runlog")
                     {
@@ -4140,8 +4148,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // to the right, which IS the arrival tableau. Every frame after it is held.
         if (!_opening.HoldsFight || !_expedition.RunStarted) UpdateExpedition(gameTime);
 
-        // ── THE FIGHT SCREEN'S OWN UI INPUT: the EXPEDITION LOG medallion, the utility rail's door and
-        //    the fall plate's READ THE LOG. Deliberately OUTSIDE the hold above — the log must stay
+        // ── THE FIGHT SCREEN'S OWN UI INPUT: the EXPEDITION LOG medallion and the utility rail's
+        //    door. Deliberately OUTSIDE the hold above — the log must stay
         //    openable on a frame the authored opening is holding the fight — and deliberately ABOVE the
         //    menu branches' `Latch(); return;`, so it runs on every frame whatever screen is up. A modal
         //    already makes MouseClicked false, so nothing fires under one.
@@ -4697,9 +4705,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (_discoveredVows.Add(granted.Id) && _grantsBaselined)
                     // SILENT UNDER THE RIG unless a capture asked for this one, exactly as a rail
                     // reveal is (RH_SHOT_REVEAL below). A fixture that opens the BUILD screen offers
-                    // this Vow on its first frame, and the toast stands in the notice lane — which is
-                    // where the fall plate stands too, so it hid the state `fightregroup` exists to
-                    // photograph. RH_SHOT_REVEAL=Vow announces it deliberately.
+                    // this Vow on its first frame, and the toast stands in the notice lane, over
+                    // whatever a fight fixture is posing there. RH_SHOT_REVEAL=Vow announces it deliberately.
                     if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), "Vow", StringComparison.OrdinalIgnoreCase))
                         PostVowReveal(granted, offered: true);
 
@@ -5383,13 +5390,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
         if (_expedition.LogOpen) return null;
-        // THE FALL PLATE SAYS IT FIRST, AND SAYS IT LOUDER. It lands in this exact slot, names the wave,
-        // diagnoses what stopped the run and carries its own READ THE LOG button — so a card repeating
-        // that sentence on top of it is two surfaces saying one thing, overlapping. The plate holds the
-        // slot for its seven and a half seconds; if the report is still unread when it goes, the quiet
-        // card takes over. (Never photographed before: the fall fixture poses the collapse with
-        // DevShowFall, which is the one state that keeps the plate off.)
-        if (_expedition.FallPlateUp) return null;
+        // NOTHING IS SAID OVER A FALL. The Hunter collapsing, the black, and the stage coming back are
+        // the one thing on screen; a card in the toast slot beside them is a second. The lesson waits for
+        // the next descent to be visible.
+        if (_expedition.DeathTransitionUp) return null;
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
         if (_coach.Showing is not { } step) return null;
@@ -6039,6 +6043,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_tourActive || _showTitle || _showSettings || _showHelp || WelcomeUp || _expedition.LogOpen) return false;
         if (_forge.RevealActive) return false;
+        if (_expedition.DeathTransitionUp) return false;   // nothing is lit over a fall, or over the black after it
         if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
             return NavSlots().Contains(Array.IndexOf(NavActivity, sends));   // the tile must be on the rail
         return OnboardingLessons.Target(id) is not null;

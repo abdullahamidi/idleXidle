@@ -26,7 +26,7 @@ namespace IdleXIdle.Core.Expeditions;
 /// </remarks>
 /// <summary>
 /// What ended the run, in one word — the thresholds <see cref="RunReport.Verdict"/> has always applied,
-/// exposed so the HUNT's fall plate and the log's diagnosis line can NAME the limit before the numbers.
+/// exposed so the EXPEDITION LOG's diagnosis line can NAME the limit before the numbers.
 /// </summary>
 /// <remarks>
 /// UX V2 P1.1 (brief §22/§24): "1.0 of 3.0 creatures per cast" is a magnitude; REACH is its meaning. No new

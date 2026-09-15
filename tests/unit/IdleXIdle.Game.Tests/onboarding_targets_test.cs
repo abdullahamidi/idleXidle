@@ -216,11 +216,12 @@ public class OnboardingTargetTests
     [Fact]
     public void test_the_wave_lane_takes_a_second_row_only_when_one_will_not_hold_it()
     {
-        // The rule the fall banner's overlap came down to, on its own and without a font. The wave
+        // The rule the wave lane's overlap came down to, on its own and without a font. The wave
         // line is the one line in the stage header with no fit ladder: the region title above it steps
         // its rung down to fit, the conquest row below it reserves its bar around a measured label,
-        // and this was simply centred and drawn — so at 150 % "WAVE 11 — RECOVERING — BACK TO WAVE 11"
-        // grew past both of the header's rails and printed itself over the hunter's health readout.
+        // and this was simply centred and drawn — so at 150 % its longest form (the wave, a corruption
+        // tier's name, BOSS WAVE) grew past both of the header's rails and printed itself over the
+        // hunter's health readout.
         foreach (var percent in new[] { 100, 125, 150 })
         {
             UiMetrics.Apply(percent);

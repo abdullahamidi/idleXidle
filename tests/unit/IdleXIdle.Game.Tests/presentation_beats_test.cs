@@ -327,4 +327,140 @@ public class PresentationBeatsTest
         }
         return (killFrame, falls, card, ack, next);
     }
+
+    // ── THE FALL: readable, then black, the restart under the black, then the stage back. ─────────
+
+    /// <summary>
+    /// One fall, stepped exactly as HuntScreen.Update steps it: the fade-in clock decays, the downed beat
+    /// counts down, the descent restarts on the frame it reaches zero and arms the fade-in, and Draw asks
+    /// for the alpha after all of that. Ends on the first frame the transition is no longer up.
+    /// </summary>
+    private static List<(int Frame, bool Downed, float Alpha)> Fall(bool reduced)
+    {
+        var frames = new List<(int, bool, float)>();
+        var downed = true;
+        var timer = Descent.DownedSeconds;
+        var fadeIn = 0f;
+        for (var frame = 1; frame < 600; frame++)
+        {
+            fadeIn = MathF.Max(0f, fadeIn - FrameS);
+            if (downed)
+            {
+                timer -= FrameS;
+                if (timer <= 0f) { fadeIn = DeathTransition.FadeInSeconds(reduced); downed = false; }
+            }
+            frames.Add((frame, downed, DeathTransition.Alpha(downed, timer, fadeIn, reduced)));
+            if (!DeathTransition.Up(downed, fadeIn)) break;
+        }
+        return frames;
+    }
+
+    /// <summary>The frame the bare countdown restarts on — `_downedTimer -= dt; if (<= 0) StartRun` and nothing else.</summary>
+    private static int BareRestartFrame()
+    {
+        var timer = Descent.DownedSeconds;
+        for (var frame = 1; ; frame++) { timer -= FrameS; if (timer <= 0f) return frame; }
+    }
+
+    [Fact]
+    public void test_the_death_stays_readable_then_fades_and_is_black_on_the_frame_the_descent_restarts()
+    {
+        // THE FADE SITS INSIDE THE DOWNED BEAT. OfflineHunt spends Descent.DownedSeconds per fall and the
+        // Dust for a checkpoint is charged on the restart frame, so the restart may not move: it lands on
+        // the frame it always did, and the black is simply full by then.
+        Assert.True(DeathTransition.FadeOut < Descent.DownedSeconds);
+
+        var fall = Fall(reduced: false);
+        var restart = fall.First(f => !f.Downed).Frame;
+        Assert.Equal(BareRestartFrame(), restart);
+        Assert.InRange(restart, (int)(Descent.DownedSeconds / FrameS), (int)(Descent.DownedSeconds / FrameS) + 1);
+
+        // Readable for everything but the last Reward band: the clip plays and the body lies there.
+        var readableFrames = (int)((Descent.DownedSeconds - DeathTransition.FadeOut) / FrameS);
+        Assert.All(fall.Where(f => f.Frame < readableFrames), f => Assert.Equal(0f, f.Alpha));
+        // ...then the black rises from nothing, never brightens, and is FULL on the restart frame — not
+        // a frame later.
+        var fading = fall.Where(f => f.Frame >= readableFrames + 1 && f.Frame < restart).ToList();
+        Assert.NotEmpty(fading);
+        Assert.True(fading[0].Alpha < 0.1f, "the fade started already dark: a cut, not a fade");
+        for (var i = 1; i < fading.Count; i++) Assert.True(fading[i].Alpha >= fading[i - 1].Alpha, "the fade brightened");
+        Assert.Equal(1f, fall.First(f => f.Frame == restart).Alpha);
+    }
+
+    [Fact]
+    public void test_the_black_holds_for_the_fast_band_after_the_restart_then_lifts_over_the_reward_band()
+    {
+        var fall = Fall(reduced: false);
+        var restart = fall.First(f => !f.Downed).Frame;
+        var after = fall.Where(f => f.Frame > restart).ToList();
+
+        // HELD, so the reset is never seen: full black for the Fast band...
+        var held = (int)(DeathTransition.Hold / FrameS);
+        Assert.All(after.Take(held), f => Assert.Equal(1f, f.Alpha));
+        // ...then the lift, never darkening, to nothing by Fast + Reward — and the transition is over.
+        var lifting = after.Skip(held).ToList();
+        for (var i = 1; i < lifting.Count; i++) Assert.True(lifting[i].Alpha <= lifting[i - 1].Alpha, "the lift darkened");
+        Assert.Equal(0f, lifting[^1].Alpha);
+        var over = (int)Math.Ceiling((DeathTransition.Hold + DeathTransition.FadeIn) / FrameS);
+        Assert.InRange(after.Count, over - 1, over + 1);
+        Assert.False(DeathTransition.Up(downed: false, fadeInClock: 0f));
+        // The bands are the HUNT's own; the constants name them rather than typing seconds.
+        Assert.Equal(UiMotion.Reward, DeathTransition.FadeOut);
+        Assert.Equal(UiMotion.Fast, DeathTransition.Hold);
+        Assert.Equal(UiMotion.Reward, DeathTransition.FadeIn);
+    }
+
+    [Fact]
+    public void test_reduced_motion_cuts_to_black_and_back_with_no_frame_in_between()
+    {
+        // Reduced Motion is the SAME end state with no travel: a cut where the fade would start, black
+        // through the hold, a cut back — and the restart on exactly the same frame.
+        var fall = Fall(reduced: true);
+        Assert.All(fall, f => Assert.True(f.Alpha is 0f or 1f, $"an intermediate alpha under Reduced Motion: {f.Alpha}"));
+        Assert.Equal(BareRestartFrame(), fall.First(f => !f.Downed).Frame);
+
+        // 0 then 1 then 0, each once: no flicker.
+        var runs = new List<float>();
+        foreach (var f in fall) if (runs.Count == 0 || runs[^1] != f.Alpha) runs.Add(f.Alpha);
+        Assert.Equal(new[] { 0f, 1f, 0f }, runs);
+        // The cut back comes at the hold's end, not after a fade nobody is shown.
+        Assert.Equal(DeathTransition.Hold, DeathTransition.FadeInSeconds(reduced: true));
+        Assert.Equal(DeathTransition.Hold + DeathTransition.FadeIn, DeathTransition.FadeInSeconds(reduced: false));
+    }
+
+    [Fact]
+    public void test_the_rigs_dial_sweeps_from_the_last_readable_instant_through_the_black_to_the_stage_back()
+    {
+        // RH_SHOT_T for `fightfade`: five instants a reviewer can name, linear in seconds between them.
+        var readable = DeathTransition.At(0f, reduced: false);
+        Assert.False(readable.Restarted);
+        Assert.Equal(DeathTransition.FadeOut, readable.DownedTimer, 5);
+        Assert.Equal(0f, DeathTransition.Alpha(true, readable.DownedTimer, 0f, false));
+
+        var fadingOut = DeathTransition.At(0.25f, reduced: false);
+        Assert.False(fadingOut.Restarted);
+        Assert.InRange(DeathTransition.Alpha(true, fadingOut.DownedTimer, 0f, false), 0.3f, 0.8f);
+
+        var black = DeathTransition.At(0.5f, reduced: false);
+        Assert.True(black.Restarted, "at the dial's middle the next descent has already begun");
+        Assert.Equal(1f, DeathTransition.Alpha(false, 0f, black.FadeInClock, false));
+
+        var fadingIn = DeathTransition.At(0.75f, reduced: false);
+        Assert.True(fadingIn.Restarted);
+        Assert.InRange(DeathTransition.Alpha(false, 0f, fadingIn.FadeInClock, false), 0.3f, 0.8f);
+
+        var done = DeathTransition.At(1f, reduced: false);
+        Assert.True(done.Restarted);
+        Assert.Equal(0f, done.FadeInClock);
+        Assert.False(DeathTransition.Up(false, done.FadeInClock));
+        // Time runs one way along the dial: the new wave's entrance is further along at every step.
+        Assert.True(black.SinceRestart < fadingIn.SinceRestart && fadingIn.SinceRestart < done.SinceRestart);
+
+        // Under Reduced Motion the same instants are the cut: black where the fade would be, and the
+        // stage already back where the lift would be.
+        Assert.Equal(1f, DeathTransition.Alpha(true, DeathTransition.At(0.25f, true).DownedTimer, 0f, true));
+        Assert.Equal(1f, DeathTransition.Alpha(false, 0f, DeathTransition.At(0.5f, true).FadeInClock, true));
+        Assert.Equal(0f, DeathTransition.At(0.75f, true).FadeInClock);
+        Assert.False(DeathTransition.Up(false, DeathTransition.At(0.75f, true).FadeInClock));
+    }
 }
