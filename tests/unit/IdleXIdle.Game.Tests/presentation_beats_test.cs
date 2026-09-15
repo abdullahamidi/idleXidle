@@ -429,6 +429,30 @@ public class PresentationBeatsTest
     }
 
     [Fact]
+    public void test_the_hud_refuses_exactly_while_the_black_is_visible_and_is_live_at_every_other_frame()
+    {
+        // "Nothing clickable paints when its input is blocked" cuts both ways: the medallion painted
+        // beside a fallen Hunter for the readable beat is LIVE, and only the black blocks it — from the
+        // fade-out's first visible frame to the lift's last, never a frame longer either side.
+        foreach (var reduced in new[] { false, true })
+        {
+            var fall = Fall(reduced);
+            Assert.All(fall, f => Assert.Equal(f.Alpha > 0f, DeathTransition.Covers(f.Alpha)));
+            var readableFrames = (int)((Descent.DownedSeconds - DeathTransition.FadeOut) / FrameS);
+            Assert.All(fall.Where(f => f.Frame < readableFrames), f => Assert.False(DeathTransition.Covers(f.Alpha), "the readable beat refused input"));
+            Assert.True(DeathTransition.Covers(fall.First(f => !f.Downed).Alpha), "the restart frame is black and must refuse");
+            Assert.False(DeathTransition.Covers(fall[^1].Alpha), "the stage is back and must answer");
+            // ...and the transition being UP (the coach's gate) is the wider window: it starts on the fall
+            // frame, before the black, so a card is never raised beside the collapse either.
+            Assert.True(DeathTransition.Up(fall[0].Downed, 0f));
+            Assert.False(DeathTransition.Covers(fall[0].Alpha));
+        }
+        // Under Reduced Motion the black is a cut, so the refusal is a cut too: the same frames, no more.
+        var cut = Fall(reduced: true);
+        Assert.Equal(cut.Count(f => f.Alpha == 1f), cut.Count(f => DeathTransition.Covers(f.Alpha)));
+    }
+
+    [Fact]
     public void test_the_rigs_dial_sweeps_from_the_last_readable_instant_through_the_black_to_the_stage_back()
     {
         // RH_SHOT_T for `fightfade`: five instants a reviewer can name, linear in seconds between them.

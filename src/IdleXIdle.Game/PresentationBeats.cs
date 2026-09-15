@@ -161,7 +161,20 @@ public static class DeathTransition
     }
 
     /// <summary>Does the transition own the stage — the downed beat, or the black and the lift after it?</summary>
+    /// <remarks>
+    /// The fact the host's lesson card and coach spotlight yield to: nothing is SAID over a fall from its
+    /// first frame to the lift's last. Input is a narrower question — see <see cref="Covers"/>.
+    /// </remarks>
     public static bool Up(bool downed, float fadeInClock) => downed || fadeInClock > 0f;
+
+    /// <summary>Is the black covering the stage — does the screen's own HUD refuse input under it?</summary>
+    /// <remarks>
+    /// Exactly while the fill is visible, from the fade-out's first frame to the lift's last, and not a
+    /// frame longer either side: "nothing clickable paints when its input is blocked" cuts both ways, so
+    /// the readable phase — the medallion painted beside a fallen Hunter — is as live as any other frame.
+    /// One rule for both halves (ADR-006): the paint and the refusal read the same alpha.
+    /// </remarks>
+    public static bool Covers(float alpha) => alpha > 0f;
 
     /// <summary>One instant of the transition, for the capture rig: which clock is running and where it stands.</summary>
     /// <param name="Restarted">Has the next descent begun — is the instant past the restart frame?</param>

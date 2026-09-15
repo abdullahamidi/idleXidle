@@ -1146,11 +1146,22 @@ public sealed class HuntScreen
     /// <remarks>
     /// Published for the host: nothing is said over a fall. The lesson card and the coach's spotlight
     /// yield while this is true — a prompt beside a collapsing Hunter, or brackets over a black stage,
-    /// is a second thing to look at — and <see cref="TakeInput"/> refuses this screen's own HUD under
-    /// it. The same reading <see cref="ResolveOverlay"/> and the fill at the foot of <see cref="Draw"/>
-    /// use, so the three cannot disagree about when the fall is over.
+    /// is a second thing to look at. Input is the narrower question (<see cref="BlackCovers"/>): the
+    /// medallion beside a fallen Hunter is painted, so it is live; only the black blocks it.
     /// </remarks>
     public bool DeathTransitionUp => DeathTransition.Up(_mode == Mode.Downed, _deathFadeIn);
+
+    /// <summary>How black the stage is this frame, 0..1 — what the foot of <see cref="Draw"/> paints.</summary>
+    /// <remarks>
+    /// ONE READING FOR BOTH HALVES (ADR-006): the fill paints this and <see cref="TakeInput"/> refuses
+    /// under it, so the paint and the refusal cannot disagree about whether the HUD is covered. Read from
+    /// the two clocks and the Reduced Motion switch alone; DevShowFall holds it at zero so `fightfall`
+    /// can photograph the collapse at any point of the beat.
+    /// </remarks>
+    private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced);
+
+    /// <summary>Is the black covering this screen's own HUD — the medallion, the rail's doors, the inspector?</summary>
+    private bool BlackCovers => DeathTransition.Covers(BlackAlpha);
 
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
@@ -1288,10 +1299,12 @@ public sealed class HuntScreen
         // nothing here paints while another screen is on top — so a lift that ran out unseen must not
         // resume as a black frame when the player comes back.
         if (!huntOnTop) { _deathFadeIn = 0f; return; }
-        // UNDER THE FALL, NOTHING ON THIS SCREEN ANSWERS. The medallion, the rail's doors and the
-        // inspector stand beside a collapsing Hunter and then under the black, and Draw parks the cursor
-        // for them; the host's own chrome stays live above it, and L still opens the log.
-        if (DeathTransitionUp) return;
+        // UNDER THE BLACK, NOTHING ON THIS SCREEN ANSWERS — and only under the black. The medallion, the
+        // rail's doors and the inspector are painted beside a fallen Hunter for the readable beat, so
+        // they are live then, exactly as on any other frame; from the fade's first frame to the lift's
+        // last they are covered, and refuse. The host's own chrome stays live above the black, and L
+        // still opens the log.
+        if (BlackCovers) return;
         // The paint's own guard: before the first descent there is no HUD to hit.
         if (_run is null || _replay is null || _champ is null) return;
 
@@ -2316,10 +2329,8 @@ public sealed class HuntScreen
         _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
-        // full resolution), so the log button and the utility doors hit-test it as is. PARKED while the
-        // death transition is up: TakeInput refuses everything this screen paints under it, and a control
-        // whose input is refused does not hover (ADR-006 — what is drawn is what is hit-tested).
-        var hit = DeathTransitionUp ? OffCanvas : mouse;
+        // full resolution), so the log button and the utility doors hit-test it as is.
+        var hit = mouse;
         if (_run is null || _replay is null || _champ is null) return;
 
         // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
@@ -2369,12 +2380,11 @@ public sealed class HuntScreen
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
         // THE FALL'S BLACK, after the flash and under the host's chrome. One fill over the whole canvas —
-        // the arena, the header stack, the rails, the medallion, the scene behind — read from the two
-        // clocks and the Reduced Motion switch alone (DeathTransition), so the host's toast gate cannot
-        // silence it. Batch C paints the pills, the gear and the nav over it: their input is not
-        // blocked, so they stay live. DevShowFall holds it off so `fightfall` can photograph the
-        // collapse at any point of the beat.
-        var black = DevShowFall ? 0f : DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced);
+        // the arena, the header stack, the rails, the medallion, the scene behind — from BlackAlpha, the
+        // reading TakeInput refuses under, so the host's toast gate cannot silence it and the HUD is
+        // never refused while visible nor answered while covered. Batch C paints the pills, the gear and
+        // the nav over it: their input is not blocked, so they stay live.
+        var black = BlackAlpha;
         if (black > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.Black * black);   // ui-page-ok: the canvas, not the page
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
         if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F9)
@@ -5229,9 +5239,10 @@ public sealed class HuntScreen
     //    descent begins at full black on the frame the beat runs out; the black holds for DeathTransition.Hold
     //    and lifts over DeathTransition.FadeIn while the new wave walks in. The arithmetic is DeathTransition
     //    (PresentationBeats.cs); this screen owns the two clocks — _downedTimer and the lift below — and
-    //    paints ONE full-canvas fill from them at the foot of Draw, under the host's chrome. Under Reduced
-    //    Motion both fades are cuts. No plate, no door, no header line: the wave lane shows the wave that
-    //    fell until the restart and the new wave after it, and the report waits in the EXPEDITION LOG.
+    //    paints ONE full-canvas fill from them at the foot of Draw, under the host's chrome; its own HUD
+    //    refuses input exactly while that fill is visible (BlackCovers) and is live at every other frame.
+    //    Under Reduced Motion both fades are cuts. No plate, no door, no header line: the wave lane shows
+    //    the wave that fell until the restart and the new wave after it, and the report waits in the LOG.
 
     /// <summary>Seconds left of the lift after a restart — the hold, then the fade. Zero while the stage is visible.</summary>
     /// <remarks>
@@ -5239,9 +5250,6 @@ public sealed class HuntScreen
     /// another screen is on top (<see cref="TakeInput"/>), held by <see cref="DevPoseDeathTransition"/>.
     /// </remarks>
     private float _deathFadeIn;
-
-    /// <summary>Where this screen's HUD is told the cursor is while the transition is up: nowhere, so nothing hovers under the black.</summary>
-    private static readonly Point OffCanvas = new(-4096, -4096);
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>

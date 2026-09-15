@@ -116,24 +116,30 @@ public class HuntScreenFeedbackTests
         Assert.Equal(at, src.LastIndexOf(fill, StringComparison.Ordinal));
         Assert.True(at > src.IndexOf("Ember * (_deathFlash * 0.35f)", StringComparison.Ordinal), "the black is painted before the flash");
         Assert.True(at > src.IndexOf("DrawHunterHud(b);", StringComparison.Ordinal), "the black is painted inside the arena pass — it will be scissored");
-        var reads = Slice(src, "var black = ", fill);
-        Assert.Contains("DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced)", reads);
-        Assert.DoesNotContain("clicked", reads);
-        Assert.DoesNotContain("wheel", reads);
-        Assert.DoesNotContain("suppressBanner", reads);
+        Assert.Contains("var black = BlackAlpha;", src);
+        Assert.True(src.IndexOf("var black = BlackAlpha;", StringComparison.Ordinal) < at, "the fill reads an alpha computed after it");
+        const string alpha = "private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced);";
+        Assert.Contains(alpha, src);
+        Assert.DoesNotContain("clicked", alpha);
+        Assert.DoesNotContain("suppressBanner", alpha);
 
-        // ...and this screen's own HUD does not answer under it. DECIDED IN UPDATE (ADR-006): TakeInput
-        // refuses the medallion and the rail while the transition is up, after the log and after the
-        // screen gate, so a click under the black cannot fire what the black covers.
+        // ...and this screen's own HUD refuses EXACTLY WHILE THE BLACK COVERS IT, and is live at every
+        // other frame — the medallion painted beside a fallen Hunter opens the log as it always does,
+        // and nothing hovers or answers under the black. ONE READING FOR BOTH HALVES (ADR-006): the
+        // refusal is the paint's own alpha, decided in TakeInput after the log and after the screen gate.
+        Assert.Contains("private bool BlackCovers => DeathTransition.Covers(BlackAlpha);", src);
+        Assert.DoesNotContain("OffCanvas", src);   // the cursor is never parked: a painted control hovers
+        Assert.Contains("var hit = mouse;", src);
         var input = Slice(src, "public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)", "private string _buildStamp");
         var logGate = input.IndexOf("if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }", StringComparison.Ordinal);
         var topGate = input.IndexOf("if (!huntOnTop) { _deathFadeIn = 0f; return; }", StringComparison.Ordinal);
-        var fallGate = input.IndexOf("if (DeathTransitionUp) return;", StringComparison.Ordinal);
+        var blackGate = input.IndexOf("if (BlackCovers) return;", StringComparison.Ordinal);
         var medallion = input.IndexOf("UiKit.ClickedIn(LogButtonRect", StringComparison.Ordinal);
         Assert.True(logGate >= 0, "the log gate is missing from TakeInput");
         Assert.True(topGate > logGate, "leaving the screen must snap the transition, after the log gate");
-        Assert.True(fallGate > topGate, "the death transition's refusal must follow the screen gate");
-        Assert.True(medallion > fallGate, "the medallion is hit-tested before the death transition refuses it");
+        Assert.True(blackGate > topGate, "the black's refusal must follow the screen gate");
+        Assert.True(medallion > blackGate, "the medallion is hit-tested before the black refuses it");
+        Assert.DoesNotContain("if (DeathTransitionUp) return;", input);   // the readable beat is live
     }
 
     [Fact]

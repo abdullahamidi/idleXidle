@@ -137,6 +137,6 @@ public class CaptureRigModesTest
         Assert.Contains("DevHoldReport = false;", pose);
         Assert.Contains("StartRun(", pose);
         // ...and `fightfall` keeps its own hold: under DevShowFall the black never paints, whatever the clocks say.
-        Assert.Contains("var black = DevShowFall ? 0f : DeathTransition.Alpha(", hunt);
+        Assert.Contains("private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(", hunt);
     }
 }

@@ -257,6 +257,10 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_REVEAL_WEARABLE" ] && RH_ENV+=(RH_SHOT_REVEAL_WEARABLE="$RH_SHOT_REVEAL_WEARABLE")
 [ -n "$RH_SHOT_SCROLL" ] && RH_ENV+=(RH_SHOT_SCROLL="$RH_SHOT_SCROLL")
 [ -n "$RH_SHOT_HELD" ] && RH_ENV+=(RH_SHOT_HELD="$RH_SHOT_HELD")
+# THE POSED CURSOR, in whichever of its three spaces the caller named (the game refuses more than one).
+[ -n "$RH_SHOT_MOUSE" ] && RH_ENV+=(RH_SHOT_MOUSE="$RH_SHOT_MOUSE")
+[ -n "$RH_SHOT_PAGE_MOUSE" ] && RH_ENV+=(RH_SHOT_PAGE_MOUSE="$RH_SHOT_PAGE_MOUSE")
+[ -n "$RH_SHOT_CANVAS_MOUSE" ] && RH_ENV+=(RH_SHOT_CANVAS_MOUSE="$RH_SHOT_CANVAS_MOUSE")
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
