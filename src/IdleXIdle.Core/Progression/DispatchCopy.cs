@@ -1,0 +1,94 @@
+﻿using System;
+using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
+using IdleXIdle.Core.Economy;
+using IdleXIdle.Core.Encounters;
+using IdleXIdle.Core.Quests;
+using IdleXIdle.Core.Sources;
+using IdleXIdle.Core.Traits;
+
+namespace IdleXIdle.Core.Progression;
+
+/// <summary>
+/// The WORDS of a dispatch, rendered at display time from the catalogues. Never persisted: a row
+/// stores the event and its subject, and the catalogue that owns the subject says what it is called
+/// — so a renamed trait reads by its new name, and a retired one reads plainly instead of as an id.
+/// </summary>
+/// <remarks>
+/// A headline is uppercase, like every notice in the game; a body is a sentence the surface may
+/// wrap. Neither promises a price the screen it points at could refuse — the first gem's free socket
+/// is a live rule the Forge states itself.
+/// </remarks>
+public static class DispatchCopy
+{
+    /// <summary>The one line that says what happened. Never empty, never a raw id.</summary>
+    public static string Headline(Dispatch d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return d.Kind switch
+        {
+            DispatchKind.Unlock => ScreenOf(d) is { } screen ? $"NEW — {Unlocks.Headline(screen)}" : "A NEW SCREEN OPENED",
+            DispatchKind.Gem => "A GEM DROPPED",
+            DispatchKind.Trait => TraitCatalogue.Find(d.SubjectId) is { } t ? $"A TRAIT HAS AWAKENED — {t.Name}" : "A TRAIT HAS AWAKENED",
+            DispatchKind.Vow => Vows.ById(d.SubjectId) is { } v ? $"A VOW HAS REVEALED ITSELF — {v.Name}" : "A VOW HAS REVEALED ITSELF",
+            DispatchKind.Keystone => Keystones.ById(d.SubjectId) is { } k ? $"NEW KEYSTONE — {k.Name}" : "A NEW KEYSTONE",
+            DispatchKind.Champion => CharacterRoster.Find(d.SubjectId ?? "") is { } c ? $"{c.Name} JOINS YOU" : "A HUNTER JOINS YOU",
+            DispatchKind.Quest => QuestCatalogue.Find(d.SubjectId) is { } q ? $"QUEST COMPLETE — {q.Name}" : "QUEST COMPLETE",
+            DispatchKind.Set => SourceOf(d) is { } s ? $"{ElementSets.Name(s)} COMPLETE" : "A SET IS COMPLETE",
+            DispatchKind.Region => Regions.Find(d.RegionId ?? "") is { } r ? $"{r.Name} CONQUERED" : "A REGION IS CONQUERED",
+            DispatchKind.Socket => "A KEYSTONE SOCKET OPENS",
+            DispatchKind.Migration => d.SubjectId switch
+            {
+                DispatchKeys.MigrationKeystones => d.Count is int n && n > 1
+                    ? $"THE WORLD HAS TAUGHT YOU {n} KEYSTONES"
+                    : "THE WORLD HAS TAUGHT YOU A KEYSTONE",
+                DispatchKeys.MigrationFifthSlot => "THE FIFTH SKILL SLOT IS GONE",
+                _ => "THE GAME HAS CHANGED",
+            },
+            _ => "NEWS",
+        };
+    }
+
+    /// <summary>What to do about it, or what it does — one sentence the surface may wrap. Empty only when there is nothing to add.</summary>
+    public static string Body(Dispatch d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return d.Kind switch
+        {
+            DispatchKind.Unlock => ScreenOf(d) is { } screen ? Unlocks.OpenedLine(screen) : "It is on the rail.",
+            DispatchKind.Gem => "The Forge's SOCKET tab sets it into an item.",
+            DispatchKind.Trait => TraitCatalogue.Find(d.SubjectId) is { } t ? t.Flavour : "Read what it does on the TRAITS screen.",
+            DispatchKind.Vow => Vows.ById(d.SubjectId) is { } v && v.ProofLine.Length > 0 ? v.ProofLine : "It is on the BUILD screen.",
+            DispatchKind.Keystone => Keystones.ById(d.SubjectId) is { } k ? k.Blurb : "It is on the BUILD screen, ready to wear.",
+            DispatchKind.Champion => "Switch hunter on the ROSTER screen.",
+            DispatchKind.Quest => QuestCatalogue.Find(d.SubjectId) is { } q ? q.Demand : "Its reward is yours.",
+            DispatchKind.Set => SourceOf(d) is { } s ? $"{ElementSets.CapstoneName(s)} ACTIVE" : "Five pieces worn; its bonus is active.",
+            DispatchKind.Region => "The next region is open. Travel there on the MAP when you are ready.",
+            DispatchKind.Socket => "Go to the BUILD screen to wear your new keystone.",
+            DispatchKind.Migration => d.SubjectId switch
+            {
+                DispatchKeys.MigrationKeystones => (d.Count is int n && n > 1 ? "They are" : "It is")
+                                                   + " on the BUILD screen, ready to wear. You find more by conquering and mastering regions.",
+                DispatchKeys.MigrationFifthSlot => "It was taken out of your build. It keeps its level — put it back any time in place of another skill.",
+                _ => "",
+            },
+            _ => "",
+        };
+    }
+
+    // The subject of an Unlock row is an Activity NAME, read forward across renames the way the
+    // explained list is — so a row written when TRAINING was still STATS renders as TRAINING.
+    private static Activity? ScreenOf(Dispatch d)
+        => d.SubjectId is { Length: > 0 } name
+           && Enum.TryParse<Activity>(Onboarding.ModernScreenKey(name), ignoreCase: true, out var screen)
+           && Enum.IsDefined(screen)
+            ? screen
+            : null;
+
+    private static Source? SourceOf(Dispatch d)
+        => d.SubjectId is { Length: > 0 } name
+           && Enum.TryParse<Source>(name, ignoreCase: true, out var source)
+           && Enum.IsDefined(source)
+            ? source
+            : null;
+}

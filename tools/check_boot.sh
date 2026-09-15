@@ -172,6 +172,35 @@ seed_version() {
 }
 
 ledger_line() { echo "$1" | grep -m1 "ftue_loop_lived="; }
+inbox_line()  { echo "$1" | grep -m1 "inbox.unread="; }
+
+# THE INBOX RIDES THE SAME TWO LANES. Both files are below Dispatches.FirstVersionWithInbox (8), so
+# both must be SEEDED — told what they already know, with nothing unread — and the seed must have
+# marked something: MasteryEarned 25 opens TRAINING, and the starter is on every roster.
+assert_inbox_seeded() {   # $1 = lane name, $2 = the run's output
+  local line
+  line="$(inbox_line "$2")"
+  if [ -z "$line" ]; then
+    echo "NO INBOX LEDGER ROW on the $1 lane — DumpLessonLedger printed no inbox line, so this proves nothing." >&2
+    exit 1
+  fi
+  if ! echo "$line" | grep -q "seeded=True"; then
+    echo "A PRE-v8 SAVE WAS NOT SEEDED — Game1._saveVersionSeen is not reaching Dispatches.SeedKnown." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  if ! echo "$line" | grep -qE "unread=0[[:space:]]"; then
+    echo "A PRE-v8 SAVE BOOTED WITH UNREAD MAIL — a veteran was handed letters about a life already led." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  if echo "$line" | grep -qE "known=0[[:space:]]"; then
+    echo "THE SEED MARKED NOTHING KNOWN — the file's facts are not reaching it." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  echo "$1 save's inbox seeded as already known — $line"
+}
 
 seed_version 4
 old_out="$(boot_run "$(winpath "$SEED")")"
@@ -187,6 +216,14 @@ if ! echo "$old_line" | grep -q "ftue_loop_lived=True"; then
   exit 1
 fi
 echo "v4 save seeded as a veteran."
+assert_inbox_seeded v4 "$old_out"
+# ...and the bump that made the seed safe took its snapshot: a pre-v8 file is copied aside before the
+# first autosave can rewrite it (SaveStore.SnapshotBeforeUpgrade, once per target version).
+if ! ls "$SEED"/save.pre-v8-*.json >/dev/null 2>&1; then
+  echo "NO PRE-UPGRADE SNAPSHOT — a pre-v8 file booted without save.pre-v8-*.json being taken." >&2
+  exit 1
+fi
+echo "pre-v8 snapshot taken."
 
 seed_version 5
 new_out="$(boot_run "$(winpath "$SEED")")"
@@ -202,6 +239,39 @@ if ! echo "$new_line" | grep -q "ftue_loop_lived=False"; then
   exit 1
 fi
 echo "v5 save believed as written — false facts stay false."
+assert_inbox_seeded v5 "$new_out"
+
+# ── AND THE NEGATIVE CONTROL FOR THE INBOX: a file AT the inbox version is believed as written. ──
+#
+# A hand-written v8 file carrying ONE unread letter must boot with that letter still unread and
+# nothing seeded. A `SaveGame.CurrentVersion` creeping into the seed's gate — or the gate reading the
+# inbox's emptiness instead of the file's version — would pass both lanes above and fail here.
+seed_v8_with_one_unread() {
+  rm -f "$SEED/save.json" "$SEED/save.bak" "$SEED"/save.pre-v*.json
+  printf '{ "Version": 8, "SavedAtMs": 1700000000000, "MasteryEarned": 25, "Dispatches": [ { "Key": "region.verdant_hollow.conquered", "Kind": "Region", "AtMs": 1700000000000, "Read": false, "RegionId": "verdant_hollow" } ], "KnownDispatchKeys": [ "region.verdant_hollow.conquered" ] }
+' > "$SEED/save.json"
+}
+
+seed_v8_with_one_unread
+v8_out="$(boot_run "$(winpath "$SEED")")"
+v8_line="$(inbox_line "$v8_out")"
+if [ -z "$v8_line" ]; then
+  echo "NO INBOX LEDGER ROW on the v8 lane." >&2
+  echo "$v8_out" | tail -20 >&2
+  exit 1
+fi
+if ! echo "$v8_line" | grep -q "seeded=False"; then
+  echo "A CURRENT-VERSION SAVE WAS SEEDED — the version has stopped deciding, and every letter a new" >&2
+  echo "player has not opened yet would be marked as already known on their next launch." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+if ! echo "$v8_line" | grep -qE "unread=1[[:space:]]"; then
+  echo "AN UNREAD LETTER DID NOT SURVIVE THE BOOT — a v8 file is not being believed as written." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+echo "v8 save believed as written — an unread letter stays unread, nothing seeded — $v8_line"
 
 if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
   echo "THE MIGRATION LANES TOUCHED THE PLAYER'S SAVE." >&2

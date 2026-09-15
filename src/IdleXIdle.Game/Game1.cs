@@ -185,6 +185,39 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private bool _retriedAfterChange;
 
     /// <summary>
+    /// DISPATCHES — the account's inbox: the news it has been told, and which of it has been read.
+    /// </summary>
+    /// <remarks>
+    /// A plain model with no device, restored in Initialize like the trait ledger. The inbox IS the
+    /// dedupe: a producer posts by semantic key and needs no first-frame baseline of its own. Copy is
+    /// never stored — <see cref="DispatchCopy"/> renders it from the catalogues at display time.
+    /// </remarks>
+    private readonly Inbox _inbox = new();
+
+    /// <summary>
+    /// Has DISPATCHES ever been opened? The completion latch of the inbox's lesson — a sibling of
+    /// <see cref="_reportOpenedEver"/>, kept by the save because opening the inbox changes nothing
+    /// in the world and so cannot be reconstructed.
+    /// </summary>
+    private bool _dispatchesOpenedEver;
+
+    /// <summary>
+    /// A dispatch arrived since the chrome last looked — the edge the envelope's pulse is made of.
+    /// Set by <see cref="PostDispatch"/>, taken by <see cref="TakeDispatchArrival"/>. Session-only.
+    /// </summary>
+    private bool _dispatchArrivalOwed;
+
+    /// <summary>
+    /// The loaded file, parked between <see cref="LoadOrStartFresh"/> (Initialize) and
+    /// <see cref="SeedExplained"/> for the inbox seed, whose facts include the rail's revealed set —
+    /// real only once the Forge exists. Null once used, and on every path that read no file.
+    /// </summary>
+    private SaveGame? _pendingInboxSeed;
+
+    /// <summary>Did this session's load seed the inbox — was it a file from before the inbox? Telemetry only.</summary>
+    private bool _inboxSeeded;
+
+    /// <summary>
     /// The Version of the file this session LOADED. Migration input, and nothing else.
     /// </summary>
     /// <remarks>
@@ -1172,6 +1205,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _reportOpenedEver = save.ReportOpenedEver;
         _changedAfterFall = save.ChangedAfterFall;
         _retriedAfterChange = save.RetriedAfterChange;
+        _dispatchesOpenedEver = save.DispatchesOpenedEver;
+        // THE INBOX — a plain model with no device, like the trait ledger above, so it is safe to
+        // restore here in Initialize. Rows are deduped by key on the way in and a Kind this build does
+        // not know is dropped (Core, tested) — never a boot crash.
+        _inbox.Restore(SaveSystem.RestoreDispatches(save), save.KnownDispatchKeys);
+        // PARKED for the inbox seed: a file from before the inbox is told what it already knows in
+        // SeedExplained, once the rail's revealed set is real (Reveal.Restore reads the Forge's bag,
+        // and the Forge is built in LoadContent).
+        _pendingInboxSeed = save;
         _pendingExplained = save.ExplainedScreens.Select(Onboarding.ModernScreenKey).ToList();
         _pendingRevealed = save.RevealedScreens.ToList();
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
@@ -1483,6 +1525,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             ReportOpenedEver = _reportOpenedEver,
             ChangedAfterFall = _changedAfterFall,
             RetriedAfterChange = _retriedAfterChange,
+            // THE INBOX — rows in created order (the order IS meaning), the known-key set, and the
+            // opened latch. All three, in the same commit as the three on SaveGame: a field added there
+            // and forgotten here serialises empty for ever, and autosave fires every ten seconds.
+            Dispatches = _inbox.ToSave(),
+            KnownDispatchKeys = _inbox.KnownToSave(),
+            DispatchesOpenedEver = _dispatchesOpenedEver,
             ExplainedScreens = _explained.OrderBy(s => s).ToList(),
             RevealedScreens = Reveal.Names(_revealed),
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -1666,6 +1714,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _reportOpenedEver = false;
         _changedAfterFall = false;
         _retriedAfterChange = false;
+        // THE INBOX: a new career has been told nothing, has opened nothing, and owes the chrome nothing.
+        _inbox.Clear();
+        _dispatchesOpenedEver = false;
+        _dispatchArrivalOwed = false;
+        _pendingInboxSeed = null;
+        _inboxSeeded = false;
         // A NEW GAME HAS READ NO FILE, so it predates nothing and is never seeded as a veteran.
         _saveVersionSeen = SaveGame.CurrentVersion;
         _fallSnapshot = null;
@@ -1800,6 +1854,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (Environment.GetEnvironmentVariable("RH_LESSON_LEDGER") is not { Length: > 0 }) return;
         _ledgerDumped = true;
         foreach (var row in _coach.Telemetry(LessonFactsNow())) Console.WriteLine(row);
+        // THE INBOX, in one line: what waits unread, what the account knows, and whether this load
+        // seeded it (a file from before the inbox). tools/check_boot.sh reads it on three hand-written
+        // files — a migration lane that cannot fail is not a test.
+        Console.WriteLine($"inbox\tunread={_inbox.Unread}\tknown={_inbox.Known.Count}\tseeded={_inboxSeeded}");
     }
 
     /// <summary>Has the ledger been printed? Both exit paths run on the way out of a rig shot.</summary>
@@ -1922,6 +1980,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             foreach (var a in Enum.GetValues<Activity>()) _revealed.Add(a);
         _pendingRevealed = null;
         _revealSeeded = true;
+
+        // ── AND THE INBOX, FOR A SAVE THAT PREDATES IT. ─────────────────────────────────────────
+        //
+        // A file from before the inbox has been TOLD nothing, and it has lived everything its facts
+        // carry — conquests, traits, keystones, Vows, quests, hunters, sets, the screens it has open.
+        // Loaded literally, the first producers would post twenty letters about a life already led.
+        // So its accomplishments are marked KNOWN — no rows, no timestamps, nothing to read — and only
+        // what happens from here on is news. Here and not in LoadOrStartFresh because the revealed set
+        // is one of the facts, and it is only real once the Forge exists.
+        //
+        // THE FILE'S VERSION DECIDES (Dispatches.FirstVersionWithInbox), never the inbox's emptiness:
+        // a file at 8 or above with an empty inbox is a player who has honestly been told nothing yet.
+        if (_pendingInboxSeed is { } seedFrom && _saveVersionSeen < Dispatches.FirstVersionWithInbox)
+            _inboxSeeded = Dispatches.SeedKnown(seedFrom, _revealed, _inbox);
+        _pendingInboxSeed = null;
 
         _explained.Clear();
         if (Environment.GetEnvironmentVariable("RH_SHOT") is not null)
@@ -5016,6 +5089,44 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// are both read.
     /// </remarks>
     private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(new Notice(head, detail));
+
+    /// <summary>
+    /// Post a dispatch to the inbox. True if it was news; false — and nothing posted — if the account
+    /// already knew the key. The inbox is the dedupe: a producer needs no baseline of its own.
+    /// </summary>
+    /// <remarks>
+    /// Posting does not save. A producer that latches a fact already calls <see cref="Save"/> on the
+    /// same frame, so the row and its fact land in one write; the ten-second autosave carries the rest.
+    /// </remarks>
+    private bool PostDispatch(Dispatch dispatch)
+    {
+        if (!_inbox.Post(dispatch)) return false;
+        _dispatchArrivalOwed = true;   // the edge the envelope's pulse is made of
+        return true;
+    }
+
+    /// <summary>The arrival edge, taken once: true on the first ask after a dispatch was posted.</summary>
+    private bool TakeDispatchArrival()
+    {
+        var owed = _dispatchArrivalOwed;
+        _dispatchArrivalOwed = false;
+        return owed;
+    }
+
+    /// <summary>
+    /// Mark one dispatch read, and save at once — the pattern of ReportOpenedEver: a thing the player
+    /// just did survives a crash before the ten-second autosave. Reading changes presentation only.
+    /// </summary>
+    private void MarkDispatchRead(string key)
+    {
+        if (_inbox.MarkRead(key)) Save();
+    }
+
+    /// <summary>Mark every dispatch read, and save at once.</summary>
+    private void MarkAllDispatchesRead()
+    {
+        if (_inbox.MarkAllRead() > 0) Save();
+    }
 
     /// <summary>
     /// A TRAIT HAS AWAKENED — the reveal §32 asks for: meaningful, rare, and never blocking.

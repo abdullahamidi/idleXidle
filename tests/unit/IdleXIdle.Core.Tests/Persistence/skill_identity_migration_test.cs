@@ -163,7 +163,7 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_seven()
+    public void test_the_current_save_version_is_eight()
     {
         // RE-PINNED 2026-09-09 (was four). The bump is what makes an OLDER build refuse a new file as
         // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
@@ -181,6 +181,9 @@ public class SkillIdentityMigrationTest
         // written before it has none. See OpeningScript.FirstVersionWithOpeningState.
         // RE-PINNED 2026-09-11 (was six): that cursor gained a stage mid-sequence, and a v6 file's
         // ordinals are read in their own numbering. See OpeningScript.FirstVersionWithSignatureWatch.
-        Assert.Equal(7, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox. A file below 8 has been TOLD nothing,
+        // and "told nothing" must be distinguishable from an honestly empty inbox - the v5 lesson
+        // again. See Dispatches.FirstVersionWithInbox, frozen at 8.
+        Assert.Equal(8, SaveGame.CurrentVersion);
     }
 }

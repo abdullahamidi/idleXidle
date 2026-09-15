@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -54,6 +54,17 @@ public sealed record SaveGame
     // from IntroduceHealth up moved one place. A v6 cursor is read through OpeningScript.StageOf(saved,
     // fileVersion), which puts it back on the beat it meant; this number is what tells the two
     // numberings apart (OpeningScript.FirstVersionWithSignatureWatch, frozen at 7).
+    // 8 = DISPATCHES (2026-09-15). The account gained an inbox — a ledger of what it has been TOLD,
+    // and the keys it knows, so background news is posted once and never twice. A file written before
+    // it carries no inbox, and "carries none" must be distinguishable from "honestly empty": the v5
+    // lesson again, because the two serialise the same way and only the version can say which it is.
+    // Loaded literally, a veteran's first session on this build would open on twenty unread letters
+    // about a life already led — so a file below 8 is seeded as already KNOWING every accomplishment it
+    // carries (conquests, traits, keystones, Vows, quests, hunters, sets, the screens it has open), with
+    // no rows, no timestamps and nothing unread, and only what happens from then on is news. A file at
+    // 8 or above is believed as written, an empty inbox and an unread row included
+    // (Dispatches.FirstVersionWithInbox, frozen at 8). The bump also makes SnapshotBeforeUpgrade copy
+    // every v7 file aside before the first autosave rewrites it.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -402,6 +413,35 @@ public sealed record SaveGame
     /// </remarks>
     public List<string> TutorialsDone { get; init; } = new();
 
+    // ── DISPATCHES (2026-09-15). Three fields, and a version bump (8) rather than an additive add: a
+    //    file from before them has been told NOTHING, and Dispatches.SeedKnown has to tell that file
+    //    apart from one whose inbox is honestly empty — "absent" and "empty" serialise the same way,
+    //    and only the version can say which it is (the v5 lesson, in the history above).
+    //
+    //    ALL THREE MUST ALSO BE IN Game1.Save()'s `with` BLOCK. A field added here and forgotten there
+    //    serialises at its default for ever, and autosave fires every ten seconds: the inbox would be
+    //    wiped within one interval of being written. ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The inbox: every dispatch the account has been sent and still holds, in the order they were
+    /// posted (the order IS meaning; the surface reverses it). Copy is not here — a row carries the
+    /// event and its subject, and the catalogues say the words at display time.
+    /// </summary>
+    public List<SavedDispatch> Dispatches { get; init; } = new();
+
+    /// <summary>
+    /// Every dispatch key the account KNOWS — posted once, or seeded as already lived. Monotone, and
+    /// a superset of the rows' keys: a row the cap has pruned stays known, so it can never re-post.
+    /// </summary>
+    public List<string> KnownDispatchKeys { get; init; } = new();
+
+    /// <summary>
+    /// Has DISPATCHES ever been opened? The completion latch of the inbox's lesson — a sibling of
+    /// <see cref="ReportOpenedEver"/>, and like it not derivable from anything: opening the inbox
+    /// changes nothing in the world.
+    /// </summary>
+    public bool DispatchesOpenedEver { get; init; }
+
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
 
@@ -519,6 +559,26 @@ public sealed record SavedTraitFirst
     public string CharacterId { get; init; } = "";
     public string RegionId { get; init; } = "";
     public int Wave { get; init; }
+}
+
+/// <summary>
+/// One dispatch, flattened for the save file: the stable key, the kind by NAME, when it was posted,
+/// whether it has been read, and the flat nullable columns that name its subject.
+/// </summary>
+/// <remarks>
+/// Flat columns rather than a payload object per kind — the house pattern of <see cref="RunReportSave"/>
+/// and <see cref="SavedChest.Gift"/>: <c>WhenWritingNull</c> drops an absent column, and a kind this
+/// build does not know is dropped on read like every other catalogue name in the save.
+/// </remarks>
+public sealed record SavedDispatch
+{
+    public required string Key { get; init; }
+    public required string Kind { get; init; }
+    public long AtMs { get; init; }
+    public bool Read { get; init; }
+    public string? SubjectId { get; init; }
+    public string? RegionId { get; init; }
+    public int? Count { get; init; }
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>
@@ -904,6 +964,26 @@ public static class SaveSystem
             .GroupBy(s => s.InstanceId).Select(g => g.First())
             .Where(CanRestore)          // an unknown BaseType is dropped, never a boot crash
             .Select(FromSavedItem).ToList();
+
+    /// <summary>
+    /// The inbox's rows, in file order: one per key (the first wins), a row whose Kind this build does
+    /// not know dropped — never a boot crash — and every key read forward across renames on the way in.
+    /// </summary>
+    public static List<Progression.Dispatch> RestoreDispatches(SaveGame save)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        var rows = new List<Progression.Dispatch>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var s in save.Dispatches)
+        {
+            if (s is null || string.IsNullOrWhiteSpace(s.Key) || string.IsNullOrWhiteSpace(s.Kind)) continue;
+            if (!Enum.TryParse<Progression.DispatchKind>(s.Kind, out var kind) || !Enum.IsDefined(kind)) continue;
+            var key = Progression.Dispatches.ModernDispatchKey(s.Key);
+            if (!seen.Add(key)) continue;
+            rows.Add(new Progression.Dispatch(key, kind, s.AtMs, s.Read, s.SubjectId, s.RegionId, s.Count));
+        }
+        return rows;
+    }
 
     public static void RestoreHunter(SaveGame save, Hunter hunter)
     {

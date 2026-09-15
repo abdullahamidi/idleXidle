@@ -306,7 +306,10 @@ public class TraitTreeMigrationTest
         // than bookkeeping.
         // RE-PINNED 2026-09-11 (was six): the opening's cursor gained a stage mid-sequence
         // (OpeningScript.FirstVersionWithSignatureWatch).
-        Assert.Equal(7, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox, whose seed reads the file's version
+        // to tell a file that was never told anything from one whose inbox is honestly empty
+        // (Dispatches.FirstVersionWithInbox).
+        Assert.Equal(8, SaveGame.CurrentVersion);
         Assert.True(5 < SaveGame.CurrentVersion);
     }
 }
