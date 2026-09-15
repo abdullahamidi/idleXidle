@@ -9566,7 +9566,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void UpdateWorld()
     {
         PushMapState();
-        _mapScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked);
+        _mapScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseWheel);
         ConsumeMapRequests();
     }
 

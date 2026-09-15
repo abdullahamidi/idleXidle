@@ -686,9 +686,8 @@ public sealed class MapScreen
 
     /// <param name="wheel">
     /// Mouse-wheel notches this frame (+ away, - toward, as <c>Game1.MouseWheel</c> latches them), for the
-    /// inspector's flow. The host does not pass it yet — it passes GEAR's, FORGE's, BUILD's, VAULT's and
-    /// TRAINING's, and this screen's needs the same one-line change in Game1; until then the arrow keys,
-    /// PAGE UP / PAGE DOWN and a click on the scrollbar's track are the ways down the flow.
+    /// inspector's flow — alongside the arrow keys, PAGE UP / PAGE DOWN and a click on the scrollbar's
+    /// track, the ways down the flow that need no pointer.
     /// </param>
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel = 0)
     {
