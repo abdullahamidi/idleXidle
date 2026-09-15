@@ -135,7 +135,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// bought a trait (Enter on TRAITS), sold the bench item (S on the FORGE) or walked into a region
     /// (Enter on the MAP) underneath the scrim (review 2026-08-26).
     /// </summary>
-    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput ? default : _keys;
+    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -2115,7 +2115,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         UiMotion.Reduced = ReducedMotion;
         UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
         ReserveNoticeLane();
-        DismissNoticeIfClosed();
         TickChromeMotion((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
@@ -3753,6 +3752,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // The vault's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
             else if (_showVault && _vault.FilterOpen) _vault.FilterOpen = false;
             else _showSettings = true;
+            _settingsEscSpent = true;   // one Escape, one layer: the opening's own Escape below must not also act on it
         }
 
         // THE ONE LINE THAT SAYS THE GAME HAS STARTED MUST SURVIVE THE INTRO. _bootMessage on a fresh
@@ -3839,9 +3839,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (DevKeysEnabled && Pressed(Keys.F9)) _expedition.DevVfxDebug = !_expedition.DevVfxDebug;   // dev: the VFX placement contract's bounds/anchor/ratio overlay (brief §70)
         if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; }   // dev layout overlays
         if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
-        if (Pressed(Keys.F1)) _showHelp = !_showHelp;
-        if (Pressed(Keys.F10)) _showSettings = !_showSettings;
-        if (WelcomeUp && (Pressed(Keys.Enter) || Pressed(Keys.Space))) _showWelcome = false;   // CONTINUE by key
+        // ONE HOST PANEL AT A TIME, as the nav's own entries already insist: the modal block below runs
+        // exactly one of the two, so a HELP stacked under SETTINGS painted its close icon dead.
+        if (Pressed(Keys.F1)) { _showHelp = !_showHelp; if (_showHelp) _showSettings = false; }
+        if (Pressed(Keys.F10)) { _showSettings = !_showSettings; if (_showSettings) _showHelp = false; }
+        // CONTINUE by key -- RAW edges, because the welcome joins the frame's swallow below and Pressed()
+        // honours it. Escape reads the welcome too, one layer per press.
+        if (WelcomeUp && (KeyEdge(Keys.Enter) || KeyEdge(Keys.Space) || (!_settingsEscSpent && KeyEdge(Keys.Escape)))) _showWelcome = false;
         // ...AND BY MOUSE, HERE. It used to be decided inside DrawWelcomePanel, so on a catch-up tick
         // (Update, Update, Draw) the edge was gone before the button was tested and the panel ignored
         // the press. Raw `_clicked`, as the drawn button used: this panel IS the modal.
@@ -3849,8 +3853,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // THE WELCOME IS A MODAL FOR INPUT, NOT FOR THE FRAME. It is up on the very first frame after a load,
         // and an early return here would skip the block below that feeds every screen its dependencies —
         // the first Draw would then hit a null (the boot check caught exactly that). So the frame runs on
-        // and only the input is spent: Pressed() and MouseClicked both honour _swallowInput / WelcomeUp.
-        if (WelcomeUp) _swallowInput = true;
+        // and only the input is spent: the welcome is a term of the frame's swallow below, beside the tour
+        // and the opening. (A `_swallowInput = true` here was overwritten by that line and never held.)
 
         // A modal eats the frame's input, but NOT the frame. The farms above still tick and the
         // autosave above still fires — an idle game does not pause because you opened a menu. What it
@@ -3890,7 +3894,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // A TOUR OR THE AUTHORED OPENING. The opening is the second thing in this game allowed to
         // own a frame, and it is allowed for the reason the tour is: while it holds the player it is
         // the only thing being asked of them. A LiveExplain step owns nothing — see OwnsInput.
-        _swallowInput = _tourActive || _opening.OwnsInput;
+        _swallowInput = _tourActive || _opening.OwnsInput || WelcomeUp;
         // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
         // developer happens to press in the sixty frames advances the card — a capture asked for card
         // five came back as card six. The rig poses a card by number; it never plays.
@@ -3958,6 +3962,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             _swallowInput = true;
         }
+
+        // THE NOTICE TOAST'S ×, now that this frame's click edge is latched and its swallow is settled
+        // (it used to run at the top of Update, against LAST frame's edge, and its swallow was then
+        // overwritten). Read here, it spends the click before the gear, the hint slot, the nav and the
+        // screens can.
+        DismissNoticeIfClosed();
 
         // THE SETTINGS GEAR, top-right of every screen. Handled here, before the nav and the screens,
         // so its click never falls through to whatever sits underneath it.
@@ -5067,7 +5077,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The slot content owed on the current menu screen, or null. Never during a tour, never on the HUNT.</summary>
     private SlotContent? SlotShowing()
     {
-        if (_showTitle || _tourActive || _showHelp || _showSettings || !OverlayActive) return null;
+        // WelcomeUp: the slot paints OVER the welcome panel, whose swallow would leave its × dead.
+        if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || !OverlayActive) return null;
         if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
         var screen = ScreenActivity();
         // THE ONE LESSON THE DIRECTOR CHOSE, if the deed it asks for happens on this screen. The
@@ -7189,7 +7200,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         : SlotShowing() is { } slot ? HintSlotRect(slot).Bottom + UiMetrics.Space(8)
         : CanvasY(PageSubtitleBottom + UiMetrics.Space(8));
 
-    private bool Pressed(Keys k) => !_swallowInput && _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
+    private bool Pressed(Keys k) => !_swallowInput && KeyEdge(k);
+
+    /// <summary>A key going down this frame, before the frame's swallow — for a modal's own keys.</summary>
+    private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 
     /// <summary>Any key going down this frame — for "press anything to continue" panels.</summary>
     /// <remarks>
@@ -7474,7 +7488,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
 
-    private bool MouseRightClicked => _rightClicked && !_showSettings && !_opening.OwnsInput;
+    private bool MouseRightClicked => _rightClicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
 
 
     /// <summary>

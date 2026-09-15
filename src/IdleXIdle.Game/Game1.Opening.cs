@@ -440,8 +440,16 @@ public partial class Game1
         if (!_opening.OwnsInput || CaptureRig) return;
 
 
+        var escape = KeyEdge(Keys.Escape);
+        // THE WAY BACK: with the panel up, Escape closes it — one layer per press; an open list was
+        // shut at the top of Update and spent the edge. (It used to re-open on every press, so a panel
+        // opened from a beat could only be closed with its ×.) Nothing else of the beat's runs under one.
+        if (_showSettings || _showHelp)
+        {
+            if (escape && !_settingsEscSpent && _showSettings) { _showSettings = false; _settingsEscSpent = true; }
+            return;
+        }
         // THE WAY OUT, first and unconditionally.
-        var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);
         if (escape || (_clicked && SettingsGear.Contains(ChromeMouse)))
         {
             _showSettings = true;
@@ -450,7 +458,6 @@ public partial class Game1
             _sound.Play("sfx_click", 0.6f);
             return;
         }
-        if (_showSettings || _showHelp) return;
 
         var keyGo = (_keys.IsKeyDown(Keys.Space) && _prevKeys.IsKeyUp(Keys.Space))
                     || (_keys.IsKeyDown(Keys.Enter) && _prevKeys.IsKeyUp(Keys.Enter));
