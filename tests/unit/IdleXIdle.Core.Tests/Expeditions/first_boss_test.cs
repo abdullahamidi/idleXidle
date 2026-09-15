@@ -194,9 +194,8 @@ public class FirstBossTests
 
     /// <summary>
     /// THE FIRST FAILURE STILL HAPPENS, and it happens AFTER the boss. The whole climax of the FTUE —
-    /// READ THE LOG, MAKE ONE CHANGE, TRY AGAIN — is gated on <c>LessonFacts.Falls >= 1</c>, so a fix
-    /// that made the champion immortal would delete the game's most important lesson to save its
-    /// fourth-most.
+    /// READ THE LOG, MAKE ONE CHANGE — is gated on <c>LessonFacts.Falls >= 1</c>, so a fix that made
+    /// the champion immortal would delete the game's most important lesson to save its fourth-most.
     /// </summary>
     /// <remarks>
     /// Bounded on BOTH sides on purpose. It must fall LATER than the tutorial boss (or the sequencing

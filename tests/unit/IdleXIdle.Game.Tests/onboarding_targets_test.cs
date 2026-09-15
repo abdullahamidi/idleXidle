@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Game;
@@ -124,26 +125,23 @@ public class OnboardingTargetTests
     [Fact]
     public void test_the_fall_lessons_stay_on_the_hunt_where_the_report_is()
     {
-        // READ THE LOG → MAKE ONE CHANGE → TRY AGAIN is one sequence and it lives around the arena:
-        // the log opens over the HUNT, and the retry is the next descent. None of the three sends the
-        // player to a MENU screen — and that null Sends is load-bearing twice over: it is what makes
-        // Game1.HuntLessonShowing draw their cards on the fight, and what the spotlight's
-        // `?? Activity.Hunt` fallback reads.
+        // READ THE LOG → MAKE ONE CHANGE is one sequence and it lives around the arena: the log opens
+        // over the HUNT. Neither sends the player to a MENU screen — and that null Sends is
+        // load-bearing twice over: it is what makes Game1.HuntLessonShowing draw their cards on the
+        // fight, and what the spotlight's `?? Activity.Hunt` fallback reads. The retry that follows a
+        // change is automatic and is never a lesson at all — it has no Sends, no Target, no card.
         foreach (var id in new[] { OnboardingLessonId.FirstFailureReport,
-                                   OnboardingLessonId.FirstPostFailureChange,
-                                   OnboardingLessonId.FirstRetry })
+                                   OnboardingLessonId.FirstPostFailureChange })
         {
             Assert.Null(OnboardingLessons.Sends(id));
             Assert.NotEqual(LessonMode.Observe, OnboardingLessons.Mode(id));
         }
 
-        // ...AND ALL THREE POINT AT SOMETHING, because the copy now rides beside a light and a light
-        // needs a hole. IT FELL marks the door to the report; MAKE ONE CHANGE marks the RAIL, since a
-        // change is a rank, a worn piece, a node or the weave and those live on four different
-        // screens; GO AGAIN marks the champion, who is the one doing it.
+        // ...AND BOTH POINT AT SOMETHING, because the copy now rides beside a light and a light needs
+        // a hole. IT FELL marks the door to the report; MAKE ONE CHANGE marks the RAIL, since a change
+        // is a rank, a worn piece, a node or the weave and those live on four different screens.
         Assert.Equal(TourTarget.LogButton, OnboardingLessons.Target(OnboardingLessonId.FirstFailureReport));
         Assert.Equal(TourTarget.NavRail, OnboardingLessons.Target(OnboardingLessonId.FirstPostFailureChange));
-        Assert.Equal(TourTarget.Champion, OnboardingLessons.Target(OnboardingLessonId.FirstRetry));
     }
 
     [Fact]
@@ -419,5 +417,67 @@ public class OnboardingTargetTests
         var notYet = lived with { RetriedAfterChange = false };
         Assert.Contains(new OnboardingDirector().Telemetry(notYet),
                         row => row.Contains("ftue_loop_lived=False", StringComparison.Ordinal));
+    }
+
+    // ── THE RELOAD SEED ──────────────────────────────────────────────────────────────────────────
+
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir }.Concat(parts).ToArray());
+            if (File.Exists(candidate)) return candidate;
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new FileNotFoundException(string.Join('/', parts) + " not found above the test binary.");
+    }
+
+    /// <summary>The body of one method, brace-matched from its signature.</summary>
+    private static string BodyOf(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"source no longer contains `{signature}`.");
+        var open = source.IndexOf('{', at);
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
+        }
+        throw new InvalidOperationException($"`{signature}` never closes.");
+    }
+
+    /// <summary>
+    /// A CAREER THAT CHANGED ITS BUILD AFTER A FALL, SAVED, AND RELOADED must still be able to record
+    /// RETRIED.
+    /// </summary>
+    /// <remarks>
+    /// Game1.Update needs a GraphicsDevice, so as in host_input_gates_test.cs this is pinned
+    /// structurally. `_retryFrom` is session-only — never written to the save — so a reload before the
+    /// next descent used to lose the number WatchTheFallLoop compares RunsStarted against, and
+    /// RetriedAfterChange could never latch. The fix seeds `_retryFrom` from the freshly built
+    /// HuntScreen's own RunsStarted (always zero at this point), in SeedExplained — called from
+    /// ApplyRestoredState, right beside the veteran fall-loop seed it shares its reasoning with — so
+    /// the very next StartRun becomes the retry the milestone is waiting for.
+    /// </remarks>
+    [Fact]
+    public void test_a_reload_after_the_change_still_seeds_the_next_descent_as_the_retry()
+    {
+        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs")).Replace("\r\n", "\n");
+        var seedExplained = BodyOf(game, "private void SeedExplained()");
+
+        Assert.Contains(
+            "if (_changedAfterFall && !_retriedAfterChange) _retryFrom = _expedition?.RunsStarted ?? 0;",
+            seedExplained, StringComparison.Ordinal);
+
+        // ...reading _expedition.RunsStarted only makes sense once a HuntScreen exists to have one, so
+        // the screens must still be built (BuildScreens) before SeedExplained runs — it does, by way of
+        // ApplyRestoredState, which LoadContent calls only after BuildScreens.
+        var loadContent = BodyOf(game, "protected override void LoadContent()");
+        Assert.Contains("SeedExplained();", BodyOf(game, "private void ApplyRestoredState()"), StringComparison.Ordinal);
+        Assert.True(loadContent.IndexOf("BuildScreens();", StringComparison.Ordinal)
+                    < loadContent.IndexOf("ApplyRestoredState();", StringComparison.Ordinal),
+                    "BuildScreens must run before ApplyRestoredState, or _expedition is still null");
     }
 }

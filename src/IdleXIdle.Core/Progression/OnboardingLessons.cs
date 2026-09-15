@@ -46,15 +46,14 @@ public enum OnboardingLessonId
     /// <summary>Gear does nothing in the bag.</summary>
     FirstItemEquip,
 
-    // ── THE CLIMAX: fail, diagnose, change, retry. The loop this whole game is. ───────────────────
+    // ── THE CLIMAX: fail, diagnose, change. The loop this whole game is. The retry that follows a
+    //    real change is automatic — the regroup timer sends the Hunter back down by itself — so it is
+    //    never asked for; LessonFacts.RetriedAfterChange records that it happened, silently. ────────
     /// <summary>The first fall, and the report that says what stopped it.</summary>
     FirstFailureReport,
 
     /// <summary>Anything real: a stat, a skill, a node, a worn piece.</summary>
     FirstPostFailureChange,
-
-    /// <summary>Back into the fight with the change made.</summary>
-    FirstRetry,
 
     /// <summary>A point in the tree. Any node.</summary>
     FirstMasterySpend,
@@ -232,9 +231,10 @@ public readonly record struct LessonFacts(
 /// </para>
 /// <para>
 /// <b>What the game teaches is the loop, not the menu.</b> Observe, ask why it stopped, change one
-/// thing, try again, see if it went deeper. That is why the failure trio outranks everything: the
+/// thing, try again, see if it went deeper. That is why the two fall lessons outrank everything: the
 /// strongest first-session milestone is not "finished the tutorial", it is
-/// <i>opened the report, changed something, and went back down</i>.
+/// <i>opened the report, changed something, and went back down</i> — and the third step is never
+/// asked for, only recorded.
 /// </para>
 /// </remarks>
 public static class OnboardingLessons
@@ -272,7 +272,6 @@ public static class OnboardingLessons
 
         OnboardingLessonId.FirstFailureReport => f.ReportOpenedEver,
         OnboardingLessonId.FirstPostFailureChange => f.ChangedAfterFall,
-        OnboardingLessonId.FirstRetry => f.RetriedAfterChange,
 
         OnboardingLessonId.FirstMasterySpend => f.MasterySpent >= 1,
         OnboardingLessonId.FirstSharedSkillEquip => f.SharedSkillsEquipped >= 1,
@@ -340,10 +339,9 @@ public static class OnboardingLessons
         // reached by a different route.
         OnboardingLessonId.FirstItemEquip => f.ItemsOwned >= 1 && f.StatsTrained >= 1,
 
-        // ── THE TRIO. Each waits on the one before it, because they are one sequence. ────────────
+        // ── THE FALL LOOP'S TWO PRESENTED LESSONS. Each waits on the one before it. ────────────────
         OnboardingLessonId.FirstFailureReport => f.Falls >= 1,
         OnboardingLessonId.FirstPostFailureChange => f.Falls >= 1 && f.ReportOpenedEver,
-        OnboardingLessonId.FirstRetry => f.Falls >= 1 && f.ChangedAfterFall,
 
         OnboardingLessonId.FirstMasterySpend => f.MasteryPointsFree >= 1,
         // AVAILABLE means the tree reaches it NOW. Mastery access is not permanent: a respec that
@@ -399,7 +397,7 @@ public static class OnboardingLessons
     /// Which lesson wins when several are eligible. Higher is louder; ties break on declaration order.
     /// </summary>
     /// <remarks>
-    /// The failure trio is the top band because it is the game's actual loop and the strongest
+    /// The two fall lessons are the top band because they are the game's actual loop and the strongest
     /// first-session milestone there is. The opening beats come next because a player who cannot get
     /// started has no loop to learn. Everything contextual sits at the bottom, where it can wait
     /// without blocking anything — which is the whole point of replacing the ladder.
@@ -408,7 +406,6 @@ public static class OnboardingLessons
     {
         OnboardingLessonId.FirstFailureReport => 100,
         OnboardingLessonId.FirstPostFailureChange => 99,
-        OnboardingLessonId.FirstRetry => 98,
 
         OnboardingLessonId.FirstFight => 90,
         OnboardingLessonId.FirstChestOpen => 80,
@@ -517,13 +514,12 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstBoss => TourTarget.Enemies,
         OnboardingLessonId.FirstRegionConquest => TourTarget.Enemies,
 
-        // THE FALL TRIO keeps its null Sends — the fight itself is where it belongs, and the host
-        // reads a null Sends as "the HUNT" when it resolves these lights.
+        // THE FALL LOOP'S TWO LESSONS keep their null Sends — the fight itself is where they belong,
+        // and the host reads a null Sends as "the HUNT" when it resolves these lights.
         OnboardingLessonId.FirstFailureReport => TourTarget.LogButton,
         // MAKE ONE CHANGE is the one instruction that names no single control: a change is a rank, a
         // worn piece, a node or the weave, on four different screens. The rail is where all four are.
         OnboardingLessonId.FirstPostFailureChange => TourTarget.NavRail,
-        OnboardingLessonId.FirstRetry => TourTarget.Champion,
         OnboardingLessonId.FirstTrainingPurchase => TourTarget.TrainingRows,
         OnboardingLessonId.FirstChestOpen => TourTarget.ChestCards,
         OnboardingLessonId.FirstItemEquip => TourTarget.Inventory,
@@ -558,7 +554,6 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstItemEquip => "SOMETHING DROPPED",
         OnboardingLessonId.FirstFailureReport => "IT FELL",
         OnboardingLessonId.FirstPostFailureChange => "THIS STOPPED THE RUN",
-        OnboardingLessonId.FirstRetry => "GO AGAIN",
         OnboardingLessonId.FirstMasterySpend => "MASTERY",
         OnboardingLessonId.FirstSharedSkillEquip => "A SKILL IS OPEN",
         OnboardingLessonId.FirstVariationChoice => "A LEVEL TO SPEND",
@@ -586,7 +581,6 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstItemEquip => "EQUIP ONE ITEM",
         OnboardingLessonId.FirstFailureReport => "READ THE LOG",
         OnboardingLessonId.FirstPostFailureChange => "MAKE ONE CHANGE",
-        OnboardingLessonId.FirstRetry => "TRY AGAIN",
         OnboardingLessonId.FirstMasterySpend => "SPEND ONE MASTERY POINT",
         OnboardingLessonId.FirstSharedSkillEquip => "EQUIP ONE SHARED SKILL",
         OnboardingLessonId.FirstVariationChoice => "CHOOSE A VARIATION",

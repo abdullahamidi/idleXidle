@@ -1960,6 +1960,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _fallsSeen = _expedition?.Log.Entries.Count ?? 0;
         }
 
+        // ── AND THE RETRY, FOR A CAREER THAT CHANGED ITS BUILD AND THEN RELOADED. ────────────────
+        //
+        // _retryFrom is session-only — it is never written to the save — so a career that fell, changed
+        // its build, saved, and reloaded before its next descent carries ChangedAfterFall forward but
+        // loses the number WatchTheFallLoop compares RunsStarted against, and RetriedAfterChange could
+        // never latch. RunsStarted always reopens at zero on the fresh HuntScreen BuildScreens has
+        // already built by the time this runs, so seeding _retryFrom with that same zero makes the very
+        // next StartRun — the descent the game is about to begin on its own — the retry the milestone
+        // is waiting for.
+        if (_changedAfterFall && !_retriedAfterChange) _retryFrom = _expedition?.RunsStarted ?? 0;
+
         // The one-time migration: a player from before the intro is past it. Marked so the seeding
         // above does not repeat on every launch, quietly marking screens they opened but never read.
         if (!_introSeen && !Onboarding.IntroDue(_deepestEver, false)) _introSeen = true;

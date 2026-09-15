@@ -197,7 +197,7 @@ if [ -z "$new_line" ]; then
 fi
 if ! echo "$new_line" | grep -q "ftue_loop_lived=False"; then
   echo "A CURRENT-VERSION SAVE WAS SEEDED AS A VETERAN — the version has stopped deciding, and a new" >&2
-  echo "player who reloads loses READ THE LOG, MAKE ONE CHANGE and TRY AGAIN." >&2
+  echo "player who reloads loses READ THE LOG, MAKE ONE CHANGE, and the retry that completes the loop." >&2
   echo "  ledger: $new_line" >&2
   exit 1
 fi

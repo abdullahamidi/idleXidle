@@ -304,9 +304,9 @@ public sealed record ExpeditionTuning
     /// "finishes at 1 HP every time" the brief rules out; 0.35 and below hand the boss back more than
     /// half the pool and it stops being frightening. The first natural failure moves from wave 5 to
     /// wave 8 — after the boss, after the chest, after the Welcome Gift is worn — which is the order the
-    /// opening was written for, and it keeps the FTUE's own climax alive: READ THE LOG / MAKE ONE
-    /// CHANGE / TRY AGAIN is gated on <c>LessonFacts.Falls &gt;= 1</c>, so a champion that stopped dying
-    /// would have deleted the lesson this whole repair exists to reach.
+    /// opening was written for, and it keeps the FTUE's own climax alive: READ THE LOG and MAKE ONE
+    /// CHANGE are gated on <c>LessonFacts.Falls &gt;= 1</c>, so a champion that stopped dying would
+    /// have deleted the lesson this whole repair exists to reach.
     /// </para>
     /// </remarks>
     public float TutorialBiteScale { get; init; } = 1f;

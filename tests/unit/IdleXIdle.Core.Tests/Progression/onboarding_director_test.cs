@@ -306,8 +306,7 @@ public class onboarding_director_test
 
         var seeded = veteran with { ReportOpenedEver = true, ChangedAfterFall = true, RetriedAfterChange = true };
         foreach (var id in new[] { OnboardingLessonId.FirstFailureReport,
-                                   OnboardingLessonId.FirstPostFailureChange,
-                                   OnboardingLessonId.FirstRetry })
+                                   OnboardingLessonId.FirstPostFailureChange })
             Assert.True(OnboardingLessons.Completed(id, seeded), $"{id} would replay on a veteran save");
 
         // A genuinely new player is NOT seeded — the loop is the one thing they must actually live.
@@ -321,8 +320,8 @@ public class onboarding_director_test
         // has never opened a report" was taken to mean "a file written before those facts existed".
         // It also describes somebody who started a NEW game on this build, ran to a conquest without
         // dying, quit, and came back — and they were handed the veteran's answer, which silently
-        // deletes READ THE LOG / MAKE ONE CHANGE / TRY AGAIN. That is the most important lesson in
-        // the game and the only one a first session exists to teach.
+        // deletes READ THE LOG and MAKE ONE CHANGE. That is the most important lesson in the game and
+        // the only one a first session exists to teach.
         var conqueredEarly = new LessonFacts(WavesCleared: 20, DeepestWave: 20, RegionsConquered: 1,
                                              StatsTrained: 6, ItemsWorn: 3, RegionsEntered: 1,
                                              HuntersOwned: 2, Falls: 0);
@@ -434,11 +433,11 @@ public class onboarding_director_test
     // ── THE CLIMAX, AS A SEQUENCE ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_the_fall_loop_runs_read_then_change_then_retry_and_outranks_everything()
+    public void test_the_fall_loop_runs_read_then_change_and_outranks_everything()
     {
-        // The strongest first-session milestone there is: opened the report, changed something, went
-        // back down. Each waits on the one before it, and all three outrank every other lesson —
-        // including a chest sitting unopened and a point waiting to be spent.
+        // The strongest first-session milestone there is: opened the report, changed something. Each
+        // waits on the one before it, and both outrank every other lesson — including a chest sitting
+        // unopened and a point waiting to be spent.
         var fell = new LessonFacts(WavesCleared: 24, DeepestWave: 24, Gleam: 400, StatsTrained: 1,
                                    BossesFelled: 4, ChestsHeld: 1, ChestsOpened: 2, ItemsOwned: 1, ItemsWorn: 1,
                                    MasteryPointsFree: 1, RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
@@ -448,13 +447,33 @@ public class onboarding_director_test
         var read = fell with { ReportOpenedEver = true };
         Assert.Equal(OnboardingLessonId.FirstPostFailureChange, OnboardingLessons.Next(read));
 
+        // ...and once the change is made the two presented lessons are both satisfied, and the
+        // ordinary lessons resume — the retry that follows is automatic and never asked for.
         var changed = read with { ChangedAfterFall = true };
-        Assert.Equal(OnboardingLessonId.FirstRetry, OnboardingLessons.Next(changed));
+        Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(changed));
+    }
 
-        // ...and once the loop has been lived it stops asking, and the ordinary lessons resume.
-        var done = changed with { RetriedAfterChange = true };
-        Assert.NotEqual(OnboardingLessonId.FirstRetry, OnboardingLessons.Next(done));
-        Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(done));
+    [Fact]
+    public void test_the_retry_is_recorded_silently_and_never_presented()
+    {
+        // THE THIRD STEP OF THE LOOP IS NEVER A LESSON. Its deed — a new descent — happens by itself,
+        // 1.6 seconds after the fall, whether or not the player is even looking. So once fell, read
+        // and changed are all true and the next descent has begun (RetriedAfterChange latches), the
+        // catalogue must have nothing left to say about it: no lesson id names it, and Next() moves on
+        // to whatever the player has not yet done.
+        Assert.DoesNotContain(OnboardingLessons.All,
+                              id => id.ToString().Contains("Retry", StringComparison.OrdinalIgnoreCase));
+
+        var fell = new LessonFacts(WavesCleared: 24, DeepestWave: 24, Gleam: 400, StatsTrained: 1,
+                                   BossesFelled: 4, ChestsHeld: 1, ChestsOpened: 2, ItemsOwned: 1, ItemsWorn: 1,
+                                   MasteryPointsFree: 1, RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
+        var read = fell with { ReportOpenedEver = true };
+        var changed = read with { ChangedAfterFall = true };
+        var retried = changed with { RetriedAfterChange = true };   // the next descent already began
+
+        Assert.True(retried.RetriedAfterChange, "the milestone fact itself must still be true");
+        Assert.Equal(OnboardingLessons.Next(changed), OnboardingLessons.Next(retried));
+        Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(retried));
     }
 
     [Fact]
@@ -462,8 +481,7 @@ public class onboarding_director_test
     {
         var never = Playing() with { Falls = 0, ReportOpenedEver = false, ChangedAfterFall = false, RetriedAfterChange = false };
         foreach (var id in new[] { OnboardingLessonId.FirstFailureReport,
-                                   OnboardingLessonId.FirstPostFailureChange,
-                                   OnboardingLessonId.FirstRetry })
+                                   OnboardingLessonId.FirstPostFailureChange })
             Assert.False(OnboardingLessons.Eligible(id, never), $"{id} is eligible before the player has ever fallen");
     }
 
@@ -563,8 +581,7 @@ public class onboarding_director_test
         {
             if (OnboardingLessons.Mode(id) == LessonMode.Observe) continue;
             if (id == OnboardingLessonId.FirstFailureReport
-                || id == OnboardingLessonId.FirstPostFailureChange
-                || id == OnboardingLessonId.FirstRetry) continue;   // the fall loop lives on the HUNT
+                || id == OnboardingLessonId.FirstPostFailureChange) continue;   // the fall loop lives on the HUNT
             Assert.NotNull(OnboardingLessons.Sends(id));
             Assert.NotNull(OnboardingLessons.Target(id));
         }

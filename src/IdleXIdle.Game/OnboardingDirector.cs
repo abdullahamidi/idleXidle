@@ -223,11 +223,10 @@ public sealed class OnboardingDirector
     private static bool BelongsToTheMoment(OnboardingLessonId id, Busy busy)
         => id switch
         {
-            // The fall trio lives on and around the run log: the first sends the player INTO it, the
-            // second is what the report is for, and the third is what closing it leads to.
+            // The fall loop's two lessons live on and around the run log: the first sends the player
+            // INTO it, and the second is what the report is for.
             OnboardingLessonId.FirstFailureReport => busy.ReportUp || !busy.RewardUp,
             OnboardingLessonId.FirstPostFailureChange => true,
-            OnboardingLessonId.FirstRetry => true,
             // ...and the camp's lesson is raised BY the return panel, so it may speak over one.
             OnboardingLessonId.FirstWarrenReturn => busy.RewardUp,
             _ => false,
