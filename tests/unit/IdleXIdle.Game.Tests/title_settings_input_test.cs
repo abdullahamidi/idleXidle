@@ -80,6 +80,26 @@ public class TitleSettingsInputTest
     }
 
     /// <summary>
+    /// The Escape that closes the panel is still held on the next frame, so the title's own quit reflex
+    /// must read an EDGE, not the held key -- or closing the panel quits the game.
+    /// </summary>
+    [Fact]
+    public void test_escape_that_closes_the_title_settings_panel_cannot_quit_on_the_next_frame()
+    {
+        var update = BodyOf(Game1Source(), "protected override void Update(GameTime gameTime)");
+        var titleToggle = update.IndexOf("if (Pressed(Keys.F10)) _showSettings = !_showSettings;", StringComparison.Ordinal);
+        Assert.True(titleToggle >= 0);
+        // The whole title branch: from its settings toggle to the Latch it returns through after the plates.
+        var title = update[titleToggle..];
+        var firstLatch = title.IndexOf("Latch(gameTime);", StringComparison.Ordinal);
+        title = title[..title.IndexOf("Latch(gameTime);", firstLatch + 1, StringComparison.Ordinal)];
+        _out.WriteLine(title[^200..]);
+
+        Assert.DoesNotContain("IsKeyDown(Keys.Escape)", title, StringComparison.Ordinal);
+        Assert.Contains("if (Pressed(Keys.Escape)) Exit();", title, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The other half of the invariant: <c>DrawSettings</c> paints from the cursor and never from the
     /// click edge, and the CLOSE control is decided in <c>UpdateSettings</c>.
     /// </summary>

@@ -3675,7 +3675,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (_clicked) { ChooseTitleItem(i); break; }
             }
 
-            if (_keys.IsKeyDown(Keys.Escape)) Exit();
+            // An EDGE, not the held key: the Escape that just closed the settings panel is still down on
+            // this frame, and a held read here quit the game on it.
+            if (Pressed(Keys.Escape)) Exit();
             Latch(gameTime);
             return;
             }
