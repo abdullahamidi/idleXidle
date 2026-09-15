@@ -4167,9 +4167,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // coach's choice are read as the last frame left them: both tick inside UpdateExpedition below,
         // one frame behind is a frame nobody sees, and a second reading would be a second owner. The
         // death owns the frame only while it is ON the page: the fight ticks on every screen, and a fall
-        // behind the Forge is not something the player is looking at. Highest wins.
+        // behind the Forge is not something the player is looking at — so the edge below is the on-page
+        // death's too, and a fall nobody watched hushes nothing. Highest wins.
         var deathWasUp = _deathWasUp;
-        _deathWasUp = _expedition.DeathTransitionUp;
+        _deathWasUp = !OverlayActive && _expedition.DeathTransitionUp;
         // THE FALL HAS FINISHED: a beat of quiet, so READ THE LOG lands once the new descent is legible
         // rather than on the first lit frame of the stage coming back. No such beat when the log closes —
         // the lesson it leads to is simply chosen fresh.
@@ -6098,7 +6099,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The surface that owns the player's attention this frame. Assigned in exactly one place.</summary>
     private AttentionOwner _attention;
 
-    /// <summary>Was the death transition up on the last frame? Its falling edge is the fall's end.</summary>
+    /// <summary>Was the death transition on the page last frame? Its falling edge is the fall's end, as the player saw it.</summary>
     private bool _deathWasUp;
 
     /// <summary>Is anything ABOVE this tier up? The one question every reader asks.</summary>
@@ -7755,7 +7756,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _expedition.OverlayFloor = BootToastShowing
                 ? ToastTop + ToastHeight + UiMetrics.Space(8)
                 : HuntLessonShowing() is { } lessonUp ? HuntLessonRect(lessonUp).Bottom + UiMetrics.Space(8) : 0;
-            _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
+            // The fight's own banners yield to a boot toast that is ON SCREEN, to the opening (whose held boot
+            // line is what the fresh save's seven seconds are for) and to the welcome — never to a toast that
+            // is merely waiting behind a lit lesson, which could stand for as long as the lesson does.
+            _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), BootToastShowing || _opening.Running || WelcomeUp);
         }
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one

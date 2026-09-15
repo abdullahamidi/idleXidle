@@ -279,7 +279,27 @@ public class AttentionOwnerTest
         Assert.Contains("DeathUp: _attention == AttentionOwner.Death));", game, StringComparison.Ordinal);
         var update = UpdateBody();
         Assert.Contains("if (deathWasUp && !_deathWasUp) _coach.Hush(OnboardingDirector.QuietAfterReward);", update, StringComparison.Ordinal);
+        // The edge is the ON-PAGE death's, the same fact the owner's Death tier reads: the fight ticks on
+        // every screen, and a hush on the end of a fall behind the Forge dropped a lit lesson there for
+        // the quiet and re-armed its full scrim when it came back -- the background-fall blink, through
+        // the director this time.
+        Assert.Contains("_deathWasUp = !OverlayActive && _expedition.DeathTransitionUp;", update, StringComparison.Ordinal);
+        Assert.DoesNotContain("_deathWasUp = _expedition.DeathTransitionUp;", update, StringComparison.Ordinal);
         // No second hush when the log closes: the lesson is simply chosen fresh.
         Assert.Single(Regex.Matches(Host(), @"_coach\.Hush\("));
+    }
+
+    /// <summary>
+    /// The hunt's own banners (BOSS INCOMING, WAVE CLEARED) are suppressed by a boot toast that is ON
+    /// SCREEN, by the opening and by the welcome -- never by a toast that is merely waiting. The boot
+    /// clock holds under anything above Feedback now, so the raw timer would have kept the fight's own
+    /// presentation down for as long as a lit lesson stood, plus seven seconds.
+    /// </summary>
+    [Fact]
+    public void test_the_hunts_own_banners_are_not_held_back_by_a_toast_that_is_waiting()
+    {
+        var game = Game1();
+        Assert.Contains("EnemyArtFor(_activeRegion), BootToastShowing || _opening.Running || WelcomeUp);", game, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);", game, StringComparison.Ordinal);
     }
 }
