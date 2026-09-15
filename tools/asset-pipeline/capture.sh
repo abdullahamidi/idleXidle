@@ -212,6 +212,14 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # RH_SHOT_LESSON=<OnboardingLessonId> holds one onboarding lesson on screen, so its card, its brackets
 # and its reflow can be photographed at 100 / 125 / 150. Most lessons depend on facts no fixture has.
 [ -n "$RH_SHOT_LESSON" ] && RH_ENV+=(RH_SHOT_LESSON="$RH_SHOT_LESSON")
+# RH_SHOT_NOTICE=1 posts ONE sample notice toast on any fixture, once, so what news does under an
+# attention owner can be photographed: queued under `lootforge`'s chest reveal it must not paint and
+# its clock must not burn; with RH_SHOT_T at or past the reveal's hold (3.8) the reveal is posed already
+# closed and the toast lands. Not with RH_SHOT_LESSON, which clears the toast slot for its pose.
+#
+#   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_owns.png 1.2
+#   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_done.png 5
+[ -n "$RH_SHOT_NOTICE" ] && RH_ENV+=(RH_SHOT_NOTICE="$RH_SHOT_NOTICE")
 # RH_UI_BUDGET=1 prints the raster ledger the same way (BRIEF sec.74).
 [ -n "$RH_UI_BUDGET" ] && RH_ENV+=(RH_UI_BUDGET="$RH_UI_BUDGET")
 # RH_SAVE_DIR=<dir> points the whole save system at another folder — an EMPTY one is the only way to

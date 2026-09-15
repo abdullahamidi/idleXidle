@@ -269,10 +269,76 @@ public class OnboardingTargetTests
         d.Update(1 / 60f, facts, new OnboardingDirector.Busy(RewardUp: false, ModalUp: true, ReportUp: false));
         Assert.Null(d.Showing);
 
-        // ...but the fall lessons belong to the report, so they survive it being open.
+        // ...nor over the open log -- not even the fall lessons, which are ABOUT the log. Opening it is
+        // the deed READ THE LOG asks for, and MAKE ONE CHANGE lights the rail the log is covering.
         var fell = facts with { Falls = 1 };
         d.Update(1 / 60f, fell, new OnboardingDirector.Busy(RewardUp: false, ModalUp: false, ReportUp: true));
+        Assert.Null(d.Showing);
+    }
+
+    [Fact]
+    public void test_nothing_is_said_over_the_open_log_and_the_lesson_is_chosen_fresh_when_it_closes()
+    {
+        // The report has been read and nothing has changed yet: MAKE ONE CHANGE is what the log leads
+        // to, and it used to be chosen WHILE the log was open -- unpainted, its blaze burning behind the
+        // report and its shown-count rising for a card nobody saw.
+        var d = new OnboardingDirector();
+        var read = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1, Falls = 1, ReportOpenedEver = true };
+        Assert.Contains(OnboardingLessonId.FirstPostFailureChange, OnboardingLessons.EligibleNow(read));
+
+        var reading = new OnboardingDirector.Busy(RewardUp: false, ModalUp: false, ReportUp: true);
+        for (var i = 0; i < 120; i++)
+        {
+            d.Update(1 / 60f, read, reading);
+            Assert.Null(d.Showing);
+        }
+        Assert.Equal(0f, d.ShowingFor);
+
+        // The log closes: chosen now, with its clock at zero -- its blaze starts when it can be seen.
+        d.Update(1 / 60f, read, Idle);
+        Assert.Equal(OnboardingLessonId.FirstPostFailureChange, d.Showing);
+        Assert.Equal(0f, d.ShowingFor);
+    }
+
+    [Fact]
+    public void test_nothing_is_said_over_the_death_transition_and_the_quiet_holds_under_it()
+    {
+        var d = new OnboardingDirector();
+        var fell = Fresh() with { WavesCleared = 4, DeepestWave = 4, StatsTrained = 1, ChestsHeld = 1, Falls = 1 };
+        Assert.Contains(OnboardingLessonId.FirstFailureReport, OnboardingLessons.EligibleNow(fell));
+        var dying = new OnboardingDirector.Busy(RewardUp: false, ModalUp: false, ReportUp: false, DeathUp: true);
+
+        // A quiet started as the fall began is still there when the stage comes back: it does not burn
+        // behind the black, so it cannot expire unseen.
+        d.Hush(1f);
+        for (var i = 0; i < 180; i++)   // three seconds of transition, longer than the hush
+        {
+            d.Update(1 / 60f, fell, dying);
+            Assert.Null(d.Showing);
+        }
+        Assert.True(d.Quiet, "the quiet clock burned under the death transition");
+        Assert.Equal(0f, d.ShowingFor);
+
+        // The transition ends: the quiet runs its course now, and READ THE LOG follows it.
+        d.Update(0.25f, fell, Idle);
+        Assert.True(d.Quiet);
+        Assert.Null(d.Showing);
+        for (var i = 0; i < 4; i++) d.Update(0.25f, fell, Idle);
+        Assert.False(d.Quiet);
         Assert.Equal(OnboardingLessonId.FirstFailureReport, d.Showing);
+    }
+
+    [Fact]
+    public void test_the_warren_lesson_still_speaks_over_the_return_panel_that_raised_it()
+    {
+        // The welcome panel is RewardUp to the director, and THE WARREN WORKED is the one lesson written
+        // to be said over it: the panel is what raises it.
+        var d = new OnboardingDirector();
+        var paid = Fresh() with { WarrenOpen = true, WarrenPaidOffline = true };
+        foreach (var id in OnboardingLessons.All)
+            if (id != OnboardingLessonId.FirstWarrenReturn) d.Mute(id);
+        d.Update(1 / 60f, paid, new OnboardingDirector.Busy(RewardUp: true, ModalUp: false, ReportUp: false));
+        Assert.Equal(OnboardingLessonId.FirstWarrenReturn, d.Showing);
     }
 
     [Fact]

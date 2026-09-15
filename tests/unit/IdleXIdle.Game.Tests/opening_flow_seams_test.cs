@@ -163,18 +163,23 @@ public class OpeningFlowSeamsTest
     public void test_no_notice_is_drawn_over_the_opening_or_repeats_a_screen_it_walks_into()
     {
         // The notice's clock was already held while the opening ran; its toast and its lane were not, so
-        // it stood frozen under every card and pushed GEAR's doll out of existence at 150 %.
-        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
-        Assert.Contains("_noticeTimer > 0f && !NoticeHeld && !_opening.Running", game, StringComparison.Ordinal);
-        Assert.Contains("var showing = OverlayActive && !_tourActive && !_opening.Running", game, StringComparison.Ordinal);
-        Assert.Contains("if (_opening.Running) return;", game, StringComparison.Ordinal);
+        // it stood frozen under every card and pushed GEAR's doll out of existence at 150 %. The opening
+        // is the top tier of the attention owner now, and the toast, its lane and its clock are Feedback
+        // tier: each asks the owner, so the three cannot disagree about the opening again.
+        var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs")).Replace("\r\n", "\n");
+        Assert.Contains("_attention = _opening.Running ? AttentionOwner.Opening", game, StringComparison.Ordinal);
+        Assert.Contains("_noticeTimer > 0f && !NoticeHeld && !AttentionOwnedAbove(AttentionOwner.Feedback)", game, StringComparison.Ordinal);
+        Assert.Contains("var showing = OverlayActive && !AttentionOwnedAbove(AttentionOwner.Feedback)", game, StringComparison.Ordinal);
+        Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Feedback)) return;", game, StringComparison.Ordinal);
         // The boot line is the same: not drawn over the opening, and spent when the opening completes.
-        Assert.Contains("if (_opening.Running) return;\n        var fade = Math.Clamp(_bootTimer / 1.2f", game.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        Assert.Contains("if (!BootToastShowing) return;\n        var fade = Math.Clamp(_bootTimer / 1.2f", game, StringComparison.Ordinal);
+        Assert.Contains("private bool BootToastShowing => _bootTimer > 0f && _bootMessage.Length > 0 && !AttentionOwnedAbove(AttentionOwner.Feedback);", game, StringComparison.Ordinal);
         var host = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.Opening.cs"));
         Assert.Contains("if (_opening.Stage == OpeningStage.Complete) { _bootTimer = 0f; Save(); }", host, StringComparison.Ordinal);
-        // A lit lesson waits for a notice toast rather than being drawn under it (one surface per slot).
-        Assert.Contains("if (NoticeToastHolds) { _coachCard = Rectangle.Empty; return; }", game, StringComparison.Ordinal);
-        Assert.Contains("if (_coachBlaze > 0f && !NoticeToastHolds)", game, StringComparison.Ordinal);
+        // One surface per slot, the other way round: a notice toast waits for a lit lesson rather than being
+        // drawn over it -- the coach outranks direct feedback -- and the blaze runs only while the light is painted.
+        Assert.Contains("if (_coach.Showing is not { } id || !CoachLightsIt(id)) { _coachCard = Rectangle.Empty; return; }", game, StringComparison.Ordinal);
+        Assert.Contains("if (_coachBlaze > 0f && CoachLit)", game, StringComparison.Ordinal);
         // ...and the unlock notice for a screen the opening walks the player into is not posted at all.
         Assert.Contains("&& !OpeningWalksInto(opened))", game, StringComparison.Ordinal);
         var walked = OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceNavigate).Select(s => s.Screen).ToHashSet();

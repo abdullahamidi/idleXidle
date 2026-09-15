@@ -5012,6 +5012,9 @@ public sealed class ForgeScreen
     /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>
     public void DevPoseReveal(float t)
     {
+        // AT OR PAST THE HOLD THE REVEAL IS OVER: the pose is the frame after it closed, which is what a
+        // capture asks for when it wants to see what the reveal was holding back (RH_SHOT_NOTICE).
+        if (t >= RevealHold) { _revealTimer = 0f; _revealFrozen = false; return; }
         _revealTimer = Math.Max(0.01f, RevealHold - t);
         _revealFrozen = true;
     }

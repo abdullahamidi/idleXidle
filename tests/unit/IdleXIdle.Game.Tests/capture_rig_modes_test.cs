@@ -139,4 +139,20 @@ public class CaptureRigModesTest
         // ...and `fightfall` keeps its own hold: under DevShowFall the black never paints, whatever the clocks say.
         Assert.Contains("private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(", hunt);
     }
+
+    /// <summary>
+    /// At 1 the pose lets go: the lift's last instant is held for one frame and the transition then ends on
+    /// its own clock, so the host crosses the fall's end -- the edge that hushes the coach -- on film. A pose
+    /// that jumped straight to the end state photographed READ THE LOG lit on the first lit frame, which is
+    /// the rig's doing and not play's.
+    /// </summary>
+    [Fact]
+    public void test_the_death_pose_at_one_lets_the_transition_end_on_its_own_clock()
+    {
+        var hold = BodyOf(HuntScreen(), "private void HoldDeathPose()");
+        var release = hold.IndexOf("if (t >= 1f) { _deathFadeIn = float.Epsilon; _devDeathPose = null; return; }", StringComparison.Ordinal);
+        var reassert = hold.IndexOf("_deathFadeIn = pose.FadeInClock;", StringComparison.Ordinal);
+        Assert.True(release >= 0, "the pose at 1 no longer lets the transition end on its own clock.");
+        Assert.True(release < reassert, "the release must come before the every-frame re-assert.");
+    }
 }

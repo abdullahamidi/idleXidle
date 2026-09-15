@@ -106,10 +106,14 @@ public class HostInputGatesTest
         Assert.DoesNotContain("if (WelcomeUp) _swallowInput = true;", update, StringComparison.Ordinal);
         Assert.Contains("if (WelcomeUp && (KeyEdge(Keys.Enter) || KeyEdge(Keys.Space)", update, StringComparison.Ordinal);
         Assert.Contains("KeyEdge(Keys.Escape)", update, StringComparison.Ordinal);
-        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp ? default : _keys;", game, StringComparison.Ordinal);
+        // The screens' keyboard is empty under the welcome -- and under the two host panels and the open log,
+        // which hold the host's own keys the same way (attention_owner_test).
+        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || _showSettings || _showHelp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
         Assert.Contains("private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);", game, StringComparison.Ordinal);
-        // The hint slot paints OVER the welcome, so under its swallow it must not paint at all.
-        Assert.Contains("if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || !OverlayActive) return null;", game, StringComparison.Ordinal);
+        // The hint slot paints OVER the welcome, so under its swallow it must not paint at all: the welcome is
+        // Modal tier to the attention owner, and the slot is the coach's tier, so it asks the owner and waits.
+        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", game, StringComparison.Ordinal);
+        Assert.Contains("ProductionModalUp || WelcomeUp ? AttentionOwner.Modal", game, StringComparison.Ordinal);
     }
 
     /// <summary>A right click is gated by every modal a left click is.</summary>
@@ -122,20 +126,26 @@ public class HostInputGatesTest
     }
 
     /// <summary>
-    /// The coach's death gate holds on the HUNT only. The fight ticks on every screen, so a fall's downed
+    /// The coach yields to a fall on the HUNT only. The fight ticks on every screen, so a fall's downed
     /// beat runs while the Forge is up; gated without the screen term, a lesson lit there blinked spotlight
     /// to card and back for every background fall -- the transition's state dragged onto another screen.
+    /// The gate is the attention owner's now: the death owns the frame only while it is ON the page, and
+    /// neither the spotlight nor the lesson card asks about the fall itself.
     /// </summary>
     [Fact]
     public void test_the_coach_yields_to_a_fall_only_on_the_hunt()
     {
-        var lights = BodyOf(Source("Game1.cs"), "private bool CoachLightsIt(OnboardingLessonId id)");
-        Assert.Contains("if (!OverlayActive && _expedition.DeathTransitionUp) return false;", lights, StringComparison.Ordinal);
-        Assert.DoesNotContain("if (_expedition.DeathTransitionUp) return false;", lights, StringComparison.Ordinal);
-        // The lesson card's own gate already returns on OverlayActive before it asks about the fall.
-        var showing = BodyOf(Source("Game1.cs"), "private OnboardingLessonId? HuntLessonShowing()");
-        Assert.True(IndexOf(showing, "OverlayActive) return null;") < IndexOf(showing, "if (_expedition.DeathTransitionUp) return null;"),
-                    "the lesson card must leave another screen before it asks about the fall.");
+        var game = Source("Game1.cs");
+        var update = UpdateBody();
+        Assert.Contains(": !OverlayActive && _expedition.DeathTransitionUp ? AttentionOwner.Death", update, StringComparison.Ordinal);
+        var lights = game[game.IndexOf("private bool CoachLightsIt(OnboardingLessonId id)", StringComparison.Ordinal)..];
+        lights = lights[..lights.IndexOf(';')];
+        Assert.Contains("AttentionOwnedAbove(AttentionOwner.Coach)", lights, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeathTransitionUp", lights, StringComparison.Ordinal);
+        // The lesson card leaves another screen and asks the owner in one breath, and never about the fall.
+        var showing = BodyOf(game, "private OnboardingLessonId? HuntLessonShowing()");
+        Assert.Contains("if (OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", showing, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeathTransitionUp", showing, StringComparison.Ordinal);
     }
 
     /// <summary>

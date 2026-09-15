@@ -25,7 +25,8 @@ namespace IdleXIdle.Game;
 /// neither, and the loudest moments in this game — a chest cracking, a champion falling, a region
 /// conquered — are exactly when a queued lesson would land on top of something the player is already
 /// looking at. So the director holds a QUIET clock that a reward beat starts, and refuses to speak
-/// while a modal production surface is up unless the lesson belongs to that surface.
+/// while a modal production surface, the open run log or a fall has the frame — and the quiet clock
+/// waits with it, so a hush started under one of them cannot expire unseen behind it.
 /// </para>
 /// </remarks>
 public sealed class OnboardingDirector
@@ -116,10 +117,11 @@ public sealed class OnboardingDirector
     /// <summary>
     /// What the game is doing that a lesson must not talk over.
     /// </summary>
-    /// <param name="RewardUp">A chest reveal, a welcome panel — a surface the player is reading.</param>
-    /// <param name="ModalUp">Settings, help, a tour: production UI that owns the input.</param>
-    /// <param name="ReportUp">The run log is open. The fall lessons belong here; nothing else does.</param>
-    public readonly record struct Busy(bool RewardUp, bool ModalUp, bool ReportUp);
+    /// <param name="RewardUp">A chest reveal, a welcome panel — a surface the player is reading. The one surface a lesson may belong to.</param>
+    /// <param name="ModalUp">Settings, help, a tour, the authored opening: production UI that owns the input.</param>
+    /// <param name="ReportUp">The run log is open: the player is reading, and nothing is said over it — not even the lessons about it.</param>
+    /// <param name="DeathUp">The death transition is on the page: the collapse, the black, the stage coming back.</param>
+    public readonly record struct Busy(bool RewardUp, bool ModalUp, bool ReportUp, bool DeathUp = false);
 
     /// <summary>
     /// RIG ONLY: hold one lesson on screen so its presentation can be photographed.
@@ -145,7 +147,11 @@ public sealed class OnboardingDirector
     {
         if (Forced is { } posed) { _showing = posed; ShowingFor += dt; return; }
 
-        _quiet = MathF.Max(0f, _quiet - dt);
+        // THE QUIET HOLDS WHILE SOMETHING ELSE HAS THE FRAME. A hush started as a fall begins would
+        // otherwise burn behind the black and expire unseen; it counts down only on frames the coach
+        // could speak on.
+        var owned = busy.DeathUp || busy.ModalUp || busy.ReportUp || busy.RewardUp;
+        if (!owned) _quiet = MathF.Max(0f, _quiet - dt);
 
         // COMPLETION IS WATCHED, NOT ASSUMED. A lesson satisfied while it was on screen starts the
         // quiet period, which is what stops the next ask from landing on top of the reward for this
@@ -169,7 +175,7 @@ public sealed class OnboardingDirector
         // nobody saw — and it holds its dwell while it waits rather than burning it behind the panel.
         if (_raised is { } beat)
         {
-            if (busy.RewardUp || busy.ModalUp || busy.ReportUp)
+            if (owned)
             {
                 if (_showing is not null) { _showing = null; ShowingFor = 0f; }
                 return;
@@ -193,18 +199,15 @@ public sealed class OnboardingDirector
 
         // ── WHEN NOT TO SPEAK. ───────────────────────────────────────────────────────────────────
         //
-        // A lesson that BELONGS to the moment is allowed through it — READ THE LOG has to be sayable
-        // while the log is what the player is being sent to, and MAKE ONE CHANGE has to survive the
-        // report being open. Everything else waits for the surface to close.
-        if (next is { } id2 && !BelongsToTheMoment(id2, busy))
-        {
-            if (busy.RewardUp || busy.ModalUp || busy.ReportUp) next = null;
-        }
-        // ...AND NOTHING IS SAID OVER A MODAL, not even a lesson that belongs to the moment. Those
-        // exemptions were written for the run log and the reward panel, and they let READ THE LOG through
-        // the authored opening's own ModalUp — mid-opening, right after the tutorial boss's first win
-        // (autoplayed opening, 2026-09-11). It waits, and is said when the modal hands the game back.
-        if (busy.ModalUp) next = null;
+        // Nothing is said over a modal, over the open log or over a fall — not even a lesson ABOUT the
+        // log: opening it is the deed READ THE LOG asks for, and MAKE ONE CHANGE lights the rail the log
+        // is covering, so both are chosen fresh, with their clocks at zero, when it closes. (A modal
+        // exemption once let READ THE LOG through the authored opening's own ModalUp, mid-opening, right
+        // after the tutorial boss's first win — autoplayed opening, 2026-09-11.) A REWARD is the one
+        // surface a lesson may belong to: the camp's lesson is raised by the return panel and speaks over
+        // it. Everything else waits for the surface to close.
+        if (busy.DeathUp || busy.ModalUp || busy.ReportUp) next = null;
+        else if (busy.RewardUp && next is { } id2 && !BelongsToTheMoment(id2, busy)) next = null;
         if (_quiet > 0f) next = null;
 
         if (next != _showing)
@@ -219,15 +222,11 @@ public sealed class OnboardingDirector
     /// <summary>One more presentation of this lesson, for the ledger.</summary>
     private void Count(OnboardingLessonId id) => _shownCount[id] = _shownCount.GetValueOrDefault(id) + 1;
 
-    /// <summary>Is this lesson about the very surface that is up?</summary>
+    /// <summary>Is this lesson about the very reward surface that is up?</summary>
     private static bool BelongsToTheMoment(OnboardingLessonId id, Busy busy)
         => id switch
         {
-            // The fall loop's two lessons live on and around the run log: the first sends the player
-            // INTO it, and the second is what the report is for.
-            OnboardingLessonId.FirstFailureReport => busy.ReportUp || !busy.RewardUp,
-            OnboardingLessonId.FirstPostFailureChange => true,
-            // ...and the camp's lesson is raised BY the return panel, so it may speak over one.
+            // The camp's lesson is raised BY the return panel, so it may speak over one.
             OnboardingLessonId.FirstWarrenReturn => busy.RewardUp,
             _ => false,
         };

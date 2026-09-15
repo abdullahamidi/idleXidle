@@ -133,9 +133,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// The keyboard as the SCREENS see it: empty while a tour is up. The tour swallowed clicks from the
     /// first day, but the screens read raw <see cref="_keys"/>, so "any key advances the card" also
     /// bought a trait (Enter on TRAITS), sold the bench item (S on the FORGE) or walked into a region
-    /// (Enter on the MAP) underneath the scrim (review 2026-08-26).
+    /// (Enter on the MAP) underneath the scrim (review 2026-08-26). Empty under the two host panels and
+    /// the open Expedition Log too, which hold the host's own hotkeys the same way (see panelHolds).
     /// </summary>
-    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp ? default : _keys;
+    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || _showSettings || _showHelp || _expedition.LogOpen ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -538,6 +539,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The keep-filter's wanted slots — several at once since 2026-08-23 (empty = any).</summary>
     private readonly HashSet<ItemBaseType> _chestKeepSlots = new();
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
+    private bool _rigNoticePosted;       // RH_SHOT_NOTICE: the sample notice is posted once, never every frame
     private MasteryScreen _masteryScreen = null!;
     private bool _showMastery;
 
@@ -1643,6 +1645,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
         _swallowInput = false;
         _coach.Reset();
+        _deathWasUp = false;   // a new career's first fall is its own; the old one's edge must not hush it
         // ...AND THE OPENING RUNS AGAIN, WHOLE. A new career is a new beginning in every sense: the
         // story is unread, the cursor is at nothing, the gift is ungranted, and the title's PLAY item
         // starts it over (ChooseTitleItem reads _hasSave, which this reset has just cleared).
@@ -3761,6 +3764,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             if (_showSettings) _showSettings = false;
             else if (_showHelp) _showHelp = false;
+            // THE OPEN EXPEDITION LOG is the next layer down: Esc on it means "close the log" — the one door
+            // out of a full-screen read that needs no aim — never "open settings over it".
+            else if (_expedition.LogOpen) _expedition.ToggleLog();
             // A pending SELL/SALVAGE question outranks the settings reflex: Esc on it means "keep it",
             // not "open another panel over the question". (Adversarial review, pass four.)
             else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();
@@ -3789,7 +3795,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // said so before the game moves.
         UpdateOpening(dt);
 
-        if (_bootTimer > 0f && !_tourActive && !_opening.Running) _bootTimer = Math.Max(0f, _bootTimer - dt);
+        // THE TOASTS' CLOCKS RUN ONLY WHILE THEIR TOASTS CAN BE READ. Feedback tier: under a lit lesson,
+        // the open log, a fall, a reveal, a modal or the opening the boot line waits with its clock held,
+        // and lands the instant the frame is handed back rather than expiring behind whatever owned it.
+        // The owner is last frame's — it is decided further down, once this frame's flags have settled —
+        // and one frame is a frame nobody sees. The locked-tile refusal may simply expire: a refusal is
+        // over the moment it was seen, or not.
+        if (_bootTimer > 0f && !AttentionOwnedAbove(AttentionOwner.Feedback)) _bootTimer = Math.Max(0f, _bootTimer - dt);
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
         // Notice toasts: one at a time, each for NoticeSeconds, the next one only once the last has
         // gone. Ticks here, past the title return, so only seconds of actual play count.
@@ -3819,8 +3831,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // the page two lanes and squeezed four labels into ellipses at 150 %. So the reveal, which
         // waits for a click, holds the band; the notice, which is a few seconds, waits — AND ITS CLOCK
         // IS HELD, so it lands the moment the card closes rather than expiring unseen behind it.
-        if (_noticeTimer > 0f && !NoticeHeld && !_opening.Running) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
-        if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
+        // ...AND THE SAME UNDER ANYTHING THAT OUTRANKS IT. The toast is Feedback tier: a lit lesson, the
+        // open log, a fall, a reveal, a modal and the opening all own the frame over it, so its clock
+        // holds while any of them is up, and the NEXT one is not dequeued either — a toast dequeued
+        // under an owner played its cue for a plate nobody could see.
+        if (_noticeTimer > 0f && !NoticeHeld && !AttentionOwnedAbove(AttentionOwner.Feedback)) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
+        if (_noticeTimer <= 0f && _noticeQueue.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Feedback))
         {
             _notice = _noticeQueue.Dequeue();
             // AN AWAKENING HOLDS LONGER, because it has a third line to read and because it is the
@@ -3862,6 +3878,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // exactly one of the two, so a HELP stacked under SETTINGS painted its close icon dead.
         if (Pressed(Keys.F1)) { _showHelp = !_showHelp; if (_showHelp) _showSettings = false; }
         if (Pressed(Keys.F10)) { _showSettings = !_showSettings; if (_showSettings) _showHelp = false; }
+        // A HOST PANEL HOLDS THE HOST'S OWN KEYS. The panels eat the frame's clicks (MouseClicked) but the
+        // hotkeys below read Pressed(), which only the tour, the opening and the welcome silence — so B
+        // under SETTINGS opened BUILD beneath the panel, and L opened the log under it. Esc, F1 and F10
+        // above stay raw: they are how the panels open and close. Read once, here, for every key below.
+        var panelHolds = _showSettings || _showHelp;
         // CONTINUE by key -- RAW edges, because the welcome joins the frame's swallow below and Pressed()
         // honours it. Escape reads the welcome too, one layer per press.
         if (WelcomeUp && (KeyEdge(Keys.Enter) || KeyEdge(Keys.Space) || (!_settingsEscSpent && KeyEdge(Keys.Escape)))) _showWelcome = false;
@@ -3970,7 +3991,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // ChromeMouse, not PageCursor: the reveal is drawn in BeginCanvas(1), true 1920x1080.
             var onRevealButton = revealClick && _forge.RevealWantsClick(ChromeMouse);
             _forge.RevealInput(ChromeMouse, onRevealButton);
-            if (!onRevealButton && (revealClick || Pressed(Keys.Space) || Pressed(Keys.Enter)))
+            // ...and not from under a host panel: Space with SETTINGS over the reveal advanced the card the
+            // panel was covering.
+            if (!onRevealButton && (revealClick || (!panelHolds && (Pressed(Keys.Space) || Pressed(Keys.Enter)))))
                 _forge.AdvanceReveal();
 
             // The reveal's question carries the same "don't ask me again" box the bench's does, and the
@@ -4038,8 +4061,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // hotkeys, L and T are the host's, so the host holds them while any modal is open.
         var ceremonyHolds = (_showMastery && _masteryScreen.SpecialisationOpen)
                               || (_showVault && _vault.ModalUp);
+        // ...AND SO DOES THE OPEN EXPEDITION LOG, a full-screen read: a tile or a hotkey that switched the
+        // screen beneath it left the log painting through the overlay's inset transform while its
+        // hit-tests stayed in plain 1920 space. Its own doors (BUILD, GEAR, the ×, L, Esc) are the way
+        // out; the rail is furniture until it closes, and is not painted (DrawHexNav).
+        var navHolds = ceremonyHolds || panelHolds || _expedition.LogOpen;
 
-        if (!ceremonyHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
+        if (!ceremonyHolds) HandleNavClick();   // a click on the shared hex nav works from any screen; it refuses the panels and the log itself
 
         // EVERY NAV HOTKEY GOES THROUGH OpenNav — the unlock gate, the refusal toast and the
         // flag-clearing all live in exactly one place now.
@@ -4055,7 +4083,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Each handler also cleared its own idiosyncratic subset of the flags, and three of them forgot
         // _showRoster and _showLoadout — so the player could see one screen while an invisible one
         // consumed their clicks. OpenNav clears all nine, every time.
-        for (var navKey = 0; navKey < Nav.Length && !ceremonyHolds; navKey++)
+        for (var navKey = 0; navKey < Nav.Length && !navHolds; navKey++)
         {
             // Keys.A..Keys.Z are the ASCII letter codes, so the table's char IS the key.
             if (!Pressed((Keys)Nav[navKey].Key)) continue;
@@ -4071,7 +4099,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The hunt screen's LOG button raises WantsLog (drawn last frame); it is the same door as L.
         var wantsLog = _expedition.WantsLog;
         _expedition.WantsLog = false;
-        if ((Pressed(Keys.L) || wantsLog) && !ceremonyHolds)
+        if ((Pressed(Keys.L) || wantsLog) && !ceremonyHolds && !panelHolds)
         {
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
@@ -4090,7 +4118,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _showMastery = _showGear = _showTraining = _showRoster = _showLoadout = _showVault = false;
             }
         }
-        if (_expedition.LogOpen)
+        if (_expedition.LogOpen && !panelHolds)
         {
             if (Pressed(Keys.Left)) _expedition.StepLog(1);    // left = older
             if (Pressed(Keys.Right)) _expedition.StepLog(-1);
@@ -4099,7 +4127,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // T — THE WEAVE. The one screen with no rail tile of its own, so it cannot go through OpenNav;
         // it is gated on Activity.Build, which is the screen it is reached from and the thing it is
         // part of. Without this it was the last remaining way to walk past the unlock gate.
-        if (Pressed(Keys.T) && !ceremonyHolds)
+        if (Pressed(Keys.T) && !navHolds)
         {
             if (!Unlocks.IsOpen(Activity.Build, GuideUnlockFacts()))
             {
@@ -4130,6 +4158,36 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // which only runs when that screen is the one on top, so a click in the Forge cannot fall
         // through into the fight without any flag being threaded down for it.
         _regionProgression = RegionProgressionOf(_region);
+
+        // ── WHO HAS THE PLAYER'S EYES THIS FRAME. ───────────────────────────────────────────────
+        //
+        // Decided here, once, after every flag it reads has settled for the frame — the panels and the
+        // welcome above, the log's L and medallion, the reveal's tick — and before the fight and the
+        // coach run, so it stands on a frame the authored opening holds the fight. The death and the
+        // coach's choice are read as the last frame left them: both tick inside UpdateExpedition below,
+        // one frame behind is a frame nobody sees, and a second reading would be a second owner. The
+        // death owns the frame only while it is ON the page: the fight ticks on every screen, and a fall
+        // behind the Forge is not something the player is looking at. Highest wins.
+        var deathWasUp = _deathWasUp;
+        _deathWasUp = _expedition.DeathTransitionUp;
+        // THE FALL HAS FINISHED: a beat of quiet, so READ THE LOG lands once the new descent is legible
+        // rather than on the first lit frame of the stage coming back. No such beat when the log closes —
+        // the lesson it leads to is simply chosen fresh.
+        if (deathWasUp && !_deathWasUp) _coach.Hush(OnboardingDirector.QuietAfterReward);
+        _attention = _opening.Running ? AttentionOwner.Opening
+            : ProductionModalUp || WelcomeUp ? AttentionOwner.Modal
+            : _forge.RevealActive ? AttentionOwner.Reveal
+            : !OverlayActive && _expedition.DeathTransitionUp ? AttentionOwner.Death
+            : _expedition.LogOpen ? AttentionOwner.Report
+            // THE COACH OWNS THE FRAME ONLY WHEN SOMETHING IS LIT. A raised beat about the fight (its
+            // Target is a fight control) dwells while the player is on the Forge; it aims, but there is
+            // no hole for it there, nothing is painted, and a light that paints nothing must not hold
+            // the news back. The holes are the geometry DrawCoachSpotlight paints — the lane is already
+            // reserved for this frame, so resolving them here is safe where CoachLightsIt could not.
+            : _coach.Showing is { } aimed && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach
+            : _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback
+            : AttentionOwner.None;
+
         // ── THE AUTHORED HOLD. ──────────────────────────────────────────────────────────────────
         //
         // The player must SEE a frozen game, not a still frame with a simulation running behind it.
@@ -4978,13 +5036,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The activity the screen on top belongs to — what a tour or a slot note would be about.</summary>
     private Activity ScreenActivity() => NavActivity[NavActive()];
 
-    /// <summary>The slot note owed at the top of the current screen, or null. Never during a tour.</summary>
+    /// <summary>The slot note owed at the top of the current screen, or null. Never under anything above the coach's tier.</summary>
     private ScreenBanner? ScreenBannerShowing()
     {
-        if (_showTitle || _tourActive || _showHelp || _showSettings) return null;
-        // The expedition LOG is a full-screen read over the hunt; a banner over it would be about a
-        // screen the player is not looking at.
-        if (_expedition.LogOpen) return null;
+        // THE COACH'S TIER: a note is teaching. Under the open log, a fall, a reveal, a modal or the
+        // opening it would be about a screen the player is not looking at, so it waits.
+        if (AttentionOwnedAbove(AttentionOwner.Coach)) return null;
         return Onboarding.BannerFor(ScreenActivity(), GuideUnlockFacts(), _explained);
     }
 
@@ -5092,11 +5149,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Hints closed this session. Not saved: a hint is about now, and returns when its fact changes.</summary>
     private readonly HashSet<string> _dismissedHints = new();
 
-    /// <summary>The slot content owed on the current menu screen, or null. Never during a tour, never on the HUNT.</summary>
+    /// <summary>The slot content owed on the current menu screen, or null. Never on the HUNT, never under anything above the coach's tier.</summary>
     private SlotContent? SlotShowing()
     {
-        // WelcomeUp: the slot paints OVER the welcome panel, whose swallow would leave its × dead.
-        if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || !OverlayActive) return null;
+        // THE COACH'S TIER, on a menu screen only. The slot paints OVER a reveal, the welcome, a tour and
+        // the panels, whose swallow would leave its × dead — so under any of them it does not paint at all.
+        if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;
         if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
         var screen = ScreenActivity();
         // THE ONE LESSON THE DIRECTOR CHOSE, if the deed it asks for happens on this screen. The
@@ -5388,13 +5446,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The fight rung to show on the HUNT this frame, or null.</summary>
     private OnboardingLessonId? HuntLessonShowing()
     {
-        if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
-        if (_expedition.LogOpen) return null;
-        // NOTHING IS SAID OVER A FALL. The Hunter collapsing, the black, and the stage coming back are
-        // the one thing on screen; a card in the toast slot beside them is a second. The lesson waits for
-        // the next descent to be visible.
-        if (_expedition.DeathTransitionUp) return null;
-        if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
+        // THE COACH'S TIER, on the fight only. Nothing is said over the open log, over a fall — the Hunter
+        // collapsing, the black and the stage coming back are the one thing on screen — over a modal or
+        // the opening; the card waits for the owner to hand the frame back.
+        if (OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;
+        if (BootToastShowing) return null;                                  // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Head.Length > 0) return null;     // so does a notice
         if (_coach.Showing is not { } step) return null;
         // THE SPOTLIGHT SAYS IT INSTEAD, wherever it can. The toast slot is the place the playtest
@@ -5531,7 +5587,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The toast for clicking a locked rail tile. Says the price, then fades.</summary>
     private void DrawLockedToast()
     {
-        if (_lockedTimer <= 0f || _lockedMsg.Length == 0) return;
+        // FEEDBACK TIER: a refusal never paints over anything the player is meant to be reading.
+        if (_lockedTimer <= 0f || _lockedMsg.Length == 0 || AttentionOwnedAbove(AttentionOwner.Feedback)) return;
 
         var fade = MathF.Min(1f, _lockedTimer / 0.5f);
         var w = LockedToastWidth;
@@ -5729,25 +5786,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawNoticeToast()
     {
+        // NOTHING CLICKABLE PAINTS WHEN ITS INPUT IS BLOCKED, and this plate has a ×: on every frame it is
+        // not painted the rect the × is read from is cleared first, so a hidden close cannot take a click.
+        _noticeCloseRect = Rectangle.Empty;
         if (_noticeTimer <= 0f || _notice.Head.Length == 0) return;
-        if (_showTitle || _showHelp || _showSettings || WelcomeUp) return;
-        // Never over the SPECIALISATION ceremony: it is the one modal the game stops for, and a quest
-        // toast across it covered the panel's own title (seen at UI SCALE 125%).
-        if (_showMastery && _masteryScreen.SpecialisationOpen) return;
-        // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
-        // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
-        if (_tourActive) return;
-        // ...nor over the authored opening, for the same reason and with the same held clock: the news
-        // waits, and lands when the opening hands the game back (it stood frozen under every card).
-        if (_opening.Running) return;
+        // FEEDBACK TIER. News waits under anything the player is meant to be reading — a lit lesson, the
+        // open log, a fall, a reveal, a modal (the SPECIALISATION ceremony had its own title covered by a
+        // quest toast at 125 %; a toast across a tour's spotlight is two lessons at once) and the authored
+        // opening — and its clock waits with it (Update), so it lands when the frame is handed back.
+        if (AttentionOwnedAbove(AttentionOwner.Feedback)) return;
         if (NoticeHeld) return;   // the band belongs to a slot reveal; the clock is held with it
         if (OpeningRigOn) _rigNoticeDrawn = _notice.Head;   // dev: the opening rig's trace
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         // IN THE LANE on a menu screen (ReserveNoticeLane): the toast stands where the body's first row
         // used to start, and the body has moved down to make room; it arrives with the lane. On the
-        // hunt it stays an overlay under the header stack.
-        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
+        // hunt it stays an overlay under the header stack, stepping down under the boot toast.
+        var y = BootToastShowing ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
         if (OverlayActive)
         {
             y = CanvasY(UiKit.PageTopBase);
@@ -5952,14 +6007,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawCoachSpotlight()
     {
-        if (_coach.Showing is not { } id || !CoachLightsIt(id)) return;
+        // THE CARD'S RECT IS CLEARED ON EVERY FRAME THE CARD IS NOT PAINTED, so the × Update hit-tests is
+        // always the one that was drawn — never last frame's, on a frame the light was withheld.
+        if (_coach.Showing is not { } id || !CoachLightsIt(id)) { _coachCard = Rectangle.Empty; return; }
         var holes = CoachHoles(id);
-        if (holes.Length == 0) return;   // nothing to light: the card path says it instead
-        // ONE SURFACE PER SLOT — A QUEUE, NOT A STACK — as the HUNT's own lesson card already knows
-        // (HuntLessonShowing). On the fight the notice toast and a card beside the run-log button share
-        // one band, and READ THE LOG was drawn under TRAINING's notice the moment the opening handed the
-        // game back (autoplayed opening, 150 %, 2026-09-11). The light waits; its blaze waits with it.
-        if (NoticeToastHolds) { _coachCard = Rectangle.Empty; return; }
+        if (holes.Length == 0) { _coachCard = Rectangle.Empty; return; }   // nothing to light: the card path says it instead
+        // ONE SURFACE PER SLOT — A QUEUE, NOT A STACK. On the fight the notice toast and a card beside the
+        // run-log button share one band, and the light outranks the news: a toast waits for a lit lesson
+        // (DrawNoticeToast asks the owner, and the next one is not dequeued under it) rather than being
+        // drawn over the thing the player is being shown.
 
         // ── DARKEN EVERYTHING, LIGHT THE ONE THING. ─────────────────────────────────────────────
         //
@@ -6024,29 +6080,64 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _coachBlaze = _coach.Showing is null ? 0f : CoachBlazeSeconds;
             return;
         }
-        if (_coachBlaze > 0f && !NoticeToastHolds) _coachBlaze = MathF.Max(0f, _coachBlaze - dt);
+        // ...AND IT BURNS ONLY WHILE THE LIGHT IS PAINTED. Under an owner the spotlight is withheld and the
+        // blaze holds with it, so the scrim is at full when the light is first seen, not half gone.
+        if (_coachBlaze > 0f && CoachLit) _coachBlaze = MathF.Max(0f, _coachBlaze - dt);
     }
 
-    /// <summary>Is a notice toast on screen, so a lit lesson waits its turn (see DrawNoticeToast)?</summary>
-    private bool NoticeToastHolds => _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld && !_opening.Running;
+    /// <summary>Is the coach lighting something this frame — the spotlight, its brackets and its card?</summary>
+    private bool CoachLit => _coach.Showing is { } lit && CoachLightsIt(lit);
+
+    // ── WHO HAS THE PLAYER'S EYES ────────────────────────────────────────────────────────────────
+    //
+    // One owner per frame, decided in Update once the frame's flags have settled (the assignment beside
+    // the fight's hold) and read by every gate that paints something the player is meant to read and by
+    // every clock under it. A gate names its own tier and asks one question; the ranking lives in
+    // AttentionOwner and nowhere else, so no surface keeps a private list of what outranks it.
+
+    /// <summary>The surface that owns the player's attention this frame. Assigned in exactly one place.</summary>
+    private AttentionOwner _attention;
+
+    /// <summary>Was the death transition up on the last frame? Its falling edge is the fall's end.</summary>
+    private bool _deathWasUp;
+
+    /// <summary>Is anything ABOVE this tier up? The one question every reader asks.</summary>
+    private bool AttentionOwnedAbove(AttentionOwner tier) => _attention > tier;
+
+    /// <summary>
+    /// A production surface that owns the frame: the title, the two host panels, the type spec, a tour,
+    /// and the screens' own confirmations — the attunement, the vault's stall and cards, the Forge's
+    /// SELL / SALVAGE question. The welcome is not here: it is a reward to the director (the camp's
+    /// lesson may speak over it), and the owner adds it to this tier itself.
+    /// </summary>
+    private bool ProductionModalUp
+        => _showTitle || _showSettings || _showHelp || _showTypeSpec || _tourActive
+           || (_showMastery && _masteryScreen.SpecialisationOpen)
+           || (_showVault && _vault.ModalUp)
+           || (_showForge && _forge.ConfirmOpen);
+
+    /// <summary>Is the boot toast on screen? Feedback tier: it waits under anything the player is meant to be reading, and its clock waits with it (Update).</summary>
+    private bool BootToastShowing => _bootTimer > 0f && _bootMessage.Length > 0 && !AttentionOwnedAbove(AttentionOwner.Feedback);
 
     /// <summary>
     /// Is this lesson's copy carried by the SPOTLIGHT rather than by a card in the toast slot?
     /// </summary>
     /// <remarks>
-    /// Deliberately geometry-free. <see cref="SlotShowing"/> and <see cref="HuntLessonShowing"/> ask
-    /// this to decide whether to draw the lesson themselves, and they are called from the page's own
+    /// The coach's tier: it lights only when nothing above it — the log, a fall on the page, a reveal, a
+    /// modal, the opening — has the frame, and <see cref="CoachAims"/> says whether there is anything
+    /// to light. Deliberately geometry-free. <see cref="SlotShowing"/> and <see cref="HuntLessonShowing"/>
+    /// ask this to decide whether to draw the lesson themselves, and they are called from the page's own
     /// lane arithmetic — resolving a rectangle here would make the lane depend on a rectangle that
     /// depends on the lane. It asks only what the catalogue says and which screen is on top.
     /// </remarks>
-    private bool CoachLightsIt(OnboardingLessonId id)
+    private bool CoachLightsIt(OnboardingLessonId id) => !AttentionOwnedAbove(AttentionOwner.Coach) && CoachAims(id);
+
+    /// <summary>
+    /// Would the coach carry this lesson by a spotlight, given the frame — geometry-free, so the lane
+    /// arithmetic may ask. (The owner's own coach term asks the geometry, <see cref="CoachHoles"/>.)
+    /// </summary>
+    private bool CoachAims(OnboardingLessonId id)
     {
-        if (_tourActive || _showTitle || _showSettings || _showHelp || WelcomeUp || _expedition.LogOpen) return false;
-        if (_forge.RevealActive) return false;
-        // NOTHING IS LIT OVER A FALL, or over the black after it — ON THE HUNT. The fight ticks on every
-        // screen, so its downed beat runs while the Forge is up; the gate is the hunt's, and a lesson lit on
-        // another screen keeps its light through a fall nobody is watching.
-        if (!OverlayActive && _expedition.DeathTransitionUp) return false;
         if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
             return NavSlots().Contains(Array.IndexOf(NavActivity, sends));   // the tile must be on the rail
         return OnboardingLessons.Target(id) is not null;
@@ -6531,18 +6622,32 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _lockedTimer = 3.2f;
         }
 
+        // RH_SHOT_NOTICE=1 posts ONE sample notice on any fixture, once, so what news does under an owner
+        // can be photographed: queued under a chest reveal it must not paint and its clock must not burn,
+        // and it lands when the reveal is dismissed (a late RH_SHOT_T on `lootforge` poses that frame).
+        if (CaptureRig && !_rigNoticePosted && Environment.GetEnvironmentVariable("RH_SHOT_NOTICE") is { Length: > 0 })
+        {
+            _rigNoticePosted = true;
+            PostNotice("QUEST COMPLETE — FIRST STEPS", "You can equip a second skill.");
+        }
+
         WatchTheFallLoop();
         RaiseSignatureBeat();
         TickCoachBlaze((float)gameTime.ElapsedGameTime.TotalSeconds);
         _coach.Update((float)gameTime.ElapsedGameTime.TotalSeconds, LessonFactsNow(),
                       new OnboardingDirector.Busy(
                           RewardUp: _forge.RevealActive || WelcomeUp,
-                          // ...AND THE AUTHORED OPENING OUTRANKS IT ENTIRELY. Only one guided
-                          // sequence owns the player at a time, and while the first minutes are
-                          // written the contextual catalogue has nothing to add that is not either
-                          // already being said or being said too early.
-                          ModalUp: _showSettings || _showHelp || _tourActive || _showTitle || _opening.Running,
-                          ReportUp: _expedition.LogOpen));
+                          // THE OWNER'S MODAL TIER, less the welcome on its own: the welcome is a reward
+                          // to the director (the camp's lesson is raised by it and may speak over it).
+                          // The authored opening outranks it entirely — only one guided sequence owns
+                          // the player at a time, and while the first minutes are written the
+                          // contextual catalogue has nothing to add that is not either already being
+                          // said or being said too early.
+                          ModalUp: _attention >= AttentionOwner.Modal && !(WelcomeUp && !ProductionModalUp),
+                          ReportUp: _expedition.LogOpen,
+                          // The death on the page, as the owner read it this frame: the transition ticks
+                          // further down, so this is last frame's — and the frame it ends on is hushed.
+                          DeathUp: _attention == AttentionOwner.Death));
 
         _forge.Tuning = ForgeTuning.Default with
         {
@@ -6979,15 +7084,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawBootToast()
     {
-        if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
-        // The first-session nudge ("your champion is already fighting") would be a dim duplicate
-        // under a tour's scrim, so it waits — and its clock is HELD while it waits (the tick in
-        // Update reads !_tourActive), so it lands the instant the scrim lifts rather than expiring
-        // behind the cards.
-        if (_tourActive) return;
-        // ...nor over the authored opening, whose Update holds the same clock: drawn, it stood frozen
-        // under every card and across the lit GEAR panel at 150 % (autoplayed opening, 2026-09-11).
-        if (_opening.Running) return;
+        // FEEDBACK TIER, like the notice. The first-session nudge ("your champion is already fighting")
+        // would be a dim duplicate under a tour's scrim, and it stood frozen under every card of the
+        // authored opening and across the lit GEAR panel at 150 % (autoplayed opening, 2026-09-11); it
+        // waits under those, a lit lesson, the open log, a fall, a reveal and a modal alike — and its
+        // clock is HELD while it waits (the tick in Update reads the same owner), so it lands the instant
+        // the frame is handed back rather than expiring behind whatever owned it.
+        if (!BootToastShowing) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
         // Rev 4 §18.4: a FIXED two-line welcome-back toast at (590,165,740,82) — never a full-width band,
         // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
@@ -7649,7 +7752,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // The overlays' foot, for the fight's floating words (HuntScreen.OverlayFloor, hunt-01): this
             // frame's boot toast or lesson card hangs under the header stack, and a callout must not rise
             // behind it.
-            _expedition.OverlayFloor = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive
+            _expedition.OverlayFloor = BootToastShowing
                 ? ToastTop + ToastHeight + UiMetrics.Space(8)
                 : HuntLessonShowing() is { } lessonUp ? HuntLessonRect(lessonUp).Bottom + UiMetrics.Space(8) : 0;
             _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
@@ -9095,9 +9198,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>Is the ? live right now? Drawing and hit-testing ask the same question.</summary>
+    /// <remarks>
+    /// The coach's tier: a tour is teaching, so the ? stays live over a lit lesson and is gone under
+    /// anything the player is reading — the open log — and everything above it, the fall included.
+    /// </remarks>
     private bool LearnOffered()
-        => !_showSettings && !_showHelp && !_showTitle && !_tourActive && !WelcomeUp
-           && !_forge.RevealActive && !_expedition.LogOpen
+        => !AttentionOwnedAbove(AttentionOwner.Coach)
            && Onboarding.TourFor(ScreenActivity()).Count > 0;
 
     /// <summary>Take the ? if it was pressed. Returns true when the click was spent.</summary>
@@ -10177,12 +10283,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void ReserveNoticeLane()
     {
-        // Not while the opening runs, whose clock already holds the notice (Update): a lane opened for a
-        // toast nobody may read pushed every page down under the opening's cards — at 150 % it left the
-        // GEAR doll that BACK TO THE HUNT lights no height at all (autoplayed opening, 2026-09-11).
-        var showing = OverlayActive && !_tourActive && !_opening.Running && !_showTitle && !_showHelp && !_showSettings && !WelcomeUp
-                      && _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld
-                      && !(_showMastery && _masteryScreen.SpecialisationOpen);
+        // Only while the toast itself may paint (DrawNoticeToast asks the owner the same way): a lane
+        // opened for a toast nobody may read pushed every page down under the opening's cards — at 150 %
+        // it left the GEAR doll that BACK TO THE HUNT lights no height at all (autoplayed opening,
+        // 2026-09-11). The owner is last frame's here, at the top of Update; the lane eases anyway.
+        var showing = OverlayActive && !AttentionOwnedAbove(AttentionOwner.Feedback)
+                      && _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld;
         if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);
         _noticeLaneOpen = UiMotion.Ease(NoticeLaneKey, showing ? 1f : 0f, UiMotion.Transition);
         if (!showing && _noticeLaneOpen <= 0f) _noticeLaneFull = 0;
@@ -10278,7 +10384,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private void DrawHexNav()
     {
-        if (_showSettings || _showHelp) return;   // a modal owns the frame
+        // A modal owns the frame — and so does the open EXPEDITION LOG, a full-screen read the rail cannot
+        // answer under (HandleNavClick and the hotkeys refuse), so it is not painted as if it could.
+        if (_showSettings || _showHelp || _expedition.LogOpen) return;
 
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
@@ -10495,7 +10603,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private void HandleNavClick()
     {
-        if (_showSettings || _showHelp) return;
+        if (_showSettings || _showHelp || _expedition.LogOpen) return;   // the panels and the open log hold the rail (see navHolds)
         // A FORCED NAVIGATION LETS EXACTLY ONE TILE THROUGH the authority that killed the rest. The
         // tile is the game's own, in its own place, taking its own click — there is no tutorial-only
         // button in this design — and a press on any OTHER tile is swallowed in silence rather than

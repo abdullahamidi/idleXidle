@@ -6404,10 +6404,17 @@ public sealed class HuntScreen
     /// <summary>The held transition pose, re-asserted every frame while a capture is posing one — this nullable IS the hold.</summary>
     private float? _devDeathPose;
 
-    /// <summary>Re-assert the posed transition: its clock, and past the restart the new wave's entrance where the pose has it.</summary>
+    /// <summary>
+    /// Re-assert the posed transition: its clock, and past the restart the new wave's entrance where the
+    /// pose has it. AT 1 THE POSE IS LET GO: the lift's last instant is held for exactly one frame and the
+    /// transition then ends on its own clock, so the host crosses the edge it crosses in play — the fall's
+    /// end, which hushes the coach for a beat — rather than photographing a stage that was never in
+    /// transition at all (the clock's tiny remainder paints no black: Covers reads the alpha).
+    /// </summary>
     private void HoldDeathPose()
     {
         if (_devDeathPose is not { } t) return;
+        if (t >= 1f) { _deathFadeIn = float.Epsilon; _devDeathPose = null; return; }
         var pose = DeathTransition.At(t, UiMotion.Reduced);
         if (pose.Restarted)
         {
