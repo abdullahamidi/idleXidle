@@ -125,11 +125,12 @@ public class HuntScreenFeedbackTests
 
         // ...and this screen's own HUD refuses EXACTLY WHILE THE BLACK COVERS IT, and is live at every
         // other frame — the medallion painted beside a fallen Hunter opens the log as it always does,
-        // and nothing hovers or answers under the black. ONE READING FOR BOTH HALVES (ADR-006): the
-        // refusal is the paint's own alpha, decided in TakeInput after the log and after the screen gate.
+        // and nothing hovers, tips or answers under the black. ONE READING FOR BOTH HALVES (ADR-006):
+        // the refusal is the paint's own alpha, decided in TakeInput after the log and after the screen
+        // gate — and the paint parks the cursor under that same predicate, so a refused medallion cannot
+        // lift, whiten or offer its tip through a half-lifted fade.
         Assert.Contains("private bool BlackCovers => DeathTransition.Covers(BlackAlpha);", src);
-        Assert.DoesNotContain("OffCanvas", src);   // the cursor is never parked: a painted control hovers
-        Assert.Contains("var hit = mouse;", src);
+        Assert.Contains("var hit = BlackCovers ? OffCanvas : mouse;", src);
         var input = Slice(src, "public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)", "private string _buildStamp");
         var logGate = input.IndexOf("if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }", StringComparison.Ordinal);
         var topGate = input.IndexOf("if (!huntOnTop) { _deathFadeIn = 0f; return; }", StringComparison.Ordinal);

@@ -2329,8 +2329,11 @@ public sealed class HuntScreen
         _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
-        // full resolution), so the log button and the utility doors hit-test it as is.
-        var hit = mouse;
+        // full resolution), so the log button and the utility doors hit-test it as is. PARKED under the
+        // black, under the SAME predicate TakeInput refuses under: a control that will not answer must
+        // not lift, whiten or offer its tip through a half-lifted fade (ADR-006 — what is drawn is what
+        // is hit-tested). The readable beat is not covered, so it hovers and answers like any other frame.
+        var hit = BlackCovers ? OffCanvas : mouse;
         if (_run is null || _replay is null || _champ is null) return;
 
         // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
@@ -5240,7 +5243,8 @@ public sealed class HuntScreen
     //    and lifts over DeathTransition.FadeIn while the new wave walks in. The arithmetic is DeathTransition
     //    (PresentationBeats.cs); this screen owns the two clocks — _downedTimer and the lift below — and
     //    paints ONE full-canvas fill from them at the foot of Draw, under the host's chrome; its own HUD
-    //    refuses input exactly while that fill is visible (BlackCovers) and is live at every other frame.
+    //    refuses input, and parks the cursor for its own hover faces and tips, exactly while that fill is
+    //    visible (BlackCovers), and is live at every other frame.
     //    Under Reduced Motion both fades are cuts. No plate, no door, no header line: the wave lane shows
     //    the wave that fell until the restart and the new wave after it, and the report waits in the LOG.
 
@@ -5250,6 +5254,9 @@ public sealed class HuntScreen
     /// another screen is on top (<see cref="TakeInput"/>), held by <see cref="DevPoseDeathTransition"/>.
     /// </remarks>
     private float _deathFadeIn;
+
+    /// <summary>Where this screen's HUD is told the cursor is while the black covers it: nowhere, so nothing hovers or tips under the black.</summary>
+    private static readonly Point OffCanvas = new(-4096, -4096);
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>

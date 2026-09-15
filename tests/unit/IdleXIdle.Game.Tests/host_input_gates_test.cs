@@ -122,6 +122,23 @@ public class HostInputGatesTest
     }
 
     /// <summary>
+    /// The coach's death gate holds on the HUNT only. The fight ticks on every screen, so a fall's downed
+    /// beat runs while the Forge is up; gated without the screen term, a lesson lit there blinked spotlight
+    /// to card and back for every background fall -- the transition's state dragged onto another screen.
+    /// </summary>
+    [Fact]
+    public void test_the_coach_yields_to_a_fall_only_on_the_hunt()
+    {
+        var lights = BodyOf(Source("Game1.cs"), "private bool CoachLightsIt(OnboardingLessonId id)");
+        Assert.Contains("if (!OverlayActive && _expedition.DeathTransitionUp) return false;", lights, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (_expedition.DeathTransitionUp) return false;", lights, StringComparison.Ordinal);
+        // The lesson card's own gate already returns on OverlayActive before it asks about the fall.
+        var showing = BodyOf(Source("Game1.cs"), "private OnboardingLessonId? HuntLessonShowing()");
+        Assert.True(IndexOf(showing, "OverlayActive) return null;") < IndexOf(showing, "if (_expedition.DeathTransitionUp) return null;"),
+                    "the lesson card must leave another screen before it asks about the fall.");
+    }
+
+    /// <summary>
     /// While an authored beat owns input, Escape opens the settings panel -- and Escape closes it again.
     /// One Escape, one layer: a handler that spends the edge marks it spent for the rest of the frame.
     /// </summary>

@@ -6043,7 +6043,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_tourActive || _showTitle || _showSettings || _showHelp || WelcomeUp || _expedition.LogOpen) return false;
         if (_forge.RevealActive) return false;
-        if (_expedition.DeathTransitionUp) return false;   // nothing is lit over a fall, or over the black after it
+        // NOTHING IS LIT OVER A FALL, or over the black after it — ON THE HUNT. The fight ticks on every
+        // screen, so its downed beat runs while the Forge is up; the gate is the hunt's, and a lesson lit on
+        // another screen keeps its light through a fall nobody is watching.
+        if (!OverlayActive && _expedition.DeathTransitionUp) return false;
         if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
             return NavSlots().Contains(Array.IndexOf(NavActivity, sends));   // the tile must be on the rail
         return OnboardingLessons.Target(id) is not null;
