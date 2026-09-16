@@ -801,6 +801,10 @@ public sealed class HuntScreen
         // hit-tests, so the light and the click cannot drift apart. The first failure lesson (IT FELL) is
         // the most important prompt in the game and it pointed at nothing until this arm existed.
         TourTarget.LogButton => new[] { Inflated(LogButtonRect, 10) },
+        // THE ENVELOPE IN THE HOST'S OWN CHROME, read from the one rectangle Game1 paints and
+        // hit-tests — the pattern CurrencyPills set. The lesson about it sends the player nowhere, so
+        // a null Sends reads as "the HUNT" and this is where that resolution lands.
+        TourTarget.DispatchIcon => new[] { Inflated(Game1.DispatchButton, 10) },
         _ => Array.Empty<Rectangle>(),
     };
 

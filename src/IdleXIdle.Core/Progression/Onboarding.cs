@@ -160,6 +160,16 @@ public enum TourTarget
     /// the chest was opened on, so the host resolves it, in canvas space.
     /// </summary>
     RevealedItem,
+
+    /// <summary>
+    /// The DISPATCHES envelope in the shared top chrome, beside the ? and the gear.
+    /// </summary>
+    /// <remarks>
+    /// The one target that belongs to no screen: it is drawn in canvas space on every screen, so the
+    /// host answers it directly. The HUNT answers it too, because a lesson about it sends the player
+    /// nowhere and a null Sends reads as "the HUNT" wherever the catalogue is resolved.
+    /// </remarks>
+    DispatchIcon,
 }
 
 /// <summary>One card of a tour: what it points at, its title, and its two or three short sentences.</summary>

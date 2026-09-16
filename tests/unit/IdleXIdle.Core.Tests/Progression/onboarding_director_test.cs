@@ -582,9 +582,71 @@ public class onboarding_director_test
             if (OnboardingLessons.Mode(id) == LessonMode.Observe) continue;
             if (id == OnboardingLessonId.FirstFailureReport
                 || id == OnboardingLessonId.FirstPostFailureChange) continue;   // the fall loop lives on the HUNT
+            // ...and the DISPATCH lesson points at the shared top chrome, which is on every screen and
+            // is no screen. A Sends would send the player somewhere to press a control that is already
+            // under their cursor wherever they are standing; the host answers its target instead.
+            if (id == OnboardingLessonId.FirstDispatchOpened) continue;
             Assert.NotNull(OnboardingLessons.Sends(id));
             Assert.NotNull(OnboardingLessons.Target(id));
         }
+    }
+
+    // ── THE DISPATCH LESSON: waits for real mail, and is finished by really opening it ───────────
+
+    [Fact]
+    public void test_the_dispatch_lesson_waits_for_a_real_letter_and_is_finished_by_opening_them()
+    {
+        const OnboardingLessonId id = OnboardingLessonId.FirstDispatchOpened;
+
+        // NOTHING WAITING, NOTHING SAID. The envelope exists from the first frame of the game; the
+        // lesson about it does not, because there is nothing to open.
+        var empty = new LessonFacts();
+        Assert.DoesNotContain(id, OnboardingLessons.EligibleNow(empty));
+        Assert.False(OnboardingLessons.Completed(id, empty), "the lesson completes on an account with no mail");
+
+        // ONE UNREAD LETTER IS THE WHOLE TRIGGER.
+        var waiting = new LessonFacts(DispatchesUnread: 1);
+        Assert.Contains(id, OnboardingLessons.EligibleNow(waiting));
+        Assert.False(OnboardingLessons.Completed(id, waiting));
+
+        // ...AND ONLY THE REAL DEED FINISHES IT. Not reading one, not the count going back to zero:
+        // the fact the surface itself writes when it is opened.
+        Assert.False(OnboardingLessons.Completed(id, new LessonFacts(DispatchesUnread: 0)),
+                     "the letters going quiet counts as having opened them");
+        Assert.True(OnboardingLessons.Completed(id, new LessonFacts(DispatchesUnread: 1, DispatchesOpenedEver: true)));
+
+        // A SOFT OFFER, pointing at the chrome, sending the player nowhere.
+        Assert.Equal(LessonMode.SoftGuide, OnboardingLessons.Mode(id));
+        Assert.Null(OnboardingLessons.Sends(id));
+        Assert.Equal(TourTarget.DispatchIcon, OnboardingLessons.Target(id));
+        Assert.Equal("A DISPATCH ARRIVED", OnboardingLessons.Title(id));
+        Assert.Equal("OPEN DISPATCHES", OnboardingLessons.Action(id));
+        Assert.Equal("Messages wait here.", OnboardingLessons.Why(id));
+    }
+
+    [Fact]
+    public void test_a_player_who_opened_the_dispatches_first_is_never_taught_about_them()
+    {
+        // The offer only exists for somebody who has not found it. Opening the envelope before the
+        // lesson could be chosen completes it where it stands, and Next never picks a completed
+        // lesson -- so the card is not shown late, and it is not shown at all.
+        var found = new LessonFacts(DispatchesUnread: 3, DispatchesOpenedEver: true);
+        Assert.True(OnboardingLessons.Completed(OnboardingLessonId.FirstDispatchOpened, found));
+        Assert.DoesNotContain(OnboardingLessonId.FirstDispatchOpened, OnboardingLessons.EligibleNow(found));
+        Assert.NotEqual(OnboardingLessonId.FirstDispatchOpened, OnboardingLessons.Next(found, Array.Empty<OnboardingLessonId>()));
+    }
+
+    [Fact]
+    public void test_the_dispatch_lesson_never_outranks_a_lesson_the_player_is_in_the_middle_of()
+    {
+        // It is contextual, not urgent: a letter can wait for the fall the player is living through,
+        // for the warren they just came back to, and for every first-hour lesson above those.
+        var mail = OnboardingLessons.Priority(OnboardingLessonId.FirstDispatchOpened);
+        Assert.True(mail < OnboardingLessons.Priority(OnboardingLessonId.FirstWarrenReturn));
+        Assert.True(mail < OnboardingLessons.Priority(OnboardingLessonId.FirstFailureReport));
+        // ...and it still outranks the back half, which arrives later than mail ever does.
+        foreach (var (id, _, _) in BackHalf)
+            Assert.True(mail > OnboardingLessons.Priority(id), $"{id} outranks the dispatch lesson");
     }
 
     // ── THE TWO CONSTANTS THAT MIRROR REAL TUNING ────────────────────────────────────────────────

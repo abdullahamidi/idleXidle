@@ -5601,7 +5601,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             TraderStocked: _vault?.TraderStock.Count > 0,
             TraderBought: _traderBought.Count,
             CanDeepenWorld: _world.CanDeepenCorruption,
-            CorruptionTier: _world.CorruptionTier);
+            CorruptionTier: _world.CorruptionTier,
+
+            // THE ACCOUNT'S OWN NEWS. The inbox answers "is anything waiting"; the persisted latch
+            // answers "has anybody ever looked" — written by the surface itself, never by a card.
+            DispatchesUnread: _inbox.Unread,
+            DispatchesOpenedEver: _dispatchesOpenedEver);
     }
 
     /// <summary>
@@ -6185,6 +6190,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var reveal = _forge.RevealCardRect;
             reveal.Inflate(SpotlightHalo, SpotlightHalo);
             return new[] { reveal };
+        }
+
+        // THE ENVELOPE IS HOST CHROME: canvas space on every screen, so it never goes through a
+        // screen's overlay transform. Answered here rather than by whichever screen happens to be up.
+        if (target == TourTarget.DispatchIcon)
+        {
+            var mail = DispatchButton;
+            mail.Inflate(SpotlightHalo, SpotlightHalo);
+            return new[] { mail };
         }
 
         if (target == TourTarget.MasteryTile)

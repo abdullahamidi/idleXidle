@@ -85,6 +85,17 @@ public enum OnboardingLessonId
     /// <summary>Taught after the camp has actually paid, never before.</summary>
     FirstWarrenReturn,
 
+    /// <summary>
+    /// A letter is waiting in the envelope and the player has never opened the surface it waits on.
+    /// </summary>
+    /// <remarks>
+    /// The one lesson about the shared chrome rather than a screen. It waits for REAL mail — there is
+    /// nothing to teach about an empty inbox — and it is finished by the one deed that proves the
+    /// player found it: opening DISPATCHES. Somebody who opened the envelope out of curiosity before
+    /// the lesson could be chosen is never taught about it at all, which is the correct outcome.
+    /// </remarks>
+    FirstDispatchOpened,
+
     // ── THE BACK HALF (coverage pass, 2026-09-10). Six systems the game shipped with no voice at
     //    all: a player reached each of them and was told nothing about any of them. Every one is
     //    answered by a fact the account already proves, and every one waits for the moment it can
@@ -209,7 +220,21 @@ public readonly record struct LessonFacts(
     /// <summary>Every region conquered and the world not yet deepened — the valve can be opened.</summary>
     bool CanDeepenWorld = false,
     /// <summary>How far it has been opened.</summary>
-    int CorruptionTier = 0);
+    int CorruptionTier = 0,
+
+    // ── THE ACCOUNT'S OWN NEWS. One pair again: is there something to open, and has it been opened. ──
+
+    /// <summary>Letters waiting in the inbox. One is what makes the dispatch lesson eligible at all.</summary>
+    int DispatchesUnread = 0,
+    /// <summary>
+    /// The player has opened the DISPATCHES surface at least once, ever.
+    /// </summary>
+    /// <remarks>
+    /// The fifth fact that cannot be derived, and persisted for the same reason the other four are:
+    /// nothing else in the account proves that somebody looked. NOT "has read a letter" — the deed the
+    /// lesson asks for is finding the surface, and a player who opened it and read nothing has found it.
+    /// </remarks>
+    bool DispatchesOpenedEver = false);
 
 /// <summary>
 /// THE LESSON CATALOGUE: what is true, what is actionable, and which one matters most.
@@ -287,6 +312,7 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => f.TraitsEquipped >= 1,
         OnboardingLessonId.FirstHunterInteraction => f.HunterSwitches >= 1,
         OnboardingLessonId.FirstWarrenReturn => f.WarrenVisited,
+        OnboardingLessonId.FirstDispatchOpened => f.DispatchesOpenedEver,
 
         // THE BACK HALF. Each one is finished by the deed itself, never by the card being closed.
         OnboardingLessonId.FirstAutoSell => f.AutoSellOn,
@@ -363,6 +389,10 @@ public static class OnboardingLessons
         // NEVER BEFORE THE CAMP HAS PAID. A Warren tour given to somebody the Warren has done nothing
         // for is a theory; given after an offline payout it answers a question they already have.
         OnboardingLessonId.FirstWarrenReturn => f.WarrenOpen && f.WarrenPaidOffline,
+        // NEVER ABOUT AN EMPTY INBOX. The envelope is in the chrome from the first frame and says
+        // nothing while there is nothing in it; the lesson arrives with the first real letter, which
+        // is the only moment "messages wait here" is a fact rather than a promise.
+        OnboardingLessonId.FirstDispatchOpened => f.DispatchesUnread >= 1,
 
         // ── THE BACK HALF. Every one of these waits on the thing it asks for EXISTING. ──────────
         //
@@ -425,6 +455,10 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstGemSocket => 38,
         OnboardingLessonId.FirstTraitEquip => 36,
         OnboardingLessonId.FirstWarrenReturn => 30,
+        // BELOW THE WARREN AND ABOVE THE BACK HALF. A letter can wait — it is the one thing in the
+        // game that is explicitly designed to — so it never wins over a lesson the player is in the
+        // middle of; but it arrives in the first hour, long before the trader or the valve.
+        OnboardingLessonId.FirstDispatchOpened => 28,
         OnboardingLessonId.FirstHunterInteraction => 20,
 
         // ── THE BACK HALF RANKS BELOW EVERYTHING THE FIRST HOUR TEACHES. ────────────────────────
@@ -453,6 +487,7 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstHunterInteraction => LessonMode.SoftGuide,
         OnboardingLessonId.FirstTraitEquip => LessonMode.SoftGuide,
         OnboardingLessonId.FirstWarrenReturn => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstDispatchOpened => LessonMode.SoftGuide,
         OnboardingLessonId.FirstKeystoneChoice => LessonMode.SoftGuide,
         OnboardingLessonId.FirstRegionTravel => LessonMode.SoftGuide,
 
@@ -532,6 +567,10 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => TourTarget.TraitCollection,
         OnboardingLessonId.FirstHunterInteraction => TourTarget.ChampionCards,
         OnboardingLessonId.FirstWarrenReturn => TourTarget.Facilities,
+        // THE ENVELOPE IN THE SHARED CHROME, and so no Sends: the control is already beside the
+        // player's cursor on whatever screen they are standing on, and sending them somewhere to
+        // press it would be a lie about where it lives.
+        OnboardingLessonId.FirstDispatchOpened => TourTarget.DispatchIcon,
 
         OnboardingLessonId.FirstAutoSell => TourTarget.VaultButtons,
         OnboardingLessonId.FirstVowSworn => TourTarget.Vows,
@@ -564,6 +603,7 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => "A TRAIT HAS AWAKENED",
         OnboardingLessonId.FirstHunterInteraction => "A NEW HUNTER HAS JOINED",
         OnboardingLessonId.FirstWarrenReturn => "THE WARREN WORKED",
+        OnboardingLessonId.FirstDispatchOpened => "A DISPATCH ARRIVED",
 
         OnboardingLessonId.FirstAutoSell => "IT CAN SELL FOR YOU",
         OnboardingLessonId.FirstVowSworn => "A VOW IS A RULE",
@@ -590,6 +630,7 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraitEquip => "CHOOSE ONE TRAIT",
         OnboardingLessonId.FirstHunterInteraction => "TRY ANOTHER HUNTER",
         OnboardingLessonId.FirstWarrenReturn => "OPEN WARREN",
+        OnboardingLessonId.FirstDispatchOpened => "OPEN DISPATCHES",
 
         OnboardingLessonId.FirstAutoSell => "TURN ON AUTO-SELL",
         OnboardingLessonId.FirstVowSworn => "SWEAR ONE VOW",
@@ -611,6 +652,7 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstItemEquip => "The fight only reads what is worn.",
         OnboardingLessonId.FirstGemSocket => "Your first socket is free.",
         OnboardingLessonId.FirstWarrenReturn => "It paid while you were away.",
+        OnboardingLessonId.FirstDispatchOpened => "Messages wait here.",
 
         OnboardingLessonId.FirstAutoSell => "Junk becomes materials on its own.",
         OnboardingLessonId.FirstVowSworn => "A rule a skill keeps, and pays for.",

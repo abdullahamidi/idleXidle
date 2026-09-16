@@ -180,6 +180,35 @@ public class OnboardingTargetTests
         UiMetrics.Apply(100);
     }
 
+    /// <summary>
+    /// A DISPATCH ARRIVED lights the ENVELOPE in the shared top chrome, at every density. The icon is
+    /// host chrome rather than a screen's control, so two arms have to agree about it: the host's own
+    /// in <c>TourSpotlights</c>, and the HUNT's — because the lesson sends the player nowhere, and a
+    /// null Sends reads as "the HUNT" everywhere the catalogue is resolved, this test included.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_dispatch_lesson_lights_the_envelope_in_the_chrome_at_every_density(int percent)
+    {
+        UiMetrics.Apply(percent);
+        try
+        {
+            var lit = Resolve(Activity.Hunt, OnboardingLessons.Target(OnboardingLessonId.FirstDispatchOpened)!.Value);
+            Assert.Single(lit);
+            var r = lit[0];
+            var control = Game1.DispatchButton;
+            _out.WriteLine($"{percent}%: light {r} over control {control}");
+
+            Assert.Null(OnboardingLessons.Sends(OnboardingLessonId.FirstDispatchOpened));
+            Assert.True(r.Contains(control), $"the light does not cover the envelope at {percent}% ({r} vs {control})");
+            Assert.True(new Rectangle(0, 0, 1920, 1080).Contains(r), $"the light leaves the page at {percent}% ({r})");
+            Assert.False(r.Width >= 1900 && r.Height >= 1060, $"the whole-canvas fallback at {percent}%");
+            // ...and the envelope it marks is a real hit target, not a decoration.
+            Assert.True(control.Width >= UiMetrics.HitTargetMinimum && control.Height >= UiMetrics.HitTargetMinimum);
+        }
+        finally { UiMetrics.Apply(100); }
+    }
+
     [Theory]
     [MemberData(nameof(Profiles))]
     public void test_read_the_log_lights_the_expedition_log_medallion_at_every_density(int percent)
