@@ -310,7 +310,12 @@ public class AttentionOwnerTest
     {
         var game = Game1();
         Assert.Contains("RewardUp: _forge.RevealActive || WelcomeUp,", game, StringComparison.Ordinal);
-        Assert.Contains("ModalUp: _attention >= AttentionOwner.Modal && !(WelcomeUp && !ProductionModalUp),", game, StringComparison.Ordinal);
+        // A PRODUCTION MODAL OR THE OPENING, named as those two things. The tier-minus-welcome form it
+        // replaces was false on the frame the opening owned while the welcome stood alone -- Opening
+        // ranks above Modal, so the rank said yes and the subtraction took it back. Inert in practice
+        // (every surface is separately refused under the opening), and one expression either way.
+        Assert.Contains("ModalUp: _attention == AttentionOwner.Opening || ProductionModalUp,", game, StringComparison.Ordinal);
+        Assert.DoesNotContain("!(WelcomeUp && !ProductionModalUp)", game, StringComparison.Ordinal);
         Assert.Contains("ReportUp: _expedition.LogOpen,", game, StringComparison.Ordinal);
         Assert.Contains("DeathUp: _attention == AttentionOwner.Death));", game, StringComparison.Ordinal);
         var update = UpdateBody();
@@ -385,6 +390,19 @@ public class AttentionOwnerTest
                         + "                UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);\n"
                         + "                _navHuntBoss = r.IsBoss;\n"
                         + "            }", fight, StringComparison.Ordinal);
+
+        // ── THE LETTER'S ARRIVAL WAITS FOR A FRAME NOTHING OWNS -- the one gate in the host that asks
+        //    AttentionOwnedAbove(None), because a letter is a MESSAGE and direct feedback outranks
+        //    background news: a halo and an audible cue under a live notice toast or a locked-tile
+        //    refusal is two messages landing together. It is deliberately NOT the rung the rail's
+        //    ceremonies use, so the two are pinned against each other here.
+        Assert.Contains("if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.None))", update, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))", update, StringComparison.Ordinal);
+        //    ...and it is the ONLY gate that asks it, so the asymmetry cannot spread by copy-paste.
+        Assert.Single(Regex.Matches(Host(), @"AttentionOwnedAbove\(AttentionOwner\.None\)"));
+        //    The break stays at the coach's rung: silent, on the rail rather than in the toast's band,
+        //    and the only one that career gets.
+        Assert.Contains("if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))", update, StringComparison.Ordinal);
 
         // ── THE PILLS' "+N" IS DEFERRED BY ITS OWN BANK: the accumulator keeps filling and empties into
         //    one badge on the first free frame; a spend in between cancels it, as it always did.

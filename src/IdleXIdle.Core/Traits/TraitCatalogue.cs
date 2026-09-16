@@ -140,7 +140,7 @@ public enum TraitCounter
 /// <param name="Id">The stable save id. Never shown.</param>
 /// <param name="Name">What the player calls it.</param>
 /// <param name="Line">WHAT IT DOES, in one plain sentence the player can hold.</param>
-/// <param name="Flavour">The line the awakening plate says under the name.</param>
+/// <param name="Flavour">The line an awakening's DISPATCH says under the name.</param>
 /// <param name="Tag">The behaviour it belongs to.</param>
 /// <param name="Discovery">The hidden rule. Data, and never rendered.</param>
 /// <param name="Shape">

@@ -4435,15 +4435,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
         }
 
-        // ── A LETTER ARRIVED. One pulse, one cue, and only when nobody else has the player's eyes.
+        // ── A LETTER ARRIVED. One pulse, one cue, and only on a frame NOTHING has a claim on.
         //
         // The mark on the envelope is STATE and needs no permission — it simply holds until the letters
         // are read. The flourish is the part that competes: a halo and a soft cue over a chest reveal,
         // a fall or an open log is the game asking for two things at once. So the edge is HELD (a pulse
-        // cannot be paused — UiMotion decrements every one) and spent on the first frame the owner is
-        // the coach or nothing. No toast, ever: this is background news.
+        // cannot be paused — UiMotion decrements every one) and spent on the first frame nobody owns.
+        // No toast, ever: this is background news.
+        //
+        // THE ONE FLOURISH THAT WAITS FOR *FEEDBACK* TOO, and the only gate in the host that asks
+        // AttentionOwnedAbove(None) — "does anything at all have a claim". A letter arriving IS a
+        // message, and a notice toast or a locked-tile refusal is a message the player just asked for;
+        // the spec ranks direct feedback above background news, so two messages landing together is
+        // exactly the two-things-at-once this owner exists to prevent — and this one is AUDIBLE, so it
+        // would stack its cue on the toast's. The rail's ceremonies below stay at the coach's rung on
+        // purpose: a chain break is silent, it plays on the rail rather than in the toast's own band,
+        // and it is the only one that career will ever get — holding it behind a six-second plate that
+        // shares no pixels with it would cost more than it saves. The NEW dot's halo is a two-second
+        // cycle with nothing to defer, so it is skipped rather than queued, at the same rung.
         if (TakeDispatchArrival()) _dispatchArrivalHeld = true;
-        if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))
+        if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.None))
         {
             _dispatchArrivalHeld = false;
             UiMotion.Flash(DispatchPulseKey, UiMotion.Transition);
@@ -6993,13 +7004,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _coach.Update((float)gameTime.ElapsedGameTime.TotalSeconds, LessonFactsNow(),
                       new OnboardingDirector.Busy(
                           RewardUp: _forge.RevealActive || WelcomeUp,
-                          // THE OWNER'S MODAL TIER, less the welcome on its own: the welcome is a reward
-                          // to the director (the camp's lesson is raised by it and may speak over it).
-                          // The authored opening outranks it entirely — only one guided sequence owns
-                          // the player at a time, and while the first minutes are written the
-                          // contextual catalogue has nothing to add that is not either already being
-                          // said or being said too early.
-                          ModalUp: _attention >= AttentionOwner.Modal && !(WelcomeUp && !ProductionModalUp),
+                          // A PRODUCTION MODAL, OR THE AUTHORED OPENING — said as those two things
+                          // rather than as a tier with the welcome subtracted. The welcome is a REWARD
+                          // to the director, not a modal (the camp's lesson is raised by it and may
+                          // speak over it), and the tier-minus-welcome form was false on the one frame
+                          // the opening owned while the welcome stood alone: Opening is above Modal, so
+                          // the rank said yes and the subtraction took it away again. The opening
+                          // outranks everything — only one guided sequence owns the player at a time,
+                          // and while the first minutes are written the contextual catalogue has
+                          // nothing to add that is not either already being said or said too early.
+                          ModalUp: _attention == AttentionOwner.Opening || ProductionModalUp,
                           ReportUp: _expedition.LogOpen,
                           // The death on the page, as the owner read it this frame: the transition ticks
                           // further down, so this is last frame's — and the frame it ends on is hushed.

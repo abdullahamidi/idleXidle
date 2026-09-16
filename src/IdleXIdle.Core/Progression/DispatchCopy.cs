@@ -15,9 +15,27 @@ namespace IdleXIdle.Core.Progression;
 /// — so a renamed trait reads by its new name, and a retired one reads plainly instead of as an id.
 /// </summary>
 /// <remarks>
-/// A headline is uppercase, like every notice in the game; a body is a sentence the surface may
-/// wrap. Neither promises a price the screen it points at could refuse — the first gem's free socket
+/// <para>
+/// A headline is uppercase, like every notice in the game. A body is MEANT to be a sentence the
+/// surface may wrap, and for eight of the eleven kinds it is: Unlock, Gem, Trait, Champion, Quest,
+/// Region, Socket and Migration all read as prose.
+/// </para>
+/// <para>
+/// <b>Three kinds still shout, and this says so rather than pretending otherwise.</b>
+/// <see cref="DispatchKind.Keystone"/> renders <c>Keystone.Blurb</c> ("DOUBLE DAMAGE. HALF HEALTH.")
+/// behind a rung prefix this file authors in the same register ("VERDANT HOLLOW IS PARTLY
+/// MASTERED."); <see cref="DispatchKind.Vow"/> renders <c>Vow.ProofLine</c>;
+/// <see cref="DispatchKind.Set"/> renders <c>CapstoneName + " ACTIVE"</c>. All three are catalogue
+/// strings authored ALL-CAPS for the retired toast, and BUILD and TRAITS still print the same
+/// strings — so they cannot simply be lower-cased here without changing those screens too. The
+/// reading pane therefore holds letters that speak beside letters that shout, in one ink and one
+/// size. Fixing it needs a per-kind sentence-case rendering and is a pass of its own; until then this
+/// remark is the record, so nobody reads the rule above as a description of the output.
+/// </para>
+/// <para>
+/// Nothing here promises a price the screen it points at could refuse — the first gem's free socket
 /// is a live rule the Forge states itself.
+/// </para>
 /// </remarks>
 public static class DispatchCopy
 {
