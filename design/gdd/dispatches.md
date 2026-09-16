@@ -35,6 +35,20 @@ to three typed payload columns (`SubjectId`, `RegionId`, `Count`). No product te
 catalogues, and every Kind has a plain fallback ("A TRAIT HAS AWAKENED") for a subject the
 catalogues no longer carry. A raw id never reaches the player.
 
+**A body is sentence prose, whatever the catalogue shouts.** The headline is uppercase like every
+notice; the body is spoken sentences the pane wraps. For eight Kinds the catalogue line was always
+prose. For the other three the body is **written from typed data, never copied from a catalogue
+string**: a Keystone letter says the rung reached ("CINDERWORKS is conquered, and it has taught you
+GLASS CANNON."), then the gift *and* the cost with every number formatted from `Keystone.Mods` or
+the fight's own CHARGE constants, then a pointer; a Vow letter says how it was earned — a granted
+Vow's rule and its pay from `Vows.Multiplier`, a proved Vow's `ProofWaves`, the demand kept
+(`Demand` / `Threshold` / `Bare`) and the temptation refused, a conduct Vow's conduct, branched by id
+exactly as `Vows.RuleHeld` is — then a pointer; a Set letter says the worn count, the capstone's name
+and the capstone rung's own `Line`. The ALL-CAPS catalogue strings (`Keystone.Blurb`,
+`Vow.ProofLine`, `ElementSets.CapstoneName`) are untouched: BUILD, TRAITS and GEAR still print them
+as written, and the letter never lower-cases anything — proper nouns stay as the catalogue spells
+them. A keystone the prose table does not know falls back to its Blurb, and a test refuses that.
+
 **Keys.** One semantic key per event, so the same event can only ever be told once:
 `unlock.<screen>` · `quest.<id>.complete` · `hunter.<id>.joined` · `keystone.<id>` · `vow.<id>` ·
 `trait.<id>` · `set.<source>.complete` · `region.<id>.conquered` · `gem.first` · `socket.first` ·
@@ -146,7 +160,7 @@ Everything else is set membership: a key is Known or it is not.
 |---|---|---|
 | AC1 | A background event writes exactly one letter, whatever its producer does, however many frames it asks on | `dispatches_test` (once-never-twice; same key, different payload, ignored); `dispatch_producers_test` |
 | AC2 | No background event posts a notice toast; the toast carries only direct feedback | `dispatch_producers_test` (the channel scan over every `PostNotice` site) |
-| AC3 | A letter's words are rendered from the catalogues, never persisted, and a missing subject falls back without printing an id | `dispatches_test` (a Theory over all eleven Kinds, plus the fallback cases) |
+| AC3 | A letter's words are rendered from the catalogues, never persisted, and a missing subject falls back without printing an id; Keystone, Vow and Set bodies are sentence prose rendered from typed data, and the catalogue strings they stand beside are untouched | `dispatches_test` (a Theory over all eleven Kinds, plus the fallback cases; `test_keystone_vow_and_set_letters_read_as_sentences`; `test_the_catalogue_strings_are_untouched`) |
 | AC4 | A granted Vow reads "A VOW IS OFFERED TO YOU"; a discovered one reads "A VOW HAS REVEALED ITSELF"; the key is the same | `dispatches_test.test_a_vow_letter_says_whether_it_was_offered_or_proved`; `production/qa/evidence/dispatches/dispatch_vow_{granted,proved}_*.png` |
 | AC5 | A pre-v8 save opens with an empty inbox, no unread mark, and its history Known | `dispatches_save_test`; `check_boot.sh`'s v4 and v5 lanes (`unread=0 … seeded=True`, `known` non-empty) |
 | AC6 | A v8 save is believed as written — its unread letter survives a boot, and nothing is seeded | `check_boot.sh`'s v8 negative-control lane; `dispatches_save_test` |
@@ -157,3 +171,4 @@ Everything else is set membership: a key is Known or it is not.
 | AC11 | The envelope and its mark do not paint while anything above the coach's rung owns the frame | `attention_owner_test`; `production/qa/evidence/dispatches/chestdispatch_during_*.png` |
 | AC12 | No dispatch is surfaced over the authored opening | `check_opening_trace.py` ("no dispatch was surfaced over the opening", plus its non-vacuity wiring check) |
 | AC13 | The arrival cue is the quietest in the bank and fires at most once per 900 ms | `make_sfx.py --measure` (peak 0.17); `SoundBank.MinGapMs` |
+| AC14 | A keystone letter names every number it moves, both halves, from `Keystone.Mods` or the fight's constants, and no catalogue keystone falls to the Blurb fallback; a Vow letter counts its own `ProofWaves` and a granted Vow states its own pay; every such letter still fits the reading pane at 100 / 125 / 150 % | `dispatches_test.test_a_keystone_letter_names_every_number_it_moves`, `test_a_vow_letter_counts_its_own_proof_waves`; `keystone_notice_test` (fit at every density) |

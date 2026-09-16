@@ -272,7 +272,11 @@ public class gear_feedback_test : IDisposable
         var letter = Dispatches.Set(Source.Nature, 1_000);
         Assert.Equal(DispatchKeys.SetComplete(Source.Nature), letter.Key);
         Assert.Equal(ElementSets.Name(Source.Nature) + " COMPLETE", DispatchCopy.Headline(letter));
-        Assert.Equal(ElementSets.CapstoneName(Source.Nature) + " ACTIVE", DispatchCopy.Body(letter));
+        // The body names the capstone and quotes its rung's own sentence, as prose — never the
+        // retired toast's "OVERGROWTH ACTIVE".
+        var body = DispatchCopy.Body(letter);
+        Assert.Contains(ElementSets.CapstoneName(Source.Nature), body, StringComparison.Ordinal);
+        Assert.Contains(ElementSets.TiersOf(Source.Nature)[^1].Line, body, StringComparison.Ordinal);
 
         // Read once, gone — the host sounds the reward on it, and a second read must not sound it twice.
         Assert.Null(fb.ConsumeCompletedSet());

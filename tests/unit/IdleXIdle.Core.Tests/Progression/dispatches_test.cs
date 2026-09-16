@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
+using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Progression;
@@ -366,5 +368,162 @@ public class DispatchesTest
             Assert.Contains(DispatchKeys.Migration(DispatchKeys.MigrationFifthSlot), inbox.Known);
             Assert.Empty(inbox.Rows);
         }
+    }
+
+    // ── 7. THE LETTERS SPEAK ─────────────────────────────────────────────────────────────────────
+    //
+    //     Keystone, Vow and Set bodies used to paste a catalogue string authored ALL-CAPS for the
+    //     retired toast, so three kinds of letter shouted beside eight that spoke. They are written
+    //     from typed data now; these four tests are the proof, and the fourth proves the catalogue
+    //     strings themselves were left alone for the screens that still print them.
+
+    /// <summary>Every keystone, Vow and set letter, with the name its catalogue gives the subject.</summary>
+    private static IEnumerable<(string Subject, string Id, string Name, string Body)> SpokenLetters()
+    {
+        foreach (var k in Keystones.Catalog)
+            yield return ("keystone", k.Id, k.Name, DispatchCopy.Body(Dispatches.Keystone(k.Id, Now)));
+        foreach (var v in Vows.Catalog)
+            yield return ("vow", v.Id, v.Name, DispatchCopy.Body(Dispatches.Vow(v.Id, Now)));
+        foreach (var s in Enum.GetValues<Source>())
+            yield return ("set", s.ToString(), ElementSets.Name(s), DispatchCopy.Body(Dispatches.Set(s, Now)));
+    }
+
+    [Fact]
+    public void test_keystone_vow_and_set_letters_read_as_sentences()
+    {
+        var letters = SpokenLetters().ToList();
+        Assert.Equal(Keystones.Catalog.Count + Vows.Catalog.Count + Enum.GetValues<Source>().Length, letters.Count);
+
+        foreach (var (subject, id, name, body) in letters)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(body), $"{subject} {id} has no body");
+            Assert.True(body != body.ToUpperInvariant(), $"{subject} {id} still shouts: \"{body}\"");
+            Assert.EndsWith(".", body, StringComparison.Ordinal);
+            Assert.Contains(name, body, StringComparison.Ordinal);
+            Assert.DoesNotContain(id, body, StringComparison.Ordinal);
+            Assert.DoesNotContain("  ", body, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The ways a multiplier may honestly be spoken: x2 is "double" or "twice", x0.5 is "half", and
+    /// anything else is the whole percentage it cuts ("30% softer") or the whole percentage it keeps
+    /// ("each at 60%"). Whichever the sentence chose, the number is the field's and not a retyped one.
+    /// </summary>
+    private static string[] Spellings(float multiplier)
+    {
+        if (Math.Abs(multiplier - 2f) < 0.0001f) return new[] { "double", "twice" };
+        if (Math.Abs(multiplier - 3f) < 0.0001f) return new[] { "triple" };
+        if (Math.Abs(multiplier - 0.5f) < 0.0001f) return new[] { "half" };
+        return new[] { WholePercent(Math.Abs(1f - multiplier)), WholePercent(multiplier) };
+    }
+
+    private static string WholePercent(float fraction)
+        => MathF.Round(fraction * 100f).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+    [Fact]
+    public void test_a_keystone_letter_names_every_number_it_moves()
+    {
+        foreach (var k in Keystones.Catalog)
+        {
+            var body = DispatchCopy.Body(Dispatches.Keystone(k.Id, Now));
+
+            // No catalogue keystone falls through to the fallback arm, which is the Blurb, shouting.
+            Assert.DoesNotContain(k.Blurb.Trim(), body, StringComparison.Ordinal);
+
+            var m = k.Mods;
+            foreach (var (field, value) in new[]
+                     {
+                         ("Damage", m.Damage), ("Health", m.Health), ("SkillRate", m.SkillRate),
+                         ("Haul", m.Haul), ("Rarity", m.Rarity),
+                     })
+            {
+                if (Math.Abs(value - 1f) < 0.0001f) continue;
+                var spellings = Spellings(value);
+                Assert.True(spellings.Any(s => body.Contains(s, StringComparison.OrdinalIgnoreCase)),
+                            $"{k.Id}: {field} x{value} is never named — expected one of [{string.Join(", ", spellings)}] in \"{body}\"");
+            }
+
+            // The CHARGE keystones and WEAVER carry numbers that are not on Mods at all: they are the
+            // fight's own constants, and the letter must read them from there.
+            if (k.Grants.Contains(BuildTrigger.Rend))
+            {
+                Assert.Contains($"up to {SoloBattle.ChargeCap}", body, StringComparison.Ordinal);
+                Assert.Contains(WholePercent(SoloBattle.ChargeRendPerPoint), body, StringComparison.Ordinal);
+            }
+            if (k.Grants.Contains(BuildTrigger.Capacitor))
+                Assert.Contains($"{SoloBattle.ChargeCapExtended} instead of {SoloBattle.ChargeCap}", body, StringComparison.Ordinal);
+            if (k.Grants.Contains(BuildTrigger.Dynamo))
+                Assert.Contains($"stores {SoloBattle.ChargeDynamoPerBite} charge", body, StringComparison.Ordinal);
+            if (k.Grants.Contains(BuildTrigger.Weaver))
+                Assert.Contains(WholePercent(SoloBattle.WeaverEchoFraction), body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void test_a_vow_letter_counts_its_own_proof_waves()
+    {
+        var conduct = new List<string>();
+        foreach (var v in Vows.Catalog)
+        {
+            var body = DispatchCopy.Body(Dispatches.Vow(v.Id, Now));
+            switch (v.Proof)
+            {
+                case VowProof.Demand:
+                    Assert.Contains($"{v.ProofWaves} waves", body, StringComparison.Ordinal);
+                    if (v.Demand is VowDemand.CadenceAtOrBelow or VowDemand.CadenceAtOrAbove)
+                        Assert.Contains(v.Threshold.ToString("0.00", CultureInfo.InvariantCulture) + "x", body, StringComparison.Ordinal);
+                    break;
+                case VowProof.Conduct:
+                    Assert.Contains($"{v.ProofWaves} waves", body, StringComparison.Ordinal);
+                    conduct.Add(body);
+                    break;
+                case VowProof.Granted:
+                    // A granted Vow was not proved, so it counts no waves; it states its pay instead.
+                    Assert.Contains(WholePercent(Vows.Multiplier(v) - 1f), body, StringComparison.Ordinal);
+                    Assert.DoesNotContain("waves", body, StringComparison.OrdinalIgnoreCase);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(v.Proof), v.Proof, null);
+            }
+        }
+
+        // The two conduct Vows have no demand to keep, and branch by id the way Vows.RuleHeld does —
+        // so their letters must say two different things.
+        Assert.Equal(Vows.Catalog.Count(v => v.Proof == VowProof.Conduct), conduct.Count);
+        Assert.True(conduct.Count >= 2, "the catalogue no longer holds two conduct Vows");
+        Assert.Equal(conduct.Count, conduct.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// House caps: every letter uppercase, with the one lowercase the catalogue allows — the
+    /// multiplier unit after a digit, "1.00x".
+    /// </summary>
+    private static bool IsHouseCaps(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (!char.IsLetter(c) || char.IsUpper(c)) continue;
+            if (c == 'x' && i > 0 && char.IsDigit(s[i - 1])) continue;
+            return false;
+        }
+        return true;
+    }
+
+    [Fact]
+    public void test_the_catalogue_strings_are_untouched()
+    {
+        // BUILD, TRAITS and GEAR still print these as written. The letter's prose is rendered beside
+        // them, not carved out of them.
+        foreach (var k in Keystones.Catalog)
+            Assert.True(IsHouseCaps(k.Blurb), $"{k.Id}: Blurb is no longer house caps — \"{k.Blurb}\"");
+        foreach (var v in Vows.Catalog)
+        {
+            Assert.True(IsHouseCaps(v.ProofLine), $"{v.Id}: ProofLine is no longer house caps — \"{v.ProofLine}\"");
+            Assert.True(IsHouseCaps(v.Description), $"{v.Id}: Description is no longer house caps — \"{v.Description}\"");
+        }
+        foreach (var s in Enum.GetValues<Source>())
+            Assert.True(IsHouseCaps(ElementSets.CapstoneName(s)), $"{s}: CapstoneName is no longer house caps");
     }
 }

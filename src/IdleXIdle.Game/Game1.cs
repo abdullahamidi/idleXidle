@@ -3787,7 +3787,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     {
                         // ONE OF EACH SHAPE THE PANE HAS TO HOLD: a screen's own line, a quest's
                         // demand, a champion's sentence, the LONGEST keystone reveal in the
-                        // catalogue (164 characters — the worst case the wrap has to survive), a
+                        // catalogue (a short paragraph of prose — the worst case the wrap has to survive), a
                         // trait's flavour, and a region with a kicker at the row's right end.
                         PostDispatch(Dispatches.Unlock(Activity.Warren, 1_000));
                         PostDispatch(Dispatches.Quest("q_cinder_deep", 1_400));
@@ -5148,7 +5148,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <remarks>
     /// The reading pane's wrap is a ceiling, and a ceiling is only ever proved by the worst case. Asked
     /// of the catalogue rather than named in the fixture, so it follows the copy: today it is CAPACITOR
-    /// at 164 characters, and it stays the right answer when a keystone is added or a blurb is
+    /// at a short paragraph of prose, and it stays the right answer when a keystone is added or a blurb is
     /// rewritten. RH_SHOT_DISPATCH=longest poses that letter open in the DISPATCHES pane.
     /// </remarks>
     private static Keystone? LongestKeystoneReveal()
@@ -6207,7 +6207,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>How many wrapped body lines a notice may grow to before it is cut.</summary>
     /// <remarks>
     /// Two holds every string this channel still carries: direct feedback is one short sentence about
-    /// a thing the player just did. The 164-character keystone reveal that once forced this budget is
+    /// a thing the player just did. The keystone reveal that once forced this budget is
     /// a DISPATCH now, and the reading pane wraps it in full rather than cutting it. A toast that
     /// needs a third line is a copy problem, not a layout one.
     /// </remarks>
@@ -7306,11 +7306,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // AND THE REGION TEACHES YOU ITS DOCTRINE. A conquest is the fast axis of the world and the
             // spine every player walks, so it carries the six keystones the rest of the game depends on
             // — two weapon enchantments are dead without ECHO or BLOODLUST, and both are conquest
-            // rewards. The BLURB is not optional: a player who has never owned a keystone learns
-            // nothing from the word BLOODLUST on its own — but it is 164 characters at its longest and
-            // it goes where a long sentence can be READ, which is the dispatch's reading pane. See
-            // DispatchCopy.KeystoneRevealDetail. The strip keeps the compact headline and stays the
-            // one line it is.
+            // rewards. The DESCRIPTION is not optional: a player who has never owned a keystone learns
+            // nothing from the word BLOODLUST on its own — but it is a short paragraph of prose (the
+            // rung, the gift, the cost, a pointer) and it goes where a paragraph can be READ, which is
+            // the dispatch's reading pane. See DispatchCopy.KeystoneRevealDetail. The strip keeps the
+            // compact headline and stays the one line it is.
             var gift = Keystones.Sources.FirstOrDefault(s =>
                            s.RegionId == _activeRegion && s.Rung == WorldRung.Conquest) is { } taught
                        ? Keystones.ById(taught.KeystoneId) : null;
