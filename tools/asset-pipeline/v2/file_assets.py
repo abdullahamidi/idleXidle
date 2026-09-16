@@ -21,6 +21,10 @@ no code key reaches it; see design/art/arena-art-contract.md and the 2026-08-22 
              that pointed at them were dead and are gone from AssetLibrary)
   vfx      : VFX/{aura,binding,death,heal,impact,interrupt,levelup,loot,projectile,slash,smoke}
              (superseded by fx_* — VFX/traits/vfx_trait_burst stays, the prestige screen reads it)
+  matrix   : (2026-09-16) the six Source-era bodies above (Animations/Enemies/<old>_*, Enemies/enemies/<old>)
+             and the UI/icons/creatures crea_* family nothing reads; files the 24 region x archetype bodies
+             from spec.json enemy_matrix (staged by matrixclips.py) and re-derives their idle_01 / attack_01
+  bossclips: (2026-09-16) no retirements; files only the boss clips spec.json bosses.done records
   hunter   : Animations/Hunter/* , Characters/Hunter/poses/* , Characters/Hunter/hunter_rig_base.png
              (the retired single-Hunter strips and cutout-rig base: no key in the game reaches them —
              the playable figure is the roster character; hunter_portrait + icons STAY)
@@ -30,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import sys
@@ -72,6 +77,29 @@ def plan_group(group: str) -> tuple[list[tuple[str, str]], list[str], list[tuple
                 if clip != "death":
                     statics.append((dst, os.path.join(ART, "Enemies", "enemies", key, f"{key}_{clip}_01.png")))
             removes += [os.path.join(ART, "Enemies", "enemies", key)]
+    elif group == "matrix":
+        spec = json.load(open(os.path.join(HERE, "spec.json"), encoding="utf-8"))
+        for old in ENEMIES:
+            removes += glob.glob(os.path.join(ART, "Animations", "Enemies", f"{old}_*"))
+            removes.append(os.path.join(ART, "Enemies", "enemies", old))
+        removes += glob.glob(os.path.join(ART, "UI", "icons", "creatures", "crea_*.png"))
+        for key in spec["enemy_matrix"]["items"]:
+            for clip in ("idle", "attack", "death"):
+                src = os.path.join(STAGING, "matrix", f"{key}_{clip}_strip8_512.png")
+                dst = os.path.join(ART, "Animations", "Enemies", f"{key}_{clip}", f"{key}_{clip}_strip8_512.png")
+                copies.append((src, dst))
+                if clip != "death":
+                    statics.append((dst, os.path.join(ART, "Enemies", "enemies", key, f"{key}_{clip}_01.png")))
+    elif group == "bossclips":
+        # 2026-09-16: replace single boss clips that were re-rolled on a concrete defect (the boss audit),
+        # leaving every other boss strip where it is. Only the clips spec.json `bosses.done` records are
+        # filed — the staging dir still holds the whole 2026-08-22 set, which must not be re-filed blind.
+        spec = json.load(open(os.path.join(HERE, "spec.json"), encoding="utf-8"))
+        for key, ids in spec["bosses"].get("done", {}).items():
+            for clip in ("idle", "attack", "death"):
+                if clip in ids:
+                    copies.append((os.path.join(STAGING, "bosses", f"{key}_{clip}_strip8_512.png"),
+                                   os.path.join(ART, "Animations", "Bosses", f"{key}_{clip}", f"{key}_{clip}_strip8_512.png")))
     elif group == "bosses":
         removes += [os.path.join(ART, "Animations", "Bosses"), os.path.join(ART, "Bosses")]
         for key in BOSSES:

@@ -226,10 +226,34 @@ for colour spends a generation on something a transform does for free and for ce
 | Boss clip | `assets/art/Animations/Bosses/<key>_<clip>/` | `<key>_<clip>_strip8_512` |
 | Effect | `assets/art/VFX/<name>/` | `fx_<name>_strip8_512` |
 
-Enemy keys (one per Source): bonecrawler (Body), soul_leech (Mind), wisp (Nature),
-stone_sentinel (Machine), shadeling (Shadow), rift_guardian (Spirit).
+Enemy keys (2026-09-16: one per REGION and ARCHETYPE, `<region slug>_<archetype>`; the table is
+`src/IdleXIdle.Game/EnemyPresentation.cs`, the recipe `tools/asset-pipeline/v2/spec.json` `enemy_matrix`):
+
+| Region | Swarm | Caster | Armoured | Bruiser |
+|---|---|---|---|---|
+| Verdant Hollow (`verdant_`) | BRIAR MITE | BOG WEAVER | BARK WARDEN | THORN OGRE |
+| Cinderworks (`cinder_`) | CINDER GNAT | FURNACE PRIEST | BOILER KNIGHT | SLAG HULK |
+| Umbral Reach (`umbral_`) | GLOOM WHELP | HOLLOW SEER | NIGHT CARAPACE | DUSK APE |
+| Marrow Wastes (`marrow_`) | MARROW TICK | CARRION SHAMAN | SHELL GHOUL | FLAYED BRUTE |
+| The Still Archive (`archive_`) | GLYPH MOTE | LENS ARCHIVIST | RUNE SENTRY | TABLET GOLEM |
+| The Pale Choir (`choir_`) | CHOIR WISP | PALE CANTOR | HALO GUARD | BELL GIANT |
+
+Each role reads from its SILHOUETTE first (swarm small, low and busy; caster tall, thin or
+hovering; armoured closed and plated with its weight low; bruiser broad and dominant), and
+`HuntScreen.ArchetypeScale` sizes the row as supporting language only. A creature's SOURCE is not in
+its body: the enemy strip shows the Sources the wave carries and the inspector the hovered
+creature's own. The six 2026-08-22 bodies (bonecrawler, soul_leech, wisp, stone_sentinel, shadeling,
+rift_guardian) are retired. Swarm bodies come from the image route (`create_image_pixen` +
+`animate_image`, 192²), the other three from the character route (128², south-west). Every clip is
+gated by `matrixclips.py`: the rhart gate per clip, and a body-size jump of at most 12 % between a
+clip and its idle (`clip_pop.py`), since the renderer scales each strip by its own headroom.
+
 Boss keys (one per region): thorn_regent, forge_colossus, void_reaper, crystal_lich, lumen_angel,
 spirit_matron.
+
+All of these load on FIRST USE (`AssetLibrary.IsDeferred`), warmed from Update by
+`HuntScreen.WarmArt` for the champion, the region's family and its boss. A new family costs nothing
+at boot; it costs 8 MB per strip while it is on screen.
 
 ## 5. Effects (the skill layer)
 

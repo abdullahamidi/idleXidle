@@ -35,6 +35,7 @@ SPEC = os.path.join(HERE, "spec.json")
 STAGING = os.path.join(REPO, "tools", "asset-pipeline", ".staging", "v2", "matrix")
 DIRECTION = "south-west"   # enemies face LEFT natively (arena-art-contract.md §1)
 CLIPS = ("idle", "attack", "death")
+POP_LIMIT = 0.12   # a clip may draw the body at most 12 % bigger or smaller than the idle does
 
 
 def assemble(key: str, done: dict, only: tuple[str, ...] = CLIPS) -> list[tuple[str, str, bool, str]]:
@@ -59,8 +60,11 @@ def assemble(key: str, done: dict, only: tuple[str, ...] = CLIPS) -> list[tuple[
             cmd.append("--loose")
         if clip == "death":
             cmd.append("--fallen")   # a body that ends on the ground is half its standing height
-        if done.get("thrown"):
-            cmd.append("--thrown")   # sparks / smoke / shed shadow are a second blob on purpose (rhart.gate `thrown`)
+        # sparks / smoke / shed shadow / a thrown volley are a second blob on purpose (rhart.gate `thrown`).
+        # `thrown` is true for every clip of the cell, or a comma list naming the clips it covers.
+        thrown = done.get("thrown")
+        if thrown in (True, "true") or (isinstance(thrown, str) and clip in thrown.split(",")):
+            cmd.append("--thrown")
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         tail = (p.stdout or p.stderr).strip().splitlines()
         rows.append((key, clip, p.returncode == 0, tail[-1] if tail else "(no output)"))
@@ -91,6 +95,17 @@ def main(argv: list[str]) -> int:
             path = os.path.join(STAGING, f"{k}_{clip}_strip8_512.png")
             if os.path.exists(path):
                 strips.append(path)
+    # THE CLIP JUMP (clip_pop.py): the renderer scales each strip by its own headroom, so a clip whose
+    # motion reaches higher draws the body smaller. The shipped set runs 0.92-1.01; refuse past 12 %.
+    import clip_pop  # noqa: E402  (sibling module)
+    for key in keys:
+        have = {c: os.path.join(STAGING, f"{key}_{c}_strip8_512.png") for c in CLIPS
+                 if os.path.exists(os.path.join(STAGING, f"{key}_{c}_strip8_512.png"))}
+        if "idle" in have and len(have) > 1:
+            worst = clip_pop.report(have, f"jump {key}")
+            if abs(worst - 1) > POP_LIMIT:
+                print(f"FAIL {key}: a clip draws the body at {worst:.2f} of the idle's size (limit {POP_LIMIT:.0%})")
+                failed += 1
     if strips:
         sheet = a.sheet or os.path.join(REPO, "build", "shots", "matrix_sheet.png")
         os.makedirs(os.path.dirname(sheet), exist_ok=True)

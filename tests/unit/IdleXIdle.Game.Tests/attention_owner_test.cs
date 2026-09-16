@@ -343,8 +343,8 @@ public class AttentionOwnerTest
     public void test_the_hunts_own_banners_are_not_held_back_by_a_toast_that_is_waiting()
     {
         var game = Game1();
-        Assert.Contains("EnemyArtFor(_activeRegion), BootToastShowing || _opening.Running || WelcomeUp);", game, StringComparison.Ordinal);
-        Assert.DoesNotContain("EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);", game, StringComparison.Ordinal);
+        Assert.Contains("Regions.Get(_activeRegion).Name, BootToastShowing || _opening.Running || WelcomeUp);", game, StringComparison.Ordinal);
+        Assert.DoesNotContain("_bootTimer > 0f || WelcomeUp);", game, StringComparison.Ordinal);
     }
 
     /// <summary>

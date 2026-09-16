@@ -1950,6 +1950,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _pixel.SetData(new[] { Color.White });
         _font = new PixelFont(GraphicsDevice);
         _assets = new AssetLibrary(GraphicsDevice);
+        // Every champion's IDLE is drawn at once by the roster and the gear doll, so those load now; the
+        // rest of the animation strips wait for the arena to ask (AssetLibrary.IsDeferred, HuntScreen.WarmArt).
+        foreach (var champion in CharacterRoster.All) _assets.Warm(champion.StripKey("idle"));
         // Audio is disabled during headless screenshot/CI runs (RH_SHOT set) — those machines may have
         // no sound device, and a screenshot never needs sound. Real runs get the full audio bank.
         _sound = new SoundBank(disable: Environment.GetEnvironmentVariable("RH_SHOT") is not null);
@@ -2843,12 +2846,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(jawsSlot, Source.Nature);
                         _loadout.SetSkill(jawsSlot, "field_mire");
                     }
-                    // THE CAPPED CREATURE'S POSE. Which figure the arena draws is the region's THEME, and
-                    // how big its box is is the wave's ARCHETYPE — a seeded roll. Only a Bruiser box asks
-                    // the renderer for more magnification than it will give, and only of a deeply
-                    // letterboxed idle (the rift guardian's, in the Spirit region), so the one case where
-                    // the drawn figure and its geometry could disagree could not be photographed at all.
-                    // Both dials move presentation and nothing else: the art key and a layout scale.
+                    // THE CREATURE POSES. Which family the arena draws is the REGION's (EnemyPresentation),
+                    // and which body of it, and how big its box is, is the wave's ARCHETYPE, a seeded roll.
+                    // RH_SHOT_SOURCE picks the family of the region whose theme that Source is (Spirit
+                    // draws the Pale Choir's) without conquering to it; RH_SHOT_ARCHETYPE picks the body.
+                    // Together they reach all twenty-four cells, which is how the enemy contact captures
+                    // and the capped-actor geometry pose are taken. Both dials move presentation and
+                    // nothing else: the art keys and a layout scale.
                     if (Environment.GetEnvironmentVariable("RH_SHOT_SOURCE")?.Trim() is { Length: > 0 } shotSource)
                         _expedition.DevEnemySource = Enum.TryParse<Source>(shotSource, ignoreCase: true, out var src)
                             ? src
@@ -3070,6 +3074,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
                         _expedition.DevSeek(seekS);
+                    // RH_SHOT_BITE=1 lands the shutter just before a creature's bite (RH_SHOT_LEAD, 0.02 by
+                    // default), so the arena draws the ATTACK clip: the enemy matrix's attack art can be
+                    // photographed on any cell without guessing a second. Replaces the RH_SHOT_T seek.
+                    if (sm is "fight" or "fightinspect" or "vfxdebug"
+                        && Environment.GetEnvironmentVariable("RH_SHOT_BITE") == "1")
+                        _expedition.DevSeekBefore(e => e.Kind == BattleEventKind.EnemyStrike, ShotLead());
                 }
                 // RH_SHOT_HUNT_T=<seconds into the wave> DRAINS THE FIGHT UNDER A MENU FIXTURE, so the
                 // HUNT tile's live bar can be photographed with something to show. Every menu mode
@@ -5050,16 +5060,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
 
 
-    /// <summary>The creature a region throws at your squad, so the enemy is never a coloured box.</summary>
-    private static string EnemyArtFor(string regionId) => regionId switch
-    {
-        "cinderworks" => "crea_machine_atk_warden",
-        "umbral_reach" => "crea_shadow_atk_stalker",
-        "marrow_wastes" => "crea_body_atk_sinew",
-        "still_archive" => "crea_mind_atk_lance",
-        "pale_choir" => "crea_spirit_atk_echofang",
-        _ => "crea_nature_atk_whelp",
-    };
 
     /// <summary>A region's rung on the world ladder (0 = home). Deeper regions are innately tougher.</summary>
 
@@ -7178,6 +7178,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _expedition.Character = _characters.Active;
         _gear.Character = _characters.Active;
         _masteryScreen.Character = _characters.Active;
+        _expedition.WarmArt();   // the champion's and the region's strips, loaded here rather than in a Draw
 
         // WHAT THE WORLD HAS TAUGHT reaches the loadout — keystones, sockets, Vow capacity. Without
         // this the sockets are earned and never granted, which is the shape of the failure this
@@ -8211,7 +8212,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // The fight's own banners yield to a boot toast that is ON SCREEN, to the opening (whose held boot
             // line is what the fresh save's seven seconds are for) and to the welcome — never to a toast that
             // is merely waiting behind a lit lesson, which could stand for as long as the lesson does.
-            _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), BootToastShowing || _opening.Running || WelcomeUp);
+            _expedition.Draw(_batch, ChromeMouse, Regions.Get(_activeRegion).Name, BootToastShowing || _opening.Running || WelcomeUp);
         }
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
@@ -8315,6 +8316,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // its envelope and the hunter's keep-out, in canvas pixels — the numbers a hover pose
                 // is aimed from, and the proof that a rectangle did not move between two frames.
                 System.IO.File.WriteAllLines(shotPath + ".actors.txt", _expedition.DevActorGeometry());
+                // ...and what the asset library actually holds at the shutter (AssetLibrary.IsDeferred):
+                // the resident figure the 512 MB working ceiling is measured against.
+                System.IO.File.WriteAllText(shotPath + ".assets.txt",
+                    $"loaded {_assets.LoadedCount} textures, {_assets.ResidentBytes / (1024 * 1024)} MB resident; "
+                    + $"{_assets.DeferredCount} indexed and not yet asked for\n");
             }
 
             using var fs = System.IO.File.Create(shotPath);

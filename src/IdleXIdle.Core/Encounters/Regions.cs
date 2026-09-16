@@ -48,7 +48,7 @@ public sealed record RegionDefinition
 /// <remarks>
 /// Regions are content, not code — each is a theme, a combat bias, a band cycle and a drop profile
 /// over the same wave machinery. The chain gives the game its progression spine: hold the conquest
-/// wave to take a region and unlock the next. (Enemy art keys live in Game1.EnemyArtFor.)
+/// wave to take a region and unlock the next. (What its creatures look like is the Game assembly's EnemyPresentation.)
 /// </remarks>
 public static class Regions
 {

@@ -197,7 +197,7 @@ public class actor_crop_test
 
     [Theory]
     // actor, headroom, side pad, sole pad, box height, and the rectangle recorded BEFORE this pass.
-    [InlineData(126, 151, 17, 492, 262, 461)]   // rift guardian, the one capped actor
+    [InlineData(126, 151, 17, 492, 262, 461)]   // a 126 px sky in the Bruiser box (the retired rift guardian's), capped
     [InlineData(117, 88, 17, 492, 419, 471)]    // stone sentinel, just under the ceiling
     [InlineData(114, 93, 17, 492, 403, 471)]    // shadeling, just under
     [InlineData(114, 132, 17, 430, 268, 412)]   // the seeker in the champion box

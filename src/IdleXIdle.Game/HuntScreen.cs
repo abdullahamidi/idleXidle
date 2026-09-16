@@ -254,12 +254,7 @@ public sealed class HuntScreen : IFocusActors
     private static bool ChampionFacesRight => ArtFacesLeft && ChampBox.Center.X < EnemyBox.Center.X;
     // 2026-08-22: the boss is an ordinary 8x512 strip on a clean canvas (design/art/arena-art-contract.md),
     // so the per-boss BODY-bounds table that used to live here (SrcTop / BodyX.. measured off the old
-    // crystal_lich render, with a "bleed streak" to trim) is gone. The name is the only per-boss fact left.
-    private static readonly Dictionary<string, string> BossNameFor = new()
-    {
-        ["thorn_regent"] = "THORN REGENT", ["forge_colossus"] = "FORGE COLOSSUS", ["void_reaper"] = "VOID REAPER",
-        ["crystal_lich"] = "CRYSTAL LICH", ["lumen_angel"] = "LUMEN ANGEL", ["spirit_matron"] = "SPIRIT MATRON",
-    };
+    // crystal_lich render, with a "bleed streak" to trim) is gone. Its name and art are EnemyPresentation's.
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
@@ -268,14 +263,10 @@ public sealed class HuntScreen : IFocusActors
     private int _bossFrame;
     private string _bossName = "BOSS";
 
-    // package_03: one representative common enemy per Source (no Nature enemy shipped — a wisp stands in).
-    private static readonly Dictionary<Source, string> EnemyForSource = new()
-    {
-        [Source.Body] = "bonecrawler", [Source.Mind] = "soul_leech", [Source.Nature] = "wisp",
-        [Source.Machine] = "stone_sentinel", [Source.Shadow] = "shadeling", [Source.Spirit] = "rift_guardian",
-    };
+    // THE CAST IS EnemyPresentation's (2026-09-16): a body per REGION and ARCHETYPE, not one per Source
+    // scaled to four sizes. Nothing here keys art off a Source any more.
 
-    /// <summary>The enemy key back out of its strip key ("shadeling_idle_strip8_512" → "shadeling").</summary>
+    /// <summary>The enemy key back out of its strip key ("verdant_swarm_idle_strip8_512" → "verdant_swarm").</summary>
     private static string EnemyKeyOf(string stripKey)
     {
         var cut = stripKey.IndexOf("_idle_", StringComparison.Ordinal);
@@ -283,17 +274,6 @@ public sealed class HuntScreen : IFocusActors
         return cut < 0 ? stripKey : stripKey[..cut];
     }
 
-    /// <summary>Display name for the wave's creature ("STONE SENTINEL"), from its art key.</summary>
-    private static string PrettyName(Source? src)
-        => src is { } s && EnemyForSource.TryGetValue(s, out var k)
-            ? k.Replace('_', ' ').ToUpperInvariant()
-            : "CORRUPTED";
-    // package_04: the six region bosses, matched to region theme.
-    private static readonly Dictionary<string, string> BossForRegion = new()
-    {
-        ["verdant_hollow"] = "thorn_regent", ["cinderworks"] = "forge_colossus", ["umbral_reach"] = "void_reaper",
-        ["still_archive"] = "crystal_lich", ["pale_choir"] = "lumen_angel", ["marrow_wastes"] = "spirit_matron",
-    };
 
     private readonly UiKit _ui;
     private readonly VfxPlayer _vfx;
@@ -570,7 +550,6 @@ public sealed class HuntScreen : IFocusActors
     private string _bannerText = "";
     private float _deathFlash;    // 1 → 0: red flash on a fall — drawn over the WHOLE canvas (see Draw)
     private int _fellWave = 1;    // the wave the champion fell at — stamped on a trait the fall awakens
-    private string _enemyArt = "";
 
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
     public int Deepest => _descent.Deepest;
@@ -933,20 +912,63 @@ public sealed class HuntScreen : IFocusActors
     public Source? EnemySource { get; set; }
 
     /// <summary>
-    /// FIXTURE ONLY (<c>RH_SHOT_SOURCE</c>): draw another region's creature without conquering to it.
+    /// FIXTURE ONLY (<c>RH_SHOT_SOURCE</c>): draw another region's creatures without conquering to it.
     /// </summary>
     /// <remarks>
-    /// The Source decides WHICH figure the arena draws, and the figures differ enormously in how
-    /// deeply their idle is letterboxed — which is what decides whether a box's ask for magnification
-    /// is one the renderer will grant. Only the rift guardian's idle (the Spirit region's) is
-    /// letterboxed deeply enough to be capped, and reaching that region legitimately means conquering
-    /// four. <see cref="EnemySource"/> itself cannot be posed: the host rewrites it from the active
-    /// region every frame. This overrides the ART, nothing else — no baseline, no roll, no reward.
+    /// Since the arena's cast is chosen by region and archetype (<see cref="EnemyPresentation"/>), a
+    /// Source pose picks the FAMILY of the region whose theme it is — Spirit draws the Pale Choir's —
+    /// and the wave glyph. <see cref="EnemySource"/> itself cannot be posed: the host rewrites it from
+    /// the active region every frame. This overrides the ART, nothing else — no baseline, no roll, no
+    /// reward.
     /// </remarks>
     public Source? DevEnemySource { get; set; }
 
-    /// <summary>Which creature the arena DRAWS: the rig's override, else the region's own Source.</summary>
+    /// <summary>The Source the wave strip falls back to when the wave carries none: the rig's, else the region's.</summary>
     private Source? ArtSource => DevEnemySource ?? EnemySource;
+
+    /// <summary>The region whose family the arena DRAWS: the rig's Source pose's, else the active one.</summary>
+    private string ArtRegion
+        => DevEnemySource is { } posed && EnemyPresentation.RegionOfTheme(posed) is { } posedRegion ? posedRegion : RegionId;
+
+    /// <summary>The look this wave's creatures wear — the region's body for the archetype the run rolled.</summary>
+    private EnemyLook CreatureLook => EnemyPresentation.For(ArtRegion, WaveArchetype);
+
+    private string? _warmedChampion;
+    private string? _warmedRegion;
+    private bool _warmedForcedBoss;
+
+    /// <summary>
+    /// Load, from Update, the art families this arena is about to draw: the champion's clips, the four
+    /// creatures of the region it draws, and that region's boss. The library defers every animation strip
+    /// to first use (<see cref="AssetLibrary.IsDeferred"/>); asking here keeps the decode out of Draw. Costs
+    /// one comparison a frame until the champion or the region changes.
+    /// </summary>
+    public void WarmArt()
+    {
+        var champion = Character.Id;
+        var region = ArtRegion;
+        if (champion == _warmedChampion && region == _warmedRegion && DevForceBoss == _warmedForcedBoss) return;
+        _warmedChampion = champion;
+        _warmedRegion = region;
+        _warmedForcedBoss = DevForceBoss;
+        var assets = _ui.Assets;
+        assets.Warm("char_" + champion + "_");   // every clip of this champion (Character.StripKey's family)
+        assets.Warm("fx_" + champion + "_");     // and its own effect strips (the forms it casts in)
+        var family = EnemyPresentation.For(region, Archetype.Swarm).RegionId;
+        foreach (var look in EnemyPresentation.Normals)
+            if (look.RegionId == family) assets.Warm(look.ArtKey + "_");
+        if (BossArt is { } boss) assets.Warm(boss.ArtKey + "_");
+    }
+
+    /// <summary>
+    /// The Source a creature in <paramref name="slot"/> really carries (Core's roll), else the wave's fallback.
+    /// </summary>
+    private Source? CreatureSource(int slot)
+    {
+        if (DevEnemySource is { } posed) return posed;
+        var comp = _run?.LastWaveCreatures;
+        return comp is not null && slot >= 0 && slot < comp.Count && comp[slot].Source is { } s ? s : ArtSource;
+    }
     /// <summary>The active region id — picks the boss creature (boss_&lt;region&gt;) on boss waves. Set by the host.</summary>
     public string RegionId { get; set; } = "";
     /// <summary>The active region's combat character — handed to the run so the enemy's bite tempo matches it.</summary>
@@ -2335,9 +2357,8 @@ public sealed class HuntScreen : IFocusActors
 
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    public void Draw(SpriteBatch b, Point mouse, string regionName, string enemyArt = "", bool suppressBanner = false)
+    public void Draw(SpriteBatch b, Point mouse, string regionName, bool suppressBanner = false)
     {
-        _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
         // full resolution), so the log button and the utility doors hit-test it as is. PARKED under the
@@ -2461,7 +2482,9 @@ public sealed class HuntScreen : IFocusActors
         var defNow = r.CreatureDefenceNow(slot);
         var baseEvery = r.EnemyIntervalMs;
         var everyNow = r.BiteEveryMsNow;
-        var kind = _isBossWave ? "BOSS" : _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        var kind = _isBossWave ? "BOSS" : WaveArchetype.ToString().ToUpperInvariant();
+        var name = _isBossWave ? _bossName : CreatureLook.Name;
+        var source = CreatureSource(slot);
         var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
 
         // Direction: +1 = favourable to the hunter (green), -1 = unfavourable (red), 0 = unchanged.
@@ -2480,8 +2503,13 @@ public sealed class HuntScreen : IFocusActors
 
         // ── THE PLATE: sized from its lines, beside the creature, on the page and off the dock. ──
         var pad = UiMetrics.Space(12);
-        var w = UiMetrics.Control(284);
         var lineS = UiTypography.Pitch(UiTypography.Caption);
+        // The name line carries the creature's name, its role and its Source glyph; the plate widens
+        // for a long name at a large profile rather than clipping it.
+        var glyphEdge = UiTypography.Caption + UiMetrics.Space(4);
+        var nameLineW = _ui.MeasureBig(name, UiTypography.Secondary) + UiMetrics.Space(8)
+                        + glyphEdge + UiMetrics.Space(6) + _ui.MeasureBig(kind, UiTypography.Caption);
+        var w = Math.Max(UiMetrics.Control(284), nameLineW + 2 * pad + 5);
         var lineB = UiTypography.Pitch(UiTypography.Secondary);
         var barH = UiMetrics.Control(8);
         var h = pad + lineB + lineS + UiMetrics.Space(8)                       // name, kind line, rule
@@ -2505,16 +2533,25 @@ public sealed class HuntScreen : IFocusActors
         var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
         var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampionPresentation.Envelope, _utilityPanel);
         _ui.Fill(b, plate, Color.Black * 0.45f);
-        _ui.Plate(b, plate, ArtSource is { } src ? SourceGlow(src) : null);
+        _ui.Plate(b, plate, source is { } src ? SourceGlow(src) : null);
 
         var left = plate.X + pad + 5;
         var right = plate.Right - pad;
         var ty = plate.Y + pad;
-        // THE NAME LINE IS THE NAME. The health figure used to hang in this line's right corner,
-        // three rows above the bar that quantifies it, so reading "how hurt is this thing" meant
-        // crossing the card twice. The corner is left empty rather than filled with something
-        // invented for it: the archetype is already the line, and the affixes are the line below.
-        _ui.TextBig(b, kind, left, ty, Bone, UiTypography.Secondary);
+        // THE NAME LINE IS THE NAME — the creature's own (2026-09-16), with its ROLE and its SOURCE in
+        // the corner. The Source is THIS creature's, rolled by Core from the region's roster, which is
+        // why the plate's accent and the glyph read it rather than the region's theme: a Verdant pack
+        // can carry Body and Mind creatures, and the body a creature wears no longer says which.
+        // (The health figure used to hang in this corner, three rows above the bar that quantifies it.)
+        var cornerW = _ui.MeasureBig(kind, UiTypography.Caption);
+        var cornerX = right - cornerW;
+        _ui.TextBig(b, kind, cornerX, ty + (lineB - UiTypography.Caption) / 2, Slate, UiTypography.Caption);
+        if (source is { } own && _ui.Assets.Get(SourceGlyphKey(own)) is { } ownGlyph)
+        {
+            cornerX -= glyphEdge + UiMetrics.Space(6);
+            b.Draw(ownGlyph, new Rectangle(cornerX, ty + (lineB - glyphEdge) / 2, glyphEdge, glyphEdge), Color.White);
+        }
+        _ui.TextBig(b, _ui.ShortenBig(name, cornerX - left - UiMetrics.Space(8), UiTypography.Secondary), left, ty, Bone, UiTypography.Secondary);
         ty += lineB;
         var kindLine = affixes.Count > 0 ? string.Join("  ·  ", affixes.Take(2).Select(AffixWords)) : "NO AFFIX";
         _ui.TextBig(b, _ui.ShortenBig(kindLine, right - left, UiTypography.Caption), left, ty, Slate, UiTypography.Caption);
@@ -2863,7 +2900,7 @@ public sealed class HuntScreen : IFocusActors
     /// actually draw at, which is the box's ask THROUGH the renderer's magnification ceiling
     /// (<c>UiKit.DrawScale</c>, reached here as <c>UiKit.FrameCeiling</c>). A box may ask for more
     /// than the ceiling allows — a Bruiser wave, lone or packed, gives a 488 x 492 box, which
-    /// asks 1.27 of the rift guardian's deeply letterboxed idle — and the renderer answers 1.25, so
+    /// asked 1.27 of the retired rift guardian's deeply letterboxed idle (today the Flayed Brute's and the Dusk Ape's, 120 px of sky, ask 1.255) — and the renderer answers 1.25, so
     /// an authored rectangle would size every
     /// effect on that creature against a figure 6 px wider and 9 px taller than the one on screen.
     /// See <see cref="AuthoredRect"/> for the pre-ceiling rectangle, which is a diagnostic and not a
@@ -3099,9 +3136,8 @@ public sealed class HuntScreen : IFocusActors
     private IReadOnlyList<EquippedSkill>? _champClipStripsSkills;
     private bool _champClipStripsNoStrips;
 
-    /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
-    private string? CreatureReferenceStrip
-        => ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
+    /// <summary>The idle strip this wave's creatures are measured from (the region's body for the rolled archetype).</summary>
+    private string? CreatureReferenceStrip => CreatureLook.IdleStrip;
 
     /// <summary>
     /// The clips a standing creature plays — its idle and its attack — for the wave's art key, or
@@ -3231,10 +3267,10 @@ public sealed class HuntScreen : IFocusActors
 
     /// <summary>The boss's idle strip, or null when the region has no boss art.</summary>
     private string? BossReferenceStrip
-        => BossKey is { } k && _ui.Assets.Has($"{k}_idle_strip8_512") ? $"{k}_idle_strip8_512" : null;
+        => BossArt is { } k && _ui.Assets.Has(k.IdleStrip) ? k.IdleStrip : null;
 
     /// <summary>Which boss this wave draws — the dev fixture's, or the region's.</summary>
-    private string? BossKey => DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
+    private BossLook? BossArt => DevForceBoss ? EnemyPresentation.BossByArtKey("crystal_lich") : EnemyPresentation.BossFor(RegionId);
 
     /// <summary>The creature the sim is hitting: the first alive one, else the one that died last.</summary>
     private int TargetSlot()
@@ -3309,13 +3345,9 @@ public sealed class HuntScreen : IFocusActors
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var (w, h) = (ArchetypeBox(WaveArchetype).X, ArchetypeBox(WaveArchetype).Y);
 
-        string? stripKey = null, staticKey = null;
-        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
-        {
-            var act = attacking ? "attack" : "idle";
-            stripKey = $"{en}_{act}_strip8_512";
-            staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
-        }
+        var look = CreatureLook;
+        string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
+        string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         for (var i = 0; i < comp.Count; i++)
         {
@@ -3421,22 +3453,17 @@ public sealed class HuntScreen : IFocusActors
         var figTop = _rowTopY;
         if (_replay is not null && !_replay.CreatureAlive(0))
         {
-            var deadKey = ArtSource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
-            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), deadKey);
+            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey);
             return;
         }
 
-        string? stripKey = null, staticKey = null;
+        var look = CreatureLook;
         // 11/9, was 16/12. The whole complaint is legibility: an 8-frame swing at 16fps is over in half
         // a second, which is not long enough to see a creature wind up and commit. Held above ~9 so the
         // frames still read as motion rather than as a slideshow.
         var fps = attacking ? 11f : 9f;
-        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
-        {
-            var act = attacking ? "attack" : "idle";
-            stripKey = $"{en}_{act}_strip8_512";
-            staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
-        }
+        string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
+        string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
                                                 !attacking, enterTint, crop, record: VfxSubject.Creature(0)))
@@ -3462,8 +3489,8 @@ public sealed class HuntScreen : IFocusActors
         var ebar = new Rectangle(ebox.Center.X - 92, visTop - 46, 184, 34);
         _ui.BarArt(b, ebar, Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f), "health");
         // The creature was never named on screen — the player fought an anonymous sprite for the whole run.
-        if (stripKey is not null || staticKey is not null)
-            _ui.TextCenterBig(b, PrettyName(ArtSource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
+        // Its name is its look's: what this region calls this role (EnemyPresentation).
+        _ui.TextCenterBig(b, look.Name, ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
 
     /// <summary>
@@ -3478,8 +3505,8 @@ public sealed class HuntScreen : IFocusActors
     /// </remarks>
     private void DrawBoss(SpriteBatch b, bool attacking)
     {
-        var bossKey = BossKey;
-        _bossName = bossKey is not null ? BossNameFor.GetValueOrDefault(bossKey, "BOSS") : "BOSS";
+        var bossArt = BossArt;
+        _bossName = bossArt?.Name ?? "BOSS";
         // The corruption's epithet on the boss — "FEVERED CRYSTAL LICH" — so the tier is a thing with a
         // name that looks back at you, not a number on another screen.
         var epithet = CorruptionLook.For(CorruptionTier).Epithet;
@@ -3490,17 +3517,17 @@ public sealed class HuntScreen : IFocusActors
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
-        if (bossKey is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
-            && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
+        if (bossArt is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
+            && _ui.Assets.Has(bossArt.DeathStrip))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            ActorSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f,
+            ActorSprite(b, bossArt.DeathStrip, box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f,
                         record: VfxSubject.Creature(0));
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
         var fps = attacking ? 10f : 8f;
-        var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
+        var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
         if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0)))
         {
@@ -3781,7 +3808,7 @@ public sealed class HuntScreen : IFocusActors
 
         var champ = VisualRect(ChampBox, ChampionReferenceStrip);
         var swarmBox = new Rectangle(Point.Zero, ArchetypeBox(Archetype.Swarm));
-        var swarm = VisualRect(swarmBox, CreatureReferenceStrip);
+        var swarm = VisualRect(swarmBox, EnemyPresentation.For(ArtRegion, Archetype.Swarm).IdleStrip);
         var boss = VisualRect(new Rectangle(0, 0, BossTargetBodyHeight, BossTargetBodyHeight), BossReferenceStrip);
         var row = new Rectangle(0, 0, swarm.Width * 3, swarm.Height);   // a four-creature row, compressed
 
@@ -4840,6 +4867,33 @@ public sealed class HuntScreen : IFocusActors
     /// one stack: where, when, how far — and, underneath, what. The life is a bar, not a percentage in
     /// words; the count keeps its words because "4 OF 4" alone does not say what is being counted.
     /// </remarks>
+    /// <summary>The distinct Sources this wave's creatures carry, in slot order — refilled by <see cref="WaveSources"/>.</summary>
+    private readonly List<Source> _waveSources = new(6);
+
+    /// <summary>
+    /// Fill <see cref="_waveSources"/> with the Sources the wave's creatures really carry (Core's roll),
+    /// or the fallback Source when none of them carries one. No allocation per frame.
+    /// </summary>
+    private void WaveSources()
+    {
+        _waveSources.Clear();
+        if (DevEnemySource is { } posed) { _waveSources.Add(posed); return; }
+        var comp = _run?.LastWaveCreatures;
+        if (comp is not null)
+            for (var i = 0; i < comp.Count; i++)
+                if (comp[i].Source is { } s && !_waveSources.Contains(s)) _waveSources.Add(s);
+        if (_waveSources.Count == 0 && ArtSource is { } fallback) _waveSources.Add(fallback);
+    }
+
+    private static readonly Dictionary<Source, string> SourceGlyphKeys = new()
+    {
+        [Source.Body] = "source_body", [Source.Mind] = "source_mind", [Source.Nature] = "source_nature",
+        [Source.Machine] = "source_machine", [Source.Shadow] = "source_shadow", [Source.Spirit] = "source_spirit",
+    };
+
+    /// <summary>The Source medallion's asset key, without building a string per frame.</summary>
+    private static string SourceGlyphKey(Source s) => SourceGlyphKeys[s];
+
     private void DrawEnemyLine(SpriteBatch b)
     {
         if (_replay is null || _run is null || _isBossWave) return;
@@ -4847,22 +4901,33 @@ public sealed class HuntScreen : IFocusActors
         // THE HOUSE PLATE with the wave's Source as its accent — it was a hand-drawn fill with a 2 px
         // bronze outline no other surface wears, so the one QUIET surface in the header stack competed
         // with the frame above it instead of sitting under it (release polish 2026-09-05, hunt-06).
-        _ui.Plate(b, strip, ArtSource is { } accent ? SourceGlow(accent) : null);
+        WaveSources();
+        _ui.Plate(b, strip, _waveSources.Count > 0 ? SourceGlow(_waveSources[0]) : null);
         HeaderStackBottom = strip.Bottom;
 
-        // LEFT: the wave's Source glyph, then its kind. Everything on the strip is centred on its height,
-        // which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
+        // LEFT: the Sources the wave really carries, then its kind. Core rolls each creature's Source
+        // from the region's roster, so a pack can hold two or three; the strip used to show the
+        // region's theme alone, which was true of the body (one per Source) and of nothing else — and
+        // since 2026-09-16 the body does not say it either. Everything on the strip is centred on its
+        // height, which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
         var glyphEdge = UiMetrics.Control(30);
-        var glyph = new Rectangle(strip.X + 5 + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
-        if (ArtSource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
-            b.Draw(g, glyph, Color.White);
-        else
+        var x = strip.X + 5 + UiMetrics.Space(12);
+        WaveSources();
+        foreach (var ws in _waveSources)
         {
-            var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
-            _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), ArtSource is { } s2 ? SourceGlow(s2) : Slate);
+            var glyph = new Rectangle(x, strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
+            if (_ui.Assets.Get(SourceGlyphKey(ws)) is { } g) b.Draw(g, glyph, Color.White);
+            else
+            {
+                var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
+                _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), SourceGlow(ws));
+            }
+            x = glyph.Right + UiMetrics.Space(4);
         }
-        var x = glyph.Right + UiMetrics.Space(10);
-        var kind = _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        x += UiMetrics.Space(6);
+        // The laid-out role, which is the run's own roll outside the capture rig (WaveArchetype), so the
+        // label always names the bodies drawn beside it.
+        var kind = WaveArchetype.ToString().ToUpperInvariant();
         _ui.TextBig(b, kind, x, strip.Y + (strip.Height - UiTypography.Body) / 2 + 1, UiKit.Vellum, UiTypography.Body);
         x += _ui.MeasureBig(kind, UiTypography.Body) + UiMetrics.Space(10);
 

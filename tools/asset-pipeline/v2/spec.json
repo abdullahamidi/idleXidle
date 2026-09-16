@@ -76,7 +76,13 @@
   "bosses": {
     "route": "character", "size": 160, "rotation": "south-west", "clips": ["idle", "attack"],
     "dest": "bosses", "key": "{id}_{clip}_strip8_512",
-    "done": { "crystal_lich": { "character_id": "4854cbc5-9cf4-4ee6-82d2-ada2dcf54e6b" } },
+    "done": {
+      "crystal_lich": { "character_id": "4854cbc5-9cf4-4ee6-82d2-ada2dcf54e6b" },
+      "forge_colossus": { "character_id": "708c1739-cfce-4872-91b7-84d8f60a2587", "attack": "dfa5e385-2898-472d-a38e-628bb2b062c2" }
+    },
+    "rejected": {
+      "forge_colossus": ["attack from the 2026-08-22 set (rh_attack a94968da-222d-4c19-a0c8-53a377f54758 or rh_attack3 4f564ede-1a00-46c3-b5e1-41f3aee4f698): at the impact the body turns into a translucent smoke outline for two frames; replaced in the 2026-09-16 boss audit"]
+    },
     "items": {
       "thorn_regent":   { "source": "Nature",
                           "look": "a towering antlered thorn regent, a tall gaunt forest king crowned in brambles with great branching antlers, bark-and-thorn armour, glowing green eyes, a long thorned staff",
@@ -193,7 +199,7 @@
                 "image_job": "864b90ad-b04c-401d-82f4-48aa9e46169d",
                 "idle_job": "78da2eb1-622a-4272-9f67-602bc89769d7",
                 "attack_job": "7c126590-c5f8-494e-a23b-ebc27b3a412c",
-                "death_job": "d4ac608b-99bc-4438-ae30-e214edce3fd7"
+                "death_job": "582a9618-d3c7-4440-b89f-4275f3ba7f6e"
           },
           "verdant_caster": {
                 "character_id": "47d4695a-3276-4337-86bc-b743de9d71bc",
@@ -233,7 +239,10 @@
                 "death": "f6c158fb-bc99-43e6-9e80-26c7d04ce7da"
           },
           "marrow_swarm": {
-                "image_job": "b76f5947-72f8-41df-b158-8454433445a8"
+                "image_job": "b76f5947-72f8-41df-b158-8454433445a8",
+                "idle_job": "3b2ac571-dfc6-40b9-a42c-5176bc950fc5",
+                "attack_job": "1b89fc4b-8549-41a8-8d4b-13122d98b1f1",
+                "death_job": "93cdc2a2-368c-4d04-9f87-acd2beae458f"
           },
           "umbral_caster": {
                 "character_id": "a1f8c5f5-23b3-4fc9-8231-46ac4e02d0a8",
@@ -254,7 +263,10 @@
                 "death": "aff61df3-24a7-4b5f-abf5-4a1c2d5debda"
           },
           "archive_swarm": {
-                "image_job": "62101096-3060-4d23-b0eb-428b01c5d19a"
+                "image_job": "62101096-3060-4d23-b0eb-428b01c5d19a",
+                "idle_job": "aa934cc6-c32a-4493-bc52-92749e8473a9",
+                "attack_job": "4fc52e4b-59e7-4b0c-8ca6-eec3c7a779eb",
+                "death_job": "7716d6c8-0d2c-4c8e-957c-2c423611042e"
           },
           "cinder_bruiser": {
                 "character_id": "0988bc46-7939-4cfe-98c9-5eb2e8c000da",
@@ -263,15 +275,106 @@
                 "death": "8be397ba-be86-4332-be0e-0c4e6a84964c"
           },
           "choir_swarm": {
-                "image_job": "9ef9690b-872d-49a7-9253-d5a216e2e6a6"
+                "image_job": "9ef9690b-872d-49a7-9253-d5a216e2e6a6",
+                "idle_job": "d794a60b-1ac0-49cb-b820-63e3e5b12191",
+                "attack_job": "65e71ebf-185a-4da6-bad5-9fddb4fdc37a",
+                "death_job": "b6994a4e-23ab-4667-b634-c94e8e7e985b"
+          },
+          "marrow_caster": {
+                "character_id": "116d50e2-21db-4beb-ad65-139c70434aff",
+                "idle": "8946f037-a627-40d9-8b92-98ee89221525",
+                "attack": "7a0b4bd9-1fd9-4576-a4cb-a55c35cd8551",
+                "death": "982b491f-dbf6-47c2-9101-7189bed488e9",
+                "thrown": "attack"
+          },
+          "marrow_armoured": {
+                "character_id": "3363fa16-ae5d-4286-92d0-bdca398df9f9",
+                "idle": "e78fb053-b5ee-4ef1-821a-438742ea20f5",
+                "attack": "201612bc-97a6-41ad-9c12-c219a256587e",
+                "death": "bc88be1e-8fc6-401a-9929-127f1a9155f7"
+          },
+          "marrow_bruiser": {
+                "character_id": "11175dca-bf99-45c1-aa2e-aeed82dd32f4",
+                "idle": "6cc89387-4e71-4488-9ce8-1fe9a7ae8040",
+                "attack": "543ce84f-2ff2-431f-be09-dbc3f94097d8",
+                "death": "650a724f-4c48-4dde-921e-f54852f0b8e5"
+          },
+          "archive_bruiser": {
+                "idle": "091d3f3b-a082-400d-a375-08a4df298628",
+                "attack": "2a633c42-c4d9-47ac-a7ec-e7268241983f",
+                "death": "fa6e7491-920f-41a3-88a9-a428235de9ce",
+                "character_id": "2b52795e-08c4-489f-83b0-b15a646594c0"
+          },
+          "choir_caster": {
+                "idle": "03b79750-bcad-486f-a110-f907a1a11264",
+                "attack": "7a992b40-b221-4dee-8571-d82158c7fced",
+                "death": "e8d803cd-24e8-44e3-8e25-7f32502d8da2",
+                "character_id": "a77ad8c2-2a3c-4335-9fa9-6c5ac2eec660"
+          },
+          "choir_armoured": {
+                "idle": "b6351836-6496-4ef7-a0c4-51008a9df849",
+                "attack": "f893cfdc-9447-41b2-bf9b-feecfa4d5578",
+                "death": "b9060476-085d-4716-9777-78e2b24f36f0",
+                "character_id": "cfc75f89-810d-445a-997d-49930dc18f9f"
+          },
+          "archive_caster": {
+                "character_id": "abadab4c-a769-452d-8d9f-57032f5c9fe3",
+                "idle": "734a9811-88c5-47e4-9b7f-ab67c7b3a673",
+                "attack": "7bc7f2e0-4498-4de3-abba-e1cd9294b0a5",
+                "death": "b7a9b97a-4fa6-4043-b51d-c3bd127305b6"
+          },
+          "archive_armoured": {
+                "character_id": "6876f515-b343-4402-81ed-677be685dfbf",
+                "idle": "1edafe2f-6cb7-461a-bc00-914c176ee738",
+                "attack": "656b0624-04a0-4090-9e7e-1e4471c17200",
+                "death": "81e11370-9c22-4ea6-8267-9fece0dc0487"
+          },
+          "choir_bruiser": {
+                "character_id": "9ec42281-a37c-4a80-9768-827e18f16410",
+                "idle": "7309b6cf-423e-4d06-b88a-615dd119e900",
+                "attack": "5e656466-b50e-40e8-85c1-b98797e37eb6",
+                "death": "474d443e-06e5-4f93-8813-8d8fc85ed56f"
           }
+    },
+    "rejected": {
+      "verdant_caster": [
+        "base 80cd922a-c16b-427f-b2e3-f09ff7d0b815 (v1 base, replaced by v2 at the Verdant pilot review)"
+      ],
+      "verdant_armoured": [
+        "base 944e3f54-9ca2-42bd-88e8-cc3b9c0ddb89 (v1 base, replaced by v2 at the Verdant pilot review)"
+      ],
+      "archive_caster": [
+        "base 3fc9b788-bd82-457e-b0ed-f1db27d306b2 (a halo: reads as the Pale Choir, not the Archive)",
+        "idle cf230c05-aa08-421f-920a-c864173b710c (a blue flame grows on the head over frames 5-8, so the loop pops)"
+      ],
+      "archive_armoured": [
+        "base c705f9bb-983d-477a-af2f-4d11a43f6511 (a human face under the helm, not a construct)"
+      ],
+      "archive_swarm": [
+        "death_job 41db8dd9-efbe-4da8-8a5a-8f34d230a500 (the shards scatter to a thin line; last frame 4.8 % filled)",
+        "death_job f94418fb-4c2e-44b4-9c26-426003119e18 (a spike rises above the idle, so the body draws at 0.83 on death)"
+      ],
+      "choir_bruiser": [
+        "base db22b8fa-7516-47f7-ba0f-629de35eeac8 (an olive body, off the Pale Choir palette)"
+      ],
+      "marrow_swarm": [
+        "death_job 32bc07e7-0bd7-450b-8d0c-00e11ce3025a (the shell only drains to white; the tick never falls)"
+      ],
+      "marrow_caster": [
+        "attack 60fd9383-9d3f-48b4-8ab3-9cefa6f98270 (the whole figure turns to orange flame mid-cast: reads as the Cinderworks palette)"
+      ],
+      "verdant_swarm": [
+        "death_job d4ac608b-99bc-4438-ae30-e214edce3fd7 (almost no motion: the beetle never falls, so the kill reads as a freeze)",
+        "death_job 04077a57-b5af-4b35-b909-9c6b2dbbb173 (prompt-only re-roll: still upright on the last frame)",
+        "note: the kept death (582a9618) interpolates to a pinned end pose, edit_image_pixen c03af3c2-9957-4938-8c9a-5fa8188ae92f (the beetle on its back)"
+      ]
     },
     "items": {
       "verdant_swarm": {
         "region": "verdant_hollow",
         "archetype": "Swarm",
         "source": "Nature",
-        "name": "BRIAR MITES",
+        "name": "BRIAR MITE",
         "route": "image",
         "size": 192,
         "look": "a small round thorny beetle creature of dark moss and bramble, six spiny legs, two glowing green eyes, tiny thorn mandibles, low to the ground, three-quarter side view facing left",
@@ -319,7 +422,7 @@
         "region": "cinderworks",
         "archetype": "Swarm",
         "source": "Machine",
-        "name": "CINDER GNATS",
+        "name": "CINDER GNAT",
         "route": "image",
         "size": 192,
         "look": "a small brass clockwork insect with a glowing orange ember for an abdomen, four thin jointed metal legs, two stubby smokestack wings puffing sparks, low to the ground, three-quarter side view facing left",
@@ -367,7 +470,7 @@
         "region": "umbral_reach",
         "archetype": "Swarm",
         "source": "Shadow",
-        "name": "GLOOM WHELPS",
+        "name": "GLOOM WHELP",
         "route": "image",
         "size": 192,
         "look": "a small hunched shadow creature with torn ragged edges, four thin legs, a long tail of drifting darkness, two pale glowing eyes, no visible mouth, low to the ground, three-quarter side view facing left",
@@ -403,7 +506,7 @@
         "region": "umbral_reach",
         "archetype": "Bruiser",
         "source": "Shadow",
-        "name": "DUSK BRUTE",
+        "name": "DUSK APE",
         "route": "character",
         "size": 128,
         "look": "a huge broad ape-like brute of solid shadow with torn ragged edges, enormous long arms with hooked claws, a small head with pale glowing eyes, vast shoulders, knuckles resting on the ground, feet planted wide",
@@ -415,7 +518,7 @@
         "region": "marrow_wastes",
         "archetype": "Swarm",
         "source": "Body",
-        "name": "MARROW TICKS",
+        "name": "MARROW TICK",
         "route": "image",
         "size": 192,
         "look": "a small tick-like creature of pale bone with a bloated dark red sinew body, six spindly bone legs, a hooked bone beak, low to the ground, three-quarter side view facing left",
@@ -463,7 +566,7 @@
         "region": "still_archive",
         "archetype": "Swarm",
         "source": "Mind",
-        "name": "GLYPH MOTES",
+        "name": "GLYPH MOTE",
         "route": "image",
         "size": 192,
         "look": "a small cluster of floating cyan crystal shards arranged around a glowing rune, geometric and sharp, no legs, hovering, three-quarter side view facing left",
@@ -511,7 +614,7 @@
         "region": "pale_choir",
         "archetype": "Swarm",
         "source": "Spirit",
-        "name": "CHOIR WISPS",
+        "name": "CHOIR WISP",
         "route": "image",
         "size": 192,
         "look": "a small pale spirit of soft white light with a tiny hooded shape and a trailing tail of glow, faint feathered edges, no legs, hovering, three-quarter side view facing left",
@@ -535,7 +638,7 @@
         "region": "pale_choir",
         "archetype": "Armoured",
         "source": "Spirit",
-        "name": "HYMN WARDEN",
+        "name": "HALO GUARD",
         "route": "character",
         "size": 128,
         "look": "a squat broad figure in closed pale spectral plate armour with feathered edges of light, a smooth closed helm with a thin glowing seam, a tall pale tower shield of light held in front, solid planted stance",
@@ -611,7 +714,7 @@
       "pressures": "93279118-65e6-46a3-be1d-5043c81267b5",
       "joints": "2f2151a1-365c-4fbb-9b57-31ecb8f1857c",
       "tear": "b91acd34-69c1-41d6-a345-79e6f085b2cf",
-      "hunter": "c3538e9e-99d8-4953-8675-80fecdf7f6a3",
+      "hunter": "b754b861-d5ce-4576-a894-bc17bc360657",
       "stands": "f7fa302c-0a3f-4bd3-89aa-882d8604f586",
       "hollow": "448ca4a4-7fa9-4df0-bc48-0259889b1d79"
     },
@@ -643,7 +746,7 @@
       "pressures": "a vast dark landscape seen from very high above at night, six far-apart places each lit dimly from below by a different glow rising through cracks in the ground like pressure: green, orange, violet, deep red, cyan and pale white, the glows spread across the upper half, a near-black sky with faint violet stars, the lower third a quiet dark plain; no characters",
       "joints": "a colossal ancient joint of iron and stone, a great ringed pillar driven into a mountainside like a bolt holding the land level, faint runes glowing cold blue along its bands, mist at its base, the pillar standing in the upper half against a night sky, the lower third dark quiet ground; no characters",
       "tear": "a torn joint: one colossal ringed stone tower with bands of runes, driven into a mountainside like a bolt, now split down the middle and leaning, its cold blue runes dying, violet corruption bleeding up through the crack like smoke and cold light, moonlit mountains and a night sky, the tower in the upper half, the lower third dark quiet ground; no characters",
-      "hunter": "a lone small hooded figure seen from behind, standing at the lip of a vast dark descent, a faint cold light on her shoulders, a rope and pulley frame beside her, the figure small in the upper middle of the frame, the chasm below dark and quiet, a night sky above",
+      "hunter": "a lone small hooded figure seen from behind, standing on the lip of a vast dark chasm that drops away below her, a faint cold light on her shoulders, a full moon and clouds in the night sky, the figure small in the upper left third of the frame, the chasm below dark and quiet, nothing else near her",
       "stands": "deep underground at the foot of a colossal ringed stone tower with bands of runes, the joint driven down through the cavern roof like a bolt, a lone small hooded figure standing alone on a narrow stone platform before it, the rune bands beginning to glow warm gold as if remembering their shape, dark cavern walls, dust drifting, the figure and the tower in the upper half, the lower third dark and quiet",
       "hollow": "a vast mossy forest hollow at dusk, giant gnarled roots and thorn brambles, a small camp with a single warm lantern dug into the roots in the upper right, dim green and gold light, mist gathering in the lower third, a dark quiet foreground; no characters"
     }

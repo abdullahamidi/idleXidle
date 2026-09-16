@@ -1441,7 +1441,7 @@ public sealed class UiKit
     /// <para>
     /// <see cref="AnimSprite"/> draws with this, and the actor geometry the effects and the pointer read
     /// resolves with this, so the two cannot drift. They did: the geometry took the box's ask and the
-    /// renderer took the cap, so a rift guardian in a 488 x 492 box (a wave of two or more at Bruiser
+    /// renderer took the cap, so the retired rift guardian in a 488 x 492 box (a wave of two or more at Bruiser
     /// scale) was DRAWN 262 x 461 while every effect on it was sized against 268 x 470. A second
     /// "almost the same" clamp beside this one is
     /// the defect, not the fix — measure through this function or pass its answer along.

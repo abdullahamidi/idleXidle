@@ -43,6 +43,15 @@
 #
 #     RH_SHOT_HUNTER=magpie RH_SHOT_SHIELDFX=gain bash tools/asset-pipeline/capture.sh fightshield out.png
 #
+# RH_SHOT_SOURCE=<Source> and RH_SHOT_ARCHETYPE=<Swarm|Caster|Armoured|Bruiser> pose ANY normal fight
+#   on one cell of the enemy matrix (HuntScreen.CreatureLook, EnemyPresentation): the Source picks the
+#   FAMILY of the region whose theme it is (Nature = Verdant Hollow, Machine = Cinderworks, Shadow =
+#   Umbral Reach, Body = Marrow Wastes, Mind = The Still Archive, Spirit = The Pale Choir) and the wave
+#   glyph, the archetype picks the body and its box. Presentation only; a boss wave refuses the
+#   archetype dial. tools/asset-pipeline/enemy_fixtures.sh takes the whole matrix this way.
+#
+#     RH_SHOT_SOURCE=Machine RH_SHOT_ARCHETYPE=Bruiser bash tools/asset-pipeline/capture.sh fight out.png 0.8
+#
 # tools/asset-pipeline/vfx_shots.sh retakes the whole VFX evidence set in one command — six fight modes
 #   at the three density profiles, the debug view on four silhouettes, and the ledger.
 #
