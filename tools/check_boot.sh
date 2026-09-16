@@ -266,12 +266,21 @@ if ! echo "$v8_line" | grep -q "seeded=False"; then
   echo "  ledger: $v8_line" >&2
   exit 1
 fi
-if ! echo "$v8_line" | grep -qE "unread=1[[:space:]]"; then
+# THE KEY, NOT THE COUNT. The file carries exactly one letter, but the 600-frame soak is real play:
+# a producer can post genuine news during it (this fixture's MasteryEarned opens TRAINING, which is a
+# `unlock.training` letter), so a lane asserting `unread=1` would fail on correct behaviour. The claim
+# the lane is making is "THIS letter is still unread", and that is what it now says.
+if ! echo "$v8_line" | grep -q "region.verdant_hollow.conquered"; then
   echo "AN UNREAD LETTER DID NOT SURVIVE THE BOOT — a v8 file is not being believed as written." >&2
   echo "  ledger: $v8_line" >&2
   exit 1
 fi
-echo "v8 save believed as written — an unread letter stays unread, nothing seeded — $v8_line"
+if echo "$v8_line" | grep -qE "unread=0[[:space:]]"; then
+  echo "THE v8 FILE'S LETTER WAS READ BY THE BOOT WALK — walking past a surface must not open its mail." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+echo "v8 save believed as written — its letter stays unread, nothing seeded — $v8_line"
 
 if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
   echo "THE MIGRATION LANES TOUCHED THE PLAYER'S SAVE." >&2

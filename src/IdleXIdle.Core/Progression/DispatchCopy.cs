@@ -59,7 +59,7 @@ public static class DispatchCopy
             DispatchKind.Gem => "The Forge's SOCKET tab sets it into an item.",
             DispatchKind.Trait => TraitCatalogue.Find(d.SubjectId) is { } t ? t.Flavour : "Read what it does on the TRAITS screen.",
             DispatchKind.Vow => Vows.ById(d.SubjectId) is { } v && v.ProofLine.Length > 0 ? v.ProofLine : "It is on the BUILD screen.",
-            DispatchKind.Keystone => Keystones.ById(d.SubjectId) is { } k ? k.Blurb : "It is on the BUILD screen, ready to wear.",
+            DispatchKind.Keystone => Keystones.ById(d.SubjectId) is { } k ? KeystoneRevealDetail(k) : "It is on the BUILD screen, ready to wear.",
             DispatchKind.Champion => "Switch hunter on the ROSTER screen.",
             DispatchKind.Quest => QuestCatalogue.Find(d.SubjectId) is { } q ? q.Demand : "Its reward is yours.",
             DispatchKind.Set => SourceOf(d) is { } s ? $"{ElementSets.CapstoneName(s)} ACTIVE" : "Five pieces worn; its bonus is active.",
@@ -74,6 +74,36 @@ public static class DispatchCopy
             },
             _ => "",
         };
+    }
+
+    /// <summary>
+    /// The reveal a found keystone gets: where it came from, then the FIRST sentence of what it does,
+    /// and a pointer to the BUILD screen when there is more.
+    /// </summary>
+    /// <remarks>
+    /// ONE SENTENCE-MAKER FOR ALL FOUR PRODUCERS — a conquest, the two mastery rungs and the
+    /// corruption — so a keystone arrives with the same shape however it was earned. It has to say
+    /// what the keystone DOES: the word CAPACITOR alone teaches nobody anything, and the longest of
+    /// these sentences is 164 characters, which is why the reading pane wraps rather than truncates.
+    /// Pure, so the pane that shows it and the test that measures it read the same string.
+    /// </remarks>
+    public static string KeystoneRevealDetail(Keystone k)
+    {
+        ArgumentNullException.ThrowIfNull(k);
+        var where = Keystones.SourceOf(k.Id) is { } src ? RungReached(src) : "";
+        var blurb = k.Blurb.Trim();
+        var cut = blurb.IndexOf(". ", StringComparison.Ordinal);
+        var first = cut > 0 ? blurb[..(cut + 1)] : blurb;
+        var detail = where.Length > 0 ? $"{where} {first}" : first;
+        return first.Length < blurb.Length ? $"{detail} THE BUILD SCREEN SAYS THE REST." : detail;
+    }
+
+    /// <summary>"VERDANT HOLLOW IS PARTLY MASTERED." — the sentence a mastery-rung reveal opens with.</summary>
+    private static string RungReached(KeystoneSource src)
+    {
+        if (src.Rung == WorldRung.Corruption) return "THE CORRUPTION HAS DEEPENED.";
+        if (src.RegionId is not { } id || Regions.Find(id) is not { } def) return "";
+        return $"{def.Name} IS {Keystones.RungName(src.Rung)}.";
     }
 
     // The subject of an Unlock row is an Activity NAME, read forward across renames the way the

@@ -16,6 +16,7 @@ input path. Each check below is an ORDER a screenshot cannot prove:
              ITEM STATS came after the pick; EQUIP wore it; CONTINUE returned to the hunt
   EVERY STEP each clicked beat advanced on its first click, and nothing stalled
 """
+import os
 import re
 import sys
 
@@ -156,6 +157,27 @@ def main(path):
     check(not over, "no notice toast was drawn over the opening" + (f" (drawn: {over[0]})" if over else ""))
     stale = [f"{r} (frame {f})" for f, k, r in ev if k == "NOTICE" and ("NEW — VAULT" in r or "NEW — GEAR" in r)]
     check(not stale, "no notice repeated a screen the opening walked the player into" + (f" (said: {stale[0]})" if stale else ""))
+    # ...NOR A DISPATCH, SURFACED. Background news goes to the inbox now, and the inbox may FILL all
+    # through the opening — nothing about that is on screen. What must not happen is the news being
+    # SURFACED: the envelope pulsing, the DISPATCHES lesson lighting, or the reading panel standing
+    # open, each of which asks the player to look away from the thing they are being shown.
+    mail = [f"{r} (frame {f})" for f, k, r in ev if k == "DISPATCH" and begin <= f and (done is None or f < done)]
+    check(not mail, "no dispatch was surfaced over the opening" + (f" (surfaced: {mail[0]})" if mail else ""))
+    # AND THE TWO RULES ABOVE ARE NOT VACUOUS. With every background producer migrated, an opening run
+    # normally records no NOTICE at all — so "no notice over the opening" would pass because nothing
+    # could ever be traced, which is a check that has stopped checking. Both recorders are therefore
+    # asserted to be WIRED, in the host, by name.
+    for source, wire, what in (
+        ("src/IdleXIdle.Game/Game1.cs", "_rigNoticeDrawn = _notice.Head;", "the notice toast"),
+        ("src/IdleXIdle.Game/Game1.cs", '_rigDispatchSurfaced = "pulse";', "a surfaced dispatch"),
+        ("src/IdleXIdle.Game/Game1.OpeningRig.cs", 'Trace($"DISPATCH {mail}")', "the DISPATCH trace event"),
+    ):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *source.split("/"))
+        try:
+            wired = wire in open(path, encoding="utf-8").read()
+        except OSError:
+            wired = False
+        check(wired, f"the rig still records {what} (else the rules above pass vacuously)")
     # ...and no coach lesson at all while it runs: the opening is the one guide on screen.
     spoke = [f"{r} (frame {f})" for f, k, r in ev if k == "LESSON" and begin <= f and (done is None or f < done)]
     check(not spoke, "no coach lesson was shown over the opening" + (f" (shown: {spoke[0]})" if spoke else ""))

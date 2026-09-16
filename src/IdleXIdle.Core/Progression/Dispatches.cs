@@ -389,6 +389,14 @@ public static class Dispatches
 
         if (HasHeldAGem(save)) keys.Add(DispatchKeys.GemFirst);
         if (HasASocket(save, legacy)) keys.Add(DispatchKeys.SocketFirst);
+
+        // THE TWO ONE-SHOTS, UNCONDITIONALLY. Both are announcements the game owes a file whose
+        // keystones moved off the trait tree and onto the world, and both fire on the FIRST pass of
+        // any such file — which is every file older than the inbox. Nothing in a save records having
+        // been told, so no fact can answer this one: the version is the answer, and a returning
+        // player must not be handed mail about a change they have already been living with.
+        keys.Add(DispatchKeys.Migration(DispatchKeys.MigrationKeystones));
+        keys.Add(DispatchKeys.Migration(DispatchKeys.MigrationFifthSlot));
         return keys;
     }
 

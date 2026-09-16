@@ -289,7 +289,45 @@ public class DispatchesTest
 
         Assert.True(Dispatches.SeedKnown(empty, new[] { Activity.Hunt }, inbox));
 
-        Assert.Equal(new[] { DispatchKeys.HunterJoined(CharacterRoster.StarterId) }, inbox.Known);
+        Assert.Equal(
+            new[]
+            {
+                DispatchKeys.HunterJoined(CharacterRoster.StarterId),
+                DispatchKeys.Migration(DispatchKeys.MigrationKeystones),
+                DispatchKeys.Migration(DispatchKeys.MigrationFifthSlot),
+            }.OrderBy(k => k, StringComparer.Ordinal),
+            inbox.Known.OrderBy(k => k, StringComparer.Ordinal));
         Assert.Empty(inbox.Rows);
+    }
+
+    /// <summary>
+    /// THE TWO ONE-SHOTS THE GAME OWES A RETURNING PLAYER ARE SEEDED KNOWN, whatever the file holds.
+    /// </summary>
+    /// <remarks>
+    /// Both fire on the FIRST pass of a file whose keystones moved house — which is every file from
+    /// before the inbox — so without this the migration they have already lived through, silently,
+    /// on an earlier launch would arrive as unread mail on the very boot that introduced the inbox.
+    /// They are the one family whose key is not derived from a fact: nothing in the save records
+    /// having been told, so the version is the only honest answer.
+    /// </remarks>
+    [Fact]
+    public void test_the_migration_one_shots_are_seeded_known_for_every_old_file()
+    {
+        foreach (var save in new[]
+                 {
+                     new SaveGame { SavedAtMs = Now, Version = Dispatches.FirstVersionWithInbox - 1 },
+                     new SaveGame
+                     {
+                         SavedAtMs = Now, Version = Dispatches.FirstVersionWithInbox - 1,
+                         ConqueredRegions = new List<string> { "verdant_hollow" },
+                     },
+                 })
+        {
+            var inbox = new Inbox();
+            Assert.True(Dispatches.SeedKnown(save, new[] { Activity.Hunt }, inbox));
+            Assert.Contains(DispatchKeys.Migration(DispatchKeys.MigrationKeystones), inbox.Known);
+            Assert.Contains(DispatchKeys.Migration(DispatchKeys.MigrationFifthSlot), inbox.Known);
+            Assert.Empty(inbox.Rows);
+        }
     }
 }

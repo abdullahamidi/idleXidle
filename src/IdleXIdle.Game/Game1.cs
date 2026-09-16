@@ -350,25 +350,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Set once the revealed set has been seeded, so no frame announces a screen the save already had.</summary>
     private bool _revealSeeded;
 
-    /// <summary>A champion joined and the roster has not been looked at since. Session-only.</summary>
-    private bool _rosterNews;
-
-    /// <summary>Who joined most recently — the name the ROSTER hint says while <see cref="_rosterNews"/> holds.</summary>
-    private string _rosterNewName = "";
-
-    /// <summary>
-    /// One queued toast. Two lines for the ordinary kind; three, styled differently, for an awakening.
-    /// </summary>
+    /// <summary>One queued toast: a headline and a body, both about something the player just did.</summary>
     /// <remarks>
-    /// It was a string with a newline in it, which was enough while every notice had exactly a title
-    /// and a body. A TRAIT AWAKENING is three rungs and the middle one is the loud one — the trait's
-    /// NAME, not the kicker above it — so the payload says which kind it is rather than the drawing
-    /// code guessing from a line count.
+    /// DIRECT FEEDBACK ONLY. Background news — a screen opening, a quest, a champion, a keystone, a
+    /// Vow, a trait, the first gem — is a DISPATCH: keyed, deduped, kept, and read when the player
+    /// chooses. A toast crosses whatever they are reading and is gone in six seconds, which is the
+    /// right shape for an answer to a click and the wrong shape for a discovery.
     /// </remarks>
-    private readonly record struct Notice(string Head, string Detail, string? Third = null,
-                                          bool Awakening = false);
+    private readonly record struct Notice(string Head, string Detail);
 
-    /// <summary>Notices waiting their turn — "QUEST COMPLETE", "X JOINS YOU" — shown one at a time.</summary>
+    /// <summary>Feedback toasts waiting their turn — "YOU ARE THE ANVIL" — shown one at a time.</summary>
     private readonly Queue<Notice> _noticeQueue = new();
     private Notice _notice;
 
@@ -517,14 +508,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>
     /// False until the first roster Refresh has been absorbed silently.
     /// </summary>
-    /// <remarks>
-    /// The unlocked set is derived from conquest and held in memory only — the save carries just the
-    /// active champion's id — so the first Refresh after every load reports EVERY champion the player
-    /// already owns as newly gained. Without this the game would open with a stack of "X JOINS YOU"
-    /// toasts for champions earned hours ago.
-    /// </remarks>
-    private bool _rosterBaselined;
-
     private int _regionProgression;
 
     private bool _showHelp;
@@ -1729,7 +1712,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // wears its NEW mark again, no tile has been visited, and no notice is waiting. Nothing
         // becomes DUE, because the mandatory intro is gone — the two intro flags reset only as the
         // rig's pose latch and the migration's record of a save that predates the intro.
-        _rosterBaselined = false;
         _tourActive = false;
         _tourCard = Rectangle.Empty;
         _tourStep = 0;
@@ -1741,7 +1723,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _revealSeeded = false;
         _explained.Clear();
         _visited.Clear();
-        _rosterNews = false;
         _noticeQueue.Clear();
         _notice = default;
         _noticeTimer = 0f;
@@ -1914,10 +1895,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (Environment.GetEnvironmentVariable("RH_LESSON_LEDGER") is not { Length: > 0 }) return;
         _ledgerDumped = true;
         foreach (var row in _coach.Telemetry(LessonFactsNow())) Console.WriteLine(row);
-        // THE INBOX, in one line: what waits unread, what the account knows, and whether this load
-        // seeded it (a file from before the inbox). tools/check_boot.sh reads it on three hand-written
-        // files — a migration lane that cannot fail is not a test.
-        Console.WriteLine($"inbox\tunread={_inbox.Unread}\tknown={_inbox.Known.Count}\tseeded={_inboxSeeded}");
+        // THE INBOX, in one line: what waits unread, what the account knows, whether this load seeded
+        // it (a file from before the inbox), and WHICH keys are still unread. tools/check_boot.sh
+        // reads it on three hand-written files — a migration lane that cannot fail is not a test —
+        // and it names the keys rather than counting them because the count moves the moment a real
+        // producer posts something during the soak, while "the letter this file carried is still
+        // unread" is the claim the lane is actually making.
+        Console.WriteLine($"inbox\tunread={_inbox.Unread}\tknown={_inbox.Known.Count}\tseeded={_inboxSeeded}"
+                          + $"\tunread_keys={string.Join(",", _inbox.Rows.Where(d => !d.Read).Select(d => d.Key))}");
     }
 
     /// <summary>Has the ledger been printed? Both exit paths run on the way out of a rig shot.</summary>
@@ -2358,7 +2343,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "fightaura" or "fightflash"
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "warrenlocked" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
-                or "keystonenotice"
                 or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover" or "chestdispatch"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec" or "vfxdebug")
@@ -3460,23 +3444,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSkill(0, freshSig);
                     }
                 }
-                // `keystonenotice` — the LONGEST reveal the game can post. A keystone is announced with
-                // what it DOES, not just its name, and CAPACITOR's sentence is 164 characters: its blurb
-                // plus the line naming the rung that taught it. One body line silently cut that in half
-                // for as long as the toast has existed, and nothing could photograph it, because no
-                // capture mode had ever posted a long one. It is built here through the SAME helper the
-                // live reveal calls, so what is photographed is the real string at its real length.
-                //
-                // MEASURED, NOT NAMED: the pose asks the catalogue which reveal is longest, so it stays
-                // the worst case as keystones are added or their copy is rewritten. RH_SHOT_KEYSTONE=<id>
-                // poses a specific one instead — `echo` is the shortest, the first conquest's reveal.
-                if (sm == "keystonenotice")
-                {
-                    _showLoadout = true;
-                    var shown = Environment.GetEnvironmentVariable("RH_SHOT_KEYSTONE")?.Trim() is { Length: > 0 } kid
-                                ? Keystones.ById(kid) : LongestKeystoneReveal();
-                    if (shown is not null) PostKeystoneReveal(shown);
-                }
                 if (sm == "weave")
                 {
                     _showLoadout = true;
@@ -3762,23 +3729,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     else
                         _traitScreen.DevSelect(pinnedId is { Length: > 0 } ? pinnedId : "t_last_word");
 
-                    // THE AWAKENING PLATE (§32). RH_SHOT_WAKE=one poses one trait's reveal;
-                    // RH_SHOT_WAKE=many poses the combined plate an established save gets on its
-                    // first load. It fires once, in a moment nobody can schedule, so without this
-                    // dial the reveal's own layout — three rungs at UI SCALE 150 — would never have
-                    // been looked at, which is how every wrong state in this project has been found.
-                    switch (Environment.GetEnvironmentVariable("RH_SHOT_WAKE"))
-                    {
-                        case "one" when TraitCatalogue.Find("t_scar_tissue") is { } woken:
-                            PostAwakening("A TRAIT HAS AWAKENED", woken.Name, woken.Flavour.ToUpperInvariant());
-                            break;
-                        case "many":
-                            PostAwakening("6 TRAITS HAVE AWAKENED",
-                                          "WHAT YOU HAVE LIVED THROUGH CHANGED YOU",
-                                          "READ THEM ON THE TRAITS SCREEN");
-                            break;
-                    }
-
                     // A CONQUERED WORLD, which is what teaches the keystones and opens the sockets
                     // now. The fixture used to buy tree nodes here; the world is the producer, so it
                     // sets the world and lets the derivation answer.
@@ -3805,7 +3755,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // state is a real reading and had no picture otherwise.
                     if (sm != "dispatchesempty")
                     {
+                        // ONE OF EACH SHAPE THE PANE HAS TO HOLD: a screen's own line, a quest's
+                        // demand, a champion's sentence, the LONGEST keystone reveal in the
+                        // catalogue (164 characters — the worst case the wrap has to survive), a
+                        // trait's flavour, and a region with a kicker at the row's right end.
                         PostDispatch(Dispatches.Unlock(Activity.Warren, 1_000));
+                        PostDispatch(Dispatches.Quest("q_cinder_deep", 1_400));
+                        PostDispatch(Dispatches.Champion("anvil", 1_600));
+                        if (LongestKeystoneReveal() is { } worst) PostDispatch(Dispatches.Keystone(worst.Id, 1_800));
                         PostDispatch(Dispatches.Trait("t_scar_tissue", 2_000));
                         PostDispatch(Dispatches.Region(VerdantHollow.RegionId, 3_000));
                         // ...AND A COLUMN THAT OVERFLOWS. Three letters fit in every profile's list,
@@ -3827,6 +3784,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                     // The two panel fixtures open it through the same door the envelope and M use.
                     if (sm is "dispatches" or "dispatchesempty") OpenDispatches();
+
+                    // `longest` is MEASURED, NOT NAMED: it asks the catalogue which keystone reveal is
+                    // the longest sentence, so the baseline follows the copy rather than a keystone
+                    // that may stop being the worst case. A `keystone.<id>` nobody has been told about
+                    // is seeded on the spot, which is how a chosen reveal is photographed.
+                    if (string.Equals(posedMail, "longest", StringComparison.OrdinalIgnoreCase))
+                        posedMail = LongestKeystoneReveal() is { } longest ? DispatchKeys.Keystone(longest.Id) : "";
+                    else if (posedMail is { Length: > 0 } && posedMail.StartsWith("keystone.", StringComparison.OrdinalIgnoreCase)
+                             && Keystones.ById(posedMail["keystone.".Length..]) is { } chosen)
+                        PostDispatch(Dispatches.Keystone(chosen.Id, 2_500));
 
                     switch (posedMail?.ToLowerInvariant())
                     {
@@ -3934,19 +3901,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             BeginTour(Activity.Forge, Onboarding.GemTourFor(_forge.FreeSocketUsed), gemKey);
         }
 
-        // And the moment the first one DROPS, a line at the top says where it goes — never a panel —
-        // and the FORGE tile earns its unread dot back even if the Forge was visited earlier this
+        // And the moment the first one DROPS there is a letter waiting that says where it goes, and
+        // the FORGE tile earns its unread dot back even if the Forge was visited earlier this
         // session. The DEED itself is the coach's FirstGemSocket lesson, which waits on a gem being
-        // set and not on this notice being read.
+        // set and not on the letter being read.
+        //
+        // THE LETTER IS ASKED FOR FROM THE FACT — "a gem is held" — and not from the frame it landed
+        // on, so a crash before the first autosave cannot lose the news: the next load asks again.
+        // The inbox is the dedupe, so `gem.first` is told exactly once whatever happens here.
         var gemsHeld = GemsHeld();
+        if (gemsHeld > 0) PostDispatch(Dispatches.Gem(SaveFile.NowMs));
         if (gemsHeld > _gemsHeldLast && Onboarding.GemTourDue(gemsHeld, _explained) is not null)
-        {
-            PostNotice("A GEM DROPPED",
-                       GemCraft.IsFirstGemFree(_forge.FreeSocketUsed)
-                           ? "THE FORGE'S SOCKET TAB SETS IT INTO AN ITEM — YOUR FIRST GEM IS FREE"
-                           : "THE FORGE'S SOCKET TAB SETS IT INTO AN ITEM");
             _visited.Remove(Activity.Forge);
-        }
         _gemsHeldLast = gemsHeld;
 
         // Escape backs out of an open panel before it quits the game. Escape is the reflex for "get me
@@ -4020,9 +3986,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // SEE happen on the rail rather than a row quietly appearing under the last one.
                 UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
                 OpeningRigMark($"NAV_BREAK {opened}", $"break_{opened}", 60, 2);   // dev: the opening rig's trace and film
+                // A LETTER, NOT A TOAST. A screen opening is background news, so it goes to the
+                // DISPATCHES inbox keyed by the screen and waits there to be read. The two screens
+                // the authored opening WALKS the player into are marked known instead: being shown a
+                // screen and then told it opened is the same sentence twice.
                 if ((!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), opened.ToString(), StringComparison.OrdinalIgnoreCase))
                     && !OpeningWalksInto(opened))
-                    PostNotice($"NEW — {Unlocks.Headline(opened)}", Unlocks.OpenedLine(opened));
+                    PostDispatch(Dispatches.Unlock(opened, SaveFile.NowMs));
+                else
+                    KnowDispatch(DispatchKeys.Unlock(opened));
             }
 
         // A QUEUE, NOT A STACK — the rule this codebase already keeps for the toast slot, applied to
@@ -4039,11 +4011,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_noticeTimer <= 0f && _noticeQueue.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Feedback))
         {
             _notice = _noticeQueue.Dequeue();
-            // AN AWAKENING HOLDS LONGER, because it has a third line to read and because it is the
-            // rarest thing this toast slot ever says. Still a toast and not a modal: §32 asks for a
-            // meaningful reveal and warns in the same breath against a blocking ceremony.
-            _noticeTimer = _notice.Awakening ? NoticeSeconds * 1.6f : NoticeSeconds;
-            _sound.PlayFirst(0.9f, _notice.Awakening ? "sfx_trait_lit" : "sfx_levelup", "sfx_levelup", "sfx_click");
+            _noticeTimer = NoticeSeconds;
+            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
         }
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
@@ -4419,6 +4388,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _dispatchArrivalHeld = false;
             UiMotion.Flash(DispatchPulseKey, UiMotion.Transition);
+            _rigDispatchSurfaced = "pulse";   // dev: the opening rig's trace
             // The background tier's cue, quieter than the notice's reward tier. PlayFirst so the game
             // plays before the wav lands, and so a build without it falls back to the rail's page tick.
             _sound.PlayFirst(0.5f, "sfx_dispatch", "sfx_nav");
@@ -4503,16 +4473,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked || ForcedScreenClick(), MouseRightClicked, MouseWheel, _hunter);
             PlayCue(_gear.ConsumeCue());
 
-            // A SET FINISHED IS NEWS, ONCE. The screen decides when a five-piece set is first complete
-            // and hands back two lines; the host toasts them, sounds the reward, and writes the set's
-            // name to the save so the next session does not announce it again (SaveGame.CompletedSets).
-            if (_gear.ConsumeNotice() is { } setNews)
-            {
-                var lines = setNews.Split('\n');
-                PostNotice(lines[0], lines.Length > 1 ? lines[1] : "");
-                _sound.Play("sfx_levelup", 0.8f);
-                Save();
-            }
+            // A SET FINISHED IS NEWS, ONCE — and the news is a LETTER, while the moment belongs to
+            // the screen the player is looking at. The fifth rung reveals under their cursor and the
+            // reward sounds here; the durable record goes to the inbox, where it can still be read
+            // tomorrow. It was a global toast as well, which meant one event on two surfaces and the
+            // reward cue played twice (here, and again when the toast dequeued).
+            //
+            // ASKED FOR FROM THE SAVED FACT (SaveGame.CompletedSets), not from the frame the piece
+            // went on, so a crash between the fifth piece and its letter cannot lose the letter.
+            var setNews = _gear.ConsumeCompletedSet() is not null;
+            if (setNews) _sound.Play("sfx_levelup", 0.8f);
+            foreach (var completed in _gear.CompletedSets)
+                if (Enum.TryParse<Source>(completed, out var element) && Enum.IsDefined(element))
+                    setNews |= PostDispatch(Dispatches.Set(element, SaveFile.NowMs));
+            if (setNews) Save();
 
             // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
             //    what it wants and the host carries the player there, already pointed at the item.
@@ -4997,13 +4971,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // It arrives with the BUILD screen, on the gate that already opens the workbench it is sworn on.
         if (Unlocks.IsOpen(Activity.Build, facts))
             foreach (var granted in Vows.Granted)
-                if (_discoveredVows.Add(granted.Id) && _grantsBaselined)
+                if (_discoveredVows.Add(granted.Id))
                     // SILENT UNDER THE RIG unless a capture asked for this one, exactly as a rail
-                    // reveal is (RH_SHOT_REVEAL below). A fixture that opens the BUILD screen offers
-                    // this Vow on its first frame, and the toast stands in the notice lane, over
-                    // whatever a fight fixture is posing there. RH_SHOT_REVEAL=Vow announces it deliberately.
-                    if (!CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), "Vow", StringComparison.OrdinalIgnoreCase))
-                        PostVowReveal(granted, offered: true);
+                    // reveal is (RH_SHOT_REVEAL below). A fixture dresses its facts on its first
+                    // frame, so every capture in the project would carry an unread mark for a Vow
+                    // nobody earned. The account still KNOWS it; only the letter is withheld.
+                    if (VowNewsAllowed)
+                        PostDispatch(Dispatches.Vow(granted.Id, SaveFile.NowMs));
+                    else
+                        KnowDispatch(DispatchKeys.Vow(granted.Id));
 
         // KEYSTONES. TRANSITIONAL: the trait tree still stands this phase and its keystone nodes are
         // still buyable, so what it has taught is unioned in as well. That term goes when the tree does.
@@ -5020,6 +4996,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             Math.Max(_keystoneSocketsEarned, Unlocks.KeystoneSockets(facts)),
             _loadout.KeystoneIds.Count);
         _loadout.KeystoneCapacity = _keystoneSocketsEarned;
+        // THE FIRST SOCKET IS NEWS, ASKED FOR FROM THE COUNT ITSELF rather than from the conquest
+        // that opened it — the count is saved, so the letter survives a crash the conquest's own
+        // frame would not, and the inbox refuses every later ask.
+        if (_keystoneSocketsEarned >= 1) PostDispatch(Dispatches.Socket(SaveFile.NowMs));
         // ASSIGNED, NOT RAISED. The facts behind it only ever grow, so this only ever grows in play —
         // and a Math.Max here would let the type's own default stand in for the world's answer, which
         // is exactly how this milestone came to grant nothing at all.
@@ -5038,93 +5018,56 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _grantsBaselined = true;
             // A RETURNING PLAYER IS TOLD, ONCE. Their keystones moved house — off the trait tree and
             // onto the world — and arriving in silence would give them no reason to go and look. A
-            // new game finds nothing on this frame, so the line is only ever seen by a save that
-            // already had some.
+            // new game finds nothing on this frame, so the letter is only ever owed to a save that
+            // already had some. Every file from before the inbox is seeded knowing both of these
+            // (Dispatches.KnownFrom), because nothing in a save records having been told.
             if (fresh.Count > 0 && (!CaptureRig || ShotMode == "conquered"))
-                PostNotice(
-                    fresh.Count == 1
-                        ? "THE WORLD HAS TAUGHT YOU A KEYSTONE"
-                        : $"THE WORLD HAS TAUGHT YOU {fresh.Count} KEYSTONES",
-                    (fresh.Count == 1 ? "IT IS " : "THEY ARE ")
-                    + "ON THE BUILD SCREEN, READY TO WEAR. YOU FIND MORE BY CONQUERING "
-                    + "AND MASTERING REGIONS.");
-            if (_fifthSkillDropped is { } lost)
+                PostDispatch(Dispatches.Migration(DispatchKeys.MigrationKeystones, SaveFile.NowMs, fresh.Count));
+            if (_fifthSkillDropped is not null)
             {
                 _fifthSkillDropped = null;
-                PostNotice("THE FIFTH SKILL SLOT IS GONE",
-                    $"{lost.ToUpperInvariant()} WAS TAKEN OUT OF YOUR BUILD. IT KEEPS ITS LEVEL — "
-                    + "PUT IT BACK ANY TIME IN PLACE OF ANOTHER SKILL.");
+                PostDispatch(Dispatches.Migration(DispatchKeys.MigrationFifthSlot, SaveFile.NowMs));
             }
             return;
         }
         if (fresh.Count == 0) return;
 
-        // A MASTERY RUNG HAPPENS MID-FARM, with the player very possibly not watching, so it is never
-        // modal: the same wrapping notice every keystone reveal uses. A CONQUEST posts its own, at the
-        // conquest site, so the socket line can follow it in the right order — so it is skipped here.
+        // A MASTERY RUNG HAPPENS MID-FARM, with the player very possibly not watching, which is the
+        // whole reason it is a letter: it waits in the inbox instead of crossing whatever screen they
+        // are on. A CONQUEST posts its own at the conquest site, so the region, the keystone and the
+        // socket are read in the order they happened — so it is skipped here.
+        //
+        // `fresh` IS the re-derivation: a keystone is only fresh until the latch behind it is saved,
+        // and the latch and the letter are written by the same autosave — so a crash before that
+        // simply makes the next load find it fresh again.
         foreach (var k in fresh)
         {
             if (Keystones.SourceOf(k.Id) is { Rung: WorldRung.Conquest }) continue;
-            PostKeystoneReveal(k);
+            PostDispatch(Dispatches.Keystone(k.Id, SaveFile.NowMs));
         }
     }
 
-    /// <summary>The reveal a found keystone gets: its name, then the rung that taught it and what it does.</summary>
+    /// <summary>May a Vow's reveal become a letter on this run? Always, unless a capture is posing one.</summary>
     /// <remarks>
-    /// ONE HELPER FOR ALL FOUR PRODUCERS — conquest, the two mastery rungs and the corruption — so the
-    /// sentence a keystone arrives with is written once and every one of them is the same shape.
-    /// <para>
-    /// It is a NOTICE and not the map's strip, and that is the whole point. A keystone has to say what it
-    /// DOES — the word CAPACITOR alone teaches nobody anything — and the longest of those sentences is 164
-    /// characters. The notice is the one presentation in the game that can hold it: its body WRAPS and its
-    /// plate grows to the rungs it draws. The map strip is a fixed-height single line, and after the sixth
-    /// conquest it is not drawn at all (the corruption ladder takes it), so a reveal written into it was
-    /// four lines across the region cards for five conquests and invisible on the sixth.
-    /// </para>
+    /// The one Vow the game GIVES arrives with the BUILD screen, so every fixture that opens BUILD
+    /// offers it on its first frame. Under the rig the account is told it KNOWS the Vow instead, and
+    /// RH_SHOT_REVEAL=Vow is how a capture asks for the letter itself.
     /// </remarks>
-    private void PostKeystoneReveal(Keystone k) => PostNotice($"NEW KEYSTONE — {k.Name}", KeystoneRevealDetail(k));
-
-    /// <summary>
-    /// The reveal's body: where it came from, then the FIRST sentence of what it does, and a pointer to
-    /// the BUILD screen when there is more. Four lines of uppercase prose was not a toast (chrome-08);
-    /// the BUILD inspector carries the whole blurb. Static and pure so the notice test reads the same
-    /// sentence the host posts.
-    /// </summary>
-    internal static string KeystoneRevealDetail(Keystone k)
-    {
-        var where = Keystones.SourceOf(k.Id) is { } src ? RungReached(src) : "";
-        var blurb = k.Blurb.Trim();
-        var cut = blurb.IndexOf(". ", StringComparison.Ordinal);
-        var first = cut > 0 ? blurb[..(cut + 1)] : blurb;
-        var detail = where.Length > 0 ? $"{where} {first}" : first;
-        return first.Length < blurb.Length ? $"{detail} THE BUILD SCREEN SAYS THE REST." : detail;
-    }
+    private static bool VowNewsAllowed
+        => !CaptureRig || string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_REVEAL"), "Vow", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whichever keystone's reveal is the longest sentence in the catalogue. Capture rig only.</summary>
     /// <remarks>
-    /// The toast's wrap is a ceiling, and a ceiling is only ever proved by the worst case. Asked of the
-    /// catalogue rather than named in the fixture, so it follows the copy: today it is CAPACITOR at 164
-    /// characters, and it stays the right answer when a keystone is added or a blurb is rewritten.
+    /// The reading pane's wrap is a ceiling, and a ceiling is only ever proved by the worst case. Asked
+    /// of the catalogue rather than named in the fixture, so it follows the copy: today it is CAPACITOR
+    /// at 164 characters, and it stays the right answer when a keystone is added or a blurb is
+    /// rewritten. RH_SHOT_DISPATCH=longest poses that letter open in the DISPATCHES pane.
     /// </remarks>
     private static Keystone? LongestKeystoneReveal()
         => Keystones.Catalog
-            .OrderByDescending(k => (Keystones.SourceOf(k.Id) is { } s ? RungReached(s).Length + 1 : 0) + k.Blurb.Length)
+            .OrderByDescending(k => DispatchCopy.KeystoneRevealDetail(k).Length)
             .ThenBy(k => k.Id, StringComparer.Ordinal)
             .FirstOrDefault();
-
-    /// <summary>"VERDANT HOLLOW IS PARTLY MASTERED." — the sentence a mastery-rung reveal opens with.</summary>
-    private static string RungReached(KeystoneSource src)
-    {
-        if (src.Rung == WorldRung.Corruption) return "THE CORRUPTION HAS DEEPENED.";
-        if (src.RegionId is not { } id || Regions.Find(id) is not { } def) return "";
-        return $"{def.Name} IS {Keystones.RungName(src.Rung)}.";
-    }
-
-    /// <summary>The reveal a found Vow gets: what you did, then one line about it.</summary>
-    private void PostVowReveal(Vow vow, bool offered = false)
-        => PostNotice(offered ? $"A VOW IS OFFERED TO YOU — {vow.Name}"
-                              : $"A VOW HAS REVEALED ITSELF — {vow.Name}",
-                      vow.ProofLine);
 
     /// <summary>
     /// Rebuild the keystone and Vow lists every consumer reads — the composer, the workbench, the sim.
@@ -5210,7 +5153,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         foreach (var vow in found)
         {
             _discoveredVows.Add(vow.Id);
-            PostVowReveal(vow);
+            PostDispatch(Dispatches.Vow(vow.Id, SaveFile.NowMs));
         }
         RebuildBuildMenus();
     }
@@ -5242,14 +5185,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
 
     /// <summary>
-    /// Queue a notice toast: two lines, "HEAD\nDETAIL", shown at the top for a few seconds, never modal.
+    /// Queue a feedback toast: two lines, shown at the top for a few seconds, never modal.
     /// </summary>
     /// <remarks>
-    /// Quest completions and champion joins used to be modal panels in the same queue as the unlock
-    /// explanations, and they were the worst of it: a panel about a champion, over the Forge, while the
-    /// player was deciding what to salvage. They are a line at the top now. Queued rather than
-    /// replaced, so two events on one frame (a quest finishing is what frees a quest-gated champion)
-    /// are both read.
+    /// DIRECT FEEDBACK ONLY — the answer to something the player just did on the screen they are
+    /// looking at. Everything durable that happens TO them (a screen opening, a quest, a champion, a
+    /// keystone, a Vow, a trait, the first gem, a set, a conquest) is a DISPATCH instead: it is kept
+    /// and read when they choose, rather than crossing the thing they were reading and expiring.
+    /// Queued rather than replaced, so two answers on one frame are both seen.
     /// </remarks>
     private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(new Notice(head, detail));
 
@@ -5291,22 +5234,39 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_inbox.MarkAllRead() > 0) Save();
     }
 
+    /// <summary>Is a champion still waiting to be met? The ROSTER tile's NEW mark, and the inbox is the memory.</summary>
+    private bool RosterNews => UnreadChampion(_inbox.Rows) is not null;
+
+    /// <summary>The waiting champion's name, or null — what the rail's ROSTER hint says while the mark holds.</summary>
+    private string? NewChampionWaiting
+        => UnreadChampion(_inbox.Rows) is { SubjectId: { } id } && CharacterRoster.Find(id) is { } who ? who.Name : null;
+
     /// <summary>
-    /// A TRAIT HAS AWAKENED — the reveal §32 asks for: meaningful, rare, and never blocking.
+    /// Walking into the ROSTER reads every champion letter waiting in the inbox.
     /// </summary>
     /// <remarks>
-    /// Queued like any other notice, so two awakenings in one moment are shown one after the other
-    /// rather than on top of each other. An established save's first load can satisfy six rules at
-    /// once, and six ceremonies in one second is the failure mode §32 warns about as loudly as it
-    /// asks for the ceremony — so that case posts ONE combined plate instead (see RefreshTraits).
+    /// The letter says one sentence — who joined, and that you switch here — so arriving at the
+    /// screen it points at IS reading it. Without this the rail's mark would hold until the player
+    /// opened DISPATCHES, which would make one surface depend on another for no reason.
     /// </remarks>
+    private void ReadChampionLetters()
+    {
+        var read = false;
+        foreach (var key in _inbox.Rows.Where(d => d.Kind == DispatchKind.Champion && !d.Read)
+                                       .Select(d => d.Key).ToList())
+            read |= _inbox.MarkRead(key);
+        if (read) Save();
+    }
+
+    /// <summary>
+    /// Record a dispatch key as already KNOWN, with no letter and no mark on the envelope.
+    /// </summary>
     /// <remarks>
-    /// The flavour arrives UPPERCASED by its callers, because the inspector uppercases the same
-    /// string and two surfaces showing one line in two cases is a defect you only see side by side —
-    /// which is what the RH_SHOT_WAKE capture is for.
+    /// For news the account has lived but must not be told: a screen the authored opening walks the
+    /// player into itself, or a reveal a capture fixture dressed rather than earned. Known is the
+    /// same dedupe a posted letter leaves behind, so the event can never arrive later as news.
     /// </remarks>
-    private void PostAwakening(string kicker, string name, string flavour)
-        => _noticeQueue.Enqueue(new Notice(kicker, name, flavour, Awakening: true));
+    private void KnowDispatch(string key) => _inbox.Know(key);
 
     /// <summary>The activity the screen on top belongs to — what a tour or a slot note would be about.</summary>
     private Activity ScreenActivity() => NavActivity[NavActive()];
@@ -5513,7 +5473,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             EmptySkillSlots: Math.Max(0, Math.Min(Unlocks.SkillSlots(GuideUnlockFacts()),
                                                   1 + (_mastery?.AvailableSkills().Count ?? 0))
                                          - _loadout.Skills.Count),
-            NewChampionName: _rosterNews ? _rosterNewName : null,
+            NewChampionName: NewChampionWaiting,
             ChestsWaiting: _forge?.UnopenedChests.Count ?? 0,
             TrainableStat: stat,
             TrainableCost: cost,
@@ -6058,11 +6018,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // ── Notice toasts ──────────────────────────────────────────────────────────────────────────
 
-    /// <summary>A quest finished, a champion joined: two lines at the top, fading on their own clock.</summary>
+    /// <summary>The answer to something the player just did: two lines at the top, fading on their own clock.</summary>
     /// <remarks>
-    /// The boot toast's shape and place, because it IS the same kind of thing — news, not a lesson.
-    /// It steps down under the boot toast on the one occasion both are up (a quest that was already
-    /// satisfied when the save loaded). Never modal, never reads input.
+    /// The boot toast's shape and place, and it steps down under it on the one occasion both are up.
+    /// Never modal, never reads input. News does not come here — it goes to DISPATCHES — so what
+    /// stands in this lane is always about the click that summoned it.
     /// </remarks>
     private void DrawNoticeToast()
     {
@@ -6088,30 +6048,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y = CanvasY(UiKit.PageTopBase);
             fade *= _noticeLaneOpen;
         }
-        // THE HEIGHT FOLLOWS THE TEXT, at both shapes, so nothing can fall out of the plate.
-        //
-        // Two notices meet here and each fixed half of the same fault. The trait AWAKENING is three
-        // rungs — a quiet kicker, the trait's own NAME in gold at the title size, then its flavour —
-        // and its height is summed from those rungs rather than guessed. Every OTHER notice is a
-        // headline and a body, and its body WRAPS: it used to be one ellipsised line, which was fine
-        // while every notice was a short sentence and wrong the moment keystone reveals arrived,
-        // because a keystone has to say what it DOES — the word IRONCLAD alone teaches nobody
-        // anything — and the longest of those is 164 characters against a line that fits about 80.
+        // THE HEIGHT FOLLOWS THE TEXT, so nothing can fall out of the plate: a headline, then a body
+        // that WRAPS. It used to be one ellipsised line, which was fine while every toast was a short
+        // sentence and wrong as soon as a long one arrived.
         var pad = UiMetrics.Space(22);
         var r0 = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, 0);
         // MEASURED AGAINST THE CLOSE BUTTON, on BOTH sides, because this text is CENTRED: a reserve
         // on the right alone moves the middle, and the line still reaches the corner the x sits in.
         // At 150 % the second line of a keystone reveal ran straight under it.
         var room = r0.Width - 2 * (UiKit.PanelCorner + 8 + UiMetrics.Control(UiKit.CloseSize) + UiMetrics.Space(8));
-        var body = !_notice.Awakening && _notice.Detail.Length > 0
+        var body = _notice.Detail.Length > 0
             ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).ToList()
             : new List<string>();
-        var rungs = _notice.Awakening
-            ? UiTypography.Pitch(UiTypography.OverlayBody)      // the kicker
-              + UiTypography.Pitch(UiTypography.OverlayTitle)   // the NAME
-              + UiTypography.Pitch(UiTypography.OverlayBody)    // the flavour
-            : UiTypography.Pitch(UiTypography.OverlayTitle)
-              + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body.Count);
+        var rungs = UiTypography.Pitch(UiTypography.OverlayTitle)
+                    + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body.Count);
         var h = pad + rungs + UiMetrics.Space(12);
         // ── IT ARRIVES, rather than being there. ─────────────────────────────────────────────────
         //
@@ -6137,24 +6087,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _noticeCloseRect = UiKit.CloseRect(r);
         _ui.CloseButton(_batch, _noticeCloseRect, ChromeMouse, false);
 
-        if (_notice.Awakening)
-        {
-            // THE MIDDLE RUNG IS THE LOUD ONE. "A TRAIT HAS AWAKENED" is only the kicker; the trait's
-            // own NAME is what the player carries away, so it takes the title size and the gold, and
-            // the flavour sits under it in the body size.
-            var ty = r.Y + pad;
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Head, room, UiTypography.OverlayBody),
-                              r.Center.X, ty, Slate * fade, UiTypography.OverlayBody);
-            ty += UiTypography.Pitch(UiTypography.OverlayBody);
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Detail, room, UiTypography.OverlayTitle),
-                              r.Center.X, ty, NavGold * fade, UiTypography.OverlayTitle);
-            ty += UiTypography.Pitch(UiTypography.OverlayTitle);
-            if (_notice.Third is { } flavour)
-                _ui.TextCenterBig(_batch, _ui.ShortenBig(flavour, room, UiTypography.OverlayBody),
-                                  r.Center.X, ty, Bone * fade, UiTypography.OverlayBody);
-            return;
-        }
-
         _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Head, room, UiTypography.OverlayTitle),
                           r.Center.X, r.Y + pad, NavGold * fade, UiTypography.OverlayTitle);
         var bodyY = r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle);
@@ -6178,11 +6110,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>How many wrapped body lines a notice may grow to before it is cut.</summary>
     /// <remarks>
-    /// Four holds every string the game posts at every UI SCALE. The longest is CAPACITOR's keystone
-    /// reveal at 164 characters — its blurb, plus the sentence naming the rung that taught it — which
-    /// wraps to three lines at SCALE 100 and to four at 150, where the type is larger and the plate is
-    /// not. This is a ceiling for a rare case rather than a target: a toast that needs more than four
-    /// lines is a copy problem, not a layout one, and `keystonenotice` is the mode that shows it.
+    /// Two holds every string this channel still carries: direct feedback is one short sentence about
+    /// a thing the player just did. The 164-character keystone reveal that once forced this budget is
+    /// a DISPATCH now, and the reading pane wraps it in full rather than cutting it. A toast that
+    /// needs a third line is a copy problem, not a layout one.
     /// </remarks>
     private const int NoticeBodyLines = 2;
 
@@ -6752,32 +6683,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // A LOAD IS A CHECK. Every rule is re-checked here as well as after a cleared wave, which is
         // what makes a threshold crossed while the player was not looking impossible to miss.
-        //
-        // THE DISCOVERY ALWAYS HAPPENS; ONLY THE REVEAL IS HELD BACK UNDER THE CAPTURE RIG. Every
-        // fixture in the rig is an established save, so the six account-fed rules fire on frame one
-        // and the plate landed across the middle of EVERY fight, build and gear capture in the
-        // project. A pose is something a capture asks for (RH_SHOT_WAKE), not something that leaks
-        // into other people's baselines.
-        // RH_SHOT_WAKE poses the plate itself, so the rig never needs the organic one.
-        var revealing = ShotMode is null;
         if (_traitsFirstCheckOwed)
         {
             _traitsFirstCheckOwed = false;
             _traitWatch.Recheck();
-            var woke = revealing ? _traitWatch.TakeAwakened() : Array.Empty<string>();
-            if (woke.Count == 1 && TraitCatalogue.Find(woke[0]) is { } only)
-                PostAwakening("A TRAIT HAS AWAKENED", only.Name, only.Flavour.ToUpperInvariant());
-            else if (woke.Count > 1)
-                // ONE PLATE, NOT SIX. The names are in the collection the plate points at; saying six
-                // of them here would be the achievement list §90 forbids, in a toast.
-                PostAwakening($"{woke.Count} TRAITS HAVE AWAKENED",
-                              "WHAT YOU HAVE LIVED THROUGH CHANGED YOU",
-                              "READ THEM ON THE TRAITS SCREEN");
         }
 
+        // ONE LETTER PER TRAIT, and the LIST is what summarises them. An established save's first
+        // load can satisfy six rules at once; the old answer was a single plate saying "6 TRAITS HAVE
+        // AWAKENED", which named none of them and was gone in ten seconds. Six rows name six traits
+        // and wait until they are read.
+        //
+        // WRITTEN UNDER THE RIG TOO, because the inbox is STATE and not a flourish: a fixture whose
+        // save has lived through six awakenings HAS six letters, and suppressing them would
+        // photograph an account that cannot exist. Only the SURFACING is posed (RH_SHOT_DISPATCH).
         foreach (var id in _traitWatch.TakeAwakened())
-            if (revealing && TraitCatalogue.Find(id) is { } def0)
-                PostAwakening("A TRAIT HAS AWAKENED", def0.Name, def0.Flavour.ToUpperInvariant());
+            PostDispatch(Dispatches.Trait(id, SaveFile.NowMs));
     }
 
     private void UpdateExpedition(GameTime gameTime)
@@ -6911,13 +6832,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _lockedTimer = 3.2f;
         }
 
-        // RH_SHOT_NOTICE=1 posts ONE sample notice on any fixture, once, so what news does under an owner
-        // can be photographed: queued under a chest reveal it must not paint and its clock must not burn,
-        // and it lands when the reveal is dismissed (a late RH_SHOT_T on `lootforge` poses that frame).
+        // RH_SHOT_NOTICE=1 posts ONE sample toast on any fixture, once, so what direct feedback does
+        // under an owner can be photographed: queued under a chest reveal it must not paint and its
+        // clock must not burn, and it lands when the reveal is dismissed (a late RH_SHOT_T on
+        // `lootforge` poses that frame). The copy is a champion switch, because that is the only kind
+        // of thing this channel carries now — a sample of news would pose a plate the game cannot post.
         if (CaptureRig && !_rigNoticePosted && Environment.GetEnvironmentVariable("RH_SHOT_NOTICE") is { Length: > 0 })
         {
             _rigNoticePosted = true;
-            PostNotice("QUEST COMPLETE — FIRST STEPS", "You can equip a second skill.");
+            PostNotice("YOU ARE THE ANVIL",
+                       "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
         }
 
         WatchTheFallLoop();
@@ -6974,8 +6898,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (!_characters.QuestDone(done.Id))
             {
                 _characters.CompleteQuest(done.Id);
-                // WAS _bootMessage, WHICH IS A BOOT-ONLY CHANNEL. See the champion block below.
-                PostNotice("QUEST COMPLETE", $"{done.Name} — {done.Demand}");
+                // A LETTER, WRITTEN BY THE SAME Save() AS THE FACT — so the two can never come apart.
+                // It was a toast (and, before that, the boot-only channel), which meant a quest
+                // finished mid-fight was announced across the fight and then gone.
+                PostDispatch(Dispatches.Quest(done.Id, SaveFile.NowMs));
                 Save();
             }
 
@@ -6989,22 +6915,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // line. There was no sound, no banner, no panel and no badge for a champion anywhere in the
         // game. The player was right that nothing told them.
         //
-        // It also had a second failure in the opposite direction. CharacterState._unlocked is in-memory
-        // only — the save carries just the active id — so on the FIRST gameplay frame of every launch
-        // Refresh re-reports every champion the player already owns, and the last one clobbered the
-        // WELCOME BACK offline summary with a false "X JOINS YOU". _rosterBaselined absorbs that first
-        // pass silently, the same way SeedExplained settles what a returning player already knows.
+        // A LETTER, AND THE ROSTER TILE'S NEW MARK IS THAT LETTER. The mark asks the inbox — "is a
+        // champion still unread?" — so it survives a restart instead of dying with the session, and
+        // the load-frame skip that used to absorb a false first pass is gone with it: the roster is
+        // BANKED in the save now, so Refresh reports only the genuinely new, and the key refuses
+        // anything the account already knows. A champion who joined while the game was closed — a
+        // quest satisfied by offline progress — is therefore told, which is exactly what the skip
+        // was silently eating. The champion's power and the "nothing resets" reassurance live on the
+        // roster card, which is where a player who follows the mark will read them.
         foreach (var got in _characters.Refresh(_world.ConqueredIds))
-        {
-            if (!_rosterBaselined) continue;
-            // A toast, and a NEW mark on the ROSTER tile that stays until the roster is opened. The
-            // champion's power and the "nothing resets" reassurance live on the roster card itself,
-            // which is where a player who follows the mark will read them.
-            PostNotice($"{got.Name.ToUpperInvariant()} JOINS YOU", "SWITCH HUNTER ON THE ROSTER SCREEN");
-            _rosterNews = true;
-            _rosterNewName = got.Name;
-        }
-        _rosterBaselined = true;
+            if (PostDispatch(Dispatches.Champion(got.Id, SaveFile.NowMs))) Save();
 
         // A CHAMPION SWITCH SHEDS WHAT THE NEW ONE CANNOT WEAR — AND WHAT THEY CANNOT USE. The roster's
         // promise is that switching costs nothing, and it still costs nothing: the pieces go back to the
@@ -7215,23 +7135,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // — two weapon enchantments are dead without ECHO or BLOODLUST, and both are conquest
             // rewards. The BLURB is not optional: a player who has never owned a keystone learns
             // nothing from the word BLOODLUST on its own — but it is 164 characters at its longest and
-            // it goes where a long sentence can be READ, which is the notice toast. See
-            // PostKeystoneReveal. The strip gets the compact headline and stays the one line it is.
+            // it goes where a long sentence can be READ, which is the dispatch's reading pane. See
+            // DispatchCopy.KeystoneRevealDetail. The strip keeps the compact headline and stays the
+            // one line it is.
             var gift = Keystones.Sources.FirstOrDefault(s =>
                            s.RegionId == _activeRegion && s.Rung == WorldRung.Conquest) is { } taught
                        ? Keystones.ById(taught.KeystoneId) : null;
             _conquerMsg = MapScreen.ConquestHeadline(_activeRegion, unlocked, gift);
+            // THE CEREMONY IS THE MAP'S, AND THE RECORD IS THE INBOX'S. The conquest already has a
+            // foreground moment — the strip's headline, the sound, the dust — so the letter says the
+            // same thing quietly and durably rather than a second time, loudly. The socket that
+            // follows is posted where the socket COUNT is derived (ApplyWorldGrants), so the three
+            // letters land region, keystone, socket: the order they happened in.
+            PostDispatch(Dispatches.Region(_activeRegion, SaveFile.NowMs));
             if (gift is not null)
             {
                 _discoveredKeystones.Add(gift.Id);
                 RebuildBuildMenus();
-                PostKeystoneReveal(gift);
-                // On the FIRST conquest only, because the socket arrives on the same event — the build
-                // screen is never showing a keystone with nowhere to put it. Its own toast, queued
-                // behind the reveal, so the two are read in the order they happened.
-                if (_world.ConqueredIds.Count == 1)
-                    PostNotice("A KEYSTONE SOCKET OPENS",
-                               "GO TO THE BUILD SCREEN TO WEAR YOUR NEW KEYSTONE.");
+                PostDispatch(Dispatches.Keystone(gift.Id, SaveFile.NowMs));
             }
             Save();
         }
@@ -10680,9 +10601,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _training.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
         _vault.FilterOpen = false;   // the vault's CHEST FILTER popover folds when the player walks away
         // Looked at: the tile's NEW mark goes (its banner, if any, waits on the screen until closed),
-        // and the roster's "someone joined" mark is satisfied by a visit.
+        // and the roster's "someone joined" mark is satisfied by a visit — walking in IS reading the
+        // one sentence the letter carries, so the letter is marked read with it.
         _visited.Add(NavActivity[i]);
-        if (NavActivity[i] == Activity.Roster) _rosterNews = false;
+        if (NavActivity[i] == Activity.Roster) ReadChampionLetters();
         // BUILD and MASTERY are two doors into one screen, so the tile also sets which VIEW it opens on.
         // Without that line the rail would be lying: pressing MASTERY while the overview was last open
         // would show the overview, and the tile would look broken rather than the state being stale.
@@ -10854,12 +10776,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         var pad = UiMetrics.Space(22);
         var room = NoticeToastWidth - UiMetrics.Space(60);
-        var body = !_notice.Awakening && _notice.Detail.Length > 0
+        var body = _notice.Detail.Length > 0
             ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).Count()
             : 0;
-        var rungs = _notice.Awakening
-            ? UiTypography.Pitch(UiTypography.OverlayBody) + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody)
-            : UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body);
+        var rungs = UiTypography.Pitch(UiTypography.OverlayTitle)
+                    + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body);
         return pad + rungs + UiMetrics.Space(12);
     }
 
@@ -11030,7 +10951,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                               || (activity == Activity.Forge && Onboarding.GemTourDue(navGems, _explained) is not null))
                              && !_visited.Contains(activity))
                             || rungSends
-                            || (activity == Activity.Roster && _rosterNews));
+                            || (activity == Activity.Roster && RosterNews));
             if (isNew)
             {
                 // ── AN UNREAD DOT, NOT A GOLD CHIP. ─────────────────────────────────────────────

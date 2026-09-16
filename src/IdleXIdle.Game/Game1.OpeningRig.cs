@@ -103,10 +103,19 @@ public partial class Game1
     private int _trBeat = -1;
     private int _trWaves = -1, _trDowns = -1, _trCasts = -1, _trRewards = -1, _trChests = -1, _trWorn = -1;
     private bool _trFalls, _trShown, _trHeld, _trLanded, _trHoldNext, _trCard, _trDowned;
-    private string _trSelected = "?", _trPicked = "?", _trLesson = "-", _trNotice = "-";
+    private string _trSelected = "?", _trPicked = "?", _trLesson = "-", _trNotice = "-", _trDispatch = "-";
 
     /// <summary>The notice toast the last Draw actually painted, or null — set by DrawNoticeToast.</summary>
     private string? _rigNoticeDrawn;
+
+    /// <summary>How a dispatch was SURFACED on the last frame, or null — set where the arrival is spent.</summary>
+    /// <remarks>
+    /// Posting a letter is not surfacing it: the inbox may fill all through the opening and that is
+    /// correct, because nothing about it is on screen. What must never happen while the opening runs
+    /// is the envelope PULSING, the DISPATCHES lesson lighting, or the list standing open — three
+    /// things the player would have to look at instead of the thing they are being shown.
+    /// </remarks>
+    private string? _rigDispatchSurfaced;
 
     /// <summary>One frame of the rig: note what the last frame did, then decide the hand for this one.</summary>
     private void OpeningRigFrame()
@@ -225,6 +234,14 @@ public partial class Game1
         // ...and the notice toast, as painted (only its arrivals: a catch-up frame paints nothing).
         if (_rigNoticeDrawn is { Length: > 0 } notice && notice != _trNotice) { Trace($"NOTICE {notice}"); _trNotice = notice; }
         _rigNoticeDrawn = null;
+        // ...and a DISPATCH the moment it is SURFACED rather than merely posted: the envelope's
+        // arrival pulse, the lesson that points at it, or the reading panel standing open.
+        var mail = _rigDispatchSurfaced
+                   ?? (_showDispatches ? "list" : null)
+                   ?? (_coach.Showing == OnboardingLessonId.FirstDispatchOpened ? "lesson" : null)
+                   ?? "-";
+        if (mail != _trDispatch) { if (mail != "-") Trace($"DISPATCH {mail}"); _trDispatch = mail; }
+        _rigDispatchSurfaced = null;
 
         var card = OpeningUp && !_openingCard.IsEmpty;
         if (card != _trCard)

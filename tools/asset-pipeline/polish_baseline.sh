@@ -32,7 +32,7 @@ SHOTS=(
   "settings||settings"
   "help||help"
   "welcome||welcome"
-  "keystonenotice||notice"
+  "dispatches|RH_SHOT_DISPATCH=longest|dispatch"
   "tour|RH_SHOT_TAB=Mastery RH_SHOT_STEP=3|tourmastery3"
   "tour|RH_SHOT_TAB=Mastery RH_SHOT_STEP=1|tourmastery1"
   "tour|RH_SHOT_TAB=Build RH_SHOT_STEP=3|tourbuild3"

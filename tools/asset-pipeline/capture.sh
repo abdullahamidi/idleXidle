@@ -12,11 +12,11 @@
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
-#        rosterswitch warrenready warrenfresh warrenlocked weavefresh keystonenotice
+#        rosterswitch warrenready warrenfresh warrenlocked weavefresh
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
 #        fightfall fightfade fightarrive fightcooldown
 #        dispatches dispatchesempty dispatchesunread dispatcheshover chestdispatch
-#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|many|<key> — see its note below)
+#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|many|longest|<key> — see below)
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
 # screenshot can judge on its own, and two of the three states below could not be posed at all before:
@@ -118,12 +118,10 @@
 # Every fixture that restores a conquered world lands on that frame, so the toast is suppressed
 # under the rig everywhere else; without that it covered the screen in every capture.
 #
-# `keystonenotice` poses the LONGEST notice toast the game can post - today CAPACITOR's keystone
-# reveal, which is its blurb plus the sentence naming the rung that taught it, 164 characters. The
-# fixture ASKS the catalogue which is longest rather than naming one, and builds the string through
-# the same helper the live reveal calls, so it is the real sentence at its real length rather than a
-# stand-in. Every keystone reveal is a notice: a conquest one too, since the map strip is one line
-# and, once the world is conquered, is not drawn at all.
+# `keystonenotice` is RETIRED. A keystone reveal is a DISPATCH now, not a toast, so the longest one
+# the game can produce - today CAPACITOR's, 164 characters - is photographed where it is actually
+# read: `dispatches` with RH_SHOT_DISPATCH=longest, which asks the catalogue which reveal is longest
+# rather than naming a keystone that may stop being the worst case.
 #
 # `world` is the map with a conquest's news in the strip - the compact headline, keystone named,
 # built by the same helper the live conquest calls. RH_SHOT_CONQUEST picks which conquest.
@@ -225,13 +223,18 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # RH_SHOT_DISPATCH=unread|read|many|<key> dresses the five DISPATCHES fixtures. All of them seed real
 # typed letters through the host's own PostDispatch (the inbox is STATE under the rig; only its
 # surfacing is posed), and this says how many and which one the reading pane has open:
-#   unread  three letters, the newest open and the rest still waiting  — the default
-#   read    the same three, everything already read: no dots, MARK ALL READ dead
+#   unread  six letters - a screen, a quest, a champion, the longest keystone reveal, a trait and a
+#           region - with the newest open and the rest still waiting, a MIXED list; the default
+#   read    the same six, everything already read: no dots, MARK ALL READ dead
 #   many    every region, seven traits, four screens, the gem and the socket — past the shortest
 #           column (nine rows at 150 %), so the scrollbar and the wheel have a fixture. Pair it with
 #           RH_SHOT_SCROLL=<rows>|end to photograph the list actually scrolled.
-#   <key>   one letter by its key (unlock.warren, trait.t_scar_tissue, region.verdant_hollow.conquered)
-# A key nothing answers to ABORTS rather than photographing the wrong letter.
+#   longest the LONGEST keystone reveal in the catalogue, open in the pane - the worst case the wrap
+#           has to survive, asked of the catalogue so the pose follows the copy
+#   <key>   one letter by its key (unlock.warren, quest.q_cinder_deep.complete, hunter.anvil.joined,
+#           keystone.<id>, trait.t_scar_tissue, region.verdant_hollow.conquered). A `keystone.<id>`
+#           nobody has been told about is seeded on the spot, which is how a chosen reveal is posed.
+# Any other key nothing answers to ABORTS rather than photographing the wrong letter.
 #   `dispatches` the panel over a fight · `dispatchesempty` its empty state · `dispatchesunread` the
 #   chrome alone with the mark on · `dispatcheshover` its caption (park RH_SHOT_MOUSE on the envelope)
 #   · `chestdispatch` a letter posted DURING a chest reveal — nothing pulses, nothing toasts, and with
@@ -316,15 +319,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # EVERY REGION BUT THE LAST. Posing a conquest conquers every region up to it, so `pale_choir` leaves
 # the world whole — and a whole world gives the strip to the corruption LADDER, which is exactly why
 # the reveal is a notice and not a line here. The capture then shows the ladder and no headline; that
-# is the real screen, not a broken dial, and `keystonenotice` is where the last conquest's news is
-# photographed.
-#
-# RH_SHOT_KEYSTONE=<keystone id> poses `keystonenotice` on a chosen keystone's reveal. With none the
-# fixture asks the catalogue which reveal is LONGEST and poses that, so the pose follows the copy
-# rather than naming a keystone that may stop being the worst case. `echo` is the shortest — the
-# first conquest's — and is how the one-line body is photographed:
-#
-#   RH_SHOT_KEYSTONE=echo bash tools/asset-pipeline/capture.sh keystonenotice out.png
+# is the real screen, not a broken dial, and RH_SHOT_DISPATCH=keystone.<id> is where the last
+# conquest's news is photographed.
 #
 # RH_SHOT_SHED=1 makes `rosterswitch` perform a REAL champion switch away from a hunter whose own
 # signature skill is woven, so the notice the game posts when it repairs the loadout is photographed
@@ -334,8 +330,6 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_SHED" ] && RH_ENV+=(RH_SHOT_SHED="$RH_SHOT_SHED")
 # THE MAP STRIP: which conquest's line it is carrying. `world` only.
 [ -n "$RH_SHOT_CONQUEST" ] && RH_ENV+=(RH_SHOT_CONQUEST="$RH_SHOT_CONQUEST")
-# THE NOTICE TOAST: which keystone's reveal it is showing. `keystonenotice` only; the longest by default.
-[ -n "$RH_SHOT_KEYSTONE" ] && RH_ENV+=(RH_SHOT_KEYSTONE="$RH_SHOT_KEYSTONE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")

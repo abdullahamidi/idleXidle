@@ -142,6 +142,23 @@ public partial class Game1
     }
 
     /// <summary>
+    /// The champion letter still waiting to be read, newest first — or null when none is.
+    /// </summary>
+    /// <remarks>
+    /// THE RAIL'S ROSTER MARK IS THIS LETTER. It used to be a session bool set the frame a champion
+    /// joined, which meant a hunter who arrived before the game was last closed was never announced
+    /// at all. Derived from the inbox, the mark is as durable as the news: it holds across a restart
+    /// and is cleared by the one act that answers it — opening the ROSTER screen.
+    /// </remarks>
+    internal static Dispatch? UnreadChampion(IReadOnlyList<Dispatch> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        foreach (var row in rows)
+            if (row.Kind == DispatchKind.Champion && !row.Read) return row;
+        return null;
+    }
+
+    /// <summary>
     /// The one-line source note at the right end of a letter's row: where the news came from, when a
     /// region owns it, and otherwise nothing. Never a date — an idle game's calendar is not the point.
     /// </summary>
