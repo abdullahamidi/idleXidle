@@ -576,8 +576,9 @@ last clip ends.
 - **The first gem is free.** `GemCraft.SocketCost` returns 0 until `SaveGame.FreeSocketUsed`; a save
   from before the field that already holds a socketed gem counts as used. The first gem drop writes a
   DISPATCH (`gem.first`), a NEW mark on FORGE and a two-card tour that opens the SOCKET tab
-  (`Onboarding.GemTour`). It was a toast until 2026-09-16: background news is a letter that waits in
-  the inbox, not a plate across whatever screen the drop happened to land on.
+  (`Onboarding.GemTour`). The letter is why: background news waits in the inbox to be read, rather
+  than crossing whatever screen the drop happened to land on (`design/gdd/dispatches.md`, ADR-007).
+  The NEW mark and the tour are the FORGE's own local cues and stay where they are.
 - **The damage number is the simulation's.** The hunt printed an invented figure (power × a multiplier
   × jitter, e.g. "-185" on wave one) at the row's centre; it now prints the event's amount over the
   creature that took it. The bars were always right.
