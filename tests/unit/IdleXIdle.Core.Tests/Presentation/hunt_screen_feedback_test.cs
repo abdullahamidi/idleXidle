@@ -144,6 +144,25 @@ public class HuntScreenFeedbackTests
     }
 
     [Fact]
+    public void test_a_trait_the_fall_awakens_is_stamped_with_the_wave_that_fell()
+    {
+        var src = Source();
+
+        // THE WAVE THAT FELL IS ASSIGNED BEFORE THE RULES ARE ASKED WITH IT. TraitFirst.Wave is
+        // provenance the trait screen prints for the rest of the career, so a re-check that ran
+        // before the assignment stamped the PREVIOUS fall's wave onto a trait this one awakened.
+        // The re-check still follows Log.Add: WHAT KILLED YOU reads the log the fall just wrote.
+        var write = src.IndexOf("Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat));", StringComparison.Ordinal);
+        var assign = src.IndexOf("_fellWave = Math.Max(1, _replayWave);", StringComparison.Ordinal);
+        var recheck = src.IndexOf("watchFell.Recheck(_fellWave);", StringComparison.Ordinal);
+        Assert.True(write >= 0, "the fall branch no longer writes its report to the log");
+        Assert.True(assign >= 0, "the fall branch no longer assigns the wave that fell");
+        Assert.True(recheck >= 0, "the fall branch no longer re-checks the trait rules");
+        Assert.True(assign > write, "the wave that fell is assigned before the report that names it");
+        Assert.True(recheck > assign, "the rules are re-checked with the PREVIOUS fall's wave");
+    }
+
+    [Fact]
     public void test_the_death_flash_draws_in_the_unclipped_hud_pass()
     {
         var src = Source();

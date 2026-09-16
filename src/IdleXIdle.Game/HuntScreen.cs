@@ -2248,6 +2248,12 @@ public sealed class HuntScreen
             LastRunVowProof = _run.VowProofWaves.ToDictionary(kv => kv.Key, kv => kv.Value);
             LogDirty = true;
 
+            // THE WAVE THAT FELL, BEFORE ANYTHING IS STAMPED WITH IT. TraitFirst.Wave is provenance
+            // the trait screen prints for the rest of the career, and the re-check below stamps
+            // whatever this holds — so it is assigned for THIS fall first, and the header's wave lane
+            // reads it from the same instant.
+            _fellWave = Math.Max(1, _replayWave);
+
             // AND THE RUN'S END IS THE ONE MOMENT FAILURE CAN TEACH. WHAT KILLED YOU reads the log
             // that was just written — three consecutive deaths in one region against one kind of
             // creature — so the account facts are refreshed by the host and every rule re-checked
@@ -2262,7 +2268,6 @@ public sealed class HuntScreen
                 watchFell.Recheck(_fellWave);
             }
 
-            _fellWave = Math.Max(1, _replayWave);
             _deathFlash = 1f;
             _mode = Mode.Downed;
             _downedTimer = DownedSeconds;
