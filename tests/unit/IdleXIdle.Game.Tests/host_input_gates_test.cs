@@ -112,7 +112,7 @@ public class HostInputGatesTest
         Assert.Contains("private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);", game, StringComparison.Ordinal);
         // The hint slot paints OVER the welcome, so under its swallow it must not paint at all: the welcome is
         // Modal tier to the attention owner, and the slot is the coach's tier, so it asks the owner and waits.
-        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", game, StringComparison.Ordinal);
+        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;", game, StringComparison.Ordinal);
         Assert.Contains("ProductionModalUp || WelcomeUp ? AttentionOwner.Modal", game, StringComparison.Ordinal);
     }
 

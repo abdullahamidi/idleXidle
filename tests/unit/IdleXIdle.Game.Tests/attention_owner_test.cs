@@ -194,11 +194,31 @@ public class AttentionOwnerTest
         Assert.Contains("AttentionOwnedAbove(AttentionOwner.Feedback)) return;", MemberOf(game, "private void DrawLockedToast()"), StringComparison.Ordinal);
         Assert.Contains("private bool CoachLightsIt(OnboardingLessonId id) => !AttentionOwnedAbove(AttentionOwner.Coach) && CoachAims(id);", game, StringComparison.Ordinal);
         Assert.Contains("if (OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private OnboardingLessonId? HuntLessonShowing()"), StringComparison.Ordinal);
-        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
+        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
         Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
         // The ? opens a tour, so it is the coach's tier: live over a lit lesson, gone under the log and above.
         Assert.Contains("!AttentionOwnedAbove(AttentionOwner.Coach)", MemberOf(game, "private bool LearnOffered()"), StringComparison.Ordinal);
         Assert.Contains("var showing = OverlayActive && NoticeToastShowing;", MemberOf(game, "private void ReserveNoticeLane()"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// TWO CARDS ON ONE SCREEN IS THE THING THE OWNER EXISTS TO PREVENT. The slot at the top of a menu
+    /// screen is the coach's own tier, so it stands down when the coach LIGHTS something on that screen
+    /// -- the WARREN photographed a lit TRAINING lesson (scrim, brackets, card) with an unrelated
+    /// AN UPGRADE IS AFFORDABLE plate over the same page (production/qa/evidence/dispatches/producers).
+    /// </summary>
+    /// <remarks>
+    /// Its guard reads Feedback rather than Coach for exactly that reason: an owner AT the coach's tier
+    /// is a lit lesson, and the slot is where a lesson goes when it is not lit.
+    /// </remarks>
+    [Fact]
+    public void test_the_slot_stands_down_while_the_coach_lights_the_same_screen()
+    {
+        var slot = MemberOf(Game1(), "private SlotContent? SlotShowing()");
+        Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;", slot, StringComparison.Ordinal);
+        Assert.DoesNotContain("AttentionOwnedAbove(AttentionOwner.Coach)", slot, StringComparison.Ordinal);
+        // ...and the slot still carries a lesson the coach did NOT light, which is the path this leaves alone.
+        Assert.Contains("!CoachLightsIt(lesson)", slot, StringComparison.Ordinal);
     }
 
     /// <summary>The clocks under an owner hold rather than burn, and none of them is advanced in Draw.</summary>

@@ -165,6 +165,16 @@ public class CaptureRigModesTest
         Assert.Contains("PostDispatch(", handler);
         Assert.Contains("OpenDispatches();", handler);
 
+        // ...and the two poses the real producers had quietly taken away. `dispatchesempty` is the ONE
+        // fixture whose subject is an inbox with nothing in it, and a socket opening and a champion
+        // joining post on its own facts one frame after it dresses; `read` means nothing is waiting, and
+        // the same producers put a red dot back. One refuses the post, the other re-asserts every frame.
+        Assert.Contains("if (CaptureRig && ShotMode == \"dispatchesempty\") return false;",
+                        BodyOf(game1, "private bool PostDispatch(Dispatch dispatch)"));
+        Assert.Contains("if (CaptureRig && string.Equals(Environment.GetEnvironmentVariable(\"RH_SHOT_DISPATCH\"), \"read\",", game1);
+        // The highlight and the letter in the pane are one row: opening a letter is what moves the cursor.
+        Assert.Contains("_dispatchCursorKey = _dispatchOpenKey = _inbox.Rows.Count > 0", handler);
+
         // ...and `many` fills the column past its last row, so the scrollbar, the wheel and the
         // keyboard's follow-the-cursor have a fixture at all. A list that fits in one column is why a
         // scroll that could not scroll went unphotographed.
@@ -172,12 +182,19 @@ public class CaptureRigModesTest
         Assert.Contains("Regions.All.Where(", handler);
         Assert.Contains("TraitCatalogue.All.Take(", handler);
 
+        // ...and a VOW is seeded BY NAME, because its sentence branches on how the vow arrived: the
+        // one the BUILD screen hands over is OFFERED TO YOU, every proved one REVEALED ITSELF. A
+        // fixture that can seed neither leaves one of the two sentences unphotographed.
+        Assert.Contains("Vows.ById(posedMail[\"vow.\".Length..])", handler);
+
         var header = CaptureHeader();
         foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover", "chestdispatch" })
             Assert.Contains(mode, header);
         Assert.Contains("RH_SHOT_DISPATCH", header);
         // ...and the dial is forwarded, or a caller setting it gets a picture of the default pose.
         Assert.Contains("RH_SHOT_DISPATCH", Source("tools", "asset-pipeline", "capture.sh"));
+        // ...and the dial documents the vow keys, which are the only way either sentence is posed.
+        Assert.Contains("vow.<id>", Source("tools", "asset-pipeline", "capture.sh"));
     }
 
     /// <summary>

@@ -3820,16 +3820,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     else if (posedMail is { Length: > 0 } && posedMail.StartsWith("keystone.", StringComparison.OrdinalIgnoreCase)
                              && Keystones.ById(posedMail["keystone.".Length..]) is { } chosen)
                         PostDispatch(Dispatches.Keystone(chosen.Id, 2_500));
+                    // A VOW ARRIVES TWO WAYS AND THE SENTENCE BRANCHES ON WHICH. The one Vow the BUILD
+                    // screen hands over reads A VOW IS OFFERED TO YOU; every Vow that had to be proved
+                    // reads A VOW HAS REVEALED ITSELF. Seeded on the spot like a keystone above, so
+                    // either sentence is photographed by naming its vow rather than by a fixture that
+                    // happens to hold one.
+                    else if (posedMail is { Length: > 0 } && posedMail.StartsWith("vow.", StringComparison.OrdinalIgnoreCase)
+                             && Vows.ById(posedMail["vow.".Length..]) is { } sworn)
+                        PostDispatch(Dispatches.Vow(sworn.Id, 2_600));
 
                     switch (posedMail?.ToLowerInvariant())
                     {
                         case null or "" or "unread" or "many":
-                            // The newest open, the rest waiting — a MIXED list.
-                            _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
+                            // The newest open, the rest waiting — a MIXED list. THE CURSOR SITS ON THE
+                            // LETTER THE PANE IS READING, because that is the only way a player can get
+                            // here: opening one is what moves the highlight onto it. Posed apart, the
+                            // picture showed a highlight on one row and the reading of another.
+                            _dispatchCursorKey = _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
                             break;
                         case "read":
                             _inbox.MarkAllRead();        // nothing waiting: no dots, MARK ALL READ dead
-                            _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
+                            _dispatchCursorKey = _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
                             break;
                         default:
                             if (_inbox.Rows.FirstOrDefault(d => string.Equals(d.Key, posedMail, StringComparison.OrdinalIgnoreCase)) is not { } posedLetter)
@@ -5260,6 +5271,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private bool PostDispatch(Dispatch dispatch)
     {
+        // `dispatchesempty` IS THE EMPTY STATE, and it is the only fixture that is. Every other one
+        // writes its inbox the way the game does — the inbox is state, not a flourish — but the
+        // producers fire on this fixture's own facts (a socket opens, a champion joins) one frame after
+        // it has dressed, so without this the capture of an inbox with nothing in it had two letters in
+        // it, and the migrated veteran's proof had no picture.
+        if (CaptureRig && ShotMode == "dispatchesempty") return false;
         if (!_inbox.Post(dispatch)) return false;
         _dispatchArrivalOwed = true;   // the edge the envelope's pulse is made of
         return true;
@@ -5443,7 +5460,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         // THE COACH'S TIER, on a menu screen only. The slot paints OVER a reveal, the welcome, a tour and
         // the panels, whose swallow would leave its × dead — so under any of them it does not paint at all.
-        if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;
+        // AND IT STANDS DOWN FOR THE COACH'S OWN LIGHT, which is its own tier: a lit lesson darkens the
+        // page, brackets one control and puts a card beside it, and a second plate at the top of that
+        // same screen saying something else is the two-things-at-once this owner exists to prevent.
+        // The slot is where a lesson goes when it is NOT lit, so nothing is lost — the hint or note
+        // returns the frame the light does.
+        if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;
         if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
         var screen = ScreenActivity();
         // THE ONE LESSON THE DIRECTOR CHOSE, if the deed it asks for happens on this screen. The
@@ -6921,6 +6943,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _lockedMsg = $"{Unlocks.Headline(locked)} IS NOT OPEN YET — {Unlocks.Requirement(locked).ToUpperInvariant()}.";
             _lockedTimer = 3.2f;
         }
+
+        // RH_SHOT_DISPATCH=read POSES AN INBOX WITH NOTHING WAITING, and the fixture marks it read on
+        // the title frame — one frame before the real producers post on its own facts. Re-asserted here
+        // every frame, like the toast and the chain break above, or the picture of "everything read"
+        // has a red dot in it and a live MARK ALL READ.
+        if (CaptureRig && string.Equals(Environment.GetEnvironmentVariable("RH_SHOT_DISPATCH"), "read",
+                                        StringComparison.OrdinalIgnoreCase))
+            _inbox.MarkAllRead();
 
         // RH_SHOT_NOTICE=1 posts ONE sample toast on any fixture, once, so what direct feedback does
         // under an owner can be photographed: queued under a chest reveal it must not paint and its

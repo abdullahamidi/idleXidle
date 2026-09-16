@@ -231,8 +231,11 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #   longest the LONGEST keystone reveal in the catalogue, open in the pane - the worst case the wrap
 #           has to survive, asked of the catalogue so the pose follows the copy
 #   <key>   one letter by its key (unlock.warren, quest.q_cinder_deep.complete, hunter.anvil.joined,
-#           keystone.<id>, trait.t_scar_tissue, region.verdant_hollow.conquered). A `keystone.<id>`
-#           nobody has been told about is seeded on the spot, which is how a chosen reveal is posed.
+#           keystone.<id>, vow.<id>, trait.t_scar_tissue, region.verdant_hollow.conquered). A
+#           `keystone.<id>` or `vow.<id>` nobody has been told about is seeded on the spot, which is
+#           how a chosen reveal is posed. A VOW ARRIVES TWO WAYS and the letter says which:
+#           vow.vow_complete is the one the BUILD screen HANDS over (A VOW IS OFFERED TO YOU) and
+#           any other is one that had to be proved (A VOW HAS REVEALED ITSELF).
 # Any other key nothing answers to ABORTS rather than photographing the wrong letter.
 #   `dispatches` the panel over a fight · `dispatchesempty` its empty state · `dispatchesunread` the
 #   chrome alone with the mark on · `dispatcheshover` its caption (park RH_SHOT_MOUSE on the envelope)
