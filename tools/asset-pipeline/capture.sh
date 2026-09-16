@@ -270,6 +270,10 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # per career, on a frame nothing can schedule:
 #
 #   RH_SHOT_BREAK=Vault:0.45 bash tools/asset-pipeline/capture.sh fight build/shots/break.png
+#
+# THE POSE ASKS THE SAME QUESTION THE BREAK DOES. The ceremony waits for a frame the player is not
+# already being shown something, so a fixture holding a chest reveal, a modal, a fall, the open log or
+# an authored opening beat photographs NO break — which is the picture, not a failed pose.
 [ -n "${RH_SHOT_BREAK:-}" ] && RH_ENV+=(RH_SHOT_BREAK="$RH_SHOT_BREAK")
 [ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
 [ -n "${RH_SHOT_BEAT:-}" ] && RH_ENV+=(RH_SHOT_BEAT="$RH_SHOT_BEAT")
