@@ -350,6 +350,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Set once the revealed set has been seeded, so no frame announces a screen the save already had.</summary>
     private bool _revealSeeded;
 
+    /// <summary>Screens whose tile is already open and whose CHAIN BREAK has not been played yet.</summary>
+    /// <remarks>
+    /// THE TILE OPENS AT ONCE; ONLY THE CEREMONY WAITS. <see cref="Reveal.Newly"/> grows the rail and
+    /// posts the screen's letter on the frame its gate opens — that is game truth, and nothing defers
+    /// it. But the chains springing off the tile are nine tenths of a second of flourish on the far
+    /// side of the screen, and a flourish under a chest reveal, a fall, the open log, a modal or the
+    /// authored opening is the game asking to be looked at in two places at once. A pulse cannot be
+    /// paused (<see cref="UiMotion.Tick"/> decrements every one, and every screen's hover rides on
+    /// that), so what waits is the ARMING: the screen is latched here and spent on the first frame
+    /// nobody above the coach has the player's eyes.
+    /// <para>
+    /// Not saved. A break the player quit before seeing is simply not played — and cannot come back,
+    /// because <see cref="Reveal.Newly"/> offers a screen exactly once per career.
+    /// </para>
+    /// </remarks>
+    private readonly List<Activity> _navBreakPending = new();
+
     /// <summary>One queued toast: a headline and a body, both about something the player just did.</summary>
     /// <remarks>
     /// DIRECT FEEDBACK ONLY. Background news — a screen opening, a quest, a champion, a keystone, a
@@ -1724,6 +1741,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _pendingRevealed = null;
         _revealed = new HashSet<Activity> { Activity.Hunt };
         _revealSeeded = false;
+        _navBreakPending.Clear();
         _explained.Clear();
         _visited.Clear();
         _noticeQueue.Clear();
@@ -3989,11 +4007,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_revealSeeded)
             foreach (var opened in Reveal.Newly(_revealed, GuideUnlockFacts()))
             {
-                // THE CHAINS COME OFF THE TILE ON THE SAME FRAME the notice says why. The tile has been
-                // standing there bound since the first launch, so the reveal is a thing the player can
-                // SEE happen on the rail rather than a row quietly appearing under the last one.
-                UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
-                OpeningRigMark($"NAV_BREAK {opened}", $"break_{opened}", 60, 2);   // dev: the opening rig's trace and film
+                // THE CHAINS COME OFF WHERE THE PLAYER CAN WATCH THEM. The tile has been standing there
+                // bound since the first launch, so the reveal is a thing that HAPPENS on the rail rather
+                // than a row quietly appearing under the last one — and a ceremony played behind a chest
+                // reveal or the authored opening is that thing spent on nobody. The tile is open from
+                // this frame either way; the break is latched here and spent below, once, when the
+                // player's eyes are free.
+                if (!_navBreakPending.Contains(opened)) _navBreakPending.Add(opened);
                 // A LETTER, NOT A TOAST. A screen opening is background news, so it goes to the
                 // DISPATCHES inbox keyed by the screen and waits there to be read. The two screens
                 // the authored opening WALKS the player into are marked known instead: being shown a
@@ -4411,6 +4431,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // The background tier's cue, quieter than the notice's reward tier. PlayFirst so the game
             // plays before the wav lands, and so a build without it falls back to the rail's page tick.
             _sound.PlayFirst(0.5f, "sfx_dispatch", "sfx_nav");
+        }
+
+        // ── THE CHAINS COME OFF, ONCE, ON A FRAME THAT IS WORTH LOOKING AT. ─────────────────────
+        //
+        // Everything latched above breaks TOGETHER: two gates opening on one wave is one moment on the
+        // rail, not two ceremonies in a row. Spent exactly once per screen per career — the latch is
+        // cleared as it is spent, and Reveal.Newly never offers a screen twice, so no reload replays one.
+        if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))
+        {
+            foreach (var opened in _navBreakPending)
+            {
+                UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);
+                OpeningRigMark($"NAV_BREAK {opened}", $"break_{opened}", 60, 2);   // dev: the opening rig's trace and film
+            }
+            _navBreakPending.Clear();
         }
 
         // ── THE AUTHORED HOLD. ──────────────────────────────────────────────────────────────────
@@ -6861,7 +6896,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // RH_SHOT_BREAK=<Activity>[:<0..1>] holds the NAV CHAIN'S BREAK part-played. It is nine tenths
         // of a second on a frame that happens once per screen per career, so it had no way of being
         // looked at; re-posed every frame here, so the fixture's own dressing cannot outrun it.
-        if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_BREAK") is { Length: > 0 } breakSpec)
+        // THROUGH THE SAME GATE THE BREAK ITSELF ASKS, and after the owner has been decided for this
+        // frame: a capture must photograph the game's own answer, so a fixture that poses a break under
+        // a chest reveal is answered with the rail the player would actually have been shown.
+        if (CaptureRig && !AttentionOwnedAbove(AttentionOwner.Coach)
+            && Environment.GetEnvironmentVariable("RH_SHOT_BREAK") is { Length: > 0 } breakSpec)
         {
             var bits = breakSpec.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var who = Enum.TryParse<Activity>(bits[0], true, out var ba)
@@ -7036,8 +7075,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // THE BITE, ONCE. _enemySinceHit counts UP from zero and is reset on the sim's own EnemyStrike,
         // so a fall in its value is the edge — read here, in Update, because a Draw that armed a pulse
         // would re-arm it every frame and the tile would sit red for as long as the player looked.
+        // ...AND NOT WHILE SOMEBODY ELSE HAS THE PLAYER'S EYES. This one is SKIPPED, not deferred: the
+        // bite is over, and a red wash arriving a minute later — when a chest reveal finally closes —
+        // would be the rail reporting a fight that has moved on. The health bar beside it is state and
+        // is always true.
         var sinceHit = _expedition.SinceChampionHit;
-        if (sinceHit < _navHuntSinceHit && _showScreenFlash && !UiMotion.Reduced)
+        if (sinceHit < _navHuntSinceHit && _showScreenFlash && !UiMotion.Reduced
+            && !AttentionOwnedAbove(AttentionOwner.Coach))
             UiMotion.Flash(NavHuntHurtKey, UiMotion.Fast);
         _navHuntSinceHit = sinceHit;
 
@@ -7050,9 +7094,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _rewardsCredited++;
             // THE RAIL LEARNS EVERY WAVE THE FIGHT CLEARS. No new plumbing: this loop already runs on
             // every screen and already carries the wave and whether it was a boss — the HUNT tile just
-            // had no way to know. A boss's tick lives longer and lands brighter.
-            UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);
-            _navHuntBoss = r.IsBoss;
+            // had no way to know. A boss's tick lives longer and lands brighter, and the boss mark is
+            // decided WITH the tick it brightens or not at all.
+            // Skipped, like the bite above, while anything above the coach owns the frame: a wave that
+            // fell while the player was reading a chest is not news by the time they look up.
+            if (!AttentionOwnedAbove(AttentionOwner.Coach))
+            {
+                UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);
+                _navHuntBoss = r.IsBoss;
+            }
             _hunter.AddGleam(r.Haul.Gleam);
             _champGleamAccrued += r.Haul.Gleam;
             // HAUL CORES ARE THE FORGE MATERIAL NOW. The hatchery currency they used to feed retired
@@ -9833,9 +9883,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // BANKED, NOT ANNOUNCED. A hunt pays Gleam a few at a time; a badge per kill is
                     // noise. The bank empties into one "+N" once it is worth a glance — a twentieth
                     // of what is already held, and never under the pill's own floor.
+                    // ...AND NOT WHILE SOMEBODY ELSE HAS THE PLAYER'S EYES. The bank IS the wait: it
+                    // keeps filling under a chest reveal, a fall or the opening and empties into ONE
+                    // badge on the first free frame, at its true size. A spend in between cancels it
+                    // (below) — money that arrived and left while nobody was looking is not news.
                     _pillGainAcc[i] += delta;
                     var bar = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));
-                    if (_pillGainAcc[i] >= bar)
+                    if (_pillGainAcc[i] >= bar && !AttentionOwnedAbove(AttentionOwner.Coach))
                     {
                         _pillGainShow[i] = _pillGainAcc[i];
                         _pillGainT[i] = PillGainSeconds;
@@ -11014,10 +11068,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // A dark seat first, so the dot reads on the tile's own art rather than merging with it.
                 _ui.Disc(_batch, new Rectangle(at.X - 2, at.Y - 2, at.Width + 4, at.Height + 4), UiInk.Ground * 0.85f);
                 _ui.Disc(_batch, at, UiInk.Danger);
-                if (!UiMotion.Reduced)
+                if (!UiMotion.Reduced && !AttentionOwnedAbove(AttentionOwner.Coach))
                 {
                     // One slow breath — a halo that grows and fades on a two-second cycle. It draws the
                     // eye on a still screen without ever moving the dot itself.
+                    // THE DOT IS STATE AND THE BREATH IS NOT. The dot above holds whatever else is on
+                    // screen — it means "you have not looked", and that stays true under a chest reveal
+                    // or a fall. The breath is the part that COMPETES, so it stops while somebody else
+                    // has the player's eyes and resumes when they are free. (A dot the coach is
+                    // pointing at keeps its breath: the coach is not above its own tier.)
                     var beat = (MathF.Sin(_navDotClock * MathF.PI) + 1f) * 0.5f;
                     var halo = (int)MathF.Round(dot * (0.35f + 0.45f * beat));
                     _ui.Disc(_batch, new Rectangle(at.X - halo / 2, at.Y - halo / 2, at.Width + halo, at.Height + halo),
@@ -11136,8 +11195,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Last frame's "seconds since bitten", so the flash fires on the bite rather than every frame.</summary>
     private float _navHuntSinceHit = 99f;
 
-    /// <summary>The one-shot armed when a screen opens — the tile's chain springs off over its life.</summary>
-    private static int NavBreakKey(Activity a) => HashCode.Combine("nav.break", (int)a);
+    /// <summary>
+    /// The one-shot the tile's chain springs off over — armed on the first frame the player's eyes are
+    /// free after the screen opened (<see cref="_navBreakPending"/>), and spent once per screen, ever.
+    /// </summary>
+    internal static int NavBreakKey(Activity a) => HashCode.Combine("nav.break", (int)a);
 
     /// <summary>
     /// The chains on a rail tile that is not open yet, and the one-shot that springs them off.
@@ -11167,10 +11229,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <remarks>
     /// It was 0.55, which was the eight-frame strip's length — at eight frames a second that reached
     /// frame four, so the strip's last three frames had never once been drawn. There is no strip now
-    /// and this is simply how long the two halves take to leave: long enough to be seen as an event
-    /// beside the notice that says what opened, short enough not to hold up the rail.
+    /// and this is simply how long the two halves take to leave: long enough to read as an event on a
+    /// page the player is actually looking at, short enough not to hold up the rail.
     /// </remarks>
-    private const float NavChainSeconds = 0.9f;
+    internal const float NavChainSeconds = 0.9f;
 
     private List<int> NavSlots()
     {

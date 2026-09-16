@@ -163,6 +163,26 @@ def main(path):
     # open, each of which asks the player to look away from the thing they are being shown.
     mail = [f"{r} (frame {f})" for f, k, r in ev if k == "DISPATCH" and begin <= f and (done is None or f < done)]
     check(not mail, "no dispatch was surfaced over the opening" + (f" (surfaced: {mail[0]})" if mail else ""))
+    # ...NOR THE RAIL, PERFORMING. Every gate the opening throws opens its tile at once -- that is game
+    # truth and never waits -- but the CHAINS SPRINGING OFF are a ceremony on the far side of the page,
+    # and one played while the player is reading an authored card is the game asking to be looked at in
+    # two places. So each opened screen is latched and broken on the first frame the opening lets go:
+    # after Complete, once per screen, never twice and never again on a later run.
+    # Measured against the LAST AUTHORED CLICK, not against STAGE Complete: the stage is sampled at the
+    # top of the following frame, so the frame the final CONTINUE frees the rail -- and the frame the
+    # breaks land on -- is stamped one before it.
+    breaks = [(f, (r.split() or ["?"])[0]) for f, k, r in ev if k == "NAV_BREAK"]
+    last_beat = max([f for f, k, _ in ev if k == "CLICK"], default=None)
+    early = [f"{who} (frame {f})" for f, who in breaks if last_beat is not None and f < last_beat]
+    check(not early, f"no rail tile performed its unlock while the opening still had the player "
+                     f"(last card answered at frame {last_beat}, Complete at {done})"
+          + (f" -- broke: {early[0]}" if early else ""))
+    names = [who for _, who in breaks]
+    twice = sorted({who for who in names if names.count(who) > 1})
+    check(not twice, "every screen's chains came off exactly once"
+          + (f" (again: {twice[0]})" if twice else ""))
+    print("INFO  rail tiles broken after the opening let go: "
+          + (", ".join(f"{who}@{f}" for f, who in breaks) or "none"))
     # AND THE TWO RULES ABOVE ARE NOT VACUOUS. With every background producer migrated, an opening run
     # normally records no NOTICE at all — so "no notice over the opening" would pass because nothing
     # could ever be traced, which is a check that has stopped checking. Both recorders are therefore
@@ -170,6 +190,7 @@ def main(path):
     for source, wire, what in (
         ("src/IdleXIdle.Game/Game1.cs", "_rigNoticeDrawn = _notice.Head;", "the notice toast"),
         ("src/IdleXIdle.Game/Game1.cs", '_rigDispatchSurfaced = "pulse";', "a surfaced dispatch"),
+        ("src/IdleXIdle.Game/Game1.cs", 'OpeningRigMark($"NAV_BREAK {opened}"', "a rail tile's chains coming off"),
         ("src/IdleXIdle.Game/Game1.OpeningRig.cs", 'Trace($"DISPATCH {mail}")', "the DISPATCH trace event"),
     ):
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *source.split("/"))

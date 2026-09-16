@@ -314,4 +314,66 @@ public class AttentionOwnerTest
         Assert.Contains("EnemyArtFor(_activeRegion), BootToastShowing || _opening.Running || WelcomeUp);", game, StringComparison.Ordinal);
         Assert.DoesNotContain("EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);", game, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// THE CHROME'S BACKGROUND FLOURISHES WAIT, AND ITS STATE DOES NOT. A rail tile unlocks, an unread
+    /// dot appears and a purse goes up whatever else is on screen -- that is what the player owns. What
+    /// waits is the MOTION about it: the chains springing off a tile, the HUNT tile's hurt and cleared
+    /// washes, the dot's breath, and the pills' "+N". Every one of them asks the coach's tier, because
+    /// a ceremony over a chest reveal, a fall, the open log, a modal or the authored opening is the game
+    /// asking to be looked at in two places at once. <c>UiMotion.Tick</c> is never paused -- every
+    /// screen's hover ease rides on it -- so what is deferred or skipped is the ARM.
+    /// </summary>
+    [Fact]
+    public void test_the_background_flourishes_wait_while_something_owns_the_players_eyes()
+    {
+        var game = Game1();
+        var update = UpdateBody();
+        var fight = MemberOf(game, "private void UpdateExpedition(GameTime gameTime)");
+        var chrome = MemberOf(game, "private void TickChromeMotion(float dt)");
+        var hex = MemberOf(game, "private void DrawHexNav()");
+
+        // ── THE CHAIN BREAK IS DEFERRED, NOT SKIPPED: it is a once-per-screen-per-career ceremony, so
+        //    it is latched where the tile opens and spent on the first free frame.
+        Assert.Contains("if (!_navBreakPending.Contains(opened)) _navBreakPending.Add(opened);", update, StringComparison.Ordinal);
+        Assert.Contains("if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))", update, StringComparison.Ordinal);
+        // The reveal LATCHES and the owner SPENDS, in that order: the flash lives in the drain, not
+        // where the tile opens -- which is the whole of this change.
+        Assert.True(IndexOf(update, "if (!_navBreakPending.Contains(opened)) _navBreakPending.Add(opened);")
+                    < IndexOf(update, "if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))"),
+                    "the latch must be written where the tile opens and spent later in the frame.");
+        Assert.True(IndexOf(update, "if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))")
+                    < IndexOf(update, "UiMotion.Flash(NavBreakKey(opened), NavChainSeconds);"),
+                    "the break's Flash must live inside the drain, not at the reveal.");
+        // One writer, one drain -- across every partial of the host, and the reset's own clearing aside.
+        Assert.Single(Regex.Matches(Host(), @"_navBreakPending\.Add\("));
+        Assert.Single(Regex.Matches(update, @"_navBreakPending\.Clear\(\)"));
+        Assert.Single(Regex.Matches(Host(), @"UiMotion\.Flash\(NavBreakKey\("));
+
+        // ── THE HUNT TILE'S TICKS ARE SKIPPED: a bite and a cleared wave are over the moment they
+        //    happen, so a tick played a minute late would be a lie about the fight.
+        Assert.Contains("&& !AttentionOwnedAbove(AttentionOwner.Coach))\n            UiMotion.Flash(NavHuntHurtKey, UiMotion.Fast);", fight, StringComparison.Ordinal);
+        Assert.Contains("if (!AttentionOwnedAbove(AttentionOwner.Coach))", fight, StringComparison.Ordinal);
+        Assert.Contains("UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);", fight, StringComparison.Ordinal);
+        // The boss's brighter, longer wash is the SAME tick; it is decided with it or not at all.
+        Assert.True(IndexOf(fight, "UiMotion.Flash(NavHuntClearKey") < IndexOf(fight, "_navHuntBoss = r.IsBoss;"),
+                    "the boss mark must be set beside the tick it brightens.");
+
+        // ── THE PILLS' "+N" IS DEFERRED BY ITS OWN BANK: the accumulator keeps filling and empties into
+        //    one badge on the first free frame; a spend in between cancels it, as it always did.
+        Assert.Contains("if (_pillGainAcc[i] >= bar && !AttentionOwnedAbove(AttentionOwner.Coach))", chrome, StringComparison.Ordinal);
+        Assert.Contains("_pillGainAcc[i] = 0;", chrome, StringComparison.Ordinal);
+
+        // ── THE NEW DOT IS STATE; ONLY ITS BREATH WAITS. The dot itself is painted from `isNew` alone.
+        Assert.Contains("if (!UiMotion.Reduced && !AttentionOwnedAbove(AttentionOwner.Coach))", hex, StringComparison.Ordinal);
+        Assert.Contains("if (isNew)", hex, StringComparison.Ordinal);
+        var dot = IndexOf(hex, "_ui.Disc(_batch, at, UiInk.Danger);");
+        var halo = IndexOf(hex, "if (!UiMotion.Reduced && !AttentionOwnedAbove(AttentionOwner.Coach))");
+        Assert.True(dot < halo, "the dot must be painted before -- and regardless of -- its halo.");
+
+        // ── AND THE RIG POSES THE BREAK THROUGH THE SAME GATE, so a capture photographs the game's own
+        //    answer rather than a flourish the player would never have been shown.
+        Assert.Contains("if (CaptureRig && !AttentionOwnedAbove(AttentionOwner.Coach)", fight, StringComparison.Ordinal);
+        Assert.Contains("UiMotion.PoseFlash(NavBreakKey(who), part, NavChainSeconds);", fight, StringComparison.Ordinal);
+    }
 }

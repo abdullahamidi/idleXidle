@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Game;
 using Microsoft.Xna.Framework;
@@ -391,5 +393,162 @@ public class NavChainTests
         Assert.Empty(Reveal.Newly(reloaded, facts));
         // ...and nor does a save from before the list, whose gates were already open: those tiles load unbound.
         Assert.Empty(Reveal.Newly(Reveal.Restore(Array.Empty<string>(), facts), facts));
+    }
+
+    // ── THE BREAK WAITS FOR THE PLAYER'S EYES ────────────────────────────────────────────────────
+    //
+    // The tile OPENS on the frame its gate does -- game truth, never deferred -- but the chains
+    // springing off it are nine tenths of a second of flourish on the far side of the screen, and a
+    // flourish under a chest reveal, a fall, the open log or the authored opening is the game asking to
+    // be looked at in two places at once. A pulse cannot be paused (UiMotion decrements every one), so
+    // what waits is the ARMING: the opened screen is latched and spent on the first free frame.
+    //
+    // Game1.Update cannot run headless, so these replay the host's two lines against the real Reveal
+    // and the real UiMotion -- and the first test below asserts that those two lines are still what the
+    // host says, so the replay cannot quietly stop describing the game.
+
+    /// <summary>The host's arm site, quoted from Game1.Update's Reveal.Newly drain.</summary>
+    private const string ArmLine = "if (!_navBreakPending.Contains(opened)) _navBreakPending.Add(opened);";
+
+    /// <summary>The host's drain, quoted from Game1.Update, beside the owner it asks.</summary>
+    private const string DrainLine = "if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))";
+
+    /// <summary>Game1.cs with LF endings, found above the test binary.</summary>
+    private static string Game1Source()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, "src", "IdleXIdle.Game", "Game1.cs");
+            if (File.Exists(candidate)) return File.ReadAllText(candidate).Replace("\r\n", "\n");
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new FileNotFoundException("src/IdleXIdle.Game/Game1.cs not found above the test binary.");
+    }
+
+    /// <summary>Run every stored pulse out, so one test's flash is never read by the next.</summary>
+    private static void SettleMotion()
+    {
+        for (var i = 0; i < 20; i++) UiMotion.Tick(0.1f);
+    }
+
+    /// <summary>The host's arm site, replayed: a screen that opens is LATCHED, never flashed on the spot.</summary>
+    private static void Arm(List<Activity> pending, Activity opened)
+    {
+        if (!pending.Contains(opened)) pending.Add(opened);
+    }
+
+    /// <summary>The host's drain, replayed: every latched screen breaks together, once, on a free frame.</summary>
+    private static void Spend(List<Activity> pending, bool free)
+    {
+        if (pending.Count == 0 || !free) return;
+        foreach (var opened in pending) UiMotion.Flash(Game1.NavBreakKey(opened), Game1.NavChainSeconds);
+        pending.Clear();
+    }
+
+    [Fact]
+    public void test_the_host_latches_the_break_and_spends_it_in_one_place_each()
+    {
+        var src = Game1Source();
+        // ONE WRITER: the only thing that ever latches a break is the frame Reveal.Newly opens a gate.
+        Assert.Contains(ArmLine, src, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(src, @"_navBreakPending\.Add\("));
+        // ONE DRAIN, and it asks the owner.
+        Assert.Contains(DrainLine, src, StringComparison.Ordinal);
+        // ONE ARM: the flash itself exists exactly once in the host, inside that drain.
+        var flashes = Regex.Matches(src, @"UiMotion\.Flash\(NavBreakKey\(");
+        Assert.Single(flashes);
+        var drain = src.IndexOf(DrainLine, StringComparison.Ordinal);
+        Assert.True(flashes[0].Index > drain, "the break's Flash must live inside the drain, not at the reveal.");
+        Assert.True(src.IndexOf("_navBreakPending.Clear();", drain, StringComparison.Ordinal) > flashes[0].Index,
+                    "the drain must clear the latch after spending it.");
+    }
+
+    [Fact]
+    public void test_the_break_waits_under_an_owner_and_fires_once_when_the_frame_frees()
+    {
+        SettleMotion();
+        var pending = new List<Activity>();
+        var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1);
+
+        // The frame the gates open: the RAIL GROWS NOW (state never waits) and the ceremony is latched.
+        foreach (var opened in Reveal.Newly(revealed, facts)) Arm(pending, opened);
+        Assert.Contains(Activity.Gear, revealed);
+        Assert.Contains(Activity.Vault, revealed);
+        // MORE THAN ONE SCREEN OPENS ON THIS ONE FRAME, which is the case the latch exists to hold --
+        // and each of them is latched once however many times the frame offers it.
+        var opening = pending.ToArray();
+        _out.WriteLine("latched together: " + string.Join(", ", opening));
+        Assert.True(opening.Length > 1, $"only {opening.Length} screen(s) opened; the together case is untested.");
+        Assert.Contains(Activity.Gear, opening);
+        Assert.Contains(Activity.Vault, opening);
+        foreach (var opened in opening) Arm(pending, opened);
+        Assert.Equal(opening.Length, pending.Count);
+
+        // ...and while somebody else has the player's eyes, nothing is armed, however long they hold it.
+        for (var frame = 0; frame < 120; frame++) { Spend(pending, free: false); UiMotion.Tick(1f / 60f); }
+        foreach (var opened in opening) Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(opened)));
+        Assert.Equal(opening.Length, pending.Count);
+
+        // EVERY SCREEN, ONE MOMENT: the first free frame breaks all of them, together, once each.
+        Spend(pending, free: true);
+        foreach (var opened in opening) Assert.Equal(1f, UiMotion.Pulse(Game1.NavBreakKey(opened)));
+        Assert.Empty(pending);
+
+        // ...and the frames after it only run the pulse DOWN. A drain that re-armed would hold the
+        // chains bursting for as long as the player stayed on the page.
+        for (var frame = 0; frame < 30; frame++) { UiMotion.Tick(1f / 60f); Spend(pending, free: true); }
+        var left = UiMotion.Pulse(Game1.NavBreakKey(Activity.Gear));
+        Assert.True(left > 0f && left < 1f, $"the break restarted rather than running down (pulse {left:F2}).");
+        SettleMotion();
+    }
+
+    [Fact]
+    public void test_a_reload_latches_no_break_so_a_free_frame_arms_nothing()
+    {
+        SettleMotion();
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1);
+        var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
+        var pending = new List<Activity>();
+        foreach (var opened in Reveal.Newly(revealed, facts)) Arm(pending, opened);
+
+        // The career is quit with the ceremony still owed -- under a modal, say. The latch is not saved.
+        pending.Clear();
+
+        // A RELOAD OPENS NOTHING. Reveal.Newly offers a screen once per career, so the latch stays empty
+        // and the freest frame in the world arms no break.
+        var reloaded = Reveal.Restore(Reveal.Names(revealed), facts);
+        foreach (var opened in Reveal.Newly(reloaded, facts)) Arm(pending, opened);
+        Assert.Empty(pending);
+        for (var frame = 0; frame < 10; frame++) { Spend(pending, free: true); UiMotion.Tick(1f / 60f); }
+        Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Gear)));
+        Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Vault)));
+    }
+
+    [Fact]
+    public void test_reduced_motion_defers_the_break_exactly_as_the_full_one_does()
+    {
+        SettleMotion();
+        var was = UiMotion.Reduced;
+        try
+        {
+            // REDUCED MOTION IS NOT A THIRD BEHAVIOUR. A pulse is a state change, not movement, so the
+            // break still fires -- NavChain composes a calmer one (NavChain.Compose's `reduced`) -- and
+            // it waits for the frame to free exactly as it does at full motion.
+            UiMotion.Reduced = true;
+            var pending = new List<Activity>();
+            Arm(pending, Activity.Forge);
+            Spend(pending, free: false);
+            Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Forge)));
+            Spend(pending, free: true);
+            Assert.Equal(1f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Forge)));
+            Assert.Empty(pending);
+        }
+        finally
+        {
+            UiMotion.Reduced = was;
+            SettleMotion();
+        }
     }
 }
