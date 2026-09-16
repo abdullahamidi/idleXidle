@@ -1,10 +1,10 @@
 # ITEM CELLS — slot well, rarity frame, glyph: three layers with three jobs (2026-09-16)
 
-Captured from the running game on 2026-09-16 with the OLD rarity frames still on disk (the five
-`ui_frame_rarity_*.png` have an opaque near-black centre, so `ItemArtMetrics.FrameInterior` reports
-the 15 % fallback and the renderer keeps tinting them). **These captures judge the LAYOUT.** The
-verdicts marked *waits on the new family* cannot be given until the regenerated transparent-centred
-frames land; nothing in the code changes for them — the renderer measures the hole from the texture.
+Captured from the running game on 2026-09-16 with the REGENERATED rarity frames (five pixel-art
+frames with see-through centres, one band, progressive ornament: plain iron · green inlay · blue steel
+brackets · violet enamel with gold corners · gold filigree with a crest). `ItemArtMetrics.FrameInterior`
+measures each hole (10-20 % per side) and the renderer draws every frame untinted. Re-run with
+`bash tools/asset-pipeline/item_fixtures.sh [filter]`.
 
 ## What was built
 
@@ -36,17 +36,26 @@ glyph on disk, mean luminance 22/255), Epic WARDEN chest (locked), Rare ring wea
 
 ## Verdicts
 
-| check | 100 | 125 | 150 | note |
-|---|---|---|---|---|
-| frame fills the slot | pass | pass | pass | 94 % of the cell, a 3 px rim of the plate shows on every side |
-| glyph fills the frame | pass | pass | pass | content-aware: the ring, the sword and the chest reach the hole's edges; before, each sat in a 15 % inset of its own padding |
-| slot boundaries obvious | pass | pass | pass | the plate's hairline and the rim read as the cell; the frame reads as the item |
-| rarity obvious from the frame | *waits on the new family* | — | — | the legacy set is one gold ring under five tints; Legendary (white) and Uncommon (green) can be told apart, Rare and Epic only side by side |
-| no white squares | pass | pass | pass | every glyph draws from its content bounds; no canvas edge shows |
-| no double rarity encoding in square cells | pass | pass | pass | the strips are gone from the grid and the doll; the Forge ROW keeps its strip on purpose |
-| selected ≠ Legendary | pass | pass | pass | bone ring + corner tick on the Legendary bow; the hover is a grey Slate ring on the Common ring cell; gold appears only in the frame art |
-| dark items visible | **fail on the legacy frame** | fail | fail | `item_weapon_bow_heavy` is a thin near-black bow on the legacy frame's near-black interior — visible only by its highlight. The new family's transparent hole sits on `WellInk` (Black × 0.35 over the plate), a step lighter; re-judge then. If it still fails, the fix is in the art (the ~10 glyphs under 30/255 luminance) or a lighter well, not the layout |
-| no clipping at 150 % | — | — | pass | the 3-column grid, the doll's 48 px wells, the 96 px inspector icon, the 144 px trader offers and the 120 px reveal all draw whole |
+Every picture was looked at whole and the Gear grid again at 2x (`gear_selected_100` 925-1335 x 255-465).
 
-Row context (the Forge bag): the 30 px row icon draws the frame and the glyph, and at that size a
-dark glyph is a smudge — the row's name and strip carry the identity there, as they always have.
+| check | 100 | 125 | 150 | what the pictures show |
+|---|---|---|---|---|
+| frame fills the slot | PASS | PASS | PASS | the frame is 94 % of the cell; a thin plate rim is the slot well |
+| glyph fills the frame | PASS | PASS | PASS | content-aware: the ring, sword and chest reach the hole's edges; nothing floats as a thumbnail |
+| slot boundaries obvious | PASS | PASS | PASS | plate hairline + rim read as the cell; empty cells stay half-strength plates |
+| rarity obvious from the frame | PASS | PASS | PASS | iron / green inlay / blue brackets / violet enamel / gold filigree — shape and ornament differ, not only hue |
+| no white or black squares | PASS | PASS | PASS | every hole is see-through onto the warm well |
+| no double rarity encoding in square cells | PASS | PASS | PASS | no strip in the grid, the doll, the dragged piece or the flight (source-pinned) |
+| selected is not Legendary | PASS | PASS | PASS | the selected Legendary bow wears a bone ring and a bone corner tick round its gold frame |
+| hovered is its own look | PASS | PASS | PASS | `gear_showcase_*`: the Common ring's cell lifts and takes a slate ring; the hover card hangs off it |
+| dark glyphs visible | PASS (noted) | PASS (noted) | PASS (noted) | the darkest file (`item_weapon_bow_heavy`, mean luminance 22) reads as a thin dark bow on the warm well; it is thin art, not a hidden one |
+| no clipping at 150 % | PASS | PASS | PASS | three-column grid, 48 px doll wells, 96 px inspector icon, 120 px reveal cell all whole |
+| same object everywhere | PASS | PASS | PASS | Forge bag rows, the reveal card, the trader's cards and the inspector draw the same frame grammar at their own sizes |
+
+## Notes
+
+- The well is the branch's old "shelf" ink (`UiInk.Rule * 0.9`), now painted under the see-through
+  frame: that is what keeps near-black iron glyphs from vanishing on a dark cell.
+- `tools/check_item_art.py` refuses a rarity frame whose centre is painted — the 2026-08 family would
+  have failed it (centre alpha 255).
+- The Forge bag ROW keeps its 5 px strip and its gold `SelectedEdge`: a row is not a square cell.
