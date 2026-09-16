@@ -16,6 +16,7 @@ One family per MEANING, reused across screens; never one click for everything, n
 | Family | Cue | Where |
 |---|---|---|
 | Navigation | `sfx_nav` (soft page tick) | nav rail, tabs, screen switches |
+| Dispatch arrived | `sfx_dispatch` (paper and a wax seal) | a letter reaches the inbox, once, and only when attention is free |
 | Generic button | `sfx_click` (short dry click) | any button with no richer meaning |
 | Refusal | `sfx_error` (dull, dead) | a locked tile, a button that cannot take the click |
 | Equip | `sfx_equip` (latch and seat) | GEAR equip / take off |

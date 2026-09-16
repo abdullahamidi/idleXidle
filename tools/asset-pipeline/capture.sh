@@ -15,6 +15,8 @@
 #        rosterswitch warrenready warrenfresh warrenlocked weavefresh keystonenotice
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
 #        fightfall fightfade fightarrive fightcooldown
+#        dispatches dispatchesempty dispatchesunread dispatcheshover chestdispatch
+#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|<key> — see its note below)
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
 # screenshot can judge on its own, and two of the three states below could not be posed at all before:
@@ -220,6 +222,18 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_owns.png 1.2
 #   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_done.png 5
 [ -n "$RH_SHOT_NOTICE" ] && RH_ENV+=(RH_SHOT_NOTICE="$RH_SHOT_NOTICE")
+# RH_SHOT_DISPATCH=unread|read|<key> dresses the five DISPATCHES fixtures. All of them seed three real
+# typed letters through the host's own PostDispatch (the inbox is STATE under the rig; only its
+# surfacing is posed), and this says which one the reading pane has open:
+#   unread  the newest, with the rest still waiting  — the default
+#   read    everything already read: no dots, MARK ALL READ dead
+#   <key>   one letter by its key (unlock.warren, trait.t_scar_tissue, region.verdant_hollow.conquered)
+# A key nothing answers to ABORTS rather than photographing the wrong letter.
+#   `dispatches` the panel over a fight · `dispatchesempty` its empty state · `dispatchesunread` the
+#   chrome alone with the mark on · `dispatcheshover` its caption (park RH_SHOT_MOUSE on the envelope)
+#   · `chestdispatch` a letter posted DURING a chest reveal — nothing pulses, nothing toasts, and with
+#   the third argument at or past the reveal's hold (3.8) the row is there afterwards.
+[ -n "$RH_SHOT_DISPATCH" ] && RH_ENV+=(RH_SHOT_DISPATCH="$RH_SHOT_DISPATCH")
 # RH_UI_BUDGET=1 prints the raster ledger the same way (BRIEF sec.74).
 [ -n "$RH_UI_BUDGET" ] && RH_ENV+=(RH_UI_BUDGET="$RH_UI_BUDGET")
 # RH_SAVE_DIR=<dir> points the whole save system at another folder — an EMPTY one is the only way to

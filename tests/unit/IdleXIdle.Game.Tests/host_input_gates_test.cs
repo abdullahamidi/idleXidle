@@ -108,7 +108,7 @@ public class HostInputGatesTest
         Assert.Contains("KeyEdge(Keys.Escape)", update, StringComparison.Ordinal);
         // The screens' keyboard is empty under the welcome -- and under the two host panels and the open log,
         // which hold the host's own keys the same way (attention_owner_test).
-        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || _showSettings || _showHelp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
+        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
         Assert.Contains("private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);", game, StringComparison.Ordinal);
         // The hint slot paints OVER the welcome, so under its swallow it must not paint at all: the welcome is
         // Modal tier to the attention owner, and the slot is the coach's tier, so it asks the owner and waits.
@@ -121,8 +121,11 @@ public class HostInputGatesTest
     public void test_right_click_is_gated_like_a_left_click()
     {
         var game = Source("Game1.cs");
-        Assert.Contains("private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
-        Assert.Contains("private bool MouseRightClicked => _rightClicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
+        Assert.Contains("private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
+        Assert.Contains("private bool MouseRightClicked => _rightClicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
+        // THREE PANELS, ONE PREDICATE. Every gate that used to spell the two out reads this, so a
+        // third host modal cannot be forgotten at one of the fourteen sites (the gear-dead-close class).
+        Assert.Contains("private bool HostModalUp => _showSettings || _showHelp || _showDispatches;", game, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -167,5 +170,52 @@ public class HostInputGatesTest
         var block = update[esc..];
         block = block[..IndexOf(block, "\n        }\n")];
         Assert.Contains("_settingsEscSpent = true;", block, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE ENVELOPE AND ITS PANEL ARE DECIDED IN UPDATE. The chrome's click is taken beside the gear's
+    /// and the ?'s, before the nav and the screens can have it; the panel's own rows, MARK ALL READ and
+    /// close are decided in <c>TakeDispatchesInput</c> from the modal block; M toggles it beside F1 and
+    /// F10 and leaves exactly one host panel up. Nothing in the panel's paint reads an edge or marks a
+    /// letter read (check_draw_purity covers the rest of that claim).
+    /// </summary>
+    [Fact]
+    public void test_the_envelope_and_the_dispatches_panel_are_decided_in_update()
+    {
+        var game = Source("Game1.cs");
+        var update = UpdateBody();
+
+        // The chrome click: after the ?, on the same terms, and it marks the edge as the opener.
+        var learn = IndexOf(update, "if (!_swallowInput && TakeLearnClick()) _swallowInput = true;");
+        var envelope = IndexOf(update, "DispatchButton.Contains(ChromeMouse)");
+        var nav = IndexOf(update, "if (!ceremonyHolds) HandleNavClick();");
+        _out.WriteLine($"? {learn} < envelope {envelope} < nav {nav}");
+        Assert.True(learn < envelope, "the envelope's click is taken before the ? has had the edge.");
+        Assert.True(envelope < nav, "the envelope's click falls through to the rail and the screens.");
+        Assert.Contains("_modalOpenedNow = true;", update[envelope..nav], StringComparison.Ordinal);
+
+        // The panel's own decisions run from the modal block, and only there.
+        Assert.Contains("TakeDispatchesInput();", update, StringComparison.Ordinal);
+        Assert.Equal(1, update.Split("TakeDispatchesInput();").Length - 1);
+        Assert.Contains("if (HostModalUp)", update, StringComparison.Ordinal);
+
+        // M is the third host panel's key, and exactly one of the three is ever up. The F1 and F10
+        // lines above are untouched -- the line after M is what keeps them exclusive.
+        Assert.Contains("if (Pressed(Keys.M)) { if (_showDispatches) _showDispatches = false; else { OpenDispatches(); _modalOpenedNow = true; } }", update, StringComparison.Ordinal);
+        Assert.Contains("else if (_showDispatches && (_showSettings || _showHelp)) _showDispatches = false;", update, StringComparison.Ordinal);
+        var f10 = IndexOf(update, "if (Pressed(Keys.F10)) { _showSettings = !_showSettings; if (_showSettings) _showHelp = false; }");
+        Assert.True(f10 < IndexOf(update, "if (Pressed(Keys.M)) { if (_showDispatches)"),
+                    "M must be read after F1 and F10, so a press of either closes DISPATCHES behind it.");
+
+        // Esc peels one layer: the panel after HELP, before the open log and the Forge's question.
+        var help = IndexOf(update, "else if (_showHelp) _showHelp = false;");
+        var mail = IndexOf(update, "else if (_showDispatches) _showDispatches = false;");
+        var log = IndexOf(update, "else if (_expedition.LogOpen) _expedition.ToggleLog();");
+        Assert.True(help < mail && mail < log, "Esc must close DISPATCHES after HELP and before the open log.");
+
+        // The paint decides nothing: no edge, no read-mark, no save.
+        var draw = BodyOf(Source("Game1.Dispatches.cs"), "private void DrawDispatches()");
+        foreach (var forbidden in new[] { "_clicked", "MarkDispatchRead", "MarkAllDispatchesRead", "Save()", "_showDispatches =" })
+            Assert.DoesNotContain(forbidden, draw, StringComparison.Ordinal);
     }
 }

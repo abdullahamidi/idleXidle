@@ -155,6 +155,89 @@ public class ChromeReflowTests
     }
 
     /// <summary>
+    /// THE CHROME ROW IS A CHAIN AND NOTHING IN IT SITS ON TOP OF ITS NEIGHBOUR. Gear, ?, envelope,
+    /// then the currency capsules — right to left, each taking its own room. The first cut of the ?
+    /// was hung off the gear at the capsules' y and drew a ? through the MATERIALS pill; the envelope
+    /// is the third link and the same mistake is one line away, at three densities.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_chrome_row_is_a_chain_with_no_shared_pixel(int percent)
+    {
+        UiMetrics.Apply(percent);
+        try
+        {
+            var gear = Read<Rectangle>("SettingsGear");
+            var learn = Read<Rectangle>("LearnButton");
+            var mail = Read<Rectangle>("DispatchButton");
+            var pillRight = Read<int>("PillRowRight");
+            var page = UiKit.Page;
+
+            foreach (var (name, r) in new[] { ("SettingsGear", gear), ("LearnButton", learn), ("DispatchButton", mail) })
+            {
+                Assert.True(page.Contains(r), $"{name} {r} leaves the page at {percent}%");
+                Assert.True(r.Width >= UiMetrics.HitTargetMinimum && r.Height >= UiMetrics.HitTargetMinimum,
+                            $"{name} is {r.Width}x{r.Height} at {percent}%, under the {UiMetrics.HitTargetMinimum} px hit floor");
+                Assert.True(r.X >= pillRight + 16,
+                            $"{name} {r} reaches into the currency row, which ends at {pillRight} at {percent}%");
+            }
+
+            Assert.False(gear.Intersects(learn), $"the gear {gear} and the ? {learn} share a pixel at {percent}%");
+            Assert.False(learn.Intersects(mail), $"the ? {learn} and the envelope {mail} share a pixel at {percent}%");
+            Assert.False(gear.Intersects(mail), $"the gear {gear} and the envelope {mail} share a pixel at {percent}%");
+
+            // Right to left: gear, ?, envelope. The order is the one-line change PillRowRight follows.
+            Assert.True(learn.Right <= gear.X, $"the ? {learn} is not left of the gear {gear} at {percent}%");
+            Assert.True(mail.Right <= learn.X, $"the envelope {mail} is not left of the ? {learn} at {percent}%");
+            // All three stand on the capsules' centre line, so the row reads as one row.
+            Assert.Equal(learn.Center.Y, mail.Center.Y);
+        }
+        finally { UiMetrics.Apply(100); }
+    }
+
+    /// <summary>
+    /// THE DISPATCHES PANEL IS REACHABLE AT EVERY PROFILE — the close icon, the list of letters and
+    /// MARK ALL READ. A modal whose close has left the page, or whose footer has grown over its own
+    /// rows, is a surface the player cannot get out of or cannot finish with.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_dispatches_panel_keeps_its_close_list_and_mark_all_read_reachable(int percent)
+    {
+        UiMetrics.Apply(percent);
+        try
+        {
+            var panel = Read<Rectangle>("DispatchesPanel");
+            var close = Read<Rectangle>("DispatchesCornerClose");
+            var list = Read<Rectangle>("DispatchesListView");
+            var pane = Read<Rectangle>("DispatchesPane");
+            var mark = Read<Rectangle>("DispatchesMarkAll");
+
+            Assert.True(UiKit.Page.Contains(panel), $"the DISPATCHES panel {panel} leaves the page at {percent}%");
+            foreach (var (name, r) in new[] { ("the close icon", close), ("the list", list), ("the reading pane", pane), ("MARK ALL READ", mark) })
+                Assert.True(panel.Contains(r), $"{name} {r} left the DISPATCHES panel {panel} at {percent}%");
+
+            Assert.True(close.Height >= UiMetrics.HitTargetMinimum,
+                        $"the close icon is {close.Height} px at {percent}%, under the hit floor");
+            Assert.True(mark.Height >= UiMetrics.HitTargetMinimum,
+                        $"MARK ALL READ is {mark.Height} px tall at {percent}%, under the hit floor");
+            Assert.True(UiMetrics.RowHeight >= UiMetrics.HitTargetMinimum,
+                        $"a letter's row is {UiMetrics.RowHeight} px at {percent}%, under the hit floor");
+
+            Assert.False(list.Intersects(pane), $"the list {list} prints through the reading pane {pane} at {percent}%");
+            Assert.False(list.Intersects(mark), $"the list {list} runs under MARK ALL READ {mark} at {percent}%");
+            Assert.False(pane.Intersects(mark), $"the reading pane {pane} runs under MARK ALL READ {mark} at {percent}%");
+            Assert.False(list.Intersects(close), $"the list {list} is under the close icon {close} at {percent}%");
+            Assert.True(list.Right <= pane.X, $"the list {list} is not left of the pane {pane} at {percent}%");
+
+            // The list is worth scrolling: at least four letters stand in it at every profile.
+            Assert.True(list.Height / UiMetrics.RowHeight >= 4,
+                        $"only {list.Height / UiMetrics.RowHeight} letters fit in the list at {percent}%");
+        }
+        finally { UiMetrics.Apply(100); }
+    }
+
+    /// <summary>
     /// A HINT IS NEVER SQUEEZED. Its one line keeps the paragraph rung with a pad above and below at
     /// every profile — the rule is reflow, never smaller type.
     /// </summary>

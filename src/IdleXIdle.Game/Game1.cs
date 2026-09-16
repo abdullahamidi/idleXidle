@@ -136,7 +136,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// (Enter on the MAP) underneath the scrim (review 2026-08-26). Empty under the two host panels and
     /// the open Expedition Log too, which hold the host's own hotkeys the same way (see panelHolds).
     /// </summary>
-    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || _showSettings || _showHelp || _expedition.LogOpen ? default : _keys;
+    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -421,8 +421,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         : _showVault ? "vault" : _showLoadout ? "loadout" : _showWarren ? "warren"
         : _showMastery ? "mastery" : _showGear ? "gear" : _showTraining ? "training" : "hunt";
 
-    /// <summary>True while one of the host's own modals is up — the two that fade in.</summary>
-    private bool ModalUpNow => _showSettings || _showHelp;
+    /// <summary>
+    /// True while one of the HOST's own panels is up: SETTINGS, HELP or DISPATCHES.
+    /// </summary>
+    /// <remarks>
+    /// ONE PREDICATE, THREE PANELS. This disjunction used to be spelt out at fourteen sites — the
+    /// gear's click, the chrome's closes, the modal block, the rail's paint and its click, the two
+    /// cursor gates, the screens' keyboard, the attention owner's Modal tier — and every one of them
+    /// was a place a third panel could be forgotten, which is exactly how a gear paints live over a
+    /// modal that will refuse its click. They all ask this instead.
+    /// </remarks>
+    private bool HostModalUp => _showSettings || _showHelp || _showDispatches;
+
+    /// <summary>True while one of the host's own modals is up — the ones that fade in.</summary>
+    private bool ModalUpNow => HostModalUp;
 
     // ── THE CURRENCY PILLS REACT (brief sec. 36-38) ─────────────────────────────────────────────
     //
@@ -517,6 +529,44 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private bool _showHelp;
     private bool _showSettings;
+
+    /// <summary>The DISPATCHES reading surface — the third host panel, opened by the envelope or M.</summary>
+    private bool _showDispatches;
+
+    /// <summary>
+    /// Which letter the reading pane has OPEN — an index into the inbox's newest-first rows, or -1.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Session-only, and deliberately: what the pane is showing is presentation, and what has been READ
+    /// is the fact — that one lives in the inbox and in the save.
+    /// </para>
+    /// <para>
+    /// IT STARTS AT NOTHING, and that is the whole reason it exists as a separate number from the
+    /// cursor. Showing the newest letter the instant the panel opens would mark it read, and on the
+    /// common case — one letter waiting — merely glancing at the surface would clear the mark without
+    /// anybody having read a word. A letter is opened by a click or by ENTER, and opening it is what
+    /// reads it.
+    /// </para>
+    /// </remarks>
+    private int _dispatchSelected = -1;
+
+    /// <summary>The highlighted row — the keyboard's cursor and the mouse's hover, as the dropdown does it.</summary>
+    private int _dispatchCursor;
+
+    /// <summary>The first letter visible in the list, when there are more than the column holds.</summary>
+    private int _dispatchScroll;
+
+    /// <summary>
+    /// A dispatch has arrived and its one pulse has not been spent yet.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TakeDispatchArrival"/> gives the edge once; this HOLDS it while somebody else has the
+    /// player's eyes, so news that lands under a chest reveal or a fall is announced when the frame is
+    /// free rather than swallowed. A pulse cannot be paused (UiMotion decrements every one), so what
+    /// waits is the Flash itself.
+    /// </remarks>
+    private bool _dispatchArrivalHeld;
 
     // ── The idle half. Automation is EARNED here, never assumed. ──────────────────────────────
     private ForgeScreen _forge = null!;
@@ -1736,7 +1786,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ApplyRestoredState();        // hands the (empty) pending state to the new screens
         _bootTimer = 7f;
 
-        _showSettings = _showHelp = false;
+        _showSettings = _showHelp = _showDispatches = false;
+        _dispatchCursor = _dispatchScroll = 0;
+        _dispatchSelected = -1;
+        _dispatchArrivalHeld = false;
         _showGear = _showTraining = _showMastery = _showForge = _showWarren = false;
         _showWorld = _showTraits = _showRoster = _showLoadout = _showVault = false;
         _showTitle = true;           // back to the title, which now offers BEGIN THE HUNT
@@ -2099,7 +2152,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ("roster", () => { _showTraits = false; _showRoster = true; }),
         ("help", () => { _showRoster = false; _showHelp = true; }),
         ("settings", () => { _showHelp = false; _showSettings = true; }),
-        ("hunt again", () => _showSettings = false),
+        ("dispatches", () => OpenDispatches()),
+        ("hunt again", () => _showDispatches = false),
     };
 
     private int _bootCheckScreensSeen;
@@ -2298,6 +2352,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "warrenlocked" or "weave" or "weavefresh" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "keystonenotice"
+                or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover" or "chestdispatch"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec" or "vfxdebug")
             {
@@ -2333,11 +2388,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // (the idle loop drops items only on boss waves, which a 1-second shot won't reach).
                 // RH_SHOT_T poses the chest reveal at a chosen instant — the shake, the burst, the card.
                 // Read BEFORE the fixture runs; applied after it opens a chest, or the open overwrites it.
-                if (sm is "lootforge" or "vaultfirst" && Environment.GetEnvironmentVariable("RH_SHOT_T") is { } rt
+                if (sm is "lootforge" or "chestdispatch" or "vaultfirst" && Environment.GetEnvironmentVariable("RH_SHOT_T") is { } rt
                     && float.TryParse(rt, System.Globalization.CultureInfo.InvariantCulture, out var revealT))
                     _pendingRevealPose = revealT;
 
-                if (sm == "lootforge")
+                if (sm is "lootforge" or "chestdispatch")
                 {
                     _showForge = true;
                     var rar = new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
@@ -2652,7 +2707,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "fightaura" or "fightflash" or "fightshield" or "runlog"
-                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug")
+                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti" or "fightinspect" or "vfxdebug"
+                    or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover")
                 {
                     // `vfxdebug` is `fightshield` PLUS the VFX contract's own overlay (brief §70): the
                     // standing barrier is the acceptance case, so the mode that photographs the contract
@@ -2790,7 +2846,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "runlog" or "fightshield" or "fightshieldbroken" or "vfxdebug")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfade" or "runlog" or "fightshield" or "fightshieldbroken" or "vfxdebug"
+                        or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover")
                     {
                         var worn = new[]
                         {
@@ -2827,7 +2884,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // Not for the fall fixtures: the welcome-back toast outranks every arena overlay, so
                     // it would stand over the very state those captures exist to show.
                     // No toast over `fightshield`: it would sit on the very strip the capture is for.
-                    if (sm is not ("fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
+                    if (sm is not ("fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"
+                                   or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover"))
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
@@ -3722,6 +3780,48 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
                 }
+
+                // ── DISPATCHES. THE INBOX IS WRITTEN UNDER THE RIG, and only its SURFACING is posed.
+                //    It is state, not a flourish: a fixture that suppressed production the way the
+                //    trait awakenings are suppressed would photograph an empty panel forever. So the
+                //    rows go in through the host's own PostDispatch — the same dedupe, the same
+                //    arrival edge, the same copy the game renders.
+                if (sm is "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover" or "chestdispatch")
+                {
+                    // `dispatchesempty` is the one fixture with nothing in it: the panel's own empty
+                    // state is a real reading and had no picture otherwise.
+                    if (sm != "dispatchesempty")
+                    {
+                        PostDispatch(Dispatches.Unlock(Activity.Warren, 1_000));
+                        PostDispatch(Dispatches.Trait("t_scar_tissue", 2_000));
+                        PostDispatch(Dispatches.Region(VerdantHollow.RegionId, 3_000));
+                    }
+                    // The two panel fixtures open it through the same door the envelope and M use.
+                    if (sm is "dispatches" or "dispatchesempty") OpenDispatches();
+
+                    // RH_SHOT_DISPATCH=unread|read|<key> — which letter the pane is reading, and
+                    // whether the list still has unread rows in it. An unparseable value ABORTS: a
+                    // fixture that cannot pose what it was asked for must not return an image.
+                    var posedMail = Environment.GetEnvironmentVariable("RH_SHOT_DISPATCH")?.Trim();
+                    switch (posedMail?.ToLowerInvariant())
+                    {
+                        case null or "" or "unread":
+                            _dispatchSelected = 0;       // the newest open, the rest waiting — a MIXED list
+                            break;
+                        case "read":
+                            _inbox.MarkAllRead();        // nothing waiting: no dots, MARK ALL READ dead
+                            _dispatchSelected = 0;
+                            break;
+                        default:
+                            var at = _inbox.Rows.ToList().FindIndex(d => string.Equals(d.Key, posedMail, StringComparison.OrdinalIgnoreCase));
+                            if (at < 0)
+                                throw new InvalidOperationException(
+                                    $"RH_SHOT_DISPATCH='{posedMail}' is not a seeded dispatch key. Seeded: "
+                                    + string.Join(", ", _inbox.Rows.Select(d => d.Key)) + ".");
+                            _dispatchCursor = _dispatchSelected = at;
+                            break;
+                    }
+                }
             }
             else {
             if (Pressed(Keys.F10)) _showSettings = !_showSettings;
@@ -3837,6 +3937,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             if (_showSettings) _showSettings = false;
             else if (_showHelp) _showHelp = false;
+            // DISPATCHES is a host panel like the two above it, and Esc means "close the letters".
+            else if (_showDispatches) _showDispatches = false;
             // THE OPEN EXPEDITION LOG is the next layer down: Esc on it means "close the log" — the one door
             // out of a full-screen read that needs no aim — never "open settings over it".
             else if (_expedition.LogOpen) _expedition.ToggleLog();
@@ -3951,11 +4053,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // exactly one of the two, so a HELP stacked under SETTINGS painted its close icon dead.
         if (Pressed(Keys.F1)) { _showHelp = !_showHelp; if (_showHelp) _showSettings = false; }
         if (Pressed(Keys.F10)) { _showSettings = !_showSettings; if (_showSettings) _showHelp = false; }
+        // ...AND M IS THE THIRD PANEL'S KEY. DISPATCHES swaps with the other two exactly as they swap
+        // with each other, and the two lines above are untouched: read AFTER them, M wins its own press
+        // and the else below closes the letters behind an F1 or F10 pressed over them. M is free — the
+        // rail's nine tiles are H C V B E K F A W P R, and L and T are the log and the weave.
+        if (Pressed(Keys.M)) { if (_showDispatches) _showDispatches = false; else { OpenDispatches(); _modalOpenedNow = true; } }
+        else if (_showDispatches && (_showSettings || _showHelp)) _showDispatches = false;
         // A HOST PANEL HOLDS THE HOST'S OWN KEYS. The panels eat the frame's clicks (MouseClicked) but the
         // hotkeys below read Pressed(), which only the tour, the opening and the welcome silence — so B
         // under SETTINGS opened BUILD beneath the panel, and L opened the log under it. Esc, F1 and F10
         // above stay raw: they are how the panels open and close. Read once, here, for every key below.
-        var panelHolds = _showSettings || _showHelp;
+        var panelHolds = HostModalUp;
         // CONTINUE by key -- RAW edges, because the welcome joins the frame's swallow below and Pressed()
         // honours it. Escape reads the welcome too, one layer per press.
         if (WelcomeUp && (KeyEdge(Keys.Enter) || KeyEdge(Keys.Space) || (!_settingsEscSpent && KeyEdge(Keys.Escape)))) _showWelcome = false;
@@ -4086,7 +4194,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // THE SETTINGS GEAR, top-right of every screen. Handled here, before the nav and the screens,
         // so its click never falls through to whatever sits underneath it.
-        if (!_showSettings && !_showHelp && !_swallowInput && _clicked && SettingsGear.Contains(ChromeMouse))
+        if (!HostModalUp && !_swallowInput && _clicked && SettingsGear.Contains(ChromeMouse))
         {
             _showSettings = true;
             _swallowInput = true;
@@ -4097,6 +4205,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // so its click is spent here rather than falling through to whatever it covers.
         if (!_swallowInput && TakeLearnClick()) _swallowInput = true;
 
+        // ...AND THE ENVELOPE BESIDE THAT. Same terms again: it sits over the screen, so its click is
+        // spent here rather than falling through to whatever it covers. DispatchesOffered is the one
+        // question DrawDispatchButton asks too — what is painted is what is hit-tested.
+        // _modalOpenedNow for the gear's reason: the panel's own input runs later this Update, and
+        // without the mark the opening click would also land on the list row under the cursor.
+        if (!_swallowInput && _clicked && DispatchesOffered() && DispatchButton.Contains(ChromeMouse))
+        {
+            OpenDispatches();
+            _swallowInput = true;
+            _modalOpenedNow = true;
+        }
+
         // THE HINT SLOT at the top of a menu screen — a slot note, the lesson about this screen, or a hint
         // from real state — closes with its × (a note and a lesson are remembered in the save; a hint for
         // the session), and a click anywhere else on it is spent: it sits over the screen's own controls,
@@ -4104,7 +4224,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // CARD closes the same way (playtest: "messages stay forever until I do the thing"). Display only:
         // no underlying fact is faked, so unlocks and gates are untouched. Handled here rather than in
         // Draw so the click is swallowed before any screen hit-tests it.
-        if (!_showSettings && !_showHelp && !_swallowInput && _clicked)
+        if (!HostModalUp && !_swallowInput && _clicked)
         {
             // THE COACH'S CARD FIRST, because it is drawn over everything else and its close is the
             // only click it owns. The card is NOT modal: a click anywhere else — including the lit
@@ -4262,6 +4382,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             : _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback
             : AttentionOwner.None;
 
+        // ── A LETTER ARRIVED. One pulse, one cue, and only when nobody else has the player's eyes.
+        //
+        // The mark on the envelope is STATE and needs no permission — it simply holds until the letters
+        // are read. The flourish is the part that competes: a halo and a soft cue over a chest reveal,
+        // a fall or an open log is the game asking for two things at once. So the edge is HELD (a pulse
+        // cannot be paused — UiMotion decrements every one) and spent on the first frame the owner is
+        // the coach or nothing. No toast, ever: this is background news.
+        if (TakeDispatchArrival()) _dispatchArrivalHeld = true;
+        if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))
+        {
+            _dispatchArrivalHeld = false;
+            UiMotion.Flash(DispatchPulseKey, UiMotion.Transition);
+            // The background tier's cue, quieter than the notice's reward tier. PlayFirst so the game
+            // plays before the wav lands, and so a build without it falls back to the rail's page tick.
+            _sound.PlayFirst(0.5f, "sfx_dispatch", "sfx_nav");
+        }
+
         // ── THE AUTHORED HOLD. ──────────────────────────────────────────────────────────────────
         //
         // The player must SEE a frozen game, not a still frame with a simulation running behind it.
@@ -4298,9 +4435,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // hotkeys and buttons underneath the panel continuing to respond.
         // THE TWO HOST MODALS DECIDE HERE, not in their Draw. The panel eats the frame's input and
         // not the frame (the farms and the champion tick above), so this is the last thing that runs.
-        if (_showSettings || _showHelp)
+        if (HostModalUp)
         {
             if (_showSettings) UpdateSettings();
+            else if (_showDispatches) TakeDispatchesInput();
             else if (_showHelp)
             {
                 // The help panel's two inputs: its close icon (F1 and Esc close it too, from the block
@@ -6223,7 +6361,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// lesson may speak over it), and the owner adds it to this tier itself.
     /// </summary>
     private bool ProductionModalUp
-        => _showTitle || _showSettings || _showHelp || _showTypeSpec || _tourActive
+        => _showTitle || HostModalUp || _showTypeSpec || _tourActive
            || (_showMastery && _masteryScreen.SpecialisationOpen)
            || (_showVault && _vault.ModalUp)
            || (_showForge && _forge.ConfirmOpen);
@@ -7720,9 +7858,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Rectangle _helpView;
     private int _helpMaxScroll;
 
-    private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
+    private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput;
 
-    private bool MouseRightClicked => _rightClicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
+    private bool MouseRightClicked => _rightClicked && !HostModalUp && !WelcomeUp && !_swallowInput;
 
 
     /// <summary>
@@ -7893,6 +8031,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawSettingsGear();    // the corner gear — settings from any screen, including mid-hunt
         DrawLearnButton();     // ...and the ? beside it, which is where the screen tours live now
+        DrawDispatchButton();  // ...and the envelope beside that, where account news waits
         DrawCoachSpotlight();  // the guided lesson's brackets, on the screen's own control
         DrawHexNav();   // the shared nav bar, over every screen
 
@@ -7905,10 +8044,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // scroll that survived the close would hide the one control that can undo 150 %.
         if (!_showHelp) _helpScroll = 0;
         if (!_showSettings) _settingsScroll = 0;
+        if (!_showDispatches) _dispatchScroll = 0;
 
         if (_showHelp) DrawHelp();
         if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
+        if (_showDispatches) DrawDispatches();
 
         // A MODAL FADES UP (brief sec. 34): backdrop and panel together over one fast beat, so the
         // settings panel stops appearing between two frames. Over the modal, under everything the
@@ -8511,6 +8652,37 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// shifted sideways when the ? appeared would be worse than the gap.
     /// </remarks>
     private static int LearnButtonLeft => SettingsGear.X - UiMetrics.Space(8) - LearnButtonSize;
+
+    /// <summary>
+    /// DISPATCHES — the sealed envelope beside the ?, and the third link in the chrome's chain.
+    /// </summary>
+    /// <remarks>
+    /// Not a rail tile: dispatches are not a place to go, they are news that has already happened, and
+    /// the rail's eleven tiles are the eleven screens. The chrome is where the things that belong to no
+    /// screen live — the gear, the ?, and now the letters — and the chrome is on every screen, which is
+    /// the only way a mark meaning "something is waiting" can be seen wherever the player is standing.
+    /// <para>
+    /// <c>internal</c> so the coach and the tour can light it (the pattern <see cref="GleamPillRect"/>
+    /// set), and so <c>page_layout_test</c> walks it at every profile.
+    /// </para>
+    /// </remarks>
+    internal static Rectangle DispatchButton
+        => new(DispatchButtonLeft, PillRowTop + (PillHeight - DispatchButtonSize) / 2, DispatchButtonSize, DispatchButtonSize);
+
+    /// <summary>The envelope's edge — the ?'s size, for the ?'s reason: every pixel comes off the currency row.</summary>
+    private static int DispatchButtonSize => UiMetrics.HitTargetMinimum;
+
+    /// <summary>
+    /// The envelope's left edge, and the wall the currency row stops at now.
+    /// </summary>
+    /// <remarks>
+    /// THE CHAIN AGAIN (see <see cref="LearnButtonLeft"/>): a third control in this row has to take its
+    /// room rather than sit on top of the ?, so it hangs off the ? exactly as the ? hangs off the gear,
+    /// and <see cref="PillRowRight"/> derives from THIS number instead. Right to left the row now reads
+    /// gear, ?, envelope, capsules, and the room is reserved on every screen — a row of capsules that
+    /// shifted sideways when the letters arrived would be worse than the gap.
+    /// </remarks>
+    private static int DispatchButtonLeft => LearnButtonLeft - UiMetrics.Space(8) - DispatchButtonSize;
 
     /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
@@ -9349,9 +9521,169 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>
+    /// THE ENVELOPE — the door to the letters, and the mark that says one is waiting.
+    /// </summary>
+    /// <remarks>
+    /// The LOG medallion's recipe (HuntScreen.DrawLogButton): bone at rest, white under the mouse, a
+    /// 4 px lift eased in, and the 2 px pressed drop every button in the game wears. What is added here
+    /// is the UNREAD MARK — the rail's own red dot on its dark seat — and the ARRIVAL's one halo.
+    /// </remarks>
+    private void DrawDispatchButton()
+    {
+        if (!DispatchesOffered()) return;
+        var r = DispatchButton;
+        var hot = r.Contains(ChromeMouse);
+        var pressed = hot && UiKit.MouseHeld;
+        var lift = UiMotion.Ease(UiMotion.KeyOf(r), hot ? 1f : 0f);
+        var side = UiMetrics.Control(36) + (int)MathF.Round(UiMetrics.Control(4) * lift);
+        var box = new Rectangle(r.X + (r.Width - side) / 2, r.Y + (r.Height - side) / 2 + (pressed ? 2 : 0), side, side);
+        var tint = hot ? Color.White : new Color(0xE0, 0xD8, 0xC8);
+        if (pressed) tint = new Color((int)(tint.R * 0.78f), (int)(tint.G * 0.78f), (int)(tint.B * 0.78f), (int)tint.A);
+
+        // THE ARRIVAL'S ONE HALO, behind the medallion: it fades once and is gone. Armed in Update on
+        // the frame the news was allowed to speak, never here — a pulse re-armed in a paint never ends.
+        // Under Reduced Motion it is skipped and the dot carries the whole message, exactly as the
+        // rail's unread dot drops its breath.
+        var pulse = UiMotion.Pulse(DispatchPulseKey);
+        if (pulse > 0f && !UiMotion.Reduced)
+        {
+            var halo = (int)MathF.Round(side * 0.5f * UiMotion.Smooth(pulse));
+            _ui.Disc(_batch, new Rectangle(box.X - halo / 2, box.Y - halo / 2, box.Width + halo, box.Height + halo),
+                     NavGold * (0.34f * UiMotion.Smooth(pulse)));
+        }
+
+        if (!_ui.Icon(_batch, "icon_dispatch", box, tint))
+        {
+            // No medallion on disk: an envelope from primitives — a plate, a rim and its two folds, the
+            // way the gear keeps a drawn cog behind its own art.
+            _ui.Fill(_batch, box, new Color(0x16, 0x11, 0x10, 0xE0));
+            var flap = new Vector2(box.Center.X, box.Y + box.Height * 0.62f);
+            _ui.LineSeg(_batch, new Vector2(box.Left + 3, box.Y + 3), flap, 3f, tint);
+            _ui.LineSeg(_batch, new Vector2(box.Right - 3, box.Y + 3), flap, 3f, tint);
+            _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 2), tint);
+            _ui.Fill(_batch, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), tint);
+            _ui.Fill(_batch, new Rectangle(box.X, box.Y, 2, box.Height), tint);
+            _ui.Fill(_batch, new Rectangle(box.Right - 2, box.Y, 2, box.Height), tint);
+        }
+
+        // ── THE UNREAD MARK. The rail's idiom verbatim, and a STATE rather than an animation: it holds
+        //    until the letters are read, so it says what a six-second toast could not. NO BREATH here —
+        //    the rail already has one breathing dot, and two on one screen is noise. It overhangs the
+        //    corner by a third of itself, into the eight-pixel gap the chain leaves before the ?.
+        if (_inbox.Unread > 0)
+        {
+            var dot = Math.Max(8, UiMetrics.Control(14));
+            var at = new Rectangle(r.Right - dot + dot / 3, r.Y - dot / 3, dot, dot);
+            _ui.Disc(_batch, new Rectangle(at.X - 2, at.Y - 2, at.Width + 4, at.Height + 4), UiInk.Ground * 0.85f);
+            _ui.Disc(_batch, at, UiInk.Danger);
+        }
+
+        if (hot) _ui.TextRight(_batch, "DISPATCHES — M", r.Right, r.Bottom + 8, NavGold);
+    }
+
+    /// <summary>Is the envelope live right now? Drawing and hit-testing ask the same question.</summary>
+    /// <remarks>
+    /// The ?'s tier, for the ?'s reason: the letters are background news, so they wait under anything
+    /// the player is being asked to read — the open log, a chest's reveal, a fall, a panel, the authored
+    /// opening — and they are gone on the title, which paints no chrome at all. The gear is the one
+    /// control that outranks this, because the gear is the way out of everything.
+    /// </remarks>
+    private bool DispatchesOffered() => !AttentionOwnedAbove(AttentionOwner.Coach);
+
+    /// <summary>The envelope's own pulse key — one key, so a second letter re-arms the same halo.</summary>
+    private const int DispatchPulseKey = 0x0D15A7C4;
+
+    /// <summary>
+    /// Open DISPATCHES — from the envelope, or from M. One host panel at a time, newest letter first.
+    /// </summary>
+    private void OpenDispatches()
+    {
+        _showSettings = _showHelp = false;   // ONE HOST PANEL AT A TIME, as F1 and F10 already insist
+        _showDispatches = true;
+        _dispatchCursor = 0;       // the keyboard starts on the newest; one ENTER opens it
+        _dispatchSelected = -1;    // ...and nothing is READ until a letter is actually opened
+        _dispatchScroll = 0;
+        _sound.Play("sfx_click", 0.7f);
+    }
+
+    /// <summary>
+    /// Everything the DISPATCHES panel decides: which letter is open, MARK ALL READ, the way out, and
+    /// the keyboard path through all three.
+    /// </summary>
+    /// <remarks>
+    /// Run from the modal block at the foot of Update, never from <c>DrawDispatches</c> — the panel
+    /// paints the rectangles this hit-tests and reads the same <c>DispatchesFrameNow()</c> to find them
+    /// (ADR-006). Raw edges rather than <c>Pressed</c>/<c>MouseClicked</c>: this panel IS the modal that
+    /// makes those false, so it has to read the frame's own edge, the way UpdateSettings does.
+    /// </remarks>
+    private void TakeDispatchesInput()
+    {
+        // THE DEED, LATCHED. Opening the letters is the fact that completes the one lesson about them,
+        // and it is a REAL open — not a card the player closed. Saved at once, as READ THE LOG is.
+        if (!_dispatchesOpenedEver) { _dispatchesOpenedEver = true; Save(); }
+
+        var f = DispatchesFrameNow();
+        var count = _inbox.Count;
+        // Never the edge that opened the panel: without this the opening click also lands on the row
+        // under the cursor (see _modalOpenedNow).
+        var uiClick = _clicked && !_modalOpenedNow;
+
+        // ── THE SCROLL, before anything is hit-tested against it. ───────────────────────────────
+        var maxScroll = Math.Max(0, count - f.Rows);
+        if (maxScroll > 0 && MouseWheel != 0 && f.List.Contains(ChromeMouse))
+            _dispatchScroll = UiKit.Scrolled(_dispatchScroll, MouseWheel, f.Rows, count);
+        // DEV: pose the list scrolled (RH_SHOT_SCROLL=<rows>|end), as the settings panel does.
+        if (RigActive && maxScroll > 0
+            && Environment.GetEnvironmentVariable("RH_SHOT_SCROLL") is { Length: > 0 } posedScroll)
+            _dispatchScroll = posedScroll.Equals("end", StringComparison.OrdinalIgnoreCase) ? maxScroll
+                : int.TryParse(posedScroll, out var posedRows) ? posedRows : _dispatchScroll;
+
+        // ── THE KEYBOARD PATH, and it is not a convenience: every interaction in this game has to be
+        //    completable without the mouse (technical-preferences). Up and Down walk the letters,
+        //    ENTER opens the one under the cursor, and Escape peels the panel from the block above.
+        if (KeyEdge(Keys.Down)) _dispatchCursor++;
+        if (KeyEdge(Keys.Up)) _dispatchCursor--;
+        _dispatchCursor = count == 0 ? 0 : Math.Clamp(_dispatchCursor, 0, count - 1);
+        if (KeyEdge(Keys.Enter) && count > 0) _dispatchSelected = _dispatchCursor;
+
+        // ── A CLICK ON A ROW both moves the cursor and OPENS the letter: a mouse asks for one thing.
+        if (uiClick && DispatchRowAt(ChromeMouse, _dispatchScroll, count) is var row && row >= 0)
+        {
+            _dispatchCursor = row;
+            _dispatchSelected = row;
+            _sound.Play("sfx_nav", 0.6f);
+        }
+
+        if (_dispatchSelected >= count) _dispatchSelected = -1;
+        // The column follows the cursor, so the keyboard reaches a letter the column does not hold.
+        if (_dispatchCursor < _dispatchScroll) _dispatchScroll = _dispatchCursor;
+        if (_dispatchCursor >= _dispatchScroll + f.Rows) _dispatchScroll = _dispatchCursor - f.Rows + 1;
+        _dispatchScroll = Math.Clamp(_dispatchScroll, 0, maxScroll);
+
+        // AN OPEN LETTER HAS BEEN READ. It is on the page in front of the player; there is no second
+        // act of reading to wait for. MarkDispatchRead writes only on the frame the flag actually
+        // turns, so this costs one call and one save per letter however many frames it stands open.
+        if (_dispatchSelected >= 0) MarkDispatchRead(_inbox.Rows[_dispatchSelected].Key);
+
+        // MARK ALL READ — live only while something is unread, decided here and painted with false.
+        if (UiKit.ClickedIn(f.MarkAll, ChromeMouse, uiClick) && _inbox.Unread > 0)
+        {
+            MarkAllDispatchesRead();
+            _sound.Play("sfx_click", 0.7f);
+        }
+
+        // THE WAY OUT. The corner icon; Escape and M close it from the block above.
+        if (UiKit.ClickedIn(f.Close, ChromeMouse, uiClick))
+        {
+            _showDispatches = false;
+            _sound.Play("sfx_click", 0.7f);
+        }
+    }
+
     private void DrawSettingsGear()
     {
-        if (_showSettings || _showHelp) return;   // a modal owns the frame
+        if (HostModalUp) return;   // a modal owns the frame
         var hover = SettingsGear.Contains(ChromeMouse);
         var c = new Vector2(SettingsGear.Center.X, SettingsGear.Center.Y);
         var ink = hover ? NavGold : UiInk.Secondary;
@@ -9714,10 +10046,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     /// <remarks>
     /// It was <c>SettingsGear.X - 16</c>, which was right while the gear was the only thing in the
-    /// corner. LEARN THIS SCREEN now sits between them — see <see cref="LearnButtonLeft"/>, which this
+    /// corner. LEARN THIS SCREEN and then DISPATCHES took their room out of it — see
+    /// <see cref="DispatchButtonLeft"/>, the chain's leftmost link, which this
     /// reads rather than re-deriving, so a change to either lands on both.
     /// </remarks>
-    private static int PillRowRight => LearnButtonLeft - 16;
+    private static int PillRowRight => DispatchButtonLeft - 16;
 
     /// <summary>
     /// The chrome row's foot: the bottom of the capsules, the ? and the gear, which share one line.
@@ -9967,6 +10300,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             ("P", "TRAITS — PERMANENT BONUSES"),
             ("R", "ROSTER — YOUR HUNTERS"),
             ("L", "THE EXPEDITION LOG"),
+            ("M", "DISPATCHES — WHAT HAS HAPPENED TO YOUR ACCOUNT"),
             ("ESC", "SETTINGS — DISPLAY, SOUND, QUIT"),
             ("F1", "CLOSE"),
         };
@@ -10501,7 +10835,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         // A modal owns the frame — and so does the open EXPEDITION LOG, a full-screen read the rail cannot
         // answer under (HandleNavClick and the hotkeys refuse), so it is not painted as if it could.
-        if (_showSettings || _showHelp || _expedition.LogOpen) return;
+        if (HostModalUp || _expedition.LogOpen) return;
 
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
@@ -10718,7 +11052,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private void HandleNavClick()
     {
-        if (_showSettings || _showHelp || _expedition.LogOpen) return;   // the panels and the open log hold the rail (see navHolds)
+        if (HostModalUp || _expedition.LogOpen) return;   // the panels and the open log hold the rail (see navHolds)
         // A FORCED NAVIGATION LETS EXACTLY ONE TILE THROUGH the authority that killed the rest. The
         // tile is the game's own, in its own place, taking its own click — there is no tutorial-only
         // button in this design — and a press on any OTHER tile is swallowed in silence rather than

@@ -126,11 +126,16 @@ public class AttentionOwnerTest
         Assert.Contains(": _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback", update, StringComparison.Ordinal);
         Assert.Contains(": AttentionOwner.None;", update, StringComparison.Ordinal);
 
-        // The modal tier names every production surface once, here and nowhere else.
+        // The modal tier names every production surface once, here and nowhere else. The three HOST
+        // panels are named once BELOW it, in HostModalUp, which every gate that used to spell them out
+        // reads -- so a fourth panel joins the tier by joining one line.
         var modal = MemberOf(Game1(), "private bool ProductionModalUp");
-        foreach (var term in new[] { "_showTitle", "_showSettings", "_showHelp", "_showTypeSpec", "_tourActive",
+        foreach (var term in new[] { "_showTitle", "HostModalUp", "_showTypeSpec", "_tourActive",
                                      "_masteryScreen.SpecialisationOpen", "_vault.ModalUp", "_forge.ConfirmOpen" })
             Assert.Contains(term, modal, StringComparison.Ordinal);
+        var panels = MemberOf(Game1(), "private bool HostModalUp");
+        foreach (var term in new[] { "_showSettings", "_showHelp", "_showDispatches" })
+            Assert.Contains(term, panels, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -148,6 +153,7 @@ public class AttentionOwnerTest
             "private SlotContent? SlotShowing()",
             "private ScreenBanner? ScreenBannerShowing()",
             "private bool LearnOffered()",
+            "private bool DispatchesOffered()",
             "private void DrawCoachSpotlight()",
             "private void DrawNoticeToast()",
             "private void ReserveNoticeLane()",
@@ -162,7 +168,7 @@ public class AttentionOwnerTest
 
         var privateLists = new[]
         {
-            "_showSettings", "_showHelp", "_showTitle", "_tourActive", "WelcomeUp", "_showTypeSpec",
+            "_showSettings", "_showHelp", "_showDispatches", "_showTitle", "_tourActive", "WelcomeUp", "_showTypeSpec",
             "_expedition.LogOpen", "_forge.RevealActive", "DeathTransitionUp", "_opening.Running",
             "SpecialisationOpen", "NoticeToastHolds",
         };
@@ -242,7 +248,7 @@ public class AttentionOwnerTest
     {
         var game = Game1();
         var update = UpdateBody();
-        Assert.Contains("var panelHolds = _showSettings || _showHelp;", update, StringComparison.Ordinal);
+        Assert.Contains("var panelHolds = HostModalUp;", update, StringComparison.Ordinal);
         Assert.Contains("var navHolds = ceremonyHolds || panelHolds || _expedition.LogOpen;", update, StringComparison.Ordinal);
         Assert.Contains("for (var navKey = 0; navKey < Nav.Length && !navHolds; navKey++)", update, StringComparison.Ordinal);
         Assert.Contains("if ((Pressed(Keys.L) || wantsLog) && !ceremonyHolds && !panelHolds)", update, StringComparison.Ordinal);
@@ -254,18 +260,19 @@ public class AttentionOwnerTest
         Assert.Contains("if (Pressed(Keys.F1)) { _showHelp = !_showHelp; if (_showHelp) _showSettings = false; }", update, StringComparison.Ordinal);
 
         var nav = MemberOf(game, "private void HandleNavClick()");
-        Assert.Contains("if (_showSettings || _showHelp || _expedition.LogOpen) return;", nav, StringComparison.Ordinal);
+        Assert.Contains("if (HostModalUp || _expedition.LogOpen) return;", nav, StringComparison.Ordinal);
         // ...and the rail is not painted as live over the log it cannot answer under.
         var hex = MemberOf(game, "private void DrawHexNav()");
-        Assert.Contains("if (_showSettings || _showHelp || _expedition.LogOpen) return;", hex, StringComparison.Ordinal);
+        Assert.Contains("if (HostModalUp || _expedition.LogOpen) return;", hex, StringComparison.Ordinal);
 
-        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || _showSettings || _showHelp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
+        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
 
-        // Esc peels the log after the two panels and before the Forge's question.
+        // Esc peels the log after the three panels and before the Forge's question.
         var help = IndexOf(update, "else if (_showHelp) _showHelp = false;");
+        var mail = IndexOf(update, "else if (_showDispatches) _showDispatches = false;");
         var log = IndexOf(update, "else if (_expedition.LogOpen) _expedition.ToggleLog();");
         var forge = IndexOf(update, "else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();");
-        Assert.True(help < log && log < forge, "Esc must close the log after the panels and before the Forge's question.");
+        Assert.True(help < mail && mail < log && log < forge, "Esc must close the log after the panels and before the Forge's question.");
     }
 
     /// <summary>The director is fed from the owner, and the fall's end hushes it for a beat.</summary>

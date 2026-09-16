@@ -246,6 +246,18 @@ def nav() -> None:
     write(os.path.join(OUT_DIR, "sfx_nav.wav"), buf)
 
 
+def dispatch() -> None:
+    """A DISPATCH ARRIVES: paper and a wax seal. A short breath of air and one low two-partial note,
+    under 150 ms and quieter than everything else in the bank — this is BACKGROUND news, and the one
+    cue it gets must not sound like a reward. Lower and softer than the nav tick it falls back to, so
+    a letter landing while the player is reading something else is felt rather than announced."""
+    rng = Noise(0xD15A)
+    buf = [0.0] * int(0.15 * RATE)
+    air(buf, 0.0, 0.05, 0.11, rng)                             # the paper
+    bell(buf, 0.02, 392.00, 0.13, 0.075, partials=(1.0, 2.0))  # G4, two partials — the seal pressing
+    write(os.path.join(OUT_DIR, "sfx_dispatch.wav"), buf)
+
+
 def error() -> None:
     """A refusal: a locked tile, a button that cannot take the click, a code that will not paste.
     Dull on purpose — no ring, no rise — a knuckle on a closed door. Distinct from the click by
@@ -342,6 +354,7 @@ if __name__ == "__main__":
     weave()
     bind()
     nav()
+    dispatch()
     error()
     train()
     reroll()

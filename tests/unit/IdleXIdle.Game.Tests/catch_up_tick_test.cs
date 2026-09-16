@@ -7,6 +7,7 @@ using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Loot;
+using IdleXIdle.Core.Progression;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Warrens;
@@ -359,5 +360,72 @@ public class CatchUpTickTest
         screen.Update(0.016f, chests, new Point(-9999, -9999), clicked: false, wheel: 0);
         Tick(updates, clicked => screen.Update(0.016f, chests, new Point(-9999, -9999), clicked, wheel: 0));
         Assert.Equal(VaultScreen.OpenRequest.None, screen.ConsumeOpen());
+    }
+
+    // ── DISPATCHES: one press picks one letter, and the letter in the pane is read. ───────────────
+    //
+    // The panel lives inside Game1, which cannot be constructed here — so what is driven is the exact
+    // seam TakeDispatchesInput runs: Game1.DispatchRowAt resolves the cursor against the one geometry
+    // the paint reads, the EDGE moves the selection, and the SELECTED letter is marked read every
+    // frame (the pane is showing it; showing it IS reading it). The Inbox is the real one, so the
+    // "exactly one" claim is the model's own, not a mock's.
+
+    private static Rectangle DispatchesList
+        => (Rectangle)typeof(Game1).GetProperty("DispatchesListView", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+
+    private static Inbox ThreeLetters()
+    {
+        var inbox = new Inbox();
+        inbox.Post(Dispatches.Socket(1000));            // oldest
+        inbox.Post(Dispatches.Gem(2000));
+        inbox.Post(Dispatches.Region("verdant_hollow", 3000));   // newest — row 0
+        return inbox;
+    }
+
+    [Theory]
+    [MemberData(nameof(Ticks))]
+    public void test_one_press_in_the_dispatches_list_marks_exactly_one_letter_read(int updates)
+    {
+        UiMetrics.Apply(100);
+        UiMotion.Clear();
+        var inbox = ThreeLetters();
+        Assert.Equal(3, inbox.Unread);
+
+        // The cursor on the SECOND row, so a test that passes by marking the top letter fails.
+        var list = DispatchesList;
+        var at = new Point(list.Center.X, list.Y + UiMetrics.RowHeight + UiMetrics.RowHeight / 2);
+
+        var selected = -1;
+        Tick(updates, clicked =>
+        {
+            var row = Game1.DispatchRowAt(at, first: 0, count: inbox.Count);
+            if (clicked && row >= 0) selected = row;
+            if (selected >= 0 && selected < inbox.Count) inbox.MarkRead(inbox.Rows[selected].Key);
+        });
+
+        _out.WriteLine($"{updates} update(s): selected {selected}, unread {inbox.Unread}");
+        Assert.Equal(1, selected);
+        Assert.Equal(2, inbox.Unread);
+        Assert.True(inbox.Rows[1].Read, "the letter under the cursor was not the one that was read");
+        Assert.False(inbox.Rows[0].Read);
+    }
+
+    /// <summary>...and a press off the rows picks nothing, on any tick shape.</summary>
+    [Theory]
+    [MemberData(nameof(Ticks))]
+    public void test_a_press_off_the_dispatches_rows_reads_nothing(int updates)
+    {
+        UiMetrics.Apply(100);
+        UiMotion.Clear();
+        var inbox = ThreeLetters();
+        var selected = -1;
+        Tick(updates, clicked =>
+        {
+            var row = Game1.DispatchRowAt(new Point(-9999, -9999), first: 0, count: inbox.Count);
+            if (clicked && row >= 0) selected = row;
+            if (selected >= 0 && selected < inbox.Count) inbox.MarkRead(inbox.Rows[selected].Key);
+        });
+        Assert.Equal(-1, selected);
+        Assert.Equal(3, inbox.Unread);
     }
 }

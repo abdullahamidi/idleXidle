@@ -141,6 +141,39 @@ public class CaptureRigModesTest
     }
 
     /// <summary>
+    /// THE FOUR DISPATCH POSES ARE FIGHT FIXTURES — a fight behind the chrome, so the envelope, its
+    /// unread mark and the panel are photographed over the screen a player actually has open. Each has
+    /// to be in all four lists or it poses nothing: the title, a naked Hunter, or a WELCOME BACK toast
+    /// over the very state the capture exists to show.
+    /// </summary>
+    [Fact]
+    public void test_the_dispatch_poses_are_registered_in_every_game1_list_and_in_the_capture_header()
+    {
+        var game1 = Game1();
+        foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover" })
+            foreach (var (name, anchor) in FightLists)
+                Assert.Contains($"\"{mode}\"", ListAt(game1, anchor));
+
+        // ...and the reveal-borne one is a lootforge fixture: the chest's cascade with a dispatch
+        // posted DURING it, which is where "the news waits" has to be proved.
+        Assert.Contains("\"chestdispatch\"", ListAt(game1, "if (sm is \"vfx\" or \"forge\""));
+
+        // THE INBOX IS WRITTEN UNDER THE RIG -- it is state. Only its surfacing is posed, so the
+        // fixtures seed real typed rows rather than suppressing production.
+        var handler = BodyOf(game1, "if (sm is \"dispatches\" or \"dispatchesempty\" or \"dispatchesunread\" or \"dispatcheshover\" or \"chestdispatch\")");
+        Assert.Contains("RH_SHOT_DISPATCH", handler);
+        Assert.Contains("PostDispatch(", handler);
+        Assert.Contains("OpenDispatches();", handler);
+
+        var header = CaptureHeader();
+        foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover", "chestdispatch" })
+            Assert.Contains(mode, header);
+        Assert.Contains("RH_SHOT_DISPATCH", header);
+        // ...and the dial is forwarded, or a caller setting it gets a picture of the default pose.
+        Assert.Contains("RH_SHOT_DISPATCH", Source("tools", "asset-pipeline", "capture.sh"));
+    }
+
+    /// <summary>
     /// At 1 the pose lets go: the lift's last instant is held for one frame and the transition then ends on
     /// its own clock, so the host crosses the fall's end -- the edge that hushes the coach -- on film. A pose
     /// that jumped straight to the end state photographed READ THE LOG lit on the first lit frame, which is
