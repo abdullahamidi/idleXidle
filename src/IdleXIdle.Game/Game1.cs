@@ -2674,7 +2674,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         };
                         if (GemCraft.Socket(upWeapon, gem).Product is { } set) upWeapon = set;
                     }
-                    _forge.AddLoot(new List<ItemInstance>
+                    // THE SHOWCASE POSE (RH_SHOT_GEAR_POSE=showcase, 2026-09-16) trades the whole unequipped
+                    // bag for six pieces chosen for the item CELL — one of every rarity, the darkest and the
+                    // brightest glyph on disk, a locked one — so the frame, the well and the glyph can be
+                    // judged on their own. The doll keeps the eight worn pieces.
+                    var showcase = GearScreen.DevPoseKind == "showcase";
+                    if (showcase) _forge.AddLoot(GearShowcaseBag());
+                    else _forge.AddLoot(new List<ItemInstance>
                     {
                         upWeapon,
                         new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55, Class = ItemClass.Warden },
@@ -2693,7 +2699,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             ItemLevel = 20 + i * 3,
                             Class = ItemClasses.IsClassLocked(types[i % types.Length]) ? (ItemClass)(i % 5) : null,
                         });
-                    _forge.AddLoot(extra);
+                    if (!showcase) _forge.AddLoot(extra);
                     foreach (var it in seed) _hunter.Equip(it);   // one item per slot — all eight filled
                     _hunter.AddGleam(5000);
                     for (var i = 0; i < 8; i++) _hunter.Train(HunterStat.AttackPower);
@@ -8422,6 +8428,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>RIG ONLY: the frame the shutter opens on. Every capture mode saves at this frame.</summary>
     internal const int ShotAtFrame = 60;
+
+    /// <summary>
+    /// RIG: the `character` fixture's bag under RH_SHOT_GEAR_POSE=showcase — six pieces chosen for the
+    /// item cell itself, not for the screen around it.
+    /// </summary>
+    /// <remarks>
+    /// One of every rarity across ring, weapon and chest, so the five frames stand in one grid. The ids
+    /// are not arbitrary: a glyph is picked from the item's id (ItemNaming.ArtSeed), and these ids were
+    /// searched for so the Legendary bow wears item_weapon_bow_heavy — the darkest glyph on disk (mean
+    /// luminance 22 of 255, measured 2026-09-16) — and the Uncommon blade and Rare ring wear
+    /// item_weapon_keen and item_ring_swift, the brightest. The Epic chest is a WARDEN's, so one cell
+    /// poses the lock veil over a frame. The grid sorts by rarity, so the Legendary is first and the
+    /// two Commons close the row — park RH_SHOT_PAGE_MOUSE on either for the hover.
+    /// </remarks>
+    private static List<ItemInstance> GearShowcaseBag() =>
+    [
+        new() { InstanceId = "sc_leg0", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 60, Class = ItemClass.Wanderer, Family = 1 },
+        new() { InstanceId = "sc_epic1", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 50, Class = ItemClass.Warden },
+        new() { InstanceId = "sc_rare1", BaseType = ItemBaseType.Ring, Rarity = Rarity.Rare, SellValue = 90, Element = Source.Mind, ItemLevel = 40 },
+        new() { InstanceId = "sc_unc3", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Uncommon, SellValue = 40, Element = Source.Body, ItemLevel = 30, Class = ItemClass.Wanderer, Family = 0 },
+        new() { InstanceId = "sc_com3", BaseType = ItemBaseType.Ring, Rarity = Rarity.Common, SellValue = 12, ItemLevel = 12 },
+        new() { InstanceId = "sc_com22", BaseType = ItemBaseType.Chest, Rarity = Rarity.Common, SellValue = 10, Element = Source.Spirit, ItemLevel = 10, Class = ItemClass.Wanderer },
+    ];
 
     /// <summary>RIG ONLY: the frame being drawn, so a screen can apply a posed seek just before the shutter.</summary>
     internal static int ShotFrameNow { get; private set; }

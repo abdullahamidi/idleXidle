@@ -78,6 +78,20 @@
 #   photographed at all: 1 is the first instant of a screen switch, a modal fade, a currency pill's
 #   spend flash and its banked "+N"; 0.5 is halfway; unset means the game animates normally.
 # RH_SHOT_PAGE_MOUSE=x,y poses the cursor in PAGE space (a hover, a tooltip) on any menu screen.
+# RH_SHOT_GEAR_POSE poses the `character` fixture (GearScreen.DevPoseSpec reads it):
+#   equip[@N]  four NATURE pieces come off on the first frame and the chest goes back on N frames
+#              (5 unsaid) before the shutter — one slot pulses, GEAR POWER mid-tick, the set completes.
+#   best       EQUIP HIGHEST POWER has run, so the button draws OFF and says why.
+#   bare       everything is off: eight quiet EMPTY slots, UNEQUIP ALL off.
+#   press      the mouse button is held for the whole run (park RH_SHOT_PAGE_MOUSE on the control).
+#   showcase   the bag is Game1.GearShowcaseBag — one piece of every rarity across ring, weapon and
+#              chest, the darkest (item_weapon_bow_heavy) and brightest (item_weapon_keen, item_ring_swift)
+#              glyphs on disk, and a WARDEN's chest the starter cannot wear. The first Legendary is
+#              selected; the Commons close the grid, so RH_SHOT_PAGE_MOUSE on one poses the hover.
+#              PAGE space, not canvas pixels: page = ((canvas.x - 180) / 0.896, canvas.y / 0.896), so
+#              the Common ring's cell is 893,458 at 100 %, 858,567 at 125 % and 918,662 at 150 %:
+#
+#     RH_SHOT_GEAR_POSE=showcase RH_SHOT_PAGE_MOUSE=893,458 bash tools/asset-pipeline/capture.sh character out.png
 # `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
 # RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
 #
@@ -319,6 +333,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_MOUSE" ] && RH_ENV+=(RH_SHOT_MOUSE="$RH_SHOT_MOUSE")
 [ -n "$RH_SHOT_PAGE_MOUSE" ] && RH_ENV+=(RH_SHOT_PAGE_MOUSE="$RH_SHOT_PAGE_MOUSE")
 [ -n "$RH_SHOT_CANVAS_MOUSE" ] && RH_ENV+=(RH_SHOT_CANVAS_MOUSE="$RH_SHOT_CANVAS_MOUSE")
+# GEAR: the character fixture's pose (equip[@N] | best | bare | press | showcase). `character` only.
+[ -n "$RH_SHOT_GEAR_POSE" ] && RH_ENV+=(RH_SHOT_GEAR_POSE="$RH_SHOT_GEAR_POSE")
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")

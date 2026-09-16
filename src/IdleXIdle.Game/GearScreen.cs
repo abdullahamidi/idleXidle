@@ -138,7 +138,16 @@ public sealed class GearScreen
     //                                 quiet EMPTY slots.
     //   RH_SHOT_GEAR_POSE=press       holds the mouse button down for the whole run, so a PRESSED cell,
     //                                 tab, slot, menu row or verb can be photographed under RH_SHOT_PAGE_MOUSE.
+    //   RH_SHOT_GEAR_POSE=showcase    the character fixture's bag is six pieces chosen for the item cell
+    //                                 itself (Game1.GearShowcaseBag): one of every rarity across ring,
+    //                                 weapon and chest, the darkest and the brightest glyph on disk, and a
+    //                                 WARDEN's chest the starter cannot wear. The first Legendary is
+    //                                 selected; park RH_SHOT_PAGE_MOUSE on a Common cell for the hover.
     private static readonly string? DevPoseSpec = Environment.GetEnvironmentVariable("RH_SHOT_GEAR_POSE");
+
+    /// <summary>DEV: the pose's kind without its <c>@N</c> lead, for the host's fixture to branch on. Null when unposed.</summary>
+    internal static string? DevPoseKind
+        => DevPoseSpec is null ? null : DevPoseSpec.IndexOf('@') is var at && at > 0 ? DevPoseSpec[..at] : DevPoseSpec;
 
     /// <summary>
     /// DEV: RH_SHOT_GEAR_DETAIL=&lt;rows&gt; parks the item detail column that many rows down.
@@ -868,6 +877,10 @@ public sealed class GearScreen
                     break;
                 case "best": EquipHighestPower(hunter); break;
                 case "bare": foreach (var s in AllSlots) hunter.Unequip(s); break;
+                // The bag is the host's showcase (Game1.GearShowcaseBag); the pose only picks the first
+                // Legendary in the grid's own order, so SELECTED is photographed on the one rarity whose
+                // colour it used to share.
+                case "showcase": _selectedId = Filtered(hunter).FirstOrDefault(i => i.Rarity == Rarity.Legendary)?.InstanceId; break;
             }
         }
         if (kind != "equip") return;
@@ -1043,7 +1056,7 @@ public sealed class GearScreen
         if (item is null) { _menuItemId = null; return; }
 
         var worn = IsWorn(hunter, item);
-        var rc = RarityColor(item.Rarity);
+        var rc = ItemCellLayout.RarityInk(item.Rarity);
         var box = MenuRect;
         _ui.Fill(b, new Rectangle(box.X + 4, box.Y + 4, box.Width, box.Height), new Color(0, 0, 0, 0xA0));
         _ui.Fill(b, box, new Color(0x15, 0x10, 0x0F, 0xF6));
@@ -1104,9 +1117,9 @@ public sealed class GearScreen
             var g = new Rectangle(_carryAt.X - side / 2, _carryAt.Y - side / 2, side, side);
             _ui.Fill(b, new Rectangle(g.X + 5, g.Y + 6, g.Width, g.Height), new Color(0, 0, 0) * 0.45f);
             _ui.Plate(b, g);
-            _ui.Fill(b, new Rectangle(g.X, g.Y, 5, g.Height), RarityColor(held.Rarity));
-            _forge.DrawItemIcon(b, held, Shrink(g, UiMetrics.Space(6)));
-            Ring(b, g, RarityColor(held.Rarity), 2);
+            // The piece in hand is a cell like any other: its frame says its rarity, once. The strip and
+            // the rarity ring it used to wear said it twice more (2026-09-16).
+            _forge.DrawItemIcon(b, held, g);
         }
 
         if (_flight is not { } f || UiMotion.Reduced) return;
@@ -1121,7 +1134,7 @@ public sealed class GearScreen
         var cx = MathHelper.Lerp(f.From.Center.X, f.To.Center.X, t);
         var cy = MathHelper.Lerp(f.From.Center.Y, f.To.Center.Y, t) - arc;
         var box = new Rectangle((int)cx - w / 2, (int)cy - w / 2, w, w);
-        var tint = RarityColor(f.Item.Rarity);
+        var tint = ItemCellLayout.RarityInk(f.Item.Rarity);
         // A TRAIL: three ghosts along the path behind it, fading. Cheap, and it turns a moving square
         // into something with speed.
         for (var k = 1; k <= 3; k++)
@@ -1133,8 +1146,7 @@ public sealed class GearScreen
             var by = (int)(MathHelper.Lerp(f.From.Center.Y, f.To.Center.Y, tk) - ak) - wk / 2;
             _ui.Fill(b, new Rectangle(bx, by, wk, wk), tint * (0.16f * (1f - k / 4f)));
         }
-        _forge.DrawItemIcon(b, f.Item, box);
-        Ring(b, box, tint, 2);
+        _forge.DrawItemIcon(b, f.Item, box);   // the frame is its edge; the trail above carries the colour
     }
 
     // ── EQUIPPED: the one ornate surface — who, what they wear, what it adds up to, two actions. ──────────
@@ -1236,9 +1248,9 @@ public sealed class GearScreen
                 if (hot) { _hovered = w2; _hoveredAt = box; }
                 // PRESSED: the piece sits two pixels lower and darker for as long as the button is held (§27).
                 var drop = pressed ? 2 : 0;
-                // RARITY ON THE LEFT EDGE, the grid's own grammar — a bar floating above the ring read
-                // as a loose line rather than part of the slot (release polish 2026-09-05, gear-14).
-                _ui.Fill(b, new Rectangle(box.X, box.Y, 5, box.Height), RarityColor(w2.Rarity));
+                // THE PIECE'S CELL is the ring art's well; the rarity frame sits inside it (ItemCellLayout).
+                // RARITY IS THE FRAME'S TO SAY (2026-09-16): the 5 px strip that used to ride the box's
+                // left edge said it a second time in a square cell, and is gone.
                 _forge.DrawItemIcon(b, w2, new Rectangle(box.X + well, box.Y + well + drop, box.Width - well * 2, box.Height - well * 2));
                 if (lift > 0f) _ui.Fill(b, Shrink(box, rim), Color.White * (0.08f * lift));   // hover: a thin luminance lift (§26)
                 if (pressed) _ui.Fill(b, Shrink(box, rim), Color.Black * 0.18f);
@@ -1262,7 +1274,7 @@ public sealed class GearScreen
             }
             if (liftedOut) _ui.Fill(b, box, new Color(0x0B, 0x09, 0x08) * 0.55f);
 
-            if (selected) Ring(b, box, Gold, 3);   // gold = selected
+            if (selected) SelectedMark(b, box);   // bone, never gold — gold is the Legendary frame's
             else if (lift > 0f && !Dragging) Ring(b, box, Slate * lift, 2);
             // JUST EQUIPPED (§49): one gold pulse on the slot the piece landed in — a fading wash inside the
             // ring and a halo outside it, which steps out as it fades (a fade alone under Reduced Motion).
@@ -1384,7 +1396,6 @@ public sealed class GearScreen
 
         var cols = InvCols;
         var visibleRows = InvRows;
-        var iconInset = UiMetrics.Space(6);
         var lockEdge = UiMetrics.Control(24);
         // THE SCROLL LANE: when a row waits beyond the last visible one, the grid gives the bar its lane
         // inside the content edge rather than the bar riding the frame's rail (gear-20). Mirrored for
@@ -1410,29 +1421,34 @@ public sealed class GearScreen
             var pressed = hot && UiKit.MouseHeld;
             if (lift > 0f && !sel && !Dragging) _ui.Fill(b, cell, CellHot * lift);
             var drop = pressed ? 2 : 0;
-            _forge.DrawItemIcon(b, item, new Rectangle(cell.X + iconInset, cell.Y + iconInset + drop, cell.Width - iconInset * 2, cell.Height - iconInset * 2));
-            if (pressed) _ui.Fill(b, Shrink(cell, 5), Color.Black * 0.18f);
-            _ui.Fill(b, new Rectangle(cell.X, cell.Y, 5, cell.Height), RarityColor(item.Rarity));   // rarity owns the left edge
+            // THE CELL IS THE WELL, THE FRAME IS RARITY'S (2026-09-16): the whole cell goes to the one item
+            // renderer, and every ring here is drawn on the rectangles ItemCellLayout hands back, so the
+            // press veil, the lock veil and the BETTER hairline sit exactly on the frame. The 5 px rarity
+            // strip that rode the cell's left edge said rarity a second time in a square cell, and is gone.
+            var frame = ItemCellLayout.FrameRect(cell);
+            _forge.DrawItemIcon(b, item, new Rectangle(cell.X, cell.Y + drop, cell.Width, cell.Height));
+            if (pressed) _ui.Fill(b, frame, Color.Black * 0.18f);
             var wearable = CanWearNow(item);
             if (!wearable)
             {
                 // The house lock glyph in Primary over the dark veil — not a hand-built padlock in the OTHER
                 // class's colour, which scattered five untaught hues across the grid (gear-07). Who can
                 // wear it stays on the hover card and in the inspector's CANNOT WEAR line.
-                _ui.Fill(b, Shrink(cell, 5), new Color(0x0B, 0x09, 0x08, 0xB4));
+                _ui.Fill(b, frame, new Color(0x0B, 0x09, 0x08, 0xB4));
                 _ui.Icon(b, "ui_slot_locked", new Rectangle(cell.Right - UiMetrics.Space(8) - lockEdge, cell.Bottom - UiMetrics.Space(8) - lockEdge, lockEdge, lockEdge), Bone);
             }
-            // BETTER: one green hairline inside the frame — a hint; the inspector makes the case. Judged by the
+            // BETTER: one green hairline on the frame — a hint; the inspector makes the case. Judged by the
             // same ranking the inspector's verdict uses: bench damage for a weapon, ITEM POWER for the rest.
             var better = wearable && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is { } wornPiece
                          && (bs == GearSlot.Weapon ? WeaponDps(hunter, item) > WeaponDps(hunter, wornPiece) * 1.005f
                                                     : hunter.PowerContribution(item) > hunter.PowerContribution(wornPiece));
             // THE CELL THE PIECE WAS LIFTED OUT OF GOES DARK — over the icon, not under it, or the veil
             // is a shade behind a picture that is still at full brightness and the item reads as being
-            // in two places at once, which is what makes a drag look like a copy.
-            if (Dragging && item.InstanceId == _carryId) _ui.Fill(b, Shrink(cell, 2), new Color(0x0B, 0x09, 0x08) * 0.62f);
-            if (better) Ring(b, Shrink(cell, 3), new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
-            if (sel) { Ring(b, cell, Gold, 3); Ring(b, Shrink(cell, 3), new Color(0x16, 0x11, 0x10, 0x88), 1); }   // gold = selected
+            // in two places at once, which is what makes a drag look like a copy. On the frame, like
+            // every other veil here, so it sits exactly on the picture.
+            if (Dragging && item.InstanceId == _carryId) _ui.Fill(b, frame, new Color(0x0B, 0x09, 0x08) * 0.62f);
+            if (better) Ring(b, frame, new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
+            if (sel) SelectedMark(b, cell);
             else if (lift > 0f) Ring(b, cell, Slate * lift, 2);
         }
 
@@ -1570,7 +1586,7 @@ public sealed class GearScreen
             return;
         }
 
-        var rc = RarityColor(item.Rarity);
+        var rc = ItemCellLayout.RarityInk(item.Rarity);
         var worn = IsWorn(hunter, item);
         var slot = Gear.SlotFor(item.BaseType);
         var wornPiece = slot is { } s0 ? hunter.Worn(s0) : null;
@@ -1871,11 +1887,23 @@ public sealed class GearScreen
         Rarity.Common => "COMMON", Rarity.Uncommon => "UNCOMMON", Rarity.Rare => "RARE",
         Rarity.Epic => "EPIC", _ => "LEGENDARY",
     };
-    private static Color RarityColor(Rarity r) => r switch
+    /// <summary>The hairline inside the selected ring — a dark seam that keeps the bone ring off the glyph.</summary>
+    private static readonly Color SelectedSeam = new(0x16, 0x11, 0x10, 0x88);
+
+    /// <summary>
+    /// SELECTED IS NOT A RARITY (2026-09-16). A 2 px Primary (bone) ring, a 1 px dark seam inside it and
+    /// a solid bone tick in the top-left corner — on an inventory cell or a doll slot alike. It was a 3 px
+    /// GOLD ring, which is the Legendary colour: a selected Common read as a Legendary from across the
+    /// room, and a selected Legendary read as nothing at all. The equip-moment gold pulse stays — that is
+    /// a flourish for an event, not a state.
+    /// </summary>
+    private void SelectedMark(SpriteBatch b, Rectangle cell)
     {
-        Rarity.Common => Bone, Rarity.Uncommon => UiInk.Good, Rarity.Rare => new Color(0x4A, 0x90, 0xD9),
-        Rarity.Epic => new Color(0x8B, 0x3F, 0x82), _ => Gold,
-    };
+        Ring(b, cell, Bone, 2);
+        Ring(b, Shrink(cell, 2), SelectedSeam, 1);
+        var tick = UiMetrics.Control(10);
+        _ui.Fill(b, new Rectangle(cell.X, cell.Y, tick, tick), Bone);
+    }
 }
 
 /// <summary>

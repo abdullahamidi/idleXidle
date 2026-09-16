@@ -60,9 +60,8 @@ public sealed class VaultScreen
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
 
-    /// <summary>The same ramp the Forge uses. A grade must read as one colour everywhere in the game.</summary>
-    private static readonly Color[] RarityColors =
-        [Bone, UiInk.Good, new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
+    // A grade's colour is ItemCellLayout.RarityInk — the one ramp every screen reads (2026-09-16). This
+    // screen carried a copy of the Forge's, and the copy had drifted.
 
     /// <summary>Also shared with the fight screen, for the same reason.</summary>
     private static readonly Dictionary<Source, Color> SourceColor = new()
@@ -1054,7 +1053,7 @@ public sealed class VaultScreen
     private void DrawCard(SpriteBatch b, Chest chest, int stackCount, Rectangle card, int idx, bool hovered, bool pressed)
     {
         var d = ChestDossiers.For(chest);
-        var grade = RarityColors[(int)chest.Rarity];
+        var grade = ItemCellLayout.RarityInk(chest.Rarity);
         // HOVER through the one vocabulary (§26): ~100 ms in, and out again when the pointer leaves.
         // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
         // the pointer at once, it just does not grow or ease into it.
@@ -1250,7 +1249,7 @@ public sealed class VaultScreen
         {
             var (card, art, grade) = _burst[i];
             var f = BurstAt(pulse, grade, UiMotion.Reduced);
-            var ink = RarityColors[(int)grade];
+            var ink = ItemCellLayout.RarityInk(grade);
 
             // The edge: the card's own hover edge, in the grade's colour, with a softer halo a step out.
             Outline(b, card, ink * (0.9f * f.Edge), 3);
@@ -1513,7 +1512,7 @@ public sealed class VaultScreen
         {
             var offer = TraderStock[i];
             var card = TraderCardRect(g, i);
-            var grade = RarityColors[(int)offer.Rarity];
+            var grade = ItemCellLayout.RarityInk(offer.Rarity);
             var over = card.Contains(hit);
             if (over) { hoverOffer = offer; hoverCard = card; }
 

@@ -51,12 +51,9 @@ public sealed class ForgeScreen
 
     private static readonly string[] RarityNames = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
 
-    /// <summary>Rarity on the DARK item cards and frames. Light.</summary>
-    private static readonly Color[] RarityColors =
-        [Bone, UiInk.Good, new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
-
-    /// <summary>Rarity for the item NAME. The panels are dark glass now, so it is just the bright ramp —
-    /// the old dark-ink version was there for a parchment panel that no longer exists.</summary>
+    // RARITY'S COLOUR IS ItemCellLayout.RarityInk — one ramp for the Forge, the Vault, the Gear screen and
+    // the tooltip. This screen kept its own five colours until 2026-09-16, one drift away from each of the
+    // other three (they disagreed on Epic and on Common).
 
     // The slot word is Core's (ItemNaming.SlotWord) — this screen kept its own eight-word table until
     // 2026-09-07, one drift away from the Gear screen's.
@@ -1834,7 +1831,7 @@ public sealed class ForgeScreen
             ? "YOUR RUNNERS SOLD IT"
             : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNaming.SlotWord(i.BaseType)}"));
         Say($"{names}   +{mat} MATERIALS",
-            items.Count > 0 ? RarityColors[items.Max(i => (int)i.Rarity)] : Slate);
+            items.Count > 0 ? ItemCellLayout.RarityInk(items.Max(i => i.Rarity)) : Slate);
     }
 
     /// <summary>Crack every chest at once — the idle-convenience twin of AUTO-MERGE ALL.</summary>
@@ -2101,7 +2098,7 @@ public sealed class ForgeScreen
 
             var it = bag[idx];
             var row = BagRow(vis);
-            var rc = RarityColors[(int)it.Rarity];
+            var rc = ItemCellLayout.RarityInk(it.Rarity);
             var gem = GemCraft.IsGem(it);
             var sel = gem ? it.InstanceId == _gemId : it.InstanceId == _focusId;
             var hover = row.Contains(hit);
@@ -2701,7 +2698,7 @@ public sealed class ForgeScreen
 
     private void DrawItemColumn(SpriteBatch b, Hunter hunter, ItemInstance item, Point hit)
     {
-        var rc = RarityColors[(int)item.Rarity];
+        var rc = ItemCellLayout.RarityInk(item.Rarity);
         var worn = IsWorn(hunter, item);
         var x = UiKit.ContentLeft(ItemPanel);
         var right = UiKit.ContentRight(ItemPanel);
@@ -3584,7 +3581,7 @@ public sealed class ForgeScreen
         _ui.TextBig(b, "SET THIS GEM?", s.X, s.Y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(s.X, q.Icon.Y, q.Icon.Height, q.Icon.Height));
         _ui.TextBig(b, GemLine(gem, s.W - q.NameX),
-                    s.X + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
+                    s.X + q.NameX, q.NameY, ItemCellLayout.RarityInk(gem.Rarity), UiTypography.Body);
         for (var i = 0; i < s.Into.Count; i++)
             _ui.TextBig(b, s.Into[i], s.X, s.Line1 + i * UiTypography.Pitch(UiTypography.Secondary),
                         SocketPrice(host.Rarity) == 0 ? Gold : Bone, UiTypography.Secondary);
@@ -3638,7 +3635,7 @@ public sealed class ForgeScreen
         _ui.TextBig(b, "CRUSH THIS GEM?", s.X, s.Y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(s.X, q.Icon.Y, q.Icon.Height, q.Icon.Height));
         _ui.TextBig(b, GemLine(gem, s.W - q.NameX),
-                    s.X + q.NameX, q.NameY, RarityColors[(int)gem.Rarity], UiTypography.Body);
+                    s.X + q.NameX, q.NameY, ItemCellLayout.RarityInk(gem.Rarity), UiTypography.Body);
         for (var i = 0; i < s.Warn.Count; i++)
             _ui.TextBig(b, s.Warn[i], s.X, s.Line1 + i * UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.Secondary);
 
@@ -3806,7 +3803,7 @@ public sealed class ForgeScreen
                     s.X, s.Y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, item, new Rectangle(s.X, q.Icon.Y, q.Icon.Height, q.Icon.Height));
         var name = s.Gem ? $"{GemCraft.NameOf(item)} {item.ItemLevel}" : ItemNaming.FullName(item);
-        _ui.TextBig(b, _ui.ShortenBig(name, s.W - q.NameX, UiTypography.Body), s.X + q.NameX, q.NameY, RarityColors[(int)item.Rarity], UiTypography.Body);
+        _ui.TextBig(b, _ui.ShortenBig(name, s.W - q.NameX, UiTypography.Body), s.X + q.NameX, q.NameY, ItemCellLayout.RarityInk(item.Rarity), UiTypography.Body);
 
         for (var i = 0; i < s.OutcomeLines.Count; i++)
             _ui.TextBig(b, s.OutcomeLines[i], s.X, s.OutcomeY + i * UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.Secondary);
@@ -4581,7 +4578,7 @@ public sealed class ForgeScreen
         // reads it, so the fade agrees with the clock that produced it.
         var pointerIn = _revealPointerHold;
         var fade = pointerIn ? 1f : Math.Clamp(_revealTimer / fadeWin, 0f, 1f);
-        var grade = RarityColors[(int)_revealGrade];
+        var grade = ItemCellLayout.RarityInk(_revealGrade);
 
         // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
         // strength on frame one is what made the old reveal read as a dialog rather than an event.
@@ -4774,7 +4771,7 @@ public sealed class ForgeScreen
     {
         var live = _inv.FirstOrDefault(i => i.InstanceId == snapshot.InstanceId);
         var shown = live ?? snapshot;
-        var rc = RarityColors[(int)shown.Rarity];
+        var rc = ItemCellLayout.RarityInk(shown.Rarity);
         var icon = new Rectangle(cell.X + (cell.Width - RevealIcon) / 2, cell.Y + drop, RevealIcon, RevealIcon);
 
         DrawItemIcon(b, shown, icon);
@@ -4932,7 +4929,7 @@ public sealed class ForgeScreen
         _ui.TextBig(b, kind == ScrapKind.Sell ? "SELL THIS?" : "SALVAGE THIS?", s.X, s.Y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, item, new Rectangle(s.X, q.Icon.Y, q.Icon.Height, q.Icon.Height));
         _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), s.W - q.NameX, UiTypography.Body), s.X + q.NameX, q.NameY,
-                    RarityColors[(int)item.Rarity], UiTypography.Body);
+                    ItemCellLayout.RarityInk(item.Rarity), UiTypography.Body);
 
         var outcome = kind == ScrapKind.Sell
             ? $"IT SELLS FOR {item.SellValue:N0} GLEAM. THIS CANNOT BE UNDONE."
@@ -4964,7 +4961,7 @@ public sealed class ForgeScreen
         var panel = h.Panel;
         _ui.PanelQuiet(b, panel);
 
-        var best = n > 0 ? RarityColors[_revealAll.Max(i => (int)i.Rarity)] : Bone;
+        var best = n > 0 ? ItemCellLayout.RarityInk(_revealAll.Max(i => i.Rarity)) : Bone;
         _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + titleOff,
                           best * fade, UiTypography.PanelTitle);
 
@@ -5036,27 +5033,30 @@ public sealed class ForgeScreen
     }
 
     /// <summary>
-    /// The tint each rarity's frame is drawn with, so the ring itself carries rarity.
+    /// The tint a LEGACY rarity frame — one whose centre is painted — is drawn with, so its ring carries
+    /// rarity. A frame with a see-through centre is drawn untinted: that family carries its own colour.
     /// </summary>
     /// <remarks>
-    /// <b>THE FIVE RARITY FRAME TEXTURES ARE FIVE DIFFERENT RINGS, AND ALL FIVE ARE GOLD.</b>
-    /// ui_frame_rarity_common through _legendary each carry a little more ornament than the last —
-    /// that part is a real ladder — but every one of them is the same warm gold-and-bone metal, so
-    /// drawn untinted "rarity frame" was a name and not a signal, and rarity's only mark on an item
-    /// was a few pixels of coloured bar beside it. The largest shape in every cell said nothing.
-    /// (An older note here claimed the five files were one picture; they are not, and were not when
-    /// it was written — what they share is the metal, which is what the tint is for.)
+    /// <b>THE 2026-08 RARITY FRAMES WERE FIVE DIFFERENT RINGS, AND ALL FIVE WERE GOLD.</b>
+    /// ui_frame_rarity_common through _legendary each carried a little more ornament than the last, but
+    /// every one was the same warm gold-and-bone metal round an opaque black centre, so drawn untinted
+    /// "rarity frame" was a name and not a signal, and rarity's only mark on an item was a few pixels of
+    /// coloured bar beside it. The largest shape in every cell said nothing.
     ///
-    /// Tinting works here only because the art's brightest pixels are near-white (sampled 239,221,199),
-    /// not saturated gold: a multiply against a near-white ring can reach any hue, while a multiply
-    /// against actual gold could only ever darken toward brown. Legendary keeps White, which is what
-    /// makes it the one that still reads as metal.
+    /// Tinting works on that set only because the art's brightest pixels are near-white (sampled
+    /// 239,221,199), not saturated gold: a multiply against a near-white ring can reach any hue, while a
+    /// multiply against actual gold could only ever darken toward brown. Legendary keeps White, which is
+    /// what makes it the one that still reads as metal.
+    ///
+    /// The set was regenerated on 2026-09-16 as one family with a transparent centre, one shared band
+    /// and its OWN colour per tier (plain iron, a green inlay, blue steel brackets, violet enamel, gold
+    /// filigree), so the renderer asks <see cref="ItemArtMetrics.FrameInterior"/> which kind of frame
+    /// it holds and tints only the legacy kind. No shipped frame is that kind any more, and
+    /// <c>tools/check_item_art.py</c> refuses one; the table stays for a painted-centre frame dropped in
+    /// by hand, which would otherwise read as five identical gold rings again.
     ///
     /// Indexed by <c>(int)Rarity</c>, in the same order as FrameKey.
     /// </remarks>
-    /// <summary>The niche a dark item stands in, so its silhouette has something to be dark against.</summary>
-    private static readonly Color ItemShelf = UiInk.Rule * 0.9f;
-
     private static readonly Color[] FrameTint =
     {
         new(0xD2, 0xCE, 0xC2),   // Common — neutral bone, so it reads as "no claim"
@@ -5066,16 +5066,46 @@ public sealed class ForgeScreen
         Color.White,             // Legendary — the art as authored
     };
 
-    /// <summary>Draw an item's frame+glyph (or a rarity-coloured fallback). Shared with the Character screen.</summary>
-    public void DrawItemIcon(SpriteBatch b, ItemInstance item, Rectangle box)
+    /// <summary>
+    /// Draw an item into its CELL — the one item renderer, shared with the Gear screen, the Vault and the
+    /// tooltip. Three layers with three jobs: the slot well (the caller's cell, showing through the rim),
+    /// the rarity frame (which says how good) and the glyph (which says what).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The caller passes the whole cell and draws its own rings and hairlines on the rectangles
+    /// <see cref="ItemCellLayout"/> gives it, so the frame and the selection share one geometry
+    /// (ADR-006). Before 2026-09-16 every caller inset the box by its own breath and the renderer
+    /// stretched the glyph's whole 256 px canvas into a 15 % inset of that — so a thin charm on its
+    /// chain drew at a third of its room, and rarity was said twice in a square cell (the frame and a
+    /// 5 px strip beside it).
+    /// </para>
+    /// <para>
+    /// The glyph is drawn CONTENT-AWARE: its source rectangle is the box its opaque pixels fill
+    /// (<see cref="ItemArtMetrics.ContentBounds"/>), fitted uniformly into the frame's measured interior
+    /// (<see cref="ItemArtMetrics.FrameInterior"/>, or the 15 % fallback for a painted-centre frame).
+    /// A gem still wears the medallion of its stat, an item with no art still gets a rarity pip, and
+    /// the Source gem and enchant accent overlays sit in the frame's corners as before.
+    /// </para>
+    /// </remarks>
+    public void DrawItemIcon(SpriteBatch b, ItemInstance item, Rectangle cell)
     {
-        var frame = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
-        if (frame is not null) b.Draw(frame, box, FrameTint[(int)item.Rarity]);
+        var frameTex = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
+        var frame = ItemCellLayout.FrameRect(cell);
+        var interior = frameTex is null ? FrameInterior.None : ItemArtMetrics.FrameInterior(frameTex);
+        if (frameTex is not null)
+        {
+            // THE WELL: a see-through frame shows whatever the cell paints through its hole, so the
+            // glyph's ground is painted under it (ItemCellLayout.WellInk — see below for why it is a
+            // warm mid-tone and not a darkening). A painted-centre frame gets its ground on the hole.
+            if (interior.Transparent) _ui.Fill(b, frame, ItemCellLayout.WellInk);
+            b.Draw(frameTex, frame, interior.Transparent ? Color.White : FrameTint[(int)item.Rarity]);
+        }
 
         // ── A SHELF BEHIND THE ITEM, because the items are DARK and so is the cell. ─────────────
         //
         // Almost every wearable in this game is painted as near-black iron on transparency, and the
-        // rarity frame's own interior is opaque black — so a helm, a boot and a blade all read as an
+        // old rarity frames' interiors were opaque black — so a helm, a boot and a blade all read as an
         // empty cell with a gold ring round it, at every size, on every surface. Playtest: the item
         // art needs work; half of it was never actually visible.
         //
@@ -5083,10 +5113,10 @@ public sealed class ForgeScreen
         // ornament so nothing of the frame is covered. It is drawn here rather than in each caller
         // because every item surface in the game — bag, paper doll, socket box, reveal card, tooltip,
         // chest dossier — draws its icon through this one method.
-        var shelfPad = frame is null ? 0 : Math.Max(4, box.Width * 15 / 100);
-        if (frame is not null)
-            _ui.Fill(b, new Rectangle(box.X + shelfPad, box.Y + shelfPad,
-                                      box.Width - 2 * shelfPad, box.Height - 2 * shelfPad), ItemShelf);
+        // Since 2026-09-16 the frames are see-through and the well above IS that plate; only a legacy
+        // painted-centre frame still needs it laid on its hole.
+        if (frameTex is not null && !interior.Transparent)
+            _ui.Fill(b, ItemCellLayout.GlyphRect(frame, interior), ItemCellLayout.WellInk);
 
         // A STAT GEM wears the MEDALLION OF ITS STAT — a fist for damage, a star for critical chance.
         // Six of them shipped in assets/art/ItemsLoot/glyphs/affix and nothing in the game ever asked
@@ -5095,52 +5125,45 @@ public sealed class ForgeScreen
         // question, tooltip — because they all draw their icon through this one method.
         if (GemCraft.IsGem(item))
         {
-            var inset = frame is null ? 4 : Math.Max(6, box.Width * 18 / 100);
-            var inner = new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset);
+            var inner = frameTex is null ? ItemCellLayout.GlyphRect(frame, interior) : ItemCellLayout.GemRect(frame, interior);
             var stat = GemCraft.StatOf(item);
             if (_ui.Assets.Get(GemIconKey(stat)) is { } medallion) b.Draw(medallion, inner, Color.White);
             else _ui.Diamond(b, inner, GemColor(stat));   // the pre-art fallback, kept: a missing PNG must not blank the slot
             return;
         }
 
-        // The icon: the item's id-stable face (see ItemArt), drawn INSET so the ornate rarity frame
-        // stays visible around it. Then the Source gem (top-left) and enchant glyph (bottom-right)
-        // as small modular overlays — the package_05 composition order.
+        // The icon: the item's id-stable face (see ItemArt), its CONTENT fitted into the frame's hole.
+        // Then the Source gem (top-left) and enchant glyph (bottom-right) as small modular overlays —
+        // the package_05 composition order.
         var glyph = ItemArt(item);
         if (glyph is not null)
         {
-            var pad = frame is null ? 0 : Math.Max(4, box.Width * 15 / 100);
-            b.Draw(glyph, new Rectangle(box.X + pad, box.Y + pad, box.Width - 2 * pad, box.Height - 2 * pad), Color.White);
-            DrawSourceGem(b, item, box);
-            DrawEnchantAccent(b, item, box);
+            var src = ItemArtMetrics.ContentBounds(glyph);
+            b.Draw(glyph, ItemCellLayout.Fit(src.Size, ItemCellLayout.GlyphRect(frame, interior)), src, Color.White);
+            DrawSourceGem(b, item, cell, frame);
+            DrawEnchantAccent(b, item, cell, frame);
             return;
         }
 
         // No glyph art at all: a rarity-coloured pip so the slot still reads as filled and its grade shows —
         // inset when a frame drew, so the border stays visible.
-        var pip = frame is null
-            ? box
-            : new Rectangle(box.X + box.Width / 4, box.Y + box.Height / 4, box.Width / 2, box.Height / 2);
-        _ui.Fill(b, pip, RarityColors[(int)item.Rarity]);
+        _ui.Fill(b, frameTex is null ? frame : ItemCellLayout.PipRect(frame), ItemCellLayout.RarityInk(item.Rarity));
     }
 
-    /// <summary>The item's trait-specific icon, or null if that slot/trait pair hasn't been drawn yet.</summary>
-    /// <summary>The item's Source gem, top-left (package_05 source_&lt;element&gt;). Skipped on tiny boxes.</summary>
-    private void DrawSourceGem(SpriteBatch b, ItemInstance item, Rectangle box)
+    /// <summary>The item's Source gem, top-left of the frame (package_05 source_&lt;element&gt;). Skipped on tiny cells.</summary>
+    private void DrawSourceGem(SpriteBatch b, ItemInstance item, Rectangle cell, Rectangle frame)
     {
-        if (box.Width < 80 || item.Element is not { } el) return;
+        if (cell.Width < ItemCellLayout.SourceGemMinEdge || item.Element is not { } el) return;
         if (_ui.Assets.Get($"source_{el.ToString().ToLowerInvariant()}") is not { } sg) return;
-        var s = box.Width * 2 / 5;
-        b.Draw(sg, new Rectangle(box.X, box.Y, s, s), Color.White);
+        b.Draw(sg, ItemCellLayout.SourceGemRect(frame), Color.White);
     }
 
-    /// <summary>A small corner glyph for the item's enchantment (Rare+ only). Skipped on tiny boxes.</summary>
-    private void DrawEnchantAccent(SpriteBatch b, ItemInstance item, Rectangle box)
+    /// <summary>A small corner glyph for the item's enchantment (Rare+ only), bottom-right of the frame. Skipped on tiny cells.</summary>
+    private void DrawEnchantAccent(SpriteBatch b, ItemInstance item, Rectangle cell, Rectangle frame)
     {
-        if (box.Width < 88 || Enchantments.Of(item) is not { } ench) return;
+        if (cell.Width < ItemCellLayout.EnchantMinEdge || Enchantments.Of(item) is not { } ench) return;
         if (_ui.Assets.Get($"ench_{ench.Kind.ToString().ToLowerInvariant()}") is not { } g) return;
-        var s = box.Width * 2 / 5;
-        b.Draw(g, new Rectangle(box.Right - s, box.Bottom - s, s, s), Color.White);
+        b.Draw(g, ItemCellLayout.EnchantRect(frame), Color.White);
     }
 
     /// <summary>The medallion asset key for a gem's stat — aliased in <see cref="AssetLibrary"/>.</summary>
