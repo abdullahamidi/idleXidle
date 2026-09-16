@@ -169,8 +169,9 @@ public class OpeningFlowSeamsTest
         var game = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs")).Replace("\r\n", "\n");
         Assert.Contains("_attention = _opening.Running ? AttentionOwner.Opening", game, StringComparison.Ordinal);
         Assert.Contains("_noticeTimer > 0f && !NoticeHeld && !AttentionOwnedAbove(AttentionOwner.Feedback)", game, StringComparison.Ordinal);
-        Assert.Contains("var showing = OverlayActive && !AttentionOwnedAbove(AttentionOwner.Feedback)", game, StringComparison.Ordinal);
-        Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Feedback)) return;", game, StringComparison.Ordinal);
+        Assert.Contains("var showing = OverlayActive && NoticeToastShowing;", game, StringComparison.Ordinal);
+        Assert.Contains("if (!NoticeToastShowing) return;", game, StringComparison.Ordinal);
+        Assert.Contains("&& !AttentionOwnedAbove(AttentionOwner.Feedback) && !NoticeHeld;", game, StringComparison.Ordinal);
         // The boot line is the same: not drawn over the opening, and spent when the opening completes.
         Assert.Contains("if (!BootToastShowing) return;\n        var fade = Math.Clamp(_bootTimer / 1.2f", game, StringComparison.Ordinal);
         Assert.Contains("private bool BootToastShowing => _bootTimer > 0f && _bootMessage.Length > 0 && !AttentionOwnedAbove(AttentionOwner.Feedback);", game, StringComparison.Ordinal);
@@ -180,8 +181,10 @@ public class OpeningFlowSeamsTest
         // drawn over it -- the coach outranks direct feedback -- and the blaze runs only while the light is painted.
         Assert.Contains("if (_coach.Showing is not { } id || !CoachLightsIt(id)) { _coachCard = Rectangle.Empty; return; }", game, StringComparison.Ordinal);
         Assert.Contains("if (_coachBlaze > 0f && CoachLit)", game, StringComparison.Ordinal);
-        // ...and the unlock notice for a screen the opening walks the player into is not posted at all.
+        // ...and the unlock DISPATCH for a screen the opening walks the player into is not posted at
+        // all: the key is marked known instead, so it can never arrive later as news either.
         Assert.Contains("&& !OpeningWalksInto(opened))", game, StringComparison.Ordinal);
+        Assert.Contains("KnowDispatch(DispatchKeys.Unlock(opened));", game, StringComparison.Ordinal);
         var walked = OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceNavigate).Select(s => s.Screen).ToHashSet();
         Assert.True(walked.SetEquals(new Activity?[] { Activity.Vault, Activity.Gear }),
                     "the opening walks the player into VAULT and GEAR, and no other screen");

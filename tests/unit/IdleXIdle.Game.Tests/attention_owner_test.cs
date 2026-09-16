@@ -160,11 +160,13 @@ public class AttentionOwnerTest
             "private void DrawBootToast()",
             "private void DrawLockedToast()",
         };
-        // Two predicates read the owner on a gate's behalf; a gate may read the owner through them.
+        // Three predicates read the owner on a gate's behalf; a gate may read the owner through them.
         var lights = MemberOf(game, "private bool CoachLightsIt(OnboardingLessonId id)");
         var boot = MemberOf(game, "private bool BootToastShowing");
+        var toast = MemberOf(game, "private bool NoticeToastShowing");
         Assert.Contains(OwnerRead, lights, StringComparison.Ordinal);
         Assert.Contains(OwnerRead, boot, StringComparison.Ordinal);
+        Assert.Contains(OwnerRead, toast, StringComparison.Ordinal);
 
         var privateLists = new[]
         {
@@ -177,6 +179,7 @@ public class AttentionOwnerTest
             var body = MemberOf(game, gate);
             var reads = body.Contains(OwnerRead, StringComparison.Ordinal)
                         || body.Contains("BootToastShowing", StringComparison.Ordinal)
+                        || body.Contains("NoticeToastShowing", StringComparison.Ordinal)
                         || body.Contains("CoachLightsIt(", StringComparison.Ordinal);
             Assert.True(reads, $"{gate} does not read the attention owner.");
             foreach (var term in privateLists)
@@ -184,7 +187,9 @@ public class AttentionOwnerTest
         }
         // The toast's inversion: it is Feedback tier and waits for a lit lesson, not the other way round.
         Assert.DoesNotContain("NoticeToastHolds", game, StringComparison.Ordinal);
-        Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Feedback)) return;", MemberOf(game, "private void DrawNoticeToast()"), StringComparison.Ordinal);
+        // The plate, its lane and its cue ask ONE predicate, and that predicate asks the owner.
+        Assert.Contains("if (!NoticeToastShowing) return;", MemberOf(game, "private void DrawNoticeToast()"), StringComparison.Ordinal);
+        Assert.Contains("&& !AttentionOwnedAbove(AttentionOwner.Feedback) && !NoticeHeld;", toast, StringComparison.Ordinal);
         Assert.Contains("if (!BootToastShowing) return;", MemberOf(game, "private void DrawBootToast()"), StringComparison.Ordinal);
         Assert.Contains("AttentionOwnedAbove(AttentionOwner.Feedback)) return;", MemberOf(game, "private void DrawLockedToast()"), StringComparison.Ordinal);
         Assert.Contains("private bool CoachLightsIt(OnboardingLessonId id) => !AttentionOwnedAbove(AttentionOwner.Coach) && CoachAims(id);", game, StringComparison.Ordinal);
@@ -193,7 +198,7 @@ public class AttentionOwnerTest
         Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
         // The ? opens a tour, so it is the coach's tier: live over a lit lesson, gone under the log and above.
         Assert.Contains("!AttentionOwnedAbove(AttentionOwner.Coach)", MemberOf(game, "private bool LearnOffered()"), StringComparison.Ordinal);
-        Assert.Contains("var showing = OverlayActive && !AttentionOwnedAbove(AttentionOwner.Feedback)", MemberOf(game, "private void ReserveNoticeLane()"), StringComparison.Ordinal);
+        Assert.Contains("var showing = OverlayActive && NoticeToastShowing;", MemberOf(game, "private void ReserveNoticeLane()"), StringComparison.Ordinal);
     }
 
     /// <summary>The clocks under an owner hold rather than burn, and none of them is advanced in Draw.</summary>

@@ -2363,6 +2363,14 @@ public sealed class ForgeScreen
     // legend are the tour's job; what they said is in the tour cards word for word.
     private void DrawMaterialStrip(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit)
     {
+        // THE BAND IS SHARED, AND THE STRIP YIELDS IT. Every other screen lays out from UiKit.PageTop,
+        // which grows by the notice lane, so a toast or a slot card stands ABOVE the page. This screen
+        // anchors at the page's own top instead (see Top — its three columns have no height to give
+        // at 150 %), so a plate in that lane lands ON the strip and cuts it in half. Standing the strip
+        // down is the honest answer: every balance on it is also in the chrome pills and in the item
+        // column, while a half-covered plate reads as a broken screen. Nothing here takes a click, and
+        // a tour outranks the lane, so the MATERIALS spotlight always has its strip to land on.
+        if (UiKit.NoticeLane > 0) return;
         _ui.Plate(b, MaterialStrip);
         _ui.Fill(b, new Rectangle(MaterialStrip.X, MaterialStrip.Y, MaterialStrip.Width, 2), Gold * 0.35f);   // the strip's own rule, so it reads as part of the page's frames
 

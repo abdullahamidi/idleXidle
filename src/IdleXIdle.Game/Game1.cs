@@ -363,6 +363,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly Queue<Notice> _noticeQueue = new();
     private Notice _notice;
 
+    /// <summary>A dequeued toast owes its cue, and pays it on the first frame it is actually painted.</summary>
+    private bool _noticeCueOwed;
+
     // ── SCREEN AND MODAL MOTION (brief sec. 33, 34) ─────────────────────────────────────────────
     //
     // A screen used to APPEAR: one frame the page was BUILD, the next it was GEAR, with nothing in
@@ -1726,6 +1729,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _noticeQueue.Clear();
         _notice = default;
         _noticeTimer = 0f;
+        _noticeCueOwed = false;
         // The click that confirmed the reset may have closed a banner in the same frame, which
         // leaves _swallowInput latched TRUE — and the title screen's keys all read through it. The
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
@@ -1772,7 +1776,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _region = _world.RegionFarm(_activeRegion);
         BuildScreens();              // every screen re-made around the fresh state
         ApplyRestoredState();        // hands the (empty) pending state to the new screens
-        _bootTimer = 7f;
+        // ARMED ONLY WITH SOMETHING TO SAY. A bare seven seconds with an empty message is not a toast,
+        // but every surface that steps around one counted it: the hunt's HunterDown, BOSS INCOMING and
+        // WAVE CLEARED banners stood down for seven seconds after START A NEW GAME, for a plate with no
+        // words in it. SeedNewGame writes no first-boot line today, so this is almost always zero.
+        _bootTimer = _bootMessage.Length > 0 ? 7f : 0f;
 
         _showSettings = _showHelp = _showDispatches = false;
         _dispatchScroll = 0;
@@ -4012,7 +4020,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _notice = _noticeQueue.Dequeue();
             _noticeTimer = NoticeSeconds;
-            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+            // THE CUE IS OWED, NOT PLAYED. Coming off the queue is not being seen: the band can still
+            // be held by a slot card with a body, and a reward sound for a plate that never appears is
+            // a sound about nothing. It is spent below, on the first frame the plate actually paints.
+            _noticeCueOwed = true;
         }
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
@@ -4383,6 +4394,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // a fall or an open log is the game asking for two things at once. So the edge is HELD (a pulse
         // cannot be paused — UiMotion decrements every one) and spent on the first frame the owner is
         // the coach or nothing. No toast, ever: this is background news.
+        // The toast's cue, on the first frame it is really on screen — decided here, with the owner,
+        // because Draw paints and never sounds.
+        if (_noticeCueOwed && NoticeToastShowing)
+        {
+            _noticeCueOwed = false;
+            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+        }
+
         if (TakeDispatchArrival()) _dispatchArrivalHeld = true;
         if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))
         {
@@ -6029,13 +6048,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // NOTHING CLICKABLE PAINTS WHEN ITS INPUT IS BLOCKED, and this plate has a ×: on every frame it is
         // not painted the rect the × is read from is cleared first, so a hidden close cannot take a click.
         _noticeCloseRect = Rectangle.Empty;
-        if (_noticeTimer <= 0f || _notice.Head.Length == 0) return;
-        // FEEDBACK TIER. News waits under anything the player is meant to be reading — a lit lesson, the
-        // open log, a fall, a reveal, a modal (the SPECIALISATION ceremony had its own title covered by a
-        // quest toast at 125 %; a toast across a tour's spotlight is two lessons at once) and the authored
-        // opening — and its clock waits with it (Update), so it lands when the frame is handed back.
-        if (AttentionOwnedAbove(AttentionOwner.Feedback)) return;
-        if (NoticeHeld) return;   // the band belongs to a slot reveal; the clock is held with it
+        if (!NoticeToastShowing) return;
         if (OpeningRigOn) _rigNoticeDrawn = _notice.Head;   // dev: the opening rig's trace
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
@@ -6049,20 +6062,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             fade *= _noticeLaneOpen;
         }
         // THE HEIGHT FOLLOWS THE TEXT, so nothing can fall out of the plate: a headline, then a body
-        // that WRAPS. It used to be one ellipsised line, which was fine while every toast was a short
-        // sentence and wrong as soon as a long one arrived.
-        var pad = UiMetrics.Space(22);
+        // that WRAPS — measured by the same two members the LANE measures with, so the room the page
+        // is pushed down by and the plate that stands in it can never disagree about a line.
+        var room = NoticeToastRoom;
         var r0 = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, 0);
-        // MEASURED AGAINST THE CLOSE BUTTON, on BOTH sides, because this text is CENTRED: a reserve
-        // on the right alone moves the middle, and the line still reaches the corner the x sits in.
-        // At 150 % the second line of a keystone reveal ran straight under it.
-        var room = r0.Width - 2 * (UiKit.PanelCorner + 8 + UiMetrics.Control(UiKit.CloseSize) + UiMetrics.Space(8));
-        var body = _notice.Detail.Length > 0
-            ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).ToList()
-            : new List<string>();
-        var rungs = UiTypography.Pitch(UiTypography.OverlayTitle)
-                    + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body.Count);
-        var h = pad + rungs + UiMetrics.Space(12);
+        var body = NoticeToastBody();
+        var h = NoticeToastHeightFor(body.Count);
         // ── IT ARRIVES, rather than being there. ─────────────────────────────────────────────────
         //
         // Playtest 2026-09-09: "nobody pays any attention to the notification messages at the top."
@@ -6088,8 +6093,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _ui.CloseButton(_batch, _noticeCloseRect, ChromeMouse, false);
 
         _ui.TextCenterBig(_batch, _ui.ShortenBig(_notice.Head, room, UiTypography.OverlayTitle),
-                          r.Center.X, r.Y + pad, NavGold * fade, UiTypography.OverlayTitle);
-        var bodyY = r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle);
+                          r.Center.X, r.Y + NoticeToastPad, NavGold * fade, UiTypography.OverlayTitle);
+        var bodyY = r.Y + NoticeToastPad + UiTypography.Pitch(UiTypography.OverlayTitle);
         foreach (var line in body)
         {
             _ui.TextCenterBig(_batch, _ui.ShortenBig(line, room, UiTypography.OverlayBody),
@@ -6119,6 +6124,52 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>The notice toast's width — a readable two-line plate, centred, wider with the profile so the line count does not climb at 150 %.</summary>
     private static int NoticeToastWidth => Math.Min(UiMetrics.Control(800), UiKit.Page.Width * 2 / 3);
+
+    /// <summary>The breath above the plate's first rung, and the one number both halves start from.</summary>
+    private static int NoticeToastPad => UiMetrics.Space(22);
+
+    /// <summary>
+    /// How wide the toast's text may run — the one room the plate and its lane both wrap to.
+    /// </summary>
+    /// <remarks>
+    /// MEASURED AGAINST THE CLOSE BUTTON, on BOTH sides, because this text is CENTRED: a reserve on
+    /// the right alone moves the middle, and the line still reaches the corner the × sits in.
+    /// <para>
+    /// It is ONE member because it was two. The lane wrapped at <c>width - Space(60)</c> and the plate
+    /// at the width less twice the close corner, so at 150 % they could count a different number of
+    /// lines: the page was pushed down by a room the plate did not use, or the plate grew into a room
+    /// the page had not reserved.
+    /// </para>
+    /// </remarks>
+    private static int NoticeToastRoom
+        => NoticeToastWidth - 2 * (UiKit.PanelCorner + 8 + UiMetrics.Control(UiKit.CloseSize) + UiMetrics.Space(8));
+
+    /// <summary>The showing toast's body, wrapped to <see cref="NoticeToastRoom"/> and cut at its line budget.</summary>
+    private List<string> NoticeToastBody()
+        => _notice.Detail.Length > 0
+            ? _ui.WrapBig(_notice.Detail, NoticeToastRoom, UiTypography.OverlayBody).Take(NoticeBodyLines).ToList()
+            : new List<string>();
+
+    /// <summary>The plate's height for a body of this many lines — the one formula both halves use.</summary>
+    private static int NoticeToastHeightFor(int bodyLines)
+        => NoticeToastPad
+           + UiTypography.Pitch(UiTypography.OverlayTitle)
+           + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, bodyLines)
+           + UiMetrics.Space(12);
+
+    /// <summary>
+    /// Is the toast plate painting this frame? The one question the plate, its lane and its cue ask.
+    /// </summary>
+    /// <remarks>
+    /// FEEDBACK TIER. It waits under anything the player is meant to be reading — a lit lesson, the
+    /// open log, a fall, a reveal, a modal (the SPECIALISATION ceremony had its own title covered by a
+    /// toast at 125 %; a toast across a tour's spotlight is two lessons at once) and the authored
+    /// opening — and under a slot card, which owns the same band. Its clock waits with it (Update), so
+    /// it lands when the frame is handed back.
+    /// </remarks>
+    private bool NoticeToastShowing
+        => _noticeTimer > 0f && _notice.Head.Length > 0
+           && !AttentionOwnedAbove(AttentionOwner.Feedback) && !NoticeHeld;
 
     // ── The tours ──────────────────────────────────────────────────────────────────────────────
 
@@ -10723,8 +10774,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // opened for a toast nobody may read pushed every page down under the opening's cards — at 150 %
         // it left the GEAR doll that BACK TO THE HUNT lights no height at all (autoplayed opening,
         // 2026-09-11). The owner is last frame's here, at the top of Update; the lane eases anyway.
-        var showing = OverlayActive && !AttentionOwnedAbove(AttentionOwner.Feedback)
-                      && _noticeTimer > 0f && _notice.Head.Length > 0 && !NoticeHeld;
+        var showing = OverlayActive && NoticeToastShowing;
         if (showing) _noticeLaneFull = NoticeToastHeight() + UiMetrics.Space(8);
         _noticeLaneOpen = UiMotion.Ease(NoticeLaneKey, showing ? 1f : 0f, UiMotion.Transition);
         if (!showing && _noticeLaneOpen <= 0f) _noticeLaneFull = 0;
@@ -10771,18 +10821,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         return Math.Max(0, (int)MathF.Ceiling(bottom / OverlayScale) + UiMetrics.Space(6) - UiKit.PageTopBase);
     }
 
-    /// <summary>The notice toast's height for the notice showing now, from its own lines.</summary>
-    private int NoticeToastHeight()
-    {
-        var pad = UiMetrics.Space(22);
-        var room = NoticeToastWidth - UiMetrics.Space(60);
-        var body = _notice.Detail.Length > 0
-            ? _ui.WrapBig(_notice.Detail, room, UiTypography.OverlayBody).Take(NoticeBodyLines).Count()
-            : 0;
-        var rungs = UiTypography.Pitch(UiTypography.OverlayTitle)
-                    + UiTypography.Pitch(UiTypography.OverlayBody) * Math.Max(1, body);
-        return pad + rungs + UiMetrics.Space(12);
-    }
+    /// <summary>The notice toast's height for the notice showing now — the plate's own measurement.</summary>
+    private int NoticeToastHeight() => NoticeToastHeightFor(NoticeToastBody().Count);
 
     /// <summary>Dev (F8 under RH_DEV): step the UI SCALE 100 → 125 → 150 → AUTO → 100 and keep it.</summary>
     private void CycleUiScale()
