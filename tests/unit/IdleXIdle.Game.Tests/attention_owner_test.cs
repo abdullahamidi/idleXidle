@@ -195,7 +195,7 @@ public class AttentionOwnerTest
         Assert.Contains("private bool CoachLightsIt(OnboardingLessonId id) => !AttentionOwnedAbove(AttentionOwner.Coach) && CoachAims(id);", game, StringComparison.Ordinal);
         Assert.Contains("if (OverlayActive || AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private OnboardingLessonId? HuntLessonShowing()"), StringComparison.Ordinal);
         Assert.Contains("if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
-        Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Coach)) return null;", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
+        Assert.Contains("if (AttentionOwnedAbove(AttentionOwner.Feedback)) return null;", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
         // The ? opens a tour, so it is the coach's tier: live over a lit lesson, gone under the log and above.
         Assert.Contains("!AttentionOwnedAbove(AttentionOwner.Coach)", MemberOf(game, "private bool LearnOffered()"), StringComparison.Ordinal);
         Assert.Contains("var showing = OverlayActive && NoticeToastShowing;", MemberOf(game, "private void ReserveNoticeLane()"), StringComparison.Ordinal);
@@ -402,5 +402,60 @@ public class AttentionOwnerTest
         //    answer rather than a flourish the player would never have been shown.
         Assert.Contains("if (CaptureRig && !AttentionOwnedAbove(AttentionOwner.Coach)", fight, StringComparison.Ordinal);
         Assert.Contains("UiMotion.PoseFlash(NavBreakKey(who), part, NavChainSeconds);", fight, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ...AND SO DOES THE CHROME'S OWN POSE. <c>RH_SHOT_MOTION</c> re-poses the four chrome transients
+    /// for a capture, and the banked "+N" is the one of them that waits in play -- so posing it under a
+    /// reveal, a fall or the opening photographed a badge no player would ever be shown, which is the
+    /// same rig lie <c>RH_SHOT_BREAK</c> was gated for.
+    /// </summary>
+    /// <remarks>
+    /// The capsule's TINT is re-posed unconditionally on purpose: it is ungated in play, because the
+    /// figure beside it walks to its new value under every owner, so the rim reports nothing the
+    /// number is not already showing.
+    /// </remarks>
+    [Fact]
+    public void test_the_rig_poses_no_banked_gain_the_player_would_not_be_shown()
+    {
+        var pose = MemberOf(Game1(), "private void PoseChromeMotion()");
+
+        // ONE QUESTION, THE SAME ONE THE REAL ARM ASKS...
+        Assert.Contains("var gainWouldShow = !AttentionOwnedAbove(AttentionOwner.Coach);", pose, StringComparison.Ordinal);
+        // ...asked before the badge's two fields and after the tint's, so the tint still poses.
+        var tint = IndexOf(pose, "_pillFlash[i] = UiMotion.Transition * t;");
+        var gate = IndexOf(pose, "if (!gainWouldShow) continue;");
+        var show = IndexOf(pose, "_pillGainShow[i] = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));");
+        var clock = IndexOf(pose, "_pillGainT[i] = PillGainSeconds * t;");
+        Assert.True(tint < gate, "the capsule's tint must be posed before the gain's gate.");
+        Assert.True(gate < show && show < clock, "the gain's two fields must both sit under the gate.");
+
+        // ...and the tint is NOT gated where it is armed for real, which is the decision this records.
+        var chrome = MemberOf(Game1(), "private void TickChromeMotion(float dt)");
+        Assert.Contains("_pillFlash[i] = UiMotion.Transition;", chrome, StringComparison.Ordinal);
+        // EXACTLY ONE owner question in the whole tick, and it is the badge's: the tint is not gated,
+        // and neither is the walking number the tint is about.
+        Assert.Single(Regex.Matches(chrome, "AttentionOwnedAbove"));
+        Assert.Contains("if (_pillGainAcc[i] >= bar && !AttentionOwnedAbove(AttentionOwner.Coach))", chrome, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A NOTE AND THE SLOT THAT PAINTS IT ANSWER AT ONE RUNG. The banner had the coach's rung while the
+    /// slot had Feedback, so a caller asking the banner directly could be told a note was owed on a
+    /// frame the slot would refuse to draw it -- which is how a gold mark reached the BUILD screen's
+    /// first empty row with no sentence anywhere on screen (60d2e3aa).
+    /// </summary>
+    [Fact]
+    public void test_the_slot_and_its_note_answer_at_the_same_rung()
+    {
+        var game = Game1();
+        const string rung = "AttentionOwnedAbove(AttentionOwner.Feedback)";
+        Assert.Contains("if (!OverlayActive || " + rung + ") return null;", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
+        Assert.Contains("if (" + rung + ") return null;", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
+        Assert.DoesNotContain("AttentionOwnedAbove(AttentionOwner.Coach)", MemberOf(game, "private ScreenBanner? ScreenBannerShowing()"), StringComparison.Ordinal);
+        // ...and the slot is still the ONLY caller, so there is one surface and one question about it:
+        // two mentions across every partial of the host -- the declaration, and SlotShowing's own call.
+        Assert.Equal(2, Regex.Matches(Host(), @"ScreenBannerShowing\(\)").Count);
+        Assert.Contains("if (ScreenBannerShowing() is { } note)", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
     }
 }

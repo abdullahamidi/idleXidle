@@ -171,12 +171,20 @@ def main(path):
     # Measured against the LAST AUTHORED CLICK, not against STAGE Complete: the stage is sampled at the
     # top of the following frame, so the frame the final CONTINUE frees the rail -- and the frame the
     # breaks land on -- is stamped one before it.
+    # AND THE ANCHOR MUST EXIST. A run that recorded no CLICK at all has no last authored beat, and a
+    # rule measured against nothing passes for the wrong reason -- "last card answered at frame None"
+    # is the shape of a check that has stopped checking. A fresh career always answers cards, so no
+    # anchor means the run did not play the opening, and that is a failure, not a pass.
     breaks = [(f, (r.split() or ["?"])[0]) for f, k, r in ev if k == "NAV_BREAK"]
     last_beat = max([f for f, k, _ in ev if k == "CLICK"], default=None)
-    early = [f"{who} (frame {f})" for f, who in breaks if last_beat is not None and f < last_beat]
-    check(not early, f"no rail tile performed its unlock while the opening still had the player "
-                     f"(last card answered at frame {last_beat}, Complete at {done})"
-          + (f" -- broke: {early[0]}" if early else ""))
+    if last_beat is None:
+        check(False, "the opening answered at least one authored card, so the rail has something to be "
+                     "measured against (no CLICK in the trace -- the run never played the opening)")
+    else:
+        early = [f"{who} (frame {f})" for f, who in breaks if f < last_beat]
+        check(not early, f"no rail tile performed its unlock while the opening still had the player "
+                         f"(last card answered at frame {last_beat}, Complete at {done})"
+              + (f" -- broke: {early[0]}" if early else ""))
     names = [who for _, who in breaks]
     twice = sorted({who for who in names if names.count(who) > 1})
     check(not twice, "every screen's chains came off exactly once"

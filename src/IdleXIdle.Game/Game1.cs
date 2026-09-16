@@ -5345,12 +5345,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The activity the screen on top belongs to — what a tour or a slot note would be about.</summary>
     private Activity ScreenActivity() => NavActivity[NavActive()];
 
-    /// <summary>The slot note owed at the top of the current screen, or null. Never under anything above the coach's tier.</summary>
+    /// <summary>The slot note owed at the top of the current screen, or null. It answers at the SLOT's tier.</summary>
+    /// <remarks>
+    /// THE SAME QUESTION <see cref="SlotShowing"/> ASKS, AND FOR THE SAME REASON. A note has one
+    /// surface — the hint slot — so a note this says is owed while the slot would refuse to paint it is
+    /// an answer nobody can act on: that difference is what put a gold mark on the BUILD screen's first
+    /// empty row with no sentence anywhere to explain it (fixed in 60d2e3aa). The note is the coach's
+    /// own kind of thing, and a lit lesson IS the coach, so a note stands down for one — which is the
+    /// Feedback rung, not the Coach rung. Under the open log, a fall, a reveal, a modal or the opening
+    /// it would be about a screen the player is not looking at, so it waits there too.
+    /// </remarks>
     private ScreenBanner? ScreenBannerShowing()
     {
-        // THE COACH'S TIER: a note is teaching. Under the open log, a fall, a reveal, a modal or the
-        // opening it would be about a screen the player is not looking at, so it waits.
-        if (AttentionOwnedAbove(AttentionOwner.Coach)) return null;
+        if (AttentionOwnedAbove(AttentionOwner.Feedback)) return null;
         return Onboarding.BannerFor(ScreenActivity(), GuideUnlockFacts(), _explained);
     }
 
@@ -5468,6 +5475,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // same screen saying something else is the two-things-at-once this owner exists to prevent.
         // The slot is where a lesson goes when it is NOT lit, so nothing is lost — the hint or note
         // returns the frame the light does.
+        // THIS IS THE ONLY QUESTION ANYONE ASKS ABOUT THE SLOT, and ScreenBannerShowing below answers
+        // at the same rung, so a caller cannot be told a note is owed that this would refuse to paint.
         if (!OverlayActive || AttentionOwnedAbove(AttentionOwner.Feedback)) return null;
         if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
         var screen = ScreenActivity();
@@ -9910,6 +9919,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (delta != 0)
             {
                 _pillTrue[i] = now[i];
+                // THE CAPSULE'S TINT IS NOT GATED, AND THAT IS DELIBERATE. The printed figure walks to
+                // the new one under every owner (nothing below gates _pillShown), so the number beside
+                // the rim is visibly moving whatever else has the player's eyes; a rim that says "this
+                // moved" reports nothing the capsule is not already showing. The "+N" badge is the
+                // opposite — a NEW thing appearing beside the chain — so that one waits.
                 _pillFlash[i] = UiMotion.Transition;
                 if (delta > 0)
                 {
@@ -9917,8 +9931,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // noise. The bank empties into one "+N" once it is worth a glance — a twentieth
                     // of what is already held, and never under the pill's own floor.
                     // ...AND NOT WHILE SOMEBODY ELSE HAS THE PLAYER'S EYES. The bank IS the wait: it
-                    // keeps filling under a chest reveal, a fall or the opening and empties into ONE
-                    // badge on the first free frame, at its true size. A spend in between cancels it
+                    // keeps filling under a chest reveal, a fall or the opening, and empties into ONE
+                    // badge, at its true size, on the first free frame THAT ALSO CARRIES A GAIN — the
+                    // arm lives inside this branch, so a frame in which nothing moved announces
+                    // nothing. On a hunt that is the very next payout. A spend in between cancels it
                     // (below) — money that arrived and left while nobody was looking is not news.
                     _pillGainAcc[i] += delta;
                     var bar = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));
@@ -9979,9 +9995,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         t = Math.Clamp(t, 0f, 1f);
         _screenFade = ScreenFadeSeconds * t;
         _modalFade = UiMotion.Fast * t;
+
+        // THE "+N" POSES THROUGH THE GATE THE REAL ARM ASKS — a capture must photograph the game's own
+        // answer, the same rule RH_SHOT_BREAK keeps. Without this a fixture that poses a banked gain
+        // under a chest reveal, a fall or the opening photographed a badge the player would never have
+        // been shown. A gain armed before the owner arrived is left to decay, which is what play does.
+        // The tint and the two fades are re-posed unconditionally because they are ungated in play.
+        var gainWouldShow = !AttentionOwnedAbove(AttentionOwner.Coach);
         for (var i = 0; i < 3; i++)
         {
             _pillFlash[i] = UiMotion.Transition * t;
+            if (!gainWouldShow) continue;
             _pillGainShow[i] = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));
             _pillGainT[i] = PillGainSeconds * t;
         }
