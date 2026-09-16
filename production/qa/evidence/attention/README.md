@@ -57,12 +57,12 @@ v8 save believed as written — its letter stays unread, nothing seeded — inbo
 | `death/fightfade_050_*` | The hold: the page fully black, only the rail, the capsules and the gear. | PASS |
 | `death/fightfade_075_*` | Fade-in mid-way: the Hunter standing, WAVE 1, the new pack still sliding in. | PASS |
 | `death/fightfade_100_*` | The stage back, the envelope and `?` back — and NO coach card: the fall's end hushes the lesson. | PASS |
-| `death/fightfade_025_hover_100` | The cursor on the medallion under the black: no lift, no whitening, no tip. The refused control does not paint as interactable. | PASS |
+| `death/fightfade_025_hover_100` | The cursor on the medallion mid fade-out (the page dimmed, the black not yet full — `050` is the black frame): no lift, no whitening, no tip. The refused control does not paint as interactable. | PASS |
 | `death/fightfade_025_*_reduced` | Reduced Motion at the fade-out's mid-point: fully black — the cut, not an alpha. | PASS |
 | `death/fightfade_075_*_reduced` | Reduced Motion at the fade-in's mid-point: the stage already back, and the READ THE LOG card up. A pose artifact — the frozen phase never crosses the transition's end, which is the edge that hushes the coach; the un-reduced pose at the same t is still inside the Death owner. | PASS (noted) |
 | `owner/fightfade_100_lesson_*` | The transition finished and the lesson allowed: gold brackets on the real EXPEDITION LOG medallion, the card IT FELL / READ THE LOG with its ×, no toast, no notice. | PASS |
 | `owner/runlog_lesson_*` | The report being read with MAKE ONE CHANGE forced: no card, no brackets, no scrim over the log. The rail and the `?` are not painted under it. | PASS |
-| `owner/fight_changelesson_*` | The log shut, the same lesson guiding: the card beside the rail, the page dimmed, the rail kept at full brightness with its bracket edge. | PASS (the rail's own light is faint — see the defects list) |
+| `owner/fight_changelesson_*` | The log shut, the same lesson guiding: the card beside the rail, the page dimmed, and the rail BRACKETED rather than lit — it is not dimmed with the page and not brightened either, so all the light it has is the bracket edge. | PASS (defect 2) |
 | `dispatches/chestdispatch_during_*` | A letter posted DURING the reveal: the cascade owns the frame, and the envelope is not painted at all — no mark, no halo, no toast. | PASS |
 | `dispatches/chestdispatch_after_*` | Past the reveal's hold: the envelope is back with its unread mark, the letter waiting. | PASS |
 | `dispatches/dispatches_*` | The panel over a fight, `6 UNREAD · 7 KEPT`, the cursor and the open letter on one row, the region kicker at the row's right end, the rule between the columns, MARK ALL READ live. | PASS |
@@ -76,10 +76,10 @@ v8 save believed as written — its letter stays unread, nothing seeded — inbo
 | `dispatches/dispatch_vow_proved_*` | `A VOW HAS REVEALED ITSELF — VOW OF THE BLUNT EDGE`, wrapping to two lines at 150. | PASS |
 | `producers/family_fight_100` | The hunt: the boot line on its own channel, the envelope's mark the only new thing. | PASS |
 | `producers/family_lootforge_100` | The reveal owning the frame; no envelope, no `?`. | PASS |
-| `producers/family_warren_100` | One surface: the coach card TRAINING / TRAIN ANY STAT ONCE with the rail lit. (Before the fix below, the warren's own hint plate stood over the same page.) | PASS |
+| `producers/family_warren_100` | One surface: the coach card TRAINING / TRAIN ANY STAT ONCE with the TRAINING tile bracketed (defect 2 — the rail itself neither dims nor brightens). Before the fix below, the warren's own hint plate stood over the same page. | PASS |
 | `producers/family_forge_100` | The bench with six capsules; no card, no plate, the envelope unmarked on this account's facts. | PASS |
 | `producers/chain_sixpills_forge_150` · `chain_longtitle_mastery_150` | The known chrome overrun — see the defects list. | DEFECT (reported) |
-| `flourish/coachdot_coach_*` | The coach lighting the rail while the ROSTER dot keeps its full brightness AND its breathing halo: the coach is not above its own tier. | PASS |
+| `flourish/coachdot_coach_*` | The coach aimed at the rail while the ROSTER dot keeps its full brightness AND its breathing halo: the coach is not above its own tier. | PASS |
 | `flourish/coachdot_modal_*` | The same dot under the authored opening: dimmed with the page, no halo. | PASS |
 | `flourish/coachdot_100_reduced` | The control: same dot, same brightness, no breath at all. | PASS |
 | `flourish/openingend_breaks_*` | The end of the opening: GEAR, TRAINING, VAULT and FORGE tear their chains on one frame, in one phase, while the six still-locked tiles between them keep theirs. It reads as one moment, not a burst. | PASS |

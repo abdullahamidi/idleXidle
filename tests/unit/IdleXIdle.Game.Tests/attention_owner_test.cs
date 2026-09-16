@@ -219,6 +219,10 @@ public class AttentionOwnerTest
         Assert.DoesNotContain("AttentionOwnedAbove(AttentionOwner.Coach)", slot, StringComparison.Ordinal);
         // ...and the slot still carries a lesson the coach did NOT light, which is the path this leaves alone.
         Assert.Contains("!CoachLightsIt(lesson)", slot, StringComparison.Ordinal);
+        // ...and the LOADOUT's mark on the row a slot NOTE is about reads that same predicate: the outline
+        // points at the row the note explains, so a mark painted where no note is drawn explains nothing.
+        Assert.Contains("_loadoutScreen.RevealingNewSlot = SlotShowing() is { Kind: SlotKind.Note };", Game1(), StringComparison.Ordinal);
+        Assert.DoesNotContain("RevealingNewSlot = ScreenBannerShowing()", Game1(), StringComparison.Ordinal);
     }
 
     /// <summary>The clocks under an owner hold rather than burn, and none of them is advanced in Draw.</summary>

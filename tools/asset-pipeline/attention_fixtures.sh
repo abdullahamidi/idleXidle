@@ -178,7 +178,11 @@ done
 if [ -z "$FILTER" ] || [[ "opening" == *"$FILTER"* ]]; then
   for sc in 100 150; do
     dir="build/shots/opening_flow/$sc"
-    bash tools/check_opening_flow.sh "$sc" || echo "the opening run at $sc % did not finish clean"
+    # A LANE THAT CANNOT FAIL IS NOT A LANE. The opening run is a row of this matrix like any other,
+    # so its exit code counts: a dirty trace must not let the run end on "0 failed".
+    if ! bash tools/check_opening_flow.sh "$sc"; then
+      echo "FAIL the opening run at $sc % did not finish clean"; failed=$((failed+1))
+    fi
     # THE MIDDLE OF THE BURST, not its first frame: the mark is filmed on the frame the break is
     # ARMED, where nothing has moved yet and four intact chains look exactly like four locked ones.
     frame="$(ls "$dir"/*break_*.png 2>/dev/null | awk -v n="$(ls "$dir"/*break_*.png 2>/dev/null | wc -l)" 'NR==int(n/2)+1')"
@@ -193,3 +197,5 @@ if [ -z "$FILTER" ] || [[ "opening" == *"$FILTER"* ]]; then
 fi
 
 echo "attention fixtures: $taken captured, $failed failed"
+# ...and the count is the exit code, so a caller that only reads $? learns the same thing a reader does.
+[ "$failed" -eq 0 ] || exit 1

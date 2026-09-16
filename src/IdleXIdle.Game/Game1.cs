@@ -4768,8 +4768,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.NextSocketNote = Unlocks.NextSocketNote(GuideUnlockFacts());
             _loadoutScreen.NextSkillSlotNote = Unlocks.NextSkillSlotNote(GuideUnlockFacts());
             // ...AND WHETHER THE SLOT REVEAL IS UP, so the screen can mark the row the banner is about.
-            // One question, asked once: the same ScreenBannerShowing the slot itself draws from.
-            _loadoutScreen.RevealingNewSlot = ScreenBannerShowing() is not null;
+            // ONE QUESTION, ASKED ONCE, AND IT IS THE SLOT'S OWN: a note that is not painted explains
+            // nothing, so a gold outline standing on the first empty row under a lit lesson would be a
+            // mark with no sentence anywhere on the screen. SlotShowing answers what the slot DRAWS —
+            // the note only when the note is the thing in the slot, and nothing at all above its tier.
+            _loadoutScreen.RevealingNewSlot = SlotShowing() is { Kind: SlotKind.Note };
             _loadoutScreen.NextVowNote = Unlocks.NextVowNote(GuideUnlockFacts());
             _loadoutScreen.SkillLevels = _skillProgress;
             _loadoutScreen.Hunter = _hunter;
