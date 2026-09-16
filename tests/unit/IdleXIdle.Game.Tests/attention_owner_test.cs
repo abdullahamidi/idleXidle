@@ -351,13 +351,16 @@ public class AttentionOwnerTest
         Assert.Single(Regex.Matches(Host(), @"UiMotion\.Flash\(NavBreakKey\("));
 
         // ── THE HUNT TILE'S TICKS ARE SKIPPED: a bite and a cleared wave are over the moment they
-        //    happen, so a tick played a minute late would be a lie about the fight.
+        //    happen, so a tick played a minute late would be a lie about the fight. Both guards are
+        //    pinned whole, so neither arm can drift back out of the one that holds it.
         Assert.Contains("&& !AttentionOwnedAbove(AttentionOwner.Coach))\n            UiMotion.Flash(NavHuntHurtKey, UiMotion.Fast);", fight, StringComparison.Ordinal);
-        Assert.Contains("if (!AttentionOwnedAbove(AttentionOwner.Coach))", fight, StringComparison.Ordinal);
-        Assert.Contains("UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);", fight, StringComparison.Ordinal);
-        // The boss's brighter, longer wash is the SAME tick; it is decided with it or not at all.
-        Assert.True(IndexOf(fight, "UiMotion.Flash(NavHuntClearKey") < IndexOf(fight, "_navHuntBoss = r.IsBoss;"),
-                    "the boss mark must be set beside the tick it brightens.");
+        // ...and the cleared wave WITH its boss mark, inside ONE guard: the brighter, longer wash is the
+        // same tick, so the flag that brightens it is set with the tick or not at all.
+        Assert.Contains("if (!AttentionOwnedAbove(AttentionOwner.Coach))\n"
+                        + "            {\n"
+                        + "                UiMotion.Flash(NavHuntClearKey, r.IsBoss ? UiMotion.Reward : UiMotion.Transition);\n"
+                        + "                _navHuntBoss = r.IsBoss;\n"
+                        + "            }", fight, StringComparison.Ordinal);
 
         // ── THE PILLS' "+N" IS DEFERRED BY ITS OWN BANK: the accumulator keeps filling and empties into
         //    one badge on the first free frame; a spend in between cancels it, as it always did.
