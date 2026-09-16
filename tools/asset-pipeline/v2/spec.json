@@ -210,11 +210,60 @@
           "cinder_swarm": {
                 "image_job": "a30d91de-dffc-4925-9465-33e2c3ce6464",
                 "idle_job": "3b37ecd0-b828-4f40-b903-fe111d2db3dd",
-                "attack_job": "e418dd74-be9e-439c-b506-81c3331951d9"
+                "attack_job": "e418dd74-be9e-439c-b506-81c3331951d9",
+                "death_job": "183ff201-4a40-4f38-9987-07a38444151a",
+                "thrown": "true"
           },
           "umbral_swarm": {
                 "image_job": "b2cd4c90-b03e-4817-a0bb-0bb802e1c46e",
-                "idle_job": "55a83f99-0889-4425-882e-fdfbc2a1cc37"
+                "idle_job": "23390576-8c86-4e16-837a-57126f78e8d0",
+                "attack_job": "2303a6d1-ad95-43b8-bca9-8d93667d728e",
+                "death_job": "30cff54b-d151-4729-8185-6d9a9286231d"
+          },
+          "cinder_caster": {
+                "character_id": "bb484197-9afb-4875-93c6-0692fee93b27",
+                "idle": "e3ce05a3-58c2-4377-8aaf-9a19ff733f7a",
+                "attack": "ebf764cf-783e-48d0-b3d8-416ced732cd5",
+                "death": "3aafd1e7-3248-45aa-88a8-3981faba6203"
+          },
+          "cinder_armoured": {
+                "character_id": "346864d6-0e52-43e3-8464-669969e5c24c",
+                "idle": "d9a93e88-3cd5-453a-8218-a56f190242f2",
+                "attack": "39ab44ea-f120-4cbb-adc0-452555d530e1",
+                "death": "f6c158fb-bc99-43e6-9e80-26c7d04ce7da"
+          },
+          "marrow_swarm": {
+                "image_job": "b76f5947-72f8-41df-b158-8454433445a8"
+          },
+          "umbral_caster": {
+                "character_id": "a1f8c5f5-23b3-4fc9-8231-46ac4e02d0a8",
+                "idle": "a63243cd-8b17-42bf-b26c-77ecc9c80944",
+                "attack": "a0f23613-f836-44da-8de1-119d9c112e57",
+                "death": "0b3f753f-cf16-4976-9796-88972ca1cbaf"
+          },
+          "umbral_armoured": {
+                "character_id": "c8d7fdb6-f762-456d-af1e-f23c39829cbd",
+                "idle": "8f16f6c0-1085-4035-889f-fb948bbe55e1",
+                "attack": "ebe4c70e-f964-4f5c-8398-f649ded570e3",
+                "death": "627f24e6-2c99-4207-abc2-6c4129448b6d"
+          },
+          "umbral_bruiser": {
+                "character_id": "369d3e73-64bb-4f04-a2b1-649bf55f0091",
+                "idle": "a63286ec-edbb-4d1f-aee0-e9bcf72906a7",
+                "attack": "58ff21df-0c0e-46a7-add0-33a9bb4b0fbc",
+                "death": "aff61df3-24a7-4b5f-abf5-4a1c2d5debda"
+          },
+          "archive_swarm": {
+                "image_job": "62101096-3060-4d23-b0eb-428b01c5d19a"
+          },
+          "cinder_bruiser": {
+                "character_id": "0988bc46-7939-4cfe-98c9-5eb2e8c000da",
+                "idle": "53cdc69c-b7fc-4d85-a3e2-7243a4400eb1",
+                "attack": "54f7ece1-fd5f-41a1-96d0-e5f8c4d28cc3",
+                "death": "8be397ba-be86-4332-be0e-0c4e6a84964c"
+          },
+          "choir_swarm": {
+                "image_job": "9ef9690b-872d-49a7-9253-d5a216e2e6a6"
           }
     },
     "items": {
@@ -540,6 +589,63 @@
       "rare": "a dark steel frame with an engraved blue-silver inlay line along the band and small pointed steel brackets at the four corners, cool blue and silver on dark steel",
       "epic": "a rich dark metal frame with deep violet enamel panels along all four sides and gold scrollwork corner pieces, small violet gems at the corners, violet and gold on dark metal (band about one seventh)",
       "legendary": "a magnificent gold frame with dense baroque filigree along all four sides, radiating flourishes at the four corners and a small crest at the top centre, warm gold with pale glowing highlights on dark metal"
+    }
+  },
+  "prologue": {
+    "$comment": [
+      "The 2026-09-16 bespoke prologue plates: one pixen 640x360 still per OpeningScript.Prologue beat, x3",
+      "nearest to 1920x1080 (the house plate recipe), filed as assets/art/Environments/prologue/plate_prologue_<id>.png",
+      "and keyed by PrologueArt (Game). Composed subject-up / lower-third-quiet for the subtitle; no text; no new canon.",
+      "`done` holds the chosen job per beat; `rejected` the candidates that lost and why."
+    ],
+    "route": "image",
+    "model": "pixen",
+    "width": 640,
+    "height": 360,
+    "upscale": 3,
+    "detail": "highly detailed",
+    "dest": "assets/art/Environments/prologue",
+    "key": "plate_prologue_{id}",
+    "style_suffix": "Dark fantasy pixel-art game background, very dark and desaturated, low contrast, deep near-black, muted colours, wide establishing shot, no text, no UI elements, no borders",
+    "done": {
+      "pressures": "93279118-65e6-46a3-be1d-5043c81267b5",
+      "joints": "2f2151a1-365c-4fbb-9b57-31ecb8f1857c",
+      "tear": "b91acd34-69c1-41d6-a345-79e6f085b2cf",
+      "hunter": "c3538e9e-99d8-4953-8675-80fecdf7f6a3",
+      "stands": "f7fa302c-0a3f-4bd3-89aa-882d8604f586",
+      "hollow": "448ca4a4-7fa9-4df0-bc48-0259889b1d79"
+    },
+    "rejected": {
+      "pressures": [
+        "627c6c1a-a1a1-4398-946d-252589d5cf57 (six volcanic plumes, too bright and literal)"
+      ],
+      "joints": [
+        "7908468d-ff4c-4fef-9f32-5c2a969e2201 (one spiral pillar, less legible as a joint)"
+      ],
+      "tear": [
+        "e12e59b6-3593-41c4-9995-281ac27365d0 (warm sepia column, off palette)",
+        "8228bc5e-ca45-460e-b221-1c88e7938152 (bolted beam, different structure)",
+        "3eaf4ff2-ea74-473c-8462-6525da293b03 (split rune disc, not the beat-1 tower)"
+      ],
+      "hunter": [
+        "53775985-d6f3-4e1c-b1cd-31ccebf1512a (the rope frame reads as a gallows)"
+      ],
+      "stands": [
+        "333f06a3-3418-4e7d-8c68-10081e91a848 (ring portals, not the tower family)",
+        "004f6cb5-2eea-4792-aee6-d93dc2d604d9 (ring on a wall)",
+        "9c51939a-e451-4a6f-8c1b-af498c2ed13b (tower right, figure lost)"
+      ],
+      "hollow": [
+        "a6a4b328-d3fd-4795-8c4c-03a727977851 (tent camp, brighter lower third)"
+      ]
+    },
+    "items": {
+      "pressures": "a vast dark landscape seen from very high above at night, six far-apart places each lit dimly from below by a different glow rising through cracks in the ground like pressure: green, orange, violet, deep red, cyan and pale white, the glows spread across the upper half, a near-black sky with faint violet stars, the lower third a quiet dark plain; no characters",
+      "joints": "a colossal ancient joint of iron and stone, a great ringed pillar driven into a mountainside like a bolt holding the land level, faint runes glowing cold blue along its bands, mist at its base, the pillar standing in the upper half against a night sky, the lower third dark quiet ground; no characters",
+      "tear": "a torn joint: one colossal ringed stone tower with bands of runes, driven into a mountainside like a bolt, now split down the middle and leaning, its cold blue runes dying, violet corruption bleeding up through the crack like smoke and cold light, moonlit mountains and a night sky, the tower in the upper half, the lower third dark quiet ground; no characters",
+      "hunter": "a lone small hooded figure seen from behind, standing at the lip of a vast dark descent, a faint cold light on her shoulders, a rope and pulley frame beside her, the figure small in the upper middle of the frame, the chasm below dark and quiet, a night sky above",
+      "stands": "deep underground at the foot of a colossal ringed stone tower with bands of runes, the joint driven down through the cavern roof like a bolt, a lone small hooded figure standing alone on a narrow stone platform before it, the rune bands beginning to glow warm gold as if remembering their shape, dark cavern walls, dust drifting, the figure and the tower in the upper half, the lower third dark and quiet",
+      "hollow": "a vast mossy forest hollow at dusk, giant gnarled roots and thorn brambles, a small camp with a single warm lantern dug into the roots in the upper right, dim green and gold light, mist gathering in the lower third, a dark quiet foreground; no characters"
     }
   }
 }

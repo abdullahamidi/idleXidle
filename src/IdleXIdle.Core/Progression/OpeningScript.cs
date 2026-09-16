@@ -398,8 +398,11 @@ public static class OpeningScript
                         "Your Hunter is stronger now."),
     };
 
-    /// <summary>One beat of the illustrated prologue: a heading and the line under it.</summary>
-    public readonly record struct PrologueBeat(string Title, string Body);
+    /// <summary>
+    /// One beat of the illustrated prologue: a stable id (the host's plate is keyed by it — see
+    /// <c>PrologueArt</c> in the Game assembly), a heading and the line under it.
+    /// </summary>
+    public readonly record struct PrologueBeat(string Id, string Title, string Body);
 
     /// <summary>
     /// THE STORY, BEFORE THE GAME. Six beats, once per career.
@@ -419,22 +422,22 @@ public static class OpeningScript
     /// </remarks>
     public static readonly IReadOnlyList<PrologueBeat> Prologue = new[]
     {
-        new PrologueBeat("SIX PRESSURES",
+        new PrologueBeat("pressures", "SIX PRESSURES",
                          "Under every place in this world lies one of six pressures. "
                          + "Where one lies too close, the place above it forgets what it was."),
-        new PrologueBeat("THE JOINTS",
+        new PrologueBeat("joints", "THE JOINTS",
                          "An older order drove joints into those places to hold them level. "
                          + "A joint works by remembering the shape a place is supposed to have."),
-        new PrologueBeat("THE NETWORK FAILED",
+        new PrologueBeat("tear", "THE NETWORK FAILED",
                          "The joints tore. What rises through a torn one is corruption — "
                          + "a pressure coming up through a place with nothing left to say no."),
-        new PrologueBeat("A HUNTER",
+        new PrologueBeat("hunter", "A HUNTER",
                          "A Hunter is a person the network learned by heart. "
                          + "It sends one down, and it leaves her there to stand."),
-        new PrologueBeat("SHE STANDS",
+        new PrologueBeat("stands", "SHE STANDS",
                          "Stand deep enough, for long enough, and the joint remembers. "
                          + "Nothing else has ever worked, and it is not kind."),
-        new PrologueBeat("VERDANT HOLLOW",
+        new PrologueBeat("hollow", "VERDANT HOLLOW",
                          "The first joint that ever held, and the one the camp was dug into. "
                          + "It is where you begin."),
     };

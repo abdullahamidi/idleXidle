@@ -279,6 +279,7 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #   RH_SHOT_OPENING=ForceChestOpen  bash tools/asset-pipeline/capture.sh vaultfirst out.png
 #
 # RH_SHOT_BEAT=<n> picks which PROLOGUE beat, for RH_SHOT_OPENING=Prologue (0 .. the last).
+#   (each beat stands on its own plate_prologue_<id> since 2026-09-16 — PrologueArt.cs keys them)
 # RH_SHOT_BREAK=<Activity>[:<0..1>] holds the rail tile's CHAIN BREAK part-played — the nine-tenths
 # of a second in which a screen's chain tears in half and its padlock drops. It fires once per screen
 # per career, on a frame nothing can schedule:

@@ -59,6 +59,8 @@ def assemble(key: str, done: dict, only: tuple[str, ...] = CLIPS) -> list[tuple[
             cmd.append("--loose")
         if clip == "death":
             cmd.append("--fallen")   # a body that ends on the ground is half its standing height
+        if done.get("thrown"):
+            cmd.append("--thrown")   # sparks / smoke / shed shadow are a second blob on purpose (rhart.gate `thrown`)
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         tail = (p.stdout or p.stderr).strip().splitlines()
         rows.append((key, clip, p.returncode == 0, tail[-1] if tail else "(no output)"))

@@ -677,8 +677,9 @@ public partial class Game1
     /// <remarks>
     /// It says nothing about a button, a screen or a resource — every word of it is
     /// <c>design/narrative/world.md</c>, and the teaching starts on the other side of BEGIN THE HUNT.
-    /// The illustration is owed (the art pass), and the beat's shape is built for it: the plate below
-    /// is the subtitle band, and the space above it is the frame the picture goes in.
+    /// Each beat stands on its own illustration (<see cref="PrologueArt"/>), composed with the subject
+    /// in the upper half and a quiet lower third, because the title and the lines sit at
+    /// <c>page.Height / 2 + 40</c> over the picture, and SKIP lives in the bottom band.
     /// </remarks>
     private void DrawPrologue()
     {
@@ -688,18 +689,18 @@ public partial class Game1
         var index = Math.Clamp(_prologueBeat, 0, OpeningScript.Prologue.Count - 1);
         var beat = OpeningScript.Prologue[index];
 
-        // A BEAT FADES UP. Reduced Motion keeps the fade — §32 allows exactly this one — and drops
-        // nothing else, because there is nothing else here to drop yet.
+        // A BEAT FADES UP. Reduced Motion cuts instead — a fade is a UI transition, the one class the
+        // accessibility table suppresses outright — and holds the camera still below.
         var up = Math.Clamp(_prologueClock / 0.45f, 0f, 1f);
         var ink = UiMotion.Reduced ? 1f : UiMotion.Smooth(up);
 
-        // THE PICTURE, AND A SLOW CAMERA OVER IT. Each beat is shown against a place the game already
-        // has — the constellation of the six, a torn seam, the Hollow itself — rather than against a
-        // black rectangle. Reduced Motion holds the frame still.
+        // THE PICTURE, AND A SLOW CAMERA OVER IT. Each beat is shown against its own plate
+        // (PrologueArt), a 1920×1080 still drawn 10 % over the canvas so the slow push never reveals
+        // an edge. Reduced Motion holds the frame still.
         var drift = UiMotion.Reduced ? 0.5f : Math.Clamp(_prologueClock / 11f, 0f, 1f);
-        _ui.BackgroundPanned(_batch, PrologueArt(index), 1.10f, 0.30f + 0.34f * drift,
-                             new Color(120, 118, 128) * ink);
-        _ui.Fill(_batch, page, new Color(0x05, 0x04, 0x09) * 0.42f);
+        _ui.BackgroundPanned(_batch, PrologueArt.For(beat), 1.10f, 0.30f + 0.34f * drift,
+                             new Color(150, 148, 158) * ink);
+        _ui.Fill(_batch, page, new Color(0x05, 0x04, 0x09) * 0.34f);
 
         // The letterbox: the frame the illustration hangs in.
         var band = UiMetrics.Control(120);
@@ -737,26 +738,6 @@ public partial class Game1
                                       page.Height - band + UiMetrics.Space(28), UiMetrics.Control(240), UiMetrics.Control(40));
         _ui.Button(_batch, _prologueSkip, "SKIP CINEMATIC", ChromeMouse, false);
     }
-
-    /// <summary>
-    /// The still each prologue beat is shown against — one of the game's own places.
-    /// </summary>
-    /// <remarks>
-    /// Art KEYS live in the host, never in the script: <see cref="OpeningScript"/> is copy, and copy
-    /// that named a PNG would tie the writing to the pipeline. These are the existing environment
-    /// plates rather than six new illustrations, and they are chosen for what the beat is about — the
-    /// six pressures against the constellation, the tear against the shadow arena, the Hollow against
-    /// its own. Bespoke prologue art is owed, and it lands here, behind one method.
-    /// </remarks>
-    private static string PrologueArt(int beat) => beat switch
-    {
-        0 => "bg_constellation",   // the six, as the game already draws them
-        1 => "bg_regionmap",       // the network, laid out
-        2 => "bg_arena_shadow",    // a seam that tore
-        3 => "bg_title",           // the Hunter
-        4 => "bg_arena_body",      // standing, and what standing costs
-        _ => "bg_arena_nature",    // Verdant Hollow
-    };
 
     /// <summary>
     /// THE GATE: the deliberate press that starts the career.

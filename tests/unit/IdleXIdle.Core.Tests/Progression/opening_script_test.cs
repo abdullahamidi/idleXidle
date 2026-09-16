@@ -392,6 +392,8 @@ public class OpeningScriptTest
         {
             Assert.NotEqual("", beat.Title);
             Assert.NotEqual("", beat.Body);
+            // AN ID THE HOST CAN KEY A PLATE BY: one lowercase word, stable across rewrites of the copy.
+            Assert.Matches("^[a-z]+$", beat.Id);
             // A HEADING, not a sentence — the same rule the steps keep.
             Assert.InRange(beat.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length, 1, 5);
             Assert.Equal(beat.Title.ToUpperInvariant(), beat.Title);
@@ -407,6 +409,7 @@ public class OpeningScriptTest
         // AND IT ENDS WHERE THE GAME BEGINS. The last beat names the place the arrival lands in, so
         // the cut from the story to the stage is a continuation rather than a subject change.
         Assert.Contains("VERDANT HOLLOW", OpeningScript.Prologue[^1].Title, StringComparison.Ordinal);
+        Assert.Equal(OpeningScript.Prologue.Count, OpeningScript.Prologue.Select(b => b.Id).Distinct().Count());
     }
 
     [Fact]
