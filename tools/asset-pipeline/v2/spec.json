@@ -136,5 +136,410 @@
       "levelup":        { "look": "a tall narrow column of bright light with rays fanning out at the top and sparkles along its length",
                           "action": "the column shoots up from the bottom, the rays fan out and flash at the top, then the whole column fades out completely by the last frame" }
     }
+  },
+  "enemy_matrix": {
+    "$comment": [
+      "The 2026-09-16 region x archetype matrix: 6 regions x 4 archetypes = 24 normal-enemy identities.",
+      "PRESENTATION ONLY — gameplay Source, HP, damage and archetype rolls stay in Core. The key is",
+      "<region slug>_<archetype>; clips idle/attack/death; south-west rotation (faces LEFT); 8 x 512 frames.",
+      "Archetype reads from the SILHOUETTE: swarm small/busy/low, caster tall/thin/hovering, armoured",
+      "closed/plated/heavy centre, bruiser broad/dominant. Scale (ArchetypeScale) is supporting language only.",
+      "`done` records the PixelLab ids per key: character route {character_id, idle, attack, death},",
+      "image route {image_job, idle_job, attack_job, death_job}. The six 2026-08-22 Source bodies stay in",
+      "`enemies` above as history; the matrix supersedes them for the arena."
+    ],
+    "dest": "enemies",
+    "key": "{id}_{clip}_strip8_512",
+    "clips": [
+      "idle",
+      "attack",
+      "death"
+    ],
+    "rotation": "south-west",
+    "regions": {
+      "verdant": {
+        "id": "verdant_hollow",
+        "source": "Nature"
+      },
+      "cinder": {
+        "id": "cinderworks",
+        "source": "Machine"
+      },
+      "umbral": {
+        "id": "umbral_reach",
+        "source": "Shadow"
+      },
+      "marrow": {
+        "id": "marrow_wastes",
+        "source": "Body"
+      },
+      "archive": {
+        "id": "still_archive",
+        "source": "Mind"
+      },
+      "choir": {
+        "id": "pale_choir",
+        "source": "Spirit"
+      }
+    },
+    "done": {
+          "verdant_bruiser": {
+                "character_id": "c939544d-46c4-4d67-af5e-abf185e23442",
+                "idle": "bc5cf80d-f8ce-4b45-8afc-21987a1b8179",
+                "attack": "a596ff11-f13d-448b-85f0-935b7c415f9f",
+                "death": "0540e5a7-af6b-44bb-a04f-3020a2e9da2a"
+          },
+          "verdant_swarm": {
+                "image_job": "864b90ad-b04c-401d-82f4-48aa9e46169d",
+                "idle_job": "78da2eb1-622a-4272-9f67-602bc89769d7",
+                "attack_job": "7c126590-c5f8-494e-a23b-ebc27b3a412c",
+                "death_job": "d4ac608b-99bc-4438-ae30-e214edce3fd7"
+          },
+          "verdant_caster": {
+                "character_id": "47d4695a-3276-4337-86bc-b743de9d71bc",
+                "idle": "846e9a1a-9bfb-4041-8fbf-32faefac9db8",
+                "attack": "685715ce-4178-4cb6-b218-0e9889f2bb0f",
+                "death": "9c1f824f-9b14-49eb-92cd-8bd3c5909509"
+          },
+          "verdant_armoured": {
+                "character_id": "fa083e52-7f6c-4c1a-afa1-b52123d6473f",
+                "idle": "4972a1a4-64c4-4891-9191-98a40360394a",
+                "attack": "c2c17b6d-96c0-43ce-b3fe-893d9c508af7",
+                "death": "61e494fb-ea2f-455f-bcc2-6d0d9f237802"
+          },
+          "cinder_swarm": {
+                "image_job": "a30d91de-dffc-4925-9465-33e2c3ce6464",
+                "idle_job": "3b37ecd0-b828-4f40-b903-fe111d2db3dd",
+                "attack_job": "e418dd74-be9e-439c-b506-81c3331951d9"
+          },
+          "umbral_swarm": {
+                "image_job": "b2cd4c90-b03e-4817-a0bb-0bb802e1c46e",
+                "idle_job": "55a83f99-0889-4425-882e-fdfbc2a1cc37"
+          }
+    },
+    "items": {
+      "verdant_swarm": {
+        "region": "verdant_hollow",
+        "archetype": "Swarm",
+        "source": "Nature",
+        "name": "BRIAR MITES",
+        "route": "image",
+        "size": 192,
+        "look": "a small round thorny beetle creature of dark moss and bramble, six spiny legs, two glowing green eyes, tiny thorn mandibles, low to the ground, three-quarter side view facing left",
+        "idle": "idle breathing in place: the body rising and sinking slightly, legs shifting weight, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: rears up briefly then lunges forward to the LEFT snapping its thorn mandibles, then scuttles back to the starting spot, facing left the whole time",
+        "death": "dying: the legs buckle, the body tips over onto its side and lies still, fully fallen by the last frame, facing left the whole time; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "verdant_caster": {
+        "region": "verdant_hollow",
+        "archetype": "Caster",
+        "source": "Nature",
+        "name": "BOG WEAVER",
+        "route": "character",
+        "size": 128,
+        "look": "a tall thin hooded figure grown of moss and hanging roots, a hollow cowl of bark with two glowing green spore-lights for eyes, long ragged root-fibre sleeves, holding a crooked root staff tipped with a glowing seed pod, floating just above the ground",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: raises the root staff, the seed pod flares green, then thrusts the staff forward releasing a burst of spores toward the front, the release landing at the fifth frame, then settles back to the hovering start by the last frame, the staff still in hand",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "verdant_armoured": {
+        "region": "verdant_hollow",
+        "archetype": "Armoured",
+        "source": "Nature",
+        "name": "BARK WARDEN",
+        "route": "character",
+        "size": 128,
+        "look": "a squat broad figure entirely plated in thick overlapping bark and shell, a closed helm of knotted wood with a narrow glowing green slit, a huge round shield of tree-ring wood held in front covering most of the body, thick stumpy legs, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the shield lowering and lifting slightly with slow breathing, moss swaying, the slit glow pulsing; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: rams the whole tree-ring shield forward, the bark face leading, the impact landing at the fifth frame, then settles back to the starting stance by the last frame, the shield still held in front",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "verdant_bruiser": {
+        "region": "verdant_hollow",
+        "archetype": "Bruiser",
+        "source": "Nature",
+        "name": "THORN OGRE",
+        "route": "character",
+        "size": 128,
+        "look": "a huge broad-shouldered ogre of bramble and rotten wood, enormous arms, a small head sunk between vast thorny shoulders, hanging vines, one arm ending in a massive club of twisted root, glowing green eyes, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: heaves the root club up over the head and slams it down into the ground in front, the impact landing at the fifth frame, then straightens back to the starting pose by the last frame, the club still in hand",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "cinder_swarm": {
+        "region": "cinderworks",
+        "archetype": "Swarm",
+        "source": "Machine",
+        "name": "CINDER GNATS",
+        "route": "image",
+        "size": 192,
+        "look": "a small brass clockwork insect with a glowing orange ember for an abdomen, four thin jointed metal legs, two stubby smokestack wings puffing sparks, low to the ground, three-quarter side view facing left",
+        "idle": "idle in place: the ember pulsing, the legs shifting weight, tiny sparks puffing from the stacks, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: rears up then darts forward to the LEFT with a snap of hot sparks, then skitters back to the starting spot, facing left the whole time",
+        "death": "dying: the legs buckle, the body tips over onto its side and lies still, fully fallen by the last frame, facing left the whole time; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "cinder_caster": {
+        "region": "cinderworks",
+        "archetype": "Caster",
+        "source": "Machine",
+        "name": "FURNACE PRIEST",
+        "route": "character",
+        "size": 128,
+        "look": "a tall gaunt figure in soot-black robes wearing a tall iron chimney mitre, the face hidden behind a glowing orange furnace grate, holding a long bellows staff leaking steam, floating slightly on a cushion of steam",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: raises the bellows staff, the grate flares orange, then thrusts the staff forward blasting a gout of steam and sparks toward the front, the blast landing at the fifth frame, then settles back to the hovering start by the last frame, the staff still in hand",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "cinder_armoured": {
+        "region": "cinderworks",
+        "archetype": "Armoured",
+        "source": "Machine",
+        "name": "BOILER KNIGHT",
+        "route": "character",
+        "size": 128,
+        "look": "a squat wide iron construct of riveted boiler plates, a round furnace door glowing orange in the chest, a domed rivet helm with a narrow slit, thick piston legs, huge iron gauntlets clenched, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the furnace door glow pulsing, steam venting from the joints, the heavy shoulders rising and falling slowly; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: rears back and drives both iron gauntlets forward in a crushing double punch, the impact landing at the fifth frame, then straightens back to the starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "cinder_bruiser": {
+        "region": "cinderworks",
+        "archetype": "Bruiser",
+        "source": "Machine",
+        "name": "SLAG HULK",
+        "route": "character",
+        "size": 128,
+        "look": "a massive broad brute of cooling black slag and iron, glowing orange cracks across the body, enormous fists like sledgehammer heads, a tiny head with one glowing ember eye, vast shoulders, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: heaves one enormous hammer fist up and slams it down into the ground in front, sparks flying, the impact landing at the fifth frame, then hauls it back up to the starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "umbral_swarm": {
+        "region": "umbral_reach",
+        "archetype": "Swarm",
+        "source": "Shadow",
+        "name": "GLOOM WHELPS",
+        "route": "image",
+        "size": 192,
+        "look": "a small hunched shadow creature with torn ragged edges, four thin legs, a long tail of drifting darkness, two pale glowing eyes, no visible mouth, low to the ground, three-quarter side view facing left",
+        "idle": "idle in place: the ragged edges flickering and drifting, the body breathing, the eyes blinking, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: coils back then pounces forward to the LEFT with a slash of shadow, then springs back to the starting spot, facing left the whole time",
+        "death": "dying: the legs buckle, the body tips over onto its side and lies still, fully fallen by the last frame, facing left the whole time; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "umbral_caster": {
+        "region": "umbral_reach",
+        "archetype": "Caster",
+        "source": "Shadow",
+        "name": "HOLLOW SEER",
+        "route": "character",
+        "size": 128,
+        "look": "a tall thin hooded figure of torn indigo shadow with nothing inside the cowl but a single pale glowing eye, long torn sleeves trailing into darkness, no visible hands, floating just above the ground",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: the cowl tilts forward, the single eye flares pale white, and a lash of shadow whips forward from the sleeves toward the front, landing at the fifth frame, then it settles back to the hovering start by the last frame",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "umbral_armoured": {
+        "region": "umbral_reach",
+        "archetype": "Armoured",
+        "source": "Shadow",
+        "name": "NIGHT CARAPACE",
+        "route": "character",
+        "size": 128,
+        "look": "a squat figure completely enclosed in overlapping plates of black chitin, a closed beetle-like helm with two pale glowing slits, plated arms folded like a shell across the front, short thick plated legs, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the chitin plates shifting slightly with slow breathing, the pale slits pulsing; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: the folded arm plates snap open and ram forward like a battering shell, the impact landing at the fifth frame, then fold shut again back to the starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "umbral_bruiser": {
+        "region": "umbral_reach",
+        "archetype": "Bruiser",
+        "source": "Shadow",
+        "name": "DUSK BRUTE",
+        "route": "character",
+        "size": 128,
+        "look": "a huge broad ape-like brute of solid shadow with torn ragged edges, enormous long arms with hooked claws, a small head with pale glowing eyes, vast shoulders, knuckles resting on the ground, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: rears up and slams both clawed fists down into the ground in front, shadow bursting up, the impact landing at the fifth frame, then drops back onto its knuckles in the starting pose by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "marrow_swarm": {
+        "region": "marrow_wastes",
+        "archetype": "Swarm",
+        "source": "Body",
+        "name": "MARROW TICKS",
+        "route": "image",
+        "size": 192,
+        "look": "a small tick-like creature of pale bone with a bloated dark red sinew body, six spindly bone legs, a hooked bone beak, low to the ground, three-quarter side view facing left",
+        "idle": "idle breathing in place: the body rising and sinking slightly, legs shifting weight, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: rears up then lunges forward to the LEFT stabbing with its hooked beak, then scuttles back to the starting spot, facing left the whole time",
+        "death": "dying: the legs buckle, the body tips over onto its side and lies still, fully fallen by the last frame, facing left the whole time; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "marrow_caster": {
+        "region": "marrow_wastes",
+        "archetype": "Caster",
+        "source": "Body",
+        "name": "CARRION SHAMAN",
+        "route": "character",
+        "size": 128,
+        "look": "a tall gaunt skeletal figure draped in strips of dried sinew and tattered hide, a skull face with glowing red eye sockets, holding a long staff made of a spine topped with a rattling ribcage, floating slightly above the ground",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: raises the spine staff, the ribcage rattles and glows red, then thrusts the staff forward releasing a burst of bone shards toward the front, the release landing at the fifth frame, then settles back to the hovering start by the last frame, the staff still in hand",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "marrow_armoured": {
+        "region": "marrow_wastes",
+        "archetype": "Armoured",
+        "source": "Body",
+        "name": "SHELL GHOUL",
+        "route": "character",
+        "size": 128,
+        "look": "a hunched squat ghoul encased in a heavy carapace of fused bone plates and skulls, a closed bone helm with a narrow red slit, thick bone-plated arms held across the front, short thick legs, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the bone plates shifting with slow ragged breathing, the red slit pulsing; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: rams the whole bone-plated bulk forward with a shoulder charge, the impact landing at the fifth frame, then settles back to the hunched starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "marrow_bruiser": {
+        "region": "marrow_wastes",
+        "archetype": "Bruiser",
+        "source": "Body",
+        "name": "FLAYED BRUTE",
+        "route": "character",
+        "size": 128,
+        "look": "a massive broad brute of exposed dark red muscle and sinew with bone spurs breaking through the shoulders, enormous arms, a small skull head, a huge club of bone in one hand, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: heaves the bone club up over the head and slams it down into the ground in front, the impact landing at the fifth frame, then straightens back to the starting pose by the last frame, the club still in hand",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "archive_swarm": {
+        "region": "still_archive",
+        "archetype": "Swarm",
+        "source": "Mind",
+        "name": "GLYPH MOTES",
+        "route": "image",
+        "size": 192,
+        "look": "a small cluster of floating cyan crystal shards arranged around a glowing rune, geometric and sharp, no legs, hovering, three-quarter side view facing left",
+        "idle": "idle: hovering in place, bobbing up and down gently, the glow pulsing, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: the shards draw in tight then dart forward to the LEFT as a spinning volley, then drift back to the starting spot, facing left the whole time",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "archive_caster": {
+        "region": "still_archive",
+        "archetype": "Caster",
+        "source": "Mind",
+        "name": "LENS ARCHIVIST",
+        "route": "character",
+        "size": 128,
+        "look": "a tall thin robed construct of pale stone and cyan crystal, a smooth featureless head ringed by three floating crystal lenses, long geometric sleeves, glowing cyan runes down the robe, floating just above the ground",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: the three lenses swing forward and align, gathering cyan light, then fire a focused beam toward the front, the beam landing at the fifth frame, then the lenses drift back to the hovering start by the last frame",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "archive_armoured": {
+        "region": "still_archive",
+        "archetype": "Armoured",
+        "source": "Mind",
+        "name": "RUNE SENTRY",
+        "route": "character",
+        "size": 128,
+        "look": "a squat wide construct of interlocking geometric crystal plates, a blocky angular helm with a glowing cyan rune for a face, thick faceted crystal arms held across the front like a shield, short heavy legs, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the rune face pulsing, the crystal plates shifting slightly with a slow hum; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: the faceted arms swing apart and slam together forward in a crushing crystal clap, the impact landing at the fifth frame, then return to the crossed starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "archive_bruiser": {
+        "region": "still_archive",
+        "archetype": "Bruiser",
+        "source": "Mind",
+        "name": "TABLET GOLEM",
+        "route": "character",
+        "size": 128,
+        "look": "a huge broad golem built of stacked stone tablets and slabs carved with glowing cyan runes, enormous slab fists, a small block head with a single rune eye, vast square shoulders, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: heaves one enormous slab fist up and slams it down into the ground in front, the impact landing at the fifth frame, then hauls it back up to the starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "choir_swarm": {
+        "region": "pale_choir",
+        "archetype": "Swarm",
+        "source": "Spirit",
+        "name": "CHOIR WISPS",
+        "route": "image",
+        "size": 192,
+        "look": "a small pale spirit of soft white light with a tiny hooded shape and a trailing tail of glow, faint feathered edges, no legs, hovering, three-quarter side view facing left",
+        "idle": "idle: hovering in place, bobbing up and down gently, the glow pulsing, staying on the same spot, facing left the whole time; returns to the start by the last frame so it loops",
+        "attack": "attack: swells bright then surges forward to the LEFT in a ripple of light, then drifts back to the starting spot, facing left the whole time",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "choir_caster": {
+        "region": "pale_choir",
+        "archetype": "Caster",
+        "source": "Spirit",
+        "name": "PALE CANTOR",
+        "route": "character",
+        "size": 128,
+        "look": "a tall slender spectral figure in flowing pale robes of light, a smooth glowing faceless head with a thin halo ring, long open sleeves, both hands raised as if singing, floating just above the ground",
+        "idle": "hover_idle",
+        "attack": "the same figure throughout, never changing outfit or shape: the raised hands sweep forward together and the halo flares, releasing a ring of pale light toward the front, the release landing at the fifth frame, then the hands lift back to the singing start by the last frame",
+        "death": "dying: the glow gutters, it sinks to the ground and crumples in a heap, fully fallen by the last frame; a clear visible remnant remains in every frame including the last one, never empty"
+      },
+      "choir_armoured": {
+        "region": "pale_choir",
+        "archetype": "Armoured",
+        "source": "Spirit",
+        "name": "HYMN WARDEN",
+        "route": "character",
+        "size": 128,
+        "look": "a squat broad figure in closed pale spectral plate armour with feathered edges of light, a smooth closed helm with a thin glowing seam, a tall pale tower shield of light held in front, solid planted stance",
+        "idle": "standing idle, feet planted and never moving: the feathered edges drifting slowly, the shield glow pulsing, the shoulders rising and falling; returns to the start by the last frame so it loops seamlessly",
+        "attack": "the same figure throughout, never changing outfit or shape: rams the tower shield of light forward, the pale face leading, the impact landing at the fifth frame, then settles back to the starting stance by the last frame, the shield still held in front",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      },
+      "choir_bruiser": {
+        "region": "pale_choir",
+        "archetype": "Bruiser",
+        "source": "Spirit",
+        "name": "BELL GIANT",
+        "route": "character",
+        "size": 128,
+        "look": "a huge broad pale giant of spectral light with a great bronze bell for a head, enormous arms ending in heavy bell-clapper fists, wide shoulders draped in pale feathered cloth, feet planted wide",
+        "idle": "idle",
+        "attack": "the same figure throughout, never changing outfit or shape: swings one heavy clapper fist back and hammers it forward, the bell head ringing with a burst of light, the impact landing at the fifth frame, then returns to the starting stance by the last frame",
+        "death": "dying: staggers, drops to the knees, then collapses forward onto the ground and lies still, fully fallen by the last frame; a clear visible body remains in every frame including the last one, never empty"
+      }
+    }
+  },
+  "ui_frames": {
+    "$comment": [
+      "The 2026-09-16 rarity-frame family: five pixen 256x256 stills with a TRANSPARENT centre and one",
+      "shared band (~1/8 of the width), progressive ornament by tier, hue as the second cue. Replaced the",
+      "2026-08 chrome-style frames whose interiors were opaque near-black. The renderer measures the interior",
+      "from the texture (ItemArtMetrics.FrameInterior); do not bake an item, text or a checkerboard inside."
+    ],
+    "route": "image",
+    "model": "pixen",
+    "size": 256,
+    "dest": "assets/art/ItemsLoot/frames",
+    "key": "ui_frame_rarity_{tier}",
+    "template": "a square ornate item slot frame border only: {tier}, the border band about one eighth of the width thick on all four sides, the whole centre completely empty and transparent showing nothing, dark fantasy pixel art, no text, no item inside, on empty transparent space with nothing behind it",
+    "done": {
+      "common": "9989b08a-928c-4f73-a4bc-1a797ea5ba4e",
+      "uncommon": "9db39b70-aec8-423c-923a-8559cf00c05a",
+      "rare": "4d1a35c3-05af-4223-b886-eda303548c72",
+      "epic": "643f21c3-0b6f-443d-b7ae-75df669599cd",
+      "legendary": "0ac8c8fe-d6b0-4f06-8c0e-e0ec99169656"
+    },
+    "rejected": {
+      "epic": [
+        "a77b8a5d-ee89-4ed8-81a6-fec4c17c020a (baked checkerboard interior)",
+        "e6ab69ad-ef56-4092-bc84-3aa492a79461 (band too thin for the family)"
+      ]
+    },
+    "items": {
+      "common": "a plain dark iron frame, a simple flat band with slightly worn edges and no ornament, dull grey iron",
+      "uncommon": "a dark iron frame with a thin pale green enamel inlay line running along the band and four small round rivet studs at the corners, muted green and dark iron",
+      "rare": "a dark steel frame with an engraved blue-silver inlay line along the band and small pointed steel brackets at the four corners, cool blue and silver on dark steel",
+      "epic": "a rich dark metal frame with deep violet enamel panels along all four sides and gold scrollwork corner pieces, small violet gems at the corners, violet and gold on dark metal (band about one seventh)",
+      "legendary": "a magnificent gold frame with dense baroque filigree along all four sides, radiating flourishes at the four corners and a small crest at the top centre, warm gold with pale glowing highlights on dark metal"
+    }
   }
 }

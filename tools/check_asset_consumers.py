@@ -85,6 +85,10 @@ def aliases(src: str) -> dict:
 STRIP = re.compile(r"^(.*?)_strip\d+(?:_\d+)?$")
 DIRECTION = re.compile(r"^(.*?)_(?:n|ne|e|se|s|sw|w|nw)$")
 FRAME = re.compile(r"^(.*?)_(?:\d{1,3}|f\d{1,3})$")
+# An actor's clips: `verdant_swarm_idle_strip8_512` -> `verdant_swarm_idle` (STRIP) -> `verdant_swarm`,
+# which is the literal the presentation catalogue carries (EnemyPresentation / BossForRegion). Without
+# this reducer every enemy and boss strip was an orphan the baseline had to carry by hand.
+CLIP = re.compile(r"^(.*?)_(?:idle|attack|death|cast|strike|projectile|mark|trap|transformation)$")
 
 
 def heads(src: str) -> set:
@@ -118,7 +122,7 @@ def reach() -> list:
             how = "alias target"
         else:
             stems = {key}
-            for rx in (STRIP, DIRECTION, FRAME):
+            for rx in (STRIP, DIRECTION, FRAME, CLIP):
                 for s in list(stems):
                     m = rx.match(s)
                     if m:

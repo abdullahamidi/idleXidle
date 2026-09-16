@@ -181,18 +181,26 @@ MIN_FILL = 0.08            # of the frame area; below this the frame is "empty"
 STRAY_FRACTION = 0.015     # a second blob above this share of the main one is a floating part
 
 
-def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = False) -> list[str]:
+def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = False,
+         fallen: bool = False) -> list[str]:
     """`loose` is for attack / cast / death clips: a pounce or a collapse changes the silhouette's
     height and baseline on purpose, so the drift bars widen (30 % / 10 %) instead of failing every
     honest lunge. Idle clips keep the tight bars — an idle that drifts is a zoom, not a breath.
+
+    `fallen` is for a DEATH clip and widens the scale bar alone to 50 %: a body that ends fully
+    fallen is legitimately half its standing height by the last frame, which is the one thing the
+    clip is FOR. The first matrix death (2026-09-16, the thorn ogre) collapsed cleanly and was
+    refused at 32 %, and the bog weaver's flat heap at 49 % — the gate was failing the success, as
+    `thrown` once did for a projectile.
+    The baseline bar stays at the loose 10 %: a fallen body still lies on the same ground.
 
     `thrown` is for a PROJECTILE clip, and it turns off the stray-blob check. That check exists to
     catch a limb the generator detached by accident, and it cannot tell one from a thrown object: the
     Magpie's projectile was rejected for "frame 7 has a disconnected blob (66 vs main 4013)" — the
     gem, in flight, which is the one thing the clip is FOR. A projectile whose object never leaves
     the hand is the failure; the gate was failing the success."""
-    max_scale = 0.30 if loose else MAX_SCALE_DRIFT
-    max_base = 0.10 if loose else MAX_BASELINE_DRIFT
+    max_scale = 0.50 if fallen else 0.30 if loose else MAX_SCALE_DRIFT
+    max_base = 0.10 if (loose or fallen) else MAX_BASELINE_DRIFT
     strip = load_rgba(path)
     problems: list[str] = []
     fw = strip.height
