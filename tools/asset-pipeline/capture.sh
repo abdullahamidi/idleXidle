@@ -16,7 +16,7 @@
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
 #        fightfall fightfade fightarrive fightcooldown
 #        dispatches dispatchesempty dispatchesunread dispatcheshover chestdispatch
-#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|<key> — see its note below)
+#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|many|<key> — see its note below)
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
 # screenshot can judge on its own, and two of the three states below could not be posed at all before:
@@ -222,11 +222,14 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_owns.png 1.2
 #   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_done.png 5
 [ -n "$RH_SHOT_NOTICE" ] && RH_ENV+=(RH_SHOT_NOTICE="$RH_SHOT_NOTICE")
-# RH_SHOT_DISPATCH=unread|read|<key> dresses the five DISPATCHES fixtures. All of them seed three real
+# RH_SHOT_DISPATCH=unread|read|many|<key> dresses the five DISPATCHES fixtures. All of them seed real
 # typed letters through the host's own PostDispatch (the inbox is STATE under the rig; only its
-# surfacing is posed), and this says which one the reading pane has open:
-#   unread  the newest, with the rest still waiting  — the default
-#   read    everything already read: no dots, MARK ALL READ dead
+# surfacing is posed), and this says how many and which one the reading pane has open:
+#   unread  three letters, the newest open and the rest still waiting  — the default
+#   read    the same three, everything already read: no dots, MARK ALL READ dead
+#   many    every region, seven traits, four screens, the gem and the socket — past the shortest
+#           column (nine rows at 150 %), so the scrollbar and the wheel have a fixture. Pair it with
+#           RH_SHOT_SCROLL=<rows>|end to photograph the list actually scrolled.
 #   <key>   one letter by its key (unlock.warren, trait.t_scar_tissue, region.verdant_hollow.conquered)
 # A key nothing answers to ABORTS rather than photographing the wrong letter.
 #   `dispatches` the panel over a fight · `dispatchesempty` its empty state · `dispatchesunread` the

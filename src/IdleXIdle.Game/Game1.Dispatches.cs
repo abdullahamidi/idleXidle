@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Progression;
@@ -43,6 +44,12 @@ public partial class Game1
     private static int DispatchesListWidth => UiMetrics.Control(440);
 
     /// <summary>
+    /// The footer button's words, with its key on it — the chrome's own idiom (SETTINGS — ESC,
+    /// DISPATCHES — M), and the panel's only documentation of R at the point where R is used.
+    /// </summary>
+    private const string MarkAllLabel = "MARK ALL READ — R";
+
+    /// <summary>
     /// The DISPATCHES panel at the current profile — page space, rows UNSCROLLED. Pure arithmetic over
     /// <see cref="UiMetrics"/>: no text is measured, so the static rects below hold with no font, which
     /// is what lets <c>chrome_reflow_test</c> and <c>page_layout_test</c> check them at every density.
@@ -78,7 +85,7 @@ public partial class Game1
             Pane = new Rectangle(paneX, top, x1 - paneX, columnH),
             // MARK ALL READ, at the panel's foot where the LOG puts its doors. Secondary, not Primary:
             // nothing on this surface is the screen's decision — it is a tidy-up, not a choice.
-            MarkAll = new Rectangle(x1 - UiMetrics.Space(280), footY, UiMetrics.Space(280), DispatchesButtonHeight),
+            MarkAll = new Rectangle(x1 - UiMetrics.Space(340), footY, UiMetrics.Space(340), DispatchesButtonHeight),
             Rows = rows,
         };
     }
@@ -115,6 +122,23 @@ public partial class Game1
         if (k < 0 || k >= f.Rows) return -1;
         var i = first + k;
         return i >= 0 && i < count ? i : -1;
+    }
+
+    /// <summary>
+    /// Where one letter stands in the list right now, by its key — or -1 when the inbox no longer
+    /// holds it (it was pruned, or a new game began).
+    /// </summary>
+    /// <remarks>
+    /// THE CURSOR AND THE OPEN LETTER ARE KEYS, not row numbers: a dispatch posted while the panel is
+    /// open lands at the FRONT of the newest-first list and shifts every index under the player. This
+    /// is what turns a name back into a row, once per frame, for the paint and for Update alike.
+    /// </remarks>
+    internal static int DispatchIndexOf(IReadOnlyList<Dispatch> rows, string? key)
+    {
+        if (key is null) return -1;
+        for (var i = 0; i < rows.Count; i++)
+            if (string.Equals(rows[i].Key, key, StringComparison.Ordinal)) return i;
+        return -1;
     }
 
     /// <summary>
@@ -174,8 +198,8 @@ public partial class Game1
             var d = rows[i];
             var r = DispatchRowRect(f, k);
             r.Width -= lane;
-            var hot = r.Contains(mouse) || i == _dispatchCursor;
-            var opened = i == _dispatchSelected;
+            var hot = r.Contains(mouse) || string.Equals(d.Key, _dispatchCursorKey, StringComparison.Ordinal);
+            var opened = string.Equals(d.Key, _dispatchOpenKey, StringComparison.Ordinal);
 
             if (hot)
             {
@@ -212,20 +236,21 @@ public partial class Game1
 
         // ── THE LETTER ITSELF. Source, headline, and the two or three lines that say what happened.
         //
-        // NOTHING IS OPEN UNTIL THE PLAYER OPENS ONE (see _dispatchSelected): with one letter waiting,
+        // NOTHING IS OPEN UNTIL THE PLAYER OPENS ONE (see _dispatchOpenKey): with one letter waiting,
         // a pane that showed the newest on sight would clear the envelope's mark before a word of it
         // had been read. So the pane names the act instead, and the list is where the choosing happens.
-        if (_dispatchSelected < 0 || _dispatchSelected >= rows.Count)
+        var openAt = DispatchIndexOf(rows, _dispatchOpenKey);
+        if (openAt < 0)
         {
             _ui.TextBig(_batch, "CHOOSE A DISPATCH", f.Pane.X, f.Pane.Y, Slate, UiTypography.Headline, TextFace.Display);
-            _ui.TextBig(_batch, "Click one, or move with UP and DOWN and open it with ENTER.",
+            _ui.TextBig(_batch, "Click one, or move with UP and DOWN and open it with ENTER. R marks them all read.",
                         f.Pane.X, f.Pane.Y + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(10),
                         Slate, UiTypography.Body);
-            _ui.Button(_batch, f.MarkAll, "MARK ALL READ", mouse, false, enabled: unread > 0);
+            _ui.Button(_batch, f.MarkAll, MarkAllLabel, mouse, false, enabled: unread > 0);
             return;
         }
 
-        var letter = rows[_dispatchSelected];
+        var letter = rows[openAt];
         var py = f.Pane.Y;
         var source = DispatchKicker(letter);
         if (source.Length > 0)
@@ -246,6 +271,6 @@ public partial class Game1
         }
 
         // ── THE FOOTER. Painted with a false edge; TakeDispatchesInput hit-tests this same rectangle.
-        _ui.Button(_batch, f.MarkAll, "MARK ALL READ", mouse, false, enabled: unread > 0);
+        _ui.Button(_batch, f.MarkAll, MarkAllLabel, mouse, false, enabled: unread > 0);
     }
 }

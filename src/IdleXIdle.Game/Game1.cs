@@ -534,7 +534,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private bool _showDispatches;
 
     /// <summary>
-    /// Which letter the reading pane has OPEN — an index into the inbox's newest-first rows, or -1.
+    /// The KEY of the letter the reading pane has OPEN, or null when nothing is open.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -542,17 +542,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// is the fact — that one lives in the inbox and in the save.
     /// </para>
     /// <para>
-    /// IT STARTS AT NOTHING, and that is the whole reason it exists as a separate number from the
-    /// cursor. Showing the newest letter the instant the panel opens would mark it read, and on the
-    /// common case — one letter waiting — merely glancing at the surface would clear the mark without
-    /// anybody having read a word. A letter is opened by a click or by ENTER, and opening it is what
-    /// reads it.
+    /// IT STARTS AT NOTHING, and that is the whole reason it exists apart from the cursor. Showing the
+    /// newest letter the instant the panel opens would mark it read, and on the common case — one
+    /// letter waiting — merely glancing at the surface would clear the mark without anybody having
+    /// read a word. A letter is opened by a click or by ENTER, and opening it is what reads it.
+    /// </para>
+    /// <para>
+    /// A KEY AND NOT A ROW NUMBER. The fight ticks above the modal block, so a conquest, an awakening
+    /// or a champion joining can land while the panel is open — and a posted letter goes to the FRONT
+    /// of the newest-first list, shifting every row under the player. Held as an index, the pane would
+    /// silently swap to the letter that just arrived and read it on the next frame, destroying the one
+    /// unread mark this whole surface exists to protect. A key names one letter for as long as the
+    /// inbox holds it.
     /// </para>
     /// </remarks>
-    private int _dispatchSelected = -1;
+    private string? _dispatchOpenKey;
 
-    /// <summary>The highlighted row — the keyboard's cursor and the mouse's hover, as the dropdown does it.</summary>
-    private int _dispatchCursor;
+    /// <summary>The highlighted letter's KEY — the keyboard's cursor, anchored for the same reason.</summary>
+    private string? _dispatchCursorKey;
 
     /// <summary>The first letter visible in the list, when there are more than the column holds.</summary>
     private int _dispatchScroll;
@@ -1787,8 +1794,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _bootTimer = 7f;
 
         _showSettings = _showHelp = _showDispatches = false;
-        _dispatchCursor = _dispatchScroll = 0;
-        _dispatchSelected = -1;
+        _dispatchScroll = 0;
+        _dispatchCursorKey = _dispatchOpenKey = null;
         _dispatchArrivalHeld = false;
         _showGear = _showTraining = _showMastery = _showForge = _showWarren = false;
         _showWorld = _showTraits = _showRoster = _showLoadout = _showVault = false;
@@ -3788,6 +3795,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 //    arrival edge, the same copy the game renders.
                 if (sm is "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover" or "chestdispatch")
                 {
+                    // RH_SHOT_DISPATCH=unread|read|many|<key> — which letter the pane is reading, and
+                    // whether the list still has unread rows in it. An unparseable value ABORTS: a
+                    // fixture that cannot pose what it was asked for must not return an image.
+                    var posedMail = Environment.GetEnvironmentVariable("RH_SHOT_DISPATCH")?.Trim();
+                    var manyLetters = string.Equals(posedMail, "many", StringComparison.OrdinalIgnoreCase);
+
                     // `dispatchesempty` is the one fixture with nothing in it: the panel's own empty
                     // state is a real reading and had no picture otherwise.
                     if (sm != "dispatchesempty")
@@ -3795,30 +3808,42 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         PostDispatch(Dispatches.Unlock(Activity.Warren, 1_000));
                         PostDispatch(Dispatches.Trait("t_scar_tissue", 2_000));
                         PostDispatch(Dispatches.Region(VerdantHollow.RegionId, 3_000));
+                        // ...AND A COLUMN THAT OVERFLOWS. Three letters fit in every profile's list,
+                        // so the scrollbar, the wheel and the keyboard's follow-the-cursor had no
+                        // fixture at all — which is exactly why a scroll that could not scroll went
+                        // unseen. `many` fills past the shortest column (nine rows, at 150 %).
+                        if (manyLetters)
+                        {
+                            var at = 3_000L;
+                            foreach (var region in Regions.All.Where(r => r.Id != VerdantHollow.RegionId))
+                                PostDispatch(Dispatches.Region(region.Id, at += 1_000));
+                            foreach (var trait in TraitCatalogue.All.Take(7).Where(t => t.Id != "t_scar_tissue"))
+                                PostDispatch(Dispatches.Trait(trait.Id, at += 1_000));
+                            foreach (var screen in new[] { Activity.Vault, Activity.Forge, Activity.Map, Activity.Mastery })
+                                PostDispatch(Dispatches.Unlock(screen, at += 1_000));
+                            PostDispatch(Dispatches.Gem(at += 1_000));
+                            PostDispatch(Dispatches.Socket(at += 1_000));
+                        }
                     }
                     // The two panel fixtures open it through the same door the envelope and M use.
                     if (sm is "dispatches" or "dispatchesempty") OpenDispatches();
 
-                    // RH_SHOT_DISPATCH=unread|read|<key> — which letter the pane is reading, and
-                    // whether the list still has unread rows in it. An unparseable value ABORTS: a
-                    // fixture that cannot pose what it was asked for must not return an image.
-                    var posedMail = Environment.GetEnvironmentVariable("RH_SHOT_DISPATCH")?.Trim();
                     switch (posedMail?.ToLowerInvariant())
                     {
-                        case null or "" or "unread":
-                            _dispatchSelected = 0;       // the newest open, the rest waiting — a MIXED list
+                        case null or "" or "unread" or "many":
+                            // The newest open, the rest waiting — a MIXED list.
+                            _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
                             break;
                         case "read":
                             _inbox.MarkAllRead();        // nothing waiting: no dots, MARK ALL READ dead
-                            _dispatchSelected = 0;
+                            _dispatchOpenKey = _inbox.Rows.Count > 0 ? _inbox.Rows[0].Key : null;
                             break;
                         default:
-                            var at = _inbox.Rows.ToList().FindIndex(d => string.Equals(d.Key, posedMail, StringComparison.OrdinalIgnoreCase));
-                            if (at < 0)
+                            if (_inbox.Rows.FirstOrDefault(d => string.Equals(d.Key, posedMail, StringComparison.OrdinalIgnoreCase)) is not { } posedLetter)
                                 throw new InvalidOperationException(
                                     $"RH_SHOT_DISPATCH='{posedMail}' is not a seeded dispatch key. Seeded: "
                                     + string.Join(", ", _inbox.Rows.Select(d => d.Key)) + ".");
-                            _dispatchCursor = _dispatchSelected = at;
+                            _dispatchCursorKey = _dispatchOpenKey = posedLetter.Key;
                             break;
                     }
                 }
@@ -9618,8 +9643,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         _showSettings = _showHelp = false;   // ONE HOST PANEL AT A TIME, as F1 and F10 already insist
         _showDispatches = true;
-        _dispatchCursor = 0;       // the keyboard starts on the newest; one ENTER opens it
-        _dispatchSelected = -1;    // ...and nothing is READ until a letter is actually opened
+        _dispatchCursorKey = null;   // resolved to the newest letter on the panel's first frame
+        _dispatchOpenKey = null;     // ...and nothing is READ until a letter is actually opened
         _dispatchScroll = 0;
         _sound.Play("sfx_click", 0.7f);
     }
@@ -9641,10 +9666,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (!_dispatchesOpenedEver) { _dispatchesOpenedEver = true; Save(); }
 
         var f = DispatchesFrameNow();
-        var count = _inbox.Count;
+        var rows = _inbox.Rows;
+        var count = rows.Count;
         // Never the edge that opened the panel: without this the opening click also lands on the row
         // under the cursor (see _modalOpenedNow).
         var uiClick = _clicked && !_modalOpenedNow;
+
+        // ── WHICH LETTERS THESE ARE, BY NAME. The cursor and the open letter are KEYS, resolved to a
+        //    row here and written back at the foot. The fight ticks above this block, so a conquest,
+        //    an awakening or a champion joining can land mid-read — and a posted letter goes to the
+        //    FRONT of the newest-first list, shifting every row under the player. Held as indices the
+        //    pane would swap to the newcomer and read it on the next frame. A cursor whose letter has
+        //    been pruned away falls back to the newest rather than to nothing.
+        var cursor = DispatchIndexOf(rows, _dispatchCursorKey);
+        var open = DispatchIndexOf(rows, _dispatchOpenKey);
+        if (cursor < 0 && count > 0) cursor = 0;
 
         // ── THE SCROLL, before anything is hit-tested against it. ───────────────────────────────
         var maxScroll = Math.Max(0, count - f.Rows);
@@ -9658,33 +9694,45 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // ── THE KEYBOARD PATH, and it is not a convenience: every interaction in this game has to be
         //    completable without the mouse (technical-preferences). Up and Down walk the letters,
-        //    ENTER opens the one under the cursor, and Escape peels the panel from the block above.
-        if (KeyEdge(Keys.Down)) _dispatchCursor++;
-        if (KeyEdge(Keys.Up)) _dispatchCursor--;
-        _dispatchCursor = count == 0 ? 0 : Math.Clamp(_dispatchCursor, 0, count - 1);
-        if (KeyEdge(Keys.Enter) && count > 0) _dispatchSelected = _dispatchCursor;
+        //    ENTER opens the one under the cursor, R marks the lot read, and Escape peels the panel
+        //    from the block above.
+        var walked = false;
+        if (KeyEdge(Keys.Down)) { cursor++; walked = true; }
+        if (KeyEdge(Keys.Up)) { cursor--; walked = true; }
+        cursor = count == 0 ? -1 : Math.Clamp(cursor, 0, count - 1);
+        if (KeyEdge(Keys.Enter) && cursor >= 0) open = cursor;
 
         // ── A CLICK ON A ROW both moves the cursor and OPENS the letter: a mouse asks for one thing.
         if (uiClick && DispatchRowAt(ChromeMouse, _dispatchScroll, count) is var row && row >= 0)
         {
-            _dispatchCursor = row;
-            _dispatchSelected = row;
+            cursor = row;
+            open = row;
             _sound.Play("sfx_nav", 0.6f);
         }
 
-        if (_dispatchSelected >= count) _dispatchSelected = -1;
-        // The column follows the cursor, so the keyboard reaches a letter the column does not hold.
-        if (_dispatchCursor < _dispatchScroll) _dispatchScroll = _dispatchCursor;
-        if (_dispatchCursor >= _dispatchScroll + f.Rows) _dispatchScroll = _dispatchCursor - f.Rows + 1;
+        // THE COLUMN FOLLOWS THE CURSOR ONLY ON THE FRAME A KEY MOVED IT, so the keyboard can always
+        // see what it is pointing at. Run unconditionally it fought the wheel and won: from a fresh
+        // open the cursor is on the newest letter, so a wheel-down scrolled and was dragged straight
+        // back in the same frame, and the list could not be scrolled by mouse at all.
+        if (walked && cursor >= 0)
+        {
+            if (cursor < _dispatchScroll) _dispatchScroll = cursor;
+            if (cursor >= _dispatchScroll + f.Rows) _dispatchScroll = cursor - f.Rows + 1;
+        }
         _dispatchScroll = Math.Clamp(_dispatchScroll, 0, maxScroll);
+
+        _dispatchCursorKey = cursor >= 0 ? rows[cursor].Key : null;
+        _dispatchOpenKey = open >= 0 ? rows[open].Key : null;
 
         // AN OPEN LETTER HAS BEEN READ. It is on the page in front of the player; there is no second
         // act of reading to wait for. MarkDispatchRead writes only on the frame the flag actually
         // turns, so this costs one call and one save per letter however many frames it stands open.
-        if (_dispatchSelected >= 0) MarkDispatchRead(_inbox.Rows[_dispatchSelected].Key);
+        if (_dispatchOpenKey is { } reading) MarkDispatchRead(reading);
 
-        // MARK ALL READ — live only while something is unread, decided here and painted with false.
-        if (UiKit.ClickedIn(f.MarkAll, ChromeMouse, uiClick) && _inbox.Unread > 0)
+        // MARK ALL READ — the button at the foot, and R, which the button prints on itself the way
+        // the gear prints ESC. A visible, enabled control in a modal with a keyboard map has to be
+        // reachable without the mouse; opening each letter in turn is a different act, not this one.
+        if (_inbox.Unread > 0 && (UiKit.ClickedIn(f.MarkAll, ChromeMouse, uiClick) || KeyEdge(Keys.R)))
         {
             MarkAllDispatchesRead();
             _sound.Play("sfx_click", 0.7f);

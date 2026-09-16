@@ -165,6 +165,13 @@ public class CaptureRigModesTest
         Assert.Contains("PostDispatch(", handler);
         Assert.Contains("OpenDispatches();", handler);
 
+        // ...and `many` fills the column past its last row, so the scrollbar, the wheel and the
+        // keyboard's follow-the-cursor have a fixture at all. A list that fits in one column is why a
+        // scroll that could not scroll went unphotographed.
+        Assert.Contains("manyLetters", handler);
+        Assert.Contains("Regions.All.Where(", handler);
+        Assert.Contains("TraitCatalogue.All.Take(", handler);
+
         var header = CaptureHeader();
         foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover", "chestdispatch" })
             Assert.Contains(mode, header);

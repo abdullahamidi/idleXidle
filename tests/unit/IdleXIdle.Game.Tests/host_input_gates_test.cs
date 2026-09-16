@@ -218,4 +218,77 @@ public class HostInputGatesTest
         foreach (var forbidden in new[] { "_clicked", "MarkDispatchRead", "MarkAllDispatchesRead", "Save()", "_showDispatches =" })
             Assert.DoesNotContain(forbidden, draw, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// THE PANEL HOLDS LETTERS BY NAME, NOT BY ROW NUMBER. The fight ticks above the modal block, so a
+    /// conquest or an awakening can land while DISPATCHES is open -- and a posted letter goes to the
+    /// FRONT of the newest-first list, shifting every index under the player. Held as indices, the
+    /// reading pane would swap to the newcomer and mark it read on the next frame.
+    /// </summary>
+    [Fact]
+    public void test_the_dispatches_panel_holds_its_letters_by_key_and_not_by_row()
+    {
+        var game = Source("Game1.cs");
+        var take = BodyOf(game, "private void TakeDispatchesInput()");
+        Assert.Contains("var cursor = DispatchIndexOf(rows, _dispatchCursorKey);", take, StringComparison.Ordinal);
+        Assert.Contains("var open = DispatchIndexOf(rows, _dispatchOpenKey);", take, StringComparison.Ordinal);
+        Assert.Contains("_dispatchCursorKey = cursor >= 0 ? rows[cursor].Key : null;", take, StringComparison.Ordinal);
+        Assert.Contains("_dispatchOpenKey = open >= 0 ? rows[open].Key : null;", take, StringComparison.Ordinal);
+        Assert.Contains("if (_dispatchOpenKey is { } reading) MarkDispatchRead(reading);", take, StringComparison.Ordinal);
+        // No index survives anywhere in the host, paint included -- one of them is the whole fault.
+        foreach (var file in new[] { "Game1.cs", "Game1.Dispatches.cs" })
+            foreach (var gone in new[] { "_dispatchSelected", "_dispatchCursor;", "_dispatchCursor " })
+                Assert.DoesNotContain(gone, Source(file), StringComparison.Ordinal);
+        // ...and the paint compares keys too, so the row that lights is the row that is open.
+        var draw = BodyOf(Source("Game1.Dispatches.cs"), "private void DrawDispatches()");
+        Assert.Contains("string.Equals(d.Key, _dispatchCursorKey, StringComparison.Ordinal)", draw, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(d.Key, _dispatchOpenKey, StringComparison.Ordinal)", draw, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE WHEEL CAN ACTUALLY SCROLL THE LIST. The follow-the-cursor clamp ran every frame, after the
+    /// wheel had been applied -- and from a fresh open the cursor is on the newest letter, so any
+    /// wheel-down was dragged back to zero in the same frame and the list could not be scrolled by
+    /// mouse at all. It runs only on a frame a key edge moved the cursor.
+    /// </summary>
+    [Fact]
+    public void test_the_dispatches_wheel_is_not_undone_by_the_cursor_clamp()
+    {
+        var take = BodyOf(Source("Game1.cs"), "private void TakeDispatchesInput()");
+        var wheel = IndexOf(take, "_dispatchScroll = UiKit.Scrolled(_dispatchScroll, MouseWheel, f.Rows, count);");
+        var clamp = IndexOf(take, "if (walked && cursor >= 0)");
+        _out.WriteLine($"wheel {wheel} < clamp {clamp}");
+        Assert.True(wheel < clamp, "the wheel is applied after the clamp that would undo it.");
+
+        // BOTH halves of the clamp are inside the guard, not beside it.
+        var guarded = take[clamp..];
+        guarded = guarded[..IndexOf(guarded, "\n        }")];
+        Assert.Contains("if (cursor < _dispatchScroll) _dispatchScroll = cursor;", guarded, StringComparison.Ordinal);
+        Assert.Contains("if (cursor >= _dispatchScroll + f.Rows) _dispatchScroll = cursor - f.Rows + 1;", guarded, StringComparison.Ordinal);
+
+        // ...and a KEY EDGE is the only thing that raises the guard.
+        Assert.Contains("if (KeyEdge(Keys.Down)) { cursor++; walked = true; }", take, StringComparison.Ordinal);
+        Assert.Contains("if (KeyEdge(Keys.Up)) { cursor--; walked = true; }", take, StringComparison.Ordinal);
+        Assert.Equal(2, take.Split("walked = true;").Length - 1);
+    }
+
+    /// <summary>
+    /// MARK ALL READ IS REACHABLE WITHOUT THE MOUSE. A visible, enabled control in a modal with a full
+    /// keyboard map has to be -- and opening every letter in turn is a different act, not this one. R,
+    /// printed on the button itself the way the gear prints ESC, and named in the panel's own legend.
+    /// </summary>
+    [Fact]
+    public void test_mark_all_read_has_a_key_and_the_panel_says_which()
+    {
+        var take = BodyOf(Source("Game1.cs"), "private void TakeDispatchesInput()");
+        Assert.Contains("if (_inbox.Unread > 0 && (UiKit.ClickedIn(f.MarkAll, ChromeMouse, uiClick) || KeyEdge(Keys.R)))",
+                        take, StringComparison.Ordinal);
+        // One label, used by both paint branches, and it carries the key.
+        var panel = Source("Game1.Dispatches.cs");
+        Assert.Contains("private const string MarkAllLabel = \"MARK ALL READ — R\";", panel, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"MARK ALL READ\"", panel, StringComparison.Ordinal);
+        Assert.Equal(2, panel.Split("MarkAllLabel, mouse, false, enabled: unread > 0").Length - 1);
+        // ...and the empty pane, which is the panel's legend, names it beside UP / DOWN / ENTER.
+        Assert.Contains("open it with ENTER. R marks them all read.", panel, StringComparison.Ordinal);
+    }
 }

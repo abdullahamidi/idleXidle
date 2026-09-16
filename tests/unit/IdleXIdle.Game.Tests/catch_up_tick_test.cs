@@ -395,19 +395,65 @@ public class CatchUpTickTest
         var list = DispatchesList;
         var at = new Point(list.Center.X, list.Y + UiMetrics.RowHeight + UiMetrics.RowHeight / 2);
 
-        var selected = -1;
+        string? openKey = null;
         Tick(updates, clicked =>
         {
             var row = Game1.DispatchRowAt(at, first: 0, count: inbox.Count);
-            if (clicked && row >= 0) selected = row;
-            if (selected >= 0 && selected < inbox.Count) inbox.MarkRead(inbox.Rows[selected].Key);
+            if (clicked && row >= 0) openKey = inbox.Rows[row].Key;
+            if (openKey is { } k) inbox.MarkRead(k);
         });
 
-        _out.WriteLine($"{updates} update(s): selected {selected}, unread {inbox.Unread}");
-        Assert.Equal(1, selected);
+        _out.WriteLine($"{updates} update(s): open {openKey}, unread {inbox.Unread}");
+        Assert.Equal(inbox.Rows[1].Key, openKey);
         Assert.Equal(2, inbox.Unread);
         Assert.True(inbox.Rows[1].Read, "the letter under the cursor was not the one that was read");
         Assert.False(inbox.Rows[0].Read);
+    }
+
+    /// <summary>
+    /// A LETTER THAT ARRIVES MID-READ DOES NOT SWAP THE PANE OR GET ITSELF READ.
+    /// </summary>
+    /// <remarks>
+    /// The fight ticks above the host's modal block, so a conquest, an awakening or a champion joining
+    /// can land while DISPATCHES is open — and <c>Inbox.Rows</c> is the ledger reversed, so a posted
+    /// letter becomes row 0 and shifts every index under the player. Held as an index, the pane would
+    /// silently swap to the newcomer and mark it read on the next frame, destroying the one unread mark
+    /// the surface exists to protect. This drives the resolver the host uses, against the real inbox.
+    /// </remarks>
+    [Fact]
+    public void test_a_letter_arriving_mid_read_neither_swaps_the_pane_nor_reads_itself()
+    {
+        UiMetrics.Apply(100);
+        var inbox = ThreeLetters();
+        // The player has the MIDDLE letter open, so a shift of one is visible either way.
+        var openKey = inbox.Rows[1].Key;
+        inbox.MarkRead(openKey);
+        Assert.Equal(1, Game1.DispatchIndexOf(inbox.Rows, openKey));
+        Assert.Equal(2, inbox.Unread);
+
+        // ...and a region falls while they are reading it.
+        inbox.Post(Dispatches.Region("cinderworks", 9_000));
+        var newcomer = inbox.Rows[0].Key;
+
+        // Row 1 is now a DIFFERENT letter -- what an index would have followed.
+        Assert.NotEqual(openKey, inbox.Rows[1].Key);
+        // The key still names the letter that was open, one row further down.
+        Assert.Equal(2, Game1.DispatchIndexOf(inbox.Rows, openKey));
+        // The frame after the arrival marks whatever the pane holds: the same letter, again, for free.
+        inbox.MarkRead(inbox.Rows[Game1.DispatchIndexOf(inbox.Rows, openKey)].Key);
+
+        _out.WriteLine($"open {openKey}; newcomer {newcomer}; unread {inbox.Unread}");
+        Assert.False(inbox.Rows[0].Read, "the letter that just arrived was read by the pane it never entered");
+        Assert.Equal(3, inbox.Unread);
+    }
+
+    /// <summary>...and a key the inbox no longer holds resolves to nothing rather than to row 0.</summary>
+    [Fact]
+    public void test_a_pruned_letter_is_not_silently_replaced_by_whatever_took_its_row()
+    {
+        var inbox = ThreeLetters();
+        Assert.Equal(-1, Game1.DispatchIndexOf(inbox.Rows, "region.nowhere.conquered"));
+        Assert.Equal(-1, Game1.DispatchIndexOf(inbox.Rows, null));
     }
 
     /// <summary>...and a press off the rows picks nothing, on any tick shape.</summary>
