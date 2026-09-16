@@ -127,6 +127,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private PixelFont _font = null!;
     private RenderTarget2D _canvas = null!;
 
+    /// <summary>The focus light every teaching surface darkens the page with (see <see cref="DrawFocus"/>).</summary>
+    private FocusRenderer _focus = null!;
+
+    /// <summary>The shapes the light is cut to this frame — resolved by <see cref="FocusShapes"/>, preallocated.</summary>
+    private readonly List<FocusShape> _focusShapes = new();
+
     private KeyboardState _keys, _prevKeys;
 
     /// <summary>
@@ -1950,9 +1956,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sound.SfxVolume = _sfxVolume / 100f;
         _sound.MusicVolume = _musicVolume / 100f;
         _ui = new UiKit(GraphicsDevice, _font, _assets);
+        _focus = new FocusRenderer(GraphicsDevice);
         BuildScreens();
         // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
-        _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+        // PRESERVE CONTENTS, because the frame is no longer drawn into this target in one unbroken
+        // run: the focus light (FocusRenderer.Build) binds its own two targets mid-frame and then the
+        // canvas is bound again — and with the default DiscardContents, binding a target CLEARS it, so
+        // everything drawn before the light would be gone under it.
+        _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale, false,
+                                     SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
         ApplyRestoredState();
     }
 
@@ -6431,14 +6443,58 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // scrim that held for that would be a broken game. Same method, two clocks. (The two never run
         // at once: the coach is silent for the whole of the opening.)
         var blaze = Math.Clamp(_coachBlaze / CoachBlazeFade, 0f, 1f);
-        if (blaze > 0f)
-            DrawScrimAround(holes, CoachScrim * (UiMotion.Reduced ? 1f : UiMotion.Smooth(blaze)));
-
-        // The brackets stay, and against the scrim they finally read. A viewfinder, never an outline:
-        // an outline is what this game puts round a SELECTED control.
-        foreach (var hole in holes) TourBrackets(hole);
+        // THE LIGHT IS CUT TO THE THING'S OWN SHAPE (FocusRenderer): a figure by its silhouette, a control
+        // by a soft rounded plate. The rectangles above are untouched — they are still what the click
+        // and the card are placed against — and a lesson about another screen lights its rail tile.
+        // After the blaze only the plate's faint rim is left, a marker rather than an outline: an outline
+        // is what this game puts round a SELECTED control.
+        FocusShapes(ScreenActivity(), OnboardingLessons.Target(id) ?? TourTarget.NavRail, holes, _focusShapes);
+        DrawFocus(CoachScrimWeight * (UiMotion.Reduced ? (blaze > 0f ? 1f : 0f) : UiMotion.Smooth(blaze)));
 
         DrawCoachCard(id, holes);
+    }
+
+    /// <summary>
+    /// The shapes a step's light is cut to, from the rectangles it resolved — the arena's figures where
+    /// the target is one of them, a soft plate per rectangle everywhere else.
+    /// </summary>
+    /// <remarks>
+    /// The rectangles are not changed and are not replaced: <c>holes</c> is still what the forced click
+    /// (<see cref="ClickableOf"/>) and the card (<see cref="TourCardRect"/>) are measured against. On
+    /// the HUNT the fight screen is asked for the frame it drew each figure from this frame, so the
+    /// silhouette is the pose on the page, and a fixture with no strips falls back to the body it
+    /// published, then to the rectangle. The whole-canvas sentinel still means "light nothing".
+    /// </remarks>
+    private void FocusShapes(Activity screen, TourTarget target, Rectangle[] holes, List<FocusShape> into)
+        => FocusShape.Resolve(screen, target, holes, screen == Activity.Hunt ? _expedition : null, into);
+
+    /// <summary>
+    /// Paint the focus light for the shapes resolved this frame, at the orchestrator's own weight.
+    /// </summary>
+    /// <remarks>
+    /// The scrim is a texture the renderer keeps and rebuilds only when the shapes change; building it
+    /// binds other targets, so the batch is closed round the build and the canvas — created with
+    /// PreserveContents for exactly this — is bound and reopened afterwards. Called inside Batch C
+    /// only. At weight zero (a faded blaze) the scrim is skipped and the plates' rims are all that
+    /// paints, so a lesson that waits for an hour keeps a marker and not a dark room.
+    /// </remarks>
+    private void DrawFocus(float weight)
+    {
+        if (_focusShapes.Count == 0) return;
+        if (weight <= 0f)
+        {
+            var anyPlate = false;
+            for (var i = 0; i < _focusShapes.Count && !anyPlate; i++) anyPlate = _focusShapes[i].Kind == FocusKind.RoundedRect;
+            if (!anyPlate) return;
+        }
+        if (weight > 0f && _focus.Stale(_focusShapes))
+        {
+            _batch.End();
+            _focus.Build(_batch, _focusShapes);
+            GraphicsDevice.SetRenderTarget(_canvas);
+            BeginCanvas(1);
+        }
+        _focus.Draw(_batch, _focusShapes, weight);
     }
 
     /// <summary>How long the scrim holds at full before it fades away, in seconds.</summary>
@@ -6447,8 +6503,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The fade's own length — the tail of the blaze, eased out.</summary>
     private const float CoachBlazeFade = 0.8f;
 
-    /// <summary>The coach's scrim. Lighter than the tour's, because nothing here is modal.</summary>
-    private static readonly Color CoachScrim = new Color(0x05, 0x03, 0x0A) * 0.66f;
+    /// <summary>The coach's scrim weight over <see cref="FocusRenderer.Ink"/>. Lighter than the tour's, because nothing here is modal.</summary>
+    private const float CoachScrimWeight = 0.66f;
+
+    /// <summary>A tour's scrim weight: the one full-screen modal left, so darker than the coach's.</summary>
+    private const float TourScrimWeight = 0.74f;
 
     /// <summary>Seconds of scrim left on the lesson being lit.</summary>
     private float _coachBlaze;
@@ -6595,43 +6654,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _ui.CloseButton(_batch, HintCloseRect(_coachCard), ChromeMouse, false);
     }
 
-    /// <summary>Darken the whole canvas except the given holes.</summary>
-    /// <remarks>
-    /// Cut into horizontal bands at every hole edge; inside each band, fill the x-runs no hole covers.
-    /// One hole gives the four rectangles around it; two holes give a few more. Nothing is drawn twice,
-    /// so the scrim's alpha is uniform — a second layer over a corner would read as a darker patch.
-    /// </remarks>
-    private void DrawScrimAround(IReadOnlyList<Rectangle> holes, Color scrim)
-    {
-        var edges = new SortedSet<int> { 0, 1080 };
-        foreach (var h in holes)
-        {
-            edges.Add(Math.Clamp(h.Top, 0, 1080));
-            edges.Add(Math.Clamp(h.Bottom, 0, 1080));
-        }
-        var ys = edges.ToList();
-        for (var i = 0; i + 1 < ys.Count; i++)
-        {
-            int y0 = ys[i], y1 = ys[i + 1];
-            var x = 0;
-            foreach (var h in holes.Where(h => h.Top <= y0 && h.Bottom >= y1).OrderBy(h => h.Left))
-            {
-                if (h.Left > x) _ui.Fill(_batch, new Rectangle(x, y0, h.Left - x, y1 - y0), scrim);
-                x = Math.Max(x, h.Right);
-            }
-            if (x < 1920) _ui.Fill(_batch, new Rectangle(x, y0, 1920 - x, y1 - y0), scrim);
-        }
-    }
-
-    /// <summary>A thin frame just outside a rectangle.</summary>
-    private void TourOutline(Rectangle r, int t, Color c)
-    {
-        _ui.Fill(_batch, new Rectangle(r.X - t, r.Y - t, r.Width + 2 * t, t), c);
-        _ui.Fill(_batch, new Rectangle(r.X - t, r.Bottom, r.Width + 2 * t, t), c);
-        _ui.Fill(_batch, new Rectangle(r.X - t, r.Y, t, r.Height), c);
-        _ui.Fill(_batch, new Rectangle(r.Right, r.Y, t, r.Height), c);
-    }
-
     /// <summary>
     /// Where the caption card goes: beside the spotlight, on the first side it fits without covering it.
     /// </summary>
@@ -6693,12 +6715,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // tour, so without this the light would fall on an empty slot.)
         if (step.Target == TourTarget.LessonSlot) DrawLessonCard(OnboardingLessonId.FirstFight, 1f);
 
-        DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
-        // THE RING IS A POINTER, NOT A BUTTON. It used to be a solid gold outline — the same shape
+        // THE LIGHT IS A POINTER, NOT A BUTTON. It used to be a solid gold outline — the same shape
         // this game puts round a SELECTED control — so the intro spent forty cards ringing things that
-        // could not be pressed. Drawn as corner brackets instead: a viewfinder marks what is being
-        // talked about and has never in any interface meant "press me".
-        foreach (var h in holes) TourBrackets(h);
+        // could not be pressed; then corner brackets. Now the page darkens and the thing itself is left
+        // lit, cut to its own shape (a figure by its silhouette, a control by a soft plate with a faint
+        // rim): what is being talked about is simply the one thing still in the light.
+        FocusShapes(_tourScreen, step.Target, holes, _focusShapes);
+        DrawFocus(TourScrimWeight);
 
         // The card's height is its lines: a title line, the wrapped body at the paragraph pitch, a
         // footer line — so a bigger profile makes a taller card, never a body that leaves its plate.
@@ -6748,31 +6771,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     btn.Y + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(2),
                     UiInk.Secondary, UiTypography.Secondary);
         _tourCard = card;
-    }
-
-    /// <summary>
-    /// The tour's spotlight marker: four corner brackets, not a closed ring.
-    /// </summary>
-    /// <remarks>
-    /// A closed gold outline is this game's SELECTED state — the mastery tree, the bag, the roster all
-    /// use it — so ringing a control during a tour said "this is chosen, press it" about something the
-    /// tour had frozen. Brackets are a viewfinder: they mark, they do not offer.
-    /// </remarks>
-    private void TourBrackets(Rectangle r)
-    {
-        var t = Math.Max(2, UiMetrics.Control(3));
-        var len = Math.Clamp(Math.Min(r.Width, r.Height) / 4, UiMetrics.Control(10), UiMetrics.Control(28));
-        var g = UiMetrics.Space(3);
-        var x0 = r.X - g; var y0 = r.Y - g; var x1 = r.Right + g; var y1 = r.Bottom + g;
-        void Corner(int cx, int cy, int dx, int dy)
-        {
-            _ui.Fill(_batch, new Rectangle(Math.Min(cx, cx + dx * len), cy - (dy < 0 ? t : 0), len, t), NavGold);
-            _ui.Fill(_batch, new Rectangle(cx - (dx < 0 ? t : 0), Math.Min(cy, cy + dy * len), t, len), NavGold);
-        }
-        Corner(x0, y0, 1, 1);
-        Corner(x1, y0, -1, 1);
-        Corner(x0, y1, 1, -1);
-        Corner(x1, y1, -1, -1);
     }
 
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>

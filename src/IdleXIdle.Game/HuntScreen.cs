@@ -40,7 +40,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class HuntScreen
+public sealed class HuntScreen : IFocusActors
 {
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -2956,9 +2956,57 @@ public sealed class HuntScreen
     /// thing this exists to make impossible.
     /// </summary>
     /// <returns>false when the strip did not draw, so the caller falls back exactly as before.</returns>
+    /// <param name="record">
+    /// The figure this draw IS, so the frame it drew from is kept for the focus light's silhouette
+    /// (<see cref="IFocusActors.TryDrawnFrame"/>); null for a pass that is not the figure — the hit
+    /// flash draws the white mask through here and must not overwrite the figure's own frame.
+    /// </param>
     private bool ActorSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps,
-                             bool loop, Color tint, float topCrop = 0f, bool flip = false)
-        => !DevNoStrips && _ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip);
+                             bool loop, Color tint, float topCrop = 0f, bool flip = false, VfxSubject? record = null)
+    {
+        if (DevNoStrips || !_ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out var frame)) return false;
+        if (record is { } subject) _drawnFrames[subject] = frame;
+        return true;
+    }
+
+    /// <summary>
+    /// The frame each figure was drawn from THIS frame — cleared by <see cref="LayoutActors"/> before
+    /// a figure is drawn, written by <see cref="ActorSprite"/> as each one is. Preallocated; a slot's
+    /// entry is overwritten in place, never re-added.
+    /// </summary>
+    private readonly Dictionary<VfxSubject, SpriteFrame> _drawnFrames = new();
+
+    /// <summary>The frame this figure was drawn from this frame, if a strip drew it.</summary>
+    internal bool TryDrawnFrame(VfxSubject subject, out SpriteFrame frame) => _drawnFrames.TryGetValue(subject, out frame);
+
+    /// <summary>The visible body <see cref="LayoutActors"/> published for this figure this frame.</summary>
+    internal bool TryBody(VfxSubject subject, out Rectangle body)
+    {
+        if (_actors.TryBounds(subject, out var vb)) { body = vb.Rect; return true; }
+        body = Rectangle.Empty;
+        return false;
+    }
+
+    /// <summary>How many creature slots <see cref="LayoutActors"/> laid out this frame — a boss is one, in slot 0.</summary>
+    internal int LaidOutCreatureCount => _creatureBoxes.Count;
+
+    bool IFocusActors.TryDrawnFrame(VfxSubject subject, out SpriteFrame frame) => TryDrawnFrame(subject, out frame);
+    bool IFocusActors.TryBody(VfxSubject subject, out Rectangle body) => TryBody(subject, out body);
+    int IFocusActors.LaidOutCreatureCount => LaidOutCreatureCount;
+    // THE MASK IS THE FLASH'S (AssetLibrary.WhiteMask): built once per strip, looked up by the strip the
+    // frame came from. A texture the library did not load has no key and no mask, and the light falls
+    // back to the body's rectangle rather than to a silhouette of nothing. Remembered per texture,
+    // because the library's lookup builds the mask's key by concatenation and the light asks every frame.
+    Texture2D? IFocusActors.MaskOf(Texture2D texture)
+    {
+        if (_maskOf.TryGetValue(texture, out var known)) return known;
+        var mask = _ui.Assets.KeyOf(texture) is { } key ? _ui.Assets.WhiteMask(key) : null;
+        _maskOf[texture] = mask;
+        return mask;
+    }
+
+    /// <summary>Each strip's white mask (or its absence), remembered after the first ask.</summary>
+    private readonly Dictionary<Texture2D, Texture2D?> _maskOf = new();
 
     /// <summary>Will the arena DRAW from this strip? The no-strip fixture takes it from geometry and draw alike.</summary>
     private bool StripAvailable(string key) => !DevNoStrips && _ui.Assets.Has(key);
@@ -3081,6 +3129,7 @@ public sealed class HuntScreen
     private void LayoutActors()
     {
         _creatureBoxes.Clear();
+        _drawnFrames.Clear();   // this frame's figures record their frames below; last frame's are gone
 
         // The champion, WITH his lunge. The draw used to apply this push and the effects never saw it.
         // The BODY rides the lunge, because the effects are supposed to: a hit lands where the figure
@@ -3212,7 +3261,8 @@ public sealed class HuntScreen
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
         ActorShadow(b, box.Center.X, CreatureGround, (int)(box.Width * 0.55f), 30, 0.5f * fade);
-        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
+        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f,
+                    record: VfxSubject.Creature(slot));
     }
 
     /// <summary>
@@ -3304,7 +3354,7 @@ public sealed class HuntScreen
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, creatureTint, crop))
+                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i)))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
@@ -3389,7 +3439,7 @@ public sealed class HuntScreen
         }
 
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, enterTint, crop))
+                                                !attacking, enterTint, crop, record: VfxSubject.Creature(0)))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
@@ -3444,14 +3494,15 @@ public sealed class HuntScreen
             && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            ActorSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f);
+            ActorSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f,
+                        record: VfxSubject.Creature(0));
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
         var fps = attacking ? 10f : 8f;
         var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
         var seconds = EnemyClipSeconds(attacking, fps);
-        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
+        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0)))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
             // while LayoutActors published the full box as this boss's body and envelope — 2.45x wider
@@ -6237,9 +6288,9 @@ public sealed class HuntScreen
         // may blank out while it does.
         foreach (var key in Character.StripKeys(clip))
             if (ActorSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
-                               flip: ChampionFacesRight)) return;
+                               flip: ChampionFacesRight, record: VfxSubject.Champion)) return;
         if (ActorSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
-                           flip: ChampionFacesRight)) return;
+                           flip: ChampionFacesRight, record: VfxSubject.Champion)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);
         if (_ui.SpriteGrounded(b, Character.SpriteKey,

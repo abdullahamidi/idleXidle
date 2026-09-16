@@ -726,8 +726,43 @@ public sealed class UiKit
     /// hitting. Playtest: "Karakter animasyonları ters tarafa oynuyor gibi, yön hatası var sanırım."
     /// </remarks>
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)
+        => AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out _);
+
+    /// <summary>
+    /// <see cref="AnimSprite(SpriteBatch, string, Rectangle, float, float, bool, Color, float, bool)"/>,
+    /// handing back the frame it drew — the texture, the source rectangle, where it landed and how it
+    /// was mirrored — so a caller can draw the SAME frame again through another texture (the hit flash's
+    /// white mask, the focus light's silhouette) without recomputing a pixel of it.
+    /// </summary>
+    /// <remarks>
+    /// The whole of the arithmetic is <see cref="ResolveFrame"/>; this only notes the ledger and draws.
+    /// A second copy of the crop, the scale or the grounding here would be a second owner of where a
+    /// figure stands, which is what <c>actor_crop_test</c> and the envelope tests exist to forbid.
+    /// </remarks>
+    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,
+                           float topCrop, bool flip, out SpriteFrame frame)
     {
-        if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
+        if (ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip) is not { } f) { frame = default; return false; }
+        UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, "UiKit.AnimSprite");
+        b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);
+        frame = f;
+        return true;
+    }
+
+    /// <summary>
+    /// Where one frame of a strip lands, and which frame: the arithmetic of <see cref="AnimSprite"/>
+    /// with the draw taken out. Null when the strip is missing or empty, exactly where the draw
+    /// returned false.
+    /// </summary>
+    /// <remarks>
+    /// The frame index (held on the first frame under Reduced Motion), the measured crops, the scale
+    /// through <see cref="DrawScale"/> and the bottom-anchored grounding are all here and only here;
+    /// the draw above is this plus a ledger note plus one <c>SpriteBatch.Draw</c>. The numbers are the
+    /// ones the draw has always produced — truncation where it truncated, rounding where it rounded.
+    /// </remarks>
+    public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f, bool flip = false)
+    {
+        if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return null;
         var fw = tex.Height;
         var frames = Math.Max(1, tex.Width / fw);
         // Rev 4 §8/§9: a horizontal strip must be exactly N square frames, and we draw exactly ONE of them
@@ -783,12 +818,10 @@ public sealed class UiKit
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
         var drop = (int)MathF.Round(BottomPadFraction(stripKey) * fw * sc);
-        UiRasterLedger.Note(stripKey, srcW, srcH, w, drawnH, "UiKit.AnimSprite");
         // Bottom-anchored: a capped figure keeps its feet where an uncapped one had them, so the cap
         // never lifts a hunter off the floor its slots and shadow were laid out against.
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH), src, tint,
-               0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-        return true;
+        return new SpriteFrame(tex, src, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH),
+                               flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)
@@ -851,6 +884,66 @@ public sealed class UiKit
                 // the disc drew as a SQUARE: under premultiplied blending the source RGB is added
                 // whatever the alpha says, so full white outside the circle painted the whole quad.
                 // MakeBlob gets away with (0,0,0,a) because adding zero is invisible.
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    /// <summary>
+    /// A soft-edged rounded rectangle for nine-slicing, or its outline: premultiplied white, built
+    /// once for the focus light (<see cref="FocusRenderer"/>).
+    /// </summary>
+    /// <remarks>
+    /// The opaque shape sits <paramref name="feather"/> pixels in from every edge of the texture and
+    /// has corners of <paramref name="radius"/>; outside it the alpha falls to nothing across the
+    /// feather (smoothstep, so the edge has no visible kink). Corners are therefore
+    /// <c>feather + radius</c> pixels square, and the <paramref name="mid"/> pixels between them are
+    /// the stretchable rails. With <paramref name="line"/> above zero the texture is instead the
+    /// OUTLINE: an antialiased ring that many pixels wide, centred on the opaque shape's edge — the
+    /// same slicing, so a rim drawn over a plate lands on the plate's edge.
+    /// </remarks>
+    internal static Texture2D MakeSoftRounded(GraphicsDevice d, int radius, int feather, int mid, float line = 0f)
+    {
+        var s = 2 * (feather + radius) + mid;
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var half = s / 2f;
+        var box = half - feather;   // the opaque half-size
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                // Signed distance to the rounded box: negative inside, zero on its edge.
+                var qx = MathF.Abs(x + 0.5f - half) - box + radius;
+                var qy = MathF.Abs(y + 0.5f - half) - box + radius;
+                var outside = MathF.Sqrt(MathF.Max(qx, 0f) * MathF.Max(qx, 0f) + MathF.Max(qy, 0f) * MathF.Max(qy, 0f));
+                var sd = MathF.Min(MathF.Max(qx, qy), 0f) + outside - radius;
+                float a;
+                if (line > 0f) a = Math.Clamp(line / 2f + 0.5f - MathF.Abs(sd), 0f, 1f);
+                else
+                {
+                    var t = Math.Clamp(sd / feather, 0f, 1f);
+                    a = 1f - t * t * (3f - 2f * t);
+                }
+                // PREMULTIPLIED, like MakeDisc: (1,1,1,a) would paint the whole quad white.
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    /// <summary>A soft disc: opaque to <c>radius - feather</c>, then falling to nothing at the rim. Premultiplied white.</summary>
+    internal static Texture2D MakeSoftDisc(GraphicsDevice d, int s, int feather)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = s / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x + 0.5f - c) * (x + 0.5f - c) + (y + 0.5f - c) * (y + 0.5f - c));
+                var t = Math.Clamp((r - (c - feather)) / feather, 0f, 1f);
+                var a = 1f - t * t * (3f - 2f * t);
                 data[y * s + x] = new Color(a, a, a, a);
             }
         tex.SetData(data);
@@ -2144,3 +2237,16 @@ public enum ButtonStyle
     /// <summary>Lit at rest: the screen's one primary decision (EQUIP, TAKE, OPEN ALL, HUNT HERE).</summary>
     Primary,
 }
+
+/// <summary>
+/// One resolved strip frame: the texture it comes from, the frame's source rectangle, the canvas
+/// rectangle it lands in, and how it is mirrored. What <see cref="UiKit.ResolveFrame"/> answers and
+/// <see cref="UiKit.AnimSprite(SpriteBatch, string, Rectangle, float, float, bool, Color, float, bool, out SpriteFrame)"/>
+/// draws — and what any second pass over the same figure (a white mask, a silhouette) draws from,
+/// so the two can never disagree about where the figure is.
+/// </summary>
+/// <param name="Texture">The strip.</param>
+/// <param name="Src">The one frame inside it, crops applied.</param>
+/// <param name="Dest">Where it was drawn, in canvas pixels — bottom-anchored, scale-capped.</param>
+/// <param name="Effects">The mirror it was drawn with.</param>
+public readonly record struct SpriteFrame(Texture2D Texture, Rectangle Src, Rectangle Dest, SpriteEffects Effects);

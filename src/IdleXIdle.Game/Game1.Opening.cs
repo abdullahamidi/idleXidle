@@ -83,8 +83,11 @@ public partial class Game1
     /// <summary>The fade's own length — the tail of the blaze, eased out.</summary>
     private const float OpeningBlazeFade = 0.7f;
 
-    /// <summary>The opening's scrim. The tour's weight: while it holds the player, it is the only thing.</summary>
-    private static readonly Color OpeningScrim = new Color(0x05, 0x03, 0x0A) * 0.80f;
+    /// <summary>The opening's scrim weight over <see cref="FocusRenderer.Ink"/>. The heaviest: while it holds the player, it is the only thing.</summary>
+    private const float OpeningScrimWeight = 0.80f;
+
+    /// <summary>The opening's scrim as a flat fill, for the surfaces with nothing to light (the BEGIN gate).</summary>
+    private static readonly Color OpeningScrim = FocusRenderer.Ink * OpeningScrimWeight;
 
     /// <summary>How far every lit rectangle is grown past its control, so the frame art sits inside the light.</summary>
     private const int SpotlightHalo = 10;
@@ -609,13 +612,17 @@ public partial class Game1
         // beats' answer to "the card is the only thing here"; over a running fight it is a black
         // screen with a caption, which is worse than no scrim at all.
         var weight = live ? Math.Clamp(_openingBlaze / OpeningBlazeFade, 0f, 1f) : 1f;
-        if (weight > 0f && (holes.Length > 0 || !live))
+        var scrim = OpeningScrimWeight * (live && !UiMotion.Reduced ? UiMotion.Smooth(weight) : weight);
+        if (holes.Length > 0)
         {
-            var ink = OpeningScrim * (live && !UiMotion.Reduced ? UiMotion.Smooth(weight) : weight);
-            if (holes.Length > 0) DrawScrimAround(holes, ink);
-            else _ui.Fill(_batch, new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height), ink);
+            // THE LIGHT IS CUT TO THE THING (FocusRenderer): the Hunter and the pack by their own
+            // silhouettes, a panel or a rail tile by a soft plate. The rectangles are still the ones the
+            // forced click and the card use (ForcedScreenClick, DrawOpeningCard); only the picture changed.
+            FocusShapes(ScreenActivity(), step.Target ?? TourTarget.NavRail, holes, _focusShapes);
+            DrawFocus(scrim);
         }
-        foreach (var hole in holes) TourBrackets(hole);
+        else if (scrim > 0f && !live)
+            _ui.Fill(_batch, new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height), FocusRenderer.Ink * scrim);
 
         DrawOpeningCard(step, holes);
     }
