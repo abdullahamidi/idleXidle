@@ -53,6 +53,10 @@ UiKit.Page               the logical page rectangle a menu screen lays out into:
 HUNT                     not a page — drawn at identity, laid out around the rail directly
 ```
 
+`bash tools/asset-pipeline/attention_fixtures.sh [filter]` re-takes the whole attention-pass matrix —
+the fall and its transition, the three fall-loop lessons, the chest with a letter waiting, the inbox
+and the envelope — at 100 / 125 / 150 into `production/qa/evidence/`. See the README there.
+
 Rules:
 
 - A menu screen centres its title at `UiKit.PageCenterX`, hangs right columns from `UiKit.PageRight(inset)`
@@ -379,8 +383,10 @@ headlessly and exits. The out path must be repo-relative.
 ```text
 RH_SHOT_MODE      the fixture (weave/loadout, buildtree/mastery, character/gear, stats/training, dust/traits,
                   fight/hunt, vault, vaultfirst, forge, warren, warrenready, warrenfresh, map, roster, rosterlocked, runlog, fightreport,
+                  fightfall, fightfade, dispatches, dispatchesempty, dispatchesunread, dispatcheshover, chestdispatch,
                   settings, settingsopen, help, intro <card>, tour <Activity> <card>, typespec, …)
 RH_SHOT_T / _ZOOM / _STEP / _MOUSE / _TAB / _DROPDOWN / _EXPLAIN   pose dials (see capture.sh header)
+RH_SHOT_LESSON / _DISPATCH / _BREAK / _NOTICE / _REDUCED / _OPENING   the attention pass's dials
 RH_SHOT_UISCALE   100 | 125 | 150 | auto — the page scale (100 when unset)
 RH_SHOT_WINDOW    WxH — a REAL window; the capture is then the presented backbuffer (letterbox, bilinear
                   shrink and all), not the 1920 render target. 1280x720 is the required second capture.
