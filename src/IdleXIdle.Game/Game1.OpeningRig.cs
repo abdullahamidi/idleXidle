@@ -168,12 +168,16 @@ public partial class Game1
             // ...and once more just before the hand answers it: the card as a reader sees it.
             var read = Autoplay ? Math.Max(2, AutoplayDwell - 6) : 60;
             Burst($"read_{stage}", read, 1, 1);
+            // THE STORY HANDING OVER TO THE GATE, filmed: the last beat's picture gone, BEGIN THE HUNT arriving.
+            if (stage == OpeningStage.AwaitBegin) Burst("begin_in", 0, 30, 5);
         }
         if (stage == OpeningStage.Prologue && _prologueBeat != _trBeat)
         {
             Trace($"PROLOGUE_BEAT {_prologueBeat}");
             _trBeat = _prologueBeat;
             Burst($"prologue_{_prologueBeat}", Autoplay ? Math.Max(2, AutoplayDwell - 6) : 60, 1, 1);
+            // THE CUT AND THE FADE, filmed: six frames across a new beat's first half-second.
+            if (_prologueBeat > 0) Burst($"prologue_in_{_prologueBeat}", 0, 30, 5);
         }
 
         var screen = _showTitle ? "Title" : ScreenActivity().ToString();

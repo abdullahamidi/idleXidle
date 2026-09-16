@@ -718,6 +718,19 @@ public partial class Game1
         var width = Math.Min(UiMetrics.Control(900), page.Width - pad * 4);
         var lines = _ui.WrapBig(beat.Body, width, UiTypography.Body);
         var titleY = page.Height / 2 + UiMetrics.Space(40);
+
+        // A SOFT SHADE UNDER THE WORDS. The plates are busy exactly where the story is told — a tower's
+        // rune bands, a plain of six glows — and a subtitle laid straight on them was guessed at rather
+        // than read. Two soft ellipses (the fighters' contact shadow, stretched) darken the art behind
+        // the title and the lines only; the picture keeps its full value everywhere else.
+        var blockH = UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(18)
+                     + lines.Count * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(24) + UiMetrics.Control(8);
+        var textW = _ui.MeasureBig(beat.Title, UiTypography.ScreenTitle, TextFace.Display);
+        foreach (var line in lines) textW = Math.Max(textW, _ui.MeasureBig(line, UiTypography.Body));
+        var shadeY = titleY + blockH / 2;
+        _ui.GroundShadow(_batch, page.Width / 2, shadeY, textW * 2 + UiMetrics.Space(160), blockH * 3, 0.55f * ink);
+        _ui.GroundShadow(_batch, page.Width / 2, shadeY, textW + UiMetrics.Space(200), blockH * 2, 0.45f * ink);
+
         _ui.TextCenterBig(_batch, beat.Title, page.Width / 2, titleY, UiInk.Accent * ink, UiTypography.ScreenTitle, TextFace.Display);
 
         var y = titleY + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(18);

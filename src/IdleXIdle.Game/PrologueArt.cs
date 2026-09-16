@@ -36,7 +36,7 @@ public static class PrologueArt
         ["pressures"] = "plate_prologue_pressures",   // six glows rising through a cracked plain
         ["joints"] = "plate_prologue_joints",         // two ringed rune towers driven into a mountainside
         ["tear"] = "plate_prologue_tear",             // one of them split, violet bleeding up the crack
-        ["hunter"] = "plate_prologue_hunter",         // a hooded figure at the lip of the descent, a rope frame beside her
+        ["hunter"] = "plate_prologue_hunter",         // a hooded figure alone at the lip of the chasm, under the moon
         ["stands"] = "plate_prologue_stands",         // deep underground, the tower's runes turning warm
         ["hollow"] = "plate_prologue_hollow",         // the mossy hollow, a lantern-lit camp dug into the roots
     };
