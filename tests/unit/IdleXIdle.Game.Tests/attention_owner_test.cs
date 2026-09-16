@@ -1,4 +1,6 @@
 ﻿using System;
+using Microsoft.Xna.Framework;
+using System.Reflection;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -478,5 +480,78 @@ public class AttentionOwnerTest
         // two mentions across every partial of the host -- the declaration, and SlotShowing's own call.
         Assert.Equal(2, Regex.Matches(Host(), @"ScreenBannerShowing\(\)").Count);
         Assert.Contains("if (ScreenBannerShowing() is { } note)", MemberOf(game, "private SlotContent? SlotShowing()"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE ENVELOPE ASKS THIS FRAME'S OWNER, AND TAKES ONLY A CLICK IT PAINTED. Its click sat above the
+    /// one assignment until 2026-09-16, asking LAST frame's owner while <c>DrawDispatchButton</c> asked
+    /// this frame's -- so on the frame an owner arrived the click accepted a control the paint refused,
+    /// and on the frame one left it refused a control the paint drew. The fix is ORDER, not a second
+    /// owner: the click reads the field directly below the site, through the same predicate the paint
+    /// reads, and nothing writes the field between the two.
+    /// </summary>
+    /// <remarks>
+    /// This covers every transition by construction rather than by a case per tier. The click and the
+    /// paint can disagree only if (a) one of them asks a different question -- pinned away: the if-line
+    /// asks <c>DispatchesOffered()</c> and hand-lists no flag, and the paint's first statement is the
+    /// same call -- or (b) the field changes between the site and the click -- pinned away: no
+    /// assignment sits in that span, and the host has exactly one. So free to Reveal, Report, Coach,
+    /// Death, Modal or Opening, and any owner back to free, is seen by the click and the paint on the
+    /// same frame, whichever tier it is and whichever way it goes.
+    /// </remarks>
+    [Fact]
+    public void test_the_envelope_asks_this_frames_owner_and_only_takes_a_click_it_painted()
+    {
+        var game = Game1();
+        var update = UpdateBody();
+
+        // Below the one assignment, and nothing assigns the owner in between.
+        var assign = IndexOf(update, ": AttentionOwner.None;");
+        var envelope = IndexOf(update, "DispatchButton.Contains(ChromeMouse)");
+        _out.WriteLine($"assign {assign} < envelope {envelope}");
+        Assert.True(assign < envelope, "the envelope's click must read the owner below its one assignment.");
+        Assert.Equal(0, Regex.Matches(update[assign..envelope], @"\b_attention\s*=(?!=)").Count);
+
+        // The click asks the paint's question, and only that question: no rung of its own, no flag.
+        var lineStart = update.LastIndexOf('\n', envelope) + 1;
+        var line = update[lineStart..update.IndexOf('\n', envelope)];
+        Assert.Contains("DispatchesOffered()", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("AttentionOwnedAbove(", line, StringComparison.Ordinal);
+        foreach (var flag in new[] { "_showSettings", "_showHelp", "_showDispatches", "_showTitle", "_tourActive", "WelcomeUp",
+                                     "_showTypeSpec", "_expedition.LogOpen", "_forge.RevealActive", "DeathTransitionUp",
+                                     "_opening.Running", "SpecialisationOpen", "HostModalUp", "ProductionModalUp" })
+            Assert.False(line.Contains(flag, StringComparison.Ordinal), $"the envelope's click hand-lists `{flag}`.");
+
+        // The paint asks it first, before it draws anything.
+        var draw = MemberOf(game, "private void DrawDispatchButton()");
+        var gate = IndexOf(draw, "if (!DispatchesOffered()) return;");
+        Assert.True(gate < IndexOf(draw, "_ui."), "DrawDispatchButton must ask the owner before its first draw.");
+        Assert.Equal("if (!DispatchesOffered()) return;", draw[(draw.IndexOf('{') + 1)..].Trim().Split('\n')[0].Trim());
+
+        // Three mentions across every partial of the host: the declaration, the paint's, the click's.
+        Assert.Equal(3, Regex.Matches(Host(), @"DispatchesOffered\(\)").Count);
+
+        // AND GEOMETRY KEEPS THE ORDER HONEST. Below the site the rail's click (HandleNavClick) and the
+        // hint slot's band run before the envelope, and neither swallows a click outside its own rect —
+        // so the envelope and the ? must share no pixel with a rail tile at any density. (The hint slot
+        // sits under the pill row by construction; the rail is the one rect that spans the page's height.)
+        var navHex = typeof(IdleXIdle.Game.Game1).GetMethod("NavHexRect", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var learnButton = typeof(IdleXIdle.Game.Game1).GetProperty("LearnButton", BindingFlags.NonPublic | BindingFlags.Static)!;
+        try
+        {
+            foreach (var percent in new[] { 100, 125, 150 })
+            {
+                UiMetrics.Apply(percent);
+                var envelopeRect = IdleXIdle.Game.Game1.DispatchButton;
+                var learnRect = (Rectangle)learnButton.GetValue(null)!;
+                for (var i = 0; i < 11; i++)
+                {
+                    var tile = (Rectangle)navHex.Invoke(null, new object[] { i })!;
+                    Assert.False(tile.Intersects(envelopeRect), $"the envelope shares pixels with rail tile {i} at {percent}%.");
+                    Assert.False(tile.Intersects(learnRect), $"the ? shares pixels with rail tile {i} at {percent}%.");
+                }
+            }
+        }
+        finally { UiMetrics.Apply(100); }
     }
 }

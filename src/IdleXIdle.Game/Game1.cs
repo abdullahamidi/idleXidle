@@ -4241,26 +4241,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _modalOpenedNow = true;   // the panel's own input runs later this Update — see the field
         }
 
-        // ...AND THE ? BESIDE IT, on the same terms and for the same reason: it sits over the screen,
-        // so its click is spent here rather than falling through to whatever it covers.
-        if (!_swallowInput && TakeLearnClick()) _swallowInput = true;
-
-        // ...AND THE ENVELOPE BESIDE THAT. Same terms again: it sits over the screen, so its click is
-        // spent here rather than falling through to whatever it covers. DispatchesOffered is the one
-        // question DrawDispatchButton asks too — what is painted is what is hit-tested.
-        // ONE FRAME APART, AND SAID SO: this click runs ABOVE the owner's assignment, so it asks LAST
-        // frame's owner while the paint asks this frame's — the same skew TakeLearnClick above has, and
-        // the same one the owner's own site documents for the clocks that read it. The window is the
-        // single frame an owner appears or leaves, which at 60 fps is a frame nobody sees.
-        // _modalOpenedNow for the gear's reason: the panel's own input runs later this Update, and
-        // without the mark the opening click would also land on the list row under the cursor.
-        if (!_swallowInput && _clicked && DispatchesOffered() && DispatchButton.Contains(ChromeMouse))
-        {
-            OpenDispatches();
-            _swallowInput = true;
-            _modalOpenedNow = true;
-        }
-
         // THE HINT SLOT at the top of a menu screen — a slot note, the lesson about this screen, or a hint
         // from real state — closes with its × (a note and a lesson are remembered in the save; a hint for
         // the session), and a click anywhere else on it is spent: it sits over the screen's own controls,
@@ -4425,6 +4405,43 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             : _coach.Showing is { } aimed && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach
             : _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback
             : AttentionOwner.None;
+
+        // THE ? AND THE ENVELOPE, the two chrome controls that ask the owner. The gear, handled above
+        // with the notice's ×, needs no owner — it is the way out of everything — but these two hit-test
+        // through LearnOffered and DispatchesOffered, the very questions DrawLearnButton and
+        // DrawDispatchButton ask, so what is painted is what is hit-tested. They sit HERE, and not beside
+        // the gear, because this is the first line that can read THIS frame's owner: above the assignment
+        // they asked LAST frame's while the paint asked this frame's, and the frame an owner arrived or
+        // left was a frame the click accepted a control the paint had refused, or refused one it had
+        // drawn (moved below the site 2026-09-16). Still ONE assignment site — nothing here writes the
+        // owner; both read it.
+        //
+        // EVERY NEIGHBOUR IS LOAD-BEARING. Below the one assignment, so a click is accepted only on a
+        // frame the control is painted. Above the fight's tick (UpdateExpedition), which hands the director
+        // ModalUp from ProductionModalUp: the panel this click opens must already be up when the tick
+        // reads it, or the director acts for one frame as if nothing covered the page. Above
+        // _expedition.TakeInput, because the chrome paints over the fight's HUD and its click must be
+        // spent before the HUD can hit-test it. Above the modal block, because TakeDispatchesInput
+        // reads _modalOpenedNow — the gear's reason, for the gear's field: the panel's own input runs
+        // later this Update, and without the mark the opening click would also land on the list row
+        // under the cursor. The ? goes first so learn < envelope stays true, the order the tests pin;
+        // one click can hit only one of the two rects, so nothing else turns on it.
+        //
+        // THE ONE FRAME THIS LEAVES, AND WHICH SIDE IT IS ON. On the click frame the owner was decided
+        // without the panel, so for that one frame every gate below the site (the arrival pulse and its
+        // cue, the toast's cue, the rail's ceremonies) and every painter under the panel (the envelope,
+        // the hint slot, a toast) still answers the pre-panel owner, under the panel's scrim; the owner
+        // reads Modal on the next frame (the ? and the tour it opens, the same). M, read above the site, is
+        // the mirror image: the panel and the owner flip together and the envelope is gone on the frame
+        // the scrim arrives. Neither is a frame anybody sees; what moved is that the skew now sits where
+        // a click was accepted on a painted control, never refused on one.
+        if (!_swallowInput && TakeLearnClick()) _swallowInput = true;
+        if (!_swallowInput && _clicked && DispatchesOffered() && DispatchButton.Contains(ChromeMouse))
+        {
+            OpenDispatches();
+            _swallowInput = true;
+            _modalOpenedNow = true;
+        }
 
         // ── A TOAST'S CUE, ON THE FIRST FRAME THE PLATE IS REALLY ON SCREEN. Decided here, with the
         // owner, because Draw paints and never sounds: coming off the queue is not being seen, and a

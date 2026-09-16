@@ -173,11 +173,12 @@ public class HostInputGatesTest
     }
 
     /// <summary>
-    /// THE ENVELOPE AND ITS PANEL ARE DECIDED IN UPDATE. The chrome's click is taken beside the gear's
-    /// and the ?'s, before the nav and the screens can have it; the panel's own rows, MARK ALL READ and
-    /// close are decided in <c>TakeDispatchesInput</c> from the modal block; M toggles it beside F1 and
-    /// F10 and leaves exactly one host panel up. Nothing in the panel's paint reads an edge or marks a
-    /// letter read (check_draw_purity covers the rest of that claim).
+    /// THE ENVELOPE AND ITS PANEL ARE DECIDED IN UPDATE. The chrome's click is taken beside the ?'s,
+    /// directly below the owner's one assignment (so it asks THIS frame's owner, the one the paint
+    /// asks) and above the fight's tick, the HUD's TakeInput and the modal block; the panel's own rows,
+    /// MARK ALL READ and close are decided in <c>TakeDispatchesInput</c> from the modal block; M
+    /// toggles it beside F1 and F10 and leaves exactly one host panel up. Nothing in the panel's paint
+    /// reads an edge or marks a letter read (check_draw_purity covers the rest of that claim).
     /// </summary>
     [Fact]
     public void test_the_envelope_and_the_dispatches_panel_are_decided_in_update()
@@ -185,14 +186,25 @@ public class HostInputGatesTest
         var game = Source("Game1.cs");
         var update = UpdateBody();
 
-        // The chrome click: after the ?, on the same terms, and it marks the edge as the opener.
+        // The chrome click: after the ?, below the one owner assignment (so LearnOffered and
+        // DispatchesOffered answer the hit-test from THIS frame's owner, the one the paint reads --
+        // above it they read last frame's, which is the skew moved out on 2026-09-16), above the
+        // fight's tick where the death and the coach's choice move, above the HUD's TakeInput the
+        // chrome paints over, and above the modal block that reads the opener's mark.
         var learn = IndexOf(update, "if (!_swallowInput && TakeLearnClick()) _swallowInput = true;");
         var envelope = IndexOf(update, "DispatchButton.Contains(ChromeMouse)");
-        var nav = IndexOf(update, "if (!ceremonyHolds) HandleNavClick();");
-        _out.WriteLine($"? {learn} < envelope {envelope} < nav {nav}");
+        var assign = IndexOf(update, ": AttentionOwner.None;");
+        var hold = IndexOf(update, "if (!_opening.HoldsFight || !_expedition.RunStarted) UpdateExpedition(gameTime);");
+        var takeInput = IndexOf(update, "_expedition.TakeInput(ChromeMouse, MouseClicked, MouseWheel, huntOnTop: !OverlayActive);");
+        var modal = IndexOf(update, "if (HostModalUp)");
+        _out.WriteLine($"assign {assign} < ? {learn} < envelope {envelope} < hold {hold} < take input {takeInput} < modal {modal}");
         Assert.True(learn < envelope, "the envelope's click is taken before the ? has had the edge.");
-        Assert.True(envelope < nav, "the envelope's click falls through to the rail and the screens.");
-        Assert.Contains("_modalOpenedNow = true;", update[envelope..nav], StringComparison.Ordinal);
+        Assert.True(assign < learn, "the ?'s click reads last frame's owner: it must sit below the one assignment.");
+        Assert.True(assign < envelope, "the envelope's click reads last frame's owner: it must sit below the one assignment.");
+        Assert.True(envelope < hold, "the envelope's click must be read before UpdateExpedition hands the director ModalUp, which must already see the panel the click opened.");
+        Assert.True(envelope < takeInput, "the envelope paints over the fight's HUD, so its click must be spent before the HUD's.");
+        Assert.True(envelope < modal, "the envelope's click must be read before the modal block that reads _modalOpenedNow.");
+        Assert.Contains("_modalOpenedNow = true;", update[envelope..modal], StringComparison.Ordinal);
 
         // The panel's own decisions run from the modal block, and only there.
         Assert.Contains("TakeDispatchesInput();", update, StringComparison.Ordinal);

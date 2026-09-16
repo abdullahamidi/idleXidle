@@ -89,8 +89,9 @@ None < Feedback < Coach < Report < Death < Reveal < Modal < Opening
 
 The host holds one field, `private AttentionOwner _attention;`, assigned **exactly once**, in
 `Game1.Update`, at the point where the frame's flags are final: after the F1/F10 lines, the welcome
-keys, the gear/learn/hint click block, the nav/L/T handling and `_forge.TickReveal(...)`, and before
-`UpdateExpedition` runs the fight, the coach and the director. Every reader asks one question:
+keys, the gear and hint click blocks, the nav/L/T handling and `_forge.TickReveal(...)`, and before
+the `?` and envelope clicks, `UpdateExpedition` (the fight, the coach and the director) and the
+modal block. Every reader asks one question:
 
 ```csharp
 private bool AttentionOwnedAbove(AttentionOwner tier) => _attention > tier;
@@ -103,7 +104,14 @@ the frame (the L handling < `TickReveal` < the assignment < the authored-hold li
 **Two facts are read one frame late, deliberately.** The death transition and the coach's choice both
 tick inside `UpdateExpedition`, which runs *after* the site; reading them again later would be a
 second owner. At 60 fps one frame is a frame nobody sees. The clock ticks at the top of `Update`
-likewise read last frame's owner.
+still read last frame's owner. The `?` and the envelope no longer do: their clicks sat above the
+site until 2026-09-16, asking last frame's owner while `DrawLearnButton` and `DrawDispatchButton`
+asked this frame's, and were moved directly below it — under the assignment, above
+`UpdateExpedition`, `_expedition.TakeInput` and the modal block that reads `_modalOpenedNow`.
+`LearnOffered()` and `DispatchesOffered()` now answer the hit-test and the paint from the same
+owner, so a click is accepted only on a frame the control is painted. The site is still one site:
+the clicks read it and never write it (`attention_owner_test` pins the order, and that no
+assignment sits between the two).
 
 **The death owns the frame only while it is ON the page** (`!OverlayActive && DeathTransitionUp`).
 The fight ticks on every screen, so a fall behind the Forge is not something the player is looking
@@ -319,7 +327,11 @@ Nothing here moves an edge out of `Update`. Concretely:
 - **Nothing clickable paints while it is blocked**, and its converse: the rail is no longer painted
   over the open log (it used to paint at full brightness above the log's scrim while refusing every
   click); the fight HUD parks its cursor exactly while the black covers it and is fully live during
-  the readable beat; the `?` and the envelope are not painted on frames their input is refused.
+  the readable beat; the `?` and the envelope are not painted on frames their input is refused —
+  and, since 2026-09-16, take no click on a frame they are not painted: their clicks are read below
+  the owner's assignment, from the same owner the paint reads. The one frame left is the click frame
+  itself, where the envelope paints once under the panel's scrim before the owner reads `Modal`; M,
+  read above the site, is the mirror image, with the envelope gone on the frame the scrim arrives.
 - `HostModalUp => _showSettings || _showHelp || _showDispatches` replaced every site that spelled the
   first two by hand, so the panel could not be added to thirteen places and forgotten in the
   fourteenth.
@@ -390,7 +402,10 @@ part of the loop, and leaves `GO AGAIN` teaching a button the game presses itsel
 - **Two producers ask the inbox every frame** — a short interpolated key and a `HashSet` lookup, beside
   a `List<Keystone>` that method already allocates each frame. Cheap, and recorded rather than hidden.
 - **One-frame seams**, all accepted: the clock ticks and `ReserveNoticeLane` read last frame's owner;
-  the death and the coach's choice are last frame's at the site.
+  the death and the coach's choice are last frame's at the site; and the `?`'s and the envelope's
+  click frame, on which the owner was decided before the tour or the panel opened, so that frame's
+  gates below the site and painters under the new surface answer the pre-panel owner (the gear and
+  M open above the site and never do; a catch-up tick paints none of it).
 
 ### Neutral
 
