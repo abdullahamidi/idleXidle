@@ -4248,6 +4248,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // ...AND THE ENVELOPE BESIDE THAT. Same terms again: it sits over the screen, so its click is
         // spent here rather than falling through to whatever it covers. DispatchesOffered is the one
         // question DrawDispatchButton asks too — what is painted is what is hit-tested.
+        // ONE FRAME APART, AND SAID SO: this click runs ABOVE the owner's assignment, so it asks LAST
+        // frame's owner while the paint asks this frame's — the same skew TakeLearnClick above has, and
+        // the same one the owner's own site documents for the clocks that read it. The window is the
+        // single frame an owner appears or leaves, which at 60 fps is a frame nobody sees.
         // _modalOpenedNow for the gear's reason: the panel's own input runs later this Update, and
         // without the mark the opening click would also land on the list row under the cursor.
         if (!_swallowInput && _clicked && DispatchesOffered() && DispatchButton.Contains(ChromeMouse))
@@ -4422,6 +4426,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             : _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback
             : AttentionOwner.None;
 
+        // ── A TOAST'S CUE, ON THE FIRST FRAME THE PLATE IS REALLY ON SCREEN. Decided here, with the
+        // owner, because Draw paints and never sounds: coming off the queue is not being seen, and a
+        // reward sound for a plate the band never gave room to is a sound about nothing.
+        if (_noticeCueOwed && NoticeToastShowing)
+        {
+            _noticeCueOwed = false;
+            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+        }
+
         // ── A LETTER ARRIVED. One pulse, one cue, and only when nobody else has the player's eyes.
         //
         // The mark on the envelope is STATE and needs no permission — it simply holds until the letters
@@ -4429,14 +4442,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // a fall or an open log is the game asking for two things at once. So the edge is HELD (a pulse
         // cannot be paused — UiMotion decrements every one) and spent on the first frame the owner is
         // the coach or nothing. No toast, ever: this is background news.
-        // The toast's cue, on the first frame it is really on screen — decided here, with the owner,
-        // because Draw paints and never sounds.
-        if (_noticeCueOwed && NoticeToastShowing)
-        {
-            _noticeCueOwed = false;
-            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
-        }
-
         if (TakeDispatchArrival()) _dispatchArrivalHeld = true;
         if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))
         {
@@ -5469,14 +5474,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Hints closed this session. Not saved: a hint is about now, and returns when its fact changes.</summary>
     private readonly HashSet<string> _dismissedHints = new();
 
-    /// <summary>The slot content owed on the current menu screen, or null. Never on the HUNT, never under anything above the coach's tier.</summary>
+    /// <summary>The slot content owed on the current menu screen, or null. Never on the HUNT, and never while a lit lesson — or anything above one — owns the frame.</summary>
     private SlotContent? SlotShowing()
     {
-        // THE COACH'S TIER, on a menu screen only. The slot paints OVER a reveal, the welcome, a tour and
-        // the panels, whose swallow would leave its × dead — so under any of them it does not paint at all.
-        // AND IT STANDS DOWN FOR THE COACH'S OWN LIGHT, which is its own tier: a lit lesson darkens the
-        // page, brackets one control and puts a card beside it, and a second plate at the top of that
-        // same screen saying something else is the two-things-at-once this owner exists to prevent.
+        // A MENU SCREEN ONLY, AND ONE RUNG BELOW THE COACH. The slot paints OVER a reveal, the welcome,
+        // a tour and the panels, whose swallow would leave its × dead — so under any of them it does not
+        // paint at all. AND IT STANDS DOWN FOR THE COACH'S OWN LIGHT, which is why the guard is FEEDBACK
+        // and not Coach: the slot is the coach's own tier, and AttentionOwnedAbove(Coach) is false
+        // exactly when the coach is the owner. A lit lesson darkens the page, brackets one control and
+        // puts a card beside it, and a second plate at the top of that same screen saying something else
+        // is the two-things-at-once this owner exists to prevent.
         // The slot is where a lesson goes when it is NOT lit, so nothing is lost — the hint or note
         // returns the frame the light does.
         // THIS IS THE ONLY QUESTION ANYONE ASKS ABOUT THE SLOT, and ScreenBannerShowing below answers

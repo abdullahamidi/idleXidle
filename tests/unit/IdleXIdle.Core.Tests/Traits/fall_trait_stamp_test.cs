@@ -11,11 +11,13 @@ namespace IdleXIdle.Core.Tests.Traits;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>TraitFirst.Wave</c> is provenance the trait screen prints for the rest of the career ("first
-/// awakened at wave 12"), so a stamp one fall behind is a sentence the game tells the player that is
-/// simply untrue. The stamp comes from <c>HuntScreen</c>'s fall branch, which does two things in an
-/// order that matters: it assigns <c>_fellWave</c> for THIS fall, and it re-checks every rule with
-/// that wave. Until 2026-09-16 the re-check ran first.
+/// <c>TraitFirst.Wave</c> is provenance the SAVE keeps for the life of a career: it is written by
+/// <see cref="TraitLedger.SaveProvenance"/> beside the champion and the region — the two the TRAITS
+/// screen prints today — read back on every load, and available to whatever prints it next. A stamp
+/// one fall behind is therefore a wrong number persisted for good, which is worth fixing whether or
+/// not a surface shows it yet. The stamp comes from <c>HuntScreen</c>'s fall branch, which does two
+/// things in an order that matters: it assigns <c>_fellWave</c> for THIS fall, and it re-checks every
+/// rule with that wave. Until 2026-09-16 the re-check ran first.
 /// </para>
 /// <para>
 /// So this drives two real falls at two different waves through the real <see cref="TraitWatch"/> and

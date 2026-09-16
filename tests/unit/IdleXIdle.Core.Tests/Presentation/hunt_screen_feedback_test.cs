@@ -149,8 +149,9 @@ public class HuntScreenFeedbackTests
         var src = Source();
 
         // THE WAVE THAT FELL IS ASSIGNED BEFORE THE RULES ARE ASKED WITH IT. TraitFirst.Wave is
-        // provenance the trait screen prints for the rest of the career, so a re-check that ran
-        // before the assignment stamped the PREVIOUS fall's wave onto a trait this one awakened.
+        // provenance the SAVE keeps for the life of a career (TraitLedger.SaveProvenance) beside the
+        // champion and the region the TRAITS screen prints, so a re-check that ran before the
+        // assignment persisted the PREVIOUS fall's wave against a trait this one awakened.
         // The re-check still follows Log.Add: WHAT KILLED YOU reads the log the fall just wrote.
         var write = src.IndexOf("Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat));", StringComparison.Ordinal);
         var assign = src.IndexOf("_fellWave = Math.Max(1, _replayWave);", StringComparison.Ordinal);

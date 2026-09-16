@@ -64,8 +64,9 @@ read, the cap yields and the inbox grows rather than discard an unread letter. `
 pruned, so a pruned letter's event can never arrive again as news.
 
 **The surface.** The envelope sits in the chrome chain left of the `?` (right to left: gear · ? ·
-envelope · capsules), on every screen, hidden on the `?`'s terms and under any attention owner above
-the coach's rung. Click it or press **M**. The panel is a modal: newest-first list on the left with
+envelope · capsules), on every screen, and hides under any attention owner above the coach's rung —
+the `?`'s RUNG, but the owner alone: the `?` also needs the screen to have a tour, and the envelope
+never does, because it is the same envelope everywhere. Click it or press **M**. The panel is a modal: newest-first list on the left with
 its unread dots and region kickers, reading pane on the right, the count (`2 UNREAD · 7 KEPT`) beside
 the close, `MARK ALL READ — R` at the foot. UP/DOWN move the highlight, ENTER opens, the wheel
 scrolls, Escape or M closes. Selection is held by **key**, never by row index.

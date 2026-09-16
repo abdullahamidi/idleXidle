@@ -2249,9 +2249,11 @@ public sealed class HuntScreen
             LogDirty = true;
 
             // THE WAVE THAT FELL, BEFORE ANYTHING IS STAMPED WITH IT. TraitFirst.Wave is provenance
-            // the trait screen prints for the rest of the career, and the re-check below stamps
-            // whatever this holds — so it is assigned for THIS fall first, and the header's wave lane
-            // reads it from the same instant.
+            // the SAVE keeps for every awakening (TraitLedger.SaveProvenance) beside the champion and
+            // the region — those two are what the TRAITS screen prints today; the wave is written,
+            // read back and available to whatever prints it next. The re-check below stamps whatever
+            // this holds, so it is assigned for THIS fall first: a number persisted wrong for the life
+            // of a career is wrong whether or not a surface has been built to show it yet.
             _fellWave = Math.Max(1, _replayWave);
 
             // AND THE RUN'S END IS THE ONE MOMENT FAILURE CAN TEACH. WHAT KILLED YOU reads the log

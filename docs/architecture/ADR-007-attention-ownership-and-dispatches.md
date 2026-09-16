@@ -145,7 +145,7 @@ surface, written at the site:
 | Behaviour | Surfaces | Why |
 |---|---|---|
 | **Pauses** — does not paint, and its clock holds | the notice toast (and the next one is not dequeued, so its cue is not spent either), the boot toast, the coach's spotlight and card, the hint slot, the director's `_quiet` | It is information. A clock that burns behind a cover is news that expired unseen. |
-| **Expires** — does not paint, clock runs | the locked-tile refusal (`_lockedTimer`) | A refusal is over the moment it was seen, or not. The player pressed the tile; they know. |
+| **Expires** — does not paint, clock runs | the locked-tile refusal (`_lockedTimer`) and the settings panel's COPIED line (`_feedbackToastTimer`) | Each answers a press the player has just made and knows about. A refusal is over the moment it was seen, or not; the COPIED line's clock ticks on every screen including the title, because the panel opens there too. |
 | **Deferred once** — latched, fires exactly once when the frame frees | the nav rail's unlock CHAIN BREAK, the envelope's arrival pulse and cue, the currency pills' banked "+N" | A once-per-screen-per-career ceremony spent on nobody is the only one that career had. The pills' accumulator IS the wait: it keeps filling and empties into one badge at its true size, on the first free frame that also carries a gain. A spend in between cancels it. |
 | **Skipped** — never plays | the HUNT tile's hurt and cleared washes, the NEW dot's breathing halo | The bite is over. A red wash landing a minute later reports a fight that has moved on. The halo is a two-second cycle, not a one-shot, so there is nothing to defer — it simply resumes. |
 | **Untouched** — state, not motion | the NEW dot itself, the rail's count badges, the pills' printed figures, the HUNT tile's health bar | "You have not looked" stays true under every owner. |
@@ -270,8 +270,9 @@ the correct trade — the alternative is a wall of sixty letters about a life al
 is lost mechanically, because every fact is visible on its own screen.
 
 **The surface.** The envelope joins the chrome chain left of the `?` (right to left: gear · ? ·
-envelope · capsules), hides on the `?`'s terms plus the attention owner, and opens with **M** or a
-click. The panel is a host modal (`Game1.Dispatches.cs` for layout and paint; the input lives in
+envelope · capsules), guards at the `?`'s RUNG but on the owner alone — `DispatchesOffered() =>
+!AttentionOwnedAbove(AttentionOwner.Coach)`, where the `?` additionally needs the screen to have a
+tour — and opens with **M** or a click. The panel is a host modal (`Game1.Dispatches.cs` for layout and paint; the input lives in
 `Game1.Update`): a newest-first list on the left, a reading pane on the right, `MARK ALL READ — R` at
 the foot, Escape or M to close. The pane starts **empty** and a letter opens only on a click or ENTER
 — opening the panel must not mark the one letter waiting as read before a word of it has been read.
@@ -308,10 +309,11 @@ Nothing here moves an edge out of `Update`. Concretely:
 A capture must photograph the game's own answer. Dials that pose a deferred flourish —
 `RH_SHOT_BREAK` (the chain break) and `RH_SHOT_MOTION` (the banked "+N") — ask the same owner
 question the real arm asks, so a fixture that poses one under a chest reveal is answered with the
-chrome the player would actually have been shown. Dials whose surface was deleted are retired
-loudly rather than left forwarding into nothing (`RH_SHOT_WAKE`, `RH_SHOT_KEYSTONE`,
-`keystonenotice`, `fightregroup`). The inbox is **written** under the rig, because it is state; only
-its surfacing is posed.
+chrome the player would actually have been shown. Dials and modes whose surface was deleted are
+retired loudly rather than left forwarding into nothing: `RH_SHOT_WAKE` and the `keystonenotice` mode
+carry retirement notes in `capture.sh` that point at where the same thing is read now, and
+`fightregroup`'s removal is pinned by name in `capture_rig_modes_test`, which fails if it comes back.
+The inbox is **written** under the rig, because it is state; only its surfacing is posed.
 
 ## Alternatives considered
 
