@@ -207,6 +207,14 @@ def main(path):
         except OSError:
             wired = False
         check(wired, f"the rig still records {what} (else the rules above pass vacuously)")
+    # ...NOR A LETTER AND A LESSON ARRIVING TOGETHER, after it. The owner is decided before the coach
+    # chooses, so the frame the opening lets go of reads free while the director picks its first lesson;
+    # a pulse spent there landed on the lesson's first frame (2026-09-17, frame 5713). Spending the pulse
+    # now hushes the coach, so no lesson may start within half a second of a surfaced letter.
+    pulses = [f for f, k, r in ev if k == "DISPATCH" and r.split()[:1] == ["pulse"]]
+    starts = [(f, r.split()[0]) for f, k, r in ev if k == "LESSON"]
+    clash = [f"{who} at {l} beside the pulse at {p}" for p in pulses for l, who in starts if 0 <= l - p <= 30]
+    check(not clash, "no lesson began on top of a letter's arrival" + (f" ({clash[0]})" if clash else ""))
     # ...and no coach lesson at all while it runs: the opening is the one guide on screen.
     spoke = [f"{r} (frame {f})" for f, k, r in ev if k == "LESSON" and begin <= f and (done is None or f < done)]
     check(not spoke, "no coach lesson was shown over the opening" + (f" (shown: {spoke[0]})" if spoke else ""))

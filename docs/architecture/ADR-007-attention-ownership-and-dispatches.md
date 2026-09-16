@@ -169,6 +169,15 @@ rather than in the toast's own band, and is the only one that career will ever g
 behind a six-second plate that shares no pixels with it would cost more than it saves. The NEW dot's
 halo is a two-second cycle with nothing to defer at all.
 
+**Spending the arrival hushes the coach** (2026-09-17). The owner is assigned before the director chooses
+its lesson for the frame, so the first frame after a surface lets go (the opening's last CONTINUE, a
+chest reveal closing) reads `None` while the director, later in the same Update, picks the lesson that
+frame's facts ask for. The autoplayed opening showed the letter's pulse and cue landing on the first
+lesson's first frame. The arrival therefore hushes the director for `QuietAfterReward` when no lesson is
+already standing, the same beat a fall's end starts. The owner is still assigned once and no tier was
+added; `tools/check_opening_trace.py` fails a run in which a lesson starts within half a second of a
+surfaced letter.
+
 > **The `Feedback` rung is load-bearing only through that one gate.** Every other reader asks
 > `AttentionOwnedAbove(Feedback)` or `(Coach)`, or compares for equality (`== Opening`, `== Death`) —
 > none of which can tell `Feedback` from `None`. So the tier earns its place in the enum by ranking

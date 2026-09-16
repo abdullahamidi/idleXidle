@@ -3487,10 +3487,23 @@ public sealed class HuntScreen : IFocusActors
         // unstyled element left inside the arena, and at full health it read as a floating red streak
         // with nothing tying it to the creature underneath.
         var ebar = new Rectangle(ebox.Center.X - 92, visTop - 46, 184, 34);
+        var nameY = ebar.Y - 28;
+        // THE PLATE KEEPS CLEAR OF THE RIGHT RAIL (2026-09-16). A lone Bruiser stands at the arena's right
+        // and tall, so its name and bar rose into the band the IDLE panel covers — and the rail is drawn
+        // AFTER the arena, so the bar's right end and half the name were painted over at every profile
+        // (enemies/*_lone_*). The plate slides left until it clears the panel it would sit under; the
+        // panel is the one the rail recorded (last frame's, drawn later in this Draw).
+        var rail = _utilityPanel;
+        if (rail.Width > 0 && nameY < rail.Bottom + UiMetrics.Space(8) && ebar.Bottom > rail.Y)
+        {
+            var plateHalf = Math.Max(ebar.Width, _ui.MeasureBig(look.Name, UiTypography.Secondary)) / 2;
+            var over = ebar.Center.X + plateHalf - (rail.X - UiMetrics.Space(12));
+            if (over > 0) ebar.X -= over;
+        }
         _ui.BarArt(b, ebar, Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f), "health");
         // The creature was never named on screen — the player fought an anonymous sprite for the whole run.
         // Its name is its look's: what this region calls this role (EnemyPresentation).
-        _ui.TextCenterBig(b, look.Name, ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
+        _ui.TextCenterBig(b, look.Name, ebar.Center.X, nameY, UiKit.Vellum, UiTypography.Secondary);
     }
 
     /// <summary>

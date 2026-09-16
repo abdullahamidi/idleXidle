@@ -12,7 +12,10 @@
 #   reveal_notice_during  a notice queued under a chest reveal: it does not paint and its clock holds
 #   reveal_notice_after   past the hold: the notice lands
 #   enemy_intro_notice    a notice queued under the opening's enemy introduction: the light is alone
-#   fade_lesson           the death transition with the fight's first lesson pending: no light on the black
+#   fight_lesson          the control: the coach's first HUNT lesson lighting the Hunter on a live fight
+#   fade_lesson           the same lesson posed during the death transition (0.1, the collapse): the
+#                         death owns the frame, so no light, no card
+#   fade_lesson_black     the same at 0.5, the black with the next descent beginning beneath it
 #   gear_lesson           the Gear lesson lighting a cell of the enlarged item frame
 #   letters_panel         the DISPATCHES panel open over a fight (the panel's scrim owns the page)
 #   dispatch_lesson       the first-letter lesson, once nothing above the coach owns the frame: the
@@ -29,7 +32,9 @@ ROWS=(
   "reveal_notice_during|lootforge|RH_SHOT_NOTICE=1|1.2"
   "reveal_notice_after|lootforge|RH_SHOT_NOTICE=1|5"
   "enemy_intro_notice|fight|RH_SHOT_OPENING=IntroduceEnemy RH_SHOT_NOTICE=1|"
-  "fade_lesson|fightfade|RH_SHOT_OPENING=IntroduceHealth|0.1"
+  "fight_lesson|fight|RH_SHOT_LESSON=FirstFight|"
+  "fade_lesson|fightfade|RH_SHOT_LESSON=FirstFight|0.1"
+  "fade_lesson_black|fightfade|RH_SHOT_LESSON=FirstFight|0.5"
   "gear_lesson|character|RH_SHOT_OPENING=ForceItemSelect|"
   "letters_panel|dispatches|RH_SHOT_DISPATCH=unread|"
   "dispatch_lesson|dispatchesunread|RH_SHOT_DISPATCH=unread RH_SHOT_LESSON=FirstDispatchOpened|"

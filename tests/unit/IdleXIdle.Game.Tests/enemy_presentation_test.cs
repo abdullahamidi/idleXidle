@@ -203,6 +203,9 @@ public class EnemyPresentationTest
         Assert.Contains("EnemyPresentation.For(ArtRegion, WaveArchetype)", hunt, StringComparison.Ordinal);
         Assert.Contains("EnemyPresentation.BossFor(RegionId)", hunt, StringComparison.Ordinal);
         Assert.Contains("_ui.TextCenterBig(b, look.Name,", hunt, StringComparison.Ordinal);
+        // The lone creature's name and bar slide clear of the right rail, which is painted after the arena.
+        Assert.Contains("THE PLATE KEEPS CLEAR OF THE RIGHT RAIL", hunt, StringComparison.Ordinal);
+        Assert.Contains("var rail = _utilityPanel;", hunt, StringComparison.Ordinal);
 
         var host = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
         Assert.DoesNotContain("EnemyArtFor", host, StringComparison.Ordinal);

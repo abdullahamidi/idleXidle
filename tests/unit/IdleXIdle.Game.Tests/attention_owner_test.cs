@@ -329,8 +329,12 @@ public class AttentionOwnerTest
         // the director this time.
         Assert.Contains("_deathWasUp = !OverlayActive && _expedition.DeathTransitionUp;", update, StringComparison.Ordinal);
         Assert.DoesNotContain("_deathWasUp = _expedition.DeathTransitionUp;", update, StringComparison.Ordinal);
-        // No second hush when the log closes: the lesson is simply chosen fresh.
-        Assert.Single(Regex.Matches(Host(), @"_coach\.Hush\("));
+        // No hush when the log closes: the lesson is simply chosen fresh. The host hushes the coach in
+        // exactly two places -- a fall's end, and a letter's arrival pulse (2026-09-17) -- and the second
+        // only when no lesson stands, so it can never drop a lit card the way the background-fall hush did.
+        var hushes = Regex.Matches(Host(), @"_coach\.Hush\(").Count;
+        Assert.Equal(2, hushes);
+        Assert.Contains("if (_coach.Showing is null) _coach.Hush(OnboardingDirector.QuietAfterReward);", update, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -403,6 +407,14 @@ public class AttentionOwnerTest
         //    ceremonies use, so the two are pinned against each other here.
         Assert.Contains("if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.None))", update, StringComparison.Ordinal);
         Assert.DoesNotContain("if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.Coach))", update, StringComparison.Ordinal);
+        //    THE ARRIVAL AND THE NEXT LESSON NEVER LAND TOGETHER: the owner is decided before the coach
+        //    chooses, so a frame just let go of reads None while the director picks a lesson a few lines
+        //    later. Spending the pulse hushes the coach (unless a card already stands), exactly as a
+        //    fall's end does. Regression: the autoplayed opening surfaced the letter and the first
+        //    lesson on one frame (5713).
+        var arrival = update[update.IndexOf("if (_dispatchArrivalHeld && !AttentionOwnedAbove(AttentionOwner.None))", StringComparison.Ordinal)..];
+        arrival = arrival[..arrival.IndexOf("_sound.PlayFirst(0.5f, \"sfx_dispatch\"", StringComparison.Ordinal)];
+        Assert.Contains("if (_coach.Showing is null) _coach.Hush(OnboardingDirector.QuietAfterReward);", arrival, StringComparison.Ordinal);
         //    ...and it is the ONLY gate that asks it, so the asymmetry cannot spread by copy-paste.
         Assert.Single(Regex.Matches(Host(), @"AttentionOwnedAbove\(AttentionOwner\.None\)"));
         //    The break stays at the coach's rung: silent, on the rail rather than in the toast's band,

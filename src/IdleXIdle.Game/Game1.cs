@@ -4523,6 +4523,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _dispatchArrivalHeld = false;
             UiMotion.Flash(DispatchPulseKey, UiMotion.Transition);
             _rigDispatchSurfaced = "pulse";   // dev: the opening rig's trace
+            // ...AND THE COACH GIVES IT ITS MOMENT (2026-09-17). The owner above was decided before the
+            // coach chose for this frame, so a frame that has just been let go of — the opening's last
+            // CONTINUE, a chest reveal closing — is None here while the director, a few lines below,
+            // picks the lesson that frame's facts ask for. The autoplayed opening showed both landing
+            // on one frame: the letter's halo and cue together with the first lesson's light
+            // (LESSON FirstTrainingPurchase and DISPATCH pulse, both at frame 5713). The same quiet a
+            // fall's end starts, and only when no lesson is already standing — a card that is up keeps
+            // its place; only the NEXT ask waits.
+            if (_coach.Showing is null) _coach.Hush(OnboardingDirector.QuietAfterReward);
             // The background tier's cue, quieter than the notice's reward tier. PlayFirst so the game
             // plays before the wav lands, and so a build without it falls back to the rail's page tick.
             _sound.PlayFirst(0.5f, "sfx_dispatch", "sfx_nav");
