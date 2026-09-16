@@ -82,8 +82,8 @@ public sealed class MapScreen
     /// The plate's height is a constant (<see cref="StripH"/>: one small button, with a breath above and
     /// below), so a message carrying a newline does not grow it — the extra lines are simply drawn below
     /// its foot, across the region cards. That is exactly what a conquest keystone reveal did: four lines
-    /// of doctrine written into a one-line plate. The reveal belongs in the notice toast, whose height IS
-    /// summed from the rungs it draws and whose body wraps; the strip carries the compact headline. This
+    /// of doctrine written into a one-line plate. The reveal belongs in the DISPATCH the conquest posts,
+    /// whose reading pane wraps it in full; the strip carries the compact headline. This
     /// guard is what makes that a contract rather than a convention — no future caller can spill out of
     /// the plate, whatever it writes.
     /// </remarks>
@@ -102,8 +102,8 @@ public sealed class MapScreen
     /// The copy lives WITH the plate that has to hold it. ONE LINE at every UI SCALE — the plate is one
     /// small button tall and does not grow — so the line is written short enough to be read whole rather
     /// than long enough to be ellipsised. The keystone appears as a HEADLINE only; what it DOES is the
-    /// notice toast's job, whose body wraps and whose plate grows to fit it. The two are posted together,
-    /// so the player gets the name here and the sentence there.
+    /// keystone LETTER's job, whose reading pane wraps as far as the sentence runs. The two are written
+    /// together, so the player gets the name here, in the ceremony, and the sentence in the inbox.
     /// </para>
     /// <para>
     /// THE KEYSTONE, NOT THE NEXT REGION. Carrying both ran to eighty characters, and at UI SCALE 150 the
@@ -1129,7 +1129,7 @@ public sealed class MapScreen
     /// <see cref="StripLine"/> — the message flattened by <see cref="OneLine"/> — and never the raw
     /// message. And note what the CONQUERED branch means for the other one: once every region is yours
     /// the ladder owns this row for good, so a message posted from then on is never seen. Anything the
-    /// player has to read after the last conquest belongs in the notice toast, not here.
+    /// player has to read after the last conquest belongs in a DISPATCH, not here.
     /// </para>
     /// </remarks>
     private void DrawWorldStrip(SpriteBatch b, Point hit)

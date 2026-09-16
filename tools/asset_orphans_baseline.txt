@@ -1,6 +1,9 @@
 # Assets nothing consumed when tools/check_asset_consumers.py arrived (2026-09-02).
 # Pre-pivot debt: delete at the desk, or wire it. A NEW orphan is not allowed on this list
 # without saying why here; the gate fails on any orphan the list does not name.
+# A row LEAVES the list when the code reaches its asset: the gate prints the healed rows by name and
+# asks for exactly that. Seventeen went on 2026-09-16 (the equipment, blessing and role icons, and
+# icon_peek), which is why the list is shorter than the day it was written.
 # --- pre-pivot debt ---
 assets/art/Animations/Bosses/crystal_lich_attack/crystal_lich_attack_strip8_512.png
 assets/art/Animations/Bosses/crystal_lich_death/crystal_lich_death_strip8_512.png
@@ -41,15 +44,6 @@ assets/art/Animations/Enemies/wisp_idle/wisp_idle_strip8_512.png
 assets/art/BrandingSymbols/branding/preview/emblem_idlexidle.png
 assets/art/BrandingSymbols/glyphs/navigation/color/nav_forge_128.png
 assets/art/BrandingSymbols/glyphs/navigation/color/nav_warren_128.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_accessory.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_blade.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_boots.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_bow.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_chest.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_gloves.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_helmet.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_scythe.png
-assets/art/Characters/Hunter/icons/equipment/icon_equipment_spear.png
 assets/art/Enemies/enemies/bonecrawler/bonecrawler_attack_01.png
 assets/art/Enemies/enemies/rift_guardian/rift_guardian_attack_01.png
 assets/art/Enemies/enemies/shadeling/shadeling_attack_01.png
@@ -74,9 +68,6 @@ assets/art/UI/decor/ui_divider_short.png
 assets/art/UI/decor/ui_keycap_space_blank.png
 assets/art/UI/decor/ui_scrollbar_handle.png
 assets/art/UI/decor/ui_scrollbar_track.png
-assets/art/UI/icons/blessings/icon_blessing_amplifier.png
-assets/art/UI/icons/blessings/icon_blessing_convenience.png
-assets/art/UI/icons/blessings/icon_blessing_expansion.png
 assets/art/UI/icons/creatures/crea_body_crf_marrow.png
 assets/art/UI/icons/creatures/crea_body_def_bonewall.png
 assets/art/UI/icons/creatures/crea_body_prd_brood.png
@@ -101,7 +92,6 @@ assets/art/UI/icons/creatures/crea_spirit_crf_rite.png
 assets/art/UI/icons/creatures/crea_spirit_def_vigil.png
 assets/art/UI/icons/creatures/crea_spirit_prd_emberfont.png
 assets/art/UI/icons/creatures/crea_spirit_sup_solace.png
-assets/art/UI/icons/icon_peek.png
 assets/art/UI/icons/nav/nav_codex.png
 assets/art/UI/icons/nav/nav_evolve.png
 assets/art/UI/icons/nav/nav_forge.png
@@ -112,8 +102,4 @@ assets/art/UI/icons/nav/nav_map.png
 assets/art/UI/icons/nav/nav_shop.png
 assets/art/UI/icons/nav/nav_stats.png
 assets/art/UI/icons/nav/nav_warren.png
-assets/art/UI/icons/roles/icon_role_crafter.png
-assets/art/UI/icons/roles/icon_role_defender.png
-assets/art/UI/icons/roles/icon_role_producer.png
-assets/art/UI/icons/roles/icon_role_support.png
 assets/art/UI/nodes/ui_node_mastery.png

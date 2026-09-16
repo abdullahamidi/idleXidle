@@ -274,8 +274,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     //     screen's walkthrough was much clearer.")
     //   * THE SLOT NOTE: the one banner left — a new skill slot's line at the top of the BUILD
     //     screen, after its tour, closed with one click.
-    //   * NOTICE TOASTS: a quest finishing or a champion joining is a line at the top that fades on its
-    //     own. It never takes input.
+    //   * DISPATCHES: account news — a screen opening, a quest finishing, a champion joining, a trait
+    //     waking, a region falling — is a LETTER that waits in the inbox behind the envelope in the
+    //     chrome, with an unread mark that holds until it is read. It never crosses a screen.
+    //   * NOTICE TOASTS: the answer to something the player just did — a champion switched, a locked
+    //     tile refused — a line at the top that fades on its own. It never takes input.
 
     /// <summary>Is a tour on screen? While true, input belongs to it and nothing else teaches.</summary>
     /// <summary>The unread dot's slow breath, in seconds of a two-second cycle.</summary>
@@ -3743,8 +3746,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _traitLedger.Discover(traitId, new TraitFirst(_characters.ActiveId, _activeRegion, 41));
                     foreach (var traitId in new[] { "t_scar_tissue", "t_last_word", "t_last_breath" })
                         _traitLedger.Equip(_characters.ActiveId, traitId);
-                    // The reveal has already happened for these — the rig must not fire eleven
-                    // awakening toasts across the shot it is about to take.
+                    // The reveal has already happened for these — the rig must not write eleven
+                    // awakening letters into the fixture's inbox and hang an unread mark on the shot
+                    // it is about to take.
                     _traitsFirstCheckOwed = false;
                     // WHAT THE INSPECTOR IS READING. Worn by default, because that is the reading with
                     // the most in it: the sentence, where it first awakened, and TAKE IT OFF rather
@@ -6744,7 +6748,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     /// <summary>
     /// THE ONE SEAM THE TRAITS REACH THE GAME THROUGH: compose what the worn three contribute, keep
-    /// the account facts current, and hand the reveals to the toast queue.
+    /// the account facts current, and post one LETTER for each trait that wakes.
     /// </summary>
     /// <remarks>
     /// <para>

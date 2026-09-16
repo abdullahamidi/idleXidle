@@ -52,7 +52,7 @@ public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
 /// thing; what was added says that something CHANGED. An equip pulses the slot it landed in once, ticks
 /// GEAR POWER from the old number to the new over one Transition and lets the number flash, and reveals a
 /// set rung the moment it is reached with one Source-coloured pulse. The first time a set reaches five
-/// pieces the screen records it and hands the host one notice to toast. Every one of those is a
+/// pieces the screen records the EVENT and the host writes the letter. Every one of those is a
 /// <see cref="GearFeedback"/> event fired from <see cref="Update"/> by DIFFING the hunter — never by
 /// Draw, and never by the click that caused it, so the menu route the host equips through and the
 /// EQUIP HIGHEST POWER sweep pulse exactly like the EQUIP button does. Every pulse is a
@@ -131,7 +131,7 @@ public sealed class GearScreen
     //                                 first frame, then puts the chest back on N frames (5 when unsaid)
     //                                 before the shot: one slot pulses, GEAR POWER is mid-tick, the
     //                                 ladder's fifth rung reveals, and the set completes for the first
-    //                                 time (the notice is the host's to toast). @0 is the pulse's peak.
+    //                                 time (the letter is the host's to write). @0 is the pulse's peak.
     //   RH_SHOT_GEAR_POSE=best        runs EQUIP HIGHEST POWER on the first frame, so nothing in the bag
     //                                 beats what is worn and the button draws OFF and says why.
     //   RH_SHOT_GEAR_POSE=bare        takes everything off, so UNEQUIP ALL draws OFF and the doll is eight
