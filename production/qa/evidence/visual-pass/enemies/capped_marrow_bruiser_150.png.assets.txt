@@ -1,0 +1,1 @@
+loaded 456 textures, 671 MB resident; 232 indexed and not yet asked for
