@@ -311,9 +311,10 @@ public class AttentionOwnerTest
         var game = Game1();
         Assert.Contains("RewardUp: _forge.RevealActive || WelcomeUp,", game, StringComparison.Ordinal);
         // A PRODUCTION MODAL OR THE OPENING, named as those two things. The tier-minus-welcome form it
-        // replaces was false on the frame the opening owned while the welcome stood alone -- Opening
-        // ranks above Modal, so the rank said yes and the subtraction took it back. Inert in practice
-        // (every surface is separately refused under the opening), and one expression either way.
+        // replaces was not WRONG, it was fragile: its subtraction could only bite where the opening
+        // owned and the welcome stood alone, and WelcomeUp is itself `… && !_opening.Running`, so that
+        // frame cannot occur. The gain is that the term no longer leans on a guard held in another
+        // property -- the hole opens the day WelcomeUp's definition changes.
         Assert.Contains("ModalUp: _attention == AttentionOwner.Opening || ProductionModalUp,", game, StringComparison.Ordinal);
         Assert.DoesNotContain("!(WelcomeUp && !ProductionModalUp)", game, StringComparison.Ordinal);
         Assert.Contains("ReportUp: _expedition.LogOpen,", game, StringComparison.Ordinal);
@@ -348,9 +349,11 @@ public class AttentionOwnerTest
     /// THE CHROME'S BACKGROUND FLOURISHES WAIT, AND ITS STATE DOES NOT. A rail tile unlocks, an unread
     /// dot appears and a purse goes up whatever else is on screen -- that is what the player owns. What
     /// waits is the MOTION about it: the chains springing off a tile, the HUNT tile's hurt and cleared
-    /// washes, the dot's breath, and the pills' "+N". Every one of them asks the coach's tier, because
-    /// a ceremony over a chest reveal, a fall, the open log, a modal or the authored opening is the game
-    /// asking to be looked at in two places at once. <c>UiMotion.Tick</c> is never paused -- every
+    /// washes, the dot's breath, and the pills' "+N". Those four ask the COACH's tier, because a
+    /// ceremony over a chest reveal, a fall, the open log, a modal or the authored opening is the game
+    /// asking to be looked at in two places at once. The envelope's arrival is the ONE exception and is
+    /// pinned as such below: it waits for a frame nothing owns at all, because a letter is a message
+    /// and direct feedback outranks background news. <c>UiMotion.Tick</c> is never paused -- every
     /// screen's hover ease rides on it -- so what is deferred or skipped is the ARM.
     /// </summary>
     [Fact]

@@ -147,6 +147,8 @@ surface, written at the site:
 | **Pauses** — does not paint, and its clock holds | the notice toast (and the next one is not dequeued, so its cue is not spent either), the boot toast, the coach's spotlight and card, the hint slot, the director's `_quiet` | It is information. A clock that burns behind a cover is news that expired unseen. |
 | **Expires** — does not paint, clock runs | the locked-tile refusal (`_lockedTimer`) and the settings panel's COPIED line (`_feedbackToastTimer`) | Each answers a press the player has just made and knows about. A refusal is over the moment it was seen, or not; the COPIED line's clock ticks on every screen including the title, because the panel opens there too. |
 | **Deferred once** — latched, fires exactly once when the frame frees | the nav rail's unlock CHAIN BREAK, the envelope's arrival pulse and cue, the currency pills' banked "+N" | A once-per-screen-per-career ceremony spent on nobody is the only one that career had. The pills' accumulator IS the wait: it keeps filling and empties into one badge at its true size, on the first free frame that also carries a gain. A spend in between cancels it. |
+| **Skipped** — never plays | the HUNT tile's hurt and cleared washes, the NEW dot's breathing halo | The bite is over. A red wash landing a minute later reports a fight that has moved on. The halo is a two-second cycle, not a one-shot, so there is nothing to defer — it simply resumes. |
+| **Untouched** — state, not motion | the NEW dot itself, the rail's count badges, the pills' printed figures, the HUNT tile's health bar | "You have not looked" stays true under every owner. |
 
 **Which rung a deferred flourish waits at is a decision per flourish, not one rule.** Two of the three
 wait for the coach's rung to clear (`!AttentionOwnedAbove(Coach)`); the envelope's arrival waits for a
@@ -160,15 +162,14 @@ behind a six-second plate that shares no pixels with it would cost more than it 
 halo is a two-second cycle with nothing to defer at all.
 
 > **The `Feedback` rung is load-bearing only through that one gate.** Every other reader asks
-> `AttentionOwnedAbove(Feedback)` or `(Coach)`, `>= Modal`, or `== Death` — none of which can tell
-> `Feedback` from `None`. So the tier earns its place in the enum by ranking the toast *below* the
-> coach (which is what stops a toast silencing a lesson, the inversion `NoticeToastHolds` had), and by
-> this one gate. A future surface that must yield to direct feedback asks the same question.
+> `AttentionOwnedAbove(Feedback)` or `(Coach)`, or compares for equality (`== Opening`, `== Death`) —
+> none of which can tell `Feedback` from `None`. So the tier earns its place in the enum by ranking
+> the toast *below* the coach (which is what stops a toast silencing a lesson, the inversion
+> `NoticeToastHolds` had), and by this one gate. A future surface that must yield to direct feedback
+> asks the same question.
 > Note also that `_feedbackToastTimer` is painted only inside `DrawSettings`, so as an owner term it
 > can raise `Feedback` only in the ≤ 4 s window after the panel closes — a state in which the line it
 > stands for is no longer on screen at all.
-| **Skipped** — never plays | the HUNT tile's hurt and cleared washes, the NEW dot's breathing halo | The bite is over. A red wash landing a minute later reports a fight that has moved on. The halo is a two-second cycle, not a one-shot, so there is nothing to defer — it simply resumes. |
-| **Untouched** — state, not motion | the NEW dot itself, the rail's count badges, the pills' printed figures, the HUNT tile's health bar | "You have not looked" stays true under every owner. |
 
 `UiMotion.Tick` is **never** paused: what waits is the arm, so every hover ease in the game is
 unaffected.

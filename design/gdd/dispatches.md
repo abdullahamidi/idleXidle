@@ -72,8 +72,12 @@ the close, `MARK ALL READ — R` at the foot. UP/DOWN move the highlight, ENTER 
 scrolls, Escape or M closes. Selection is held by **key**, never by row index.
 
 **Arrival.** One halo pulse behind the envelope and one quiet cue (`sfx_dispatch`, the softest in the
-bank), both **deferred** until nothing above the coach's rung owns the frame, and both skipped under
-Reduced Motion — the unread mark carries it.
+bank), both **deferred until nothing at all has a claim on the frame** — not merely until the coach's
+rung clears. A letter is a message, and a notice toast or a locked-tile refusal is a message the
+player has just asked for, so the two must not land together; the cue is audible, which would stack it
+on the toast's. Both are skipped under Reduced Motion — the unread mark carries it. (The rail's own
+ceremonies still wait only for the coach's rung: they are silent and share no pixels with the toast.
+The mark itself never waits for anything — it is state.)
 
 **One lesson.** `FirstDispatchOpened`: offered once a letter is unread, completed only by really
 opening the surface, never by closing the card.

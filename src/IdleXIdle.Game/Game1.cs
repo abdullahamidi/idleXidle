@@ -7006,13 +7006,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                           RewardUp: _forge.RevealActive || WelcomeUp,
                           // A PRODUCTION MODAL, OR THE AUTHORED OPENING — said as those two things
                           // rather than as a tier with the welcome subtracted. The welcome is a REWARD
-                          // to the director, not a modal (the camp's lesson is raised by it and may
-                          // speak over it), and the tier-minus-welcome form was false on the one frame
-                          // the opening owned while the welcome stood alone: Opening is above Modal, so
-                          // the rank said yes and the subtraction took it away again. The opening
-                          // outranks everything — only one guided sequence owns the player at a time,
-                          // and while the first minutes are written the contextual catalogue has
-                          // nothing to add that is not either already being said or said too early.
+                          // to the director, not a modal: the camp's lesson is raised by it and may
+                          // speak over it, which is the whole reason the tier alone would not do.
+                          // THE FORM THIS REPLACES WAS NOT WRONG, IT WAS FRAGILE. Its subtraction
+                          // could only bite on a frame where the opening owned AND the welcome stood
+                          // alone, and WelcomeUp is itself `… && !_opening.Running`, so that frame
+                          // cannot occur — the old expression read !(false && …) there and was already
+                          // true. What this buys is that the term stops depending on a guard held in
+                          // another property: the hole opens the day WelcomeUp's definition changes,
+                          // and nothing here would have said so. The opening outranks everything —
+                          // only one guided sequence owns the player at a time, and while the first
+                          // minutes are written the contextual catalogue has nothing to add that is
+                          // not either already being said or said too early.
                           ModalUp: _attention == AttentionOwner.Opening || ProductionModalUp,
                           ReportUp: _expedition.LogOpen,
                           // The death on the page, as the owner read it this frame: the transition ticks
