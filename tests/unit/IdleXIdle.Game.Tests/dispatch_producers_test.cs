@@ -84,6 +84,29 @@ public class DispatchProducersTest
                          $"Game1.cs still carries `{gone}` — the awakening plate was only half removed.");
     }
 
+    /// <summary>
+    /// NO SCREEN STILL BUILDS TOAST COPY FOR NEWS IT NO LONGER SENDS THERE.
+    /// </summary>
+    /// <remarks>
+    /// The GEAR screen handed the host two ready-made lines for a five-piece completion. The host
+    /// posts a letter now and the words are rendered by <see cref="DispatchCopy"/>, so the builder
+    /// became production code with no caller — which compiles, ships, and keeps a second copy of a
+    /// sentence that can drift from the one the player actually reads.
+    /// </remarks>
+    [Fact]
+    public void test_no_screen_still_builds_copy_for_a_surface_the_product_does_not_have()
+    {
+        var gear = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "GearScreen.cs")).Replace("\r\n", "\n");
+        Assert.DoesNotContain("ConsumeNotice", gear, StringComparison.Ordinal);
+        // The two lines themselves, by the shape they were built in. (CapstoneName survives as an
+        // icon key on this screen, which is a name and not a sentence.)
+        Assert.DoesNotContain("COMPLETE\\n", gear, StringComparison.Ordinal);
+        Assert.DoesNotContain("} ACTIVE\"", gear, StringComparison.Ordinal);
+        // The event itself is what the screen still reports, and the host still reads it.
+        Assert.Contains("public string? ConsumeCompletedSet()", gear, StringComparison.Ordinal);
+        Assert.Contains("_gear.ConsumeCompletedSet()", Game1Source(), StringComparison.Ordinal);
+    }
+
     /// <summary>Every background producer builds a TYPED letter through the factory for its kind.</summary>
     [Fact]
     public void test_every_background_producer_posts_a_typed_dispatch()

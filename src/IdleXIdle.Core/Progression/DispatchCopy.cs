@@ -30,7 +30,7 @@ public static class DispatchCopy
             DispatchKind.Unlock => ScreenOf(d) is { } screen ? $"NEW — {Unlocks.Headline(screen)}" : "A NEW SCREEN OPENED",
             DispatchKind.Gem => "A GEM DROPPED",
             DispatchKind.Trait => TraitCatalogue.Find(d.SubjectId) is { } t ? $"A TRAIT HAS AWAKENED — {t.Name}" : "A TRAIT HAS AWAKENED",
-            DispatchKind.Vow => Vows.ById(d.SubjectId) is { } v ? $"A VOW HAS REVEALED ITSELF — {v.Name}" : "A VOW HAS REVEALED ITSELF",
+            DispatchKind.Vow => VowHeadline(d),
             DispatchKind.Keystone => Keystones.ById(d.SubjectId) is { } k ? $"NEW KEYSTONE — {k.Name}" : "A NEW KEYSTONE",
             DispatchKind.Champion => CharacterRoster.Find(d.SubjectId ?? "") is { } c ? $"{c.Name} JOINS YOU" : "A HUNTER JOINS YOU",
             DispatchKind.Quest => QuestCatalogue.Find(d.SubjectId) is { } q ? $"QUEST COMPLETE — {q.Name}" : "QUEST COMPLETE",
@@ -74,6 +74,27 @@ public static class DispatchCopy
             },
             _ => "",
         };
+    }
+
+    /// <summary>
+    /// How a Vow arrived, which is not one sentence but two.
+    /// </summary>
+    /// <remarks>
+    /// A GRANTED Vow is HANDED to the player — it comes with the BUILD screen so the system is
+    /// discoverable at all — and "A VOW HAS REVEALED ITSELF" would be a lie about what they did: they
+    /// did nothing, the game gave it to them. Every other Vow is PROVED, by having already kept its
+    /// rule without it, and that one really did reveal itself.
+    /// <para>
+    /// One KEY for both (<c>vow.&lt;id&gt;</c>), because a Vow is discovered once however it arrives and
+    /// the inbox must refuse the second telling — the sentence branches, the dedupe does not.
+    /// </para>
+    /// </remarks>
+    private static string VowHeadline(Dispatch d)
+    {
+        if (Vows.ById(d.SubjectId) is not { } v) return "A VOW HAS REVEALED ITSELF";
+        return v.Proof == VowProof.Granted
+            ? $"A VOW IS OFFERED TO YOU — {v.Name}"
+            : $"A VOW HAS REVEALED ITSELF — {v.Name}";
     }
 
     /// <summary>

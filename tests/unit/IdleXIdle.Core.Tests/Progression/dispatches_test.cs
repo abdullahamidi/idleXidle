@@ -184,6 +184,43 @@ public class DispatchesTest
         Assert.Contains("3 KEYSTONES", DispatchCopy.Headline(Dispatches.Migration(DispatchKeys.MigrationKeystones, Now, count: 3)));
     }
 
+    /// <summary>
+    /// A VOW SAYS HOW IT ARRIVED. One key for both producers — a Vow is discovered once, however it
+    /// came — but not one sentence: a GRANTED Vow is handed to the player with the BUILD screen, and
+    /// telling them it "revealed itself" credits them with a discovery they did not make. Every other
+    /// Vow is proved by having already kept its rule, and that one really did reveal itself.
+    /// </summary>
+    [Fact]
+    public void test_a_vow_letter_says_whether_it_was_offered_or_proved()
+    {
+        Assert.NotEmpty(Vows.Granted);
+        Assert.NotEmpty(Vows.Discoverable);
+
+        foreach (var vow in Vows.Granted)
+        {
+            var head = DispatchCopy.Headline(Dispatches.Vow(vow.Id, Now));
+            Assert.Equal($"A VOW IS OFFERED TO YOU — {vow.Name}", head);
+        }
+
+        foreach (var vow in Vows.Discoverable)
+        {
+            var head = DispatchCopy.Headline(Dispatches.Vow(vow.Id, Now));
+            Assert.Equal($"A VOW HAS REVEALED ITSELF — {vow.Name}", head);
+        }
+
+        // ...and both are still ONE key, so the two producers can never tell the same Vow twice.
+        var granted = Vows.Granted[0];
+        var inbox = new Inbox();
+        Assert.True(inbox.Post(Dispatches.Vow(granted.Id, Now)));
+        Assert.False(inbox.Post(Dispatches.Vow(granted.Id, Now + 1)));
+        Assert.Equal(1, inbox.Count);
+
+        // A Vow the catalogue no longer holds still reads as a Vow, and never as a raw id.
+        var gone = DispatchCopy.Headline(Dispatches.Vow("vow_that_left", Now));
+        Assert.Equal("A VOW HAS REVEALED ITSELF", gone);
+        Assert.DoesNotContain("vow_that_left", gone);
+    }
+
     [Fact]
     public void test_copy_falls_back_plainly_when_a_subject_has_left_the_catalogue()
     {

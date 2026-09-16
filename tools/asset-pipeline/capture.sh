@@ -169,11 +169,10 @@
 # only reachable by clicking a tile and a capture never clicks, so without this dial that state could
 # never have been looked at.
 #
-# RH_SHOT_WAKE poses the AWAKENING PLATE over the same screen — `one` for a single trait's reveal,
-# `many` for the combined plate an established save gets on its first load. The reveal fires once, in
-# a moment nobody can schedule, so this is the only way its three rungs are ever photographed:
+# RH_SHOT_WAKE is RETIRED with the awakening plate it posed. A trait that wakes is a DISPATCH now -
+# one letter per trait, named, kept - so the reveal is photographed where it is read:
 #
-#   RH_SHOT_WAKE=one RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh traits build/shots/wake.png
+#   RH_SHOT_DISPATCH=trait.t_scar_tissue bash tools/asset-pipeline/capture.sh dispatches out.png
 #
 # `dusttree` is the OLD Memory tree, which is no longer the trait system but is still the only
 # producer of the keystones and the vows until those move. It takes the third argument for the tree's
@@ -297,8 +296,6 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
 # TRAITS: what the inspector is reading — a trait id, or `unknown` for the `???` reading. `traits` only.
 [ -n "$RH_SHOT_TRAIT" ] && RH_ENV+=(RH_SHOT_TRAIT="$RH_SHOT_TRAIT")
-# TRAITS: pose the awakening plate — `one` or `many`. `traits` only.
-[ -n "$RH_SHOT_WAKE" ] && RH_ENV+=(RH_SHOT_WAKE="$RH_SHOT_WAKE")
 # RH_SHOT_RESPEC=1 poses the MASTERY tree with TAKE EVERY POINT BACK already ARMED, so the warning
 # that names the skills the respec would unequip can be photographed. It lives between two presses
 # of one button, and a capture never clicks. buildtree / buildzoom only:

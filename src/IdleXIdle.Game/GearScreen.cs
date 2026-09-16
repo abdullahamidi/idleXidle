@@ -104,10 +104,17 @@ public sealed class GearScreen
     /// <remarks>Same shape as TraitsScreen.ConsumeCue. Cues raised: sfx_click (a tab or an item picked), sfx_equip (a piece put on or taken off by this screen's own controls), sfx_error (a refusal: CANNOT WEAR, or a button that is off).</remarks>
     public string? ConsumeCue() => _feedback.ConsumeCue();
 
-    /// <summary>A set's first five-piece completion, as two lines for a toast ("NATURE SET COMPLETE" / "OVERGROWTH ACTIVE"), cleared by reading. The host toasts it and plays sfx_levelup.</summary>
-    public string? ConsumeNotice() => _feedback.ConsumeNotice();
-
-    /// <summary>The set that just completed for the first time (a <see cref="Source"/> name, the form SaveGame.CompletedSets holds), cleared by reading.</summary>
+    /// <summary>
+    /// The set that just completed for the first time (a <see cref="Source"/> name, the form
+    /// SaveGame.CompletedSets holds), cleared by reading.
+    /// </summary>
+    /// <remarks>
+    /// THE EVENT, NOT THE WORDS. The host sounds the reward here — the player is looking at the fifth
+    /// rung revealing under their own cursor — and writes the durable record as a DISPATCH, whose copy
+    /// <see cref="IdleXIdle.Core.Progression.DispatchCopy"/> renders from the set itself. This screen
+    /// also handed back two ready-made toast lines; they said the same thing on a second surface, over
+    /// whatever the player walked to next, and sounded the same cue twice.
+    /// </remarks>
     public string? ConsumeCompletedSet() => _feedback.ConsumeCompletedSet();
 
     /// <summary>Every set completed so far — what the host writes to SaveGame.CompletedSets.</summary>
@@ -1925,7 +1932,7 @@ public sealed class GearFeedback
     private readonly HashSet<string> _completed = new(StringComparer.Ordinal);
     private bool _primed;
     private int _power, _powerFrom;
-    private string? _completedSet, _notice, _cue;
+    private string? _completedSet, _cue;
 
     /// <summary>
     /// Look at the hunter and fire on what changed since the last look. <paramref name="quiet"/> takes the
@@ -1972,12 +1979,11 @@ public sealed class GearFeedback
                 foreach (var rung in ElementSets.Rungs)
                     if (before < rung && after >= rung)
                         UiMotion.Flash(RungKey(Sources[s], rung), UiMotion.Reward);
-                // THE FIRST FIVE-PIECE COMPLETION, once per set, ever (§52): recorded, and one notice for the host.
+                // THE FIRST FIVE-PIECE COMPLETION, once per set, ever (§52): recorded, and named once
+                // for the host. `_completed.Add` is the once-ever half — a set taken off and put back on
+                // still reveals its rung and never reports again.
                 if (before < last && after >= last && _completed.Add(Sources[s].ToString()))
-                {
                     _completedSet = Sources[s].ToString();
-                    _notice = $"{ElementSets.Name(Sources[s])} COMPLETE\n{ElementSets.CapstoneName(Sources[s])} ACTIVE";
-                }
             }
             _counts[s] = after;
         }
@@ -2021,9 +2027,6 @@ public sealed class GearFeedback
 
     /// <summary>The set that just completed for the first time, cleared by reading.</summary>
     public string? ConsumeCompletedSet() { var c = _completedSet; _completedSet = null; return c; }
-
-    /// <summary>The completion notice, two lines, cleared by reading.</summary>
-    public string? ConsumeNotice() { var n = _notice; _notice = null; return n; }
 
     /// <summary>Raise a sound cue at its semantic moment; the host reads it once through <see cref="ConsumeCue"/>.</summary>
     public void Cue(string cue) => _cue = cue;
