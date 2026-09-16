@@ -3053,6 +3053,25 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
                         _expedition.DevSeek(seekS);
                 }
+                // RH_SHOT_HUNT_T=<seconds into the wave> DRAINS THE FIGHT UNDER A MENU FIXTURE, so the
+                // HUNT tile's live bar can be photographed with something to show. Every menu mode
+                // (forge, character, stats ...) runs the save's own fight beneath its page but never
+                // DevStarts or seeks it, so at the frame-60 shutter the champion is a second into a wave
+                // and the bar reads full — and a picture of a full bar proves only that a bar was drawn.
+                // The same three lines the fight fixture uses: the baseline pinned through the host, the
+                // run started against it, the seek held pending for the first live frame. A dial of its
+                // own because RH_SHOT_T already means something else on the menus (the reveal's instant
+                // on `lootforge`). Not for the fight family, whose fixtures own their own seek, nor for
+                // the boss poses, which DevStart their own creature.
+                else if (sm is not ("boss" or "bossdebug" or "corruptedboss")
+                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_HUNT_T"),
+                             System.Globalization.NumberStyles.Float,
+                             System.Globalization.CultureInfo.InvariantCulture, out var huntT))
+                {
+                    _shotEnemyBaseline = (1400f, 9f);
+                    _expedition.DevStart(_hunter, 1400f, 9f);
+                    _expedition.DevSeek(huntT);
+                }
                 if (sm is "boss" or "bossdebug" or "corruptedboss")
                 {
                     // Rev 4 §12 / Rev 5 boss fixture: force the current wave to render as the Crystal Lich boss
@@ -6983,6 +7002,36 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var part = bits.Length > 1 && float.TryParse(bits[1], System.Globalization.NumberStyles.Float,
                                                          System.Globalization.CultureInfo.InvariantCulture, out var bp) ? bp : 0.5f;
             UiMotion.PoseFlash(NavBreakKey(who), part, NavChainSeconds);
+        }
+
+        // RH_SHOT_HUNTTILE=hurt|cleared|boss[:<0..1>] holds one of the HUNT TILE'S TICKS part-played —
+        // the red wash of a bite (a tenth of a second) or the gold wash of a cleared wave (a boss's
+        // brighter and longer) — over whichever menu the fixture opened. Both fire on the fight's own
+        // clock, on a frame no shutter can schedule, so the tile's three signals had never once been
+        // photographed together with the bar they sit over. Re-posed every frame, like the break above,
+        // and through the same gate: under a chest reveal the player is shown no tick, so neither is
+        // the capture. The hurt pose ALSO asks the arm's own two gates (RED FLASH on, Reduced Motion
+        // off), so RH_SHOT_REDUCED=1 photographs what the player would be shown — the bar and no wash.
+        if (CaptureRig && !AttentionOwnedAbove(AttentionOwner.Coach)
+            && Environment.GetEnvironmentVariable("RH_SHOT_HUNTTILE") is { Length: > 0 } huntTileSpec)
+        {
+            var bits = huntTileSpec.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var part = bits.Length > 1 && float.TryParse(bits[1], System.Globalization.NumberStyles.Float,
+                                                         System.Globalization.CultureInfo.InvariantCulture, out var tp) ? tp : 0.5f;
+            if (string.Equals(bits[0], "hurt", StringComparison.OrdinalIgnoreCase))
+            {
+                if (_showScreenFlash && !UiMotion.Reduced) UiMotion.PoseFlash(NavHuntHurtKey, part, UiMotion.Fast);
+            }
+            else if (string.Equals(bits[0], "cleared", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(bits[0], "boss", StringComparison.OrdinalIgnoreCase))
+            {
+                var boss = string.Equals(bits[0], "boss", StringComparison.OrdinalIgnoreCase);
+                UiMotion.PoseFlash(NavHuntClearKey, part, boss ? UiMotion.Reward : UiMotion.Transition);
+                _navHuntBoss = boss;
+            }
+            else
+                throw new InvalidOperationException(
+                    $"RH_SHOT_HUNTTILE='{bits[0]}' is not a HUNT tile tick. Known: hurt, cleared, boss.");
         }
 
         if (CaptureRig && Environment.GetEnvironmentVariable("RH_SHOT_LOCKED") is { Length: > 0 } lockedName)
@@ -11120,10 +11169,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _ui.Fill(_batch, r, UiInk.Accent * ((_navHuntBoss ? 0.30f : 0.18f) * UiMotion.Smooth(cleared)));
 
                 // THE BAR SITS IN THE FOOT BAND the label already leaves (NavLabelFoot is unscaled, so
-                // this room exists at every density profile and nothing else has to move).
+                // this room exists at every density profile and nothing else has to move). Its rectangle
+                // is the grid's (NavTileGrid.HealthBar), the same rule the label and the icon are laid
+                // out by, so the test that holds it clear of both reads the number the draw does.
                 var life = Math.Clamp(_expedition.ChampionHealthFraction, 0f, 1f);
-                var barW = NavRailWidth - 52;
-                _ui.Bar(_batch, r.X + 26, r.Bottom - 7, barW, 4, life,
+                var bar = grid.HealthBar;
+                _ui.Bar(_batch, bar.X, bar.Y, bar.Width, bar.Height, life,
                         _expedition.ChampionDowned ? UiInk.Danger : UiInk.Good);
             }
 

@@ -157,6 +157,17 @@
 #
 #   RH_SHOT_REDUCED=1 bash tools/asset-pipeline/capture.sh fight build/shots/fight_reduced.png
 #
+# THE HUNT TILE'S THREE SIGNALS — the live health bar in its foot band, the red wash of a bite and
+# the gold wash of a cleared wave — are drawn on every screen BUT the hunt, so they are photographed
+# on a menu fixture. RH_SHOT_HUNT_T=<seconds> drains the fight running under that menu (without it
+# the bar is full at the shutter, and a full bar proves only that a bar was drawn); RH_SHOT_DUMP=1
+# writes the health it was drained to, which is what the bar's length is checked against.
+# RH_SHOT_HUNTTILE=hurt|cleared|boss[:<0..1>] holds one wash part-played, through the same gate the
+# live tick asks (no tick under a chest reveal; no `hurt` under RH_SHOT_REDUCED=1 or with RED FLASH
+# off — the bar alone is the picture there). The evidence set is production/qa/evidence/visual-pass/hunttile/:
+#
+#   RH_SHOT_HUNT_T=6 RH_SHOT_DUMP=1 RH_SHOT_HUNTTILE=hurt:0.15 bash tools/asset-pipeline/capture.sh forge out.png
+#
 # `traits` (alias: `dust`) is the TRAITS screen — three worn characteristics, the collection, and the
 # undiscovered as `???`. Its fixture awakens eleven of the twenty-six and wears three, because an
 # empty account shows none of the four things the screen is for. RH_SHOT_TRAIT picks what the
@@ -278,6 +289,18 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # already being shown something, so a fixture holding a chest reveal, a modal, a fall, the open log or
 # an authored opening beat photographs NO break — which is the picture, not a failed pose.
 [ -n "${RH_SHOT_BREAK:-}" ] && RH_ENV+=(RH_SHOT_BREAK="$RH_SHOT_BREAK")
+# RH_SHOT_HUNTTILE=hurt|cleared|boss[:<0..1>] holds one of the HUNT TILE'S TICKS part-played on any
+# menu fixture — the red wash of a bite (a tenth of a second) or the gold wash of a cleared wave (a
+# boss's brighter and longer) — over the tile's live health bar. Through the same gate as the break:
+# under a chest reveal there is no tick to photograph. `hurt` also keeps the arm's own gates (RED
+# FLASH on, Reduced Motion off), so with RH_SHOT_REDUCED=1 the picture is the bar and no wash.
+# RH_SHOT_HUNT_T=<seconds into the wave> DRAINS the fight running UNDER a menu fixture (forge,
+# character, stats ...) the way `fight`'s third argument drains the hunt's own: the menus never
+# DevStart or seek their fight, so without it the tile's bar is full in every capture.
+#
+#   RH_SHOT_HUNT_T=6 RH_SHOT_HUNTTILE=hurt:0.15 bash tools/asset-pipeline/capture.sh forge out.png
+[ -n "${RH_SHOT_HUNTTILE:-}" ] && RH_ENV+=(RH_SHOT_HUNTTILE="$RH_SHOT_HUNTTILE")
+[ -n "${RH_SHOT_HUNT_T:-}" ] && RH_ENV+=(RH_SHOT_HUNT_T="$RH_SHOT_HUNT_T")
 [ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
 [ -n "${RH_SHOT_BEAT:-}" ] && RH_ENV+=(RH_SHOT_BEAT="$RH_SHOT_BEAT")
 # RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson

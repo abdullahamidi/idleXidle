@@ -57,6 +57,19 @@ public readonly record struct NavTileGrid(Rectangle Tile, int LabelHeight, int L
         => new(Tile.Left, Tile.Top, Tile.Width, Math.Max(0, LabelTop - IconGap - Tile.Top));
 
     /// <summary>
+    /// THE HUNT TILE'S LIVE BAR, in the foot band under the label: 26 px in from each side of the tile,
+    /// 4 px tall, its foot 3 px above the tile's. Unscaled like <see cref="LabelFoot"/> itself, so it
+    /// exists at every density profile without moving anything above it.
+    /// </summary>
+    /// <remarks>
+    /// Owned here rather than typed into the draw so the rail's one grid says where it is and a test can
+    /// hold it against the label, the icon and the tile's edge — the bar used to be four literals in
+    /// <c>Game1.DrawHexNav</c> and a second copy of them in the chrome test, which is two things laying
+    /// out the same tile from two rules again.
+    /// </remarks>
+    public Rectangle HealthBar => new(Tile.X + 26, Tile.Bottom - 7, Tile.Width - 52, 4);
+
+    /// <summary>
     /// Lay a rail tile out for the current density profile.
     /// </summary>
     /// <remarks>

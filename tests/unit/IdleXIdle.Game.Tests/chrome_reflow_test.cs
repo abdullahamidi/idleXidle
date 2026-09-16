@@ -109,14 +109,17 @@ public class ChromeReflowTests
             // THE HUNT TILE'S LIVE BAR sits in the foot band the label already leaves, so it costs the
             // tile no geometry at any profile — and it must not print through the label above it or
             // off the tile below. (Playtest 2026-09-09: the rail shows that the fight is running.)
+            // Read from the grid, not re-typed: until 2026-09-16 this test held its own copy of the
+            // draw's four literals, which pinned the copy and not the draw. NavTileBarTests holds the
+            // bar against the label, the icon and the tile's edges; this is only the foot band.
             var first = (Rectangle)rect.Invoke(null, new object[] { 0 })!;
-            var barTop = first.Bottom - 7;
-            Assert.True(barTop + 4 <= first.Bottom,
+            var bar = NavTileGrid.Of(first).HealthBar;
+            Assert.True(bar.Bottom <= first.Bottom,
                         $"the HUNT tile's health bar runs past its own foot at {percent}%");
-            Assert.True(barTop >= first.Bottom - foot,
+            Assert.True(bar.Y >= first.Bottom - foot,
                         $"the HUNT tile's health bar at {percent}% is above the {foot} px foot band and would cross the label");
-            Assert.True(Read<int>("NavRailWidth") - 52 >= 4,
-                        "the bar is narrower than UiKit.Bar will draw");
+            Assert.True(bar.Width >= 4 && bar.Height >= 3,
+                        "the bar is narrower or lower than UiKit.Bar will draw");
         }
         finally { UiMetrics.Apply(100); }
     }
