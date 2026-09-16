@@ -425,11 +425,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// True while one of the HOST's own panels is up: SETTINGS, HELP or DISPATCHES.
     /// </summary>
     /// <remarks>
-    /// ONE PREDICATE, THREE PANELS. This disjunction used to be spelt out at fourteen sites — the
-    /// gear's click, the chrome's closes, the modal block, the rail's paint and its click, the two
-    /// cursor gates, the screens' keyboard, the attention owner's Modal tier — and every one of them
-    /// was a place a third panel could be forgotten, which is exactly how a gear paints live over a
-    /// modal that will refuse its click. They all ask this instead.
+    /// ONE PREDICATE, THREE PANELS. Fourteen sites need this answer — the gear's click, the chrome's
+    /// closes, the modal block, the rail's paint and its click, the two cursor gates, the screens'
+    /// keyboard, the attention owner's Modal tier — and a disjunction spelt out at each of them is
+    /// fourteen places a fourth panel can be forgotten, which is exactly how a gear ends up painting
+    /// live over a modal that will refuse its click. They all ask this instead.
     /// </remarks>
     private bool HostModalUp => _showSettings || _showHelp || _showDispatches;
 
@@ -9585,9 +9585,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         //    until the letters are read, so it says what a six-second toast could not. NO BREATH here —
         //    the rail already has one breathing dot, and two on one screen is noise. It overhangs the
         //    corner by a third of itself, into the eight-pixel gap the chain leaves before the ?.
+        //    Control(12), the size the panel's own rows wear -- one dot for the whole feature -- and
+        //    small enough that the medallion under it still reads as an envelope (at 14 it sat across
+        //    the rope rim, which the first captures showed).
         if (_inbox.Unread > 0)
         {
-            var dot = Math.Max(8, UiMetrics.Control(14));
+            var dot = Math.Max(8, UiMetrics.Control(12));
             var at = new Rectangle(r.Right - dot + dot / 3, r.Y - dot / 3, dot, dot);
             _ui.Disc(_batch, new Rectangle(at.X - 2, at.Y - 2, at.Width + 4, at.Height + 4), UiInk.Ground * 0.85f);
             _ui.Disc(_batch, at, UiInk.Danger);

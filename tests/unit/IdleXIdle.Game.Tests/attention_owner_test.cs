@@ -127,7 +127,7 @@ public class AttentionOwnerTest
         Assert.Contains(": AttentionOwner.None;", update, StringComparison.Ordinal);
 
         // The modal tier names every production surface once, here and nowhere else. The three HOST
-        // panels are named once BELOW it, in HostModalUp, which every gate that used to spell them out
+        // panels are named once BELOW it, in HostModalUp, which every gate that asks about a host panel
         // reads -- so a fourth panel joins the tier by joining one line.
         var modal = MemberOf(Game1(), "private bool ProductionModalUp");
         foreach (var term in new[] { "_showTitle", "HostModalUp", "_showTypeSpec", "_tourActive",

@@ -123,8 +123,8 @@ public class HostInputGatesTest
         var game = Source("Game1.cs");
         Assert.Contains("private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
         Assert.Contains("private bool MouseRightClicked => _rightClicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
-        // THREE PANELS, ONE PREDICATE. Every gate that used to spell the two out reads this, so a
-        // third host modal cannot be forgotten at one of the fourteen sites (the gear-dead-close class).
+        // THREE PANELS, ONE PREDICATE. Every gate that asks about a host panel reads this, so a fourth
+        // one cannot be forgotten at one of the fourteen sites (the gear-dead-close class).
         Assert.Contains("private bool HostModalUp => _showSettings || _showHelp || _showDispatches;", game, StringComparison.Ordinal);
     }
 

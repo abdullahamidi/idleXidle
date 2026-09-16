@@ -175,7 +175,7 @@ public partial class Game1
             var r = DispatchRowRect(f, k);
             r.Width -= lane;
             var hot = r.Contains(mouse) || i == _dispatchCursor;
-            var open = i == _dispatchSelected;
+            var opened = i == _dispatchSelected;
 
             if (hot)
             {
@@ -195,7 +195,7 @@ public partial class Game1
             }
             var kicker = DispatchKicker(d);
             var kickerW = kicker.Length > 0 ? _ui.MeasureBig(kicker, UiTypography.Caption) + UiMetrics.Space(12) : 0;
-            var ink = open ? Gold : d.Read ? Slate : Bone;
+            var ink = opened ? Gold : d.Read ? Slate : Bone;
             _ui.TextBig(_batch, _ui.ShortenBig(DispatchCopy.Headline(d), r.Right - UiTypography.ButtonPadX - kickerW - textX, UiTypography.Body),
                         textX, r.Center.Y - UiTypography.Body * 27 / 40, ink, UiTypography.Body);
             if (kicker.Length > 0)
@@ -203,6 +203,9 @@ public partial class Game1
                                  r.Center.Y - UiTypography.Caption * 27 / 40, Slate, UiTypography.Caption);
         }
         EndChromeClip();
+        // A HAIRLINE BETWEEN THE COLUMNS, full height: without it the empty room under a short list and
+        // the empty room beside a short letter read as one large void rather than as two columns.
+        _ui.Fill(_batch, new Rectangle(f.Pane.X - UiMetrics.Space(12), f.List.Y, 1, f.List.Height), UiInk.Rule);
         if (scrolling)
             _ui.ScrollBar(_batch, new Rectangle(f.List.Right - UiMetrics.ScrollbarWidth, f.List.Y, UiMetrics.ScrollbarWidth, f.List.Height),
                           first, f.Rows, rows.Count);
@@ -222,21 +225,21 @@ public partial class Game1
             return;
         }
 
-        var open2 = rows[_dispatchSelected];
+        var letter = rows[_dispatchSelected];
         var py = f.Pane.Y;
-        var source = DispatchKicker(open2);
+        var source = DispatchKicker(letter);
         if (source.Length > 0)
         {
             _ui.TextBig(_batch, source, f.Pane.X, py, Slate, UiTypography.Secondary);
             py += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
         }
-        foreach (var line in _ui.WrapBig(DispatchCopy.Headline(open2), f.Pane.Width, UiTypography.Headline))
+        foreach (var line in _ui.WrapBig(DispatchCopy.Headline(letter), f.Pane.Width, UiTypography.Headline))
         {
             _ui.TextBig(_batch, line, f.Pane.X, py, Gold, UiTypography.Headline, TextFace.Display);
             py += UiTypography.Pitch(UiTypography.Headline);
         }
         py += UiMetrics.Space(10);
-        foreach (var line in _ui.WrapBig(DispatchCopy.Body(open2), f.Pane.Width, UiTypography.Body))
+        foreach (var line in _ui.WrapBig(DispatchCopy.Body(letter), f.Pane.Width, UiTypography.Body))
         {
             _ui.TextBig(_batch, line, f.Pane.X, py, Bone, UiTypography.Body);
             py += UiTypography.Pitch(UiTypography.Body);
