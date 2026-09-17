@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using IdleXIdle.Core.Characters;
 
 namespace IdleXIdle.Game;
 
@@ -20,6 +21,19 @@ namespace IdleXIdle.Game;
 /// The game runs fine with NO assets present — every draw site falls back to the flat-shape rendering
 /// that predates the art. That keeps the greybox playable and means a missing or malformed PNG degrades
 /// gracefully instead of crashing.
+///
+/// <para>
+/// THE HEAVY FAMILIES LOAD ON FIRST USE (2026-09-16). Every animation strip is 8 x 512 frames, 8 MB
+/// resident, and the game ships ten champions' clips and effects, six bosses' and twenty-four creatures',
+/// of which one champion, one boss and one region's four creatures are ever on screen together. Loading them
+/// all at boot held about 1.8 GB against the 512 MB working ceiling
+/// (<c>.claude/docs/technical-preferences.md</c>). So <see cref="IsDeferred"/> paths are only INDEXED at
+/// boot; a key loads the first time something asks for its texture, and the screens that know what
+/// they are about to draw ask <see cref="Warm"/> from Update, so the decode never lands in a Draw.
+/// <see cref="Has"/> answers from the index and never loads. Nothing is evicted: a texture, once
+/// loaded, stays for the session (caches elsewhere hold texture references, and a disposed texture
+/// drawn later would throw).
+/// </para>
 /// </remarks>
 public sealed class AssetLibrary
 {
@@ -28,6 +42,52 @@ public sealed class AssetLibrary
 
     /// <summary>Winning source path per key, so collision tie-breaks stay deterministic.</summary>
     private readonly Dictionary<string, string> _sources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Indexed but not yet loaded: key to the PNG it will load from (see <see cref="IsDeferred"/>).</summary>
+    private readonly Dictionary<string, string> _deferred = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The deferred index's pixel area per key, for the same larger-wins collision rule the eager load keeps.</summary>
+    private readonly Dictionary<string, long> _deferredArea = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Does this runtime path wait for first use rather than load at boot? The animation strips (every
+    /// champion's, boss's and creature's clips), the creatures' stills, and each champion's own effect
+    /// strips (<c>VFX/&lt;champion id&gt;_&lt;form&gt;</c>): the families only one of which is on screen at a time.
+    /// </summary>
+    public static bool IsDeferred(string assetPath)
+    {
+        var norm = assetPath.Replace('\\', '/');
+        if (norm.Contains("/Animations/", StringComparison.OrdinalIgnoreCase)
+            || norm.Contains("/Enemies/enemies/", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var vfx = norm.IndexOf("/VFX/", StringComparison.OrdinalIgnoreCase);
+        if (vfx < 0) return false;
+        var folder = norm.AsSpan(vfx + 5);
+        foreach (var id in ChampionIds)
+            if (folder.Length > id.Length && folder.StartsWith(id, StringComparison.OrdinalIgnoreCase) && folder[id.Length] == '_')
+                return true;
+        return false;
+    }
+
+    /// <summary>Every roster champion's id — the heads of the per-champion effect folders.</summary>
+    private static readonly string[] ChampionIds = CharacterRoster.All.Select(c => c.Id).ToArray();
+
+    /// <summary>How many textures are loaded right now (masks included), for the boot report and the tests.</summary>
+    public int LoadedCount => _textures.Count;
+
+    /// <summary>How many indexed textures have not been asked for yet.</summary>
+    public int DeferredCount => _deferred.Count;
+
+    /// <summary>Resident texture memory right now, in bytes (RGBA8: width x height x 4 per texture).</summary>
+    public long ResidentBytes
+    {
+        get
+        {
+            long total = 0;
+            foreach (var tex in _textures.Values) total += (long)tex.Width * tex.Height * 4;
+            return total;
+        }
+    }
 
     public AssetLibrary(GraphicsDevice device)
     {
@@ -50,6 +110,12 @@ public sealed class AssetLibrary
             // NOT a preview / source-reference / concept / contact-sheet asset before we ever open it — a
             // forbidden asset must never reach the screen, so a match is a hard error, not a silent skip.
             ValidateRuntimeAssetPath(path);
+
+            if (IsDeferred(norm))
+            {
+                Index(path, norm);
+                continue;
+            }
 
             try
             {
@@ -161,11 +227,8 @@ public sealed class AssetLibrary
         // An alias from a key to a file of the same name would be a no-op that the asset gate would
         // flag as a dead target until the art exists. Until it does, UiKit.ClassIcon draws a diamond
         // in the class colour, and tools/check_asset_keys.py reports the family by name.
-        // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
-        // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
-        ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",
-        ["crea_mind"] = "soul_leech_idle_01", ["crea_nature"] = "wisp_idle_01",
-        ["crea_shadow"] = "shadeling_idle_01", ["crea_spirit"] = "rift_guardian_idle_01",
+        // (The crea_<source> aliases to the six Source-era creature stills went with those bodies on
+        // 2026-09-16: the arena's cast is EnemyPresentation's, and nothing asked for a crea_ key.)
         // Arena backgrounds now ship under their own bg_arena_<Source> keys, so the old
         // <element>_<region>_clean indirection is gone. Only the legacy fallback key still
         // needs a bridge.
@@ -208,11 +271,84 @@ public sealed class AssetLibrary
     };
 
     private Texture2D? Resolve(string key)
-        => _textures.GetValueOrDefault(key)
-           ?? (Aliases.TryGetValue(key, out var aliased) ? _textures.GetValueOrDefault(aliased) : null);
+        => Loaded(key)
+           ?? (Aliases.TryGetValue(key, out var aliased) ? Loaded(aliased) : null);
+
+    /// <summary>A loaded texture, loading a deferred one now if this is its first ask.</summary>
+    private Texture2D? Loaded(string key)
+        => _textures.TryGetValue(key, out var tex) ? tex
+           : _deferred.ContainsKey(key) ? LoadDeferred(key)
+           : null;
 
     /// <summary>The texture for a key (or its migration alias), or null if absent (caller falls back to shapes).</summary>
     public Texture2D? Get(string key) => Resolve(key);
+
+    /// <summary>
+    /// Load now every deferred texture whose key starts with <paramref name="prefix"/>. A screen that knows
+    /// which family it is about to draw calls this from Update, so the decode is not paid inside a Draw.
+    /// Returns how many loaded; keys already loaded cost nothing.
+    /// </summary>
+    public int Warm(string prefix)
+    {
+        if (_deferred.Count == 0 || string.IsNullOrEmpty(prefix)) return 0;
+        _warmBuffer.Clear();
+        foreach (var key in _deferred.Keys)
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) _warmBuffer.Add(key);
+        var loaded = 0;
+        foreach (var key in _warmBuffer)
+            if (LoadDeferred(key) is not null) loaded++;
+        return loaded;
+    }
+
+    private readonly List<string> _warmBuffer = new();
+
+    /// <summary>Index one deferred PNG by its header, keeping the larger of two files under one key.</summary>
+    private void Index(string path, string norm)
+    {
+        var key = Path.GetFileNameWithoutExtension(path);
+        long area;
+        try { area = HeaderArea(path); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { return; }
+        if (_deferredArea.TryGetValue(key, out var existing)
+            && !(area > existing || (area == existing && string.CompareOrdinal(norm, _sources.GetValueOrDefault(key, "")) < 0)))
+            return;
+        _deferred[key] = path;
+        _deferredArea[key] = area;
+        _sources[key] = norm;
+    }
+
+    /// <summary>A PNG's width x height from its IHDR chunk, without decoding it.</summary>
+    private static long HeaderArea(string path)
+    {
+        Span<byte> head = stackalloc byte[24];
+        using var stream = File.OpenRead(path);
+        if (stream.Read(head) != 24 || head[12] != (byte)'I' || head[13] != (byte)'H')
+            throw new InvalidDataException($"{path} is not a PNG");
+        var w = (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19];
+        var h = (head[20] << 24) | (head[21] << 16) | (head[22] << 8) | head[23];
+        return (long)w * h;
+    }
+
+    /// <summary>Decode a deferred texture into the table. A corrupt file leaves the index, and its draws fall back to shapes.</summary>
+    private Texture2D? LoadDeferred(string key)
+    {
+        if (!_deferred.Remove(key, out var path)) return _textures.GetValueOrDefault(key);
+        _deferredArea.Remove(key);
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var texture = Texture2D.FromStream(_device, stream);
+            Premultiply(texture);
+            _textures[key] = texture;
+            _byTexture?.TryAdd(texture, key);
+            return texture;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _sources.Remove(key);
+            return null;
+        }
+    }
 
     /// <summary>
     /// The key a texture was loaded under, or null if it was not loaded from this library.
@@ -233,7 +369,14 @@ public sealed class AssetLibrary
 
     private Dictionary<Texture2D, string>? _byTexture;
 
-    public bool Has(string key) => Resolve(key) is not null;
+    /// <summary>
+    /// Is there art under this key (or its alias)? Answered from the table and the deferred index, so asking
+    /// never loads anything.
+    /// </summary>
+    public bool Has(string key)
+        => Present(key) || (Aliases.TryGetValue(key, out var aliased) && Present(aliased));
+
+    private bool Present(string key) => _textures.ContainsKey(key) || _deferred.ContainsKey(key);
 
     /// <summary>The key a texture's white silhouette is registered under (see <see cref="WhiteMask"/>).</summary>
     public static string MaskKey(string key) => key + "|mask";

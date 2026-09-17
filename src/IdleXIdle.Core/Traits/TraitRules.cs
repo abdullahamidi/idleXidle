@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Sources;
 
@@ -37,7 +37,7 @@ namespace IdleXIdle.Core.Traits;
 /// <param name="FirstHitOfWaveCritMultiplier">THE CERTAIN HAND — the first skill hit of each wave crits outright, this many times as hard as a critical usually is.</param>
 /// <param name="CritToBleed">THE OPENED VEIN — the share of a hit that lingers as bleed, paid at the rate the hit criticals.</param>
 /// <param name="ShieldAfterBreakBonus">SCAR TISSUE — how much larger the first shield granted after a break is.</param>
-/// <param name="ShieldCarryFraction">STANDING PLATE — the share of a shield still held at a wave's end that is carried into the next. HALF, not all: see the exception noted on <c>ShieldRules</c>.</param>
+/// <param name="ShieldCarryFraction">STANDING PLATE — the share of a shield still held at a wave's end that is carried into the next. WHOLE, against the half everybody carries (<c>ShieldRules.BaseCarryFraction</c>).</param>
 /// <param name="ShieldedReflectFraction">THE ANSWERING WALL — the share of its own bite a creature takes back while the champion is holding a shield.</param>
 /// <param name="LowHealthShare">LAST BREATH — the health share at or under which the champion acts faster.</param>
 /// <param name="LowHealthRateBonus">LAST BREATH — and how much faster.</param>

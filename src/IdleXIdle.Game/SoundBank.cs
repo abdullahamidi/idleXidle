@@ -122,6 +122,9 @@ public sealed class SoundBank
         ["sfx_shield_break"] = 300,
         ["sfx_chest_rare"] = 400,
         ["sfx_train"] = 70,
+        // A migration or a conquest can post several dispatches in one frame, and one arrival cue is
+        // what the player should hear — not four of them stacked into a rattle.
+        ["sfx_dispatch"] = 900,
     };
 
     // Per-play pitch variation. A one-shot heard a thousand times identically "draws attention to itself

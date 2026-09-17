@@ -1,0 +1,554 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using IdleXIdle.Core.Progression;
+using IdleXIdle.Game;
+using Microsoft.Xna.Framework;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace IdleXIdle.Game.Tests;
+
+/// <summary>
+/// A LOCKED RAIL TILE IS CHAINED SHUT ON TWO DIAGONALS, AND THE CHAINS SPRING OFF ALONG THEIR OWN RUNS.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The playtest rejected a ring around the icon and then a straight belt across the tile, and what it
+/// asked for instead is GEOMETRY: two diagonal runs on different slopes, crossing off-centre, spanning
+/// the button. So this file pins geometry at all three density profiles, never a pixel coordinate a
+/// retune would break — and it cannot say whether the tile LOOKS chained shut. That is what the capture
+/// set in production/qa/evidence/chains/ is for; a passing run here is necessary, not sufficient.
+/// </para>
+/// </remarks>
+public class NavChainTests
+{
+    /// <summary>The rail stacks eleven tiles on the 1080 px canvas (Game1.NavTileHeight).</summary>
+    private const int TileHeight = 1080 / 11;
+
+    /// <summary>What "clearly diagonal" means: well away from a belt (0°) and from a post (90°).</summary>
+    private const float ShallowestDiagonal = 15f, SteepestDiagonal = 75f;
+
+    private readonly ITestOutputHelper _out;
+
+    public NavChainTests(ITestOutputHelper output) => _out = output;
+
+    public static IEnumerable<object[]> Profiles() => new[] { new object[] { 100 }, new object[] { 125 }, new object[] { 150 } };
+
+    /// <summary>A rail tile as Game1.NavHexRect lays it out — slot 5 by default, so nothing passes by sitting at the canvas origin.</summary>
+    private static Rectangle Tile(int slot = 5) => new(0, slot * TileHeight, Game1.NavRailWidth, TileHeight);
+
+    private static List<NavChainPiece> Pose(Rectangle tile, float progress, bool reduced = false)
+    {
+        var pieces = new List<NavChainPiece>();
+        NavChain.Compose(tile, NavChain.LinkLength, progress, reduced, pieces);
+        return pieces;
+    }
+
+    private static NavChainRun RunOf(Rectangle tile, int run) => NavChain.Run(tile, NavChain.LinkLength, run);
+
+    private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
+
+    /// <summary>Where two runs' lines meet.</summary>
+    private static Vector2 Meet(NavChainRun a, NavChainRun b)
+    {
+        var d1 = a.End - a.Start;
+        var d2 = b.End - b.Start;
+        return a.Start + Cross(b.Start - a.Start, d2) / Cross(d1, d2) * d1;
+    }
+
+    /// <summary>The box a set of pieces covers, every piece's rotated extent included.</summary>
+    private static (Vector2 Lo, Vector2 Hi) Bounds(IEnumerable<NavChainPiece> pieces)
+    {
+        var lo = new Vector2(float.MaxValue);
+        var hi = new Vector2(float.MinValue);
+        foreach (var p in pieces)
+        {
+            lo = Vector2.Min(lo, p.Centre - p.HalfExtent);
+            hi = Vector2.Max(hi, p.Centre + p.HalfExtent);
+        }
+        return (lo, hi);
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_a_locked_tile_is_bound_by_two_diagonal_runs_on_different_slopes(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var strong = RunOf(tile, 0);
+        var other = RunOf(tile, 1);
+        _out.WriteLine($"{percent}%: strong run {strong.SlopeDegrees:F1}°, other run {other.SlopeDegrees:F1}°, link {NavChain.LinkLength} px");
+
+        Assert.True(NavChain.RunCount >= 2, "one run is a belt, not a binding");
+        foreach (var run in new[] { strong, other })
+            Assert.InRange(MathF.Abs(run.SlopeDegrees), ShallowestDiagonal, SteepestDiagonal);
+        // The two diagonals of a door — top-left to lower-right, lower-left to upper-right — not two of the same one.
+        Assert.True(strong.SlopeDegrees > 0f, $"the strong run should fall to the right ({strong.SlopeDegrees:F1}°)");
+        Assert.True(other.SlopeDegrees < 0f, $"the other run should climb to the right ({other.SlopeDegrees:F1}°)");
+        // ASYMMETRIC: a mirrored X is a logo, not a restraint.
+        Assert.True(MathF.Abs(MathF.Abs(strong.SlopeDegrees) - MathF.Abs(other.SlopeDegrees)) >= 5f,
+                    $"the runs mirror each other ({strong.SlopeDegrees:F1}° / {other.SlopeDegrees:F1}°)");
+
+        var meet = Meet(strong, other);
+        Assert.True(NavChain.OnTile(tile, meet), $"the runs cross off the tile, at {meet}");
+        var offCentre = Vector2.Distance(meet, tile.Center.ToVector2());
+        Assert.InRange(offCentre, 3f, tile.Width * 0.25f);   // slightly off-centre: not dead centre, not in a corner
+
+        // Every link of a run lies ON its line and ALONG it, and face-on and edge-on links alternate.
+        var pieces = Pose(tile, 0f);
+        for (var r = 0; r < NavChain.RunCount; r++)
+        {
+            var line = RunOf(tile, r);
+            var links = pieces.Where(p => p.Run == r).ToList();
+            Assert.True(links.Count >= 6, $"run {r} holds {links.Count} links at {percent}%");
+            foreach (var link in links)
+            {
+                Assert.True(MathF.Abs(Cross(link.Rest - line.Start, line.Direction)) < 0.5f, $"run {r}: a link at {link.Rest} is off its line");
+                Assert.InRange(MathHelper.ToDegrees(link.Rotation) - line.SlopeDegrees, -5f, 5f);
+            }
+            Assert.Contains(links, l => l.Sprite == NavChainSprite.FaceLink);
+            Assert.Contains(links, l => l.Sprite == NavChainSprite.EdgeLink);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_runs_span_the_whole_tile_not_the_icon(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var links = Pose(tile, 0f).Where(p => p.Run >= 0).ToList();
+        var (lo, hi) = Bounds(links);
+        var wide = (hi.X - lo.X) / tile.Width;
+        var tall = (hi.Y - lo.Y) / tile.Height;
+        _out.WriteLine($"{percent}%: the chains cover {wide:P0} of the tile's width and {tall:P0} of its height");
+        // The icon box is under a quarter of the tile's width; the binding is on the BUTTON.
+        Assert.True(wide >= 0.85f, $"the chains cover only {wide:P0} of the tile's width at {percent}%");
+        Assert.True(tall >= 0.75f, $"the chains cover only {tall:P0} of the tile's height at {percent}%");
+
+        for (var r = 0; r < NavChain.RunCount; r++)
+        {
+            var (rlo, rhi) = Bounds(links.Where(p => p.Run == r));
+            Assert.True((rhi.X - rlo.X) / tile.Width >= 0.6f, $"run {r} crosses only {(rhi.X - rlo.X) / tile.Width:P0} of the tile at {percent}%");
+            // Each run reaches the tile's edges at both ends — within one link of an edge, entry and exit.
+            var reach = NavChain.LinkLength;
+            Assert.True(rlo.X - tile.Left <= reach || rlo.Y - tile.Top <= reach || tile.Bottom - rhi.Y <= reach,
+                        $"run {r} stops short of the edge it enters by ({rlo})");
+            Assert.True(tile.Right - rhi.X <= reach || tile.Bottom - rhi.Y <= reach || rlo.Y - tile.Top <= reach,
+                        $"run {r} stops short of the edge it leaves by ({rhi})");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_no_piece_lies_off_the_tile_at_rest(int percent)
+    {
+        UiMetrics.Apply(percent);
+        foreach (var slot in new[] { 0, 5, 10 })   // the top tile, a middle one, the bottom one
+        {
+            var tile = Tile(slot);
+            var pose = Pose(tile, 0f);
+            Assert.NotEmpty(pose);
+            foreach (var p in pose)
+            {
+                Assert.True(NavChain.OnTile(tile, p.Centre), $"{p.Sprite} centre {p.Centre} is off {tile}");
+                var h = p.HalfExtent;
+                // WHOLLY on it, not just its centre: a bound tile never paints on its neighbour.
+                Assert.True(p.Centre.X - h.X >= tile.Left - 0.01f && p.Centre.X + h.X <= tile.Right + 0.01f
+                            && p.Centre.Y - h.Y >= tile.Top - 0.01f && p.Centre.Y + h.Y <= tile.Bottom + 0.01f,
+                            $"{p.Sprite} at {p.Centre} (half extent {h}) crosses the edge of {tile} at {percent}%");
+                Assert.Equal(p.Rest, p.Centre);
+                Assert.True(p.Alpha > 0.5f, $"a bound {p.Sprite} is drawn at {p.Alpha:F2}");
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_pieces_that_leave_the_tile_during_the_break_are_not_drawn(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var bound = Pose(tile, 0f).Count;
+        var thrownOff = false;
+        for (var step = 1; step < 100; step++)
+        {
+            var t = step / 100f;
+            var pose = Pose(tile, t);
+            foreach (var p in pose)
+                Assert.True(NavChain.OnTile(tile, p.Centre), $"at {t:F2} a {p.Sprite} of run {p.Run} is drawn off the tile, at {p.Centre}");
+            if (pose.Count < bound - NavChain.RunCount) thrownOff = true;
+        }
+        Assert.True(thrownOff, "the break never throws a piece off the tile — then it is not a break");
+        Assert.Empty(Pose(tile, 1f));
+        Assert.Empty(Pose(tile, 1f, reduced: true));
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_break_springs_each_half_back_along_its_own_run(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var dirs = new[] { RunOf(tile, 0).Direction, RunOf(tile, 1).Direction };
+
+        // THE FIRST FRAME ALREADY SHOWS THE BREAK: both halves of both runs, and a gap opening between them.
+        var first = Pose(tile, 0.03f);
+        for (var r = 0; r < NavChain.RunCount; r++)
+        {
+            Assert.Contains(first, p => p.Run == r && p.Side < 0);
+            Assert.Contains(first, p => p.Run == r && p.Side > 0);
+        }
+
+        foreach (var t in new[] { 0.03f, 0.1f, 0.25f, 0.5f, 0.75f })
+        {
+            var moved = 0;
+            foreach (var p in Pose(tile, t))
+            {
+                var d = p.Centre - p.Rest;
+                if (p.Run < 0)
+                {
+                    // THE PADLOCK only ever falls — straight down, out from under the crossing.
+                    Assert.Equal(0f, d.X, 3);
+                    Assert.True(d.Y >= 0f, $"at {t:F2} the padlock rises ({d})");
+                    continue;
+                }
+                if (p.Side == 0)
+                {
+                    Assert.Equal(Vector2.Zero, d);   // the snapped link bursts where it was
+                    continue;
+                }
+                Assert.True(d.Length() > 0f, $"at {t:F2} a piece of run {p.Run} has not moved");
+                var along = Vector2.Dot(d, dirs[p.Run]);
+                var across = MathF.Abs(Cross(d, dirs[p.Run]));
+                Assert.True(across <= 0.01f * d.Length() + 1e-3f, $"at {t:F2} a piece of run {p.Run} moved {d}, off its run's vector {dirs[p.Run]}");
+                // Toward ITS OWN edge: the half before the snap back the way the run came in, the rest on out.
+                Assert.Equal(p.Side, Math.Sign(along));
+                moved++;
+            }
+            if (t <= 0.25f) Assert.True(moved > 0, $"nothing is moving at {t:F2}");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_reduced_motion_breaks_the_chain_without_moving_it(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var bound = Pose(tile, 0f, reduced: true);
+        var last = float.MaxValue;
+        foreach (var t in new[] { 0.03f, 0.5f, 0.9f })
+        {
+            var pose = Pose(tile, t, reduced: true);
+            Assert.NotEmpty(pose);
+            foreach (var p in pose) Assert.Equal(p.Rest, p.Centre);   // nothing moves, the padlock included
+            // THE GAP IS THE EVENT: the snapped links are gone from the first frame, and nothing else is.
+            Assert.DoesNotContain(pose, p => p.Run >= 0 && p.Side == 0);
+            Assert.Equal(bound.Count - NavChain.RunCount, pose.Count);
+            var brightest = pose.Max(p => p.Alpha);
+            Assert.True(brightest < last, $"at {t:F2} the chain is not fading ({brightest:F2})");
+            last = brightest;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_padlock_is_small_and_hangs_from_the_crossing(int percent)
+    {
+        UiMetrics.Apply(percent);
+        var tile = Tile();
+        var meet = Meet(RunOf(tile, 0), RunOf(tile, 1));
+        var clasp = Pose(tile, 0f).Single(p => p.Sprite == NavChainSprite.Clasp);
+        // NOT A GIANT PADLOCK PRETENDING TO BE THE RESTRAINT: narrower than a link, under a third of the tile.
+        Assert.True(clasp.Length < NavChain.LinkLength, $"the padlock is {clasp.Length:F0} px wide against a {NavChain.LinkLength} px link");
+        Assert.True(clasp.Thickness <= tile.Height / 3f, $"the padlock is {clasp.Thickness:F0} px tall on a {tile.Height} px tile");
+        // Its shackle reaches up round the crossing it holds.
+        Assert.True(clasp.Centre.Y - clasp.Thickness / 2f <= meet.Y, "the padlock hangs below the crossing, not from it");
+        Assert.True(Vector2.Distance(clasp.Centre, meet) <= clasp.Thickness, "the padlock is not at the crossing");
+
+        var falling = Pose(tile, 0.3f).Single(p => p.Sprite == NavChainSprite.Clasp);
+        Assert.True(falling.Centre.Y > clasp.Centre.Y, "the padlock does not drop when the chain snaps");
+    }
+
+    /// <summary>
+    /// THE PADLOCK NEVER SITS ON A WORD. The chains may lie across the label — they are binding the
+    /// button and a chain on a button lies over what is printed on it — but the LOCK is the one piece
+    /// the eye has to read as an object, and it must not land on readable glyphs at any profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fault this pins: the crossing was a fixed share of the tile while the label's rung grew at
+    /// the TEXT rate and the padlock at the SPACING rate, so the two closed on each other one profile
+    /// at a time — 7 px of air at 100 %, touching at 125 %, and at 150 % the padlock printed across the
+    /// top of a short label's cap band, on the M of MAP. Every label is centred on the tile and the
+    /// padlock is not, so no word is long enough to dodge it; the clearance has to be vertical, and it
+    /// is measured here against the label's whole line box rather than its cap ink — the stricter test,
+    /// and the one that does not move when the face does.
+    /// </para>
+    /// <para>
+    /// Measured against the TILE's own grid, never a pixel: the lock clears the label by exactly the
+    /// breath the icon beside it already takes, which is what makes it true at 125 % and 150 % without
+    /// a per-label case. MAP is the short label this was reported on; TRAINING is the longest in the
+    /// rail. Both are the same geometry — which is the point, and is why one assertion covers both.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_the_padlock_clears_the_tiles_label_at_every_profile(int percent)
+    {
+        UiMetrics.Apply(percent);
+        foreach (var slot in new[] { 0, 5, 8, 10 })   // the top tile, a middle one, MAP's slot, the bottom one
+        {
+            var tile = Tile(slot);
+            var grid = NavTileGrid.Of(tile);
+            var clasp = Pose(tile, 0f).Single(p => p.Sprite == NavChainSprite.Clasp);
+            var foot = clasp.Centre.Y + clasp.Thickness / 2f;
+            _out.WriteLine($"{percent}% slot {slot}: label top {grid.LabelTop - tile.Top}, padlock foot "
+                           + $"{foot - tile.Top:F1}, clearance {grid.LabelTop - foot:F1} px");
+
+            Assert.True(foot <= grid.LabelTop,
+                        $"the padlock's foot is {foot - grid.LabelTop:F1} px INTO the label's line box at {percent}%");
+            // Its head must stay on the tile too — a lock half off the top is not a lock.
+            Assert.True(clasp.Centre.Y - clasp.Thickness / 2f >= tile.Top,
+                        $"the padlock's head is off the top of {tile} at {percent}%");
+            // AND IT DID NOT SHRINK TO GET THERE. The whole point of moving the crossing rather than the
+            // clasp is that the restraint stays the size the playtest accepted.
+            Assert.True(clasp.Length >= NavChain.LinkLength * 0.7f,
+                        $"the padlock is {clasp.Length:F1} px wide against a {NavChain.LinkLength} px link at {percent}%");
+            // It still hangs in the band the icon owns — over the glyph, not in the tile's empty head.
+            Assert.True(clasp.Centre.Y <= grid.ClearBand.Bottom && clasp.Centre.Y >= grid.ClearBand.Top,
+                        $"the padlock's centre {clasp.Centre.Y} is outside the tile's clear band {grid.ClearBand} at {percent}%");
+        }
+    }
+
+    /// <summary>
+    /// 100 % IS UNTOUCHED by the clearance rule — it already had air under the lock, so the crossing
+    /// stays exactly where it was authored (0.42, 0.44) and only the two larger profiles move.
+    /// </summary>
+    /// <remarks>
+    /// The authored share is a CEILING, not a target: without this the crossing would drift DOWN into a
+    /// roomier band and the whole treatment would re-place itself on a profile that never had a problem.
+    /// </remarks>
+    [Fact]
+    public void test_the_crossing_keeps_its_authored_place_where_the_label_leaves_room()
+    {
+        UiMetrics.Apply(100);
+        var tile = Tile();
+        var meet = Meet(RunOf(tile, 0), RunOf(tile, 1));
+        Assert.Equal(tile.X + tile.Width * 0.42f, meet.X, 1);
+        Assert.Equal(tile.Y + tile.Height * 0.44f, meet.Y, 0);
+
+        // ...and at 150 % it has RISEN, which is the fix.
+        UiMetrics.Apply(150);
+        var raised = Meet(RunOf(tile, 0), RunOf(tile, 1));
+        Assert.True(raised.Y < meet.Y - 8f,
+                    $"the crossing did not rise at 150 % ({raised.Y:F1} against {meet.Y:F1})");
+        Assert.Equal(meet.X, raised.X, 1);   // sideways it does not move: the asymmetry is authored
+    }
+
+    [Fact]
+    public void test_every_piece_is_drawn_at_its_arts_own_aspect()
+    {
+        // NO STRETCHED CHAIN: a link is scaled whole, never pulled to fit a length — so every piece of one
+        // kind has the same shape, the bursting link included.
+        UiMetrics.Apply(100);
+        var tile = Tile();
+        foreach (var t in new[] { 0f, 0.05f, 0.4f })
+            foreach (var p in Pose(tile, t))
+            {
+                var art = p.Sprite switch
+                {
+                    NavChainSprite.FaceLink => NavChain.FaceAspect,
+                    NavChainSprite.EdgeLink => NavChain.EdgeAspect,
+                    _ => NavChain.ClaspAspect,
+                };
+                Assert.Equal(art, p.Thickness / p.Length, 4);
+            }
+    }
+
+    [Fact]
+    public void test_the_break_is_armed_once_when_a_screen_opens_and_never_by_a_reload()
+    {
+        // Game1 arms the break in one place: for each activity Reveal.Newly returns on the frame its
+        // gate opens. So "once per screen per career" is Reveal's promise, held here for the two
+        // screens the opening breaks first.
+        var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1);
+
+        var armed = Reveal.Newly(revealed, facts);
+        Assert.Contains(Activity.Gear, armed);
+        Assert.Contains(Activity.Vault, armed);
+        Assert.Equal(armed.Count, armed.Distinct().Count());
+
+        // The next frame arms nothing: one break, not one a frame.
+        Assert.Empty(Reveal.Newly(revealed, facts));
+        // A reload of a career whose screens are open replays nothing...
+        var reloaded = Reveal.Restore(Reveal.Names(revealed), facts);
+        Assert.Contains(Activity.Gear, reloaded);
+        Assert.Contains(Activity.Vault, reloaded);
+        Assert.Empty(Reveal.Newly(reloaded, facts));
+        // ...and nor does a save from before the list, whose gates were already open: those tiles load unbound.
+        Assert.Empty(Reveal.Newly(Reveal.Restore(Array.Empty<string>(), facts), facts));
+    }
+
+    // ── THE BREAK WAITS FOR THE PLAYER'S EYES ────────────────────────────────────────────────────
+    //
+    // The tile OPENS on the frame its gate does -- game truth, never deferred -- but the chains
+    // springing off it are nine tenths of a second of flourish on the far side of the screen, and a
+    // flourish under a chest reveal, a fall, the open log or the authored opening is the game asking to
+    // be looked at in two places at once. A pulse cannot be paused (UiMotion decrements every one), so
+    // what waits is the ARMING: the opened screen is latched and spent on the first free frame.
+    //
+    // Game1.Update cannot run headless, so these replay the host's two lines against the real Reveal
+    // and the real UiMotion -- and the first test below asserts that those two lines are still what the
+    // host says, so the replay cannot quietly stop describing the game.
+
+    /// <summary>The host's arm site, quoted from Game1.Update's Reveal.Newly drain.</summary>
+    private const string ArmLine = "if (!_navBreakPending.Contains(opened)) _navBreakPending.Add(opened);";
+
+    /// <summary>The host's drain, quoted from Game1.Update, beside the owner it asks.</summary>
+    private const string DrainLine = "if (_navBreakPending.Count > 0 && !AttentionOwnedAbove(AttentionOwner.Coach))";
+
+    /// <summary>Game1.cs with LF endings, found above the test binary.</summary>
+    private static string Game1Source()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, "src", "IdleXIdle.Game", "Game1.cs");
+            if (File.Exists(candidate)) return File.ReadAllText(candidate).Replace("\r\n", "\n");
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new FileNotFoundException("src/IdleXIdle.Game/Game1.cs not found above the test binary.");
+    }
+
+    /// <summary>Run every stored pulse out, so one test's flash is never read by the next.</summary>
+    private static void SettleMotion()
+    {
+        for (var i = 0; i < 20; i++) UiMotion.Tick(0.1f);
+    }
+
+    /// <summary>The host's arm site, replayed: a screen that opens is LATCHED, never flashed on the spot.</summary>
+    private static void Arm(List<Activity> pending, Activity opened)
+    {
+        if (!pending.Contains(opened)) pending.Add(opened);
+    }
+
+    /// <summary>The host's drain, replayed: every latched screen breaks together, once, on a free frame.</summary>
+    private static void Spend(List<Activity> pending, bool free)
+    {
+        if (pending.Count == 0 || !free) return;
+        foreach (var opened in pending) UiMotion.Flash(Game1.NavBreakKey(opened), Game1.NavChainSeconds);
+        pending.Clear();
+    }
+
+    [Fact]
+    public void test_the_host_latches_the_break_and_spends_it_in_one_place_each()
+    {
+        var src = Game1Source();
+        // ONE WRITER: the only thing that ever latches a break is the frame Reveal.Newly opens a gate.
+        Assert.Contains(ArmLine, src, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(src, @"_navBreakPending\.Add\("));
+        // ONE DRAIN, and it asks the owner.
+        Assert.Contains(DrainLine, src, StringComparison.Ordinal);
+        // ONE ARM: the flash itself exists exactly once in the host, inside that drain.
+        var flashes = Regex.Matches(src, @"UiMotion\.Flash\(NavBreakKey\(");
+        Assert.Single(flashes);
+        var drain = src.IndexOf(DrainLine, StringComparison.Ordinal);
+        Assert.True(flashes[0].Index > drain, "the break's Flash must live inside the drain, not at the reveal.");
+        Assert.True(src.IndexOf("_navBreakPending.Clear();", drain, StringComparison.Ordinal) > flashes[0].Index,
+                    "the drain must clear the latch after spending it.");
+    }
+
+    [Fact]
+    public void test_the_break_waits_under_an_owner_and_fires_once_when_the_frame_frees()
+    {
+        SettleMotion();
+        var pending = new List<Activity>();
+        var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1);
+
+        // The frame the gates open: the RAIL GROWS NOW (state never waits) and the ceremony is latched.
+        foreach (var opened in Reveal.Newly(revealed, facts)) Arm(pending, opened);
+        Assert.Contains(Activity.Gear, revealed);
+        Assert.Contains(Activity.Vault, revealed);
+        // MORE THAN ONE SCREEN OPENS ON THIS ONE FRAME, which is the case the latch exists to hold --
+        // and each of them is latched once however many times the frame offers it.
+        var opening = pending.ToArray();
+        _out.WriteLine("latched together: " + string.Join(", ", opening));
+        Assert.True(opening.Length > 1, $"only {opening.Length} screen(s) opened; the together case is untested.");
+        Assert.Contains(Activity.Gear, opening);
+        Assert.Contains(Activity.Vault, opening);
+        foreach (var opened in opening) Arm(pending, opened);
+        Assert.Equal(opening.Length, pending.Count);
+
+        // ...and while somebody else has the player's eyes, nothing is armed, however long they hold it.
+        for (var frame = 0; frame < 120; frame++) { Spend(pending, free: false); UiMotion.Tick(1f / 60f); }
+        foreach (var opened in opening) Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(opened)));
+        Assert.Equal(opening.Length, pending.Count);
+
+        // EVERY SCREEN, ONE MOMENT: the first free frame breaks all of them, together, once each.
+        Spend(pending, free: true);
+        foreach (var opened in opening) Assert.Equal(1f, UiMotion.Pulse(Game1.NavBreakKey(opened)));
+        Assert.Empty(pending);
+
+        // ...and the frames after it only run the pulse DOWN. A drain that re-armed would hold the
+        // chains bursting for as long as the player stayed on the page.
+        for (var frame = 0; frame < 30; frame++) { UiMotion.Tick(1f / 60f); Spend(pending, free: true); }
+        var left = UiMotion.Pulse(Game1.NavBreakKey(Activity.Gear));
+        Assert.True(left > 0f && left < 1f, $"the break restarted rather than running down (pulse {left:F2}).");
+        SettleMotion();
+    }
+
+    [Fact]
+    public void test_a_reload_latches_no_break_so_a_free_frame_arms_nothing()
+    {
+        SettleMotion();
+        var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1);
+        var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
+        var pending = new List<Activity>();
+        foreach (var opened in Reveal.Newly(revealed, facts)) Arm(pending, opened);
+
+        // The career is quit with the ceremony still owed -- under a modal, say. The latch is not saved.
+        pending.Clear();
+
+        // A RELOAD OPENS NOTHING. Reveal.Newly offers a screen once per career, so the latch stays empty
+        // and the freest frame in the world arms no break.
+        var reloaded = Reveal.Restore(Reveal.Names(revealed), facts);
+        foreach (var opened in Reveal.Newly(reloaded, facts)) Arm(pending, opened);
+        Assert.Empty(pending);
+        for (var frame = 0; frame < 10; frame++) { Spend(pending, free: true); UiMotion.Tick(1f / 60f); }
+        Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Gear)));
+        Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Vault)));
+    }
+
+    [Fact]
+    public void test_reduced_motion_defers_the_break_exactly_as_the_full_one_does()
+    {
+        SettleMotion();
+        var was = UiMotion.Reduced;
+        try
+        {
+            // REDUCED MOTION IS NOT A THIRD BEHAVIOUR. A pulse is a state change, not movement, so the
+            // break still fires -- NavChain composes a calmer one (NavChain.Compose's `reduced`) -- and
+            // it waits for the frame to free exactly as it does at full motion.
+            UiMotion.Reduced = true;
+            var pending = new List<Activity>();
+            Arm(pending, Activity.Forge);
+            Spend(pending, free: false);
+            Assert.Equal(0f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Forge)));
+            Spend(pending, free: true);
+            Assert.Equal(1f, UiMotion.Pulse(Game1.NavBreakKey(Activity.Forge)));
+            Assert.Empty(pending);
+        }
+        finally
+        {
+            UiMotion.Reduced = was;
+            SettleMotion();
+        }
+    }
+}

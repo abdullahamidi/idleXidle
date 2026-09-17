@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 8;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -30,6 +30,41 @@ public sealed record SaveGame
     // build is unwoven to four on the way in. THE BUMP IS WHAT MAKES THAT SAFE: SaveStore's
     // SnapshotBeforeUpgrade guard is `if (fileVersion >= CurrentVersion) return null;`, so without a
     // bump no pre-change copy is taken and the ten-second autosave overwrites the only original.
+    // 5 = the fall-loop facts (2026-09-09). ReportOpenedEver, ChangedAfterFall and RetriedAfterChange
+    // were added without a bump of their own, on the reasoning that default-false loads clean — which
+    // is true of the FIELDS and false of the MIGRATION. A veteran whose file predates them has to be
+    // seeded as having lived the loop, or the game opens on READ THE LOG at wave 300; but "predates
+    // them" was being inferred from progression plus ReportOpenedEver == false, and that description
+    // also fits a BRAND-NEW player on this build who conquered a region before their first fall, quit,
+    // and came back. They were handed the veteran treatment and lost the most important lesson in the
+    // game. THIS NUMBER IS THE DISCRIMINATOR: a file at 5 or above carries the facts and is believed;
+    // a file below 5 predates them and is seeded (OnboardingLessons.FirstVersionWithFallLoopFacts).
+    // The bump earns its keep twice over — it is also what makes SnapshotBeforeUpgrade copy every v4
+    // file aside before the first autosave rewrites it.
+    // 6 = the authored opening (2026-09-10). The first minutes became a written sequence that can pause
+    // the fight, force navigation and hand the player their first chest from the first boss — so a
+    // career now carries a CURSOR (OpeningStage), a one-shot prologue flag and a one-shot gift latch.
+    // A file written before all that has no cursor to read, and a player at wave three hundred must
+    // not be shown a prologue: this number is what tells the two apart
+    // (OpeningScript.FirstVersionWithOpeningState, frozen at 6 for the same reason its two siblings
+    // are frozen). It also moves the welcome gift OFF the new-game seed, so a v5 file that still holds
+    // an unopened welcome chest keeps it and is never given a second one.
+    // 7 = the signature watch (2026-09-11). The opening gained a stage in the MIDDLE of its sequence —
+    // WatchSignature, the released cast playing out with nothing drawn over it — so every stored cursor
+    // from IntroduceHealth up moved one place. A v6 cursor is read through OpeningScript.StageOf(saved,
+    // fileVersion), which puts it back on the beat it meant; this number is what tells the two
+    // numberings apart (OpeningScript.FirstVersionWithSignatureWatch, frozen at 7).
+    // 8 = DISPATCHES (2026-09-15). The account gained an inbox — a ledger of what it has been TOLD,
+    // and the keys it knows, so background news is posted once and never twice. A file written before
+    // it carries no inbox, and "carries none" must be distinguishable from "honestly empty": the v5
+    // lesson again, because the two serialise the same way and only the version can say which it is.
+    // Loaded literally, a veteran's first session on this build would open on twenty unread letters
+    // about a life already led — so a file below 8 is seeded as already KNOWING every accomplishment it
+    // carries (conquests, traits, keystones, Vows, quests, hunters, sets, the screens it has open), with
+    // no rows, no timestamps and nothing unread, and only what happens from then on is news. A file at
+    // 8 or above is believed as written, an empty inbox and an unread row included
+    // (Dispatches.FirstVersionWithInbox, frozen at 8). The bump also makes SnapshotBeforeUpgrade copy
+    // every v7 file aside before the first autosave rewrites it.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -261,31 +296,39 @@ public sealed record SaveGame
     public float MasteryPanY { get; init; }
 
     /// <summary>
-    /// First-run guide rungs the player closed by hand, as <c>TutorialStep</c> NAMES.
+    /// First-run guide rungs the player closed by hand — the retired ladder's step NAMES.
     /// </summary>
     /// <remarks>
-    /// Names rather than ordinals, so reordering the enum can never silently dismiss a different
-    /// lesson. Default-empty means every older save loads clean — no version bump. A dismissed rung is
-    /// a DISPLAY choice only: the facts the guide derives its ladder from are untouched, the closed
-    /// rung just never shows again.
+    /// Names rather than ordinals, so reordering the enum could never silently dismiss a different
+    /// lesson. Default-empty means every older save loads clean — no version bump. NOTHING READS
+    /// THIS LIST any more: the ladder went with the <c>TutorialStep</c> enum that named its rungs,
+    /// lessons are <c>OnboardingLessonId</c> values completed by a fact the player produced, and a
+    /// closed card completes nothing. The names are loaded and written back untouched so that
+    /// rolling this build back does not lose what an old player had already closed.
     /// </remarks>
     public List<string> DismissedGuideRungs { get; init; } = new();
 
     /// <summary>Has the click-through intro been finished or skipped? False on every older save.</summary>
     /// <remarks>
-    /// False alone does not mean "show it": a save from before the intro existed is false too, and
-    /// <c>Onboarding.IntroDue</c> reads a cleared wave as having seen it. Default-false, no version bump.
+    /// Nothing shows an intro any more — the mandatory cards are gone and the tours live behind
+    /// LEARN THIS SCREEN — so this flag is kept for one job: <c>Onboarding.SeedExplained</c> uses
+    /// it, with the wave count, to tell a save written before the intro existed (false here, with
+    /// waves already cleared) from one that simply has not reached it, and marks the first kind as
+    /// having read every screen it already had open. Default-false, no version bump.
     /// </remarks>
     public bool IntroSeen { get; init; }
 
     /// <summary>
-    /// Screens whose first-open explanation the player has closed, as <c>Activity</c> NAMES — plus
-    /// <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
+    /// Screens whose tour the player has read to the end or skipped, as <c>Activity</c> NAMES —
+    /// plus <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
     /// </summary>
     /// <remarks>
-    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. Default-empty
-    /// means an older save loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that
-    /// was already open as read, so a returning player is not re-taught the game they have been playing.
+    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. It decides
+    /// which rail tiles wear a gold NEW mark, not whether a tour may run: LEARN THIS SCREEN never
+    /// consults it, so a screen already read can be toured again. Default-empty means an older save
+    /// loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that was already open
+    /// as read, so a returning player's rail is not covered in marks for screens they have used for
+    /// hours.
     /// </remarks>
     public List<string> ExplainedScreens { get; init; } = new();
 
@@ -300,6 +343,104 @@ public sealed record SaveGame
     /// screen they had. Written by the host; read once, on load.
     /// </remarks>
     public List<string> RevealedScreens { get; init; } = new();
+
+    // ── ONBOARDING: the four things the lesson catalogue cannot derive. ──────────────────────────
+    //
+    // Everything else it reads is a monotone fact this save already carries — stats trained, items
+    // worn, gems set, regions conquered — so completion needs no stored state machine and a save that
+    // loads mid-lesson reconstructs itself. These four cannot be reconstructed from anything.
+
+    /// <summary>SKIP GUIDANCE: the player asked the game to stop coaching. Presentation only.</summary>
+    /// <remarks>
+    /// It silences prompts and nothing else. No fact is fabricated, no gate moves, no reward is
+    /// granted: every lesson stays honestly incomplete underneath, which is why this is one global
+    /// switch rather than a dozen local dismissals that each pretend a mechanic was learned.
+    /// </remarks>
+    public bool GuidanceOff { get; init; }
+
+    /// <summary>Has the run log ever been opened? The first half of the loop this game is about.</summary>
+    /// <remarks>
+    /// Not derivable: opening a report changes nothing in the world. Old saves are SEEDED true when
+    /// their progression proves the loop was long since lived (<c>OnboardingLessons.SeedFallLoopAsLived</c>),
+    /// so a veteran is never walked through READ THE LOG.
+    /// </remarks>
+    public bool ReportOpenedEver { get; init; }
+
+    /// <summary>A real build, training, gear or mastery change was made after the first fall.</summary>
+    public bool ChangedAfterFall { get; init; }
+
+    /// <summary>...and a descent was started after that change. The loop, closed.</summary>
+    public bool RetriedAfterChange { get; init; }
+
+    // ── THE AUTHORED OPENING. Three facts and a list; everything else it needs is derived. ───────
+
+    /// <summary>Has the illustrated prologue been played (or skipped) for this career?</summary>
+    /// <remarks>
+    /// One shot per career, and separate from the tutorial: SKIP CINEMATIC lands on BEGIN THE HUNT and
+    /// still leaves the opening to play. Reset by START A NEW GAME, because a new career is a new
+    /// beginning in every sense.
+    /// </remarks>
+    public bool PrologueSeen { get; init; }
+
+    /// <summary>
+    /// How far the authored opening got, as an <c>OpeningStage</c> ORDINAL. 0 = never started.
+    /// </summary>
+    /// <remarks>
+    /// The ordinal rather than the name, because this is a position in a sequence and the sequence is
+    /// the product decision — <c>OpeningScript.StageOf</c> resolves anything this build does not
+    /// recognise forward to Complete rather than into a forced step whose deed is already done.
+    /// The cursor is not the truth, either: on load it is walked forward over every stage whose deed
+    /// the save can prove was performed.
+    /// </remarks>
+    public int OpeningStage { get; init; }
+
+    /// <summary>Has the tutorial boss's one-time welcome gift already been granted?</summary>
+    /// <remarks>
+    /// A latch, not a count. The gift used to be seeded at frame one, before the player had done
+    /// anything; it comes from the first boss now, and it must come exactly once however many bosses
+    /// fall, however many descents are made, and however often the game is reloaded between them.
+    /// </remarks>
+    public bool WelcomeGiftGranted { get; init; }
+
+    /// <summary>
+    /// Contextual tutorials the player has finished, by NAME.
+    /// </summary>
+    /// <remarks>
+    /// Names rather than ordinals, the same law as <see cref="ExplainedScreens"/> and
+    /// <see cref="DismissedGuideRungs"/>: reordering an enum must never silently mark a different
+    /// lesson as learned. Most contextual teaching is reconstructed from real facts and needs nothing
+    /// here; this is for the few whose deed leaves no lasting trace.
+    /// </remarks>
+    public List<string> TutorialsDone { get; init; } = new();
+
+    // ── DISPATCHES (2026-09-15). Three fields, and a version bump (8) rather than an additive add: a
+    //    file from before them has been told NOTHING, and Dispatches.SeedKnown has to tell that file
+    //    apart from one whose inbox is honestly empty — "absent" and "empty" serialise the same way,
+    //    and only the version can say which it is (the v5 lesson, in the history above).
+    //
+    //    ALL THREE MUST ALSO BE IN Game1.Save()'s `with` BLOCK. A field added here and forgotten there
+    //    serialises at its default for ever, and autosave fires every ten seconds: the inbox would be
+    //    wiped within one interval of being written. ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The inbox: every dispatch the account has been sent and still holds, in the order they were
+    /// posted (the order IS meaning; the surface reverses it). Copy is not here — a row carries the
+    /// event and its subject, and the catalogues say the words at display time.
+    /// </summary>
+    public List<SavedDispatch> Dispatches { get; init; } = new();
+
+    /// <summary>
+    /// Every dispatch key the account KNOWS — posted once, or seeded as already lived. Monotone, and
+    /// a superset of the rows' keys: a row the cap has pruned stays known, so it can never re-post.
+    /// </summary>
+    public List<string> KnownDispatchKeys { get; init; } = new();
+
+    /// <summary>
+    /// Has DISPATCHES ever been opened? The completion latch of the inbox's lesson — a sibling of
+    /// <see cref="ReportOpenedEver"/>, and like it not derivable from anything: opening the inbox
+    /// changes nothing in the world.
+    /// </summary>
+    public bool DispatchesOpenedEver { get; init; }
 
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
@@ -334,6 +475,18 @@ public sealed record SaveGame
     /// <summary>The keep-filter's wanted slots (2026-08-23, several at once). When absent, the older single
     /// <see cref="ChestKeepSlot"/> is the one wanted slot.</summary>
     public List<string> ChestKeepSlots { get; init; } = new();
+
+    /// <summary>
+    /// Has the player allowed the Warren's runners to SELL low-grade gear as a chest is opened?
+    /// </summary>
+    /// <remarks>
+    /// Default false, and DELIBERATELY false for a save already past the facility level that unlocks
+    /// it (2026-09-09). The capability used to switch itself on with a Warren upgrade bought for its
+    /// output, with no off switch and no notice at the moment of sale — so a returning player is
+    /// asked rather than assumed to have agreed. No version bump: an absent field reads as off, which
+    /// is the answer this change wants for every old save.
+    /// </remarks>
+    public bool AutoSellOn { get; init; }
 
     /// <summary>The ISO week (year*100+week) whose trader stall the two fields below describe.</summary>
     /// <remarks>Zero on old saves — the host treats a mismatch with the CURRENT week as "new week,
@@ -406,6 +559,26 @@ public sealed record SavedTraitFirst
     public string CharacterId { get; init; } = "";
     public string RegionId { get; init; } = "";
     public int Wave { get; init; }
+}
+
+/// <summary>
+/// One dispatch, flattened for the save file: the stable key, the kind by NAME, when it was posted,
+/// whether it has been read, and the flat nullable columns that name its subject.
+/// </summary>
+/// <remarks>
+/// Flat columns rather than a payload object per kind — the house pattern of <see cref="RunReportSave"/>
+/// and <see cref="SavedChest.Gift"/>: <c>WhenWritingNull</c> drops an absent column, and a kind this
+/// build does not know is dropped on read like every other catalogue name in the save.
+/// </remarks>
+public sealed record SavedDispatch
+{
+    public required string Key { get; init; }
+    public required string Kind { get; init; }
+    public long AtMs { get; init; }
+    public bool Read { get; init; }
+    public string? SubjectId { get; init; }
+    public string? RegionId { get; init; }
+    public int? Count { get; init; }
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>
@@ -791,6 +964,26 @@ public static class SaveSystem
             .GroupBy(s => s.InstanceId).Select(g => g.First())
             .Where(CanRestore)          // an unknown BaseType is dropped, never a boot crash
             .Select(FromSavedItem).ToList();
+
+    /// <summary>
+    /// The inbox's rows, in file order: one per key (the first wins), a row whose Kind this build does
+    /// not know dropped — never a boot crash — and every key read forward across renames on the way in.
+    /// </summary>
+    public static List<Progression.Dispatch> RestoreDispatches(SaveGame save)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        var rows = new List<Progression.Dispatch>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var s in save.Dispatches)
+        {
+            if (s is null || string.IsNullOrWhiteSpace(s.Key) || string.IsNullOrWhiteSpace(s.Kind)) continue;
+            if (!Enum.TryParse<Progression.DispatchKind>(s.Kind, out var kind) || !Enum.IsDefined(kind)) continue;
+            var key = Progression.Dispatches.ModernDispatchKey(s.Key);
+            if (!seen.Add(key)) continue;
+            rows.Add(new Progression.Dispatch(key, kind, s.AtMs, s.Read, s.SubjectId, s.RegionId, s.Count));
+        }
+        return rows;
+    }
 
     public static void RestoreHunter(SaveGame save, Hunter hunter)
     {

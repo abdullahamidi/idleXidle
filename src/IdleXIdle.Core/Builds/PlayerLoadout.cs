@@ -139,6 +139,53 @@ public sealed class PlayerLoadout
     /// </remarks>
     public int VowCapacity { get; set; } = 1;
 
+    /// <summary>
+    /// The active champion's OWN skill — the one no road teaches and no other champion may hold.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Host-set every frame from the active character, exactly like the three capacities above.
+    /// Playtest, 2026-09-09: <i>"the idea of making the character's signature skill changeable is
+    /// definitely wrong. That skill must remain unchangeable."</i> They were describing the shipped
+    /// behaviour: nothing anywhere pinned it. <see cref="RemoveSkill"/> and <see cref="ClearSkill"/>
+    /// took it out, <see cref="SetSkill"/> wrote over it, and <see cref="MoveSkill"/> dragged it off
+    /// the top — which matters twice over, because slot order decides which skill wins a tied beat.
+    /// The screen already DREW the identity (a gold SIGNATURE heading, a pinned library tile); only
+    /// the rule was missing.
+    /// </para>
+    /// <para>
+    /// Null leaves every verb exactly as it was — a bench or a test that never names a signature is
+    /// unconstrained, and so is a save being rebuilt before the host has said who is active.
+    /// </para>
+    /// </remarks>
+    public string? SignatureSkillId { get; set; }
+
+    /// <summary>Which slot holds the signature, or -1 when it is not woven (or none is named).</summary>
+    public int SignatureSlot => SignatureSkillId is { } id ? IndexOfSkill(id) : -1;
+
+    /// <summary>Is this slot the one the signature is locked into?</summary>
+    public bool IsSignatureSlot(int slot) => slot >= 0 && slot == SignatureSlot;
+
+    /// <summary>
+    /// Lift the signature to slot one, carrying whatever was on top down a place. Returns true if it moved.
+    /// </summary>
+    /// <remarks>
+    /// The one mover allowed to touch the signature, called by the repair that runs on load and on
+    /// every champion switch. A save written before the rule can have the signature anywhere, and
+    /// slot order is a combat decision — the champion takes one action per beat and picks the first
+    /// READY skill in slot order — so leaving it where it was would leave the rule half applied.
+    /// Nothing is dropped: the list is rotated, not overwritten.
+    /// </remarks>
+    public bool PinSignature()
+    {
+        var at = SignatureSlot;
+        if (at <= 0) return false;
+        var s = _skills[at];
+        _skills.RemoveAt(at);
+        _skills.Insert(0, s);
+        return true;
+    }
+
     /// <summary>The distinct Vows this loadout has sworn — the list <see cref="VowCapacity"/> bounds.</summary>
     public IReadOnlyList<string> SwornVows =>
         _skills.Select(s => s.VowId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
@@ -160,8 +207,10 @@ public sealed class PlayerLoadout
         return _skills.Count - 1;
     }
 
+    /// <summary>Take a slot away entirely. Refuses the signature's slot — see <see cref="SignatureSkillId"/>.</summary>
     public void RemoveSkill(int slot)
     {
+        if (IsSignatureSlot(slot)) return;
         if (slot >= 0 && slot < _skills.Count) _skills.RemoveAt(slot);
     }
 
@@ -178,6 +227,7 @@ public sealed class PlayerLoadout
     /// </remarks>
     public bool ClearSkill(int slot)
     {
+        if (IsSignatureSlot(slot)) return false;   // the champion's own skill is not the player's to empty
         if (!InRange(slot) || _skills[slot].SkillId is null) return false;
         _skills[slot] = _skills[slot] with { SkillId = null, Passive = null };
         return true;
@@ -197,7 +247,12 @@ public sealed class PlayerLoadout
     public bool MoveSkill(int from, int to)
     {
         if (!InRange(from)) return false;
-        to = Math.Clamp(to, 0, _skills.Count - 1);
+        // THE SIGNATURE HOLDS THE TOP. It cannot be dragged off slot one, and nothing else may be
+        // dragged onto it — the first slot wins every tied beat, so "where the signature sits" is a
+        // combat decision and it is the champion's, not the player's.
+        if (IsSignatureSlot(from)) return false;
+        var floor = SignatureSlot == 0 ? 1 : 0;
+        to = Math.Clamp(to, floor, _skills.Count - 1);
         if (from == to) return false;
         var s = _skills[from];
         _skills.RemoveAt(from);
@@ -261,6 +316,8 @@ public sealed class PlayerLoadout
     public bool SetSkill(int slot, string skillId)
     {
         if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return false;
+        // Writing over the signature is refused; writing the signature back into its own slot is not.
+        if (IsSignatureSlot(slot) && def.Id != SignatureSkillId) return false;
         var elsewhere = IndexOfSkill(def.Id);
         if (elsewhere >= 0 && elsewhere != slot) return false;
         _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };

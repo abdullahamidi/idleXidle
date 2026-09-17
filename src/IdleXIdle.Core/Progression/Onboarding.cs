@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using IdleXIdle.Core.Encounters;
 
@@ -31,6 +31,25 @@ public enum TourTarget
     NavRail,
     /// <summary>Where the fight's lesson card appears — the toast slot under the header stack.</summary>
     LessonSlot,
+    /// <summary>
+    /// The EXPEDITION LOG medallion, right of the stage header — the door to every run's report.
+    /// </summary>
+    /// <remarks>
+    /// Drawn every frame the fight draws, with no fall condition and no disabled state, which is why
+    /// READ THE LOG marks this: a fall paints no door of its own over the arena, and the medallion is
+    /// always there.
+    /// </remarks>
+    LogButton,
+
+    /// <summary>
+    /// THE STAGE HEADER — the region, the wave, and how far the conquest has come.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="Enemies"/>, which lights the creatures AND the header because a card
+    /// about what is being fought wants both. A card about DEPTH wants the header alone: the number
+    /// it is naming is in there, and lighting the pack beside it says the pack is the answer.
+    /// </remarks>
+    StageHeader,
 
     // ── TRAINING ──
     /// <summary>The training rows: one per stat, grouped, each with what it is now and after a rank.</summary>
@@ -47,6 +66,9 @@ public enum TourTarget
     Inventory,
     /// <summary>The detail column for the clicked item, with EQUIP.</summary>
     ItemDetail,
+
+    /// <summary>The strip along the doll's foot: what is worn, the average level, and the live set rungs.</summary>
+    GearSets,
 
     // ── BUILD (the weave) ──
     /// <summary>The skill slot rows.</summary>
@@ -119,6 +141,35 @@ public enum TourTarget
     ChampionDetail,
     /// <summary>The BECOME THEM button.</summary>
     BecomeThem,
+
+    // ── THE AUTHORED OPENING: one control each, and the host says which ──
+    /// <summary>
+    /// One item's cell in the GEAR bag — the item a step is about. The host knows which item, so it
+    /// asks the screen where that cell is drawn; no static layout can answer it.
+    /// </summary>
+    InventoryItem,
+    /// <summary>The GEAR inspector's EQUIP button, and nothing else on the panel.</summary>
+    EquipButton,
+    /// <summary>
+    /// One chest's card in the VAULT — the chest a step is about, resolved by the host the way
+    /// <see cref="InventoryItem"/> is.
+    /// </summary>
+    ChestCard,
+    /// <summary>
+    /// The chest's REVEAL card — what just came out of it. Host chrome drawn over whichever screen
+    /// the chest was opened on, so the host resolves it, in canvas space.
+    /// </summary>
+    RevealedItem,
+
+    /// <summary>
+    /// The DISPATCHES envelope in the shared top chrome, beside the ? and the gear.
+    /// </summary>
+    /// <remarks>
+    /// The one target that belongs to no screen: it is drawn in canvas space on every screen, so the
+    /// host answers it directly. The HUNT answers it too, because a lesson about it sends the player
+    /// nowhere and a null Sends reads as "the HUNT" wherever the catalogue is resolved.
+    /// </remarks>
+    DispatchIcon,
 }
 
 /// <summary>One card of a tour: what it points at, its title, and its two or three short sentences.</summary>
@@ -140,6 +191,8 @@ public readonly record struct ScreenBanner(string Key, string Title, string Body
 /// <param name="TrainableStat">The cheapest stat the player can afford to train right now — or null.</param>
 /// <param name="TrainableCost">What that rank costs.</param>
 /// <param name="AffordableUpgradeName">The first Warren facility whose next level is affordable — or null.</param>
+/// <param name="SkillWithLevelToSpend">The first woven skill holding an unspent level — or null.</param>
+/// <param name="SkillLevelsToSpend">Unspent levels across every woven skill.</param>
 public readonly record struct HintFacts(
     string? NewRegionName = null,
     int MasteryPointsFree = 0,
@@ -148,15 +201,17 @@ public readonly record struct HintFacts(
     int ChestsWaiting = 0,
     string? TrainableStat = null,
     long TrainableCost = 0,
-    string? AffordableUpgradeName = null);
+    string? AffordableUpgradeName = null,
+    string? SkillWithLevelToSpend = null,
+    int SkillLevelsToSpend = 0);
 
 /// <summary>One line a screen says at the top about its own state, and the key that dismisses it.</summary>
 /// <param name="Key">Encodes the fact, so the same hint returns when the fact changes (two chests after one).</param>
 public readonly record struct ScreenHint(string Key, string Text);
 
 /// <summary>
-/// The first minute on every screen: a click-through tour of the HUNT before the first wave, and a tour
-/// of each other screen the first time it is opened.
+/// The click-through tour of a screen, and the small notes and hints a screen says about itself —
+/// the explanations a player ASKS for, rather than ones the game puts in front of them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -174,10 +229,13 @@ public readonly record struct ScreenHint(string Key, string Text);
 /// now, in the HUNT's exact style, and the HUNT's intro is simply the tour of the HUNT.
 /// </para>
 /// <para>
-/// A tour runs once per screen, the first time that screen is on top, and the screen keeps working
-/// underneath it — the champion keeps fighting. The player advances it by clicking and can skip it.
-/// Nothing is announced over the top of a screen the player did not ask for: an opened screen gets a
-/// small NEW mark on its rail tile, and its tour waits there until the player goes.
+/// <b>And then no tour started itself at all.</b> The mandatory HUNT intro and every screen's
+/// first-open tour were both cut, because a screen the player has not watched yet cannot be
+/// explained to them. A tour now runs only when the player presses LEARN THIS SCREEN — the ? beside
+/// the settings gear — and may be asked for again as often as they like. The screen keeps working
+/// underneath it, the champion keeps fighting, the player advances it by clicking and can skip it.
+/// The gold NEW mark on a rail tile says "you have not looked at this screen", never "a tour is
+/// waiting there".
 /// </para>
 /// <para>
 /// Derived where it can be. Whether a tile is new is a question asked of the unlock gates and the
@@ -187,10 +245,10 @@ public readonly record struct ScreenHint(string Key, string Text);
 /// </remarks>
 public static class Onboarding
 {
-    /// <summary>The tour of the HUNT screen — the intro. Eight cards, each pointing at one region.</summary>
-    /// <remarks>Kept under its old name because it is asked for by name: the intro's decision is its own
-    /// (<see cref="IntroDue"/>), while every other tour is owed by the explained list.</remarks>
-    public static IReadOnlyList<TourStep> Intro => TourFor(Activity.Hunt);
+    // THE `Intro` ALIAS IS GONE. It was `TourFor(Activity.Hunt)` under the old name, kept "because the
+    // capture rig's fixture is still called that" — but the rig never touched it: RH_SHOT_MODE=intro is
+    // a MODE NAME that reaches the cards through BeginTour and TourFor like every other tour. Zero
+    // callers in src/, one in a test that already asserted the same thing against TourFor.
 
     /// <summary>
     /// The tour of a screen, in the order it is shown. Two to four cards, each pointing at one region.
@@ -218,12 +276,17 @@ public static class Onboarding
             new TourStep(TourTarget.Champion, "YOUR HUNTER",
                 "This is your hunter. It fights on its own. You never press attack."),
 
+            // ITEM 7 LIVES HERE: "each wave is randomized, but we never mention this fact." This says
+            // the half a player can act on — what comes at you changes from wave to wave. (The band is
+            // fixed by wave number and the creatures inside it are rolled from a seed of region, wave
+            // and run, so a REPLAYED wave is the same wave; that is a fact about fast-forward, not
+            // about what to expect, and a tour card is not where it belongs.)
             new TourStep(TourTarget.Enemies, "THE ENEMIES",
-                "Enemies come in waves. Every fifth wave is a boss. "
-                + "The banner at the top counts the waves and the conquest."),
+                "Enemies come in waves, and no two waves are made of the same thing. Every fifth is "
+                + "a boss. The banner at the top counts the waves and the conquest."),
 
             new TourStep(TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
-                "This is your hunter's life. When it reaches zero the descent ends — "
+                "This is your hunter's life. When it reaches zero the run ends — "
                 + "then it gets back up and starts again. Nothing is lost."),
 
             new TourStep(TourTarget.CurrencyPills, "GLEAM",
@@ -232,13 +295,17 @@ public static class Onboarding
             new TourStep(TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
 
-            new TourStep(TourTarget.RightColumn, "REWARDS AND ERRANDS",
-                "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, "
-                + "or you earn mastery points, the buttons here take you there."),
+            new TourStep(TourTarget.RightColumn, "WHAT IS WAITING",
+                "What is waiting for you. A chest is in the VAULT already, and when the game has "
+                + "something else for you a button appears here to take you to it."),
 
+            // EVERY TILE IS ON THE RAIL NOW, bound in chains until its screen opens (playtest
+            // 2026-09-09: hiding them was the wrong call, and the card was written for the rail
+            // that hid them — it told a first-run player that four tiles they could plainly see
+            // were not there).
             new TourStep(TourTarget.NavRail, "THE OTHER SCREENS",
-                "Only the screens you can use are on this rail. New ones appear as you play — "
-                + "a notice says what opened and why, and a gold NEW mark stays on it until you look."),
+                "Every screen is on this rail from the start. The ones still in chains are not open yet — "
+                + "a notice says when one opens, and a gold NEW mark waits on it."),
 
             new TourStep(TourTarget.LessonSlot, "LESSONS",
                 "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. "
@@ -252,38 +319,58 @@ public static class Onboarding
                 + "numbers are what it is now and what it becomes if you buy one rank."),
 
             new TourStep(TourTarget.TrainingDetail, "THE FULL STORY",
-                "Click a row and this column explains it: what the stat does, what one rank adds, "
+                "This column explains the row you pick: what the stat does, what one rank adds, "
                 + "and what the next rank costs."),
 
+            // NO CRYSTAL HERE. A Crystal has no currency pill anywhere — the three pills are Scrap,
+            // Memory Dust and Gleam, and Essence, Core and Crystal live on the Forge, which is
+            // normally still shut when this tour runs at wave three. So the word arrived with nothing
+            // to point at (playtest 2026-09-09). The bar prints its own price to a player who can by
+            // then see one.
             new TourStep(TourTarget.ResetBar, "STARTING OVER",
                 "This bar takes every trained rank back, so you can train differently. "
-                + "It costs a Crystal. The Gleam you spent does not come back."),
+                + "It says on it what that costs, and the Gleam you spent does not come back."),
         },
 
         Activity.Gear => new[]
         {
             new TourStep(TourTarget.PaperDoll, "WHAT YOU WEAR",
                 "Eight slots, one item each. Only what is worn counts in the fight. "
-                + "Click a slot to see what is in it."),
+                + "A slot reads out on the right when you pick it."),
 
             new TourStep(TourTarget.Inventory, "YOUR ITEMS",
-                "Every item you own that is not worn. Click one to read it. "
-                + "A dimmed item belongs to another class of champion, and this one cannot wear it."),
+                "Every item you own that is not worn. Any of them can be dragged onto the doll. "
+                + "A dimmed item belongs to another class, and this hunter cannot wear it."),
 
+            // ITEM ELEMENTS AND SET BONUSES WERE NAMED AS MISSING IN THE 2026-09-09 PLAYTEST — "item
+            // elements, gear bonuses, stats and enhancements are never mentioned" — and were still
+            // missing after that pass, which is most of what "the tutorial still explains nothing"
+            // is about. An ELEMENT is the most consequential thing on a piece of gear and the tour
+            // had never said the word.
+            //
+            // Said HERE rather than on a fifth card: a tour is two to four cards and no two of them
+            // may point at the same place, both of which are house rules with tests behind them, and
+            // "who can wear it" was already the Inventory card's second sentence.
             new TourStep(TourTarget.ItemDetail, "THE ITEM",
-                "The real numbers of the item you clicked, and who can wear it. Press EQUIP to wear it. "
-                + "What was in that slot goes back to the bag."),
+                "Its GRADE is the frame colour, its LEVEL its size, and its ELEMENT the Source it "
+                + "belongs to. EQUIP wears it; what was there goes back to the bag."),
+
+            new TourStep(TourTarget.GearSets, "WEARING A SET",
+                "Wear several pieces of one ELEMENT and this strip lights: each rung of a set is a "
+                + "standing bonus, and five is the whole of it."),
         },
 
         Activity.Build => new[]
         {
             new TourStep(TourTarget.SkillSlots, "YOUR SKILL SLOTS",
-                "Each row is one skill slot. Click a row to change the skill in it. "
+                "Each row is one skill slot, and picking a row is how its skill is changed. "
                 + "More slots open as you go deeper."),
 
+            // Was the hardest sentence in the whole tour set: a conditional inside a conditional,
+            // naming "roads" and "SIGNATURE" for the first time in the same breath.
             new TourStep(TourTarget.SkillPicker, "YOUR SKILL LIBRARY",
-                "Twelve shared skills are unlocked by roads on the MASTERY tree and lock again if you "
-                + "give a road back. Your levels are kept. Your SIGNATURE needs no road."),
+                "Twelve shared skills, each opened by the MASTERY tree. Your hunter's own skill is "
+                + "the one at the top: it needs nothing, and it cannot be changed."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
                 "A Vow is a promise about your build. It pays a lot while it is kept and nothing when "
@@ -297,16 +384,16 @@ public static class Onboarding
         Activity.Mastery => new[]
         {
             new TourStep(TourTarget.MasteryTree, "FOUR DIRECTIONS",
-                "Four directions grow out of the centre. RESONANCE is your skills' power. LOOT is a "
-                + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
+                "Four directions grow out of the centre. RESONANCE is your skills' power and LOOT is "
+                + "a richer haul. TEMPO hits sooner and more often; ENDURE outlasts the enemy."),
 
             new TourStep(TourTarget.Specialisations, "ONE STYLE",
                 "A specialisation chooses your Style: that Style's skills hit twice as hard. One Style "
                 + "per hunter, and TAKE EVERY POINT BACK lets you choose again."),
 
-            new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
-                "Rest the pointer on a node to read it here. Points come from reaching a depth you "
-                + "have never reached. TAKE EVERY POINT BACK is free, any time."),
+            new TourStep(TourTarget.NodeCard, "READING A NODE, AND TAKING IT",
+                "A node reads out here when you pick it, and nothing is spent until TAKE. Points come "
+                + "from reaching a depth you never reached, and TAKE EVERY POINT BACK is free."),
         },
 
         // The first visit's chest is the WELCOME GIFT a new game is seeded with (GiftChests), so both
@@ -315,17 +402,22 @@ public static class Onboarding
         {
             new TourStep(TourTarget.ChestCards, "YOUR CHESTS",
                 "Every chest you hold, one card for each kind. Your first is a welcome gift. The card "
-                + "says what it promises before you open it. Click a card to open one."),
+                + "says what it promises before it is opened."),
 
+            // THE BUTTON SAYS WHAT IT SAYS. This card read "OPEN ALL opens every chest at once" — and
+            // the tour's first visit is guaranteed to be the ONE-chest state (the welcome gift), where
+            // VaultScreen draws OPEN THE CHEST. So the card named a control that was not on the screen
+            // (playtest 2026-09-09), and the reading it did have was odd besides. It now names the
+            // button by what it does at any count, and stops naming two tools it does not explain.
             new TourStep(TourTarget.VaultButtons, "THE TOOLBAR",
-                "OPEN ALL opens every chest at once. CHEST FILTER decides which chests you keep. "
-                + "TRADER is a stall that changes every week."),
+                "The button on the right opens your chests — one at a time, or all of them when you "
+                + "hold more than one. Everything a chest gives you goes into your bag."),
         },
 
         Activity.Forge => new[]
         {
             new TourStep(TourTarget.Bag, "THE BAG",
-                "Everything you own that is not worn, rarest first. Click an item to put it on the "
+                "Everything you own that is not worn, rarest first. An item goes onto the "
                 + "bench. The mouse wheel scrolls the list."),
 
             new TourStep(TourTarget.ForgeItem, "THE BENCH",
@@ -338,14 +430,14 @@ public static class Onboarding
 
             new TourStep(TourTarget.Materials, "YOUR MATERIALS",
                 "Every job costs materials. Waves pay them, and deeper waves pay better ones. "
-                + "A CHART is a one-use paper that pays for one job in full."),
+                + "Sometimes a wave pays a paper that covers one whole job on its own."),
         },
 
         Activity.Warren => new[]
         {
             new TourStep(TourTarget.Facilities, "THE FACILITIES",
                 "Each card is a facility. They produce on their own, even while the game is closed. "
-                + "Conquering regions opens more of them. Click one to read it."),
+                + "Conquering regions opens more of them."),
 
             new TourStep(TourTarget.FacilityDetail, "UPGRADING",
                 "What the chosen facility makes each minute, and what the next level costs. "
@@ -363,7 +455,7 @@ public static class Onboarding
                 + "than the last. Reach the goal depth in one to conquer it, which opens the next."),
 
             new TourStep(TourTarget.RegionDetail, "WHAT A REGION HOLDS",
-                "Click a region to read it here: its element, how its enemies fight, the wave that "
+                "A region reads out here: its element, how its enemies fight, the wave that "
                 + "conquers it, and what it drops. Where you hunt is a loot choice too."),
 
             new TourStep(TourTarget.EnterRegion, "GO THERE",
@@ -385,7 +477,7 @@ public static class Onboarding
                 + "you go. One you have not awakened yet shows only as ???."),
 
             new TourStep(TourTarget.TraitDetail, "READING ONE",
-                "Click a trait to read what it does, then press WEAR IT. Every hunter you own can "
+                "A trait reads out here, and WEAR IT puts it on — or drag it onto a slot. Every hunter you own can "
                 + "wear any trait you have awakened."),
         },
 
@@ -393,14 +485,14 @@ public static class Onboarding
         {
             new TourStep(TourTarget.ChampionCards, "THE HUNTERS",
                 "One card per hunter, one column per gear class. A card shows its innate power and "
-                + "what unlocks it. Click one to read it here."),
+                + "what unlocks it."),
 
             new TourStep(TourTarget.ChampionDetail, "WHO THEY ARE",
                 "The hunter's starting skill, its always-on innate power, its road and its gear "
                 + "class. Gear of another class cannot be worn."),
 
             new TourStep(TourTarget.BecomeThem, "SET ACTIVE",
-                "Press SET ACTIVE to play as this hunter. Nothing resets. Gear this hunter cannot "
+                "SET ACTIVE plays as this hunter. Nothing resets. Gear this hunter cannot "
                 + "wear goes back to your bag."),
         },
 
@@ -410,7 +502,7 @@ public static class Onboarding
     };
 
     /// <summary>
-    /// Should the intro run when this player leaves the title screen?
+    /// Was this save written with the intro still ahead of it — neither seen, nor a wave cleared?
     /// </summary>
     /// <param name="f">What the player has done so far.</param>
     /// <param name="introSeen">The save's own record of having finished or skipped it.</param>
@@ -418,10 +510,18 @@ public static class Onboarding
     /// Two guards, because the save flag did not exist until the intro did. A player whose save was
     /// written before this file has <paramref name="introSeen"/> false and hundreds of cleared waves;
     /// teaching them where the champion is would be the interruption this file exists to remove. So a
-    /// cleared wave counts as having seen it. Asked ONCE, at the moment the title closes — the intro
-    /// must not vanish because the first wave happened to clear while the player was reading card three.
+    /// cleared wave counts as having seen it. It was asked ONCE, at the moment the title closed,
+    /// so a wave clearing while the player read card three could not end the intro under them.
     /// </remarks>
-    public static bool IntroDue(TutorialFacts f, bool introSeen) => !introSeen && f.WavesCleared < 1;
+    /// <remarks>
+    /// <b>MIGRATION ONLY.</b> Nothing in the game runs an intro: a fresh save begins on the fight with
+    /// one short observation, and the tours live behind LEARN THIS SCREEN. This predicate survives for
+    /// exactly one reader, <see cref="SeedExplained"/>, as the corroborating half of its old-save test
+    /// — and it is only the corroborating half now, because the file's VERSION is what decides. (The
+    /// capture rig was named here as a second reader and never was one: RH_SHOT_MODE=intro reaches the
+    /// HUNT's cards through <see cref="TourFor"/>, not through this.)
+    /// </remarks>
+    public static bool IntroDue(int wavesCleared, bool introSeen) => !introSeen && wavesCleared < 1;
 
     /// <summary>The explained-list key for a screen.</summary>
     public static string ScreenKey(Activity screen) => screen.ToString();
@@ -489,28 +589,55 @@ public static class Onboarding
     public static string SlotKey(int slot) => $"SkillSlot{slot}";
 
     /// <summary>
+    /// THE FIRST SAVE VERSION WHOSE EXPLAINED LIST CAN BE BELIEVED. Frozen forever.
+    /// </summary>
+    /// <remarks>
+    /// A literal, never <c>SaveGame.CurrentVersion</c> — the sibling constant
+    /// <c>OnboardingLessons.FirstVersionWithFallLoopFacts</c> carries the same warning and for the same
+    /// reason: written against CurrentVersion, the next bump would start seeding files that are
+    /// perfectly honest, and every player mid-onboarding would be marked as having read everything.
+    /// Version 5 is the first written by a build in which no tour starts itself.
+    /// </remarks>
+    public const int FirstVersionWithExplainedList = 5;
+
+    /// <summary>
     /// The explained list a player should start the session with.
     /// </summary>
-    /// <param name="f">The unlock facts at load.</param>
-    /// <param name="introSeen">The save's intro flag.</param>
+    /// <param name="f">The unlock facts at load, as corroboration.</param>
+    /// <param name="introSeen">The save's intro flag — migration input, nothing sets it in play.</param>
     /// <param name="explained">The save's explained list.</param>
+    /// <param name="freeSocketUsed">Has a gem ever been set? True for every save, not only old ones.</param>
+    /// <param name="fileVersion">The Version of the file that was LOADED — the test, not the guess.</param>
     /// <remarks>
-    /// A save from before this file existed has an empty list, and honouring that literally would put
-    /// a NEW mark on every open tile and a tour on every screen a returning player has used for
-    /// hours. Such a save is recognisable — the intro is neither seen nor due — and for it every screen
-    /// open at load and every skill slot already earned counts as explained. A player who has seen the
-    /// intro gets the list exactly as saved: whatever they have not yet read is still waiting for them.
+    /// A save written before this list existed has an empty one, and honouring that literally would put
+    /// a gold NEW mark on every tile a returning player has been using for hours. Such a file is
+    /// recognised by its VERSION, and for it every screen open at load and every skill slot already
+    /// earned counts as read. Every newer file is believed exactly as saved: what the player never
+    /// looked at keeps its mark.
     /// </remarks>
     public static IReadOnlyCollection<string> SeedExplained(
-        UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed = false)
+        UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed,
+        int fileVersion)
     {
         var set = new HashSet<string>(explained);
         // A player who has already set a gem needs no lesson in setting one — and the lesson's last
         // card would promise a free socket the Forge then refuses (review 2026-08-26). This holds for
         // every save, not only the ones from before the intro.
         if (freeSocketUsed) set.Add(GemTourKey);
-        var returningFromBefore = !introSeen
-            && !IntroDue(new TutorialFacts(WavesCleared: f.WavesCleared), false);
+        // ── THE VERSION IS THE TEST. ────────────────────────────────────────────────────────────
+        //
+        // "The intro was never seen, and waves have been cleared" meant "this file predates the intro"
+        // only while an intro existed to be seen. Nothing shows one now, so that description also fits
+        // a BRAND-NEW player who cleared a wave and relaunched — and they were being handed the
+        // veteran's answer: every screen marked read, every slot reveal marked read, the first-gem
+        // lesson suppressed for good, and the rail stripped of its unread marks. Once, silently, on
+        // their second session.
+        //
+        // Only a file older than the version that stopped auto-touring can be the veteran. The wave
+        // count stays as corroboration; it is no longer the test. (Same shape, same fix, as the
+        // fall-loop seed — OnboardingLessons.SeedFallLoopAsLived.)
+        var returningFromBefore = fileVersion < FirstVersionWithExplainedList
+                                  && !introSeen && !IntroDue(f.WavesCleared, false);
         if (!returningFromBefore) return set;
 
         foreach (var screen in Unlocks.Open(f)) set.Add(ScreenKey(screen));
@@ -524,25 +651,43 @@ public static class Onboarding
     /// The explained-list key of the tour this screen still owes, or null if it has been given.
     /// </summary>
     /// <remarks>
-    /// The Hunt owes nothing here: its tour is the intro, and whether the intro runs is decided by
-    /// <see cref="IntroDue"/> against the save's own flag. Every other screen's tour is owed until its
-    /// key is in the list, which the host writes when the tour is finished or skipped.
+    /// "Owed" no longer means a tour will run: it is what a rail tile's gold NEW mark is made of,
+    /// and what the capture rig poses a tour from. LEARN THIS SCREEN never consults this list, so a
+    /// screen already read can be toured again as often as the player likes. The Hunt owes nothing,
+    /// because the player is looking at it and its tile carries no mark. Every other screen's tour
+    /// is owed until its key is in the list, which the host writes when the tour is finished or
+    /// skipped.
     /// </remarks>
     public static string? TourDue(Activity screen, IReadOnlyCollection<string> explained)
         => screen != Activity.Hunt && !explained.Contains(ScreenKey(screen)) ? ScreenKey(screen) : null;
 
     /// <summary>
-    /// The note this screen should show at the top, after its tour, or null if nothing is owed.
+    /// The reveal this screen owes: a skill slot that has opened and not been acknowledged.
     /// </summary>
     /// <remarks>
-    /// Only the BUILD screen has notes: one for each skill slot that opened after the screen did. They
-    /// are handed over one at a time, and only once the screen's own tour has been given — what the
-    /// screen is, then what changed on it. While the tour is still owed this returns null, so the
-    /// two can never be on screen together.
+    /// <para>
+    /// Only the BUILD screen has one, and it is BUILD's own progression feedback — not a lesson, not
+    /// optional help. A slot opening is a thing that HAPPENED to the player's build, and the screen
+    /// says so once, quietly, with an ×.
+    /// </para>
+    /// <para>
+    /// <b>IT USED TO WAIT FOR THE SCREEN'S TOUR</b> — "what the screen is, then what changed on it" —
+    /// which was sound while that tour ran itself the first time BUILD was opened. Tours are asked for
+    /// now (LEARN THIS SCREEN), so the rule meant a player who never pressed <c>?</c> never learned
+    /// they had a second skill slot at all: dormant progression feedback behind an optional door. The
+    /// tour cannot gate this. If both are wanted at once the host decides the order, and it does —
+    /// <c>ScreenBannerShowing</c> withholds every banner while a tour is actually up.
+    /// </para>
+    /// <para>
+    /// ONE AT A TIME, lowest slot first. Three slots can be owed at once on a returning save, and
+    /// three banners in a frame is the "three congratulations in a row" failure this codebase has
+    /// already killed once. Each is acknowledged by its own <see cref="SlotKey"/>, so closing the
+    /// second does not silence the third.
+    /// </para>
     /// </remarks>
     public static ScreenBanner? BannerFor(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained)
     {
-        if (screen != Activity.Build || TourDue(screen, explained) is not null) return null;
+        if (screen != Activity.Build) return null;
         for (var slot = 2; slot <= Unlocks.SkillSlots(f); slot++)
             if (!explained.Contains(SlotKey(slot)))
                 return new ScreenBanner(SlotKey(slot), "A NEW SKILL SLOT", Unlocks.SkillSlotNote(slot));
@@ -555,19 +700,20 @@ public static class Onboarding
            && (TourDue(screen, explained) is not null || BannerFor(screen, f, explained) is not null);
 
     /// <summary>
-    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause: while
-    /// a guide rung is showing, the tile it <see cref="Tutorial.Sends"/> the player to wears the mark too.
+    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause:
+    /// while a lesson is showing, the tile it sends the player to wears the mark too.
     /// </summary>
     /// <remarks>
-    /// UX V2 P0.7. A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over
-    /// the Forge). Now it renders only on the screen it is about; everywhere else, the rung is this mark
-    /// on the tile it points at — the rail says where, the screen says what.
+    /// A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over the
+    /// Forge). It renders only on the screen it is about; everywhere else the tile carries it — the
+    /// rail says where, the screen says what. <paramref name="lessonSends"/> is the screen the coach's
+    /// current lesson asks for, or null: the caller resolves it, so this file needs no opinion about
+    /// which lesson is showing or why.
     /// </remarks>
     public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained,
-                             TutorialStep? showing, TutorialFacts tf)
+                             Activity? lessonSends)
         => IsNew(screen, f, explained)
-           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
-               && showing is { } s && Tutorial.HasGuidance(s) && Tutorial.Sends(s, tf) == screen);
+           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f) && lessonSends == screen);
 
     /// <summary>
     /// The one line this screen says about its own state right now, or null when nothing is true.
@@ -594,6 +740,17 @@ public static class Onboarding
         // TraitPointsFree was kept on these facts for the old Memory tree screen; both are deleted.
         Activity.Mastery when f.MasteryPointsFree > 0 =>
             new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
+        // A LEVEL TO SPEND OUTRANKS AN EMPTY SLOT. Playtest 2026-09-09: "the skill upgrade section
+        // wasn't understood at all; no one would have even looked at it if I hadn't pointed it out. We
+        // didn't provide any guidance, and it's tucked away in a hidden spot." A skill's variation is
+        // the one decision in the game the player is never told they can make, and it is the deeper of
+        // the two — an empty slot is answered by picking from a list, this is answered by reading three
+        // effects and choosing.
+        Activity.Build when f.SkillWithLevelToSpend is { Length: > 0 } sk =>
+            new ScreenHint($"Hint:Build:Level:{sk}:{f.SkillLevelsToSpend}",
+                           f.SkillLevelsToSpend == 1
+                               ? $"{sk.ToUpperInvariant()} HAS A LEVEL TO SPEND — CHOOSE WHAT IT BECOMES"
+                               : $"{f.SkillLevelsToSpend} SKILL LEVELS TO SPEND — CHOOSE WHAT THEY BECOME"),
         Activity.Build when f.EmptySkillSlots > 0 =>
             new ScreenHint($"Hint:Build:{f.EmptySkillSlots}",
                            f.EmptySkillSlots == 1 ? "AN EMPTY SKILL SLOT — EQUIP A SKILL" : $"{f.EmptySkillSlots} EMPTY SKILL SLOTS — EQUIP SKILLS"),

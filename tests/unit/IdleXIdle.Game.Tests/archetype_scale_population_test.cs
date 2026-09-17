@@ -142,7 +142,7 @@ public class archetype_scale_population_test
         var five = Pack(Archetype.Bruiser, 5);
         var centres = five.Select(b => b.Center.X).ToArray();
         Assert.True(centres.Zip(centres.Skip(1)).All(p => p.Second > p.First), "a row must run left to right");
-        Assert.Equal(1, five.Select(b => b.Size).Distinct().Count());
+        Assert.Single(five.Select(b => b.Size).Distinct());
         Assert.NotEqual(Lone(Archetype.Bruiser).Center.X, five[0].Center.X);
     }
 }

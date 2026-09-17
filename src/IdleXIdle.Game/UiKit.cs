@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -113,6 +113,7 @@ public sealed class UiKit
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
     private readonly Texture2D _blob;
+    private readonly Texture2D _disc;
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
@@ -420,7 +421,16 @@ public sealed class UiKit
         _hex = MakeHex(device, 120, 104);       // flat-top hexagon, drawn tinted + scaled (LinearClamp keeps it smooth)
         _diamond = MakeDiamond(device, 64);      // a gem for the nav / accents
         _blob = MakeBlob(device, 128);           // soft contact shadow under the fighters
+        _disc = MakeDisc(device, 64);            // a hard circle — the unread badge, and nothing else yet
     }
+
+    /// <summary>Draw a hard-edged filled circle inside <paramref name="dest"/>, tinted.</summary>
+    /// <remarks>
+    /// The house had a hexagon, a diamond and a soft blob and no plain circle, so a notification dot
+    /// had to be a square or a gem — and neither of those reads as "unread" anywhere a player has
+    /// been before. Antialiased at the rim only, so it stays round at the sizes a badge is drawn at.
+    /// </remarks>
+    public void Disc(SpriteBatch b, Rectangle dest, Color fill) => b.Draw(_disc, dest, fill);
 
     /// <summary>Draw the flat-top hexagon filling <paramref name="dest"/>, tinted.</summary>
     public void Hex(SpriteBatch b, Rectangle dest, Color fill) => b.Draw(_hex, dest, fill);
@@ -716,8 +726,43 @@ public sealed class UiKit
     /// hitting. Playtest: "Karakter animasyonları ters tarafa oynuyor gibi, yön hatası var sanırım."
     /// </remarks>
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)
+        => AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out _);
+
+    /// <summary>
+    /// <see cref="AnimSprite(SpriteBatch, string, Rectangle, float, float, bool, Color, float, bool)"/>,
+    /// handing back the frame it drew — the texture, the source rectangle, where it landed and how it
+    /// was mirrored — so a caller can draw the SAME frame again through another texture (the hit flash's
+    /// white mask, the focus light's silhouette) without recomputing a pixel of it.
+    /// </summary>
+    /// <remarks>
+    /// The whole of the arithmetic is <see cref="ResolveFrame"/>; this only notes the ledger and draws.
+    /// A second copy of the crop, the scale or the grounding here would be a second owner of where a
+    /// figure stands, which is what <c>actor_crop_test</c> and the envelope tests exist to forbid.
+    /// </remarks>
+    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,
+                           float topCrop, bool flip, out SpriteFrame frame)
     {
-        if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
+        if (ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip) is not { } f) { frame = default; return false; }
+        UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, "UiKit.AnimSprite");
+        b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);
+        frame = f;
+        return true;
+    }
+
+    /// <summary>
+    /// Where one frame of a strip lands, and which frame: the arithmetic of <see cref="AnimSprite"/>
+    /// with the draw taken out. Null when the strip is missing or empty, exactly where the draw
+    /// returned false.
+    /// </summary>
+    /// <remarks>
+    /// The frame index (held on the first frame under Reduced Motion), the measured crops, the scale
+    /// through <see cref="DrawScale"/> and the bottom-anchored grounding are all here and only here;
+    /// the draw above is this plus a ledger note plus one <c>SpriteBatch.Draw</c>. The numbers are the
+    /// ones the draw has always produced — truncation where it truncated, rounding where it rounded.
+    /// </remarks>
+    public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f, bool flip = false)
+    {
+        if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return null;
         var fw = tex.Height;
         var frames = Math.Max(1, tex.Width / fw);
         // Rev 4 §8/§9: a horizontal strip must be exactly N square frames, and we draw exactly ONE of them
@@ -773,12 +818,10 @@ public sealed class UiKit
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
         var drop = (int)MathF.Round(BottomPadFraction(stripKey) * fw * sc);
-        UiRasterLedger.Note(stripKey, srcW, srcH, w, drawnH, "UiKit.AnimSprite");
         // Bottom-anchored: a capped figure keeps its feet where an uncapped one had them, so the cap
         // never lifts a hunter off the floor its slots and shadow were laid out against.
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH), src, tint,
-               0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-        return true;
+        return new SpriteFrame(tex, src, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH),
+                               flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)
@@ -825,6 +868,87 @@ public sealed class UiKit
     /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>
     public void GroundShadow(SpriteBatch b, int cx, int cy, int width, int height, float strength = 0.55f)
         => b.Draw(_blob, new Rectangle(cx - width / 2, cy - height / 2, width, height), Color.White * strength);
+
+    private static Texture2D MakeDisc(GraphicsDevice d, int s)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = (s - 1) / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                // Solid to the rim, then one texel of falloff — a hard disc that is not jagged.
+                var a = Math.Clamp((1f - r) * c * 0.5f, 0f, 1f);
+                // PREMULTIPLIED, like every other texture this renderer loads. Written as (1,1,1,a)
+                // the disc drew as a SQUARE: under premultiplied blending the source RGB is added
+                // whatever the alpha says, so full white outside the circle painted the whole quad.
+                // MakeBlob gets away with (0,0,0,a) because adding zero is invisible.
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    /// <summary>
+    /// A soft-edged rounded rectangle for nine-slicing, or its outline: premultiplied white, built
+    /// once for the focus light (<see cref="FocusRenderer"/>).
+    /// </summary>
+    /// <remarks>
+    /// The opaque shape sits <paramref name="feather"/> pixels in from every edge of the texture and
+    /// has corners of <paramref name="radius"/>; outside it the alpha falls to nothing across the
+    /// feather (smoothstep, so the edge has no visible kink). Corners are therefore
+    /// <c>feather + radius</c> pixels square, and the <paramref name="mid"/> pixels between them are
+    /// the stretchable rails. With <paramref name="line"/> above zero the texture is instead the
+    /// OUTLINE: an antialiased ring that many pixels wide, centred on the opaque shape's edge — the
+    /// same slicing, so a rim drawn over a plate lands on the plate's edge.
+    /// </remarks>
+    internal static Texture2D MakeSoftRounded(GraphicsDevice d, int radius, int feather, int mid, float line = 0f)
+    {
+        var s = 2 * (feather + radius) + mid;
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var half = s / 2f;
+        var box = half - feather;   // the opaque half-size
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                // Signed distance to the rounded box: negative inside, zero on its edge.
+                var qx = MathF.Abs(x + 0.5f - half) - box + radius;
+                var qy = MathF.Abs(y + 0.5f - half) - box + radius;
+                var outside = MathF.Sqrt(MathF.Max(qx, 0f) * MathF.Max(qx, 0f) + MathF.Max(qy, 0f) * MathF.Max(qy, 0f));
+                var sd = MathF.Min(MathF.Max(qx, qy), 0f) + outside - radius;
+                float a;
+                if (line > 0f) a = Math.Clamp(line / 2f + 0.5f - MathF.Abs(sd), 0f, 1f);
+                else
+                {
+                    var t = Math.Clamp(sd / feather, 0f, 1f);
+                    a = 1f - t * t * (3f - 2f * t);
+                }
+                // PREMULTIPLIED, like MakeDisc: (1,1,1,a) would paint the whole quad white.
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    /// <summary>A soft disc: opaque to <c>radius - feather</c>, then falling to nothing at the rim. Premultiplied white.</summary>
+    internal static Texture2D MakeSoftDisc(GraphicsDevice d, int s, int feather)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = s / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x + 0.5f - c) * (x + 0.5f - c) + (y + 0.5f - c) * (y + 0.5f - c));
+                var t = Math.Clamp((r - (c - feather)) / feather, 0f, 1f);
+                var a = 1f - t * t * (3f - 2f * t);
+                data[y * s + x] = new Color(a, a, a, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
 
     private static Texture2D MakeDiamond(GraphicsDevice d, int s)
     {
@@ -888,6 +1012,26 @@ public sealed class UiKit
             b.Draw(bg, new Rectangle(0, 0, 1920, 1080), tint ?? Color.White);
         }
         else Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk);
+    }
+
+    /// <summary>
+    /// A full-canvas background drawn SLIGHTLY OVERSIZE and panned — a slow camera over a still.
+    /// </summary>
+    /// <param name="zoom">How much bigger than the canvas the still is drawn, 1.0 being exact.</param>
+    /// <param name="panY">Where the oversize is spent vertically: 0 shows the top, 1 the bottom.</param>
+    /// <remarks>
+    /// The cinematic's only camera. There is no parallax layer to move here — these are single stills —
+    /// so the motion is the frame drifting across one, which is what a slow push on a matte painting
+    /// is. Reduced Motion holds it at a fixed frame by passing a constant pan; the still is unchanged.
+    /// </remarks>
+    public void BackgroundPanned(SpriteBatch b, string key, float zoom, float panY, Color tint)
+    {
+        if (Assets.Get(key) is not { } bg) { Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk); return; }
+        var w = (int)(1920 * Math.Max(1f, zoom));
+        var h = (int)(1080 * Math.Max(1f, zoom));
+        var r = new Rectangle(-(w - 1920) / 2, -(int)((h - 1080) * Math.Clamp(panY, 0f, 1f)), w, h);
+        UiRasterLedger.Note(key, bg.Width, bg.Height, w, h, "UiKit.BackgroundPanned");
+        b.Draw(bg, r, tint);
     }
 
     /// <summary>A translucent scrim over the whole screen — used to dim a reused background.</summary>
@@ -1297,7 +1441,7 @@ public sealed class UiKit
     /// <para>
     /// <see cref="AnimSprite"/> draws with this, and the actor geometry the effects and the pointer read
     /// resolves with this, so the two cannot drift. They did: the geometry took the box's ask and the
-    /// renderer took the cap, so a rift guardian in a 488 x 492 box (a wave of two or more at Bruiser
+    /// renderer took the cap, so the retired rift guardian in a 488 x 492 box (a wave of two or more at Bruiser
     /// scale) was DRAWN 262 x 461 while every effect on it was sized against 268 x 470. A second
     /// "almost the same" clamp beside this one is
     /// the defect, not the fix — measure through this function or pass its answer along.
@@ -1737,7 +1881,7 @@ public sealed class UiKit
         var w = Math.Max(16, Measure(key) + 8);
         if (Assets.Get("ui_keycap") is { } cap) b.Draw(cap, new Rectangle(x, y, w, 16), Color.White);
         else { Fill(b, new Rectangle(x, y, w, 16), Dim); Fill(b, new Rectangle(x + 1, y + 1, w - 2, 14), PanelBg); }
-        Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? new Color(0xE8, 0xDF, 0xC8));
+        Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? UiInk.Primary);
     }
 
     /// <summary>
@@ -1867,15 +2011,29 @@ public sealed class UiKit
     }
 
     /// <summary>
-    /// A small explanation panel beside the cursor — the hover tooltip the settings rows use.
+    /// A small explanation panel beside the THING it explains — the hover tooltip the screens use.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>It hangs off the ELEMENT, never the pointer (2026-09-09).</b> Playtest: <i>"the informational
+    /// text that appears on hover shouldn't move along with the mouse cursor; it should remain in a
+    /// fixed position."</i> This method used to take a <c>Point</c> and build a synthetic 26×30
+    /// "cursor" rectangle out of it, so the plate translated one-for-one with every mouse move and a
+    /// reader chasing a sentence dragged it around the screen. The placement rule was never at fault —
+    /// <see cref="PopoverPlacement.Place"/> places a popover beside whatever rectangle it is handed,
+    /// and two of its four callers handed it the pointer where a control belonged. Given the control's
+    /// own rectangle the tip is STILL while the pointer moves inside it, and it lands in the same place
+    /// every time the reader comes back to that control.
+    /// </para>
+    /// <para>
     /// Callers draw it LAST so it sits over the row it explains. Near the right or bottom edge of the
     /// 1920×1080 chrome space it flips to the other side of the anchor, so a tip on the last row is
     /// never clipped off screen. Deliberately a flat plate rather than an ornate panel: a tooltip is
     /// furniture, and the ornate frame is a claim of importance this text should not make.
+    /// </para>
     /// </remarks>
-    public void HoverTip(SpriteBatch b, string text, Point anchor)
+    /// <param name="element">The control being explained. Its rectangle, not the cursor's position.</param>
+    public void HoverTip(SpriteBatch b, string text, Rectangle element)
     {
         int width = UiMetrics.Text(430), pad = UiMetrics.Space(14);
         var lineH = UiTypography.Pitch(UiTypography.Secondary);
@@ -1888,8 +2046,7 @@ public sealed class UiKit
         // used to flip left at the right edge with no left clamp, so a tip near the rail went negative.
         var actionBand = new Rectangle(0, PageBottom(UiMetrics.Space(36)) - UiMetrics.ButtonHeightPrimary - UiMetrics.Space(24),
                                        Page.Width, UiMetrics.ButtonHeightPrimary + UiMetrics.Space(60));
-        var cursor = new Rectangle(anchor.X, anchor.Y, 26, 30);
-        var tip = PopoverPlacement.Place(cursor, new Point(width, h), Page, new[] { actionBand },
+        var tip = PopoverPlacement.Place(element, new Point(width, h), Page, new[] { actionBand },
                                          new[] { PopoverSide.Below, PopoverSide.Above, PopoverSide.Right, PopoverSide.Left }, 4);
         // THE HOUSE PLATE (§2 QUIET), not a private purple box with a gold rule: a tip is furniture, and
         // furniture wears the tier every list and chip on the page wears. The 4 px shadow stays, so the tip
@@ -1912,7 +2069,12 @@ public sealed class UiKit
         if (MeasureBig(text, px) <= width) return text;
         var s = text;
         while (s.Length > 1 && MeasureBig(s + "…", px) > width) s = s[..^1];
-        return s.TrimEnd() + "…";
+        var cut = s.TrimEnd() + "…";
+        // EVERY CUT IS RECORDED WHEN THE DIAL IS ON. This method always succeeds — a label that does
+        // not fit comes back shorter and nothing anywhere says so — which makes truncation the one
+        // layout fault that leaves no trace in the source. RH_UI_TEXT=1 turns it into a list.
+        if (UiTextLedger.On) UiTextLedger.Note(text, cut, width, px);
+        return cut;
     }
 
     /// <summary>The caption a built-in row wears after its stat word — one spelling for every screen.</summary>
@@ -1956,6 +2118,52 @@ public sealed class UiKit
     /// <summary>The same ladder, ending in a cut when the row has no second line to give.</summary>
     public string FitLabel(string label, int room, int px)
         => TryFitLabel(label, room, px, out var fitted) ? fitted : ShortenBig(label, room, px);
+
+    /// <summary>
+    /// THE LARGEST RUNG AT WHICH THE WHOLE WORD FITS — a control's label shrinks, it does not lose letters.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="UiTypography.NavigationLabel"/> has said this since the ladder was written — <i>"one
+    /// size for every control; it shrinks only when the label genuinely does not fit, and never below
+    /// <see cref="UiTypography.Caption"/>"</i> — and nothing implemented it. Controls called
+    /// <see cref="ShortenBig"/> instead, which cuts, so at 150 % the Forge's first tab read
+    /// <c>UPGRA…</c>: a verb with its ending missing on the button that performs it, which is worse than
+    /// the same verb one rung smaller in every way.
+    /// </para>
+    /// <para>
+    /// Steps DOWN the real ladder rather than scaling freely, so a shrunk label still lands on a size the
+    /// rest of the screen uses. Returns <paramref name="px"/> unchanged when the label already fits, and
+    /// the floor when nothing does — at which point the caller's box is genuinely too small and cutting
+    /// is the honest answer.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// An item's name in the room it has: the whole name, else the name without its prefix, else a cut.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="TryFitLabel"/>, and for the same reason: a name reduces by dropping
+    /// its least load-bearing part rather than by losing its last word. See
+    /// <see cref="Core.Economy.ItemNaming.ShortName"/> for which part that is and why.
+    /// </remarks>
+    public string FitItemName(Core.Loot.ItemInstance? item, int room, int px)
+    {
+        var full = Core.Economy.ItemNaming.FullName(item);
+        if (MeasureBig(full, px) <= room) return full;
+        var shorter = Core.Economy.ItemNaming.ShortName(item);
+        return MeasureBig(shorter, px) <= room ? shorter : ShortenBig(full, room, px);
+    }
+
+    public int FitRung(string label, int room, int px)
+    {
+        if (string.IsNullOrEmpty(label) || room <= 0) return px;
+        foreach (var rung in new[] { px, UiTypography.Body, UiTypography.Secondary, UiTypography.Caption })
+        {
+            if (rung > px) continue;                  // never louder than the caller asked for
+            if (MeasureBig(label, rung) <= room) return rung;
+        }
+        return UiTypography.Caption;
+    }
 
     /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
     /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because
@@ -2029,3 +2237,16 @@ public enum ButtonStyle
     /// <summary>Lit at rest: the screen's one primary decision (EQUIP, TAKE, OPEN ALL, HUNT HERE).</summary>
     Primary,
 }
+
+/// <summary>
+/// One resolved strip frame: the texture it comes from, the frame's source rectangle, the canvas
+/// rectangle it lands in, and how it is mirrored. What <see cref="UiKit.ResolveFrame"/> answers and
+/// <see cref="UiKit.AnimSprite(SpriteBatch, string, Rectangle, float, float, bool, Color, float, bool, out SpriteFrame)"/>
+/// draws — and what any second pass over the same figure (a white mask, a silhouette) draws from,
+/// so the two can never disagree about where the figure is.
+/// </summary>
+/// <param name="Texture">The strip.</param>
+/// <param name="Src">The one frame inside it, crops applied.</param>
+/// <param name="Dest">Where it was drawn, in canvas pixels — bottom-anchored, scale-capped.</param>
+/// <param name="Effects">The mirror it was drawn with.</param>
+public readonly record struct SpriteFrame(Texture2D Texture, Rectangle Src, Rectangle Dest, SpriteEffects Effects);

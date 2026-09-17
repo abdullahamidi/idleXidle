@@ -56,8 +56,8 @@ public static class ItemTooltip
     private static readonly Color Bad = UiInk.Danger;
     private static readonly Color Violet = UiInk.Primary;
 
-    private static readonly Color[] RarityInk =
-        [new(0xC8, 0xC2, 0xB4), new(0x6E, 0xC8, 0x7A), new(0x4A, 0x90, 0xD9), new(0xB0, 0x6A, 0xC8), new(0xE8, 0xC8, 0x7A)];
+    // The card's rarity edge is ItemCellLayout.RarityInk — the one ramp (2026-09-16). This card had its
+    // own five, a dimmer bone and a paler gold than the screens it hangs off.
 
     // The card's own grid: its side inset, its top and bottom pads, and the pitch of a plain line —
     // <c>ui.Text</c> draws at the Label rung, which is Body, so a plain line advances by Body's pitch.
@@ -83,17 +83,23 @@ public static class ItemTooltip
     /// <param name="wearer">
     /// The champion reading the card. When set and they cannot wear the item, the card names who can.
     /// </param>
-    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Point at, Rectangle canvas,
+    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Rectangle at, Rectangle canvas,
                             Character? wearer = null)
     {
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
 
-        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the pointer is the anchor, the
-        // card hangs to its right, flips left at the edge, and is clamped into the canvas — the same
-        // rule the enemy inspector and the hover tip obey.
+        // THROUGH THE ONE PLACEMENT RULE (PopoverPlacement, 2026-09-06): the card hangs to the right of
+        // THE CELL, flips left at the edge, and is clamped into the canvas — the same rule the enemy
+        // inspector and the hover tip obey.
+        //
+        // The anchor was a 1x1 rectangle built from the POINTER until 2026-09-09, and this is the
+        // biggest thing on the screen that followed it — 460 px wide at 100 %, 690 at 150 %, and up to
+        // 700 tall. Playtest: "the informational text that appears on hover shouldn't move along with
+        // the mouse cursor." Anchored to the cell, it is still while the pointer moves inside it and
+        // lands in the same place every time the reader comes back to that item.
         var h = HeightFor(ui, item, hunter, wearer);
-        var anchor = new Rectangle(at.X, at.Y - UiMetrics.Space(20), 1, 1);
+        var anchor = at;
         var card = PopoverPlacement.Place(anchor, new Point(Width, h), canvas, null,
                                           new[] { PopoverSide.Right, PopoverSide.Left, PopoverSide.Below, PopoverSide.Above },
                                           UiMetrics.Space(24));
@@ -114,7 +120,7 @@ public static class ItemTooltip
         // The house QUIET plate with the rarity as its accent, over a soft shadow — not four hand-drawn
         // edges in the rarity colour (gear-03). It still reads as a floating label, on a house surface.
         ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
-        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
+        ui.Plate(b, card, ItemCellLayout.RarityInk(item.Rarity));
 
         Walk(ui, b, item, hunter, wearer, card);
     }
@@ -151,7 +157,7 @@ public static class ItemTooltip
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
         ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
-        ui.Plate(b, card, RarityInk[(int)item.Rarity]);
+        ui.Plate(b, card, ItemCellLayout.RarityInk(item.Rarity));
         WalkCompact(ui, b, item, hunter, prices, drawArt, card);
     }
 
@@ -165,7 +171,7 @@ public static class ItemTooltip
         var rx = card.Right - PadX;
         var innerW = card.Width - PadX * 2;
         var cy = card.Y + PadTop;
-        var edge = RarityInk[(int)item.Rarity];
+        var edge = ItemCellLayout.RarityInk(item.Rarity);
         // A 48 thumbnail and tight rules (2026-09-06): the tallest offer — four rolls, a built-in, a
         // prefix, an enchant, two materials and the verdict on its own row — must still end above the
         // BUY under the next offer at 150 %, or the card cannot stand beside the offer at all.
@@ -309,7 +315,7 @@ public static class ItemTooltip
         var rx = card.Right - PadX;
         var innerW = card.Width - PadX * 2;
         var cy = card.Y + PadTop;
-        var edge = RarityInk[(int)item.Rarity];
+        var edge = ItemCellLayout.RarityInk(item.Rarity);
 
         // A left-run line and a right-aligned value on the same line — drawn only when drawing.
         void L(string s, Color c) { if (draw) ui!.Text(b!, s, lx, cy, c); }

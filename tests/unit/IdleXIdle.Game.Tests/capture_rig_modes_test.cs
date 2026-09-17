@@ -1,0 +1,215 @@
+﻿using System;
+using System.IO;
+using System.Linq;
+using Xunit;
+
+namespace IdleXIdle.Game.Tests;
+
+/// <summary>
+/// THE CAPTURE RIG'S REGISTRY IS FOUR LISTS AND A HEADER, and a fixture missing from any of them fails
+/// silently: a mode absent from Game1's allow-list photographs the TITLE, absent from the fight family it
+/// opens no fight, absent from the worn-gear list it poses a naked Hunter, absent from the toast exclusion
+/// it photographs a WELCOME BACK toast over the state it exists to show, and absent from capture.sh's
+/// header it is a mode nobody can find. Pinned by reading the sources, as host_input_gates_test.cs does,
+/// since Game1.Update needs a GraphicsDevice.
+/// </summary>
+public class CaptureRigModesTest
+{
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir }.Concat(parts).ToArray());
+            if (File.Exists(candidate)) return candidate;
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new FileNotFoundException(string.Join('/', parts) + " not found above the test binary.");
+    }
+
+    private static string Source(params string[] parts) => File.ReadAllText(RepoFile(parts)).Replace("\r\n", "\n");
+
+    private static string Game1() => Source("src", "IdleXIdle.Game", "Game1.cs");
+    private static string HuntScreen() => Source("src", "IdleXIdle.Game", "HuntScreen.cs");
+    private static string CaptureHeader()
+    {
+        // The comment block at the top of capture.sh, up to the first non-comment line.
+        var lines = Source("tools", "asset-pipeline", "capture.sh").Split('\n');
+        return string.Join('\n', lines.Skip(1).TakeWhile(l => l.StartsWith('#')));
+    }
+
+    /// <summary>One `sm is "a" or "b" …` list, from its anchor to the brace that opens its block.</summary>
+    private static string ListAt(string src, string anchor)
+    {
+        var at = src.IndexOf(anchor, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"`{anchor}` not found in Game1.cs");
+        var brace = src.IndexOf('{', at);
+        Assert.True(brace > at, $"the list at `{anchor}` never opens a block");
+        return src[at..brace];
+    }
+
+    /// <summary>The body of one method, brace-matched from its signature.</summary>
+    private static string BodyOf(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"source no longer contains `{signature}`.");
+        var open = source.IndexOf('{', at);
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
+        }
+        throw new InvalidOperationException($"`{signature}` never closes.");
+    }
+
+    /// <summary>The four places a fight fixture has to be named, by the phrase each list opens with.</summary>
+    private static readonly (string Name, string Anchor)[] FightLists =
+    {
+        ("the mode allow-list", "if (sm is \"vfx\" or \"forge\""),
+        ("the fight family", "if (sm is \"fight\" or \"welcome\""),
+        ("the worn-gear list", "if (sm is \"fightgear\" or \"fightswing\""),
+        ("the welcome-toast exclusion", "if (sm is not (\"fightreport\""),
+    };
+
+    [Fact]
+    public void test_fightfade_is_registered_in_every_game1_list_and_in_the_capture_header()
+    {
+        var game1 = Game1();
+        foreach (var (name, anchor) in FightLists)
+            Assert.Contains("\"fightfade\"", ListAt(game1, anchor));
+
+        // ...and it is a real handler: a seeded death, then the transition posed and HELD at RH_SHOT_T.
+        var handler = BodyOf(game1, "else if (sm == \"fightfade\")");
+        Assert.Contains("_expedition.DevRunToDeath(_hunter)", handler);
+        Assert.Contains("_expedition.DevPoseDeathTransition(", handler);
+        Assert.Contains("RH_SHOT_T", handler);
+
+        var header = CaptureHeader();
+        Assert.Contains("fightfade", header);
+        Assert.Contains("fightfall", header);
+        Assert.Contains("RH_SHOT_REDUCED", header);
+    }
+
+    [Fact]
+    public void test_fightregroup_is_gone_from_the_rig_with_the_plate_it_photographed()
+    {
+        // The state it posed — a plate naming the old descent over a live new one — no longer exists, and
+        // a fixture that poses nothing is the rig's own anti-pattern.
+        var game1 = Game1();
+        foreach (var (name, anchor) in FightLists)
+            Assert.DoesNotContain("\"fightregroup\"", ListAt(game1, anchor));
+        Assert.DoesNotContain("fightregroup", game1);
+        Assert.DoesNotContain("DevRunToRegroup", game1);
+        Assert.DoesNotContain("fightregroup", CaptureHeader());
+
+        var hunt = HuntScreen();
+        Assert.DoesNotContain("DevRunToRegroup", hunt);
+        Assert.DoesNotContain("_devHoldFellPlate", hunt);
+    }
+
+    [Fact]
+    public void test_fightreport_photographs_the_open_log()
+    {
+        // The report's diagnostic has one surface now — the EXPEDITION LOG — so RH_SHOT_LIMIT's three
+        // verdicts are photographed there, the way `runlog` already opens it.
+        var handler = BodyOf(Game1(), "if (sm == \"fightreport\")");
+        Assert.Contains("RH_SHOT_LIMIT", handler);
+        Assert.Contains("_expedition.DevRunToDeath(_hunter, poseLimit: limit)", handler);
+        Assert.Contains("_expedition.ToggleLog();", handler);
+    }
+
+    [Fact]
+    public void test_the_death_transition_pose_is_held_every_frame_and_restarts_for_real_past_the_black()
+    {
+        var hunt = HuntScreen();
+        Assert.Contains("public void DevPoseDeathTransition(float t)", hunt);
+        // HELD like the arrival pose: the host's first live frame restarts the run on its Source push and
+        // every fall clock decays, so a value written once is gone by the shutter.
+        var update = BodyOf(hunt, "public void Update(GameTime time, Hunter hunter, float enemyBaseHealth, float enemyBaseDamage)");
+        Assert.Contains("HoldDeathPose();", update);
+        var hold = BodyOf(hunt, "private void HoldDeathPose()");
+        Assert.Contains("_devDeathPose is not { } t", hold);
+        Assert.Contains("_deathFadeIn = pose.FadeInClock;", hold);
+        Assert.Contains("_downedTimer = pose.DownedTimer;", hold);
+        // From the restart on, the descent under the black is the real one: StartRun ran, the hold is off.
+        var pose = BodyOf(hunt, "public void DevPoseDeathTransition(float t)");
+        Assert.Contains("DevHoldReport = false;", pose);
+        Assert.Contains("StartRun(", pose);
+        // ...and `fightfall` keeps its own hold: under DevShowFall the black never paints, whatever the clocks say.
+        Assert.Contains("private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(", hunt);
+    }
+
+    /// <summary>
+    /// THE FOUR DISPATCH POSES ARE FIGHT FIXTURES — a fight behind the chrome, so the envelope, its
+    /// unread mark and the panel are photographed over the screen a player actually has open. Each has
+    /// to be in all four lists or it poses nothing: the title, a naked Hunter, or a WELCOME BACK toast
+    /// over the very state the capture exists to show.
+    /// </summary>
+    [Fact]
+    public void test_the_dispatch_poses_are_registered_in_every_game1_list_and_in_the_capture_header()
+    {
+        var game1 = Game1();
+        foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover" })
+            foreach (var (name, anchor) in FightLists)
+                Assert.Contains($"\"{mode}\"", ListAt(game1, anchor));
+
+        // ...and the reveal-borne one is a lootforge fixture: the chest's cascade with a dispatch
+        // posted DURING it, which is where "the news waits" has to be proved.
+        Assert.Contains("\"chestdispatch\"", ListAt(game1, "if (sm is \"vfx\" or \"forge\""));
+
+        // THE INBOX IS WRITTEN UNDER THE RIG -- it is state. Only its surfacing is posed, so the
+        // fixtures seed real typed rows rather than suppressing production.
+        var handler = BodyOf(game1, "if (sm is \"dispatches\" or \"dispatchesempty\" or \"dispatchesunread\" or \"dispatcheshover\" or \"chestdispatch\")");
+        Assert.Contains("RH_SHOT_DISPATCH", handler);
+        Assert.Contains("PostDispatch(", handler);
+        Assert.Contains("OpenDispatches();", handler);
+
+        // ...and the two poses the real producers had quietly taken away. `dispatchesempty` is the ONE
+        // fixture whose subject is an inbox with nothing in it, and a socket opening and a champion
+        // joining post on its own facts one frame after it dresses; `read` means nothing is waiting, and
+        // the same producers put a red dot back. One refuses the post, the other re-asserts every frame.
+        Assert.Contains("if (CaptureRig && ShotMode == \"dispatchesempty\") return false;",
+                        BodyOf(game1, "private bool PostDispatch(Dispatch dispatch)"));
+        Assert.Contains("if (CaptureRig && string.Equals(Environment.GetEnvironmentVariable(\"RH_SHOT_DISPATCH\"), \"read\",", game1);
+        // The highlight and the letter in the pane are one row: opening a letter is what moves the cursor.
+        Assert.Contains("_dispatchCursorKey = _dispatchOpenKey = _inbox.Rows.Count > 0", handler);
+
+        // ...and `many` fills the column past its last row, so the scrollbar, the wheel and the
+        // keyboard's follow-the-cursor have a fixture at all. A list that fits in one column is why a
+        // scroll that could not scroll went unphotographed.
+        Assert.Contains("manyLetters", handler);
+        Assert.Contains("Regions.All.Where(", handler);
+        Assert.Contains("TraitCatalogue.All.Take(", handler);
+
+        // ...and a VOW is seeded BY NAME, because its sentence branches on how the vow arrived: the
+        // one the BUILD screen hands over is OFFERED TO YOU, every proved one REVEALED ITSELF. A
+        // fixture that can seed neither leaves one of the two sentences unphotographed.
+        Assert.Contains("Vows.ById(posedMail[\"vow.\".Length..])", handler);
+
+        var header = CaptureHeader();
+        foreach (var mode in new[] { "dispatches", "dispatchesempty", "dispatchesunread", "dispatcheshover", "chestdispatch" })
+            Assert.Contains(mode, header);
+        Assert.Contains("RH_SHOT_DISPATCH", header);
+        // ...and the dial is forwarded, or a caller setting it gets a picture of the default pose.
+        Assert.Contains("RH_SHOT_DISPATCH", Source("tools", "asset-pipeline", "capture.sh"));
+        // ...and the dial documents the vow keys, which are the only way either sentence is posed.
+        Assert.Contains("vow.<id>", Source("tools", "asset-pipeline", "capture.sh"));
+    }
+
+    /// <summary>
+    /// At 1 the pose lets go: the lift's last instant is held for one frame and the transition then ends on
+    /// its own clock, so the host crosses the fall's end -- the edge that hushes the coach -- on film. A pose
+    /// that jumped straight to the end state photographed READ THE LOG lit on the first lit frame, which is
+    /// the rig's doing and not play's.
+    /// </summary>
+    [Fact]
+    public void test_the_death_pose_at_one_lets_the_transition_end_on_its_own_clock()
+    {
+        var hold = BodyOf(HuntScreen(), "private void HoldDeathPose()");
+        var release = hold.IndexOf("if (t >= 1f) { _deathFadeIn = float.Epsilon; _devDeathPose = null; return; }", StringComparison.Ordinal);
+        var reassert = hold.IndexOf("_deathFadeIn = pose.FadeInClock;", StringComparison.Ordinal);
+        Assert.True(release >= 0, "the pose at 1 no longer lets the transition end on its own clock.");
+        Assert.True(release < reassert, "the release must come before the every-frame re-assert.");
+    }
+}

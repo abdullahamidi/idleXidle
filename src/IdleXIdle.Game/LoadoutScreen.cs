@@ -288,6 +288,10 @@ public sealed class LoadoutScreen
     /// <summary>What the world says about the next keystone socket, or "" when all three are open.</summary>
     public string NextSocketNote { get; set; } = "";
 
+    /// <summary>What the world charges for the NEXT skill slot — <c>Unlocks.NextSkillSlotNote</c>, set by the host.</summary>
+    /// <remarks>Empty once all four are open, exactly like <see cref="NextSocketNote"/>.</remarks>
+    public string NextSkillSlotNote { get; set; } = "";
+
     /// <summary>What the world says about the next Vow, or "" at the last one.</summary>
     public string NextVowNote { get; set; } = "";
     /// <summary>What each skill has earned by being used, and where the player spends it.</summary>
@@ -549,8 +553,27 @@ public sealed class LoadoutScreen
         }
         else height += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Body);
         _skillsOverflow = Math.Max(0, height + UiMetrics.Space(12) - SkillsRegion.Height);
+
+        // ── SHOW THE PLAYER THE DECISION THEY HAVE EARNED, ONCE. The skill's own tree — its variation
+        //    and its reinforcements — sits UNDER a library of thirteen tiles, so on any profile it
+        //    starts below the fold and the column has to be scrolled to reach it. Playtest 2026-09-09:
+        //    "the skill upgrade section wasn't understood at all; no one would have even looked at it
+        //    if I hadn't pointed it out... it's tucked away in a hidden spot, so players can't find
+        //    it." When the selected skill is holding an unspent level, the column scrolls to the tree
+        //    ONCE — the same one-shot the Vows column already uses — and never again for that skill,
+        //    so it cannot fight the player's own wheel.
+        if (SlotDef(_slot) is { } sel && SkillLevels.FreeOn(sel.Id) > 0 && _revealedTreeFor != sel.Id)
+        {
+            _revealedTreeFor = sel.Id;
+            _skillsScroll = _skillsOverflow;
+        }
+        else if (SlotDef(_slot) is not { } keep || SkillLevels.FreeOn(keep.Id) <= 0) _revealedTreeFor = null;
+
         _skillsScroll = Math.Clamp(_skillsScroll, 0, _skillsOverflow);
     }
+
+    /// <summary>The skill whose tree this screen has already scrolled to. One reveal per skill.</summary>
+    private string? _revealedTreeFor;
 
     // ── THE INSPECTOR: a scrolling body over an anchored refusal line, two text actions and the one button. ──
     private static int InsX => UiKit.ContentLeft(InspectorPanel);
@@ -635,6 +658,18 @@ public sealed class LoadoutScreen
 
     /// <summary>The width of four risk pips at this pip size, for laying a label beside them.</summary>
     private static int RiskPipsWidth(int pip) => pip * 4 + UiMetrics.Space(3) * 3;
+
+    /// <summary>
+    /// Is the screen's NEW SKILL SLOT reveal on screen right now? Set by the host every frame.
+    /// </summary>
+    /// <remarks>
+    /// The banner says a slot opened; this is what points at the slot. A steady accented outline on the
+    /// first empty row rather than a pulse: a pulse is a one-shot armed by an event, and this state can
+    /// last for days — the player may not open BUILD for a week. A steady outline also needs no motion
+    /// key, so nothing can be orphaned by the list scrolling under it, and Reduced Motion has nothing
+    /// to collapse. It goes when the reveal is acknowledged, because the host stops setting it.
+    /// </remarks>
+    public bool RevealingNewSlot { get; set; }
 
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
     internal Rectangle[] Spotlights(TourTarget target)
@@ -839,13 +874,26 @@ public sealed class LoadoutScreen
             if (moved)
             {
                 var onto = SlotUnder(hit);
+                if (from >= 0 && Loadout.IsSignatureSlot(from))
+                {
+                    _msg = "YOUR HUNTER'S OWN SKILL ALWAYS GOES FIRST.";
+                    Sound?.Play("sfx_error", 0.35f);
+                    return;
+                }
                 if (from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
                 {
-                    _slot = onto; _pick = Pick.Slot;
+                    // WHERE IT LANDED, not where it was dropped: a drag onto the signature's slot is
+                    // answered with the earliest place that exists, which is the one under it.
+                    var landed = Loadout.SignatureSlot == 0 && onto == 0 ? 1 : onto;
+                    _slot = landed; _pick = Pick.Slot;
                     Dirty = true; _buildRev++;
-                    PulseSlot(onto);
+                    PulseSlot(landed);
                     Sound?.Play("sfx_weave", 0.5f);
-                    _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
+                    _msg = landed == 0
+                        ? "FIRST IN LINE — IT WINS EVERY TIED BEAT."
+                        : landed == 1 && Loadout.SignatureSlot == 0
+                            ? "RIGHT BEHIND YOUR HUNTER'S OWN SKILL."
+                            : $"NOW SLOT {landed + 1}.";
                 }
                 return;
             }
@@ -868,7 +916,10 @@ public sealed class LoadoutScreen
             {
                 _slot = Loadout.AddSkill(); _pick = Pick.Slot; _vowListOpen = false;
                 Dirty = true; _buildRev++;
-                _msg = "PICK A SKILL FROM THE LIBRARY FOR THIS SLOT.";
+                var spare = KnownSkills().Count - skills.Count(sk => SkillCatalogue.Find(sk.SkillId) is not null);
+                _msg = spare > 0
+                    ? "PICK A SKILL FROM THE LIBRARY FOR THIS SLOT."
+                    : "YOU HAVE NO SPARE SKILL YET — LEARN ONE ON THE MASTERY TREE.";
             }
             return;
         }
@@ -956,14 +1007,7 @@ public sealed class LoadoutScreen
             _vowListReveal = 2;
             return;
         }
-        if (RespecText.Contains(hit) && _respecShown && SlotDef(_slot) is { } rd)
-        {
-            SkillLevels.Respec(rd.Id);
-            Dirty = true; _buildRev++;
-            if (_pick == Pick.Reinforcement) _pick = Pick.Slot;
-            _msg = $"{rd.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
-            return;
-        }
+        if (RespecText.Contains(hit) && _respecShown && SlotDef(_slot) is { } rd) { DoRespec(rd); return; }
         if (CopyText.Contains(hit))
         {
             var code = IdleXIdle.Core.Persistence.ShareCodes.EncodeBuild(
@@ -992,6 +1036,48 @@ public sealed class LoadoutScreen
         }
     }
 
+    /// <summary>
+    /// Is the primary button a RESPEC right now?
+    /// </summary>
+    /// <remarks>
+    /// Standing on a variation you have already chosen, or a reinforcement you already own, the biggest
+    /// control on the screen had nothing to do: it read CHOSEN or OWNED and sat dead. The one action
+    /// actually available there — giving the levels back, which is free, and which the refusal line
+    /// beside it kept advertising — was a line of grey caption text in the column's corner. Playtest
+    /// 2026-09-09: <i>"the respec button is not visible. It is not even a button, it is clickable text.
+    /// We could put it where CHOSEN is."</i> So it is there, and the dead label is gone from the two
+    /// places that could always be answered.
+    /// <para>
+    /// One predicate, read by both <see cref="Primary"/> and <see cref="Commit"/>, so the button's verb
+    /// and the deed behind it cannot come apart — the failure the whole Primary/Commit split exists to
+    /// prevent.
+    /// </para>
+    /// </remarks>
+    private bool RespecIsThePrimary()
+    {
+        if (SlotDef(_slot) is not { } def || SkillLevels.SpentOn(def.Id) <= 0) return false;
+        return _pick switch
+        {
+            Pick.Variation => _pickIndex < def.Variations.Count
+                              && SkillLevels.VariationOf(def)?.Name == def.Variations[_pickIndex].Name,
+            Pick.Reinforcement => SkillLevels.VariationOf(def) is { } v
+                                  && _pickIndex < v.Reinforcements.Count
+                                  && SkillLevels.HasReinforcement(def.Id, v.Reinforcements[_pickIndex].Name),
+            _ => false,
+        };
+    }
+
+    /// <summary>Give this skill's spent levels back, and say so. The one respec path.</summary>
+    private void DoRespec(SkillDef def)
+    {
+        SkillLevels.Respec(def.Id);
+        Dirty = true;
+        _buildRev++;
+        if (_pick is Pick.Reinforcement or Pick.Variation) _pick = Pick.Slot;
+        _msg = $"{def.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
+        Sound?.Play("sfx_click", 0.4f);
+    }
+
     /// <summary>The primary button's verb for the current selection, and whether it may be pressed.</summary>
     private (string Label, bool Enabled, string Refusal) Primary()
     {
@@ -1017,6 +1103,12 @@ public sealed class LoadoutScreen
                 }
                 if (_slot >= skills.Count) return ("EQUIP", false, "PICK A SLOT ON THE LEFT FIRST.");
                 if (skills[_slot].SkillId == def.Id) return ($"EQUIPPED IN SLOT {_slot + 1}", false, "");
+                // THE SIGNATURE'S SLOT IS NOT THE PLAYER'S TO OVERWRITE, and the button has to say so
+                // BEFORE it is pressed. PlayerLoadout.SetSkill refuses the write, so an enabled EQUIP
+                // here was a promise the model would not keep: the press fell through to Commit's
+                // catch-all "THAT SKILL CANNOT GO THERE", which names no rule and reads as a fault.
+                if (Loadout.IsSignatureSlot(_slot))
+                    return ($"EQUIP TO SLOT {_slot + 1}", false, "THAT SLOT HOLDS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.");
                 // LAW 13: one slot per skill. The button says WHERE it already is, in words, rather than
                 // going grey without a reason — the loadout itself refuses the write regardless.
                 if (Loadout.IndexOfSkill(def.Id) is var other && other >= 0)
@@ -1028,7 +1120,10 @@ public sealed class LoadoutScreen
                 if (SlotDef(_slot) is not { } def || _pickIndex >= def.Variations.Count) return ("", false, "");
                 var v = def.Variations[_pickIndex];
                 var chosen = SkillLevels.VariationOf(def);
-                if (chosen?.Name == v.Name) return ("CHOSEN", false, "");
+                if (chosen?.Name == v.Name)
+                    return RespecIsThePrimary()
+                        ? ("RESPEC — TAKE THE LEVELS BACK", true, "")
+                        : ("CHOSEN", false, "");
                 if (chosen is not null) return ($"CHOOSE {v.Name}", false, $"{def.Name} IS {chosen.Name}. RESPEC TO CHANGE — IT IS FREE.");
                 if (SkillLevels.FreeOn(def.Id) < 1)
                     return ($"CHOOSE {v.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
@@ -1038,7 +1133,10 @@ public sealed class LoadoutScreen
             {
                 if (SlotDef(_slot) is not { } def || SkillLevels.VariationOf(def) is not { } v || _pickIndex >= v.Reinforcements.Count) return ("", false, "");
                 var r = v.Reinforcements[_pickIndex];
-                if (SkillLevels.HasReinforcement(def.Id, r.Name)) return ("OWNED", false, "");
+                if (SkillLevels.HasReinforcement(def.Id, r.Name))
+                    return RespecIsThePrimary()
+                        ? ("RESPEC — TAKE THE LEVELS BACK", true, "")
+                        : ("OWNED", false, "");
                 if (SkillLevels.FreeOn(def.Id) < 1)
                     return ($"TAKE {r.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
                 return ($"TAKE {r.Name}", true, "");
@@ -1053,6 +1151,11 @@ public sealed class LoadoutScreen
             default:
             {
                 if (!SlotFilled(_slot)) return ("REMOVE FROM SLOT", false, "");
+                // ...and the same rule on the way out, for the same reason: Commit already refuses the
+                // signature, so leaving the button enabled here made the refusal a surprise instead of
+                // a state the player could read off the control.
+                if (Loadout.IsSignatureSlot(_slot))
+                    return ("REMOVE FROM SLOT", false, "THIS IS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.");
                 if (skills.Count <= 1) return ("REMOVE FROM SLOT", false, "THE LAST SKILL STAYS — A HUNTER NEEDS ONE.");
                 return ("REMOVE FROM SLOT", true, "");
             }
@@ -1071,6 +1174,9 @@ public sealed class LoadoutScreen
     {
         var (_, enabled, _) = Primary();
         if (!enabled) return;
+        // THE BUTTON'S OWN VERB FIRST. On a taken variation or an owned reinforcement the primary IS
+        // the respec, and falling through to the switch below would try to buy a thing already bought.
+        if (RespecIsThePrimary() && SlotDef(_slot) is { } respecDef) { DoRespec(respecDef); return; }
         switch (_pick)
         {
             case Pick.Library:
@@ -1111,6 +1217,15 @@ public sealed class LoadoutScreen
                 if (Loadout.ToggleKeystone(_pickKeystoneId, DiscoveredKeystones)) { Dirty = true; _buildRev++; _msg = ""; }
                 break;
             default:
+                // THE SIGNATURE IS NOT THE PLAYER'S TO CLEAR. The loadout refuses it, and a screen that
+                // said "SLOT CLEARED." over a slot that had not cleared would be the worse half of the
+                // bug: a rule the player cannot see, reported as an action they did.
+                if (Loadout.IsSignatureSlot(_slot))
+                {
+                    _msg = "THIS IS YOUR HUNTER'S OWN SKILL. IT CANNOT BE CHANGED.";
+                    Sound?.Play("sfx_error", 0.35f);
+                    break;
+                }
                 Loadout.RemoveSkill(_slot);
                 _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
                 Dirty = true; _buildRev++; _msg = "SLOT CLEARED.";
@@ -1130,7 +1245,7 @@ public sealed class LoadoutScreen
 
     // ── DRAW ────────────────────────────────────────────────────────────────────────────────────────────
     private string? _tip;
-    private Point _tipAt;
+    private Rectangle _tipAt;
     private int _changeVowY;
     private bool _changeVowShown;
     private int _vowListTop;
@@ -1144,7 +1259,7 @@ public sealed class LoadoutScreen
     /// </summary>
     private float _vowPower = 1f;
 
-    public void Draw(SpriteBatch b, Point mouse, bool clicked)
+    public void Draw(SpriteBatch b, Point mouse)
     {
         var hit = mouse;
         _tip = null;
@@ -1170,7 +1285,8 @@ public sealed class LoadoutScreen
         if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
     }
 
-    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit) && _carrying == Carry.None) { _tip = text; _tipAt = hit; } }
+    /// <summary>Remember a row's explanation, and THE ROW — the tip hangs off it, never off the cursor.</summary>
+    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit) && _carrying == Carry.None) { _tip = text; _tipAt = r; } }
 
     // ── YOUR LOADOUT ────────────────────────────────────────────────────────────────────────────────────
     private void DrawLoadout(SpriteBatch b, Point hit)
@@ -1189,6 +1305,9 @@ public sealed class LoadoutScreen
         var known = KnownSkills();
         var region = ListRegion;
         var scrolling = _loadOverflow > 0;
+        // Marked on the first EMPTY row only, and cleared once it is drawn, so three owed slots never
+        // light three rows at once — the reveal itself is one at a time and its light matches it.
+        var revealAt = RevealingNewSlot;
         if (scrolling) BeginClip(b, region);
         foreach (var (slot, row, passive, first) in _rows)
         {
@@ -1196,7 +1315,15 @@ public sealed class LoadoutScreen
                 _ui.TextBig(b, passive ? "PASSIVE — ALWAYS ON" : "ACTIVE — TAKES A TURN", row.X, row.Y - UiTypography.Pitch(UiTypography.Secondary) - 2, Slate, UiTypography.Secondary);
             if (row.Bottom <= region.Y || row.Y >= region.Bottom) continue;   // scrolled clear of the region
             var shown = In(row, region);
-            if (slot < 0) { DrawEmptyRow(b, row, shown, hit); continue; }
+            if (slot < 0)
+            {
+                DrawEmptyRow(b, row, shown, hit);
+                // THE ROW THE REVEAL IS ABOUT. The banner at the top of the screen says a slot opened;
+                // without this the player has to work out which of the rows it means. The FIRST empty
+                // one, once, in the same gold the trait screen marks a landing slot with.
+                if (revealAt && slot < 0) { Outline(b, shown, Gold, 3); revealAt = false; }
+                continue;
+            }
 
             var s = skills[slot];
             var def = SkillCatalogue.Find(s.SkillId);
@@ -1238,9 +1365,16 @@ public sealed class LoadoutScreen
             var line3 = row.Bottom - UiMetrics.Space(8) - UiTypography.Body;
             if (!filled || def is null)
             {
+                // AN EMPTY ROW WITH NOTHING TO PUT IN IT IS NOT AN INVITATION. A shared skill is
+                // taught by a road on the mastery tree, and until one is the library holds a single
+                // usable tile — so a row that says PICK A SKILL sends the player to a wall of locks
+                // (playtest 2026-09-09). The row says which door opens it instead.
+                var spare = KnownSkills().Count - Loadout.Skills.Count(sk => SkillCatalogue.Find(sk.SkillId) is not null);
                 _ui.Icon(b, "ui_slot_locked", gbox, Slate);
-                _ui.TextBig(b, "EMPTY SLOT", tx, row.Y + pad, UiInk.Empty, UiTypography.Headline);
-                _ui.TextBig(b, _ui.ShortenBig("PICK A SKILL FROM THE LIBRARY", right - tx, UiTypography.Secondary), tx, row.Y + pad + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
+                _ui.TextBig(b, spare > 0 ? "EMPTY SLOT" : "NO SKILL FOR IT YET", tx, row.Y + pad, UiInk.Empty, UiTypography.Headline);
+                _ui.TextBig(b, _ui.ShortenBig(spare > 0 ? "PICK A SKILL FROM THE LIBRARY" : "LEARN ONE ON THE MASTERY TREE",
+                                              right - tx, UiTypography.Secondary),
+                            tx, row.Y + pad + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
                 continue;
             }
             _ui.Icon(b, $"icon_skill_{def.Id}", gbox, col);
@@ -1322,6 +1456,11 @@ public sealed class LoadoutScreen
                 var nameW = _ui.MeasureBig(vname, UiTypography.Body);
                 if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spare;
                 if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = spareShort;
+                // ...AND THE LAST RUNG DROPS THE TAIL WHOLE RATHER THAN CUTTING THE NAME. The ladder's
+                // own rule two lines up is that the Source word stays because it is identity — so is the
+                // VARIATION's name, and at UI SCALE 150 this row was ending on "NU…" for NUMB while
+                // still printing "0/3" beside it. A count is worth less than the thing it counts.
+                if (nameW + fixedW + _ui.MeasureBig(tail, UiTypography.Body) > room) tail = "";
                 vname = _ui.ShortenBig(vname, room - fixedW - _ui.MeasureBig(tail, UiTypography.Body), UiTypography.Body);
                 _ui.TextBig(b, vname, x3, y3, Bone, UiTypography.Body); x3 += _ui.MeasureBig(vname, UiTypography.Body);
                 _ui.TextBig(b, dot, x3, y3, Slate, UiTypography.Body); x3 += _ui.MeasureBig(dot, UiTypography.Body);
@@ -1448,7 +1587,9 @@ public sealed class LoadoutScreen
         // Shortened against the room LEFT of it, so a bigger profile trims the sentence instead of printing it
         // through the word SKILLS.
         var headRoom = SkillsW - _ui.MeasureBig("SKILLS", UiTypography.Secondary) - UiMetrics.Space(24);
-        _ui.TextRightBig(b, _ui.ShortenBig(learnedHead, headRoom, UiTypography.Secondary), SkillsX + SkillsW, SkillsHeadY, Slate, UiTypography.Secondary);
+        // "…MORE ON THE MAST…" pointed at nothing. The head shrinks rather than losing the door it names.
+        var headRung = _ui.FitRung(learnedHead, headRoom, UiTypography.Secondary);
+        _ui.TextRightBig(b, _ui.ShortenBig(learnedHead, headRoom, headRung), SkillsX + SkillsW, SkillsHeadY, Slate, headRung);
 
         // Everything under the head is one column that scrolls when the library and the tree together are
         // taller than the plate (150 %, and 125 % with a tree open) — nothing is shrunk to fit (brief §17).
@@ -1530,12 +1671,19 @@ public sealed class LoadoutScreen
             var tail = isEquipped ? _ui.MeasureBig(badgeText, UiTypography.Caption) + edgePad : 0;
             var nameX = tile.X + nameLeft;
             var nameY = nameY0(tile);
-            _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Right - edgePad - tail - nameX, UiTypography.Body), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
+            // THE SKILL'S NAME IS THE TILE'S ONLY IDENTIFIER. "NUMB" became "NU…" in 63 px at 150 %.
+            var nameRoomT = tile.Right - edgePad - tail - nameX;
+            var nameRungT = _ui.FitRung(def.Name, nameRoomT, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(def.Name, nameRoomT, nameRungT), nameX, nameY, have ? (isEquipped ? Gold : Bone) : Slate, nameRungT);
             var sub = have ? (def.TakesABeat ? "ACTIVE" : "PASSIVE") : LockLine(def, longLock);
             // The state line at Secondary, never fine print, and never the refusal red: a kept level is
             // good news (build-04). The lock badge and the Slate name already say LOCKED.
             var subInk = have ? Slate : Bone;
-            _ui.TextBig(b, _ui.ShortenBig(sub, tile.Right - edgePad - tail - nameX, UiTypography.Secondary), nameX, subY, subInk, UiTypography.Secondary);
+            // ACTIVE / PASSIVE / LOCKED · LEVEL n — a STATE, and a state cut in half says nothing:
+            // at UI SCALE 150 this tile read "ACTI…" and "PASSI…" in 75 px. It steps down the ladder.
+            var subRoom = tile.Right - edgePad - tail - nameX;
+            var subRung = _ui.FitRung(sub, subRoom, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(sub, subRoom, subRung), nameX, subY, subInk, subRung);
             if (isEquipped) _ui.TextRightBig(b, badgeText, tile.Right - edgePad, tile.Y + (tile.Height - UiTypography.Caption) / 2, Gold, UiTypography.Caption);
             Tip(shown, hit, have ? $"{def.Name} — {def.Line}" : LockTip(def));
         }
@@ -1698,7 +1846,10 @@ public sealed class LoadoutScreen
                 // name gives way to the state, so the two never print through each other at a bigger profile.
                 var chipState = owned ? "OWNED" : can ? "READY" : taken ? $"LEVEL {level + 1}" : "CHOOSE FIRST";
                 var chipRoom = chip.Width - chipPad * 2 - _ui.MeasureBig(chipState, UiTypography.Caption) - UiMetrics.Space(10);
-                _ui.TextBig(b, _ui.ShortenBig(r.Name.ToUpperInvariant(), chipRoom, UiTypography.Secondary), chip.X + chipPad, chip.Y + (chip.Height - UiTypography.Secondary) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, UiTypography.Secondary);
+                // A REINFORCEMENT'S NAME is what the player is choosing between — "PUNCH THR…" is not a
+            // choice, it is a riddle. The chip's word shrinks; the chip does not eat it.
+            var rRung = _ui.FitRung(r.Name.ToUpperInvariant(), chipRoom, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(r.Name.ToUpperInvariant(), chipRoom, rRung), chip.X + chipPad, chip.Y + (chip.Height - rRung) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, rRung);
                 _ui.TextRightBig(b, chipState, chip.Right - chipPad, chip.Y + (chip.Height - UiTypography.Caption) / 2, owned ? Met : can ? Gold : Slate, UiTypography.Caption);
                 Tip(shownChip, hit, $"{r.Name} — {r.Line}");
             }
@@ -1782,10 +1933,12 @@ public sealed class LoadoutScreen
         // is free and reversible, and it stays calm (§44).
         if (_respecShown)
         {
-            var over = RespecText.Contains(hit);
-            var press = Down(over);
-            _ui.TextBig(b, "RESPEC — FREE", RespecText.X, RespecText.Y + actionTextY + (press ? 1 : 0),
-                        Color.Lerp(Slate, Bone, Lift(RespecText, over)) * (press ? 0.75f : 1f), UiTypography.Secondary);
+            // ...AND THIS ONE IS A BUTTON NOW. It was grey caption text in a corner, at the size the
+            // game uses for column heads, and it went unfound (playtest 2026-09-09). COPY BUILD CODE
+            // stays a text action beside it because it is a convenience; giving a skill's levels back
+            // is a decision, and a decision gets a control. Still calm and still Secondary — §44's rule
+            // is that a free, reversible action does not shout, not that it hides.
+            _ui.Button(b, RespecText, "RESPEC — FREE", hit, false, true, ButtonStyle.Secondary);
             Tip(RespecText, hit, "Give this skill's levels back. Free, and it keeps every level it has earned.");
         }
         {
@@ -1984,6 +2137,15 @@ public sealed class LoadoutScreen
                     Line($"EQUIP REPLACES {replacing.Name.ToUpperInvariant()} IN SLOT {_slot + 1}", Slate, UiTypography.Secondary);
             }
             _respecShown = slotOf >= 0 && have && SkillLevels.SpentOn(def.Id) > 0;
+
+            // HOW MANY SLOTS THIS HUNTER HAS, AND WHAT OPENS THE NEXT. The ladder was re-gated on the
+            // mastery roads (playtest 2026-09-09: "we had four skill slots unlocked before we even had
+            // the skills"), and then the gate said nothing anywhere — the sentence for it was written
+            // and tested and had no caller at all. It belongs beside the slot it is about, and it goes
+            // quiet the moment the fourth slot opens.
+            if (_pick == Pick.Slot && NextSkillSlotNote.Length > 0)
+                Line($"SKILL SLOTS {skills.Count} / {Loadout.SkillCapacity} — {NextSkillSlotNote}",
+                     Slate, UiTypography.Secondary, 2);
 
             // THE VOWS — the validator block, and it asks the BUILD, not this row.
             //

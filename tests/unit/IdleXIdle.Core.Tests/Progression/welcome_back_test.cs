@@ -1,3 +1,4 @@
+﻿using System.Linq;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Core.Warrens;
@@ -26,7 +27,16 @@ public class welcome_back_test
     public void test_zero_figures_are_omitted_not_printed()
     {
         var w = new WelcomeSummary(3600, Hunt(gleam: 11320, waves: 47, falls: 0, deepest: 41), new WarrenYield(7100, 1240, 0, 0), WarrenOpen: true);
-        Assert.Equal(new[] { "+11,320 GLEAM", "47 WAVES CLEARED", "DEEPEST WAVE 41" }, w.HuntParts());
+
+        // THE PANEL IS A RESULTS GRID SINCE 2026-09-09, so the rule is pinned on the tiles: a figure
+        // that did not happen gets no tile at all, rather than a tile reading zero. Falls is zero here
+        // and Essence and Scrap are zero, and none of the three may appear.
+        Assert.Equal(new[] { "47", "11,320", "41" }, w.HuntTiles().Select(t => t.Value));
+        Assert.Equal(new[] { WelcomeFigure.Waves, WelcomeFigure.Gleam, WelcomeFigure.Deepest },
+                     w.HuntTiles().Select(t => t.Figure));
+        Assert.Equal(new[] { WelcomeFigure.Gleam, WelcomeFigure.Dust }, w.WarrenTiles().Select(t => t.Figure));
+
+        // ...and the Warren screen's own inline sentence still says the same two figures its own way.
         Assert.Equal(new[] { "+7,100 GLEAM", "+1,240 DUST" }, w.WarrenParts());
     }
 

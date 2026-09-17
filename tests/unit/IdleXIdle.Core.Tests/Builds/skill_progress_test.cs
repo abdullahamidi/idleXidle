@@ -36,7 +36,11 @@ public class SkillProgressTests
 
         var thresholds = new List<int>();
         var last = 0;
-        for (var wave = 1; wave <= 200; wave++)
+        // Past the last rung of the curve, so the walk really does reach MaxLevel. The curve is a
+        // TABLE now (SkillProgress.WavesForLevel) rather than floor(sqrt(uses)/2): the old one topped
+        // out at 64 waves — six minutes of watched play for a skill's whole identity — and this loop
+        // stopped at 200 because that was already three times more than it needed.
+        for (var wave = 1; wave <= SkillProgress.UsesForLevel(SkillProgress.MaxLevel) + 10; wave++)
         {
             p.RecordWave(Hammer.Id);
             var now = p.LevelOf(Hammer.Id);
@@ -44,10 +48,17 @@ public class SkillProgressTests
         }
 
         Assert.Equal(SkillProgress.MaxLevel, last);
-        // A square root, so each level costs more than the one before it — the shape a wall should have.
+        // Each level costs more than the one before it — the shape a wall should have, and the one
+        // property the table has to keep whatever numbers are in it.
         for (var i = 1; i < thresholds.Count; i++)
             Assert.True(thresholds[i] - thresholds[i - 1] > thresholds[i - 1] - (i >= 2 ? thresholds[i - 2] : 0),
                 $"level {i + 1} cost no more than level {i}: {string.Join(", ", thresholds)}");
+
+        // AND THE TABLE IS THE CURVE. A formula that happened to agree with it would drift the first
+        // time either moved; this asserts the one against the other.
+        for (var level = 1; level <= SkillProgress.MaxLevel; level++)
+            Assert.Equal(level, SkillProgress.LevelFor(SkillProgress.UsesForLevel(level)));
+        Assert.Equal(0, SkillProgress.LevelFor(SkillProgress.UsesForLevel(1) - 1));
     }
 
     [Fact]

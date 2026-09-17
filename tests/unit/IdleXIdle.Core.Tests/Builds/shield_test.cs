@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Prestige;
@@ -176,32 +177,93 @@ public class ShieldTests
         Assert.InRange(metrics.ShieldAbsorbed, 40f, 60f);
     }
 
-    // ── 6, 7. WAVE-LOCAL ─────────────────────────────────────────────────────────────────────────
+    // ── 6, 7. RUN-LOCAL: IT CARRIES, AND IT SETTLES ─────────────────────────────────────────────
 
     [Fact]
-    public void test_shield_resets_at_the_start_of_every_wave()
+    public void test_half_of_a_shield_carries_into_the_next_wave()
     {
+        // THE RULE CHANGED ON 2026-09-09, on the designer's call: "let the shield carry between
+        // waves, and with that carry let the shield from sources drop, so that people who build
+        // purely for shield can use it as a win condition." It was wave-local with STANDING PLATE as
+        // the one exception; it is half-carried for everybody now.
         var champ = Fresh(10_000);
         champ.GainShield(400f);
-        Assert.Equal(400f, champ.CurrentShield);
 
-        // A wave with no shield source at all: the reset must clear what was carried in.
+        // A wave with no shield source at all: what is left is halved, not cleared.
         Fight(champ, Bare(), waveMs: 300);
-        Assert.Equal(0f, champ.CurrentShield);
+        Assert.Equal(200f, champ.CurrentShield);
     }
 
     [Fact]
-    public void test_wave_start_shield_is_granted_after_the_reset()
+    public void test_a_repeated_grant_settles_at_twice_itself_instead_of_climbing()
+    {
+        // WHY HALF AND NOT ALL, as arithmetic. A grant of G every wave under a carry of c settles at
+        // G/(1-c); at c = 1/2 that is exactly 2G, and it STOPS there. A whole carry would climb to the
+        // cap from any grant at all, which is what the wave-local rule was written to prevent — the
+        // half is what keeps that argument true while still letting a shield build ramp.
+        var champ = Fresh(10_000);
+        var build = WithShape(new SkillShape { WaveStartShieldFraction = 0.06f });   // 600 a wave
+        for (var w = 0; w < 12; w++) Fight(champ, build, waveMs: 300);
+
+        // Twice the grant, and nowhere near the cap (which is half the pool: 5,000).
+        Assert.InRange(champ.CurrentShield, 1_150f, 1_250f);
+        Assert.True(champ.CurrentShield < ShieldRules.CapFor(champ.MaxHealth));
+    }
+
+    [Fact]
+    public void test_standing_plate_carries_it_whole_and_reaches_the_cap()
+    {
+        // THE TRAIT'S NEW JOB. It used to mean "you carry half instead of nothing"; with everybody
+        // carrying half it would have been a downgrade, so it means "you carry all instead of half".
+        // A whole carry is the one setting that climbs, and the cap is what stops it — which is the
+        // win condition the change was asked for: half a health pool that refills itself.
+        var champ = Fresh(10_000);
+        var build = WithShape(new SkillShape
+        {
+            WaveStartShieldFraction = 0.06f,
+            Traits = new TraitRules(ShieldCarryFraction: 1f),
+        });
+        for (var w = 0; w < 40; w++) Fight(champ, build, waveMs: 300);
+
+        Assert.Equal(ShieldRules.CapFor(champ.MaxHealth), champ.CurrentShield);
+    }
+
+    [Fact]
+    public void test_a_death_is_where_the_carry_ends()
+    {
+        // THE BOUNDARY THAT MAKES THE CARRY SAFE, and it is load-bearing now in a way it was not
+        // before: while shield was wave-local a death reset it as a side effect of every wave doing
+        // so. Now the run is what holds it, and the thing that ends a run has to end the shield too.
+        //
+        // Descent.StartRun mints a fresh Champion, so this asks the descent rather than the battle:
+        // no code anywhere carries a shield across the object that owns it.
+        var descent = new Descent { Rng = new Random(5) };
+        var build = new Build();
+        build.Shape = new SkillShape { WaveStartShieldFraction = 0.2f };
+        var hunter = new Hunter();
+
+        descent.StartRun(build, hunter, 400f, 4f);
+        descent.PushWave();
+        Assert.True(descent.Champion!.CurrentShield > 0f, "the fixture never raised a shield to carry");
+
+        // The next descent is a new champion, and a new champion holds nothing.
+        descent.StartRun(build, hunter, 400f, 4f);
+        Assert.Equal(0f, descent.Champion!.CurrentShield);
+    }
+
+    [Fact]
+    public void test_wave_start_shield_is_granted_on_top_of_what_carried()
     {
         var champ = Fresh(1_000);
-        champ.GainShield(999f);   // carried in, and must not survive
+        champ.GainShield(200f);   // carried in: half of it, 100, survives the boundary
         var build = WithShape(new SkillShape { WaveStartShieldFraction = 0.12f });
         var (_, events, _) = Fight(champ, build, waveMs: 300);
 
-        // Exactly one grant, of exactly 12% — not the carried figure, and not both.
+        // Exactly one grant, of exactly 12% — the carry is not a grant and raises no event.
         var gains = events.Where(e => e.Kind == BattleEventKind.ShieldGained).ToList();
         Assert.Single(gains);
         Assert.Equal(120, gains[0].Amount);
+        Assert.Equal(220f, champ.CurrentShield);
     }
 
     // ── 8. SHIELD DOES NOT FEED REPAY ────────────────────────────────────────────────────────────

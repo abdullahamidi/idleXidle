@@ -69,7 +69,7 @@ public class pure_source_commitment_test
         var build = Woven(TestBuilds.Chosen(Signature, "OPEN HAND"));
 
         // Act / Assert — one decided skill agrees with itself, and that is not a commitment.
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.NotNull(build.Skills[0].Variation);
         Assert.Null(build.PureSource);
     }
@@ -277,7 +277,7 @@ public class pure_source_commitment_test
 
         // Assert — one skill fights, and it is not a commitment to anything.
         Assert.Empty(mastery.AvailableSkills());
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.Equal(Signature, build.Skills[0].Def.Id);
         Assert.Null(build.PureSource);
     }
@@ -295,7 +295,7 @@ public class pure_source_commitment_test
             Pick(Signature, passive: false), empty);
 
         // Assert
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.Null(build.PureSource);
     }
 
@@ -313,7 +313,7 @@ public class pure_source_commitment_test
             Pick(Signature, passive: false), Pick(SharedField, passive: true));
 
         // Assert
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.Null(build.PureSource);
     }
 
@@ -327,7 +327,7 @@ public class pure_source_commitment_test
 
         // Assert
         Assert.Equal(Source.Body, TestBuilds.SourceOf(AnotherSignature, "UPSET"));
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.Null(build.PureSource);
     }
 
@@ -339,7 +339,7 @@ public class pure_source_commitment_test
             Pick(Signature, passive: false), Pick("not_a_skill", passive: true));
 
         // Assert
-        Assert.Equal(1, build.Skills.Count);
+        Assert.Single(build.Skills);
         Assert.Null(build.PureSource);
     }
 

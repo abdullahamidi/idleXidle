@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
+// NO Microsoft.Xna.Framework.Input HERE, ON PURPOSE. This screen reads no input device of its own any
+// more: the host hands it a cursor, a click and a wheel delta in TakeInput, and nothing else. Adding
+// this using back is the first half of putting a device read into a paint — which is the bug this file
+// was combed for on 2026-09-12 (see TakeInput, and tools/check_draw_purity.py).
 using IdleXIdle.Core.Animation;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
@@ -37,7 +40,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class HuntScreen
+public sealed class HuntScreen : IFocusActors
 {
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -136,14 +139,6 @@ public sealed class HuntScreen
     private const float BreathBeat = Descent.BreathBeat;
     private const float WaveBreakSeconds = Descent.WaveBreakSeconds;
     private const float DownedSeconds = Descent.DownedSeconds;
-
-    /// <summary>How long the fallen banner outlives the recovery beat.</summary>
-    /// <remarks>
-    /// The banner replaced a full report popup whose exact complaint was "it closes before I can even
-    /// read it" — the recovery beat is 1.6 seconds. So the banner deliberately stays up into the next
-    /// descent, and the full report waits in the EXPEDITION LOG (L) for as long as the player needs.
-    /// </remarks>
-    private const float FellBannerSeconds = 7.5f;   // long enough to read two lines and decide to open the log
 
     // Spec §12: the hunter is the DOMINANT figure, bottom-centred at (560,735), ~390px tall; the enemy grounds
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
@@ -259,12 +254,7 @@ public sealed class HuntScreen
     private static bool ChampionFacesRight => ArtFacesLeft && ChampBox.Center.X < EnemyBox.Center.X;
     // 2026-08-22: the boss is an ordinary 8x512 strip on a clean canvas (design/art/arena-art-contract.md),
     // so the per-boss BODY-bounds table that used to live here (SrcTop / BodyX.. measured off the old
-    // crystal_lich render, with a "bleed streak" to trim) is gone. The name is the only per-boss fact left.
-    private static readonly Dictionary<string, string> BossNameFor = new()
-    {
-        ["thorn_regent"] = "THORN REGENT", ["forge_colossus"] = "FORGE COLOSSUS", ["void_reaper"] = "VOID REAPER",
-        ["crystal_lich"] = "CRYSTAL LICH", ["lumen_angel"] = "LUMEN ANGEL", ["spirit_matron"] = "SPIRIT MATRON",
-    };
+    // crystal_lich render, with a "bleed streak" to trim) is gone. Its name and art are EnemyPresentation's.
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
@@ -273,14 +263,10 @@ public sealed class HuntScreen
     private int _bossFrame;
     private string _bossName = "BOSS";
 
-    // package_03: one representative common enemy per Source (no Nature enemy shipped — a wisp stands in).
-    private static readonly Dictionary<Source, string> EnemyForSource = new()
-    {
-        [Source.Body] = "bonecrawler", [Source.Mind] = "soul_leech", [Source.Nature] = "wisp",
-        [Source.Machine] = "stone_sentinel", [Source.Shadow] = "shadeling", [Source.Spirit] = "rift_guardian",
-    };
+    // THE CAST IS EnemyPresentation's (2026-09-16): a body per REGION and ARCHETYPE, not one per Source
+    // scaled to four sizes. Nothing here keys art off a Source any more.
 
-    /// <summary>The enemy key back out of its strip key ("shadeling_idle_strip8_512" → "shadeling").</summary>
+    /// <summary>The enemy key back out of its strip key ("verdant_swarm_idle_strip8_512" → "verdant_swarm").</summary>
     private static string EnemyKeyOf(string stripKey)
     {
         var cut = stripKey.IndexOf("_idle_", StringComparison.Ordinal);
@@ -288,17 +274,6 @@ public sealed class HuntScreen
         return cut < 0 ? stripKey : stripKey[..cut];
     }
 
-    /// <summary>Display name for the wave's creature ("STONE SENTINEL"), from its art key.</summary>
-    private static string PrettyName(Source? src)
-        => src is { } s && EnemyForSource.TryGetValue(s, out var k)
-            ? k.Replace('_', ' ').ToUpperInvariant()
-            : "CORRUPTED";
-    // package_04: the six region bosses, matched to region theme.
-    private static readonly Dictionary<string, string> BossForRegion = new()
-    {
-        ["verdant_hollow"] = "thorn_regent", ["cinderworks"] = "forge_colossus", ["umbral_reach"] = "void_reaper",
-        ["still_archive"] = "crystal_lich", ["pale_choir"] = "lumen_angel", ["marrow_wastes"] = "spirit_matron",
-    };
 
     private readonly UiKit _ui;
     private readonly VfxPlayer _vfx;
@@ -338,11 +313,48 @@ public sealed class HuntScreen
     /// </summary>
     public int StartWave { get; set; }
 
+    /// <summary>
+    /// A wave the NEXT descent may open at for FREE — where an absence left the champion standing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest 2026-09-09: <i>"The game shouldn't start at Wave 1 every time it's launched. We need
+    /// to convince the player that the simulation continues even while the game is closed, picking up
+    /// from the middle of a run."</i> It always did simulate — <c>OfflineHunt</c> runs the real descent
+    /// against the real build — and then threw the depth away and opened the live run at wave 1.
+    /// </para>
+    /// <para>
+    /// <b>Separate from <see cref="StartWave"/> because one is PAID and this is not.</b> A checkpoint
+    /// costs 25 Memory Dust per wave, every descent, and StartRun charges it below; charging for a
+    /// resume would bill the player for time they already spent. The host consumes this after ONE
+    /// descent, so the checkpoint's real revenue — the second, third and twentieth run of a session —
+    /// is untouched, and a player cannot farm depth by closing and reopening the game.
+    /// </para>
+    /// </remarks>
+    public int FreeStartWave { get; set; }
+
+    /// <summary>How many descents this screen has begun. The host watches it to spend the free resume.</summary>
+    public int RunsStarted { get; private set; }
+
     /// <summary>Set by StartRun when a descent began at a checkpoint: the Dust the host must now take.</summary>
     public int CheckpointCharge { get; set; }
 
     /// <summary>Host-fed: the region is already conquered, so the banner says CONQUERED from wave one (review 2026-08-26).</summary>
     public bool RegionConquered { get; set; }
+
+    /// <summary>
+    /// The wave model the next descent is fought under. <see cref="ExpeditionTuning.Default"/> is the
+    /// game; the host hands in <see cref="ExpeditionTuning.UntilTheFirstBossFalls"/> while the career
+    /// has never felled a boss.
+    /// </summary>
+    /// <remarks>
+    /// READ AT <c>StartRun</c>, like the enemy baseline beside it — the tuning is captured readonly by
+    /// the expedition, so it can only change between descents. That is exactly the grain the FTUE needs:
+    /// the window it opens is measured in WAVES (<see cref="ExpeditionTuning.TutorialWaves"/>) and closes
+    /// on its own at the tutorial boss, so a descent that runs on past it is at full strength from wave
+    /// six without anything having to be revoked mid-run.
+    /// </remarks>
+    public ExpeditionTuning Tuning { get; set; } = ExpeditionTuning.Default;
 
     /// <summary>The quality this descent accumulated — the tilt a chest it drops should remember.</summary>
     /// <remarks>
@@ -470,9 +482,6 @@ public sealed class HuntScreen
     /// scale, a spacing compression and two clamps, and every place that re-derived it got a different
     /// answer from the one on screen.
     /// </remarks>
-    /// <summary>Set when the rail's reward buttons are pressed — the host navigates, the screen does not.</summary>
-    public bool WantsVault { get; set; }
-
     /// <summary>Set by the SPEND POINTS button — the host opens the MASTERY tree (the E screen).</summary>
     /// <remarks>
     /// The button used to set <see cref="WantsBuild"/> and the host sent the player to the BUILD
@@ -536,13 +545,11 @@ public sealed class HuntScreen
     // the right, and a red flash when the champion falls. Without these, waves passed silently and the
     // playtest note was exactly that — "I can't tell what's happening".
     private float _enemyEnter;    // 1 → 0: how far off-screen-right the new enemy still is
+    private const float EnemyEnterPerSecond = 1.25f;   // the slide takes ~0.8 s: long enough to read as an ARRIVAL, not an appearance
     private float _bannerTimer;   // 1.2 → 0: the "WAVE N CLEARED" flash
     private string _bannerText = "";
     private float _deathFlash;    // 1 → 0: red flash on a fall — drawn over the WHOLE canvas (see Draw)
-    private float _fellTimer;     // seconds left on the fallen banner (FellBannerSeconds)
-    private int _fellWave = 1;    // the wave the champion fell at, named by that banner
-    private RunReport? _fellReport;   // the run's report, for the plate's MAIN LIMIT line
-    private string _enemyArt = "";
+    private int _fellWave = 1;    // the wave the champion fell at — stamped on a trait the fall awakens
 
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
     public int Deepest => _descent.Deepest;
@@ -578,6 +585,8 @@ public sealed class HuntScreen
         public CalloutLane Lane;
         /// <summary>A tag for a callout that may be ADDED TO after it is posted — the hunter's own damage number.</summary>
         public int Id;
+        /// <summary>Part of a cleared wave's haul (ShowSpoils): the clear is not SHOWN while one is still rising.</summary>
+        public bool Spoil;
     }
 
     // ── THE HUNTER'S OWN DAMAGE NUMBER (2026-09-06). ─────────────────────────────────────────────────
@@ -726,11 +735,13 @@ public sealed class HuntScreen
     /// <remarks>
     /// Hand-measured against this screen's real layout (the hunter panel at (196,20,420,205), the stage
     /// header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for one skill, the right column
-    /// from x 1570 down to the CHEST FILTER row — closed, as a fresh save shows it — the champion in
-    /// ChampBox, the pack right of it) with a margin of about ten pixels so
-    /// the frame art is inside the light, not cut by it. A fresh save is the only state this ever draws
-    /// over, so the one-skill rail height is the right one. The fight screen is not inset, so these are
-    /// already chrome coordinates and the host adds no margin of its own.
+    /// from x 1570 down to the CHEST FILTER row, the champion in ChampBox, the pack right of it)
+    /// with a margin of about ten pixels so the frame art is inside the light, not cut by it. A
+    /// FRESH SAVE IS NO LONGER THE ONLY STATE THIS DRAWS OVER — LEARN THIS SCREEN offers the tour
+    /// at any depth, to a player with four skills docked and a full errand rail — so the figures
+    /// above survive only as the 100 % baseline, and every light whose extent moves with play is
+    /// read from what the screen LAST DREW. The fight screen is not inset, so these are already
+    /// chrome coordinates and the host adds no margin of its own.
     /// </remarks>
     // DERIVED from the rects the screen draws (UI polish P2): the card, the strip and the stage move
     // with the profile, and a light measured for the 100 % layout would fall beside them at 150 %.
@@ -748,7 +759,14 @@ public sealed class HuntScreen
             Inflated(StageHeader, 10),
         },
         TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
-        TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
+        // THE HEADER ALONE — where the region, the wave and the conquest bar are. Enemies above lights
+        // the creatures AND this, because a card about what is being fought wants both; a card about
+        // DEPTH wants only the panel the number is in.
+        TourTarget.StageHeader => new[] { Inflated(StageHeader, 10) },
+        // THE GLEAM CAPSULE ALONE — the card is titled GLEAM and says Gleam pays for training, and
+        // the light used to frame all three pills beside it (playtest 2026-09-09). Read from the row
+        // the host just drew, so the card's claim and the lit rectangle cannot drift apart again.
+        TourTarget.CurrencyPills => new[] { Inflated(Game1.GleamPillRect, 6) },
         TourTarget.Skills => new[] { Inflated(s_dockRect, 10) },
         // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
         // rail's height depends on how many errands are up, and a new game now holds the welcome chest,
@@ -758,6 +776,14 @@ public sealed class HuntScreen
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
         // The lesson card hangs under the header stack (UX V2 P0.7) — the same slot the toasts use.
         TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
+        // THE MEDALLION ITSELF — the same rectangle DrawLogButton draws from and UiKit.ClickedIn
+        // hit-tests, so the light and the click cannot drift apart. The first failure lesson (IT FELL) is
+        // the most important prompt in the game and it pointed at nothing until this arm existed.
+        TourTarget.LogButton => new[] { Inflated(LogButtonRect, 10) },
+        // THE ENVELOPE IN THE HOST'S OWN CHROME, read from the one rectangle Game1 paints and
+        // hit-tests — the pattern CurrencyPills set. The lesson about it sends the player nowhere, so
+        // a null Sends reads as "the HUNT" and this is where that resolution lands.
+        TourTarget.DispatchIcon => new[] { Inflated(Game1.DispatchButton, 10) },
         _ => Array.Empty<Rectangle>(),
     };
 
@@ -849,43 +875,26 @@ public sealed class HuntScreen
     // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
     private enum HuntOverlay { None, HunterDown, BossIncoming, WaveCleared }
+
     private HuntOverlay ResolveOverlay(bool welcome)
     {
         if (welcome) return HuntOverlay.None;
 
-        // THE FALL IS NOT COVERED ANY MORE. A full report panel used to slide over the body and was
-        // gone with the next descent — playtest ten: "it closes before I can even read it". The report
-        // lives in the EXPEDITION LOG (L) now; the fall shows only a short banner naming the wave and
-        // pointing there. DevShowFall keeps even the banner off, so the collapse can be photographed.
-        if (_mode == Mode.Downed)
-            return DevShowFall ? HuntOverlay.None : HuntOverlay.HunterDown;
-        // The banner outlives the recovery beat (FellBannerSeconds), so it stays readable into the
-        // next descent — and it outranks the wave banner, because the fall is the news.
-        if (_fellTimer > 0f) return HuntOverlay.HunterDown;
-        if (_bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
+        // THE FALL PAINTS NOTHING HERE, AND OUTRANKS EVERYTHING. Its presentation is the collapse, the
+        // flash and the black, all read from the clocks at the foot of Draw — never from this, which the
+        // host's toast can silence. Resolving it keeps BOSS INCOMING and WAVE CLEARED off the stage until
+        // the next descent is visible; the report itself waits in the EXPEDITION LOG (L).
+        if (DeathTransitionUp) return HuntOverlay.HunterDown;
+        if (DevBossCall || _bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
         if (DevForceBoss) return HuntOverlay.None;   // boss verification fixture: active combat, no wave banner
         if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
         return HuntOverlay.None;
     }
 
-    /// <summary>
-    /// The first-run lesson to show, or null once the player has outgrown the guide.
-    /// </summary>
-    /// <remarks>
-    /// Drawn on the HUNT screen because that is where a new player is actually looking — the guide's
-    /// first and most important sentence is that the fight needs nothing from them, and a prompt about
-    /// that belongs over the fight, not behind a menu they have no reason to open.
-    /// </remarks>
-    /// <summary>
-    /// UNUSED — the guide moved to the host as shared chrome (Game1.DrawHuntLesson / DrawHintSlot).
-    /// </summary>
-    /// <remarks>
-    /// Kept as a deliberate tombstone rather than deleted silently, because the capture fixtures and
-    /// the scene audits both reference "the guide on the hunt screen" and the next person to look for
-    /// it here should find out where it went rather than conclude the feature was cut.
-    /// </remarks>
-    [Obsolete("The guide is drawn by Game1 (DrawHuntLesson on the HUNT, DrawHintSlot on a menu screen). Setting this does nothing.")]
-    public TutorialStep? Guide { get; set; }
+    // THE GUIDE IS NOT HERE. It moved to the host as shared chrome — Game1.DrawHuntLesson over the
+    // fight, Game1.DrawHintSlot on a menu screen — and the settable property that stood here as a
+    // tombstone went with the tutorial ladder it was typed on. A capture fixture or an audit looking
+    // for "the guide on the hunt screen" wants OnboardingDirector and those two draws.
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
     /// <summary>
@@ -903,20 +912,63 @@ public sealed class HuntScreen
     public Source? EnemySource { get; set; }
 
     /// <summary>
-    /// FIXTURE ONLY (<c>RH_SHOT_SOURCE</c>): draw another region's creature without conquering to it.
+    /// FIXTURE ONLY (<c>RH_SHOT_SOURCE</c>): draw another region's creatures without conquering to it.
     /// </summary>
     /// <remarks>
-    /// The Source decides WHICH figure the arena draws, and the figures differ enormously in how
-    /// deeply their idle is letterboxed — which is what decides whether a box's ask for magnification
-    /// is one the renderer will grant. Only the rift guardian's idle (the Spirit region's) is
-    /// letterboxed deeply enough to be capped, and reaching that region legitimately means conquering
-    /// four. <see cref="EnemySource"/> itself cannot be posed: the host rewrites it from the active
-    /// region every frame. This overrides the ART, nothing else — no baseline, no roll, no reward.
+    /// Since the arena's cast is chosen by region and archetype (<see cref="EnemyPresentation"/>), a
+    /// Source pose picks the FAMILY of the region whose theme it is — Spirit draws the Pale Choir's —
+    /// and the wave glyph. <see cref="EnemySource"/> itself cannot be posed: the host rewrites it from
+    /// the active region every frame. This overrides the ART, nothing else — no baseline, no roll, no
+    /// reward.
     /// </remarks>
     public Source? DevEnemySource { get; set; }
 
-    /// <summary>Which creature the arena DRAWS: the rig's override, else the region's own Source.</summary>
+    /// <summary>The Source the wave strip falls back to when the wave carries none: the rig's, else the region's.</summary>
     private Source? ArtSource => DevEnemySource ?? EnemySource;
+
+    /// <summary>The region whose family the arena DRAWS: the rig's Source pose's, else the active one.</summary>
+    private string ArtRegion
+        => DevEnemySource is { } posed && EnemyPresentation.RegionOfTheme(posed) is { } posedRegion ? posedRegion : RegionId;
+
+    /// <summary>The look this wave's creatures wear — the region's body for the archetype the run rolled.</summary>
+    private EnemyLook CreatureLook => EnemyPresentation.For(ArtRegion, WaveArchetype);
+
+    private string? _warmedChampion;
+    private string? _warmedRegion;
+    private bool _warmedForcedBoss;
+
+    /// <summary>
+    /// Load, from Update, the art families this arena is about to draw: the champion's clips, the four
+    /// creatures of the region it draws, and that region's boss. The library defers every animation strip
+    /// to first use (<see cref="AssetLibrary.IsDeferred"/>); asking here keeps the decode out of Draw. Costs
+    /// one comparison a frame until the champion or the region changes.
+    /// </summary>
+    public void WarmArt()
+    {
+        var champion = Character.Id;
+        var region = ArtRegion;
+        if (champion == _warmedChampion && region == _warmedRegion && DevForceBoss == _warmedForcedBoss) return;
+        _warmedChampion = champion;
+        _warmedRegion = region;
+        _warmedForcedBoss = DevForceBoss;
+        var assets = _ui.Assets;
+        assets.Warm("char_" + champion + "_");   // every clip of this champion (Character.StripKey's family)
+        assets.Warm("fx_" + champion + "_");     // and its own effect strips (the forms it casts in)
+        var family = EnemyPresentation.For(region, Archetype.Swarm).RegionId;
+        foreach (var look in EnemyPresentation.Normals)
+            if (look.RegionId == family) assets.Warm(look.ArtKey + "_");
+        if (BossArt is { } boss) assets.Warm(boss.ArtKey + "_");
+    }
+
+    /// <summary>
+    /// The Source a creature in <paramref name="slot"/> really carries (Core's roll), else the wave's fallback.
+    /// </summary>
+    private Source? CreatureSource(int slot)
+    {
+        if (DevEnemySource is { } posed) return posed;
+        var comp = _run?.LastWaveCreatures;
+        return comp is not null && slot >= 0 && slot < comp.Count && comp[slot].Source is { } s ? s : ArtSource;
+    }
     /// <summary>The active region id — picks the boss creature (boss_&lt;region&gt;) on boss waves. Set by the host.</summary>
     public string RegionId { get; set; } = "";
     /// <summary>The active region's combat character — handed to the run so the enemy's bite tempo matches it.</summary>
@@ -960,6 +1012,183 @@ public sealed class HuntScreen
     public bool HasReward => _rewards.Count > 0;
     public WaveReward TakeReward() => _rewards.Dequeue();
 
+    // ── WHAT THE REST OF THE GAME MAY ASK ABOUT THE FIGHT ─────────────────────────────────────────
+    //
+    // The champion fights on EVERY screen (Game1 ticks the expedition above every overlay), and until
+    // 2026-09-09 nothing outside this file could tell. Playtest: "It wasn't clear that the HUNT screen
+    // is the main combat screen while navigating other menus. We need a live feedback mechanism to
+    // show that combat is happening there." Three read-onlys is the whole of the plumbing that was
+    // missing — the facts were already being recomputed sixty times a second, behind private fields.
+
+    /// <summary>The champion's health, 0..1 — what the arena's own bar draws.</summary>
+    public float ChampionHealthFraction => _replay?.HealthFractionOf(0) ?? 1f;
+
+    /// <summary>Seconds since the champion was last bitten. Zero on the frame it happens.</summary>
+    public float SinceChampionHit => _enemySinceHit;
+
+    /// <summary>Is the champion down and regrouping right now?</summary>
+    public bool ChampionDowned => _mode == Mode.Downed;
+
+    // ── WHAT AN AUTHORED OPENING WAITS FOR. ─────────────────────────────────────────────────────
+    //
+    // Three readings and one dial, all of them about PRESENTATION — where the animation has got to,
+    // and where the playhead is. The simulation is untouched: the wave was resolved before any of
+    // this ran, and holding the replay changes what is on screen, never what happened.
+
+    /// <summary>
+    /// Park the playhead one millisecond short of the next beat of this kind. Null to run freely.
+    /// </summary>
+    /// <remarks>
+    /// Set by the host from the authored script, cleared by it the moment the player continues. The
+    /// screen does not know what a tutorial is; it knows how to wait.
+    /// </remarks>
+    public BattleEventKind? HoldBeforeKind { get; set; }
+
+    /// <summary>Is the playhead actually parked against <see cref="HoldBeforeKind"/> this frame?</summary>
+    public bool ReplayHeld { get; private set; }
+
+    /// <summary>
+    /// Has the wave's pack finished walking on and settled into its combat position?
+    /// </summary>
+    /// <remarks>
+    /// The fight already waits for this before anyone swings (the _enemyEnter hold above), so an
+    /// authored step that waits for it is watching the same moment the game does: the entrance plays
+    /// whole, and the explanation lands after it and before the first blow.
+    /// </remarks>
+    public bool EnemySettled => _run is not null && _replay is not null && _enemyEnter <= 0f && _breakTimer <= 0f;
+
+    /// <summary>Is a BOSS the thing standing there?</summary>
+    /// <remarks>
+    /// Computed from the wave Update keeps current (BeginWave sets <c>_replayWave</c>) — never from the
+    /// copy Draw caches, which stops moving the moment the player is on another screen. The fight runs on
+    /// every screen, and a reading of it that is stale off the HUNT held the wrong break (review 2026-09-11).
+    /// </remarks>
+    public bool BossOnStage => DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
+
+    /// <summary>
+    /// Is a hold in play in THIS session — a beat held now, or one let go and not yet played?
+    /// </summary>
+    /// <remarks>
+    /// The hold and its release live on this instance and die with the process. A reader that waits on
+    /// <see cref="ReleasedBeatPlayed"/> can ask this too, so it never waits on a release nobody made.
+    /// </remarks>
+    public bool HoldInPlay => _heldAtMs is not null || (_releasedAtMs is not null && !ReleasedBeatPlayed);
+
+    /// <summary>
+    /// Has a descent actually begun? False until the first Update, because the run starts lazily.
+    /// </summary>
+    /// <remarks>
+    /// The arrival tableau needs exactly one frame of the fight and then stillness: one frame puts a
+    /// champion on the stage in its idle stance with the wave's pack still off to the right, which IS
+    /// the arrival. The host reads this so it can let that single frame through and hold every one
+    /// after it.
+    /// </remarks>
+    public bool RunStarted => _run is not null && _replay is not null;
+
+    /// <summary>The timestamp of the beat the barrier is holding the replay short of, or null.</summary>
+    /// <remarks>
+    /// Set while <see cref="ReplayHeld"/>: the playhead is strictly before this millisecond AND before
+    /// the beat's own wind-up (see <see cref="ReplayBarrier"/>), so nothing of it is on screen yet.
+    /// </remarks>
+    public int? HeldEventAtMs { get; private set; }
+
+    /// <summary>
+    /// Has the beat the barrier last held been let go, crossed, and PLAYED — the Hunter's clip for it done?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The host waits on this before it draws anything else over the fight: a card that arrives the
+    /// frame the cast crosses covers the cast it was promising (playtest 2026-09-11, HEALTH over HARD
+    /// HANDS). PLAYED means all of the cast the player can see: the Hunter's clip aimed at it has run
+    /// out, the effect it launched has finished, and — when the blow ended the wave, as the first cast
+    /// of a fresh career does — the fall it caused has played through and faded.
+    /// </para>
+    /// <para>A beat that no clip was aimed at, and that launched nothing, has played the moment it crosses.</para>
+    /// </remarks>
+    public bool ReleasedBeatPlayed
+    {
+        get
+        {
+            // LATCHED. Once the released beat has played it stays played until the next hold: the
+            // conditions below read live state (a clip, the break), and a later clip that happened to
+            // aim at the same millisecond of another wave would otherwise un-play it.
+            if (!_releasedPlayed && _releasedAtMs is { } released && _releasedCrossed
+                && !(_clipName is not null && _clipBeatMs == released)
+                && !_vfx.AnyPlaying(_releasedFxFrom, _releasedFxTo)
+                && (_breakTimer <= 0f || FallsPlayed))
+                _releasedPlayed = true;
+            return _releasedPlayed;
+        }
+    }
+    private bool _releasedPlayed;
+
+    /// <summary>
+    /// Keep a cleared wave's stage empty until the host lets the next wave in. False in play.
+    /// </summary>
+    /// <remarks>
+    /// The break between waves still plays every beat of its own — the fall, the haul, the empty stage
+    /// (<see cref="ClearBeat.Tick"/>); this only stops it handing over. The screen does not know what a
+    /// tutorial is; it knows how to wait.
+    /// </remarks>
+    public bool HoldNextWave { get; set; }
+
+    /// <summary>Has every creature that fell in this wave played its fall through, lain there and faded?</summary>
+    public bool FallsPlayed => ClearBeat.FallsPlayed(_anim, _diedAt.Values, FallSeconds);
+
+    /// <summary>
+    /// Has the wave the fight just cleared finished being SHOWN? Every fall played and faded, the haul
+    /// risen and gone, the stage empty — false during a fight and false on a fall.
+    /// </summary>
+    /// <remarks>
+    /// The PRESENTATION boundary. The purse is paid on the kill's own frame (the reward is queued the
+    /// moment the replay runs out); this is the later moment at which the player has actually SEEN the
+    /// clear, and it is what a sentence about the clear waits for.
+    /// </remarks>
+    public bool ClearShown
+        => _mode == Mode.Fighting && _replay is { Finished: true } && _outcome == WaveOutcome.Cleared
+           && _breakTimer > 0f && FallsPlayed && !_callouts.Any(c => c.Spoil);
+
+    /// <summary>Waves this screen has begun replaying, ever. A monotone count the host can watch.</summary>
+    public int WavesBegun { get; private set; }
+
+    /// <summary>EnemyDown beats the replay has crossed, ever.</summary>
+    public int EnemyDownsSeen { get; private set; }
+
+    /// <summary>Skill beats the replay has crossed, ever — each one a callout, an effect and a cue.</summary>
+    public int SkillCastsSeen { get; private set; }
+
+    /// <summary>The in-wave timestamp of the last Skill beat crossed, or -1.</summary>
+    public int LastSkillCastAtMs { get; private set; } = -1;
+
+    /// <summary>The wave number being shown.</summary>
+    public int WaveShown => _replayWave;
+
+    /// <summary>Where the replay's playhead stands in the wave, in milliseconds.</summary>
+    public float PlayheadMs => _playheadMs;
+
+    /// <summary>
+    /// Is the DEATH TRANSITION up — the downed beat, or the black and the lift that follow it?
+    /// </summary>
+    /// <remarks>
+    /// Published for the host: nothing is said over a fall. The lesson card and the coach's spotlight
+    /// yield while this is true — a prompt beside a collapsing Hunter, or brackets over a black stage,
+    /// is a second thing to look at. Input is the narrower question (<see cref="BlackCovers"/>): the
+    /// medallion beside a fallen Hunter is painted, so it is live; only the black blocks it.
+    /// </remarks>
+    public bool DeathTransitionUp => DeathTransition.Up(_mode == Mode.Downed, _deathFadeIn);
+
+    /// <summary>How black the stage is this frame, 0..1 — what the foot of <see cref="Draw"/> paints.</summary>
+    /// <remarks>
+    /// ONE READING FOR BOTH HALVES (ADR-006): the fill paints this and <see cref="TakeInput"/> refuses
+    /// under it, so the paint and the refusal cannot disagree about whether the HUD is covered. Read from
+    /// the two clocks and the Reduced Motion switch alone; DevShowFall holds it at zero so `fightfall`
+    /// can photograph the collapse at any point of the beat.
+    /// </remarks>
+    private float BlackAlpha => DevShowFall ? 0f : DeathTransition.Alpha(_mode == Mode.Downed, _downedTimer, _deathFadeIn, UiMotion.Reduced);
+
+    /// <summary>Is the black covering this screen's own HUD — the medallion, the rail's doors, the inspector?</summary>
+    private bool BlackCovers => DeathTransition.Covers(BlackAlpha);
+
     /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
     private static (string Text, Color Color) CalloutFor(Style style) => style switch
     {
@@ -972,7 +1201,7 @@ public sealed class HuntScreen
     };
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    /// <summary>Advance the fight. Takes no input — this screen's clicks are handled in Draw.</summary>
+    /// <summary>Advance the fight. Takes no input — this screen's clicks are resolved in <see cref="TakeInput"/>.</summary>
     /// <remarks>
     /// <b>IT USED TO TAKE FOUR INPUT PARAMETERS AND READ NONE OF THEM</b> — keys, mouse, clicked and
     /// wheel, all dead. Click handling migrated into Draw (DrawBattleControls) and the Update-side
@@ -986,10 +1215,11 @@ public sealed class HuntScreen
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
-        // The wheel's notches since last frame, for the log's scroll regions. A delta, not a position.
-        var wheelNow = Mouse.GetState().ScrollWheelValue;
-        _wheel = (wheelNow - _wheelLast) / 120;
-        _wheelLast = wheelNow;
+        // THE WHEEL IS NOT SAMPLED HERE ANY MORE. It used to be read off Mouse.GetState() in this
+        // method, which the host calls only while the fight is allowed to run — so the log's scroll
+        // columns went dead for the whole of the authored hold, and any stretch without an Update
+        // turned the notches accumulated in the meantime into one enormous jump the next time it ran.
+        // The host hands the frame's delta to <see cref="TakeInput"/> now, beside the click.
         // _strikeTime WAS THE OLD SWING CLOCK and is gone. It was armed by the impact and counted down,
         // so the clip played entirely AFTER the blow it was meant to deliver. The champion now runs on
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
@@ -1000,13 +1230,14 @@ public sealed class HuntScreen
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
         // stage, so the entrance has something to be an entrance from.
-        _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
+        if (_devArrivalPose is { } posed) _enemyEnter = posed;   // held for the shutter (DevPoseArrival)
+        else _enemyEnter = Math.Max(0f, _enemyEnter - dt * EnemyEnterPerSecond);   // the new enemy slides in over ~0.8s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
-        _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
+        if (!DevBossCall) _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         // The flash holds while the fall fixture is posing it — a capture must be able to photograph
         // the one frame it exists to check (does the flash cover the WHOLE screen, corners included).
         if (!DevShowFall) _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
-        _fellTimer = Math.Max(0f, _fellTimer - dt);
+        _deathFadeIn = Math.Max(0f, _deathFadeIn - dt);   // the black after a restart lifts; see DeathTransition
         _vfx.Update(dt);
         for (var i = 0; i < _callouts.Count; i++) { var c = _callouts[i]; c.Life -= dt * 1.6f; _callouts[i] = c; }
         _callouts.RemoveAll(c => c.Life <= 0f);
@@ -1020,10 +1251,10 @@ public sealed class HuntScreen
         {
             _lastSource = EnemySource;
             _descent.Reset();
-            // The fall's presentation belongs to the region it happened in — carried across travel,
-            // the old "YOUR CHAMPION FELL" banner outranked the new region's own banners for six
-            // seconds (review 2026-08-24). The flash clear is defensive; it decays in under a second.
-            _fellTimer = 0f;
+            // The fall's presentation belongs to the region it happened in: carried across travel, a
+            // fall's black would land on a region it did not fall in (review 2026-08-24 caught the fall
+            // banner of the day doing exactly that). The flash clear is defensive; it decays in under a second.
+            _deathFadeIn = 0f;
             _deathFlash = 0f;
         }
 
@@ -1032,6 +1263,7 @@ public sealed class HuntScreen
         _enemyBaseDamage = enemyBaseDamage;
 
         if (_run is null) StartRun(hunter);
+        HoldDeathPose();   // the posed transition is re-asserted every frame, like the arrival (`fightfade`)
 
         // Stat training moved to the CHARACTER screen (press C); this is a pure idle-watch view now.
 
@@ -1041,9 +1273,70 @@ public sealed class HuntScreen
             case Mode.Downed:
                 if (DevHoldReport) break;   // capture fixture: keep the fallen beat up instead of restarting
                 _downedTimer -= dt;
-                if (_downedTimer <= 0f) StartRun(hunter);
+                if (_downedTimer <= 0f)
+                {
+                    // THE RESTART LANDS AT FULL BLACK, on the frame the downed beat runs out — the frame it
+                    // has always been: OfflineHunt spends DownedSeconds per fall, and the Dust for a
+                    // checkpoint is charged here and spent by the host next frame. The black then holds
+                    // through the reset and lifts over the new wave's entrance (DeathTransition).
+                    _deathFadeIn = DeathTransition.FadeInSeconds(UiMotion.Reduced);
+                    StartRun(hunter);
+                }
                 break;
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Take the frame's UI input. THE ONLY PLACE THIS SCREEN CONSUMES AN INPUT EDGE.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>DRAW MUST NOT CONSUME INPUT.</b> MonoGame's fixed timestep calls Update at least once and
+    /// Draw exactly once per tick, so a frame over budget runs Update twice and Draw once — and the
+    /// host latches the click edge at the top of Update and overwrites the previous mouse state at the
+    /// bottom of it. A hit test inside a Draw therefore tests an edge the second Update has already
+    /// recomputed as false, and because a press is held for three to six frames it never re-arms: the
+    /// click is silently dropped. The title screen shipped with exactly that bug (fixed 2026-09-12).
+    /// Every control on this screen is decided here now; its Draw methods paint the same rectangles
+    /// and still hover and depress, but they cannot fire.
+    /// </para>
+    /// <para>
+    /// Called from the host's Update on EVERY frame, and deliberately NOT from <see cref="Update"/>:
+    /// that one is skipped while the authored opening holds the fight, and the EXPEDITION LOG's
+    /// medallion has to answer a click on a held frame.
+    /// </para>
+    /// <para>
+    /// <paramref name="huntOnTop"/> is the host's <c>!OverlayActive</c> — the same condition its draw
+    /// chain uses to reach <see cref="Draw"/>. The screen's own HUD (the medallion, the right rail's
+    /// door) answers only when the HUNT is the screen on top, so a click in the Forge cannot fall
+    /// through into the fight. The LOG does not read it: the log is drawn over every
+    /// screen and stays live wherever it was opened from.
+    /// </para>
+    /// </remarks>
+    public void TakeInput(Point mouse, bool clicked, int wheel, bool huntOnTop)
+    {
+        // THE LOG FIRST, AND ALONE. Under its full-screen scrim the rail and the medallion are furniture —
+        // the same `!_logOpen` gate the paint applies, kept as an early return.
+        if (_logOpen) { TakeLogInput(mouse, clicked, wheel); return; }
+
+        // AND THE TRANSITION IS SNAPPED TO ITS END THE MOMENT THE SCREEN LEAVES. Update ticks this screen
+        // on every other screen too (the restart happens on its own clock wherever the player is), but
+        // nothing here paints while another screen is on top — so a lift that ran out unseen must not
+        // resume as a black frame when the player comes back.
+        if (!huntOnTop) { _deathFadeIn = 0f; return; }
+        // UNDER THE BLACK, NOTHING ON THIS SCREEN ANSWERS — and only under the black. The medallion, the
+        // rail's doors and the inspector are painted beside a fallen Hunter for the readable beat, so
+        // they are live then, exactly as on any other frame; from the fade's first frame to the lift's
+        // last they are covered, and refuse. The host's own chrome stays live above the black, and L
+        // still opens the log.
+        if (BlackCovers) return;
+        // The paint's own guard: before the first descent there is no HUD to hit.
+        if (_run is null || _replay is null || _champ is null) return;
+
+        // IN THE ORDER THE HUD PASS PAINTS THEM (see the foot of Draw): the medallion, then the right rail.
+        if (UiKit.ClickedIn(LogButtonRect, mouse, clicked)) WantsLog = true;
+        TakeRailInput(mouse, clicked);
     }
 
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
@@ -1075,6 +1368,7 @@ public sealed class HuntScreen
 
     private void StartRun(Hunter hunter)
     {
+        RunsStarted++;
         var build = ComposeBuild(hunter);
         _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
         _chargeNow = 0;
@@ -1099,14 +1393,24 @@ public sealed class HuntScreen
         _descent.RegionId = RegionId;
         _descent.EnemyBias = EnemyBias;
         _descent.Progress = Progress;
+        // AND THE WAVE MODEL ITSELF. Default for everybody who has ever felled a boss; the taught-waves
+        // tuning until then. Assigned HERE with the other four because the expedition captures it at
+        // construction — set it after StartRun and the descent fights the game the last one fought.
+        _descent.Tuning = Tuning;
         // The ledger the run's cleared waves feed. Refreshed with WHERE and WHO before the first
         // push, so a first awakening is stamped with the region and champion it happened to.
         _descent.TraitWatch = TraitWatch;
         if (TraitWatch is { } watch) { watch.RegionId = RegionId; watch.CharacterId = Character.Id; }
-        _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, StartWave);
+        // THE DEEPER OF THE TWO: the checkpoint the player paid for, or the wave the absence left the
+        // champion standing on. Never their sum — they are two answers to the same question.
+        _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, Math.Max(StartWave, FreeStartWave));
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
         // host fed StartWave = 0 when the Dust was not there, so a start here is always affordable.
+        // THE DUST IS CHARGED FOR THE CHECKPOINT ALONE. A free resume (FreeStartWave) opens the run
+        // deeper and costs nothing: the waves under it were fought, in real elapsed absence, already
+        // paid out at the camp's 30-60% rate. The player has been charged once; the depth is the
+        // receipt, not a second purchase.
         if (StartWave > 0) CheckpointCharge += Checkpoints.DustCost(StartWave);
         _mode = Mode.Fighting;
         BeginWave();
@@ -1184,6 +1488,7 @@ public sealed class HuntScreen
         _auraFxKey = fieldSk?.Def.FxKey;
         _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
 
+        WavesBegun++;
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
         _waveStartHealth = startHealth[0];   // for a posed seek's rebuild (DevSeek) — see UpdateFight
         _waveEnemyHp = enemyHp;
@@ -1199,6 +1504,41 @@ public sealed class HuntScreen
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _nextChampStrikeMs = _replay.NextChampionStrikeAfter(0f);
         _callouts.Clear();
+
+        // ── THE WAVE ARRIVES. Enemies slide in from off-stage and fade up over ~0.8 s, and the replay
+        //    is held until they have landed (UpdateFight's gate on _enemyEnter) so the champion never
+        //    swings at empty air.
+        //
+        //    THIS USED TO LIVE AT ONE CALL SITE — the between-waves break, and nowhere else. StartRun
+        //    reaches BeginWave too, on first launch, on a region change, and after EVERY death, and
+        //    none of those got an arrival: the creatures were simply THERE, at rest, at full opacity,
+        //    on frame one. Playtest 2026-09-09: "enemies spawn instantly when we start; they don't
+        //    walk in." The mechanism was built, correct and tested-adjacent, and never reached the two
+        //    moments the player actually named. Setting it here means every wave open arrives the same
+        //    way, whatever opened it.
+        //
+        //    A capture must not inherit it: a fixture seeks to an instant inside a fight, and a 0.8 s
+        //    gate in front of the playhead would freeze every fight* shot on frame zero of an entrance.
+        //    DevStart clears it (see below).
+        _enemyEnter = 1f;
+
+        // ── THE READINESS EDGES ARE RE-SEEDED, NOT WIPED. The edge detector in Update fires on a
+        //    FALSE -> TRUE crossing and reads the stored value with GetValueOrDefault, so an empty map
+        //    reads as "every slot was waiting" — and a wave that opens with three skills already ready
+        //    (which is most of them, since the carry rolls a short wave's wait forward) then popped all
+        //    three medallions and chimed for each on its first frame. That is a ready-pop for a cooldown
+        //    that did not run, at every single wave boundary: exactly what clearing the map here was
+        //    written to prevent, caused by the clear itself. Seeded from what is true at the wave's
+        //    opening instant instead, so only a slot that actually comes up during the wave pops.
+        for (var slot = 0; slot < _waveSkills.Count; slot++)
+        {
+            var def = _waveSkills[slot].Def;
+            var t0 = Timing(slot, def);
+            _railReady[slot] = def.TakesABeat && t0.Swept >= 1f;
+            // ...and the notch it opens on, for the same reason: an unseeded map reads as notch zero,
+            // and every ring would tick on the wave's first frame.
+            _railStep[slot] = t0.RingSteps > 0 ? (int)MathF.Floor(t0.Swept * t0.RingSteps + 0.001f) : 0;
+        }
     }
 
     /// <summary>The host rolled a chest for the boss just felled — upgrade the banner to the reward beat.</summary>
@@ -1208,7 +1548,9 @@ public sealed class HuntScreen
         // THE VAULT, not the Forge. Chests moved to the VAULT screen when it was carved off the Forge, and
         // this line kept sending players to the FORGE tab to open one (release polish 2026-09-05). No key
         // hint either: the doors name no keys in their labels — the tour and the help sheet teach the
-        // keys (UX guide §14) — and the right column's OPEN VAULT door is the click this line points at.
+        // keys (UX guide §14) — and the VAULT TILE on the rail, which is wearing a fresh count badge as
+        // this banner is posted, is the click this line points at. (The right column had a second door
+        // labelled OPEN VAULT; it was removed with the authored opening — one room, one door.)
         _bannerText = "BOSS DOWN — A CHEST IS WAITING IN THE VAULT";
         _bannerTimer = 2.4f;
     }
@@ -1259,6 +1601,7 @@ public sealed class HuntScreen
                 Life = SpoilsBeat + 0.35f - slot * 0.06f,
                 Px = px,
                 Lane = CalloutLane.Enemy,
+                Spoil = true,   // the clear is not SHOWN while this is still rising (ClearShown)
             });
             slot++;
         }
@@ -1350,15 +1693,28 @@ public sealed class HuntScreen
     /// re-reading off a screenshot. Three rules in one line:
     /// <list type="bullet">
     /// <item>a plain blow is its number and nothing else;</item>
-    /// <item>a graded blow names its grade — CRITICAL when the odds were beaten, and the SKILL'S OWN
-    /// NAME when a Reaction produced it, because there a crit is the expected value (§63): a Reaction
-    /// answers EVERY bite, so captioning it CRITICAL taught the player that a critical is the ordinary
-    /// case and left the skill that actually fired unnamed. The grade is unchanged; only the word;</item>
-    /// <item>a cast that landed more than once folds into one number with its count ("-635 ×5", §21).</item>
+    /// <item>a REACTION's blow is captioned with the skill's own name ("-4 JAWS") — a Reaction answers
+    /// every bite, so it is drawn a size up on every one of them, and calling that CRITICAL taught the
+    /// player that a critical is the ordinary case while leaving the skill that actually fired
+    /// unnamed;</item>
+    /// <item>a CRITICAL hit says CRITICAL. Until 2026-09-09 this word was unreachable: the screen's
+    /// <c>crit</c> flag meant "a Reaction produced it" and its true branch always replaced the word
+    /// with the Reaction's name, so the one caption the game had for a critical hit could never be
+    /// drawn — and the sim rolled none to draw it for. Both halves are fixed; the grade now comes off
+    /// <see cref="IdleXIdle.Core.Expeditions.BattleEvent.Crit"/>, and a Reaction that also crits says
+    /// both;</item>
+    /// <item>a cast that landed more than once folds into one number with its count ("-635 ×5", §21).
+    /// Criticals fold with criticals only, so a mixed instant prints two honest numbers rather than
+    /// one that grades the whole sum by its luckiest hit.</item>
     /// </list>
     /// </remarks>
     public static string DamageCalloutText(int total, bool crit, int hits, string? critWord = null)
-        => (crit ? $"-{total:N0} {critWord ?? "CRITICAL"}" : $"-{total:N0}") + (hits > 1 ? $" ×{hits}" : "");
+    {
+        var text = $"-{total:N0}";
+        if (critWord is { Length: > 0 }) text += " " + critWord;
+        if (crit) text += " CRITICAL";
+        return text + (hits > 1 ? $" ×{hits}" : "");
+    }
 
     /// <summary>
     /// A floating combat number over the creature a Strike event hit — THE EVENT'S OWN AMOUNT, which is
@@ -1439,8 +1795,9 @@ public sealed class HuntScreen
         {
             _enemyWindup = 0f;
             _clipName = null;   // a clip never survives the wave it was swung in
-            _breakTimer -= dt;
-            if (_breakTimer <= 0f) { BeginWave(); _enemyEnter = 1f; }
+            // ...AND THE HOST MAY KEEP THE NEXT PACK OFF THE STAGE (HoldNextWave): the break plays every
+            // beat of its own, then rests on the empty stage until it is let go.
+            if (ClearBeat.Tick(ref _breakTimer, dt, HoldNextWave)) BeginWave();   // ...which arms the arrival itself now
             return;
         }
 
@@ -1486,7 +1843,80 @@ public sealed class HuntScreen
             _nextChampStrikeMs = _replay.NextChampionStrikeAfter(seek);
         }
 
-        _playheadMs += dt * 1000f * _speedMul;
+        // ── THE BARRIER. ────────────────────────────────────────────────────────────────────────
+        //
+        // An authored step can ask the replay to stop short of the next beat of a given kind, so the
+        // player is told what is about to happen BEFORE it happens — and short of that beat's own
+        // WIND-UP, not only of its millisecond (ReplayBarrier). A cast's clip starts one contact-length
+        // ahead of its event, so the old park one millisecond short froze the Hunter mid-cast under
+        // the very card that was meant to come first (playtest 2026-09-11). Lifting the barrier lets
+        // the wind-up begin, and the SAME event crosses on its contact frame with callout and effect.
+        //
+        // A CLAMP, NOT AN EARLY RETURN. The two holds above this line return, and each has to
+        // hand-clear _enemyWindup and _clipName because of it. Clamping leaves the windup, the
+        // champion's clip and every rail readout frozen CONSISTENTLY at the held instant: a creature
+        // caught mid-swing stays mid-swing instead of snapping back to idle.
+        var free = _playheadMs + dt * 1000f * _speedMul;
+        var hold = ReplayBarrier.Advance(_replay, _playheadMs, free, HoldBeforeKind, _leadMs ??= PresentationLeadMs);
+        // THE HOLD LET GO. The host clears the kind on the frame the card is answered; the beat that was
+        // being held is remembered, so the host can wait for it to PLAY and not merely to cross.
+        if (HoldBeforeKind is null && _heldAtMs is { } letGo)
+        {
+            _releasedAtMs = letGo;
+            _releasedCrossed = false;
+            _releasedPlayed = false;
+            _releasedFxFrom = _releasedFxTo = 0;
+            _heldAtMs = null;
+        }
+        if (hold.HeldAtMs is { } heldAt) { _heldAtMs = heldAt; _releasedAtMs = null; _releasedPlayed = false; }
+        ReplayHeld = hold.Held;
+        HeldEventAtMs = hold.HeldAtMs;
+        _playheadMs = hold.PlayheadMs;
+
+        // ── THE READY CROSSING, ARMED HERE AND NOWHERE ELSE. A pulse belongs to Update: a Draw that
+        //    armed one would re-arm it every frame and the medallion would swell for as long as you
+        //    looked at it (the rail's own standing rule, and the reason the cast pulse lives in the
+        //    event pump). Each slot's readiness is read once per frame and only a FALSE -> TRUE edge
+        //    fires — so a skill that stays ready between waves pops once, at the moment it came up.
+        for (var slot = 0; slot < _waveSkills.Count; slot++)
+        {
+            var def = _waveSkills[slot].Def;
+            if (!def.TakesABeat) continue;             // a passive is always ready; it never crosses
+            var timing = Timing(slot, def);
+            var nowReady = timing.Swept >= 1f;
+
+            // ── EVERY NOTCH ANNOUNCES ITSELF. ────────────────────────────────────────────────────
+            //
+            // A beat-counted ring is quantised to one notch per action, so between notches it shows
+            // nothing at all; a six-beat skill was three silent jumps across four and a half seconds.
+            // Crossing a notch now arms a tick, and the ring draws it as a bright spoke that fades —
+            // so the wait reads as a countdown rather than as a stalled dial. Armed HERE, in Update,
+            // for the rail's standing rule: a Draw that armed a pulse would re-arm it every frame.
+            var step = timing.RingSteps > 0
+                ? (int)MathF.Floor(timing.Swept * timing.RingSteps + 0.001f)
+                : 0;
+            if (timing.RingSteps > 0 && step > _railStep.GetValueOrDefault(slot) && step < timing.RingSteps)
+                UiMotion.Flash(SkillStepKey(slot), UiMotion.Transition);
+            _railStep[slot] = nowReady ? 0 : step;
+
+            if (nowReady && !_railReady.GetValueOrDefault(slot))
+            {
+                UiMotion.Flash(SkillReadyKey(slot), UiMotion.Transition);
+                // AND THE MOMENT ITSELF GETS A SHAPE. The pop was a tenth of a swell over 180 ms, which
+                // is the smallest reading of "the cooldown animation is not satisfying" (playtest
+                // 2026-09-09) and not the one that was asked for. A ring now leaves the medallion and
+                // fades over the REWARD beat — the same length the game uses for a haul landing —
+                // because a skill coming up IS the fight's reward beat.
+                UiMotion.Flash(SkillBurstKey(slot), UiMotion.Reward);
+                // A CUE, but a quiet and a rare one. The screen already plays a thud every beat and a
+                // cast every action; four Actives coming up every few beats would be the disco-ball
+                // note again, one modality over. Only a skill with a real wait (two notches or more)
+                // is worth announcing, and it is announced under the cast's own volume.
+                if (def.Beats > 2) Sound?.Play("sfx_trait_lit", 0.16f, vary: 0.05f);
+            }
+            _railReady[slot] = nowReady;
+        }
+
         // THE AURA'S PULSE, ON THE WALL CLOCK. It used to be raised by an aura's damage event, which
         // meant a tick landing on a cast's own millisecond was read as that cast's blow and raised
         // nothing — and in a real four-skill build that happened often enough that the field looked
@@ -1589,7 +2019,12 @@ public sealed class HuntScreen
                         // five numbers up one column and the player read a flurry instead of a total.
                         // They are summed here and drawn as "-635 ×5" — the total is what the fight did,
                         // and the count is what makes it legible as one cast rather than one hit.
-                        var crit = e.FromSkill && e.AtMs == trapAtMs;
+                        // THE GRADE AND THE CAPTION ARE TWO QUESTIONS. `crit` is the fight's own answer
+                        // — the roll, carried on the event — and `reaction` is which skill produced the
+                        // blow. They used to be one boolean whose true branch deleted the word CRITICAL,
+                        // which is why the game could not draw a critical hit even once it had one.
+                        var crit = e.Crit;
+                        var reaction = e.FromSkill && e.AtMs == trapAtMs;
                         var skill = e.FromSkill && e.AtMs == skillAtMs;
                         var hits = 1;
                         var total = e.Amount;
@@ -1599,11 +2034,18 @@ public sealed class HuntScreen
                             if (o.AtMs != e.AtMs) break;              // the batch is in time order
                             if (o.Kind != BattleEventKind.Strike || o.Slot != e.Slot || o.Amount <= 0) continue;
                             if (o.FromSkill != e.FromSkill) continue; // a swing and a cast stay separate
+                            if (o.Crit != e.Crit) continue;           // ...and so do a critical and a plain hit
                             total += o.Amount;
                             hits++;
                             _summed.Add(kj);        // its own turn still flashes and sounds; it draws no number
                         }
-                        if (!_summed.Contains(bi)) SpawnDamage(total, e.Slot, crit, skill, hits, crit ? trapName : null);
+                        if (!_summed.Contains(bi))
+                        {
+                            SpawnDamage(total, e.Slot, crit, skill, hits, reaction ? trapName : null);
+                            // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
+                            // sound the file is named for had never once accompanied a critical hit.
+                            if (crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                        }
                     }
                     // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
@@ -1626,10 +2068,16 @@ public sealed class HuntScreen
                     break;
                 case BattleEventKind.Skill:
                 {
+                    SkillCastsSeen++;
+                    LastSkillCastAtMs = e.AtMs;
                     // THE SLOT IS THE IDENTITY. The event names which equipped skill acted; name,
                     // art, colour and kind all come from the skill itself — the old payload was a
                     // (Source, Form) ordinal pair, and two skills of one style collided on it.
                     if (e.Slot < 0 || e.Slot >= _waveSkills.Count) break;
+                    // THE RELEASED CAST'S OWN EFFECTS are the ones launched from here to the end of this
+                    // case — remembered so the host can wait for exactly those to finish (ReleasedBeatPlayed).
+                    var fxBefore = _vfx.Launched;
+                    var released = _releasedAtMs == e.AtMs;
                     var castSk = _waveSkills[e.Slot];
                     var castDef = castSk.Def;
                     // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
@@ -1645,9 +2093,13 @@ public sealed class HuntScreen
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     PlaySkillVfx(castDef, castSk.Source, castTarget);
+                    if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
                     Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
-                    if (isReaction) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow
+                    // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
+                    // to the roll now (see the Strike case), and the answer keeps the cast's own thud
+                    // pitched up, so the two events stay tellable apart by ear.
+                    if (isReaction) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
                     if (isReaction) { trapAtMs = e.AtMs; trapName = castDef.Name; }   // ...and a reaction's are graded up, under its OWN name
                     break;
@@ -1675,6 +2127,7 @@ public sealed class HuntScreen
                     // body half a second later — after the fall, not instead of it. Playtest: "düşman
                     // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
                     _diedAt[e.Slot] = _anim;
+                    EnemyDownsSeen++;
                     // A boss has its own fall (sfx_boss_down: deeper, longer, a second thump when the mass lands)
                     // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
                     if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
@@ -1764,6 +2217,15 @@ public sealed class HuntScreen
             }
         }
 
+        // THE RELEASED BEAT HAS CROSSED — latched here, after the batch, so the range of effects it
+        // launched closes over everything its beat set off: the cast's own strip, the blow's impact and,
+        // when it killed, the plume over the fall. ReleasedBeatPlayed waits on exactly that range.
+        if (_releasedAtMs is { } releasedAt && !_releasedCrossed && _playheadMs >= releasedAt)
+        {
+            _releasedCrossed = true;
+            _releasedFxTo = _vfx.Launched;
+        }
+
         if (!_replay.Finished) return;
 
         if (_outcome == WaveOutcome.Cleared)
@@ -1796,17 +2258,25 @@ public sealed class HuntScreen
         }
         else
         {
-            // Fell (or stalled). A red flash, a short breath, then the champion regroups.
+            // Fell (or stalled). A red flash, the collapse, then the stage fades to black and the next
+            // descent begins under it (DeathTransition).
             //
             // The REPORT is taken here, at the exact moment the run ended, and goes STRAIGHT into the
-            // EXPEDITION LOG. The popup that used to show it covered the fall and closed before it
-            // could be read; what the player sees now is the short fallen banner (the HunterDown
-            // overlay), which names the wave and points at the log (L), where the report keeps.
+            // EXPEDITION LOG (L). Nothing over the arena announces it: a fall is part of the idle loop,
+            // and the log keeps the report for whenever it is wanted.
             Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat));   // kept and saved — see the Log property
             // WHAT THIS DESCENT PROVED. Taken here for the same reason the report is: one frame later
             // the champion regroups onto a fresh expedition and the counter is empty.
             LastRunVowProof = _run.VowProofWaves.ToDictionary(kv => kv.Key, kv => kv.Value);
             LogDirty = true;
+
+            // THE WAVE THAT FELL, BEFORE ANYTHING IS STAMPED WITH IT. TraitFirst.Wave is provenance
+            // the SAVE keeps for every awakening (TraitLedger.SaveProvenance) beside the champion and
+            // the region — those two are what the TRAITS screen prints today; the wave is written,
+            // read back and available to whatever prints it next. The re-check below stamps whatever
+            // this holds, so it is assigned for THIS fall first: a number persisted wrong for the life
+            // of a career is wrong whether or not a surface has been built to show it yet.
+            _fellWave = Math.Max(1, _replayWave);
 
             // AND THE RUN'S END IS THE ONE MOMENT FAILURE CAN TEACH. WHAT KILLED YOU reads the log
             // that was just written — three consecutive deaths in one region against one kind of
@@ -1822,9 +2292,6 @@ public sealed class HuntScreen
                 watchFell.Recheck(_fellWave);
             }
 
-            _fellWave = Math.Max(1, _replayWave);
-            _fellReport = Log.Newest;   // the report the fall plate names (MAIN LIMIT — …)
-            _fellTimer = DownedSeconds + FellBannerSeconds;
             _deathFlash = 1f;
             _mode = Mode.Downed;
             _downedTimer = DownedSeconds;
@@ -1890,18 +2357,20 @@ public sealed class HuntScreen
 
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
+    public void Draw(SpriteBatch b, Point mouse, string regionName, bool suppressBanner = false)
     {
-        _enemyArt = enemyArt;
         if (WriteBudgetLedger) WriteBudgetLedgerOnce();
         // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
-        // full resolution), so the log button, the utility doors and the fall plate hit-test it as is.
-        var hit = mouse;
+        // full resolution), so the log button and the utility doors hit-test it as is. PARKED under the
+        // black, under the SAME predicate TakeInput refuses under: a control that will not answer must
+        // not lift, whiten or offer its tip through a half-lifted fade (ADR-006 — what is drawn is what
+        // is hit-tested). The readable beat is not covered, so it hovers and answers like any other frame.
+        var hit = BlackCovers ? OffCanvas : mouse;
         if (_run is null || _replay is null || _champ is null) return;
 
         // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
         // callouts, flash, wave banner) so only the boss and its bar read.
-        if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; _fellTimer = 0f; }
+        if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; }
 
         _isBossWave = DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
         var overlay = ResolveOverlay(suppressBanner);
@@ -1932,19 +2401,26 @@ public sealed class HuntScreen
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
-        DrawLogButton(b, hit, clicked && !_logOpen);
-        // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no errands.
-        DrawRightColumn(b, hit, clicked && !_logOpen);
+        DrawLogButton(b, hit);
+        // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no
+        // errands. TakeInput keeps that gate: with the log open it returns before the rail is reached.
+        DrawRightColumn(b, hit);
         DrawSkillDock(b);
         HeaderStackBottom = StageHeaderBottomY;                   // the strip or the boss bar lowers it
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         DrawEnemyLine(b);                                          // the wave's live strip under the header
         if (!_logOpen) DrawEnemyInspector(b, hit);                 // the hovered creature's live numbers and statuses
-        if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit, clicked && !_logOpen);
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+        // THE FALL'S BLACK, after the flash and under the host's chrome. One fill over the whole canvas —
+        // the arena, the header stack, the rails, the medallion, the scene behind — from BlackAlpha, the
+        // reading TakeInput refuses under, so the host's toast gate cannot silence it and the HUD is
+        // never refused while visible nor answered while covered. Batch C paints the pills, the gear and
+        // the nav over it: their input is not blocked, so they stay live.
+        var black = BlackAlpha;
+        if (black > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.Black * black);   // ui-page-ok: the canvas, not the page
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
         if (DevVfxDebug) DrawVfxDebugOverlay(b);                  // §70: the VFX contract's own arithmetic (F9)
         // LAST, over every panel on the screen: a hover tip is an answer to the mouse, and nothing drawn
@@ -2006,7 +2482,9 @@ public sealed class HuntScreen
         var defNow = r.CreatureDefenceNow(slot);
         var baseEvery = r.EnemyIntervalMs;
         var everyNow = r.BiteEveryMsNow;
-        var kind = _isBossWave ? "BOSS" : _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        var kind = _isBossWave ? "BOSS" : WaveArchetype.ToString().ToUpperInvariant();
+        var name = _isBossWave ? _bossName : CreatureLook.Name;
+        var source = CreatureSource(slot);
         var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
 
         // Direction: +1 = favourable to the hunter (green), -1 = unfavourable (red), 0 = unchanged.
@@ -2025,8 +2503,13 @@ public sealed class HuntScreen
 
         // ── THE PLATE: sized from its lines, beside the creature, on the page and off the dock. ──
         var pad = UiMetrics.Space(12);
-        var w = UiMetrics.Control(284);
         var lineS = UiTypography.Pitch(UiTypography.Caption);
+        // The name line carries the creature's name, its role and its Source glyph; the plate widens
+        // for a long name at a large profile rather than clipping it.
+        var glyphEdge = UiTypography.Caption + UiMetrics.Space(4);
+        var nameLineW = _ui.MeasureBig(name, UiTypography.Secondary) + UiMetrics.Space(8)
+                        + glyphEdge + UiMetrics.Space(6) + _ui.MeasureBig(kind, UiTypography.Caption);
+        var w = Math.Max(UiMetrics.Control(284), nameLineW + 2 * pad + 5);
         var lineB = UiTypography.Pitch(UiTypography.Secondary);
         var barH = UiMetrics.Control(8);
         var h = pad + lineB + lineS + UiMetrics.Space(8)                       // name, kind line, rule
@@ -2050,16 +2533,25 @@ public sealed class HuntScreen
         var viewport = new Rectangle(ArenaClip.X, ceiling, UiKit.Page.Width - ArenaClip.X, Math.Max(h + 2 * UiMetrics.Space(12), floor - ceiling));
         var plate = EnemyInspectorPlacement.Place(box, new Point(w, h), viewport, ChampionPresentation.Envelope, _utilityPanel);
         _ui.Fill(b, plate, Color.Black * 0.45f);
-        _ui.Plate(b, plate, ArtSource is { } src ? SourceGlow(src) : null);
+        _ui.Plate(b, plate, source is { } src ? SourceGlow(src) : null);
 
         var left = plate.X + pad + 5;
         var right = plate.Right - pad;
         var ty = plate.Y + pad;
-        // THE NAME LINE IS THE NAME. The health figure used to hang in this line's right corner,
-        // three rows above the bar that quantifies it, so reading "how hurt is this thing" meant
-        // crossing the card twice. The corner is left empty rather than filled with something
-        // invented for it: the archetype is already the line, and the affixes are the line below.
-        _ui.TextBig(b, kind, left, ty, Bone, UiTypography.Secondary);
+        // THE NAME LINE IS THE NAME — the creature's own (2026-09-16), with its ROLE and its SOURCE in
+        // the corner. The Source is THIS creature's, rolled by Core from the region's roster, which is
+        // why the plate's accent and the glyph read it rather than the region's theme: a Verdant pack
+        // can carry Body and Mind creatures, and the body a creature wears no longer says which.
+        // (The health figure used to hang in this corner, three rows above the bar that quantifies it.)
+        var cornerW = _ui.MeasureBig(kind, UiTypography.Caption);
+        var cornerX = right - cornerW;
+        _ui.TextBig(b, kind, cornerX, ty + (lineB - UiTypography.Caption) / 2, Slate, UiTypography.Caption);
+        if (source is { } own && _ui.Assets.Get(SourceGlyphKey(own)) is { } ownGlyph)
+        {
+            cornerX -= glyphEdge + UiMetrics.Space(6);
+            b.Draw(ownGlyph, new Rectangle(cornerX, ty + (lineB - glyphEdge) / 2, glyphEdge, glyphEdge), Color.White);
+        }
+        _ui.TextBig(b, _ui.ShortenBig(name, cornerX - left - UiMetrics.Space(8), UiTypography.Secondary), left, ty, Bone, UiTypography.Secondary);
         ty += lineB;
         var kindLine = affixes.Count > 0 ? string.Join("  ·  ", affixes.Take(2).Select(AffixWords)) : "NO AFFIX";
         _ui.TextBig(b, _ui.ShortenBig(kindLine, right - left, UiTypography.Caption), left, ty, Slate, UiTypography.Caption);
@@ -2341,6 +2833,22 @@ public sealed class HuntScreen
     private const float DeathHoldSeconds = 0.6f;     // the body lies there
     private const float DeathFadeSeconds = 0.45f;    // then fades out
 
+    /// <summary>A fall's whole length — its clip, the body lying there, the fade. What a SHOWN clear waits on.</summary>
+    /// <remarks>
+    /// 1.85 s against a 1.1 s break: in ordinary play the next wave arrives over the tail of the last
+    /// fall, which is fine for the fortieth wave and wrong for the one a card is about to name. The
+    /// authored opening keeps that wave's stage empty until this has run (HoldNextWave).
+    /// </remarks>
+    internal const float FallSeconds = 8f / DeathFps + DeathHoldSeconds + DeathFadeSeconds;
+
+    // ── THE HELD BEAT, AND THE ONE THAT WAS LET GO (the authored opening's barrier; see UpdateFight). ──
+    private int? _heldAtMs;                        // the beat the barrier held, until the host lets it go
+    private int? _releasedAtMs;                    // ...then which beat that was
+    private bool _releasedCrossed;                 // has the playhead crossed it since the release?
+    private long _releasedFxFrom, _releasedFxTo;   // the effects its crossing launched (VfxPlayer.Launched)
+    private int? _clipBeatMs;                      // the beat the committed champion clip is aimed at
+    private Func<int, float>? _leadMs;             // PresentationLeadMs, cached — no delegate per frame
+
     /// <summary>The layout box laid out for creature <paramref name="slot"/> this frame.</summary>
     private Rectangle CreatureBox(int slot)
         => _creatureBoxes.TryGetValue(slot, out var r) ? r : EnemyBox;
@@ -2392,7 +2900,7 @@ public sealed class HuntScreen
     /// actually draw at, which is the box's ask THROUGH the renderer's magnification ceiling
     /// (<c>UiKit.DrawScale</c>, reached here as <c>UiKit.FrameCeiling</c>). A box may ask for more
     /// than the ceiling allows — a Bruiser wave, lone or packed, gives a 488 x 492 box, which
-    /// asks 1.27 of the rift guardian's deeply letterboxed idle — and the renderer answers 1.25, so
+    /// asked 1.27 of the retired rift guardian's deeply letterboxed idle (today the Flayed Brute's and the Dusk Ape's, 120 px of sky, ask 1.255) — and the renderer answers 1.25, so
     /// an authored rectangle would size every
     /// effect on that creature against a figure 6 px wider and 9 px taller than the one on screen.
     /// See <see cref="AuthoredRect"/> for the pre-ceiling rectangle, which is a diagnostic and not a
@@ -2485,9 +2993,57 @@ public sealed class HuntScreen
     /// thing this exists to make impossible.
     /// </summary>
     /// <returns>false when the strip did not draw, so the caller falls back exactly as before.</returns>
+    /// <param name="record">
+    /// The figure this draw IS, so the frame it drew from is kept for the focus light's silhouette
+    /// (<see cref="IFocusActors.TryDrawnFrame"/>); null for a pass that is not the figure — the hit
+    /// flash draws the white mask through here and must not overwrite the figure's own frame.
+    /// </param>
     private bool ActorSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps,
-                             bool loop, Color tint, float topCrop = 0f, bool flip = false)
-        => !DevNoStrips && _ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip);
+                             bool loop, Color tint, float topCrop = 0f, bool flip = false, VfxSubject? record = null)
+    {
+        if (DevNoStrips || !_ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out var frame)) return false;
+        if (record is { } subject) _drawnFrames[subject] = frame;
+        return true;
+    }
+
+    /// <summary>
+    /// The frame each figure was drawn from THIS frame — cleared by <see cref="LayoutActors"/> before
+    /// a figure is drawn, written by <see cref="ActorSprite"/> as each one is. Preallocated; a slot's
+    /// entry is overwritten in place, never re-added.
+    /// </summary>
+    private readonly Dictionary<VfxSubject, SpriteFrame> _drawnFrames = new();
+
+    /// <summary>The frame this figure was drawn from this frame, if a strip drew it.</summary>
+    internal bool TryDrawnFrame(VfxSubject subject, out SpriteFrame frame) => _drawnFrames.TryGetValue(subject, out frame);
+
+    /// <summary>The visible body <see cref="LayoutActors"/> published for this figure this frame.</summary>
+    internal bool TryBody(VfxSubject subject, out Rectangle body)
+    {
+        if (_actors.TryBounds(subject, out var vb)) { body = vb.Rect; return true; }
+        body = Rectangle.Empty;
+        return false;
+    }
+
+    /// <summary>How many creature slots <see cref="LayoutActors"/> laid out this frame — a boss is one, in slot 0.</summary>
+    internal int LaidOutCreatureCount => _creatureBoxes.Count;
+
+    bool IFocusActors.TryDrawnFrame(VfxSubject subject, out SpriteFrame frame) => TryDrawnFrame(subject, out frame);
+    bool IFocusActors.TryBody(VfxSubject subject, out Rectangle body) => TryBody(subject, out body);
+    int IFocusActors.LaidOutCreatureCount => LaidOutCreatureCount;
+    // THE MASK IS THE FLASH'S (AssetLibrary.WhiteMask): built once per strip, looked up by the strip the
+    // frame came from. A texture the library did not load has no key and no mask, and the light falls
+    // back to the body's rectangle rather than to a silhouette of nothing. Remembered per texture,
+    // because the library's lookup builds the mask's key by concatenation and the light asks every frame.
+    Texture2D? IFocusActors.MaskOf(Texture2D texture)
+    {
+        if (_maskOf.TryGetValue(texture, out var known)) return known;
+        var mask = _ui.Assets.KeyOf(texture) is { } key ? _ui.Assets.WhiteMask(key) : null;
+        _maskOf[texture] = mask;
+        return mask;
+    }
+
+    /// <summary>Each strip's white mask (or its absence), remembered after the first ask.</summary>
+    private readonly Dictionary<Texture2D, Texture2D?> _maskOf = new();
 
     /// <summary>Will the arena DRAW from this strip? The no-strip fixture takes it from geometry and draw alike.</summary>
     private bool StripAvailable(string key) => !DevNoStrips && _ui.Assets.Has(key);
@@ -2580,9 +3136,8 @@ public sealed class HuntScreen
     private IReadOnlyList<EquippedSkill>? _champClipStripsSkills;
     private bool _champClipStripsNoStrips;
 
-    /// <summary>A creature's idle strip for the wave's Source, or null when no art resolves.</summary>
-    private string? CreatureReferenceStrip
-        => ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en) ? $"{en}_idle_strip8_512" : null;
+    /// <summary>The idle strip this wave's creatures are measured from (the region's body for the rolled archetype).</summary>
+    private string? CreatureReferenceStrip => CreatureLook.IdleStrip;
 
     /// <summary>
     /// The clips a standing creature plays — its idle and its attack — for the wave's art key, or
@@ -2610,6 +3165,7 @@ public sealed class HuntScreen
     private void LayoutActors()
     {
         _creatureBoxes.Clear();
+        _drawnFrames.Clear();   // this frame's figures record their frames below; last frame's are gone
 
         // The champion, WITH his lunge. The draw used to apply this push and the effects never saw it.
         // The BODY rides the lunge, because the effects are supposed to: a hit lands where the figure
@@ -2694,7 +3250,11 @@ public sealed class HuntScreen
     /// <summary>The boss: a square figure standing on its own anchor, with the same lunge as any creature.</summary>
     private void LayoutBoss()
     {
-        var lunge = (int)(_enemyLunge * -40f);
+        // THE BOSS ARRIVES TOO. This read only the lunge, so a boss appeared at rest on its own mark
+        // while every ordinary wave slid in — the one wave in five with a horn and a banner was also
+        // the only one that popped. The entrance is the same rectangle offset the row uses, eased the
+        // same way, so the two presentations cannot drift.
+        var lunge = (int)(_enemyLunge * -40f) + (int)(_enemyEnter * _enemyEnter * BossEnterOffset);
         _creatureBoxes[0] = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge,
                                           BossAnchor.Y - BossTargetBodyHeight,
                                           BossTargetBodyHeight, BossTargetBodyHeight);
@@ -2702,12 +3262,15 @@ public sealed class HuntScreen
         _rowTopY = _creatureBoxes[0].Y;
     }
 
+    /// <summary>How far off-stage-right a boss starts its arrival. Wider than the row's, because it is one figure.</summary>
+    private const float BossEnterOffset = 260f;
+
     /// <summary>The boss's idle strip, or null when the region has no boss art.</summary>
     private string? BossReferenceStrip
-        => BossKey is { } k && _ui.Assets.Has($"{k}_idle_strip8_512") ? $"{k}_idle_strip8_512" : null;
+        => BossArt is { } k && _ui.Assets.Has(k.IdleStrip) ? k.IdleStrip : null;
 
     /// <summary>Which boss this wave draws — the dev fixture's, or the region's.</summary>
-    private string? BossKey => DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
+    private BossLook? BossArt => DevForceBoss ? EnemyPresentation.BossByArtKey("crystal_lich") : EnemyPresentation.BossFor(RegionId);
 
     /// <summary>The creature the sim is hitting: the first alive one, else the one that died last.</summary>
     private int TargetSlot()
@@ -2734,7 +3297,8 @@ public sealed class HuntScreen
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
         ActorShadow(b, box.Center.X, CreatureGround, (int)(box.Width * 0.55f), 30, 0.5f * fade);
-        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
+        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f,
+                    record: VfxSubject.Creature(slot));
     }
 
     /// <summary>
@@ -2781,13 +3345,9 @@ public sealed class HuntScreen
         var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var (w, h) = (ArchetypeBox(WaveArchetype).X, ArchetypeBox(WaveArchetype).Y);
 
-        string? stripKey = null, staticKey = null;
-        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
-        {
-            var act = attacking ? "attack" : "idle";
-            stripKey = $"{en}_{act}_strip8_512";
-            staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
-        }
+        var look = CreatureLook;
+        string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
+        string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         for (var i = 0; i < comp.Count; i++)
         {
@@ -2826,7 +3386,7 @@ public sealed class HuntScreen
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, creatureTint, crop))
+                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i)))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
@@ -2893,25 +3453,20 @@ public sealed class HuntScreen
         var figTop = _rowTopY;
         if (_replay is not null && !_replay.CreatureAlive(0))
         {
-            var deadKey = ArtSource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
-            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), deadKey);
+            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey);
             return;
         }
 
-        string? stripKey = null, staticKey = null;
+        var look = CreatureLook;
         // 11/9, was 16/12. The whole complaint is legibility: an 8-frame swing at 16fps is over in half
         // a second, which is not long enough to see a creature wind up and commit. Held above ~9 so the
         // frames still read as motion rather than as a slideshow.
         var fps = attacking ? 11f : 9f;
-        if (ArtSource is { } es && EnemyForSource.TryGetValue(es, out var en))
-        {
-            var act = attacking ? "attack" : "idle";
-            stripKey = $"{en}_{act}_strip8_512";
-            staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
-        }
+        string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
+        string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, enterTint, crop))
+                                                !attacking, enterTint, crop, record: VfxSubject.Creature(0)))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
@@ -2932,10 +3487,23 @@ public sealed class HuntScreen
         // unstyled element left inside the arena, and at full health it read as a floating red streak
         // with nothing tying it to the creature underneath.
         var ebar = new Rectangle(ebox.Center.X - 92, visTop - 46, 184, 34);
+        var nameY = ebar.Y - 28;
+        // THE PLATE KEEPS CLEAR OF THE RIGHT RAIL (2026-09-16). A lone Bruiser stands at the arena's right
+        // and tall, so its name and bar rose into the band the IDLE panel covers — and the rail is drawn
+        // AFTER the arena, so the bar's right end and half the name were painted over at every profile
+        // (enemies/*_lone_*). The plate slides left until it clears the panel it would sit under; the
+        // panel is the one the rail recorded (last frame's, drawn later in this Draw).
+        var rail = _utilityPanel;
+        if (rail.Width > 0 && nameY < rail.Bottom + UiMetrics.Space(8) && ebar.Bottom > rail.Y)
+        {
+            var plateHalf = Math.Max(ebar.Width, _ui.MeasureBig(look.Name, UiTypography.Secondary)) / 2;
+            var over = ebar.Center.X + plateHalf - (rail.X - UiMetrics.Space(12));
+            if (over > 0) ebar.X -= over;
+        }
         _ui.BarArt(b, ebar, Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f), "health");
         // The creature was never named on screen — the player fought an anonymous sprite for the whole run.
-        if (stripKey is not null || staticKey is not null)
-            _ui.TextCenterBig(b, PrettyName(ArtSource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
+        // Its name is its look's: what this region calls this role (EnemyPresentation).
+        _ui.TextCenterBig(b, look.Name, ebar.Center.X, nameY, UiKit.Vellum, UiTypography.Secondary);
     }
 
     /// <summary>
@@ -2950,8 +3518,8 @@ public sealed class HuntScreen
     /// </remarks>
     private void DrawBoss(SpriteBatch b, bool attacking)
     {
-        var bossKey = BossKey;
-        _bossName = bossKey is not null ? BossNameFor.GetValueOrDefault(bossKey, "BOSS") : "BOSS";
+        var bossArt = BossArt;
+        _bossName = bossArt?.Name ?? "BOSS";
         // The corruption's epithet on the boss — "FEVERED CRYSTAL LICH" — so the tier is a thing with a
         // name that looks back at you, not a number on another screen.
         var epithet = CorruptionLook.For(CorruptionTier).Epithet;
@@ -2962,18 +3530,19 @@ public sealed class HuntScreen
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
-        if (bossKey is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
-            && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
+        if (bossArt is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
+            && _ui.Assets.Has(bossArt.DeathStrip))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            ActorSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f);
+            ActorSprite(b, bossArt.DeathStrip, box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f,
+                        record: VfxSubject.Creature(0));
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
         var fps = attacking ? 10f : 8f;
-        var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
+        var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
-        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
+        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0)))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
             // while LayoutActors published the full box as this boss's body and envelope — 2.45x wider
@@ -3252,7 +3821,7 @@ public sealed class HuntScreen
 
         var champ = VisualRect(ChampBox, ChampionReferenceStrip);
         var swarmBox = new Rectangle(Point.Zero, ArchetypeBox(Archetype.Swarm));
-        var swarm = VisualRect(swarmBox, CreatureReferenceStrip);
+        var swarm = VisualRect(swarmBox, EnemyPresentation.For(ArtRegion, Archetype.Swarm).IdleStrip);
         var boss = VisualRect(new Rectangle(0, 0, BossTargetBodyHeight, BossTargetBodyHeight), BossReferenceStrip);
         var row = new Rectangle(0, 0, swarm.Width * 3, swarm.Height);   // a four-creature row, compressed
 
@@ -3368,12 +3937,10 @@ public sealed class HuntScreen
     /// </summary>
     private int _logNumbersFirst, _logDiffFirst;
 
-    /// <summary>
-    /// The mouse wheel's notches this frame, read in <see cref="Update"/>. The host hands this screen a
-    /// cursor and a click and nothing else; the log's scroll regions need the wheel, so the screen reads
-    /// the wheel's DELTA itself — a delta is not a cursor and converts nothing (LAW 6 is about position).
-    /// </summary>
-    private int _wheel, _wheelLast;
+    // THE WHEEL IS A PARAMETER NOW, NOT A FIELD. `_wheel` was sampled off Mouse.GetState() in Update
+    // and read by DrawReportPanel — a field whose only job was to smuggle an input edge into the paint,
+    // which is the shape this pass removes. The host's own per-frame delta reaches the two scroll
+    // columns through TakeInput → TakeLogInput → ScrollReport, and nothing else ever sees it.
 
     /// <summary>
     /// The EXPEDITION LOG: a full-screen read of one run's report, with a way to walk back through the others.
@@ -3386,7 +3953,7 @@ public sealed class HuntScreen
     /// at, from <see cref="RunReport.Limit"/> — the numbers below it explain magnitude, this explains meaning.
     /// The numbers and the diff stand side by side at readable rungs (nothing under Secondary, and Secondary
     /// only for chips), instead of the diff hanging under the table at Caption. And the DOORS live here —
-    /// ADJUST BUILD and GEAR — because this is where a player decides what to change; the fall plate over the
+    /// ADJUST BUILD and GEAR — because this is where a player decides what to change; the medallion over the
     /// arena is only the door to this screen.
     /// </para>
     /// <para>
@@ -3395,7 +3962,7 @@ public sealed class HuntScreen
     /// runs — the entire reason to keep them — harder, not easier.
     /// </para>
     /// </remarks>
-    public void DrawLog(SpriteBatch b, Point mouse, bool clicked)
+    public void DrawLog(SpriteBatch b, Point mouse)
     {
         if (!_logOpen) return;
 
@@ -3414,7 +3981,7 @@ public sealed class HuntScreen
 
         // ZONE A — the header row: what this screen is; which run, of how many; the close icon.
         _ui.TextBig(b, "EXPEDITION LOG", x0, panel.Y + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle, TextFace.Display);
-        if (_ui.CloseButton(b, close, hit, clicked)) WantsLog = true;   // walks the same host path the L key does
+        _ui.CloseButton(b, close, hit, false);   // painted here; TakeLogInput decides it, and walks the same host path the L key does
 
         if (Log.Count == 0)
         {
@@ -3426,15 +3993,18 @@ public sealed class HuntScreen
             return;
         }
 
-        _logIndex = Math.Clamp(_logIndex, 0, Log.Count - 1);
-        var shown = Log.Entries[_logIndex];
-        var older = Log.OlderThan(_logIndex);
+        // A LOCAL, NOT THE FIELD. The clamp is semantic state and it is written in TakeLogInput, which
+        // runs before this every frame the log is open; reading it through a local keeps the paint from
+        // writing anything at all.
+        var index = Math.Clamp(_logIndex, 0, Log.Count - 1);
+        var shown = Log.Entries[index];
+        var older = Log.OlderThan(index);
         var region = Regions.Find(shown.RegionId)?.Name ?? shown.RegionId;
-        var entry = $"ENTRY {_logIndex + 1} OF {Log.Count}";
+        var entry = $"ENTRY {index + 1} OF {Log.Count}";
         _ui.TextRightBig(b, region.Length > 0 ? $"{region.ToUpperInvariant()}  ·  {entry}" : entry,
                          close.X - UiMetrics.Space(20), panel.Y + UiTypography.ModalTitleTop + UiMetrics.Space(6), Slate, UiTypography.Body);
 
-        DrawReportPanel(b, panel, shown, older, hit);
+        DrawReportPanel(b, panel, shown, older);
 
         // ZONE E — the footer: paging on the left as ordinary buttons; the doors on the right, ADJUST BUILD
         // the one primary decision this screen offers. No RETRY — the hunter already regroups. ANCHORED to
@@ -3442,18 +4012,64 @@ public sealed class HuntScreen
         // under a scroll region (brief §18).
         var fy = LogFooterY(panel);
         var bh = LogButtonHeight;
-        var prev = new Rectangle(x0, fy, UiMetrics.Space(180), bh);
-        var next = new Rectangle(x0 + UiMetrics.Space(196), fy, UiMetrics.Space(180), bh);
-        if (_ui.Button(b, prev, "‹  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1) && _logIndex < Log.Count - 1) { _logIndex++; _logNumbersFirst = _logDiffFirst = 0; }
-        if (_ui.Button(b, next, "NEWER  ›", hit, clicked, enabled: _logIndex > 0) && _logIndex > 0) { _logIndex--; _logNumbersFirst = _logDiffFirst = 0; }
+        var foot = LogFooter(panel);   // THE SAME FOUR RECTS TakeLogInput HIT-TESTS
+        _ui.Button(b, foot.Older, "‹  OLDER", hit, false, enabled: index < Log.Count - 1);
+        _ui.Button(b, foot.Newer, "NEWER  ›", hit, false, enabled: index > 0);
         // A disabled arrow says why, beside itself (huntstates-10).
-        var edge = Log.Count == 1 ? "THE ONLY ENTRY" : _logIndex == 0 ? "THIS IS THE NEWEST" : _logIndex == Log.Count - 1 ? "THIS IS THE OLDEST" : "";
+        var edge = Log.Count == 1 ? "THE ONLY ENTRY" : index == 0 ? "THIS IS THE NEWEST" : index == Log.Count - 1 ? "THIS IS THE OLDEST" : "";
         if (edge.Length > 0)
-            _ui.TextBig(b, edge, next.Right + UiMetrics.Space(16), fy + (bh - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, edge, foot.Newer.Right + UiMetrics.Space(16), fy + (bh - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
+        _ui.Button(b, foot.Build, "ADJUST BUILD", hit, false, true, ButtonStyle.Primary);
+        _ui.Button(b, foot.Gear, "GEAR", hit, false);
+    }
+
+    /// <summary>The LOG's footer controls — paging on the left, the two doors on the right.</summary>
+    /// <remarks>
+    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawLog"/> paints these rectangles and
+    /// <see cref="TakeLogInput"/> hit-tests them. Anchored to the panel's foot at every profile, so the
+    /// doors never sit under a scroll region (brief §18).
+    /// </remarks>
+    private readonly record struct LogFooterRects(Rectangle Older, Rectangle Newer, Rectangle Build, Rectangle Gear);
+
+    private static LogFooterRects LogFooter(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        var x1 = UiKit.ContentRight(panel);
+        var fy = LogFooterY(panel);
+        var bh = LogButtonHeight;
         var build = new Rectangle(x1 - UiMetrics.Space(280), fy, UiMetrics.Space(280), bh);
-        var gear = new Rectangle(build.X - UiMetrics.Space(16) - UiMetrics.Space(200), fy, UiMetrics.Space(200), bh);
-        if (_ui.Button(b, build, "ADJUST BUILD", hit, clicked, true, ButtonStyle.Primary)) { _logOpen = false; WantsBuild = true; }
-        if (_ui.Button(b, gear, "GEAR", hit, clicked)) { _logOpen = false; WantsGear = true; }
+        return new LogFooterRects(
+            new Rectangle(x0, fy, UiMetrics.Space(180), bh),
+            new Rectangle(x0 + UiMetrics.Space(196), fy, UiMetrics.Space(180), bh),
+            build,
+            new Rectangle(build.X - UiMetrics.Space(16) - UiMetrics.Space(200), fy, UiMetrics.Space(200), bh));
+    }
+
+    /// <summary>
+    /// The LOG's own input — the close icon, the two scroll columns, the paging arrows and the doors, in
+    /// the order <see cref="DrawLog"/> paints them.
+    /// </summary>
+    /// <remarks>
+    /// Reached from <see cref="TakeInput"/> without the <c>huntOnTop</c> gate, because the log is drawn
+    /// over whatever screen it was opened from (the host's L handler closes the menu screens, but its
+    /// nav keys do not close the log) and its controls have to keep answering there.
+    /// </remarks>
+    private void TakeLogInput(Point mouse, bool clicked, int wheel)
+    {
+        var panel = LogPanel;
+        if (UiKit.ClickedIn(UiKit.CloseRect(panel), mouse, clicked)) WantsLog = true;   // the same host path the L key walks
+        if (Log.Count == 0) return;
+
+        // THE CLAMP LIVES HERE. An index a trimmed log has put out of range is semantic state, and a
+        // paint that writes state is what this pass removes; the paint reads a local clamp instead.
+        _logIndex = Math.Clamp(_logIndex, 0, Log.Count - 1);
+        ScrollReport(panel, Log.Entries[_logIndex], Log.OlderThan(_logIndex), mouse, wheel);
+
+        var foot = LogFooter(panel);
+        if (UiKit.ClickedIn(foot.Older, mouse, clicked) && _logIndex < Log.Count - 1) { _logIndex++; _logNumbersFirst = _logDiffFirst = 0; }
+        if (UiKit.ClickedIn(foot.Newer, mouse, clicked) && _logIndex > 0) { _logIndex--; _logNumbersFirst = _logDiffFirst = 0; }
+        if (UiKit.ClickedIn(foot.Build, mouse, clicked)) { _logOpen = false; WantsBuild = true; }
+        if (UiKit.ClickedIn(foot.Gear, mouse, clicked)) { _logOpen = false; WantsGear = true; }
     }
 
     /// <summary>
@@ -3534,22 +4150,156 @@ public sealed class HuntScreen
         RunLimit.Armour => 0, RunLimit.Reach => 2, RunLimit.Sustain => 3, RunLimit.Stalled => 4, _ => -1,
     };
 
+    // ── THE REPORT'S VERTICAL GEOMETRY, as pure arithmetic off the panel. ─────────────────────────
+    //    Both halves read it: the wheel is applied to the two columns in ScrollReport and the rows are
+    //    laid out from the very same numbers in DrawReportPanel, so the column that scrolls is always
+    //    the column the pointer was over and the rows that move are the rows that were drawn.
+
+    /// <summary>ZONE B — the outcome band, at the top of the report's content.</summary>
+    private static Rectangle ReportBand(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        return new Rectangle(x0, panel.Y + LogBandTop, UiKit.ContentRight(panel) - x0,
+                             UiMetrics.Space(24) + UiTypography.RegionTitle);
+    }
+
+    /// <summary>The ENDED BY line, under the band.</summary>
+    private static int ReportEndedByY(Rectangle panel) => ReportBand(panel).Bottom + UiMetrics.Space(14);
+
+    /// <summary>The diagnosis plate's own inset.</summary>
+    private static int ReportDiagPad => UiMetrics.Space(14);
+
+    /// <summary>ZONE C — the diagnosis plate: the limit's name, the verdict, and what to look at.</summary>
+    private static Rectangle ReportDiag(Rectangle panel)
+    {
+        var x0 = UiKit.ContentLeft(panel);
+        return new Rectangle(x0, ReportEndedByY(panel) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14),
+                             UiKit.ContentRight(panel) - x0,
+                             ReportDiagPad + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body)
+                             + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10));
+    }
+
+    /// <summary>ZONE D — where the two columns and their heads begin.</summary>
+    private static int ReportColumnsTop(Rectangle panel) => ReportDiag(panel).Bottom + UiMetrics.Space(20);
+
+    /// <summary>The first row of either column: under the column's head, its hairline and a breath.</summary>
+    private static int ReportRowsTop(Rectangle panel)
+        => ReportColumnsTop(panel) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6) + UiMetrics.Space(8);
+
+    /// <summary>The floor both columns stop at, clear of the footer's doors.</summary>
+    private static int ReportFooterTop(Rectangle panel) => LogFooterY(panel) - UiMetrics.Space(16);
+
+    /// <summary>The numbers column's width — the 100 % split (620 of 1120) kept as a share.</summary>
+    private static int ReportLeftW(Rectangle panel) => (UiKit.ContentRight(panel) - UiKit.ContentLeft(panel)) * 620 / 1120;
+
+    /// <summary>The diff column's left edge.</summary>
+    private static int ReportRightX(Rectangle panel) => UiKit.ContentLeft(panel) + ReportLeftW(panel) + UiMetrics.Space(40);
+
+    /// <summary>What the pointer has to be inside for the wheel to move THE NUMBERS.</summary>
+    private static Rectangle NumbersHot(Rectangle panel)
+    {
+        var top = ReportColumnsTop(panel);
+        return new Rectangle(UiKit.ContentLeft(panel), top, ReportLeftW(panel), ReportFooterTop(panel) - top);
+    }
+
+    /// <summary>What the pointer has to be inside for the wheel to move SINCE YOUR LAST RUN HERE.</summary>
+    private static Rectangle DiffHot(Rectangle panel)
+    {
+        var top = ReportColumnsTop(panel);
+        var rightX = ReportRightX(panel);
+        return new Rectangle(rightX, top, UiKit.ContentRight(panel) - rightX, ReportFooterTop(panel) - top);
+    }
+
+    /// <summary>A column's measured rhythm: the row pitch, and how many rows there is room for.</summary>
+    private readonly record struct ScrollRhythm(int Pitch, int Visible);
+
+    /// <summary>
+    /// THE RHYTHM COMES FROM THE ROOM THERE IS (brief §17): the house pitch when the rows fit, tighter
+    /// down to a floor when they do not, and past the floor the column scrolls under the wheel.
+    /// </summary>
+    private static ScrollRhythm NumbersScroll(Rectangle panel, int count)
+    {
+        var pitchMax = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(18);
+        var pitchMin = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        var room = Math.Max(0, ReportFooterTop(panel) - ReportRowsTop(panel));
+        var pitch = Math.Clamp(room / Math.Max(1, count), pitchMin, pitchMax);
+        return new ScrollRhythm(pitch, Math.Min(count, room / pitch));
+    }
+
+    /// <summary>The diff column's rhythm — two lines to an entry, and the same clamp-to-the-room rule.</summary>
+    private static ScrollRhythm DiffScroll(Rectangle panel, int count)
+    {
+        var diffMax = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(8);
+        var diffMin = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(2);
+        var room = Math.Max(0, ReportFooterTop(panel) - ReportRowsTop(panel));
+        var pitch = Math.Clamp(room / Math.Max(1, count), diffMin, diffMax);
+        return new ScrollRhythm(pitch, Math.Min(count, room / pitch));
+    }
+
+    /// <summary>
+    /// THE NUMBERS' rows. Gathered here rather than inside the paint so the count the scroll measure
+    /// uses and the rows the paint lays out can never disagree — a row added to this list scrolls.
+    /// </summary>
+    /// <remarks>
+    /// SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one question — what
+    /// the wave landed, and what it landed ON. Never shown at zero: a build with no shield would
+    /// otherwise read a row of nothing every run and learn to skip past the rows.
+    /// </remarks>
+    private static List<(string Label, string Figure, string Unit)> ReportRows(RunReport r)
+    {
+        var rows = new List<(string Label, string Figure, string Unit)>
+        {
+            ("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage"),
+            ("AVERAGE HIT", $"{r.AverageHitSize:F0}", ""),
+            ("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast"),
+            ("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health"),
+            ("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds"),
+        };
+        if (r.ShieldAbsorbedFraction > 0f)
+            rows.Insert(4, ("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed"));
+        return rows;
+    }
+
+    /// <summary>
+    /// The wheel, over the report's two scroll columns — the one place either first-row index is moved.
+    /// </summary>
+    /// <remarks>
+    /// It used to live in <see cref="DrawReportPanel"/>, reading a <c>_wheel</c> field the screen
+    /// sampled for itself: a paint that consumed an input edge, which on a catch-up tick is a notch the
+    /// player never gets back. The clamp moved with it, because a paint that writes a scroll position is
+    /// a paint that mutates state.
+    /// </remarks>
+    private void ScrollReport(Rectangle panel, RunReport r, RunReport? previous, Point mouse, int wheel)
+    {
+        var rows = ReportRows(r).Count;
+        _logNumbersFirst = UiKit.Scrolled(_logNumbersFirst, NumbersHot(panel).Contains(mouse) ? wheel : 0,
+                                          NumbersScroll(panel, rows).Visible, rows);
+
+        var entries = r.DiffEntries(previous).Count();
+        _logDiffFirst = UiKit.Scrolled(_logDiffFirst, DiffHot(panel).Contains(mouse) ? wheel : 0,
+                                       DiffScroll(panel, entries).Visible, entries);
+    }
+
     /// <summary>
     /// The report, as the log shows it: the outcome band, the diagnosis, the numbers and the diff side by side.
     /// Nothing here is measured; every number is <see cref="RunReport"/>'s. The footer is the caller's.
     /// </summary>
-    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous, Point hit)
+    /// <remarks>
+    /// It takes no cursor and no edge any more: the wheel over its two columns is applied in
+    /// <see cref="ScrollReport"/>, from Update, and every vertical anchor here comes from the same
+    /// Report* helpers that measure it — so the rows that move are the rows that were drawn.
+    /// </remarks>
+    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous)
     {
         var x0 = UiKit.ContentLeft(panel);
         var x1 = UiKit.ContentRight(panel);
-        var w = x1 - x0;
         var pad = UiMetrics.Space(24);   // the inset of text inside the band and the diagnosis plate
 
         // ZONE B — the outcome band. FELL, in the title: every entry is the end of a run and must say so.
         // Ember for a fall, gold for a stall (the clock ran out, the hunter stood); a record is a chip.
         var stalled = r.Outcome == WaveOutcome.Stalled;
         var tint = stalled ? Gold : Ember;
-        var band = new Rectangle(x0, panel.Y + LogBandTop, w, UiMetrics.Space(24) + UiTypography.RegionTitle);
+        var band = ReportBand(panel);
         // The house plate with the outcome's accent, and its wash inside — the same component as the
         // diagnosis plate fourteen pixels under it, not a second treatment (huntstates-09).
         _ui.Plate(b, band, tint);
@@ -3571,18 +4321,17 @@ public sealed class HuntScreen
         var affixes = r.WallAffixes.Count > 0
             ? string.Join(", ", r.WallAffixes.Select(AffixWords))
             : "NO AFFIX";
-        var y = band.Bottom + UiMetrics.Space(14);
+        var y = ReportEndedByY(panel);
         var ax = Runs(b, x0, y, UiTypography.Body,
             ("ENDED BY   ", Slate),
             ($"{r.WallArchetype.ToString().ToUpperInvariant()} × {r.WallCreatures}", UiKit.Vellum),
             ("   ·   ", Slate));
         _ui.TextBig(b, _ui.ShortenBig(affixes, x1 - ax, UiTypography.Body), ax, y, Bone, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
 
         // ZONE C — the diagnosis: the limit's NAME, the verdict SENTENCE, and what to LOOK AT. A quiet plate
         // with the gold rule — this gold means "the thing that matters", and it is the only gold below the band.
-        var diagPad = UiMetrics.Space(14);
-        var diag = new Rectangle(x0, y, w, diagPad + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10));
+        var diagPad = ReportDiagPad;
+        var diag = ReportDiag(panel);
         _ui.Plate(b, diag, tint);   // the outcome's own colour: it names the failure (huntstates-05); gold stays on the title and ADJUST BUILD
         var dx = diag.X + pad;
         var dy = diag.Y + diagPad;
@@ -3591,57 +4340,38 @@ public sealed class HuntScreen
         _ui.TextBig(b, _ui.ShortenBig(r.Verdict(), diag.Width - pad * 2, UiTypography.Body), dx, dy, Bone, UiTypography.Body);
         dy += UiTypography.Pitch(UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig($"WHAT TO LOOK AT — {LookAt(r.Limit)}", diag.Width - pad * 2, UiTypography.Secondary), dx, dy, Slate, UiTypography.Secondary);
-        y = diag.Bottom + UiMetrics.Space(20);
+        y = ReportColumnsTop(panel);
 
         // ZONE D — two columns. LEFT: the numbers, each a lever; the row the diagnosis names wears the rule.
         // The split is the 100 % one (620 of 1120) kept as a share, so a wider panel widens both columns.
-        var leftW = w * 620 / 1120;
-        var rightX = x0 + leftW + UiMetrics.Space(40);
+        var leftW = ReportLeftW(panel);
+        var rightX = ReportRightX(panel);
         var rightW = x1 - rightX;
-        var footerTop = LogFooterY(panel) - UiMetrics.Space(16);
 
         _ui.TextBig(b, $"THE NUMBERS  ·  LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x0, y, Slate, UiTypography.Body);
-        var ty = y + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
-        Hairline(b, x0, ty, leftW, Slate * 0.45f);
-        ty += UiMetrics.Space(8);
+        var ty = ReportRowsTop(panel);
+        Hairline(b, x0, ty - UiMetrics.Space(8), leftW, Slate * 0.45f);
 
-        // THE ROWS, gathered before they are drawn: their labels size the figure column, and their count
-        // sets the rhythm. SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one
-        // question — what the wave landed, and what it landed ON. Never shown at zero: a build with no
-        // shield would otherwise read a row of nothing every run and learn to skip past the rows.
-        var rows = new List<(string Label, string Figure, string Unit)>
-        {
-            ("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage"),
-            ("AVERAGE HIT", $"{r.AverageHitSize:F0}", ""),
-            ("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast"),
-            ("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health"),
-            ("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds"),
-        };
-        var litRow = LimitRow(r.Limit);   // indexes the five rows above; the shield row is inserted AFTER it is resolved
-        if (r.ShieldAbsorbedFraction > 0f)
-        {
-            rows.Insert(4, ("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed"));
-            if (litRow >= 4) litRow++;
-        }
+        // THE ROWS, gathered by ReportRows so the scroll measure counts exactly what is drawn.
+        var rows = ReportRows(r);
+        var litRow = LimitRow(r.Limit);   // indexes the five base rows; the shield row is inserted AFTER it is resolved
+        if (r.ShieldAbsorbedFraction > 0f && litRow >= 4) litRow++;
         // The figures' right edge: the house 330 at 100 %, or further right when the profile's labels need it.
         var labelW = rows.Max(row => _ui.MeasureBig(row.Label, UiTypography.Body));
         var figureW = rows.Max(row => _ui.MeasureBig(row.Figure, UiTypography.Headline));
         var xv = x0 + Math.Max(UiMetrics.Space(330), labelW + UiMetrics.Space(16) + figureW);
-        // THE RHYTHM COMES FROM THE ROOM THERE IS (brief §17): the house pitch when the rows fit, tighter
-        // down to a floor when they do not, and past the floor the column scrolls under the wheel — the
-        // footer's doors are never covered. At 100 % every row fits at the house pitch, as before.
-        var pitchMax = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(18);
-        var pitchMin = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
-        var roomH = Math.Max(0, footerTop - ty);
-        var rowPitch = Math.Clamp(roomH / Math.Max(1, rows.Count), pitchMin, pitchMax);
-        var visible = Math.Min(rows.Count, roomH / rowPitch);
-        var leftHot = new Rectangle(x0, y, leftW, footerTop - y).Contains(hit);
-        _logNumbersFirst = UiKit.Scrolled(_logNumbersFirst, leftHot ? _wheel : 0, visible, rows.Count);
+        // THE RHYTHM AND THE SCROLL ARE ONE MEASURE (NumbersScroll) — the wheel is applied to it in
+        // ScrollReport, from Update, and the rows are laid out from it here. `first` is a CLAMP, not a
+        // wheel read: ScrollReport has already moved the index this frame.
+        var rhythm = NumbersScroll(panel, rows.Count);
+        var rowPitch = rhythm.Pitch;
+        var visible = rhythm.Visible;
+        var first = UiKit.Scrolled(_logNumbersFirst, 0, visible, rows.Count);
         var scrolls = rows.Count > visible;
         var rowRight = x0 + leftW - (scrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
         var drop = UiMetrics.Space(5);   // a Body label's baseline nudge beside a Headline figure
         var rowsTop = ty;
-        for (var i = _logNumbersFirst; i < Math.Min(rows.Count, _logNumbersFirst + visible); i++)
+        for (var i = first; i < Math.Min(rows.Count, first + visible); i++)
         {
             var (label, figure, unit) = rows[i];
             if (i == litRow) _ui.Fill(b, new Rectangle(x0 - UiMetrics.Space(14), ty - UiMetrics.Space(4), 4, rowPitch - UiMetrics.Space(8)), tint);
@@ -3652,14 +4382,13 @@ public sealed class HuntScreen
             Hairline(b, x0, ty - UiMetrics.Space(10), rowRight - x0, Slate * 0.18f);
         }
         if (scrolls)
-            _ui.ScrollBar(b, new Rectangle(x0 + leftW - UiMetrics.ScrollbarWidth, rowsTop, UiMetrics.ScrollbarWidth, visible * rowPitch), _logNumbersFirst, visible, rows.Count);
+            _ui.ScrollBar(b, new Rectangle(x0 + leftW - UiMetrics.ScrollbarWidth, rowsTop, UiMetrics.ScrollbarWidth, visible * rowPitch), first, visible, rows.Count);
 
         // RIGHT: what changed since the last run here — the core concept, ranked as such.
         // The same head as THE NUMBERS beside it — two peer columns, one rung, one ink (huntstates-05).
         _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", rightX, y, Slate, UiTypography.Body);
-        var ry = y + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
-        Hairline(b, rightX, ry - UiMetrics.Space(4), rightW, Slate * 0.45f);
-        ry += UiMetrics.Space(8);
+        var ry = ReportRowsTop(panel);
+        Hairline(b, rightX, ry - UiMetrics.Space(8) - UiMetrics.Space(4), rightW, Slate * 0.45f);
         var entries = r.DiffEntries(previous).ToList();
         if (entries.Count == 0)
         {
@@ -3673,17 +4402,14 @@ public sealed class HuntScreen
         // CLAMPED TO THE ROOM THERE ACTUALLY IS, above the footer: a row added to RunReport's diff must never
         // go under the frame. The same rhythm as the numbers: the house pitch when the entries fit, tighter
         // down to a floor when they do not, and past the floor they scroll under the wheel.
-        var diffMax = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(8);
-        var diffMin = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(2);
-        var diffRoom = Math.Max(0, footerTop - ry);
-        var diffPitch = Math.Clamp(diffRoom / Math.Max(1, entries.Count), diffMin, diffMax);
-        var diffVisible = Math.Min(entries.Count, diffRoom / diffPitch);
-        var rightHot = new Rectangle(rightX, y, rightW, footerTop - y).Contains(hit);
-        _logDiffFirst = UiKit.Scrolled(_logDiffFirst, rightHot ? _wheel : 0, diffVisible, entries.Count);
+        var diffRhythm = DiffScroll(panel, entries.Count);
+        var diffPitch = diffRhythm.Pitch;
+        var diffVisible = diffRhythm.Visible;
+        var diffFirst = UiKit.Scrolled(_logDiffFirst, 0, diffVisible, entries.Count);   // a clamp, not a wheel read
         var diffScrolls = entries.Count > diffVisible;
         var entryRight = rightX + rightW - (diffScrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
         var diffTop = ry;
-        for (var i = _logDiffFirst; i < Math.Min(entries.Count, _logDiffFirst + diffVisible); i++)
+        for (var i = diffFirst; i < Math.Min(entries.Count, diffFirst + diffVisible); i++)
         {
             var e = entries[i];
             _ui.TextBig(b, DiffLabel(e.Label), rightX, ry, Slate, UiTypography.Body);
@@ -3701,7 +4427,7 @@ public sealed class HuntScreen
             ry += diffPitch;
         }
         if (diffScrolls)
-            _ui.ScrollBar(b, new Rectangle(rightX + rightW - UiMetrics.ScrollbarWidth, diffTop, UiMetrics.ScrollbarWidth, diffVisible * diffPitch), _logDiffFirst, diffVisible, entries.Count);
+            _ui.ScrollBar(b, new Rectangle(rightX + rightW - UiMetrics.ScrollbarWidth, diffTop, UiMetrics.ScrollbarWidth, diffVisible * diffPitch), diffFirst, diffVisible, entries.Count);
     }
 
     /// <summary>
@@ -3728,16 +4454,24 @@ public sealed class HuntScreen
         switch (overlay)
         {
             case HuntOverlay.HunterDown:
-                // Drawn in the unclipped HUD pass (DrawFallPlate), over everything, where it can be clicked.
+                // Nothing: the fall is the collapse, the flash and the black, painted at the foot of Draw
+                // from the clocks. Resolved here only so the wave's own banners stay off under it.
                 break;
             case HuntOverlay.BossIncoming:
             {
-                var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
+                var fade = DevBossCall ? 1f : Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
+                // UNDER THE HEADER, NEVER BEHIND IT. The plate sat at a literal y of 200, which cleared
+                // a header that ended at 153 and stopped clearing one that can now end at 262 — and the
+                // state that makes the wave lane take a second row is BOSS WAVE, which is precisely the
+                // state this announcement plays under. The panel's frame is opaque, so the top half of
+                // the game's boss warning was simply painted over. Floored at the old 200 so nothing
+                // moves at the profile and row count it was measured for.
+                var plateTop = Math.Max(200, StageHeaderBottomY + UiMetrics.Space(24));
                 // The plate is as tall as its two lines: (610, 200, 700, 110) at 100 %.
-                var titleY = 200 + UiMetrics.Space(24);
+                var titleY = plateTop + UiMetrics.Space(24);
                 var subY = titleY + UiTypography.Pitch(UiTypography.RegionTitle) + 1;
-                var plateH = subY + UiTypography.OverlayBody + UiMetrics.Space(14) - 200;
-                _ui.Fill(b, new Rectangle(610, 200, 700, plateH), PanelBg * fade);
+                var plateH = subY + UiTypography.OverlayBody + UiMetrics.Space(14) - plateTop;
+                _ui.Fill(b, new Rectangle(610, plateTop, 700, plateH), PanelBg * fade);
                 _ui.TextCenterBig(b, "BOSS INCOMING", 960, titleY, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
                 _ui.TextCenterBig(b, "GET READY", 960, subY, Bone * fade, UiTypography.OverlayBody);
                 break;
@@ -4057,8 +4791,27 @@ public sealed class HuntScreen
     }
 
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
-    /// <summary>Where the EXPEDITION LOG button sits: just right of the stage header, clear of the pills. A hit target — its edge follows the profile.</summary>
-    private static Rectangle LogButtonRect => new(1206, 40, UiMetrics.Control(64), UiMetrics.Control(64));
+    /// <summary>
+    /// Where the EXPEDITION LOG button sits: right of the stage header, UNDER the chrome row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// BOTH OF ITS NUMBERS ARE ANCHORS, and each was a literal that failed at 150 %. The y hangs off
+    /// <see cref="Game1.ChromeRowBottom"/>: a fixed 40 put the medallion half underneath the GLEAM
+    /// capsule, where the capsules are half again as tall and their chain reaches back past 1206.
+    /// </para>
+    /// <para>
+    /// The x then had to leave the page's centred column entirely. Below the capsules is where the
+    /// locked-tile refusal lives — 900 px wide, centred, and taller at every profile because its type
+    /// scales while its top does not — so a medallion at 1206 was simply covered by it for three
+    /// seconds, which is the control the first failure lesson points at. There is no band that holds all three, so
+    /// the medallion takes the gap between that toast's right edge and the right-hand column. Its own
+    /// edge follows the profile, as a hit target must.
+    /// </para>
+    /// </remarks>
+    internal static Rectangle LogButtonRect
+        => new(Game1.LockedToastRight + UiMetrics.Space(16), Game1.ChromeRowBottom + UiMetrics.Space(8),
+               UiMetrics.Control(64), UiMetrics.Control(64));
 
     /// <summary>
     /// The EXPEDITION LOG's own button — the log was reachable only by the L key, which a player who has
@@ -4073,7 +4826,7 @@ public sealed class HuntScreen
     /// button is offered only while none of them is up — which the host guarantees by not routing clicks
     /// here under a modal.
     /// </remarks>
-    private void DrawLogButton(SpriteBatch b, Point hit, bool clicked)
+    private void DrawLogButton(SpriteBatch b, Point hit)
     {
         var r = LogButtonRect;
         var hot = r.Contains(hit);
@@ -4099,12 +4852,12 @@ public sealed class HuntScreen
         // panel two calls later, and the sentence was cut mid-word — "…every descent's report. The L k".
         // A hover tip that a panel eats is worse than no tip: it says there is more to read and then
         // hides it. It is remembered here and drawn last (see the foot of Draw).
-        _logTipAt = hot ? hit : null;
-        if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
+        _logTipAt = hot ? r : null;   // the BUTTON, not the pointer: the tip stands still while you read it
+        // NO HIT TEST HERE. LogButtonRect is the one geometry; TakeInput tests this very rectangle.
     }
 
     /// <summary>Where the LOG button's hover tip is owed this frame, or null — drawn at the top of the HUD pass.</summary>
-    private Point? _logTipAt;
+    private Rectangle? _logTipAt;
 
     /// <summary>Set by the log button; the host routes it through its own L handling and clears it.</summary>
     public bool WantsLog { get; set; }
@@ -4127,6 +4880,33 @@ public sealed class HuntScreen
     /// one stack: where, when, how far — and, underneath, what. The life is a bar, not a percentage in
     /// words; the count keeps its words because "4 OF 4" alone does not say what is being counted.
     /// </remarks>
+    /// <summary>The distinct Sources this wave's creatures carry, in slot order — refilled by <see cref="WaveSources"/>.</summary>
+    private readonly List<Source> _waveSources = new(6);
+
+    /// <summary>
+    /// Fill <see cref="_waveSources"/> with the Sources the wave's creatures really carry (Core's roll),
+    /// or the fallback Source when none of them carries one. No allocation per frame.
+    /// </summary>
+    private void WaveSources()
+    {
+        _waveSources.Clear();
+        if (DevEnemySource is { } posed) { _waveSources.Add(posed); return; }
+        var comp = _run?.LastWaveCreatures;
+        if (comp is not null)
+            for (var i = 0; i < comp.Count; i++)
+                if (comp[i].Source is { } s && !_waveSources.Contains(s)) _waveSources.Add(s);
+        if (_waveSources.Count == 0 && ArtSource is { } fallback) _waveSources.Add(fallback);
+    }
+
+    private static readonly Dictionary<Source, string> SourceGlyphKeys = new()
+    {
+        [Source.Body] = "source_body", [Source.Mind] = "source_mind", [Source.Nature] = "source_nature",
+        [Source.Machine] = "source_machine", [Source.Shadow] = "source_shadow", [Source.Spirit] = "source_spirit",
+    };
+
+    /// <summary>The Source medallion's asset key, without building a string per frame.</summary>
+    private static string SourceGlyphKey(Source s) => SourceGlyphKeys[s];
+
     private void DrawEnemyLine(SpriteBatch b)
     {
         if (_replay is null || _run is null || _isBossWave) return;
@@ -4134,22 +4914,33 @@ public sealed class HuntScreen
         // THE HOUSE PLATE with the wave's Source as its accent — it was a hand-drawn fill with a 2 px
         // bronze outline no other surface wears, so the one QUIET surface in the header stack competed
         // with the frame above it instead of sitting under it (release polish 2026-09-05, hunt-06).
-        _ui.Plate(b, strip, ArtSource is { } accent ? SourceGlow(accent) : null);
+        WaveSources();
+        _ui.Plate(b, strip, _waveSources.Count > 0 ? SourceGlow(_waveSources[0]) : null);
         HeaderStackBottom = strip.Bottom;
 
-        // LEFT: the wave's Source glyph, then its kind. Everything on the strip is centred on its height,
-        // which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
+        // LEFT: the Sources the wave really carries, then its kind. Core rolls each creature's Source
+        // from the region's roster, so a pack can hold two or three; the strip used to show the
+        // region's theme alone, which was true of the body (one per Source) and of nothing else — and
+        // since 2026-09-16 the body does not say it either. Everything on the strip is centred on its
+        // height, which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
         var glyphEdge = UiMetrics.Control(30);
-        var glyph = new Rectangle(strip.X + 5 + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
-        if (ArtSource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
-            b.Draw(g, glyph, Color.White);
-        else
+        var x = strip.X + 5 + UiMetrics.Space(12);
+        WaveSources();
+        foreach (var ws in _waveSources)
         {
-            var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
-            _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), ArtSource is { } s2 ? SourceGlow(s2) : Slate);
+            var glyph = new Rectangle(x, strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
+            if (_ui.Assets.Get(SourceGlyphKey(ws)) is { } g) b.Draw(g, glyph, Color.White);
+            else
+            {
+                var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
+                _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), SourceGlow(ws));
+            }
+            x = glyph.Right + UiMetrics.Space(4);
         }
-        var x = glyph.Right + UiMetrics.Space(10);
-        var kind = _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        x += UiMetrics.Space(6);
+        // The laid-out role, which is the run's own roll outside the capture rig (WaveArchetype), so the
+        // label always names the bodies drawn beside it.
+        var kind = WaveArchetype.ToString().ToUpperInvariant();
         _ui.TextBig(b, kind, x, strip.Y + (strip.Height - UiTypography.Body) / 2 + 1, UiKit.Vellum, UiTypography.Body);
         x += _ui.MeasureBig(kind, UiTypography.Body) + UiMetrics.Space(10);
 
@@ -4186,13 +4977,50 @@ public sealed class HuntScreen
     //    header rather than printing the wave over the title. The enemy strip and the boss bar hang from
     //    its foot. The x and width are page anchors and stay. ──
     private const int StageHeaderCentreX = 910;
+    /// <summary>What joins the wave to the run's state on ONE row. Measured and drawn from here alone.</summary>
+    private const string WaveJoin = "  —  ";
     private const int StageHeaderTop = 18;
     /// <summary>Where the region title sits: a breath under the frame's top.</summary>
     private static int StageHeaderTitleY => StageHeaderTop + UiMetrics.Space(10);
     /// <summary>The wave line, one title under the title. 70 at 100 %.</summary>
     private static int StageHeaderWaveY => StageHeaderTitleY + UiTypography.RegionTitle + UiMetrics.Space(4);
-    /// <summary>The conquest bar's line, one wave line under the wave. 106 at 100 %.</summary>
-    private static int StageHeaderBarY => StageHeaderWaveY + UiTypography.StageLabel + UiMetrics.Space(8);
+    /// <summary>
+    /// How many rows the wave line is spending this frame — 1 normally, 2 while the run's state is
+    /// beside it and the pair will not fit the header's own content width.
+    /// </summary>
+    /// <remarks>
+    /// A per-frame mirror in the shape of <c>s_headerStackBottom</c> and <c>s_hunterCardBottom</c>:
+    /// <see cref="DrawStageHeader"/> decides it before it reads <see cref="StageHeader"/>, and
+    /// everything hung off the header's foot follows for free. The frame's padding does not change
+    /// with the extra row — 560 wide stays past <c>UiTypography.WidePanelFrom</c> and every height it
+    /// can take keeps the same panel art key — so <see cref="StageHeaderRoom"/> cannot feed back into
+    /// the decision that sets this.
+    /// </remarks>
+    private static int s_waveRows = 1;
+
+    /// <summary>The wave lane's height: one rung, plus a full line for each extra row.</summary>
+    private static int StageHeaderWaveH
+        => UiTypography.StageLabel + (s_waveRows - 1) * UiTypography.Pitch(UiTypography.StageLabel);
+
+    /// <summary>The header's usable line width — its own content rails, 480 at every profile.</summary>
+    private static int StageHeaderRoom => UiKit.ContentRight(StageHeader) - UiKit.ContentLeft(StageHeader);
+
+    /// <summary>
+    /// Does a wave line of this width need a second row?
+    /// </summary>
+    /// <remarks>
+    /// Pure, so the rule can be tested without a font. The wave line is the ONE line in this header
+    /// with no fit ladder and no clamp: the region title above it steps its rung down until it fits,
+    /// and the conquest row below it reserves its bar around a measured label, but the wave line was
+    /// simply centred on 910 and drawn. At 150 % its longest form — the wave, a corruption tier's name
+    /// and BOSS WAVE — is measured at the full text rate while 910, 630, 560 and the panel's padding are
+    /// all literals, so it grew past both of the header's rails and printed itself over the hunter's
+    /// health readout on the left and under the log medallion on the right.
+    /// </remarks>
+    internal static int WaveRowsFor(int lineWidth, int room) => lineWidth > room ? 2 : 1;
+
+    /// <summary>The conquest bar's line, under the wave lane. 106 at 100 %.</summary>
+    private static int StageHeaderBarY => StageHeaderWaveY + StageHeaderWaveH + UiMetrics.Space(8);
     /// <summary>The conquest bar's height.</summary>
     private static int StageHeaderBarH => UiMetrics.Control(16);
     /// <summary>The header's bottom edge — the enemy strip hangs from it. 153 at 100 %.</summary>
@@ -4223,6 +5051,18 @@ public sealed class HuntScreen
         // conquest, a small label and a thin bar on one line). WHAT is being fought hangs under the panel
         // in DrawEnemyLine at the same width, so the two read as one stack (playtest 2026-08-28: "the wave
         // information texts look quite bad" — three lines of three sizes with a bar between two of them).
+        // ── THE WAVE LANE IS MEASURED BEFORE THE FRAME IS DRAWN, because the frame's height depends
+        //    on the answer. One row when the line fits the header's rails; two when the run's state
+        //    makes it too long, which is what a fall does at the larger profiles.
+        var wave = $"WAVE {Math.Max(1, _replayWave)}";
+        if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
+        var waveTint = isBossWave ? Gold : Bone;
+        var state = RunState();
+        var room = StageHeaderRoom;
+        s_waveRows = state is { } probe
+            ? WaveRowsFor(RunsWidth(UiTypography.StageLabel, (wave, waveTint), (WaveJoin, Slate), (probe.Text, probe.Tint)), room)
+            : WaveRowsFor(_ui.MeasureBig(wave, UiTypography.StageLabel), room);
+
         var bar = StageHeader;
         // The quiet frame, like every other panel on this screen (UiKit.PanelQuiet: gold is for modals).
         _ui.PanelQuiet(b, bar);
@@ -4238,12 +5078,23 @@ public sealed class HuntScreen
         // THE WAVE LINE CARRIES THE RUN'S STATE, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.
-        var wave = $"WAVE {Math.Max(1, _replayWave)}";
-        if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
-        var waveTint = isBossWave ? Gold : Bone;
+        //
+        // TWO ROWS WHEN ONE WILL NOT HOLD IT, and the line break becomes the separator — the dash is
+        // what joins two halves of one row, so a second row does not need it. Nothing shrinks and
+        // nothing is hidden: the header's own stack grows and everything under it moves down with it,
+        // which is exactly what the geometry block above this method promises.
         var waveY = StageHeaderWaveY;
-        if (RunState() is { } st)
-            RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), ("  —  ", Slate), (st.Text, st.Tint));
+        if (state is { } st && s_waveRows == 1)
+            RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), (WaveJoin, Slate), (st.Text, st.Tint));
+        else if (state is { } st2)
+        {
+            _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
+            // THE LAST RESORT, on the second row only: a state that still overruns a whole row of its
+            // own steps DOWN THE RUNG LADDER rather than losing a word.
+            var statePx = _ui.FitRung(st2.Text, room, UiTypography.StageLabel);
+            _ui.TextCenterBig(b, st2.Text, cx, waveY + UiTypography.Pitch(UiTypography.StageLabel)
+                                              + (UiTypography.StageLabel - statePx) / 2, st2.Tint, statePx);
+        }
         else _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
 
         // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
@@ -4375,6 +5226,31 @@ public sealed class HuntScreen
     /// <summary>One skill tile's cast pulse, keyed by the slot the Skill event names.</summary>
     private static int SkillCastKey(int slot) => HashCode.Combine("hunt.skill.cast", slot);
 
+    /// <summary>The one-shot armed the instant a slot crosses into READY — the pop and the unwinding band.</summary>
+    private static int SkillReadyKey(int slot) => HashCode.Combine("hunt.skill.ready", slot);
+
+    /// <summary>Was each slot ready last frame? The edge, not the state, is what arms the pop.</summary>
+    private readonly Dictionary<int, bool> _railReady = new();
+
+    /// <summary>Which notch each slot's ring last stood on, so a crossing can be told from a hold.</summary>
+    private readonly Dictionary<int, int> _railStep = new();
+
+    /// <summary>The eased ring position, so a beat-counted notch travels instead of teleporting.</summary>
+    private static int SkillRingKey(int slot) => HashCode.Combine("hunt.skill.ring", slot);
+
+    /// <summary>
+    /// One notch crossed — the tick that makes a long wait feel like it is counting down.
+    /// </summary>
+    /// <remarks>
+    /// A six-beat skill spends four and a half seconds getting ready and used to report that with three
+    /// silent jumps. Each notch it passes now says so, which turns a dead band into a countdown the eye
+    /// can follow without reading the word beside it.
+    /// </remarks>
+    private static int SkillStepKey(int slot) => HashCode.Combine("hunt.skill.step", slot);
+
+    /// <summary>The ready burst's own key — a ring that leaves the medallion, longer-lived than the pop.</summary>
+    private static int SkillBurstKey(int slot) => HashCode.Combine("hunt.skill.burst", slot);
+
     // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
     //    management, not combat state. DEEPEST WAVE REACHED went too — the header's CONQUEST n / 20 is the same
@@ -4390,22 +5266,33 @@ public sealed class HuntScreen
     /// <summary>The utility's bottom edge as last drawn (+ margin) — the right column's true extent, for the tour.</summary>
     private static int s_railBottom = 368;
 
-    /// <summary>Right utility: the idle rate, what is waiting, and the doors to it.</summary>
+    /// <summary>
+    /// The right rail's measured layout — the panel, its text anchors, and its one door.
+    /// </summary>
     /// <remarks>
-    /// A reward whose screen is locked is hidden — not greyed, not clickable-into-a-refusal. A door this
-    /// column advertises must open; until the host says the screen is unlocked, the errand is not offered.
+    /// ONE GEOMETRY, READ BY BOTH HALVES: <see cref="DrawRightColumn"/> paints from it and
+    /// <see cref="TakeRailInput"/> hit-tests the same <c>PointsDoor</c>. The whole vertical walk lives
+    /// in <see cref="MeasureRail"/> so the paint does no layout arithmetic of its own and the door
+    /// cannot drift away from the rows above it.
     /// </remarks>
-    private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
+    private readonly record struct RailPlan(
+        Rectangle Panel, int X, int W,
+        bool ChestRow, bool PointsRow, bool TwoLines,
+        string Chests, string Points, string Both,
+        int IdleLabelY, int IdleValueY, int RewardsLabelY, int RewardLineY,
+        Rectangle PointsDoor);
+
+    private RailPlan MeasureRail()
     {
         var chestRow = ChestCount > 0 && VaultOpen;
         var pointsRow = Mastery.Available > 0 && MasteryOpen;
-        var doors = (chestRow ? 1 : 0) + (pointsRow ? 1 : 0);
+        var doors = pointsRow ? 1 : 0;   // the chest's door is the VAULT tile now — see DrawRightColumn
 
         var top = UiTypography.PanelTitleTop;
         var idleBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.PrimaryValue);
         // THE REWARDS LINE SPLITS IN TWO when the two facts do not share a line at this profile — at
         // 150 % "1 CHEST READY · 7 POI…" was ellipsised over the two doors that say the same facts
-        // (huntstates-03). The panel is summed from its blocks, so the doors move down with it.
+        // (huntstates-03). The panel is summed from its blocks, so the door moves down with it.
         var chests = $"{ChestCount} CHEST{(ChestCount == 1 ? "" : "S")} READY";
         var points = $"{Mastery.Available} MASTERY POINT{(Mastery.Available == 1 ? "" : "S")}";
         var both = chestRow && pointsRow ? $"{chests} · {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}" : "";
@@ -4414,122 +5301,114 @@ public sealed class HuntScreen
         var rewardBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body) * (twoLines ? 2 : 1);
         var doorBlock = doors > 0 ? UiMetrics.Space(8) + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
         var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + UiMetrics.Space(10) + rewardBlock + doorBlock + UtilityPad);
-        // PINNED to the medium frame: this panel's height follows the profile while its width is a page
-        // anchor, so its aspect crossed 1.30 at 125 % and it alone switched to the crested square frame
-        // beside three siblings that did not (release polish 2026-09-05, hunt-02).
-        _ui.PanelQuiet(b, panel, artKey: "ui_panel_medium");
-        s_railBottom = panel.Bottom + 10;
-        _utilityPanel = panel;   // the inspector, drawn after this column, keeps clear of it
 
         var x = panel.X + UtilityPad;
         var w = panel.Width - UtilityPad * 2;
-        var y = panel.Y + top;
+        var idleLabelY = panel.Y + top;
+        var idleValueY = idleLabelY + UiTypography.Pitch(UiTypography.Secondary);
+        var rewardsLabelY = idleValueY + UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(10);
+        var rewardLineY = rewardsLabelY + UiTypography.Pitch(UiTypography.Secondary);
+        var doorY = rewardLineY + UiTypography.Pitch(UiTypography.Body) * (twoLines ? 2 : 1) + UiMetrics.Space(8);
 
-        _ui.TextBig(b, "IDLE", x, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
+        return new RailPlan(panel, x, w, chestRow, pointsRow, twoLines, chests, points, both,
+                            idleLabelY, idleValueY, rewardsLabelY, rewardLineY,
+                            pointsRow ? new Rectangle(x, doorY, w, DoorHeight) : Rectangle.Empty);
+    }
+
+    /// <summary>The rail's one errand: SPEND n POINTS. Decided here, painted in <see cref="DrawRightColumn"/>.</summary>
+    private void TakeRailInput(Point mouse, bool clicked)
+    {
+        var p = MeasureRail();
+        if (p.PointsRow && UiKit.ClickedIn(p.PointsDoor, mouse, clicked)) WantsMastery = true;
+    }
+
+    /// <summary>Right utility: the idle rate, what is waiting, and the door to it.</summary>
+    /// <remarks>
+    /// A reward whose screen is locked is hidden — not greyed, not clickable-into-a-refusal. A door this
+    /// column advertises must open; until the host says the screen is unlocked, the errand is not offered.
+    /// It lays nothing out itself: every anchor and the door's rectangle come from
+    /// <see cref="MeasureRail"/>, which <see cref="TakeRailInput"/> reads too.
+    /// </remarks>
+    private void DrawRightColumn(SpriteBatch b, Point hit)
+    {
+        var p = MeasureRail();
+        // PINNED to the medium frame: this panel's height follows the profile while its width is a page
+        // anchor, so its aspect crossed 1.30 at 125 % and it alone switched to the crested square frame
+        // beside three siblings that did not (release polish 2026-09-05, hunt-02).
+        _ui.PanelQuiet(b, p.Panel, artKey: "ui_panel_medium");
+        s_railBottom = p.Panel.Bottom + 10;
+        _utilityPanel = p.Panel;   // the inspector, drawn after this column, keeps clear of it
+
+        _ui.TextBig(b, "IDLE", p.X, p.IdleLabelY, Slate, UiTypography.Secondary);
         var gem = UiMetrics.Control(30);   // the gleam icon beside the rate — an icon box, at the profile
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(x, y + UiMetrics.Space(5), gem, gem), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", x + gem + UiMetrics.Space(10), y, Bone, UiTypography.PrimaryValue);
-        y += UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(10);
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(p.X, p.IdleValueY + UiMetrics.Space(5), gem, gem), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", p.X + gem + UiMetrics.Space(10), p.IdleValueY, Bone, UiTypography.PrimaryValue);
 
-        _ui.TextBig(b, "REWARDS", x, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextBig(b, "REWARDS", p.X, p.RewardsLabelY, Slate, UiTypography.Secondary);
         // NOTHING WAITING in Slate, not the Empty ink: a sentence under the contrast floor with no
         // shape beside it read as disabled text (release polish 2026-09-05, hunt-11).
-        if (twoLines)
+        if (p.TwoLines)
         {
-            _ui.TextBig(b, _ui.ShortenBig(chests, w, UiTypography.Body), x, y, Bone, UiTypography.Body);
-            y += UiTypography.Pitch(UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig(points, w, UiTypography.Body), x, y, Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(p.Chests, p.W, UiTypography.Body), p.X, p.RewardLineY, Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(p.Points, p.W, UiTypography.Body), p.X, p.RewardLineY + UiTypography.Pitch(UiTypography.Body), Bone, UiTypography.Body);
         }
         else
         {
-            var line = both.Length > 0 ? both : chestRow ? chests : pointsRow ? points : "NOTHING WAITING";
-            _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : Slate, UiTypography.Body);
+            var line = p.Both.Length > 0 ? p.Both : p.ChestRow ? p.Chests : p.PointsRow ? p.Points : "NOTHING WAITING";
+            _ui.TextBig(b, _ui.ShortenBig(line, p.W, UiTypography.Body), p.X, p.RewardLineY, p.PointsRow ? Bone : Slate, UiTypography.Body);
         }
-        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
-        // THE FIRST DOOR IS THE SCREEN'S PRIMARY: a chest waiting is the one thing this screen asks the
-        // player to do, so its door is lit; the points door is lit only when it is the sole door
-        // (release polish 2026-09-05, hunt-10).
-        if (chestRow)
-        {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), "OPEN VAULT", hit, clicked, true, ButtonStyle.Primary)) WantsVault = true;
-            y += DoorPitch;
-        }
-        if (pointsRow)
-        {
-            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked,
-                           true, chestRow ? ButtonStyle.Secondary : ButtonStyle.Primary))
-                WantsMastery = true;
-        }
-    }
-
-    // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────
-    /// <summary>Under the header stack, where the toasts hang — one anchor per zone (D4). (560, +8, 800, 132) at 100 %.</summary>
-    /// <remarks>
-    /// Its height is its two lines and the READ THE LOG line under them; its width grows at the spacing
-    /// rate so the verdict sentence keeps its length at a larger profile, centred on the page and always
-    /// short of the right column at 1570.
-    /// </remarks>
-    private Rectangle FallPlate => new(960 - FallPlateWidth / 2, HeaderStackBottom + UiMetrics.Space(8), FallPlateWidth, FallPlateHeight);
-    private static int FallPlateWidth => UiMetrics.Space(800);
-    // TWO ROWS, NOT THREE: the door sits on the title row beside FELL AT WAVE, so the plate is a title
-    // and a sentence — at 150 % the three-row plate lay across the hunter's face and the reaper's
-    // shoulders (release polish 2026-09-05, huntstates-01).
-    private static int FallPlateHeight
-        => UiMetrics.Space(14) + Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6))
-         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
-    private static int FallDoorHeight => UiMetrics.ButtonHeightSmall;
-
-    /// <summary>
-    /// Two lines over the fight when the champion falls: the wave, and the MAIN LIMIT with the verdict
-    /// sentence — from <see cref="RunReport.Limit"/> and <see cref="RunReport.Verdict"/>, the same thresholds
-    /// the log applies. The whole plate is a door to the log; no buttons stand over the arena because the
-    /// champion is already getting up (the doors live in the LOG's footer).
-    /// </summary>
-    private void DrawFallPlate(SpriteBatch b, Point hit, bool clicked)
-    {
-        var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
-        var r = FallPlate;
-        var pad = UiMetrics.Space(24);
-        var top = UiMetrics.Space(14);
-        // THE WHOLE PLATE IS THE DOOR, so it carries the states a door carries (§25, §27). It had only
-        // HOVER (READ THE LOG brightens); PRESSED now drops the FACE 2 px while the mouse is held, the
-        // way every UiKit.Button does, so a click on the only clickable thing on the fallen screen
-        // answers before the log gets there.
+        // THE VAULT DOOR IS GONE FROM HERE, and it is the rail tile now.
         //
-        // THE HIT RECT NEVER MOVES (§15, LAW "draw = hit"): `r` stays authoritative for hover and for
-        // the click; only `face` is depressed. A control that moves its own target under the cursor
-        // while being pressed is a control that can be released outside itself.
-        // THE DOOR IS A PRIMARY BUTTON on the title row: the fallen state's one action was a grey text
-        // link in the plate's corner, and nothing on the screen was lit (huntstates-02). The plate stays
-        // a door too, so a click anywhere on it still opens the log.
-        var door = new Rectangle(r.Right - pad - UiMetrics.Control(200), r.Y + top, UiMetrics.Control(200), FallDoorHeight);
-        var hot = r.Contains(hit) && !door.Contains(hit);
-        var face = hot && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
-        _ui.Plate(b, face, Ember, fade);
-        var titleRow = Math.Max(UiTypography.Pitch(UiTypography.StageLabel), FallDoorHeight + UiMetrics.Space(6));
-        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", face.X + pad, face.Y + top + (titleRow - UiTypography.Pitch(UiTypography.StageLabel)) / 2,
-                    Ember * fade, UiTypography.StageLabel, TextFace.Display);
-        var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
-        _ui.TextBig(b, _ui.ShortenBig(limit, face.Width - pad * 2, UiTypography.Body), face.X + pad,
-                    face.Y + top + titleRow, Bone * fade, UiTypography.Body);
-        if (_ui.Button(b, door, "READ THE LOG", hit, clicked, true, ButtonStyle.Primary)) WantsLog = true;
-        else if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
+        // A chest waiting had TWO doors in this game — a button in this column and the VAULT tile on
+        // the rail, which carries its own count badge — and the authored opening has to point at one
+        // of them. The tile is the one that is always there, on every screen, at every depth, in the
+        // place the player will look for it for the rest of the game; a button that exists only on
+        // this screen and only while a chest happens to be waiting teaches nothing they can reuse.
+        // Two doors to one room also meant the teaching had to name a place ("the right column") that
+        // stops existing the moment the chest is opened. The line above still SAYS a chest is ready.
+        //
+        // PAINTED WITH clicked: false — the pressed face comes from the static UiKit.MouseHeld, so this
+        // is visually identical to the old form and can no longer fire. TakeRailInput decides it.
+        // ON ONE LINE on purpose: the draw-purity gate judges a widget by its edge ARGUMENT, and a call
+        // split across lines cannot be read from one line, so it is reported rather than cleared.
+        var spend = $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}";
+        if (p.PointsRow) _ui.Button(b, p.PointsDoor, spend, hit, false, true, ButtonStyle.Primary);
     }
+
+    // ── The death transition (attention ownership pass, 2026-09-15). ─────────────────────────────────────
+    //    A fall is part of the idle loop, so it is not announced. The Hunter is seen to fall (the clip, the
+    //    flash); the stage fades to black over the last DeathTransition.FadeOut of the downed beat; the next
+    //    descent begins at full black on the frame the beat runs out; the black holds for DeathTransition.Hold
+    //    and lifts over DeathTransition.FadeIn while the new wave walks in. The arithmetic is DeathTransition
+    //    (PresentationBeats.cs); this screen owns the two clocks — _downedTimer and the lift below — and
+    //    paints ONE full-canvas fill from them at the foot of Draw, under the host's chrome; its own HUD
+    //    refuses input, and parks the cursor for its own hover faces and tips, exactly while that fill is
+    //    visible (BlackCovers), and is live at every other frame.
+    //    Under Reduced Motion both fades are cuts. No plate, no door, no header line: the wave lane shows
+    //    the wave that fell until the restart and the new wave after it, and the report waits in the LOG.
+
+    /// <summary>Seconds left of the lift after a restart — the hold, then the fade. Zero while the stage is visible.</summary>
+    /// <remarks>
+    /// Armed on the restart frame (Update's Downed case) and decayed there, zeroed by travel and the moment
+    /// another screen is on top (<see cref="TakeInput"/>), held by <see cref="DevPoseDeathTransition"/>.
+    /// </remarks>
+    private float _deathFadeIn;
+
+    /// <summary>Where this screen's HUD is told the cursor is while the black covers it: nowhere, so nothing hovers or tips under the black.</summary>
+    private static readonly Point OffCanvas = new(-4096, -4096);
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
     /// <remarks>
     /// Was the right half of an EXPEDITION plate whose left half repeated the banner's wave number. The
     /// word it printed most often was "ACTIVE" — true of every frame the screen is drawn in, so it
-    /// distinguished nothing and cost a whole plate to say. Only the two states that mean something now
-    /// reach the player, and they reach them on the banner beside the wave they describe.
+    /// distinguished nothing and cost a whole plate to say. Only the one state that means something now
+    /// reaches the player, and it reaches them on the banner beside the wave it describes. A fall says
+    /// nothing here: the lane is state, not an announcement (see the death transition above).
     /// </remarks>
     private (string Text, Color Tint)? RunState()
     {
-        if (_mode == Mode.Downed) return ("RECOVERING", Ember);
-        if (WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
+        if (DevBossCall || WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
         return null;
     }
 
@@ -4678,10 +5557,31 @@ public sealed class HuntScreen
         // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS: a step, not a fade — the moment worth seeing is the one
         // where the skill becomes available. The ring around the rim answers HOW MUCH LONGER; this answers
         // WHETHER. A passive is always ready and never dims.
-        var waiting = t.Swept < 1f && t.Flash <= 0f;
-        var wake = waiting ? WaitingSkillDim : 1f;
+        //
+        // THE TELEGRAPH BRIGHTENS THE WHOLE MEDALLION (2026-09-09). `waiting` tested t.Flash alone while
+        // `lit` — which the hex frame uses — is max(Flash, Telegraph), so for the 300 ms before a cast
+        // the FRAME went full gold around a diamond and a glyph still sitting at 0.45. A gold ring
+        // around a dark icon, three times a second, on every Active in the rail. Reading `lit` here
+        // instead makes those 300 ms a charge-up: the medallion brightens INTO its own cast, which is
+        // the tell the rail was missing.
         var lit = Math.Max(t.Flash, t.Telegraph);
+        var waiting = t.Swept < 1f && lit <= 0f;
+        var wake = waiting ? MathHelper.Lerp(WaitingSkillDim, 1f, Math.Clamp(lit, 0f, 1f)) : 1f;
+        // THE READY POP. The one moment the rail is for had no presentation whatsoever: the word
+        // swapped, the dim stepped up, and nothing moved. The medallion swells a tenth over a
+        // Transition on the crossing, armed in the event pump (Draw must never arm a pulse).
         var box = MedallionBox(slot);
+        // THE SWELL OVERSHOOTS AND SETTLES. A flat tenth over 180 ms reads as a nudge; the same motion
+        // with an overshoot reads as a thing arriving. The curve is 1 - (1-p)^2 shaped past its target
+        // and pulled back, which is the ordinary back-ease and costs nothing — and it is skipped whole
+        // under Reduced Motion, like every other one-shot on this screen.
+        if (UiMotion.Pulse(SkillReadyKey(i)) is var pp && pp > 0f && !UiMotion.Reduced)
+        {
+            var k = 1f - UiMotion.Smooth(pp);              // 0 at the crossing, 1 when the pop is spent
+            var swell = MathF.Sin(k * MathF.PI) * 0.17f;   // out and back, peaking a sixth over
+            var grow = (int)MathF.Round(box.Width * swell);
+            box = new Rectangle(box.X - grow / 2, box.Y - grow / 2, box.Width + grow, box.Height + grow);
+        }
         if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
             b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
         // The diamond and the glyph are PROPORTIONS of the medallion art (44 and 40×44 of 72), so they
@@ -4693,13 +5593,91 @@ public sealed class HuntScreen
         if (_ui.Assets.Get($"icon_skill_{def.Id}") is { } sg) b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
         else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, glyphBox, Color.White * wake);
         else _ui.Diamond(b, glyphBox, sc * wake);
-        // The cooldown ring at the rim, over everything; the gold halo is the cast itself.
+        // ── THE COOLDOWN, AND THE MOMENT IT ENDS ─────────────────────────────────────────────────
+        //
+        // For a beat-counted skill — which is most of them — this ring used to be a STAIRCASE: the
+        // dial is quantised to one notch per action, so it held perfectly still for a whole beat
+        // (1500 ms), jumped in a single frame, and held again. Three instantaneous jumps in a 4.5 s
+        // cycle and nothing at all in between, which is the whole of "the skill cooldown animation
+        // isn't satisfying" (playtest 2026-09-09). The notch still MEANS one action — that is what
+        // the steps are for, and the smooth dial would lie about when the skill fires — but it now
+        // TRAVELS to its new position over a Transition instead of teleporting. Under Reduced Motion
+        // Ease returns the target outright, which is exactly the old behaviour.
+        var ringCentre = new Vector2(box.Center.X, box.Center.Y);
+        var ringR = box.Width * 0.50f;
+        var shownSweep = _devCooldownPose
+                         ?? (t.RingSteps > 0 ? UiMotion.Ease(SkillRingKey(i), t.Swept, UiMotion.Transition) : t.Swept);
+        var pop = UiMotion.Pulse(SkillReadyKey(i));
+
         if (t.Flash <= 0f)
-            _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, t.Swept, new Color(0x0F, 0x0B, 0x0B, 0xE0), Gold * 0.95f);
+        {
+            // THE EDGE WARMS AS IT APPROACHES. The moving line was full gold from the first frame of a
+            // cooldown to the last, so the ring said HOW MUCH LONGER and never HOW CLOSE. Ramped, the
+            // last quarter of every wait glows, and a rail of four skills tells you at a glance which
+            // one is about to go off.
+            var heat = Math.Clamp((shownSweep - 0.55f) / 0.45f, 0f, 1f);
+            var edge = Color.Lerp(new Color(0x8A, 0x74, 0x52), Gold, heat);
+            _ui.CooldownSweep(b, ringCentre, ringR, shownSweep, new Color(0x0F, 0x0B, 0x0B, 0xE0), edge);
+
+            // ...AND IT CARRIES A HEAD. A one-pixel line on a band that moves a few degrees a second is
+            // invisible; a short bright arc trailing back from it is not, and it makes the ring read as
+            // something travelling rather than as a shape being erased.
+            if (shownSweep is > 0f and < 1f)
+            {
+                const float step = MathF.PI / 72f;
+                var lead = -MathF.PI / 2f + shownSweep * MathF.Tau;
+                for (var k = 0; k < 7; k++)
+                {
+                    var a = lead + k * step;
+                    var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                    var fadeK = (1f - k / 7f) * (1f - k / 7f);
+                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * ringR,
+                                MathF.Max(2f, ringR * 0.10f), edge * (0.55f * fadeK));
+                }
+            }
+
+            // THE NOTCHES THEMSELVES, so "2 ACTIONS" is a shape and not only a word: the band reads as
+            // a segmented track and each step visibly arrives somewhere. The one just crossed FLARES —
+            // a spoke that brightens and reaches past the rim, then settles back into the track.
+            if (t.RingSteps > 1 && shownSweep < 1f)
+            {
+                var tick = UiMotion.Pulse(SkillStepKey(i));
+                var crossed = t.RingSteps > 0 ? (int)MathF.Floor(shownSweep * t.RingSteps + 0.001f) : 0;
+                for (var n = 1; n < t.RingSteps; n++)
+                {
+                    var a = -MathF.PI / 2f + n / (float)t.RingSteps * MathF.Tau;
+                    var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                    var hot = n == crossed && tick > 0f ? UiMotion.Smooth(tick) : 0f;
+                    var reach = ringR * (1f + 0.14f * hot);
+                    _ui.LineSeg(b, ringCentre + dir * (ringR * 0.84f), ringCentre + dir * reach,
+                                2f + 2f * hot, Color.Lerp(Slate * 0.55f, Gold, hot));
+                }
+            }
+
+            // AND THE BAND COMPLETES RATHER THAN VANISHING. CooldownSweep returns on its first line at
+            // ready >= 1, so the dark band simply disappeared on the frame a skill came up — the single
+            // moment the rail exists to teach had no event at all. On the ready crossing the band is
+            // drawn back in GOLD and unwinds off over a Transition.
+            if (pop > 0f)
+                _ui.CooldownSweep(b, ringCentre, ringR, 1f - UiMotion.Smooth(pop), Gold * 0.40f, Gold);
+        }
         else
         {
             var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
             Outline(b, halo, Gold * t.Flash, 2);
+        }
+
+        // ── READY: A RING LEAVES THE MEDALLION. ──────────────────────────────────────────────────
+        //
+        // Drawn after the ring and the art so it crosses both, and after the branch above so it fires
+        // whether the skill came up quietly or came up mid-cast. Two rings a beat apart, the second
+        // wider and fainter, so the burst has a front and a wake instead of being one expanding circle
+        // — the cheapest thing that reads as ENERGY rather than as a growing outline.
+        if (!UiMotion.Reduced && UiMotion.Pulse(SkillBurstKey(i)) is var burst && burst > 0f)
+        {
+            var age = 1f - burst;                       // 0 at the crossing, 1 when spent
+            SkillBurstRing(b, ringCentre, ringR, age, Gold);
+            if (age > 0.18f) SkillBurstRing(b, ringCentre, ringR, age - 0.18f, sc);
         }
 
         // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
@@ -4804,6 +5782,30 @@ public sealed class HuntScreen
     /// slots further down the rail sit at 0.5, so a waiting skill reads as dimmer than a real row but
     /// not as absent.
     /// </remarks>
+    /// <summary>
+    /// One expanding ring of the ready burst: wider, thinner and fainter as it ages.
+    /// </summary>
+    /// <param name="age">0 the instant it fires, 1 when it is gone.</param>
+    /// <remarks>
+    /// Twenty-four segments, which is smooth at the medallion's radius and is twenty-four draws — this
+    /// runs at most four times a wave, once per Active, and only on the frames a skill comes up.
+    /// </remarks>
+    private void SkillBurstRing(SpriteBatch b, Vector2 centre, float radius, float age, Color tint)
+    {
+        age = Math.Clamp(age, 0f, 1f);
+        var r = radius * (1f + 0.60f * UiMotion.Smooth(1f - age));
+        var thick = MathF.Max(1.5f, radius * 0.13f * (1f - age));
+        var alpha = (1f - age) * (1f - age);
+        const int seg = 24;
+        for (var k = 0; k < seg; k++)
+        {
+            var a0 = k / (float)seg * MathF.Tau;
+            var a1 = (k + 1) / (float)seg * MathF.Tau;
+            _ui.LineSeg(b, centre + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * r,
+                        centre + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * r, thick, tint * alpha);
+        }
+    }
+
     private const float WaitingSkillDim = 0.45f;
 
 
@@ -4900,10 +5902,17 @@ public sealed class HuntScreen
             _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat));
             _clipStartMs = trapMs;
             _clipName = "trap";
+            _clipBeatMs = (int)trapMs;
             return;
         }
 
         if (beatMs is null) return;
+
+        // NOTHING OF A HELD BEAT IS SHOWN. While the barrier holds the replay short of a beat, the clip
+        // aimed at it — or at anything after it — does not begin. The park already sits ahead of the
+        // wind-up; this is for the playhead that was inside that window when the hold arrived, which
+        // stands in idle rather than half-way through a cast the card has not introduced yet.
+        if (ReplayHeld && HeldEventAtMs is { } heldAt && beatMs.Value >= heldAt) return;
 
         // EVERY action fills its share of the BEAT (ClipShareOfBeat): the sim acts on the
         // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
@@ -4915,13 +5924,46 @@ public sealed class HuntScreen
         // more, so it plays close to its authored second.
         var share = clip == "attack" ? ClipShareOfBeat : SkillClipShareOfBeat;
         var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * share));
-        var contactMs = ClipMs * ContactFraction / baseSpeed;
+        var contactMs = ContactMs(cast: clip != "attack");
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
 
         _clipSpeed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
         _clipStartMs = _playheadMs;
         _clipName = clip;
+        _clipBeatMs = (int)beatMs.Value;
+    }
+
+    /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
+    /// <remarks>
+    /// The ONE formula both the clip commitment above and the replay barrier's lead read, so the park the
+    /// barrier chooses is exactly where the cast would have begun — a second copy could drift, and a
+    /// barrier a few milliseconds late would show the first frames of the wind-up under the card.
+    /// </remarks>
+    private float ContactMs(bool cast)
+    {
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * (cast ? SkillClipShareOfBeat : ClipShareOfBeat)));
+        return ClipMs * ContactFraction / baseSpeed;
+    }
+
+    /// <summary>
+    /// How long before the beat at <paramref name="atMs"/> its presentation begins — the replay barrier's lead.
+    /// </summary>
+    /// <remarks>
+    /// A cast's is its clip's contact length: the Hunter starts the cast that far ahead so the blow lands on
+    /// the beat. A Reaction has none — its clip plays AFTER the bite it answers (the trap commitment) — and
+    /// nothing else is animated ahead of its own millisecond.
+    /// </remarks>
+    private float PresentationLeadMs(int atMs)
+    {
+        if (HoldBeforeKind != BattleEventKind.Skill || _run is null) return 0f;
+        foreach (var e in _run.LastWaveEvents)
+        {
+            if (e.AtMs != atMs || e.Kind != BattleEventKind.Skill) continue;
+            if (e.Slot < 0 || e.Slot >= _waveSkills.Count) return 0f;
+            return _waveSkills[e.Slot].Def.Kind == SkillKind.Reaction ? 0f : ContactMs(cast: true);
+        }
+        return 0f;
     }
 
     /// <summary>
@@ -5324,9 +6366,9 @@ public sealed class HuntScreen
         // may blank out while it does.
         foreach (var key in Character.StripKeys(clip))
             if (ActorSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
-                               flip: ChampionFacesRight)) return;
+                               flip: ChampionFacesRight, record: VfxSubject.Champion)) return;
         if (ActorSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
-                           flip: ChampionFacesRight)) return;
+                           flip: ChampionFacesRight, record: VfxSubject.Champion)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);
         if (_ui.SpriteGrounded(b, Character.SpriteKey,
@@ -5418,19 +6460,114 @@ public sealed class HuntScreen
     /// </remarks>
     public bool DevHoldReport { get; set; }
 
-    /// <summary>DEV: freeze in the downed beat but keep the report OFF, to photograph the fall.</summary>
+    /// <summary>DEV: freeze in the downed beat with the flash held and the black held OFF, to photograph the collapse.</summary>
     /// <remarks>
     /// Separate from <see cref="DevHoldReport"/> because the two jobs are different and conflating them
-    /// broke the capture: holding is what stops the timer running out and restarting the run, and
-    /// suppressing is what keeps the panel off the body. The first attempt cleared the hold in order to
-    /// suppress, so the beat simply expired mid-capture and photographed a fresh wave instead.
+    /// broke the capture: holding is what stops the timer running out and restarting the run, and this
+    /// is what keeps the fall's own presentation from covering the body — the flash stays at full so the
+    /// shot can prove it reaches the corners, and the black never paints whatever the clocks say. The
+    /// first attempt cleared the hold in order to suppress, so the beat simply expired mid-capture and
+    /// photographed a fresh wave instead.
     /// </remarks>
     public bool DevShowFall { get; set; }
 
+    /// <summary>
+    /// DEV: hold the BOSS INCOMING announcement up so it can be photographed.
+    /// </summary>
+    /// <remarks>
+    /// It lives for a second and a half in the break before a boss wave, on a timer no capture can
+    /// reach, so nobody had ever looked at it against the header above it — which is how its plate
+    /// came to sit at a literal y that a taller header paints over. A state no fixture can pose is a
+    /// state nobody has checked; this is the pose. Null in play, always.
+    /// </remarks>
+    public bool DevBossCall { get; set; }
+
+    /// <summary>
+    /// DEV: pose the wave's ARRIVAL at <paramref name="progress"/> — 1 fully off-stage, 0 just landed.
+    /// </summary>
+    /// <remarks>
+    /// The entrance had no fixture at all: DevStart clears it (a fight pose must not sit behind a
+    /// 0.8-second gate), and every other capture lands mid-fight. So the one state the player named —
+    /// "enemies spawn instantly when we start; they don't walk in" — was also a state no capture mode
+    /// could photograph before or after the change.
+    /// </remarks>
+    public void DevPoseArrival(float progress)
+    {
+        // REMEMBERED, not just assigned. The capture host restarts a DevStart run once on its first
+        // live frame (it pushes the region's enemy baseline), and that restart runs StartRun -> DevStart
+        // again — which clears the entrance. A posed value written once is wiped before the shutter;
+        // the held value is re-asserted every frame instead.
+        _devArrivalPose = Math.Clamp(progress, 0f, 1f);
+        _enemyEnter = _devArrivalPose.Value;
+        // AND THE PLAYHEAD GOES BACK TO THE WAVE'S START. An arrival happens BEFORE the fight, and
+        // DevStart leaves the replay 900 ms in — deliberately, so an ordinary fight pose catches a
+        // fight rather than an empty stage. Posed at 900 ms the wave was already nearly over and the
+        // first capture of this fixture photographed three empty health bars.
+        _playheadMs = 0f;
+        _callouts.Clear();
+    }
+
+    /// <summary>
+    /// The held entrance pose, re-asserted every frame while a capture is posing one.
+    /// </summary>
+    /// <remarks>
+    /// HELD, or the shutter never sees it. The entrance decays at 1.25/second and a capture renders 60
+    /// frames before it saves, so a value written once is long gone by the time the picture is taken —
+    /// the same reason DevHoldReport exists. Holding changes when the beat ENDS, not what it shows.
+    /// This nullable IS the hold: a separate bool beside it was written and never read.
+    /// </remarks>
+    private float? _devArrivalPose;
+
+    /// <summary>
+    /// DEV: pose the DEATH TRANSITION at <paramref name="t"/> — 0 the last readable instant of the fall,
+    /// 0.5 the black with the next descent already begun beneath it, 1 the stage back (<see cref="DeathTransition.At"/>).
+    /// </summary>
+    /// <remarks>
+    /// Call after <see cref="DevRunToDeath"/>. Past the restart the restart is REAL: the fallen beat is let
+    /// go and StartRun opens the next descent exactly as play does, so what stands under the black is a
+    /// live wave one with its entrance walking in, not a posed corpse. HELD every frame, like the arrival
+    /// pose: the host's first live frame restarts the run on its Source push, and every fall clock would
+    /// otherwise have run out before the shutter. Reads Reduced Motion, so RH_SHOT_REDUCED=1 poses the cuts.
+    /// </remarks>
+    public void DevPoseDeathTransition(float t)
+    {
+        _devDeathPose = Math.Clamp(t, 0f, 1f);
+        if (DeathTransition.At(_devDeathPose.Value, UiMotion.Reduced).Restarted && _hunter is { } hunter)
+        {
+            DevHoldReport = false;
+            _downedTimer = 0f;
+            StartRun(hunter);
+        }
+        HoldDeathPose();
+    }
+
+    /// <summary>The held transition pose, re-asserted every frame while a capture is posing one — this nullable IS the hold.</summary>
+    private float? _devDeathPose;
+
+    /// <summary>
+    /// Re-assert the posed transition: its clock, and past the restart the new wave's entrance where the
+    /// pose has it. AT 1 THE POSE IS LET GO: the lift's last instant is held for exactly one frame and the
+    /// transition then ends on its own clock, so the host crosses the edge it crosses in play — the fall's
+    /// end, which hushes the coach for a beat — rather than photographing a stage that was never in
+    /// transition at all (the clock's tiny remainder paints no black: Covers reads the alpha).
+    /// </summary>
+    private void HoldDeathPose()
+    {
+        if (_devDeathPose is not { } t) return;
+        if (t >= 1f) { _deathFadeIn = float.Epsilon; _devDeathPose = null; return; }
+        var pose = DeathTransition.At(t, UiMotion.Reduced);
+        if (pose.Restarted)
+        {
+            _deathFadeIn = pose.FadeInClock;
+            _enemyEnter = Math.Max(0f, 1f - pose.SinceRestart * EnemyEnterPerSecond);
+        }
+        else _downedTimer = pose.DownedTimer;
+    }
+
     /// <param name="fallProgress">
-    /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO suppresses the
-    /// report, so the collapse can be photographed uncovered — the report is a large centred panel and
-    /// sits directly on top of the thing this poses.
+    /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO holds the fall's
+    /// black off (<see cref="DevShowFall"/>), so the collapse can be photographed uncovered at any point of
+    /// the beat.
     /// </param>
     /// <param name="poseLimit">
     /// DEV: pose the log's diagnostic for THIS limit. The death is the real seeded one; only the single
@@ -5475,13 +6612,11 @@ public sealed class HuntScreen
             _ => report,
         };
         Log.Add(report);
-        _fellReport = Log.Newest;   // so the fall plate names the MAIN LIMIT, as it does in play
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
-        _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the fallen banner
+        _bannerTimer = 0f;   // the wave-cleared banner has no business over a fall
         _fellWave = Math.Max(1, _run.Wave + 1);
-        _replayWave = _fellWave;   // the header says the wave the plate names, not the wave DevStart played (audit P1-8)
-        _fellTimer = DownedSeconds + FellBannerSeconds;
+        _replayWave = _fellWave;   // the header says the wave that fell, not the wave DevStart played (audit P1-8)
 
         if (fallProgress is { } fp)
         {
@@ -5505,6 +6640,11 @@ public sealed class HuntScreen
         _enemyBaseDamage = edmg;
         _lastSource = EnemySource;
         StartRun(hunter);
+        // NO ARRIVAL UNDER THE RIG. BeginWave arms the entrance for every wave open, and UpdateFight
+        // holds the replay until it has finished — so a fixture that seeks 900 ms into a wave would
+        // photograph frame zero of an entrance instead of the fight it poses. Every fight* capture
+        // goes through here. The one fixture that WANTS an entrance keeps its posed value.
+        _enemyEnter = _devArrivalPose ?? 0f;
         _playheadMs = 900f;
     }
 
@@ -5526,6 +6666,26 @@ public sealed class HuntScreen
     /// identical). UpdateFight applies it on the first live frame of whichever run survives.
     /// </remarks>
     public void DevSeek(float seconds) => _devSeekMs = Math.Max(0f, seconds * 1000f);
+
+    /// <summary>
+    /// DEV: hold every Active's ring at <paramref name="swept"/> of its cycle, so a COOLDOWN can be
+    /// photographed. 0 is just cast, 1 the instant it comes up.
+    /// </summary>
+    /// <remarks>
+    /// The rail's cooldown had no fixture at all. Every fight mode the rig owns runs a build whose
+    /// skills come back inside one beat, so a seek to any instant photographs a rail of READY
+    /// medallions — the ring, its notches, its warming edge and its comet head were all drawn by code
+    /// no capture could reach. That is the exact shape of the fault this project keeps finding: a state
+    /// no capture can pose is a state nobody has looked at.
+    /// <para>
+    /// It overrides the SHOWN sweep only. The fight underneath is untouched, the readiness word still
+    /// reads off the real timing, and nothing is armed — a pose must not fire a one-shot, or the
+    /// shutter would catch a ready-pop that did not happen.
+    /// </para>
+    /// </remarks>
+    public void DevPoseCooldown(float swept) => _devCooldownPose = Math.Clamp(swept, 0f, 1f);
+
+    private float? _devCooldownPose;
 
     /// <summary>
     /// DEV: the current wave's events and the playhead, as text — written beside a capture under

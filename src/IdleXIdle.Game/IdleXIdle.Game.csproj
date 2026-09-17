@@ -37,6 +37,17 @@
     <ProjectReference Include="..\IdleXIdle.Core\IdleXIdle.Core.csproj" />
   </ItemGroup>
   <!--
+    The screens' spotlight resolvers — Spotlights(TourTarget) — are internal, because nothing outside
+    this assembly should be resolving a semantic target to a rectangle. The test project is the one
+    exception: the onboarding guide's whole claim is that the control it lights is the control that
+    takes the click, and that can only be checked by asking every screen for every target the lesson
+    catalogue names, at every UI density. Widening the resolvers to public to make them testable would
+    have been the worse trade.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="IdleXIdle.Game.Tests" />
+  </ItemGroup>
+  <!--
     Copy the raw PNG assets to the output directory so the game can load them at runtime via
     Texture2D.FromStream. This deliberately sidesteps the MGCB content pipeline (no .xnb build step):
     the art is small, flat, point-sampled pixel art, so there is nothing the pipeline would add, and

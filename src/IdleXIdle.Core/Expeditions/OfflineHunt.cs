@@ -47,13 +47,18 @@ public static class OfflineHunt
     /// <param name="Gleam">The credit, haircut applied — what the host adds to the balance.</param>
     /// <param name="WavesCleared">Waves actually resolved and cleared in the simulated portion.</param>
     /// <param name="Falls">Times the champion fell and regrouped.</param>
-    /// <param name="DeepestWave">The deepest simulated wave — informational; never a record.</param>
     /// <param name="SimulatedSeconds">The credited time that was genuinely simulated.</param>
     /// <param name="ExtrapolatedSeconds">The remainder covered at the measured rate (0 unless the wave cap hit).</param>
     /// <param name="GleamPerSecond">The rate the simulated portion measured, BEFORE the haircut.</param>
+    /// <param name="DeepestWave">
+    /// The deepest wave the simulated portion actually HELD — informational, never a record, and since
+    /// 2026-09-09 the wave a returning player's first live descent opens at.
+    /// </param>
+    /// <param name="BossesFelled">Boss waves cleared while away. A fact for the return screen to tell.</param>
     public readonly record struct Result(
         long Gleam, int WavesCleared, int Falls, int DeepestWave,
-        double SimulatedSeconds, double ExtrapolatedSeconds, double GleamPerSecond);
+        double SimulatedSeconds, double ExtrapolatedSeconds, double GleamPerSecond,
+        int BossesFelled = 0);
 
     /// <summary>
     /// Fight the credited seconds through, wave by wave, and say what they were worth.
@@ -83,6 +88,7 @@ public static class OfflineHunt
         var falls = 0;
         var deepest = 0;
         var pushed = 0;
+        var bosses = 0;
 
         while (consumed < budget && pushed < MaxSimulatedWaves)
         {
@@ -108,6 +114,7 @@ public static class OfflineHunt
                     var r = descent.TakeReward();
                     rawGleam += r.Haul.Gleam;
                     waves++;
+                    if (r.IsBoss) bosses++;
                 }
                 if (run.Wave > deepest) deepest = run.Wave;
             }
@@ -118,6 +125,11 @@ public static class OfflineHunt
             }
         }
 
+        // ONLY WHAT WAS SIMULATED CAN BE RESUMED. `deepest` is set inside the loop above, on a CLEAR,
+        // so it can never name a wave that was not actually held — and the extrapolated tail below
+        // pays Gleam (linear in time, so honest) while granting no ground, because nothing down there
+        // was fought. A camp that cannot hold the whole absence therefore resumes SHALLOW, which is
+        // what makes the Warren the thing that sells depth-on-return rather than the absence's length.
         var simulated = Math.Min(budget, consumed);
         var leftover = Math.Max(0.0, budget - consumed);
         var rate = simulated > 0 ? rawGleam / simulated : 0.0;
@@ -133,7 +145,8 @@ public static class OfflineHunt
             DeepestWave: deepest,
             SimulatedSeconds: simulated,
             ExtrapolatedSeconds: leftover,
-            GleamPerSecond: rate);
+            GleamPerSecond: rate,
+            BossesFelled: bosses);
     }
 
     /// <summary>The fall's cost in seconds: the recovery beat before the next descent begins.</summary>

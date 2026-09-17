@@ -36,9 +36,11 @@ namespace IdleXIdle.Core.Tests.Characters;
 /// HARDFACE-free loadout persists only when FULL) and the reachability test runs that repair.
 /// </para>
 /// <para>
-/// <b>Seed-invariant, asserted.</b> On bare gear the fight draws no random number that moves this
-/// gauntlet, so the forty seeds are forty identical runs and the "2% floor" is one beat of the cast
-/// cadence, not sampling noise. <b>Diagnostic, not balance:</b> the numbers are printed, the
+/// <b>Averaged, and its own error asserted.</b> The gauntlet WAS seed-invariant — on bare gear the
+/// fight drew no random number that moved it, so forty seeds were forty identical runs. Critical hits
+/// became rolled events on 2026-09-09 and that is no longer true: a single seed is one sample, the
+/// table reports the mean over forty, and what <see cref="Tally.ClearStandardError"/> holds small is
+/// the error in THAT mean rather than the spread of the samples under it. <b>Diagnostic, not balance:</b> the numbers are printed, the
 /// assertions hold the counters to their own arithmetic and the mechanic to being LIVE where its
 /// rule says it must be. No threshold here says what the passive should be worth.
 /// </para>
@@ -109,6 +111,22 @@ public class AnvilDeadweightDiagnosticTest
         /// <summary>What each wave OPENED from, on the first seed — the phase the waves before it left behind.</summary>
         public readonly ParityGauntlet.WavePhase[] Entry = new ParityGauntlet.WavePhase[3];
 
+        /// <summary>Per-seed totals, kept so the reading's own error can be measured rather than assumed.</summary>
+        public readonly List<double> SeedDeadweight = new(), SeedClear = new();
+
+        /// <summary>The standard error of the mean clear time, as a fraction of that mean.</summary>
+        public double ClearStandardError
+        {
+            get
+            {
+                if (SeedClear.Count < 2) return 0;
+                var mean = SeedClear.Average();
+                if (mean <= 0) return 0;
+                var variance = SeedClear.Sum(v => (v - mean) * (v - mean)) / (SeedClear.Count - 1);
+                return Math.Sqrt(variance / SeedClear.Count) / mean;
+            }
+        }
+
         /// <summary>The passive's direct contribution — released damage as a share of everything landed.</summary>
         public double DeadweightShare => Delivered <= 0 ? 0 : DeadweightDamage / Delivered;
     }
@@ -148,7 +166,6 @@ public class AnvilDeadweightDiagnosticTest
         var build = Compose(c, row);
         var waves = WavesOf(row);
         var t = new Tally();
-        double firstDeadweight = double.NaN, firstClear = double.NaN;
         for (var s = 0; s < seeds; s++)
         {
             var champ = ParityGauntlet.FreshChampion();
@@ -186,11 +203,18 @@ public class AnvilDeadweightDiagnosticTest
                 seedClear += metrics.DurationMs;
             }
             t.HpLost += ParityGauntlet.ChampionHealth - champ.Health;
-
-            if (double.IsNaN(firstDeadweight)) { firstDeadweight = seedDeadweight; firstClear = seedClear; }
-            Assert.True(seedDeadweight == firstDeadweight && seedClear == firstClear,
-                        $"{row.Label}: seed {s} differs from seed 0 — the gauntlet is no longer seed-invariant on bare gear; read the spread before reading the table.");
+            t.SeedDeadweight.Add(seedDeadweight);
+            t.SeedClear.Add(seedClear);
         }
+        // THE GAUNTLET IS NO LONGER SEED-INVARIANT, and that is the design (2026-09-09). This loop
+        // used to assert every seed produced byte-identical numbers on bare gear — true only while
+        // critical hits were a folded expected-value multiplier and the fight rolled no dice at all.
+        // Crit is a rolled event now, so a single seed is one sample; what the table reports is the
+        // MEAN over ParityGauntlet.Seeds, and what has to be small is the error in THAT, not the
+        // spread of the samples it averages. The deltas this diagnostic reads are 14-36%.
+        Assert.True(t.ClearStandardError < 0.02,
+                    $"{row.Label}: the mean clear time over {seeds} seeds carries {t.ClearStandardError:0.0%} standard error. "
+                    + "The deadweight deltas are smaller than that, so the table can no longer be read as effects. Average more seeds.");
         return t;
     }
 
@@ -304,8 +328,8 @@ public class AnvilDeadweightDiagnosticTest
     public void test_the_deadweight_counters_are_deterministic()
     {
         var row = Matrix.Single(r => r.Label == "UPSET + BLOW FLATTEN");
-        var once = Measure(Anvil, row, seeds: 3);
-        var twice = Measure(Anvil, row, seeds: 3);
+        var once = Measure(Anvil, row);
+        var twice = Measure(Anvil, row);
         Assert.Equal(once.DeadweightDamage, twice.DeadweightDamage);
         Assert.Equal(once.Stores, twice.Stores);
         Assert.Equal(once.Releases, twice.Releases);
@@ -352,7 +376,11 @@ public class AnvilDeadweightDiagnosticTest
         // the mechanic: the two arms arrive at that wave on different beats with different skills ready,
         // because the waves before it went differently — which is what a continuous fight does.
         var row = Matrix.Single(r => r.Label == PhaseRow);
-        const int pack = 1, seeds = 3;   // the gauntlet is seed-invariant; three seeds carry the same figures
+        // Was three seeds, "the gauntlet is seed-invariant". Crit is a rolled event since 2026-09-09,
+        // so three seeds carry a 2% error on a reading whose deltas are smaller than that. The full
+        // seed set is what the table already averages; this reading uses it too.
+        const int pack = 1;
+        const int seeds = ParityGauntlet.Seeds;
 
         var anvil = Measure(Anvil, row, seeds);
         var control = Measure(Control, row, seeds);
@@ -406,7 +434,8 @@ public class AnvilDeadweightDiagnosticTest
     public void test_the_isolated_mode_matches_both_arms_and_leaves_the_continuous_numbers_alone()
     {
         var row = Matrix.Single(r => r.Label == PhaseRow);
-        const int seeds = 3;
+        // The full seed set, for the same reason as above: three seeds no longer settle a mean.
+        const int seeds = ParityGauntlet.Seeds;
 
         var before = Measure(Anvil, row, seeds);
         var isolated = Measure(Anvil, row, seeds, isolated: true);

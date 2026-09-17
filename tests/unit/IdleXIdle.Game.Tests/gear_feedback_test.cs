@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
+using IdleXIdle.Core.Progression;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Game;
 using Xunit;
@@ -69,7 +70,6 @@ public class gear_feedback_test : IDisposable
         Assert.Equal(0f, fb.SlotPulse(GearSlot.Chest));
         Assert.Equal(0f, fb.PowerEmphasis);
         Assert.Equal(hunter.PowerRating, fb.DisplayedPower);
-        Assert.Null(fb.ConsumeNotice());
         Assert.Null(fb.ConsumeCompletedSet());
         Assert.Empty(fb.CompletedSets);
     }
@@ -243,8 +243,18 @@ public class gear_feedback_test : IDisposable
 
     // ── THE FIRST FIVE-PIECE COMPLETION, once per set, ever (§52) ────────────────────────────────────
 
+    /// <summary>
+    /// THE FIRST COMPLETION NAMES THE SET AND ITS CAPSTONE — in the LETTER the host posts for it.
+    /// </summary>
+    /// <remarks>
+    /// The screen used to hand back the two lines itself, for a toast. It hands back the EVENT now —
+    /// the set's name — and <see cref="DispatchCopy"/> renders the words from the set, so the copy is
+    /// asserted where it is written rather than in two places that could drift. The invariant this
+    /// test has always held is unchanged: the completion is reported exactly once, and reading it
+    /// clears it.
+    /// </remarks>
     [Fact]
-    public void test_the_first_completion_names_the_set_and_its_capstone_in_two_lines()
+    public void test_the_first_completion_names_the_set_and_its_capstone_in_the_letter_it_posts()
     {
         var hunter = new Hunter();
         foreach (var s in FiveSlots.Take(4)) hunter.Equip(Piece(s, Source.Nature));
@@ -254,18 +264,21 @@ public class gear_feedback_test : IDisposable
         hunter.Equip(Piece(FiveSlots[4], Source.Nature));
         fb.Observe(hunter);
 
-        var notice = fb.ConsumeNotice();
-        Assert.NotNull(notice);
-        var lines = notice!.Split('\n');
-        Assert.Equal(2, lines.Length);
-        Assert.Equal(ElementSets.Name(Source.Nature) + " COMPLETE", lines[0]);
-        Assert.Equal(ElementSets.CapstoneName(Source.Nature) + " ACTIVE", lines[1]);
-
-        Assert.Equal(Source.Nature.ToString(), fb.ConsumeCompletedSet());
+        var completed = fb.ConsumeCompletedSet();
+        Assert.Equal(Source.Nature.ToString(), completed);
         Assert.Contains(Source.Nature.ToString(), fb.CompletedSets);
 
-        // Read once, gone — the host toasts it, and a second read must not toast it twice.
-        Assert.Null(fb.ConsumeNotice());
+        // What the player reads, built from that name the way the host builds it.
+        var letter = Dispatches.Set(Source.Nature, 1_000);
+        Assert.Equal(DispatchKeys.SetComplete(Source.Nature), letter.Key);
+        Assert.Equal(ElementSets.Name(Source.Nature) + " COMPLETE", DispatchCopy.Headline(letter));
+        // The body names the capstone and quotes its rung's own sentence, as prose — never the
+        // retired toast's "OVERGROWTH ACTIVE".
+        var body = DispatchCopy.Body(letter);
+        Assert.Contains(ElementSets.CapstoneName(Source.Nature), body, StringComparison.Ordinal);
+        Assert.Contains(ElementSets.TiersOf(Source.Nature)[^1].Line, body, StringComparison.Ordinal);
+
+        // Read once, gone — the host sounds the reward on it, and a second read must not sound it twice.
         Assert.Null(fb.ConsumeCompletedSet());
     }
 
@@ -279,7 +292,6 @@ public class gear_feedback_test : IDisposable
 
         hunter.Equip(Piece(FiveSlots[4], Source.Nature));
         fb.Observe(hunter);
-        Assert.NotNull(fb.ConsumeNotice());
         Assert.Equal(Source.Nature.ToString(), fb.ConsumeCompletedSet());   // the host wrote it to the save
 
         // Off and on again — the same fifth piece, the same set. The rung still reveals; the toast does not.
@@ -290,7 +302,6 @@ public class gear_feedback_test : IDisposable
         fb.Observe(hunter);
 
         Assert.Equal(1f, fb.RungPulse(Source.Nature, 5), 3);
-        Assert.Null(fb.ConsumeNotice());
         Assert.Null(fb.ConsumeCompletedSet());
         Assert.Single(fb.CompletedSets);
     }
@@ -307,13 +318,12 @@ public class gear_feedback_test : IDisposable
         hunter.Equip(Piece(FiveSlots[4], Source.Nature));
         fb.Observe(hunter);
 
-        Assert.Null(fb.ConsumeNotice());
         Assert.Null(fb.ConsumeCompletedSet());
         Assert.Single(fb.CompletedSets);
     }
 
     [Fact]
-    public void test_reduced_motion_still_completes_the_set_and_still_hands_over_the_notice()
+    public void test_reduced_motion_still_completes_the_set_and_still_reports_it()
     {
         UiMotion.Reduced = true;
         var hunter = new Hunter();
@@ -324,7 +334,6 @@ public class gear_feedback_test : IDisposable
         hunter.Equip(Piece(FiveSlots[4], Source.Nature));
         fb.Observe(hunter);
 
-        Assert.NotNull(fb.ConsumeNotice());
         Assert.Equal(Source.Nature.ToString(), fb.ConsumeCompletedSet());
     }
 

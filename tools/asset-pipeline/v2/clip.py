@@ -116,11 +116,17 @@ def main(argv: list[str]) -> int:
                    help="take frames 0..7 even for a nine-frame group (keeps the rotation reference)")
     c.add_argument("--thrown", action="store_true",
                    help="a projectile clip: allow the thrown object to be a separate blob")
+    c.add_argument("--fallen", action="store_true",
+                   help="a death clip: the body ends fully fallen, so frames may lie as flat as 22 %% of the standing one")
 
     j = sub.add_parser("job")
     j.add_argument("--job", required=True); j.add_argument("--out", required=True)
     j.add_argument("--fit", type=float, default=0.90); j.add_argument("--frame", type=int, default=512)
     j.add_argument("--effect", action="store_true"); j.add_argument("--loose", action="store_true")
+    j.add_argument("--thrown", action="store_true",
+                   help="sparks, smoke or a shed part are a second blob on purpose: skip the stray-blob check")
+    j.add_argument("--fallen", action="store_true",
+                   help="a death clip: the body ends fully fallen, so frames may lie as flat as 22 %% of the standing one")
     j.add_argument("--flip", action="store_true")
 
     s = sub.add_parser("still")
@@ -146,7 +152,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     probs = rhart.gate(a.out, effect=getattr(a, "effect", False), loose=a.loose,
-                       thrown=getattr(a, "thrown", False))
+                       thrown=getattr(a, "thrown", False), fallen=getattr(a, "fallen", False))
     print(("PASS " if not probs else "FAIL ") + a.out)
     for pr in probs:
         print("   - " + pr)

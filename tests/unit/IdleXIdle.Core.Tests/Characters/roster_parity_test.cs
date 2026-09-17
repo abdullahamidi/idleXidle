@@ -451,11 +451,17 @@ public class RosterParityTest
     [Fact]
     public void test_the_measurement_is_deterministic()
     {
-        // Licenses every delta in this file. The sim turns out not to consume RNG in a way that moves
-        // this fixture — 40 seeds produce one number — which is worth ASSERTING rather than relying on:
-        // the day a passive starts rolling dice, a 5% delta stops being evidence and this test is what
-        // notices. It is the same discipline the animation gate settled on: measure the known-good
-        // distribution, do not assume its shape.
+        // Licenses every delta in this file. It used to assert that 40 seeds produce ONE number —
+        // the sim consumed no randomness that moved this fixture — with the note that "the day a
+        // passive starts rolling dice, a 5% delta stops being evidence and this test is what
+        // notices". THAT DAY WAS 2026-09-09: critical hits became rolled events, and a single seed
+        // is now one sample of a random sum (worst for slow heavy builds, whose window holds few
+        // hits — BLOW's samples span about 9% of their own mean).
+        //
+        // The test still does its job, one level up. Every delta in this file is read off the MEAN
+        // of `Seeds` runs, so what has to be smaller than those deltas is the error in the MEAN, not
+        // the spread of the samples under it. The raw spread is still printed, because a reader who
+        // has not met the dice should see them.
         var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
         foreach (var skill in new[] { "hammer_blow", "snare_jaws", "volley_spray" }
@@ -466,12 +472,16 @@ public class RosterParityTest
                                     .ToList();
             var mean = samples.Average();
             var spread = mean <= 0 ? 0 : (samples.Max() - samples.Min()) / mean;
+            var variance = samples.Sum(v => (v - mean) * (v - mean)) / (samples.Count - 1);
+            var error = mean <= 0 ? 0 : Math.Sqrt(variance / samples.Count) / mean;
 
-            _out.WriteLine($"{skill.Name,-12} mean clear {mean,9:N0} ms   spread across {Seeds} seeds {spread,6:0.0%}");
+            _out.WriteLine($"{skill.Name,-12} mean clear {mean,9:N0} ms   sample spread {spread,6:0.0%}"
+                           + $"   standard error of the mean {error,6:0.00%}");
 
-            Assert.True(spread < 0.02,
-                        $"{skill.Name}: clear time varies {spread:0.0%} across seeds. The parity deltas are " +
-                        "smaller than that, so they can no longer be read as effects. Average more seeds.");
+            Assert.True(error < 0.01,
+                        $"{skill.Name}: the mean clear time over {Seeds} seeds carries {error:0.0%} standard error. " +
+                        "The parity deltas are smaller than that, so they can no longer be read as effects. " +
+                        "Average more seeds.");
         }
     }
 

@@ -49,7 +49,7 @@ before=""
 boot_run() {
   timeout 120 bash -c '
     . tools/shellenv.sh || exit 1
-    RH_ENV=(RH_BOOTCHECK=1)
+    RH_ENV=(RH_BOOTCHECK=1 RH_LESSON_LEDGER=1)
     [ -n "$1" ] && RH_ENV+=(RH_SAVE_DIR="$1")
     dn run --project src/IdleXIdle.Game --no-build
   ' _ "$1" 2>&1
@@ -139,4 +139,186 @@ if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; 
   exit 1
 fi
 
-echo "boot green — reads, writes, and reads back what it wrote."
+# ── AND THE ONE PIECE OF WIRING NO UNIT TEST CAN REACH. ───────────────────────────────────────
+#
+# Two migrations decide whether a loaded save is a VETERAN — one for the fall loop
+# (OnboardingLessons.SeedFallLoopAsLived) and one for the explained list (Onboarding.SeedExplained)
+# — and both read the same host field, Game1._saveVersionSeen, which is assigned from the loaded
+# file's Version. The PREDICATES are unit-tested at both branches. The WIRING is not, and cannot be:
+# Game1 needs MonoGame to instantiate, so there is no seam a unit test can hold. Extracting one
+# would mean a fake host or an interface hierarchy for a single assignment, which is a worse trade
+# than this.
+#
+# So it is proved where it actually runs. Two boots against a hand-written file that differs by one
+# character, reading the ledger the game already prints (RH_LESSON_LEDGER).
+#
+# THE NEGATIVE CONTROL IS THE HALF THAT MATTERS: a `SaveGame.CurrentVersion` creeping into either
+# call site would still pass the v4 lane and fail the v5 one.
+SEED="${TEMP:-/tmp}/rh_bootcheck_seed"
+mkdir -p "$SEED"
+
+# MasteryEarned is what Game1 restores into _deepestEver, which LessonFactsNow hands to DeepestWave;
+# 25 clears Checkpoints.ConquestWave (20), so the progression half of the seed's test is satisfied
+# and only the VERSION decides. Every other member takes its default through System.Text.Json.
+#
+# THE TWO NUMBERS ARE FROZEN CONSTANTS, not "one less than current": 4 is a file from before the
+# tours became opt-in, 5 is Onboarding.FirstVersionWithExplainedList and
+# OnboardingLessons.FirstVersionWithFallLoopFacts. When CurrentVersion next moves, these do not —
+# and if somebody makes them move, this lane is where it shows.
+seed_version() {
+  rm -f "$SEED/save.json" "$SEED/save.bak" "$SEED"/save.pre-v*.json
+  printf '{ "Version": %s, "SavedAtMs": 1700000000000, "MasteryEarned": 25 }
+' "$1" > "$SEED/save.json"
+}
+
+ledger_line() { echo "$1" | grep -m1 "ftue_loop_lived="; }
+inbox_line()  { echo "$1" | grep -m1 "inbox.unread="; }
+
+# THE INBOX RIDES THE SAME TWO LANES. Both files are below Dispatches.FirstVersionWithInbox (8), so
+# both must be SEEDED — told what they already know, with nothing unread — and the seed must have
+# marked something: MasteryEarned 25 opens TRAINING, and the starter is on every roster.
+assert_inbox_seeded() {   # $1 = lane name, $2 = the run's output
+  local line
+  line="$(inbox_line "$2")"
+  if [ -z "$line" ]; then
+    echo "NO INBOX LEDGER ROW on the $1 lane — DumpLessonLedger printed no inbox line, so this proves nothing." >&2
+    exit 1
+  fi
+  if ! echo "$line" | grep -q "seeded=True"; then
+    echo "A PRE-v8 SAVE WAS NOT SEEDED — Game1._saveVersionSeen is not reaching Dispatches.SeedKnown." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  if ! echo "$line" | grep -qE "unread=0[[:space:]]"; then
+    echo "A PRE-v8 SAVE BOOTED WITH UNREAD MAIL — a veteran was handed letters about a life already led." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  if echo "$line" | grep -qE "known=0[[:space:]]"; then
+    echo "THE SEED MARKED NOTHING KNOWN — the file's facts are not reaching it." >&2
+    echo "  ledger: $line" >&2
+    exit 1
+  fi
+  echo "$1 save's inbox seeded as already known — $line"
+}
+
+seed_version 4
+old_out="$(boot_run "$(winpath "$SEED")")"
+old_line="$(ledger_line "$old_out")"
+if [ -z "$old_line" ]; then
+  echo "NO LESSON LEDGER — RH_LESSON_LEDGER printed nothing, so this lane proves nothing." >&2
+  echo "$old_out" | tail -20 >&2
+  exit 1
+fi
+if ! echo "$old_line" | grep -q "ftue_loop_lived=True"; then
+  echo "A PRE-v5 SAVE WAS NOT SEEDED AS A VETERAN — Game1._saveVersionSeen is not reaching the seed." >&2
+  echo "  ledger: $old_line" >&2
+  exit 1
+fi
+echo "v4 save seeded as a veteran."
+assert_inbox_seeded v4 "$old_out"
+# ...and the bump that made the seed safe took its snapshot: a pre-v8 file is copied aside before the
+# first autosave can rewrite it (SaveStore.SnapshotBeforeUpgrade, once per target version).
+if ! ls "$SEED"/save.pre-v8-*.json >/dev/null 2>&1; then
+  echo "NO PRE-UPGRADE SNAPSHOT — a pre-v8 file booted without save.pre-v8-*.json being taken." >&2
+  exit 1
+fi
+echo "pre-v8 snapshot taken."
+
+seed_version 5
+new_out="$(boot_run "$(winpath "$SEED")")"
+new_line="$(ledger_line "$new_out")"
+if [ -z "$new_line" ]; then
+  echo "NO LESSON LEDGER on the current-version lane." >&2
+  exit 1
+fi
+if ! echo "$new_line" | grep -q "ftue_loop_lived=False"; then
+  echo "A CURRENT-VERSION SAVE WAS SEEDED AS A VETERAN — the version has stopped deciding, and a new" >&2
+  echo "player who reloads loses READ THE LOG, MAKE ONE CHANGE, and the retry that completes the loop." >&2
+  echo "  ledger: $new_line" >&2
+  exit 1
+fi
+echo "v5 save believed as written — false facts stay false."
+assert_inbox_seeded v5 "$new_out"
+
+# ── AND THE NEGATIVE CONTROL FOR THE INBOX: a file AT the inbox version is believed as written. ──
+#
+# A hand-written v8 file carrying ONE unread letter must boot with that letter still unread and
+# nothing seeded. A `SaveGame.CurrentVersion` creeping into the seed's gate — or the gate reading the
+# inbox's emptiness instead of the file's version — would pass both lanes above and fail here.
+seed_v8_with_one_unread() {
+  rm -f "$SEED/save.json" "$SEED/save.bak" "$SEED"/save.pre-v*.json
+  printf '{ "Version": 8, "SavedAtMs": 1700000000000, "MasteryEarned": 25, "Dispatches": [ { "Key": "region.verdant_hollow.conquered", "Kind": "Region", "AtMs": 1700000000000, "Read": false, "RegionId": "verdant_hollow" } ], "KnownDispatchKeys": [ "region.verdant_hollow.conquered" ] }
+' > "$SEED/save.json"
+}
+
+seed_v8_with_one_unread
+v8_out="$(boot_run "$(winpath "$SEED")")"
+v8_line="$(inbox_line "$v8_out")"
+if [ -z "$v8_line" ]; then
+  echo "NO INBOX LEDGER ROW on the v8 lane." >&2
+  echo "$v8_out" | tail -20 >&2
+  exit 1
+fi
+if ! echo "$v8_line" | grep -q "seeded=False"; then
+  echo "A CURRENT-VERSION SAVE WAS SEEDED — the version has stopped deciding, and every letter a new" >&2
+  echo "player has not opened yet would be marked as already known on their next launch." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+# THE KEY, NOT THE COUNT. The file carries exactly one letter, but the 600-frame soak is real play:
+# a producer can post genuine news during it (this fixture's MasteryEarned opens TRAINING, which is a
+# `unlock.training` letter), so a lane asserting `unread=1` would fail on correct behaviour. The claim
+# the lane is making is "THIS letter is still unread", and that is what it now says.
+if ! echo "$v8_line" | grep -q "region.verdant_hollow.conquered"; then
+  echo "AN UNREAD LETTER DID NOT SURVIVE THE BOOT — a v8 file is not being believed as written." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+if echo "$v8_line" | grep -qE "unread=0[[:space:]]"; then
+  echo "THE v8 FILE'S LETTER WAS READ BY THE BOOT WALK — walking past a surface must not open its mail." >&2
+  echo "  ledger: $v8_line" >&2
+  exit 1
+fi
+echo "v8 save believed as written — its letter stays unread, nothing seeded — $v8_line"
+
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE MIGRATION LANES TOUCHED THE PLAYER'S SAVE." >&2
+  exit 1
+fi
+
+# ── AND THE AUTHORED OPENING, LIVE. ────────────────────────────────────────────────────────────
+#
+# Every other harness path either skips the opening (the shutter, so it is not in 400 captures) or
+# freezes one beat of it for a photograph. Neither runs the MACHINE — the per-frame update, the
+# fight hold, the replay barrier, the screen grants and the surface — which is the part a player
+# actually meets and was the only part of this with no headless check at all. This lane starts a
+# brand-new career INSIDE the opening and soaks it for the full boot walk: the fight is held from
+# the arrival on, so a hold that deadlocked the frame or a card that threw would take the process
+# down here rather than on someone's first launch.
+OPENING="${TEMP:-/tmp}/rh_bootcheck_opening"
+mkdir -p "$OPENING"
+rm -f "$OPENING/save.json"
+
+opening_out="$(timeout 120 bash -c '
+  . tools/shellenv.sh || exit 1
+  RH_ENV=(RH_BOOTCHECK=1 RH_SHOT_OPENING=live RH_SAVE_DIR="$1")
+  dn run --project src/IdleXIdle.Game --no-build
+' _ "$(winpath "$OPENING")" 2>&1)"
+opening_rc=$?
+
+echo "$opening_out" | grep -E "BOOT OK|Unhandled|Exception" | head -3
+
+if [ $opening_rc -ne 0 ] || ! echo "$opening_out" | grep -q "BOOT OK"; then
+  echo "THE AUTHORED OPENING CANNOT BE ENTERED — a brand-new career cannot start the game." >&2
+  echo "$opening_out" | tail -20 >&2
+  exit 1
+fi
+echo "the authored opening runs live, and the frame survives it."
+
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE OPENING LANE TOUCHED THE PLAYER'S SAVE." >&2
+  exit 1
+fi
+
+echo "boot green — reads, writes, reads back what it wrote, and migrates by version."

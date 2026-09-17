@@ -13,7 +13,9 @@
 # it, copy docs/publisher-notes.md in as README.md, a smoke boot of the published exe under RH_SHOT
 # (a build that cannot draw its title is not uploaded), then `butler push` of the FOLDER (butler diffs and
 # uploads only what changed — a 65 MB zip becomes a few MB after the first push), stamped with
-# the git sha as the user-facing version so a tester's feedback code and the build page agree.
+# "<Version>+<git sha>" as the user-facing version — the same stamp the game shows as BUILD and a
+# tester's feedback code carries, so the report and the build page agree. <Version> is the release
+# label in Directory.Build.props (0.1.0-alpha since 2026-09-17; the pre-alpha pushes were the bare sha).
 set -euo pipefail
 TARGET="${1:?usage: itch_push.sh <user>/<slug> [channel]}"
 CHANNEL="${2:-windows}"
@@ -30,7 +32,10 @@ if [ ! -x "$BUTLER" ]; then
 fi
 [ -n "${BUTLER_API_KEY:-}" ] || { echo "BUTLER_API_KEY is not set in this shell" >&2; exit 1; }
 
-SHA="$(git rev-parse --short HEAD)"
+SHA="$(git rev-parse --short=8 HEAD)"   # 8, as BuildStamp.Short prints it
+VERSION="$(grep -o '<Version>[^<]*' Directory.Build.props | head -1 | cut -d'>' -f2 || true)"   # || true: under pipefail a miss would exit before the message below
+[ -n "$VERSION" ] || { echo "no <Version> in Directory.Build.props" >&2; exit 1; }
+USERVERSION="${VERSION}+${SHA}"
 OUT="build/release/IDLExIDLE-win64"
 
 # A CLEAN FOLDER, because butler pushes the FOLDER and not the publish. dotnet publish overwrites what
@@ -41,7 +46,7 @@ OUT="build/release/IDLExIDLE-win64"
 echo "== clean ${OUT}"
 if [ -d "$OUT" ]; then find "$OUT" -mindepth 1 -delete; fi   # not `[ -d ] && …`: under set -e an absent dir would end the script
 
-echo "== publish ${SHA} → ${OUT}"
+echo "== publish ${USERVERSION} → ${OUT}"
 dn publish src/IdleXIdle.Game -c Release -r win-x64 --self-contained -o "$OUT" -v q --nologo \
   || { echo "publish failed" >&2; exit 1; }
 
@@ -55,6 +60,6 @@ SHOT="$(winpath "$PWD")\\build\\release\\smoke_${SHA}.png"
 [ -f "build/release/smoke_${SHA}.png" ] || { echo "the published build did not draw its title — not uploading" >&2; exit 1; }
 rm -f "build/release/smoke_${SHA}.png"
 
-echo "== butler push ${TARGET}:${CHANNEL} (userversion ${SHA})"
-"$BUTLER" push "$OUT" "${TARGET}:${CHANNEL}" --userversion "$SHA" --if-changed
+echo "== butler push ${TARGET}:${CHANNEL} (userversion ${USERVERSION})"
+"$BUTLER" push "$OUT" "${TARGET}:${CHANNEL}" --userversion "$USERVERSION" --if-changed
 "$BUTLER" status "${TARGET}:${CHANNEL}" | tail -5

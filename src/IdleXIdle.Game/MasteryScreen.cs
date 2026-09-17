@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -1438,12 +1438,18 @@ public sealed class MasteryScreen
             var sp = Screen(NodePos(node));
             var half = NodeHitHalf(node.Kind);
             if (Math.Abs(hit.X - sp.X) > half || Math.Abs(hit.Y - sp.Y) > half) continue;
-            // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
-            // cannot afford is exactly the one you most want to read.
+            // A CLICK READS A NODE. IT DOES NOT BUY ONE. (Playtest 2026-09-09: "let's disable
+            // automatic purchasing when clicking in the mastery tree; sometimes players just want to
+            // click to view information.") The line under this comment used to call TakeNode in the
+            // same breath as the pin, so a click meant as "what does this do?" spent the point, wrote
+            // the save on the same frame and played a 0.88-second celebration. The comment already
+            // described select-to-inspect; only the code disagreed.
+            //
+            // The commit lives on the inspector's own TAKE button, above — the pattern the BUILD
+            // screen and the Forge both already use, and the button was already there and already
+            // reading the pinned node.
             _pinnedNodeId = node.Id;
-
-
-            TakeNode(node);
+            Say("", node.Id, "sfx_click");   // clears a stale refusal so the panel speaks for THIS node
             return;
         }
 
@@ -2024,9 +2030,18 @@ public sealed class MasteryScreen
 
         // ── ANCHORED, never inside the scroll: the refusal beside the button that would have done it, then
         //    the button — the panel's one action, always where the hand expects it. ──
+        //
+        // THE BUTTON ACTS ON THE PIN, SO THE BUTTON DESCRIBES THE PIN. The reading above follows the
+        // hover; the verb never does (a hovered neighbour must not silently re-aim the one control
+        // that spends points). Those were the same variable until 2026-09-09, when the click stopped
+        // buying: a player who pins a node and then crosses another on the way to TAKE would have read
+        // one node's cost on a button about to spend another's.
+        var act = _pinnedNodeId is { } actId ? MasteryCatalog.ById(actId) : null;
+        if (act is null) return;
         var btn = TakeBtn;
-        var taken = Mastery.IsTaken(n.Id);
-        var can = Mastery.CanTake(n.Id);
+        var taken = Mastery.IsTaken(act.Id);
+        var can = Mastery.CanTake(act.Id);
+        n = act;
         // EVERY DISABLED NODE SAYS ITS OWN WHY (brief §29). The spoken line — the one a click just
         // raised — belongs to the node it was raised for, so it is only read here while THAT node is
         // the one on the card; every other node falls through to the reason its own rules give. Before
@@ -2085,7 +2100,8 @@ public sealed class MasteryScreen
             Section("MASTERY TREE");
             if (draw) _ui.TextBig(b, "PICK A NODE TO READ IT", x, y, UiInk.Empty, UiTypography.Headline);
             y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
-            Line("Hover shows a node here; click pins it. Take it with the button below.", Slate);
+            Line("Hover reads a node here. Click one to keep it here, then press TAKE.", Slate);
+            Line("Nothing is spent until you press TAKE.", Slate);
             Rule();
             Section("WHAT EACH KIND COSTS IN POINTS");
             Line($"MINOR {MasteryCatalog.CostOf(MasteryKind.Minor)}  ·  NOTABLE {MasteryCatalog.CostOf(MasteryKind.Notable)}  ·  SKILL {MasteryCatalog.CostOf(MasteryKind.SkillRoad)}  ·  GREATER {MasteryCatalog.CostOf(MasteryKind.Greater)}", Bone);
@@ -2524,7 +2540,7 @@ public sealed class MasteryScreen
             // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
             // the capture, a caption floating in empty space.
             _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - UiTypography.Secondary / 2,
-                              taken ? new Color(0x15, 0x10, 0x0F) : aff is null ? Bone : Muted(Bone, 0.62f),
+                              taken ? UiInk.Ground : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
             // INWARD, toward the centre: on the south arms the road node stands just outside this diamond and
             // used to print through the caption ("S ECIALISATION").
@@ -2545,7 +2561,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * 0.50f);
             var learnedRoad = Mastery.AvailableSkills().Contains(roadSkill);
             _ui.SpriteFit(b, skillGlyph, new Rectangle(cx - g / 2, cy - g / 2, g, g),
-                          taken ? new Color(0x15, 0x10, 0x0F) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
+                          taken ? UiInk.Ground : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
             if (learnedRoad && !taken)
             {
                 var bd = Math.Max(8, rad / 3);
@@ -2560,7 +2576,7 @@ public sealed class MasteryScreen
             var g = (int)(box.Width * (node.Kind == MasteryKind.Mastery ? 0.54f : 0.46f));
             // Dark on a lit field once taken, lit on a dark field before: whichever way round, the
             // glyph is the thing with contrast against what is behind it.
-            var tint = taken ? new Color(0x15, 0x10, 0x0F) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
+            var tint = taken ? UiInk.Ground : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
             _ui.SpriteFit(b, glyph, new Rectangle(cx - g / 2, cy - g / 2, g, g), tint);
         }
         else if (frame is null && _zoom > 0.34f
@@ -2570,7 +2586,7 @@ public sealed class MasteryScreen
             // The greybox kind mark, kept for the no-art path only.
             var pip = Math.Max(3, rad / 4);
             _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2),
-                     taken ? new Color(0x15, 0x10, 0x0F) : branchCol);
+                     taken ? UiInk.Ground : branchCol);
         }
 
         // A CAPSTONE WEARS ITS OWN NAME, under the medallion. It used to print Short(node.Branch) inside

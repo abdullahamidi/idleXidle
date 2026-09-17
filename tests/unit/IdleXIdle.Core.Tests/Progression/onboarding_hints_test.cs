@@ -67,20 +67,23 @@ public class onboarding_hints_test
         // Every tour given, every slot note read, the gem lesson had: nothing but a rung can mark a tile.
         var explained = System.Enum.GetValues<Activity>().Select(Onboarding.ScreenKey)
             .Concat(System.Linq.Enumerable.Range(1, 8).Select(Onboarding.SlotKey)).Append(Onboarding.GemTourKey).ToList();
-        var tf = new TutorialFacts(WavesCleared: 999, ChestsHeld: 1);
+        // THE CALLER RESOLVES WHICH SCREEN THE LESSON ASKS FOR, and passes only that: Onboarding needs
+        // no opinion about which lesson is showing, which is what let the ladder be deleted from under
+        // it without this rule changing at all.
         foreach (var screen in System.Enum.GetValues<Activity>())
-            Assert.False(Onboarding.IsNew(screen, facts, explained, null, tf), $"{screen} marked with no rung showing");
+            Assert.False(Onboarding.IsNew(screen, facts, explained, null), $"{screen} marked with no lesson showing");
 
-        Assert.True(Onboarding.IsNew(Activity.Training, facts, explained, TutorialStep.SpendGleam, tf));
-        Assert.True(Onboarding.IsNew(Activity.Vault, facts, explained, TutorialStep.OpenChest, tf));
-        Assert.True(Onboarding.IsNew(Activity.Gear, facts, explained, TutorialStep.EquipItem, tf));
-        Assert.True(Onboarding.IsNew(Activity.Build, facts, explained, TutorialStep.ChooseBuild, tf));
-        foreach (var screen in System.Enum.GetValues<Activity>())
-            if (screen != Activity.Training)
-                Assert.False(Onboarding.IsNew(screen, facts, explained, TutorialStep.SpendGleam, tf), $"{screen} marked by a rung about STATS");
+        foreach (var sends in new[] { Activity.Training, Activity.Vault, Activity.Gear, Activity.Build })
+        {
+            Assert.True(Onboarding.IsNew(sends, facts, explained, sends));
+            foreach (var screen in System.Enum.GetValues<Activity>())
+                if (screen != sends)
+                    Assert.False(Onboarding.IsNew(screen, facts, explained, sends), $"{screen} marked by a lesson about {sends}");
+        }
 
-        // The fight's own rungs send nowhere, so they mark nothing — they render on the HUNT.
+        // A lesson about the fight itself sends nowhere, so it marks nothing — it renders on the HUNT.
         foreach (var screen in System.Enum.GetValues<Activity>())
-            Assert.False(Onboarding.IsNew(screen, facts, explained, TutorialStep.Watch, tf));
+            Assert.False(Onboarding.IsNew(screen, facts, explained,
+                                          OnboardingLessons.Sends(OnboardingLessonId.FirstFight)));
     }
 }

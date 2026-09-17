@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -210,15 +210,18 @@ public class element_sets_test
         // 2p — the flat blunting.
         Assert.True(Taken(Wearing(Source.Machine, 2)) < Taken(Plain(2)), "two Machine pieces blunted nothing");
 
-        // 3p — the wave opens holding a shield, and the shield is 12% of the pool.
+        // 3p — the wave opens holding a shield. SIX per cent of the pool since 2026-09-09, not
+        // twelve: shield carries between waves now, and a repeated grant settles at twice itself under
+        // a half carry, so the grant halved to leave the STANDING figure where it was. See the remark
+        // on ShieldRules for the whole trade.
         var (events, _, _) = Fight(Wearing(Source.Machine, 3), BuildOf(Source.Machine, "sign_call"));
         var granted = events.Where(x => x.Kind == BattleEventKind.ShieldGained && x.AtMs == 0).Sum(x => x.Amount);
-        Assert.InRange(granted, (int)(100_000 * 0.115f), (int)(100_000 * 0.125f));
+        Assert.InRange(granted, (int)(100_000 * 0.055f), (int)(100_000 * 0.065f));
         Assert.Empty(Fight(Plain(3), BuildOf(Source.Machine, "sign_call")).Events
                      .Where(x => x.Kind == BattleEventKind.ShieldGained));
 
         // 4p and 5p, read as EVERYTHING the wave landed — what the shield ate as well as what reached
-        // the pool. Health alone cannot see them: the 3p shield is 12% of a hundred thousand and the
+        // the pool. Health alone cannot see them: the 3p shield is 6% of a hundred thousand and the
         // bites are thirty, so the pool never moves at all and three rungs would read identical.
         int Landed(Hunter h)
         {
@@ -411,7 +414,7 @@ public class element_sets_test
         Assert.True(spirit.HarmonyCharges);
 
         var machine = GearShape.Of(Wearing(Source.Machine, 5));
-        Assert.InRange(machine.WaveStartShieldFraction, 0.119f, 0.121f);
+        Assert.InRange(machine.WaveStartShieldFraction, 0.059f, 0.061f);
         Assert.InRange(machine.ShieldedDamageTaken, 0.899f, 0.901f);
         Assert.True(machine.PreventFirstDamagingBite);
 

@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    The release label, in ONE place. Every project under this folder picks it up: IdleXIdle.Core's
+    AssemblyInformationalVersion is what BuildStamp reads (the SDK appends "+<commit>"), so this is
+    the "BUILD 0.1.0-alpha+1a2b3c4d" in Settings and on the title, the Build field of a feedback code,
+    the exe's product version, and the itch.io user version (tools/publish/itch_push.sh reads it
+    from here). Until 2026-09-17 nothing set it and every build said the SDK's default "1.0.0" —
+    the pre-alpha builds on itch are 1.0.0+<sha>.
+
+    Nothing compares it: a save's compatibility is SaveGame.Version, a plain integer, so changing
+    this label never locks or quarantines a save. Raise it when a release changes what testers are
+    playing; the prerelease tag names the stage (alpha → beta → none at 1.0).
+  -->
+  <PropertyGroup>
+    <Version>0.1.0-alpha</Version>
+  </PropertyGroup>
+</Project>

@@ -22,7 +22,7 @@ public class actor_scale_test
     private static readonly Rectangle BruiserBox = new(1200, 400, 488, 492);    // 1.12
     private static readonly Rectangle ChampBox = new(420, 451, 400, 430);
 
-    // THE RIFT GUARDIAN, the one actor whose IDLE is letterboxed deeply enough (126 px of sky) that the
+    // A 126 PX SKY (the retired rift guardian's; the Bruisers that cap now have 120), an IDLE is letterboxed deeply enough (126 px of sky) that the
     // 488 x 492 box asks 1.275 and the renderer answers 1.25. That box is every Bruiser wave now — a
     // Bruiser rolls one creature, and a lone creature wears its archetype's scale like a pack does.
     private const float GuardianTop = 126 / (float)Frame;
@@ -108,7 +108,7 @@ public class actor_scale_test
     [Fact]
     public void test_the_capped_actors_body_shrinks_to_the_figure_that_is_drawn()
     {
-        // Arrange: the rift guardian's idle in the 488 x 492 box.
+        // Arrange: a 126 px-sky idle in the 488 x 492 box.
         var authored = VfxFigure.VisualRect(BruiserBox, GuardianIdleDrawn);
 
         // Act

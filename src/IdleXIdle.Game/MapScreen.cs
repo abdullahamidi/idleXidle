@@ -82,8 +82,8 @@ public sealed class MapScreen
     /// The plate's height is a constant (<see cref="StripH"/>: one small button, with a breath above and
     /// below), so a message carrying a newline does not grow it — the extra lines are simply drawn below
     /// its foot, across the region cards. That is exactly what a conquest keystone reveal did: four lines
-    /// of doctrine written into a one-line plate. The reveal belongs in the notice toast, whose height IS
-    /// summed from the rungs it draws and whose body wraps; the strip carries the compact headline. This
+    /// of doctrine written into a one-line plate. The reveal belongs in the DISPATCH the conquest posts,
+    /// whose reading pane wraps it in full; the strip carries the compact headline. This
     /// guard is what makes that a contract rather than a convention — no future caller can spill out of
     /// the plate, whatever it writes.
     /// </remarks>
@@ -102,8 +102,8 @@ public sealed class MapScreen
     /// The copy lives WITH the plate that has to hold it. ONE LINE at every UI SCALE — the plate is one
     /// small button tall and does not grow — so the line is written short enough to be read whole rather
     /// than long enough to be ellipsised. The keystone appears as a HEADLINE only; what it DOES is the
-    /// notice toast's job, whose body wraps and whose plate grows to fit it. The two are posted together,
-    /// so the player gets the name here and the sentence there.
+    /// keystone LETTER's job, whose reading pane wraps as far as the sentence runs. The two are written
+    /// together, so the player gets the name here, in the ceremony, and the sentence in the inbox.
     /// </para>
     /// <para>
     /// THE KEYSTONE, NOT THE NEXT REGION. Carrying both ran to eighty characters, and at UI SCALE 150 the
@@ -183,7 +183,7 @@ public sealed class MapScreen
     public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
 
     /// <summary>The locked card's hover explanation, gathered in DrawMap and drawn last so it sits over everything.</summary>
-    private (string Text, Point At)? _lockTip;
+    private (string Text, Rectangle At)? _lockTip;
 
     // ── THE INSPECTOR'S SCROLL (UI polish §17–§18). ──────────────────────────────────────────────
     //
@@ -196,6 +196,8 @@ public sealed class MapScreen
     private int _first;                                  // the first flow item the region shows
     private int _shown;                                  // how many it held last frame — the page size
     private readonly List<int> _itemHeights = new();     // the measured flow, reused each frame
+    private readonly List<bool> _itemKeep = new();       // … and which of them are headings held with the next
+    private int _chipItem = -1;                          // the flow index the checkpoint chip row took, or -1
 
     /// <summary>
     /// RIG: <c>RH_SHOT_SCROLL=&lt;items&gt;</c> poses the flow scrolled by that many items on its first
@@ -267,6 +269,189 @@ public sealed class MapScreen
         var x = UiKit.ContentLeft(panel);
         var h = UiMetrics.ButtonHeightPrimary;
         return new Rectangle(x, panel.Bottom - UiMetrics.Space(24) - h, UiKit.ContentRight(panel) - x, h);
+    }
+
+    /// <summary>The inspector header's own height: the CATEGORY line, the region's name, and a breath.</summary>
+    private static int DetailHeaderH =>
+        UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+
+    /// <summary>
+    /// The flow's band inside the inspector: under the header, a clear line above the one lit button.
+    /// </summary>
+    /// <remarks>
+    /// ONE GEOMETRY. The band the flow is DRAWN in is the band Update HIT-TESTS in, so it is computed
+    /// here and nowhere else — <see cref="DrawDetail"/> paints its header down to this rectangle's top
+    /// and never works the offset out a second time.
+    /// <para>
+    /// 16, not 40. The flow ran five pixels short of the START AT WAVE block on a conquered region held
+    /// deep — so the one control the panel offers besides the button was correctly suppressed, for want
+    /// of air nobody had asked for. The button keeps a clear line above it either way.
+    /// </para>
+    /// </remarks>
+    private static Rectangle DetailFlowRegion(Rectangle panel)
+    {
+        var x = UiKit.ContentLeft(panel);
+        var y = panel.Y + UiTypography.PanelTitleTop + DetailHeaderH;
+        return new Rectangle(x, y, UiKit.ContentRight(panel) - x,
+                             CtaRect(panel).Y - UiMetrics.Space(16) - y);
+    }
+
+    /// <summary>
+    /// The corruption ladder's two small buttons, hanging off the world strip's right end: SHALLOWER,
+    /// then DEEPER. They exist only while the whole world is conquered (see <see cref="DrawWorldStrip"/>).
+    /// </summary>
+    /// <remarks>ONE GEOMETRY: the strip paints them, Update resolves them, both from this one call.</remarks>
+    private static (Rectangle Ease, Rectangle Deep) LadderButtons()
+    {
+        var r = WorldStrip;
+        var btnW = UiMetrics.Control(168);
+        var btnY = r.Y + UiMetrics.Space(6);
+        var deep = new Rectangle(r.Right - UiMetrics.Space(8) - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
+        var ease = new Rectangle(deep.X - UiMetrics.Gap - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
+        return (ease, deep);
+    }
+
+    // ── THE CHECKPOINT CHIP ROW'S OWN GRID (the START AT WAVE block inside the inspector's flow). ──
+    //
+    // 30 px chips at 100 %: Secondary plus the chip padding is 27, and the six pixels saved are what let
+    // the consequence line under them fit on a deep region. They follow the profile.
+    private static int ChipGap => UiMetrics.Space(4);
+    private static int ChipH => UiMetrics.Control(30);
+    private int ChipW(int wave) => Math.Max(UiMetrics.Control(44),
+        _ui.MeasureBig(wave == 0 ? "TOP" : wave.ToString(), UiTypography.Secondary) + UiTypography.ChipPadX * 2);
+
+    /// <summary>
+    /// The checkpoint waves a conquered region offers, trimmed to the row's width.
+    /// </summary>
+    /// <remarks>
+    /// The row holds so many chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay — a
+    /// player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
+    /// </remarks>
+    private List<int> CheckpointOptions(Region farm, int w)
+    {
+        var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
+        int RowWidth() { var t = 0; foreach (var o in options) t += ChipW(o) + ChipGap; return t; }
+        while (options.Count > 2 && RowWidth() > w) options.RemoveAt(1);
+        return options;
+    }
+
+    /// <summary>
+    /// The chip row laid out from its left edge and its top: one rectangle per option, in order.
+    /// </summary>
+    /// <remarks>ONE GEOMETRY: the flow paints these rectangles, Update hit-tests these rectangles.</remarks>
+    private List<(Rectangle Chip, int Wave)> ChipRects(List<int> options, int x, int top)
+    {
+        var rects = new List<(Rectangle, int)>(options.Count);
+        var cx = x;
+        foreach (var o in options)
+        {
+            var chip = new Rectangle(cx, top, ChipW(o), ChipH);
+            rects.Add((chip, o));
+            cx += chip.Width + ChipGap;
+        }
+        return rects;
+    }
+
+    /// <summary>
+    /// How many flow items the region holds from <paramref name="first"/> — the flow's fit rule, in one
+    /// place, so the page <see cref="Flow"/> draws is the page Update measured.
+    /// </summary>
+    /// <remarks>
+    /// Items are taken in order at their own measured height. A HEADING KEEPS ITS FIRST LINE: one that
+    /// would be the page's last item is held for the next page (unless it is the page's first item, when
+    /// holding it would leave the page blank). Once one item does not fit, none after it is taken — the
+    /// flow is in order, and a gap would read as a missing block.
+    /// </remarks>
+    private int PageOf(Rectangle region, int first)
+    {
+        var y = region.Y;
+        var n = 0;
+        for (var i = first; i < _itemHeights.Count; i++)
+        {
+            var h = _itemHeights[i];
+            var need = _itemKeep[i] && i > first && i + 1 < _itemHeights.Count ? h + _itemHeights[i + 1] : h;
+            if (y + need > region.Bottom) break;
+            y += h;
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>The top edge of flow item <paramref name="i"/> on the page that starts at <paramref name="first"/>.</summary>
+    /// <remarks>
+    /// The same running sum <see cref="Flow"/>'s own <c>Item</c> keeps — it advances by exactly the
+    /// measured height of each item it draws — so a rect placed from here lands where the flow paints it.
+    /// </remarks>
+    private int ItemTop(Rectangle region, int first, int i)
+    {
+        var y = region.Y;
+        for (var k = first; k < i && k < _itemHeights.Count; k++) y += _itemHeights[k];
+        return y;
+    }
+
+    /// <summary>
+    /// THE INSPECTOR'S LAYOUT FOR THIS FRAME, measured once and read by both halves.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Update"/> measures it to hit-test the flow's controls; <see cref="DrawDetail"/> measures
+    /// it to paint them. The measurement is pure — it depends only on the state the host has already set —
+    /// so the two calls cannot disagree, and a Draw with no Update before it (a settings modal is up, and
+    /// the world map is still painted under it) still lays the panel out correctly.
+    /// </remarks>
+    private readonly record struct DetailLayout(
+        RegionDefinition Def, bool Unlocked, bool Conquered, Region Farm, Color Source,
+        Rectangle Region, Rectangle Track, bool HasTrack, int Total, int MaxFirst, int First, int Page,
+        int? ChipTop);
+
+    /// <summary>Measure the inspector's flow: the band it fills, its scrollbar, its page, its chip row.</summary>
+    private DetailLayout MeasureDetail()
+    {
+        var panel = DetailPanel;
+        var def = Def(_selected);
+        var unlocked = World.IsUnlocked(def.Id);
+        var conq = World.IsConquered(def.Id);
+        var farm = World.RegionFarm(def.Id);
+        var sc = SourceColor[def.Theme];
+        var region = DetailFlowRegion(panel);
+
+        // MEASURED, THEN DRAWN. The flow records every item's height first; if the whole of it is taller
+        // than the region, a scrollbar lane comes off the right and the flow is measured again at the
+        // narrower width (a wrapped line can only get longer). Then the first item is clamped so the last
+        // page is as full as it can be, and the flow is drawn from there.
+        //
+        // THE MEASURE PASS TOUCHES NO BATCH: every paint inside Flow sits behind its `Item(...)` guard,
+        // which returns false for every item while `draw` is false. That is what lets Update — which has
+        // no SpriteBatch and must not paint — run the very same layout it is about to hit-test.
+        void Measure(Rectangle r)
+        {
+            _itemHeights.Clear();
+            _itemKeep.Clear();
+            _chipItem = -1;
+            Flow(null!, def, unlocked, conq, farm, sc, r, Point.Zero, first: 0, page: 0, draw: false);
+        }
+
+        Measure(region);
+        var track = Rectangle.Empty;
+        var hasTrack = _itemHeights.Sum() > region.Height;
+        if (hasTrack)
+        {
+            region.Width -= UiMetrics.ScrollbarWidth + UiMetrics.Gap;
+            Measure(region);
+            track = new Rectangle(region.Right + UiMetrics.Gap, region.Y, UiMetrics.ScrollbarWidth, region.Height);
+        }
+
+        var total = _itemHeights.Count;
+        var maxFirst = 0;
+        for (int i = total - 1, acc = 0; i >= 0; i--)
+        {
+            acc += _itemHeights[i];
+            if (acc > region.Height) { maxFirst = i + 1; break; }
+        }
+        var first = Math.Clamp(_first, 0, maxFirst);
+        var page = PageOf(region, first);
+        int? chipTop = _chipItem >= first && _chipItem < first + page ? ItemTop(region, first, _chipItem) : null;
+        return new DetailLayout(def, unlocked, conq, farm, sc,
+                                region, track, hasTrack, total, maxFirst, first, page, chipTop);
     }
 
     /// <summary>Has the world anything to say right now? The strip costs nothing when it has not.</summary>
@@ -501,9 +686,8 @@ public sealed class MapScreen
 
     /// <param name="wheel">
     /// Mouse-wheel notches this frame (+ away, - toward, as <c>Game1.MouseWheel</c> latches them), for the
-    /// inspector's flow. The host does not pass it yet — it passes GEAR's, FORGE's, BUILD's, VAULT's and
-    /// TRAINING's, and this screen's needs the same one-line change in Game1; until then the arrow keys,
-    /// PAGE UP / PAGE DOWN and a click on the scrollbar's track are the ways down the flow.
+    /// inspector's flow — alongside the arrow keys, PAGE UP / PAGE DOWN and a click on the scrollbar's
+    /// track, the ways down the flow that need no pointer.
     /// </param>
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel = 0)
     {
@@ -522,13 +706,119 @@ public sealed class MapScreen
         if (P(Keys.S) && World.CanEaseCorruption) _easeRequest = true;
 
         // THE INSPECTOR'S SCROLL: the wheel over the panel, or the arrow keys — the path that needs no
-        // pointer. The upper clamp is the flow's own, applied once it has measured itself in Draw.
+        // pointer. The upper clamp is the flow's own, applied by ResolveDetailClick below once the flow
+        // has measured itself (it used to be applied by the paint, which must not write state).
         var step = wheel != 0 && DetailPanel.Contains(mouse) ? -wheel : 0;
         if (P(Keys.Down)) step++;
         if (P(Keys.Up)) step--;
         if (P(Keys.PageDown)) step += Math.Max(1, _shown);
         if (P(Keys.PageUp)) step -= Math.Max(1, _shown);
         if (step != 0) _first = Math.Max(0, _first + step);
+
+        // ── THE POINTER, RESOLVED HERE (input architecture, 2026-09-12). ─────────────────────────
+        //
+        // DRAW MUST NOT CONSUME INPUT. MonoGame's fixed timestep makes at least one Update and exactly
+        // one Draw per tick, so a frame over budget runs Update twice and Draw once — and the host
+        // latches the click edge at the top of Update and clears it at the bottom, so the second Update
+        // erases the edge the single Draw that follows would have hit-tested. A press is held three to
+        // six frames, so it never re-arms: the click is silently dropped. The title screen shipped with
+        // exactly that bug. Every one of this screen's clicks is resolved below instead, in the order
+        // the Draw methods used to resolve them — the chart's cards, then the world strip's ladder, then
+        // the inspector's chips, its scrollbar and its one lit button — and each one reads the SAME
+        // geometry member the paint reads, so what is drawn is what is hit-tested.
+        ResolveMapClick(mouse, clicked);
+        ResolveStripClick(mouse, clicked);
+        ResolveDetailClick(mouse, clicked);
+    }
+
+    /// <summary>The chart's region cards: a first click selects, a second on the selected one travels.</summary>
+    /// <remarks>
+    /// Was in <see cref="DrawMap"/>. The cards are <see cref="Node"/>, the one rectangle the paint also
+    /// uses. The whole chain is walked rather than broken out of, exactly as the paint loop walks it, so
+    /// a later card reads the selection an earlier one may just have moved (the cards do not overlap, so
+    /// at most one can fire on an edge either way).
+    /// </remarks>
+    private void ResolveMapClick(Point mouse, bool clicked)
+    {
+        if (!clicked) return;   // every branch below needs the edge; the chain's rects cost nothing to skip
+        for (var i = 0; i < RegionCount; i++)
+        {
+            var def = Def(i);
+            var sel = i == _selected;
+            if (!UiKit.ClickedIn(Node(i), mouse, clicked)) continue;
+            // The click has a sound for what it meant (§27, §86): picking a card is a dry click, going
+            // is the navigation tick, and asking to go somewhere locked is the dull error — with the
+            // reason already on the card, under it and in the inspector.
+            if (sel && World.IsUnlocked(def.Id)) { _enterRequest = def.Id; _cue = "sfx_nav"; }
+            else _cue = sel ? "sfx_error" : "sfx_click";
+            Select(i);
+        }
+    }
+
+    /// <summary>The world strip's corruption ladder: SHALLOWER and DEEPER, once the world is all yours.</summary>
+    /// <remarks>
+    /// Was in <see cref="DrawWorldStrip"/>. The same <see cref="World.AllConquered"/> branch the strip
+    /// paints under, the same <see cref="LadderButtons"/> rectangles, and the same enabled test
+    /// <c>UiKit.Button</c> applies before it will return true.
+    /// </remarks>
+    private void ResolveStripClick(Point mouse, bool clicked)
+    {
+        if (!clicked || !World.AllConquered) return;
+        var (ease, deep) = LadderButtons();
+        if (UiKit.ClickedIn(ease, mouse, clicked) && World.CanEaseCorruption) _easeRequest = true;
+        if (UiKit.ClickedIn(deep, mouse, clicked) && World.CanDeepenCorruption) _deepenRequest = true;
+    }
+
+    /// <summary>
+    /// The inspector: the checkpoint chips inside the flow, the scrollbar track beside it, and the one
+    /// lit button under it — in that order, which is the order the panel used to resolve them in.
+    /// </summary>
+    /// <remarks>
+    /// Was in <see cref="DrawDetail"/> and <see cref="Flow"/>. <see cref="MeasureDetail"/> is the one
+    /// layout both halves read, so the chip the pointer is over is the chip the flow paints there — and
+    /// the scroll clamp and the page size, which used to be written from the paint, are written here.
+    /// </remarks>
+    private void ResolveDetailClick(Point mouse, bool clicked)
+    {
+        // HEADLESS: the unit tests drive this screen with no UiKit at all — the Game test assembly
+        // deliberately touches no GraphicsDevice (see IdleXIdle.Game.Tests.csproj) and UiKit cannot be
+        // built without one, so `new MapScreen(null!)` is the sanctioned fixture. The inspector's flow is
+        // measured by WRAPPING its text, which needs a font: with no kit the panel has no geometry, and a
+        // headless frame has no pointer to hit-test against it either. The chart's cards and the world
+        // strip's ladder are page-anchored rectangles and stay live above, which is what those tests use.
+        if (_ui is null) return;
+
+        // RIG: the posed scroll, applied before the clamp — see _devScrollPending. It was consumed in
+        // Draw, which must not write state at all.
+        if (_devScrollPending != 0) { _first = _devScrollPending; _devScrollPending = 0; }
+
+        var L = MeasureDetail();
+        _first = L.First;     // the clamp: the last page is as full as it can be
+        _shown = L.Page;      // the page size PAGE UP / PAGE DOWN steps by
+
+        // START AT WAVE — the chips of a conquered region, at the row the flow actually put them on.
+        if (L.ChipTop is { } chipTop)
+            foreach (var (chip, wave) in ChipRects(CheckpointOptions(L.Farm, L.Region.Width), L.Region.X, chipTop))
+                if (UiKit.ClickedIn(chip, mouse, clicked)) _startRequest = (L.Def.Id, wave);
+
+        // A click on the track pages toward the click — the way down the flow for a pointer whose wheel
+        // does not reach this screen yet. The track maps to the flow in proportion, which is where the
+        // thumb is drawn.
+        if (L.HasTrack && UiKit.ClickedIn(L.Track, mouse, clicked))
+        {
+            var at = (mouse.Y - L.Track.Y) * L.Total / Math.Max(1, L.Track.Height);
+            var page = Math.Max(1, L.Page);
+            if (at < L.First) _first = Math.Max(0, L.First - page);
+            else if (at >= L.First + L.Page) _first = Math.Min(L.MaxFirst, L.First + page);
+        }
+
+        // ── THE ONE THING YOU CAN DO. A locked region has no button at all — a plate says what it needs
+        //    instead (§29) — so there is nothing here to resolve for one. ──
+        if (L.Unlocked && UiKit.ClickedIn(CtaRect(DetailPanel), mouse, clicked))
+        {
+            _enterRequest = L.Def.Id;
+            _cue = "sfx_nav";
+        }
     }
 
     /// <summary>
@@ -574,9 +864,15 @@ public sealed class MapScreen
         if (idx >= 0) Select(idx);
     }
 
-    public void Draw(SpriteBatch b, Point mouse, bool clicked)
+    /// <summary>
+    /// Paint the map. NO EDGE: every click on this screen is resolved in <see cref="Update"/> (see the
+    /// pointer block at its foot), so this method reads state, the cursor's POSITION and the held button
+    /// and nothing else — calling it three times over with no Update between changes nothing semantic.
+    /// </summary>
+    public void Draw(SpriteBatch b, Point mouse)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        // The SAME posed cursor Update works with, or a capture would hit-test one point and draw another.
         var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0B, 0x09, 0x08, 0xB0));
@@ -587,14 +883,14 @@ public sealed class MapScreen
         // says so there, about this player's world, instead of reciting a balance figure on every visit.
 
         _lockTip = null;
-        DrawMap(b, hit, clicked);
-        DrawDetail(b, hit, clicked);
+        DrawMap(b, hit);
+        DrawDetail(b, hit);
         // LAST, over both panels: a locked card's hover answer (§29) must not sit under the inspector.
         if (_lockTip is { } tip) _ui.HoverTip(b, tip.Text, tip.At);
         if (DevMapDebug) DrawDebug(b);
     }
 
-    private void DrawMap(SpriteBatch b, Point hit, bool clicked)
+    private void DrawMap(SpriteBatch b, Point hit)
     {
         // The illustrated map backdrop, cropped to fill the canvas (AspectFillCrop), then a dark scrim so nodes read.
         // bg_mapfield, not bg_regionmap: the latter is the cartographer's-chamber art already covering the
@@ -661,16 +957,8 @@ public sealed class MapScreen
             var sel = i == _selected;
             // First click selects, a second click on the selected region TRAVELS — "haritayı
             // değiştiremiyorum": a tile that only ever selected, with the travel verb parked in a
-            // button that disappeared at endgame, read as a map you could not use.
-            if (UiKit.ClickedIn(node, hit, clicked))
-            {
-                // The click has a sound for what it meant (§27, §86): picking a card is a dry click, going
-                // is the navigation tick, and asking to go somewhere locked is the dull error — with the
-                // reason already on the card, under it and in the inspector.
-                if (sel && unlocked) { _enterRequest = def.Id; _cue = "sfx_nav"; }
-                else _cue = sel ? "sfx_error" : "sfx_click";
-                Select(i);
-            }
+            // button that disappeared at endgame, read as a map you could not use. RESOLVED IN UPDATE
+            // (ResolveMapClick), on this same `Node(i)` rectangle; the card only paints here.
 
             var sc = SourceColor[def.Theme];
             // THE STANDARD STATES (§25–§28), the way UiKit.Button wears them. HOVER is a lift plus the
@@ -818,13 +1106,13 @@ public sealed class MapScreen
                 // that line for want of room — a short field, a world strip over the chain, 150 % — where
                 // the card would otherwise say LOCKED and refuse to say by what. Gathered here, drawn
                 // last, over both panels.
-                if (hot && !reqPrinted) _lockTip = (LockedReason(def), hit);
+                if (hot && !reqPrinted) _lockTip = (LockedReason(def), node);
             }
 
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);
         }
 
-        DrawWorldStrip(b, hit, clicked);
+        DrawWorldStrip(b, hit);
     }
 
     /// <summary>
@@ -841,10 +1129,10 @@ public sealed class MapScreen
     /// <see cref="StripLine"/> — the message flattened by <see cref="OneLine"/> — and never the raw
     /// message. And note what the CONQUERED branch means for the other one: once every region is yours
     /// the ladder owns this row for good, so a message posted from then on is never seen. Anything the
-    /// player has to read after the last conquest belongs in the notice toast, not here.
+    /// player has to read after the last conquest belongs in a DISPATCH, not here.
     /// </para>
     /// </remarks>
-    private void DrawWorldStrip(SpriteBatch b, Point hit, bool clicked)
+    private void DrawWorldStrip(SpriteBatch b, Point hit)
     {
         var r = WorldStrip;
         var body = UiTypography.Body;
@@ -854,11 +1142,9 @@ public sealed class MapScreen
             _ui.Plate(b, r, Gold);
             var label = CorruptionLook.Label(World.CorruptionTier);
             // The two small buttons hang off the strip's right end; the blurb takes whatever is left
-            // between the label and them, and says nothing rather than an ellipsis alone.
-            var btnW = UiMetrics.Control(168);
-            var btnY = r.Y + UiMetrics.Space(6);
-            var deep = new Rectangle(r.Right - UiMetrics.Space(8) - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
-            var ease = new Rectangle(deep.X - UiMetrics.Gap - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
+            // between the label and them, and says nothing rather than an ellipsis alone. Their
+            // rectangles come from LadderButtons, which is also what Update hit-tests.
+            var (ease, deep) = LadderButtons();
             // The label stops short of the buttons too: at 150 % the longest tier name ends seventeen
             // pixels before SHALLOWER (so the margin here is the small one — the bigger one cut it to an
             // ellipsis), and a longer one would otherwise run under the button.
@@ -869,8 +1155,11 @@ public sealed class MapScreen
             var blurb = _ui.ShortenBig(CorruptionLook.For(World.CorruptionTier).Blurb, ease.X - UiMetrics.Space(16) - blurbX, UiTypography.Secondary);
             if (blurb.Length > 1)
                 _ui.TextBig(b, blurb, blurbX, r.Y + (r.Height - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
-            if (_ui.Button(b, ease, "SHALLOWER", hit, clicked, World.CanEaseCorruption)) _easeRequest = true;
-            if (_ui.Button(b, deep, "DEEPER", hit, clicked, World.CanDeepenCorruption)) _deepenRequest = true;
+            // DRAWN HERE, DECIDED IN UPDATE (ResolveStripClick). `clicked: false` affects only the return
+            // value — the hover and the pressed face come from the cursor and the static UiKit.MouseHeld —
+            // so the button looks exactly as it always did and simply cannot fire from a paint.
+            _ui.Button(b, ease, "SHALLOWER", hit, false, World.CanEaseCorruption);
+            _ui.Button(b, deep, "DEEPER", hit, false, World.CanDeepenCorruption);
         }
         else if (StripLine is { Length: > 0 } news)
         {
@@ -892,15 +1181,13 @@ public sealed class MapScreen
     /// ones that do not apply cost nothing. The header (category, name) stays put and the button stays
     /// anchored; the flow between them scrolls when the profile makes it longer than the column.
     /// </remarks>
-    private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
+    private void DrawDetail(SpriteBatch b, Point hit)
     {
         var panel = DetailPanel;
         _ui.PanelQuiet(b, panel);
-        var def = Def(_selected);
-        var unlocked = World.IsUnlocked(def.Id);
-        var conq = World.IsConquered(def.Id);
-        var farm = World.RegionFarm(def.Id);
-        var sc = SourceColor[def.Theme];
+        // THE ONE LAYOUT — the same pure measurement Update hit-tested this frame (MeasureDetail).
+        var L = MeasureDetail();
+        var def = L.Def;
 
         var x = UiKit.ContentLeft(panel);
         var w = UiKit.ContentRight(panel) - x;
@@ -912,63 +1199,26 @@ public sealed class MapScreen
         y += UiTypography.Pitch(UiTypography.Secondary);
         _ui.TextBig(b, _ui.ShortenBig(def.Name, w, UiTypography.Headline), x, y,
                     def.Id == ActiveRegion ? Gold : Bone, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        // The header's foot IS the flow band's top: DetailHeaderH is these two pitches and the breath
+        // after them, and DetailFlowRegion — which is what L.Region came from — starts there.
 
-        // 16, not 40. The flow ran five pixels short of the START AT WAVE block on a conquered region held
-        // deep — so the one control the panel offers besides the button was correctly suppressed, for want
-        // of air nobody had asked for. The button keeps a clear line above it either way.
-        var region = new Rectangle(x, y, w, cta.Y - UiMetrics.Space(16) - y);
+        // MEASURED, THEN DRAWN, and measured in ONE place: L carries the band, the page and the
+        // scrollbar, so nothing below works a rectangle out a second time.
+        Flow(b, def, L.Unlocked, L.Conquered, L.Farm, L.Source, L.Region, hit, L.First, L.Page, draw: true);
 
-        // MEASURED, THEN DRAWN. The flow records every item's height first; if the whole of it is taller
-        // than the region, a scrollbar lane comes off the right and the flow is measured again at the
-        // narrower width (a wrapped line can only get longer). Then the first item is clamped so the last
-        // page is as full as it can be, and the flow is drawn from there.
-        _itemHeights.Clear();
-        Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: false);
-        var lane = 0;
-        if (_itemHeights.Sum() > region.Height)
-        {
-            lane = UiMetrics.ScrollbarWidth + UiMetrics.Gap;
-            region.Width -= lane;
-            _itemHeights.Clear();
-            Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: false);
-        }
-        var total = _itemHeights.Count;
-        var maxFirst = 0;
-        for (int i = total - 1, acc = 0; i >= 0; i--)
-        {
-            acc += _itemHeights[i];
-            if (acc > region.Height) { maxFirst = i + 1; break; }
-        }
-        if (_devScrollPending != 0) { _first = _devScrollPending; _devScrollPending = 0; }
-        _first = Math.Clamp(_first, 0, maxFirst);
-        _shown = Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: true);
-
-        if (lane > 0)
-        {
-            var track = new Rectangle(region.Right + UiMetrics.Gap, region.Y, UiMetrics.ScrollbarWidth, region.Height);
-            _ui.ScrollBar(b, track, _first, _shown, total);
-            // A click on the track pages toward the click — the way down the flow for a pointer whose
-            // wheel does not reach this screen yet. The track maps to the flow in proportion, which is
-            // where the thumb is drawn.
-            if (UiKit.ClickedIn(track, hit, clicked))
-            {
-                var at = (hit.Y - track.Y) * total / Math.Max(1, track.Height);
-                var page = Math.Max(1, _shown);
-                if (at < _first) _first = Math.Max(0, _first - page);
-                else if (at >= _first + _shown) _first = Math.Min(maxFirst, _first + page);
-            }
-        }
+        // A click on the track pages toward the click — the way down the flow for a pointer whose wheel
+        // does not reach this screen yet. RESOLVED IN UPDATE (ResolveDetailClick) on this same L.Track;
+        // the thumb, drawn in proportion to the flow, only paints here.
+        if (L.HasTrack) _ui.ScrollBar(b, L.Track, L.First, L.Page, L.Total);
 
         // ── THE ONE THING YOU CAN DO. A locked region gets the requirement on the quiet tier rather than
         //    a disabled mystery button (§29). ──
-        if (unlocked)
+        if (L.Unlocked)
         {
-            if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "HUNT HERE", hit, clicked, true, ButtonStyle.Primary))
-            {
-                _enterRequest = def.Id;
-                _cue = "sfx_nav";
-            }
+            // DRAWN HERE, DECIDED IN UPDATE (ResolveDetailClick). `clicked: false` changes only the
+            // return value — hover and the pressed face come from the cursor and the static
+            // UiKit.MouseHeld — so the button looks exactly as it did and cannot fire from a paint.
+            _ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "HUNT HERE", hit, false, true, ButtonStyle.Primary);
         }
         else
         {
@@ -985,36 +1235,41 @@ public sealed class MapScreen
     /// <summary>
     /// The inspector's flow, from the identity plate to the region's state. Each thing it draws is an
     /// ITEM of a known height. With <paramref name="draw"/> false every item's height is recorded into
-    /// <see cref="_itemHeights"/> and nothing is drawn; with it true, items before <see cref="_first"/>
-    /// are skipped and the rest are drawn while the region holds them. Returns how many it drew.
+    /// <see cref="_itemHeights"/> and nothing is drawn — and no <see cref="SpriteBatch"/> is touched, so
+    /// the measure pass runs from <see cref="MeasureDetail"/> with none. With it true, the items of the
+    /// page <paramref name="first"/> and <paramref name="page"/> name are drawn. Returns how many it drew.
     /// </summary>
+    /// <remarks>
+    /// THE PAGE IS DECIDED OUTSIDE, by <see cref="PageOf"/>, so that <see cref="Update"/> can know which
+    /// items are on screen — and where each one sits (<see cref="ItemTop"/>) — without painting anything.
+    /// This method used to apply the fit rule inline while drawing, which meant only a paint could find
+    /// out where the checkpoint chips had landed.
+    /// </remarks>
     private int Flow(SpriteBatch b, RegionDefinition def, bool unlocked, bool conq, Region farm, Color sc,
-                     Rectangle region, Point hit, bool clicked, bool draw)
+                     Rectangle region, Point hit, int first, int page, bool draw)
     {
         var x = region.X;
         var w = region.Width;
         var y = region.Y;
         var idx = 0;
         var shown = 0;
-        var full = false;
         var body = UiTypography.Body;
         var bodyPitch = UiTypography.Pitch(body);
         var wordGap = UiMetrics.Space(10);
 
-        // One item, h tall: records it when measuring; when drawing, places it at `top` if it is past the
-        // scroll and the region still has room, and says whether to draw it. Once one item does not fit,
-        // none after it is drawn — the flow is in order, and a gap would read as a missing block.
+        // One item, h tall: records it (and whether it is a heading) when measuring; when drawing, places
+        // it at `top` if it is on the page, and says whether to draw it. WHICH items are on the page is
+        // PageOf's answer, applied identically here and in Update — the running `y` advances by exactly
+        // the measured height of each item drawn, which is the same sum ItemTop takes.
         // A HEADING KEEPS ITS FIRST LINE: "WHAT IT DROPS" over nothing, at the foot of a page, says
         // nothing — so a heading that would be the page's last item is held for the next page (unless it
-        // is the page's first item, when holding it would leave the page blank).
+        // is the page's first item, when holding it would leave the page blank). PageOf applies that.
         bool Item(int h, out int top, bool keepWithNext = false)
         {
             top = y;
             var i = idx++;
-            if (!draw) { _itemHeights.Add(h); return false; }
-            if (i < _first || full) return false;
-            var need = keepWithNext && i > _first && i + 1 < _itemHeights.Count ? h + _itemHeights[i + 1] : h;
-            if (y + need > region.Bottom) { full = true; return false; }
+            if (!draw) { _itemHeights.Add(h); _itemKeep.Add(keepWithNext); return false; }
+            if (i < first || i >= first + page) return false;
             y += h;
             shown++;
             return true;
@@ -1064,6 +1319,11 @@ public sealed class MapScreen
                         plate.Y + (plateH - UiTypography.Headline) / 2, Bone, UiTypography.Headline);
         }
         Line(Description(def.Theme), Bone, body, 1);
+        // WHAT THIS PLACE IS. Two sentences the world says about itself, in the flow so they take
+        // their room like every other item and give it back when the page is short. They lived as C#
+        // comments for months — two design documents quoted them as shipped text and no player ever
+        // saw one (playtest 2026-09-09: "let's write a story for the game").
+        if (def.Blurb.Length > 0) Line(def.Blurb, Slate, UiTypography.Secondary, 4);
         Rule();
 
         // ── CAN I SURVIVE IT — the two figures, and the gap between them IN WORDS. ──
@@ -1177,8 +1437,10 @@ public sealed class MapScreen
         }
 
         // THE FOOT SAYS WHAT THE LEFTOVER BAND IS: when the flow is cut and the last item did not fit,
-        // the empty band above the button read as "the content ended here" (map-03).
-        if (draw && full && region.Bottom - y >= UiTypography.Pitch(UiTypography.Secondary))
+        // the empty band above the button read as "the content ended here" (map-03). The flow is cut
+        // exactly when the page does not reach the last item — which is when `full` used to be set.
+        if (draw && first + page < _itemHeights.Count
+            && region.Bottom - y >= UiTypography.Pitch(UiTypography.Secondary))
             _ui.TextRightBig(b, "SCROLL FOR MORE", x + w, region.Bottom - UiTypography.Pitch(UiTypography.Secondary),
                              Slate, UiTypography.Secondary);
 
@@ -1189,20 +1451,14 @@ public sealed class MapScreen
         // per descent; the chosen one is gold, an unaffordable one is dim and says so.
         void StartAtWave()
         {
-            var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
-            var gap = UiMetrics.Space(4);
-            // The row holds so many chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay —
-            // a player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
-            int ChipW(int o) => Math.Max(UiMetrics.Control(44), _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), UiTypography.Secondary) + UiTypography.ChipPadX * 2);
-            int RowWidth() { var t = 0; foreach (var o in options) t += ChipW(o) + gap; return t; }
-            while (options.Count > 2 && RowWidth() > w) options.RemoveAt(1);
+            // The options, and the chips' widths and spacing, come from CheckpointOptions / ChipRects —
+            // the row's ONE geometry, which Update reads too (ResolveDetailClick).
+            var options = CheckpointOptions(farm, w);
 
             // ONE OPTION IS NOT A CHOICE. A region conquered at wave 1 offers only the top, and a header over a
             // single inert chip is furniture — the block appears when there is somewhere else to start.
             if (options.Count < 2) return;
-            // 30 px chips at 100 %: Secondary plus the chip padding is 27, and the six pixels saved are what
-            // let the consequence line under them fit on a deep region. They follow the profile.
-            var chipH = UiMetrics.Control(30);
+            var chipH = ChipH;
 
             // THE COST RIDES THE HEADER'S OWN ROW. On its own line it was the first thing the flow dropped on a
             // deep region — and it is the half that says what pressing a chip will charge you.
@@ -1221,17 +1477,18 @@ public sealed class MapScreen
                                     : $"NEED {cost:N0} DUST — STARTS AT THE TOP",
                                  x + w, ht, affordChosen ? Slate : Ember, UiTypography.Secondary);
             }
-            if (!Item(chipH + gap, out var ct)) return;
-            var cx = x;
-            foreach (var o in options)
+            // The index this chip row takes in the flow, recorded while measuring — that is how Update
+            // finds the row's top (ItemTop) without a paint having to tell it.
+            if (!draw) _chipItem = idx;
+            if (!Item(chipH + ChipGap, out var ct)) return;
+            foreach (var (chip, o) in ChipRects(options, x, ct))
             {
                 var label = o == 0 ? "TOP" : o.ToString();
-                var chip = new Rectangle(cx, ct, ChipW(o), chipH);
                 var afford = DustOwned >= Checkpoints.DustCost(o);
                 var lit = o == chosen;
                 // The same states as the cards (§25–§27): the edge eases to bone under the pointer, and
-                // a held chip drops a pixel and darkens until it is let go. Hit-tested on `chip`, drawn
-                // on `cf`.
+                // a held chip drops a pixel and darkens until it is let go. Hit-tested (in Update) on
+                // `chip`, drawn on `cf`.
                 var chipHot = chip.Contains(hit);
                 var chipPressed = chipHot && Held;
                 var chipLift = UiMotion.Ease(UiMotion.KeyOf(chip), chipHot ? 1f : 0f);
@@ -1246,8 +1503,7 @@ public sealed class MapScreen
                 _ui.Fill(b, new Rectangle(cf.Right - 2, cf.Y, 2, cf.Height), edge);
                 _ui.TextCenterBig(b, label, cf.Center.X, cf.Y + (chipH - UiTypography.Secondary) / 2,
                                   lit ? Gold : afford ? Bone : UiInk.Disabled, UiTypography.Secondary);
-                if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, o);
-                cx += chip.Width + gap;
+                // The chip's click is resolved in Update (ResolveDetailClick), on this same `chip`.
             }
         }
     }

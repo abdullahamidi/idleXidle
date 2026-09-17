@@ -163,13 +163,27 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_four()
+    public void test_the_current_save_version_is_eight()
     {
-        // RE-PINNED 2026-09-03 (was three). The bump is what makes an OLDER build refuse a new file as
+        // RE-PINNED 2026-09-09 (was four). The bump is what makes an OLDER build refuse a new file as
         // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
         // player's live save by mistake. It is also what makes SnapshotBeforeUpgrade copy the old file
-        // aside: its guard is `if (fileVersion >= CurrentVersion) return null;`, so without a bump the
-        // keystone/Vow migration and the fifth-slot removal would have no undo at all.
-        Assert.Equal(4, SaveGame.CurrentVersion);
+        // aside: its guard is `if (fileVersion >= CurrentVersion) return null;`, so without a bump a
+        // format migration has no undo at all.
+        //
+        // 5 EARNS IT TWICE. The fall-loop facts (ReportOpenedEver / ChangedAfterFall /
+        // RetriedAfterChange) shipped without a bump, so nothing could tell a file that PREDATES them
+        // from one whose player has simply not lived that loop yet — and a brand-new player who
+        // conquered a region before their first fall was being seeded as a veteran, losing the lesson
+        // the first session exists to teach. This number is that discriminator; see
+        // OnboardingLessons.FirstVersionWithFallLoopFacts, which is frozen at it.
+        // RE-PINNED 2026-09-10 (was five): the authored opening gave a career a cursor, and a file
+        // written before it has none. See OpeningScript.FirstVersionWithOpeningState.
+        // RE-PINNED 2026-09-11 (was six): that cursor gained a stage mid-sequence, and a v6 file's
+        // ordinals are read in their own numbering. See OpeningScript.FirstVersionWithSignatureWatch.
+        // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox. A file below 8 has been TOLD nothing,
+        // and "told nothing" must be distinguishable from an honestly empty inbox - the v5 lesson
+        // again. See Dispatches.FirstVersionWithInbox, frozen at 8.
+        Assert.Equal(8, SaveGame.CurrentVersion);
     }
 }

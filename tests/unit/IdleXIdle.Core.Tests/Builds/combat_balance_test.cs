@@ -69,7 +69,21 @@ public class CombatBalanceTests
     }
 
     /// <summary>A build of named skills, each on a named variation with every reinforcement bought.</summary>
+    /// <summary>
+    /// A fully levelled build. <paramref name="picks"/> names each slot's variation; the reinforcements
+    /// taken are as many as the level ladder allows, in catalogue order.
+    /// </summary>
+    /// <remarks>
+    /// It used to take ALL of a variation's reinforcements. Since 2026-09-09 a skill's ladder buys the
+    /// variation and TWO of its three, so "all of them" is no longer a reachable build — and a fixture
+    /// that composes an unreachable build measures something the player can never hold. The extra
+    /// TakeReinforcement calls simply returned false, silently, which is worse than failing.
+    /// </remarks>
     private static Build Woven(params (Source Source, string SkillId, string? Variation)[] picks)
+        => Woven(null, picks);
+
+    private static Build Woven(IReadOnlyList<string>? reinforcements,
+                               params (Source Source, string SkillId, string? Variation)[] picks)
     {
         var progress = new SkillProgress();
         foreach (var (_, skillId, variation) in picks)
@@ -78,8 +92,13 @@ public class CombatBalanceTests
             for (var i = 0; i < SkillProgress.UsesForLevel(SkillProgress.MaxLevel); i++) progress.RecordWave(def.Id);
             if (variation is null) continue;
             Assert.True(progress.ChooseVariation(def, variation), $"{def.Name} has no {variation}");
-            foreach (var r in def.Variations.Single(v => v.Name == variation).Reinforcements)
-                progress.TakeReinforcement(def, r.Name);
+            var v = def.Variations.Single(x => x.Name == variation);
+            var wanted = reinforcements ?? v.Reinforcements.Select(r => r.Name).ToList();
+            foreach (var name in wanted)
+            {
+                if (progress.FreeOn(def.Id) < 1) break;   // the ladder's ceiling, not a silent refusal
+                progress.TakeReinforcement(def, name);
+            }
         }
         // THE OWNER SITS IN THE CHAIR when one of the picks is a signature, and nobody does
         // otherwise. A signature belongs to one champion and the composer refuses it to anyone else,
@@ -326,12 +345,28 @@ public class CombatBalanceTests
 
         var partnerId = def.Kind == SkillKind.Active ? "field_mire" : "hammer_blow";
         var leads = new bool[2];
+
+        // EVERY REACHABLE PAIR, because since 2026-09-09 a variation is bought with TWO of its three
+        // reinforcements and WHICH two is the player's decision. Asking "is there a problem this
+        // branch is the answer to" of one arbitrary pair would fail a branch whose answer lives in a
+        // pair the fixture happened not to take — the fixture reporting on itself. A branch leads a
+        // band if ANY pair of it leads ANY pair of its sibling there.
+        var pairs = def.Variations
+            .Select(v => v.Reinforcements.Select(r => r.Name).ToList())
+            .Select(names => names
+                .SelectMany((_, a) => names.Skip(a + 1).Select(b => (IReadOnlyList<string>)new[] { names[a], b }))
+                .DefaultIfEmpty(Array.Empty<string>())
+                .ToList())
+            .ToList();
+
         foreach (var band in Bands)
         foreach (var pressure in Pressures)
         {
             var r = def.Variations
-                .Select(v => Fight(Woven((v.Source, skillId, v.Name), (Source.Body, partnerId, null)),
-                                   Wearing(null, 0), band, damage: pressure))
+                .Select((v, i) => pairs[i]
+                    .Select(pair => Fight(Woven(pair, (v.Source, skillId, v.Name), (Source.Body, partnerId, null)),
+                                          Wearing(null, 0), band, damage: pressure))
+                    .ToList())
                 .ToList();
 
             // COUNTING BAND WINS WAS THE WRONG QUESTION, and it accused the wrong branches. SIPHON heals
@@ -339,13 +374,18 @@ public class CombatBalanceTests
             // GLUT was quietly dealing 40% more damage in three of them. What a player actually asks is
             // "when would I choose this?", and that needs ONE answer, not a majority: a branch is a real
             // choice if there is a problem where it leads.
-            if (Leads(r[0], r[1])) leads[0] = true;
-            if (Leads(r[1], r[0])) leads[1] = true;
+            // A BRANCH LEADS A BAND if some pair of it leads some pair of its sibling. The question
+            // the rule asks is "when would I choose this?", and the player chooses the branch AND its
+            // pair — so a branch whose answer lives in one particular pair has an answer.
+            if (r[0].Any(a => r[1].Any(b => Leads(a, b)))) leads[0] = true;
+            if (r[1].Any(a => r[0].Any(b => Leads(a, b)))) leads[1] = true;
 
-            _out.WriteLine($"{def.Name} @{band}/{pressure:F0}: {def.Variations[0].Name} dealt {r[0].Dealt:F0} kept {r[0].HealthKept} "
-                           + $"heal {r[0].Healed} shield {r[0].ShieldAbsorbed:F0} · "
-                           + $"{def.Variations[1].Name} dealt {r[1].Dealt:F0} kept {r[1].HealthKept} "
-                           + $"heal {r[1].Healed} shield {r[1].ShieldAbsorbed:F0}");
+            var best0 = r[0].OrderByDescending(x => x.Dealt).First();
+            var best1 = r[1].OrderByDescending(x => x.Dealt).First();
+            _out.WriteLine($"{def.Name} @{band}/{pressure:F0}: {def.Variations[0].Name} dealt {best0.Dealt:F0} kept {best0.HealthKept} "
+                           + $"heal {best0.Healed} shield {best0.ShieldAbsorbed:F0} · "
+                           + $"{def.Variations[1].Name} dealt {best1.Dealt:F0} kept {best1.HealthKept} "
+                           + $"heal {best1.Healed} shield {best1.ShieldAbsorbed:F0}");
         }
 
         for (var i = 0; i < 2; i++)

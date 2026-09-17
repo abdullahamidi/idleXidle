@@ -1,0 +1,132 @@
+[
+ {
+  "doc": "itch-description",
+  "i": 0,
+  "file": "docs/store/itch/description.html",
+  "line": 19,
+  "claim": "forms.png, alt \"The six styles: Hammer, Volley, Snare, Sign, Field, Drain\". The picture does not show what the alt text says.",
+  "evidence": "The baked PNG shows the retired Form names: STRIKE / PROJECTILE / AURA / TRAP / MARK / TRANSFORMATION (tools/marketing/make_itch_page.py:408-415, committed 71beb97 on 2026-08-26 and never re-baked). The game's styles are the Style enum at src/IdleXIdle.Core/Builds/SkillCatalogue.cs:34-53 (Hammer, Snare, Sign, Volley, Field, Drain), and :14-18 says Form was split up. The game reuses these same icons for the styles: src/IdleXIdle.Game/StyleAffinityDiagram.cs:328-336 maps strike=HAMMER, projectile=VOLLEY, aura=FIELD, trap=SNARE, mark=SIGN, transformation=DRAIN. The alt text is right about the game; the image is out of date.",
+  "replacement": "Keep the alt text. Re-bake forms.png with the same icons and these labels, in this order: HAMMER - one huge blow · VOLLEY - many small hits · SNARE - being hit works for you · SIGN - makes everything else bigger · FIELD - hits the whole wave, all the time · DRAIN - turns damage into health.",
+  "note": "Confirmed. I opened docs/store/itch/forms.png: it shows STRIKE / PROJECTILE / AURA / TRAP / MARK / TRANSFORMATION with Form-era captions. It was baked by forms_strip() in make_itch_page.py:408-415, and git log shows only commit 71beb97. The Style enum (SkillCatalogue.cs:34-53) is Hammer/Snare/Sign/Volley/Field/Drain, and Form no longer exists as an enum. StyleAffinityDiagram.cs:328-336 maps the same icons to the styles exactly as the finding says. The alt text is right and the picture is wrong. One caption needs a small fix: 'SNARE - hurts what hits you' fits JAWS and REPAY, but the IRON and BANKED variations stop bites or turn them into shield. The enum's own wording ('Being attacked works in your favour') covers all of these."
+ },
+ {
+  "doc": "itch-description",
+  "i": 1,
+  "file": "docs/store/itch/description.html",
+  "line": 35,
+  "claim": "section_traits.png, alt \"Characteristics you awaken\". The baked banner reads \"TRAITS THAT NEVER RESET - Four roads, fifty-one traits - and a capstone that closes the other three forever.\"",
+  "evidence": "make_itch_page.py:445 bakes the old trait-tree text. Today there are 26 characteristics with no roads and no capstone. They are found by playing, never bought, 3 are worn per champion, and swapping is free (src/IdleXIdle.Core/Traits/TraitCatalogue.cs:159-186, SlotsPerCharacter = 3; TraitLedger.cs:113 says unequip is 'Free and reversible'). The image contradicts the body text on line 36.",
+  "replacement": "Re-bake the banner. Title: TRAITS YOU AWAKEN. Kicker: Twenty-six of them, earned by how you play. Wear three. Change them for free. (Change the img alt on line 35 to 'Traits you awaken' to match.)",
+  "note": "Confirmed. section_traits.png reads 'TRAITS THAT NEVER RESET / Four roads, fifty-one traits - and a capstone that closes the other three forever' (make_itch_page.py:445). The code has 26 traits and no roads or capstone (TraitCatalogue.cs:159-186). SlotsPerCharacter = 3 (:173). Unequip is 'Free and reversible' (TraitLedger.cs:113). The screen shows no cost anywhere. One problem with the proposed title: the in-game screen is titled TRAITS, and TraitCollectionScreen.cs:630-635 says CHARACTERISTICS was dropped on purpose as 'a synonym the player was never taught'. The rail button also says TRAITS (Game1.cs:10771). The banner should use the game's word, and the alt text (and ideally body line 36) should match it."
+ },
+ {
+  "doc": "itch-description",
+  "i": 2,
+  "file": "docs/store/itch/description.html",
+  "line": 17,
+  "claim": "section_build.png (alt \"Weave a build, not a rotation\") has the baked kicker \"Source × Form × Vow, then a Mastery tree that decides how it fights.\"",
+  "evidence": "make_itch_page.py:440. Form was retired and replaced by Style plus separate skills (SkillCatalogue.cs:14-18). The build is now skills, keystones and vows (src/IdleXIdle.Core/Progression/Unlocks.cs:35 'Weaving skills, keystones and Vows').",
+  "replacement": "Re-bake the kicker: Skills, keystones and vows. Then a Mastery tree decides how it fights.",
+  "note": "Confirmed. section_build.png shows the kicker 'Source × Form × Vow, then a Mastery tree that decides how it fights.' (make_itch_page.py:440). Form is gone: there is no enum Form anywhere in src, and SkillCatalogue.cs:14-18 describes the split. Unlocks.cs:35 describes the Build activity as 'Weaving skills, keystones and Vows'. The replacement is accurate and plain."
+ },
+ {
+  "doc": "itch-description",
+  "i": 3,
+  "file": "docs/store/itch/description.html",
+  "line": 29,
+  "claim": "The first of every class opens when you conquer a region.",
+  "evidence": "THE SEEKER (first Wanderer) is the starter: CharacterRoster.cs:62 has Unlock = CharacterUnlock.Start. The other four first champions each need one named region: Anvil = cinderworks (:82), Chorus = umbral_reach (:96), Metronome = marrow_wastes (:112), Unbroken = still_archive (:124). CharacterState.cs:73 checks that the named region is conquered. So conquering Verdant Hollow (the first region) or The Pale Choir gives no champion. classes.png repeats the error: it labels THE SEEKER 'CONQUEST' and bakes 'THE FIRST OF EACH CLASS OPENS BY CONQUEST' (make_itch_page.py:367-368). Separate code-side note: the in-game Roster lock text says 'Conquer a region, and a second hunter joins' (Unlocks.cs:225, comment :196). That does not match the roster either, because the first conquest brings nobody.",
+  "replacement": "You start as THE SEEKER, the first Wanderer. Each other class sends its first champion when you conquer its region: Cinderworks, Umbral Reach, the Marrow Wastes and The Still Archive each bring one. The second of every class is earned: reach wave fifty in Cinderworks, keep a Vow through three whole descents, clear a hundred and fifty waves with a VOLLEY skill equipped, hold wave eighty in the Marrow Wastes, fell forty bosses. (In classes.png, relabel THE SEEKER 'START' and change the footer to: THE SEEKER FROM THE START · FOUR BY CONQUEST · FIVE BY A QUEST.)",
+  "note": "Confirmed. CharacterRoster.cs:62 gives THE SEEKER CharacterUnlock.Start. The other four firsts need specific regions: cinderworks (:82), umbral_reach (:96), marrow_wastes (:112) and still_archive (:124). CharacterState.Refresh (:73) checks the named region. Conquering Verdant Hollow or The Pale Choir brings no champion. classes.png does label THE SEEKER 'CONQUEST' and bakes the conquest footer. The quest demands match QuestCatalogue (Quests.cs:169-202). The in-game side note is real too: Unlocks.cs:225 says 'Conquer a region, and a second hunter joins', and the comment at :196 says the first conquest brings the second hunter, but Anvil needs Cinderworks, which is the second conquest. The proposed text needs two fixes. 'Cinderworks, Umbral Reach, Marrow Wastes or The Still Archive' reads as if any one of them would do; each region brings its own champion. 'THE OTHER FIRSTS' is awkward English."
+ },
+ {
+  "doc": "itch-description",
+  "i": 4,
+  "file": "docs/store/itch/description.html",
+  "line": 22,
+  "claim": "Items belong to one of five classes, and a champion only wears its own class; the rest is fuel.",
+  "evidence": "Only the weapon, helm, chest, gloves and boots have a class (src/IdleXIdle.Core/Economy/ItemClasses.cs:154-155, IsClassLocked). Charms, rings and focus items fit anyone (CanWear :177-182; WearsLine says 'WEARS <CLASS> GEAR AND ANY CHARM, RING OR FOCUS'). Also, 80% of class-locked drops are the active champion's own class (:79, OwnClassChance = 0.80).",
+  "replacement": "Weapons and armour belong to one of five classes, and a champion wears only its own class. Rings, charms and focus items fit everyone. Gear for another class waits for that class's champions, or becomes fuel for the Forge.",
+  "note": "Confirmed. IsClassLocked (ItemClasses.cs:154-155) covers only the weapon, helm, chest, gloves and boots. CanWear (:177-182) lets anyone wear charms, rings and focus items, and WearsLine (:275) says so in-game. The replacement's last sentence is still wrong, though. Each class has TWO champions (ChampionIds, and the header remark at :17-19 says a class-locked drop 'is still wearable by two different builds'). The OwnClassChance remark also says the off-class fifth of drops 'is a reason to open the roster'. So gear you cannot wear is not only fuel."
+ },
+ {
+  "doc": "itch-description",
+  "i": 5,
+  "file": "docs/store/itch/description.html",
+  "line": 22,
+  "claim": "The Forge ... asks before it does anything you cannot undo. (The section_forge.png kicker on line 21 bakes the same sentence.)",
+  "evidence": "Only setting a gem always asks (src/IdleXIdle.Game/ForgeScreen.cs:1137-1138). Sell and salvage ask only while AskBeforeScrap is on (default true, :1127) or the item is worn (:1551, :1583), and the dialog's checkbox can turn the asking off (:3843). Three irreversible actions never ask: RE-ROLL (DoReforgeEnchant :1647), UPGRADE, which can slip and drop the item a level (DoRefine :1684, slip message :1716), and MERGE (AutoMergeAll :1467). The upgrade button does show its success chance first (:3178).",
+  "replacement": "It always asks before it sets or crushes a gem, and it asks before it sells or salvages unless you switch that question off. An upgrade can slip back a level, and the button shows the chance first. (Re-bake the section_forge.png kicker: Every item shows its real numbers. Every upgrade shows its chance.)",
+  "note": "Confirmed. Setting a gem always asks (_socketAsk, ForgeScreen.cs:1136-1138). Sell and salvage ask only while AskBeforeScrap is on or the item is worn (:1551, :1583, :1508), and the dialog checkbox can switch the question off (:3843). RE-ROLL (RerollTabInput :3316-3322 -> DoReforgeEnchant :1647) and MERGE (AutoMergeAll :1467) happen at once. UPGRADE can slip (:1716), and the button shows the success % first (:3173-3177). section_forge.png bakes the same false sentence. Two problems with the replacement: (1) crushing a gem also always asks (RequestCrush :3521-3525), and the sell/salvage question can be switched off; (2) the new kicker 'No hidden rolls' was never checked, and MERGE produces a random item whose outcome is not shown in advance. 'Every upgrade shows its chance' is what the code supports (:3173-3177)."
+ },
+ {
+  "doc": "itch-description",
+  "i": 6,
+  "file": "docs/store/itch/description.html",
+  "line": 12,
+  "claim": "When it falls, it gets back up and pushes on. Nothing is banked, nothing is lost.",
+  "evidence": "A fall does not continue from the same wave. After the 1.6 s downed beat, HuntScreen starts a new descent (src/IdleXIdle.Game/HuntScreen.cs:1273-1284 calls StartRun). The new descent begins at wave 0, or at the checkpoint the player paid Dust for (:1406 _descent.StartRun(..., Math.Max(StartWave, FreeStartWave)); Descent.cs:124-148). Rewards already paid stay, because they are paid per cleared wave (Descent.cs:167-172). So 'nothing lost' is true of rewards, but the depth is lost.",
+  "replacement": "When it falls, it gets back up and starts a new descent: from the first wave, or from the checkpoint you picked, which costs Memory Dust each time. What it already earned stays yours.",
+  "note": "Confirmed. After the downed timer, HuntScreen.cs:1273-1284 calls StartRun, which creates a new expedition (Descent.cs:124-148) at Math.Max(StartWave, FreeStartWave) (HuntScreen.cs:1406). Game1.cs:6936-6942 clears the free offline-resume wave once a second descent starts ('the first fall drops back to the paid checkpoint'). Rewards are paid per cleared wave (Descent.cs:167-172). So the depth is lost, and 'pushes on ... nothing is lost' misleads. The replacement leaves out one thing: HuntScreen.cs:1413 charges the checkpoint's Memory Dust again on every StartRun, including the one after a fall (comment at Game1.cs:6940). So a fall to a checkpoint costs Dust."
+ },
+ {
+  "doc": "itch-description",
+  "i": 7,
+  "file": "docs/store/itch/description.html",
+  "line": 25,
+  "claim": "Hold a region past its twentieth wave and it is conquered - from there the counter reads OVERWAVE and only goes up.",
+  "evidence": "Conquest at wave 20 is correct (Checkpoints.cs:29 ConquestWave = 20; Game1.cs:7373). The OVERWAVE number belongs to the current descent only: HuntScreen.cs:5105 computes over = _replayWave - 20, and :5108 shows 'CONQUERED · OVERWAVE +N'. After a fall the new descent starts at wave 0 or at a checkpoint, so the banner goes back to 'CONQUERED' and counts up again. It does not only go up.",
+  "replacement": "Hold wave twenty in a region and it is conquered. Past that line, the banner counts OVERWAVE: how far past wave twenty this descent has gone.",
+  "note": "Confirmed. ConquestWave = 20 (Checkpoints.cs:29), and conquest fires on Deepest >= 20 (Game1.cs:7375). The banner computes over = _replayWave - ConquerAt, which counts this descent's wave only (HuntScreen.cs:5105-5108). The comment calls it 'how far beyond the bar this descent has gone'. After a fall the new descent starts at the first wave or a checkpoint, so the banner drops back to plain 'CONQUERED'. 'Only goes up' is false. The replacement is accurate, and 'hold' is the game's own word (the q_marrow_hold comment)."
+ },
+ {
+  "doc": "itch-description",
+  "i": 8,
+  "file": "docs/store/itch/description.html",
+  "line": 33,
+  "claim": "Facilities produce Gleam, Memory Dust and forge materials while you are away (plus line 32 alt \"A warren that works while you sleep\" and line 12 \"...and while the game is closed\").",
+  "evidence": "The outputs are right: Warren.cs:16 lists Gleam, Dust, Scrap and Essence. New facilities do open with each conquest (Warren.cs:214, 2 + conquered regions). The Warren does open on the first conquest (Unlocks.cs:189). But time away is capped. OfflineCamp.cs:38-50 pays a fresh account for 2 hours at 30% of live pay; each facility level bought adds 6 minutes and 0.3%, up to 12 hours and 60%. The Warren's own production is held to the same hours (Game1.cs:1359-1366). Offline hunting pays Gleam only: no skill levels, chests or materials (OfflineHunt.cs:28-31). A tester who sleeps 8 hours on a new save will see 2 hours of pay.",
+  "replacement": "Facilities make Gleam, Memory Dust and forge materials while you are away, and new ones open as you conquer. At first, time away counts for two hours. Every facility level you buy adds a little more, up to twelve hours. The Warren opens once your first region is conquered.",
+  "note": "Confirmed. OfflineCamp.cs:38-50 gives 2 h base and +0.1 h per facility level bought, capped at 12 h. Efficiency is 30% rising to 60%. The Warren's own offline production uses the same held seconds (Game1.cs:1359-1366). With no Warren the camp is null, so a new save gets 2 h at 30%. OfflineHunt.cs:28-31 pays only Gleam. The outputs Gleam, Dust, Scrap and Essence are right (Warren.cs:16), facilities open by conquest (Warren.cs:214), and the Warren opens on the first conquest (Unlocks.cs:189). 'Works while you sleep' / 'while the game is closed' will surprise a new tester who comes back to 2 hours of pay, so the change is worth making. Wording fix: 'up to twelve' should say 'hours', and levels are bought."
+ },
+ {
+  "doc": "itch-description",
+  "i": 9,
+  "file": "docs/store/itch/description.html",
+  "line": 18,
+  "claim": "Twelve skills across six styles - HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds - each deepened by its own variations and reinforcements as it levels from use.",
+  "evidence": "The catalogue has 12 shared skills (SkillCatalogue.cs:386-791) plus 10 signature skills, one per champion (:792-1130, OwnerCharacterId). SkillCatalogue.Shared (:1143) is the twelve. A new hunter starts with its signature, not one of the twelve (Unlocks.cs:166; the starter slot is the Seeker's HARD HANDS, :804). Signatures are live in fights (BuildComposer.cs:174). Levelling from use is correct: one level per waves-cleared step, then a variation and two of its three reinforcements (SkillProgress.cs:24-28, MaxLevel = 3).",
+  "replacement": "Twelve shared skills across six styles - HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds - plus one signature skill for each champion. Every skill grows its own variations and reinforcements as it levels from use.",
+  "note": "Confirmed. SkillCatalogue has 12 shared skills (:390-751) plus 10 signatures, one per champion (:804-1099, OwnerCharacterId). Shared (:1143) filters to the twelve. A new hunter starts with its signature (Unlocks.cs:166 comment; Seeker = HARD HANDS :804), so the first skill a player sees is not one of 'the twelve'. Signatures have their own variations (e.g. OPEN HAND / SHUT FIST :812-839). Levels come from waves cleared while equipped (SkillProgress.cs:24-28). 'Twelve skills' undercounts the game by ten and leaves out the skill every player starts with, so the replacement is warranted, and it is accurate."
+ },
+ {
+  "doc": "itch-description",
+  "i": 10,
+  "file": "docs/store/itch/description.html",
+  "line": 25,
+  "claim": "Deepen the Corruption for richer rewards and enemies that wear it; climb back down when it bites.",
+  "evidence": "The claim is true, but it sits in the middle of the region text with no gate. Deepening needs all six regions conquered (src/IdleXIdle.Core/Encounters/Regions.cs:197, CanDeepenCorruption => AllConquered && tier < MaxTier). There are 5 tiers (CorruptionScaling.cs:17). The rewards are better chest tiers (Game1.cs:7501) and more Dust (CorruptionScaling.cs:34-43). Easing back down is always allowed (Regions.cs EaseCorruption).",
+  "replacement": "Once all six regions are yours, the Corruption opens: five steps DEEPER, each with richer rewards and tougher enemies that wear it. Step SHALLOWER when it bites.",
+  "note": "Confirmed. CanDeepenCorruption requires AllConquered (Regions.cs:197). MaxTier = 5 (CorruptionScaling.cs:17). Rewards scale with the tier (RewardMultiplier, Dust awards), and easing is always allowed (Regions.cs:200, EaseCorruption). As written, the line reads as if Corruption is available from the start. The replacement is accurate, but its 'five steps down ... climb back up' wording doesn't match the Map screen, whose buttons are DEEPER and SHALLOWER (MapScreen.cs:758, :1161). Using the button words helps a tester find the control."
+ },
+ {
+  "doc": "itch-description",
+  "i": 12,
+  "file": "docs/store/itch/description.html",
+  "line": 43,
+  "claim": "press Escape → Settings → COPY FEEDBACK CODE ... The code carries your build and depth, nothing personal.",
+  "evidence": "The arrow path suggests a menu with a Settings entry, but there is none. In play, Escape opens the Settings panel directly (src/IdleXIdle.Game/Game1.cs:4015-4033). If a panel is open, the first Escape closes that panel instead. On the title screen Escape quits the game (:3954). The gear at the top right also opens Settings (:4284). The button text 'COPY FEEDBACK CODE' is exact (:9416); pressing it only copies to the clipboard (:9163-9166). The code holds the build version, save version, deepest wave, regions conquered, corruption tier, Gleam, training ranks, skills/keystones/mastery, worn items (slot, rarity, level) and the last run reports (src/IdleXIdle.Core/Persistence/ShareCodes.cs:76-100). There is nothing personal in it. Side note: the in-game caption under the button, 'SENDS THE DEVELOPER YOUR BUILD AND PROGRESS' (Game1.cs:9417), wrongly suggests it sends something.",
+  "replacement": "Feedback: during play, press Escape (or the gear at the top right) to open Settings, then press COPY FEEDBACK CODE. Paste the code in the comments with a sentence about what happened. The code holds the game version, your skills and build, your gear and how far you got. Nothing personal.",
+  "note": "Mostly confirmed. During play, Escape opens the Settings panel directly, after first closing any open panel (Game1.cs:4015-4033). On the title screen Escape quits the game (Game1.cs:3954; SETTINGS is a title item, :8520). The top-right gear also opens Settings (:4282-4287). The button text is exactly 'COPY FEEDBACK CODE' (:9446), and it copies to the clipboard (:9187). SharedFeedback (ShareCodes.cs:76-100) holds nothing personal. A tester who launches the game only to copy the code and presses Escape on the title screen quits, so 'during play' and the gear are worth adding. (The line numbers the finding cites have shifted by about 30 because Game1.cs is modified in the working tree.) Wording fix: 'game version, build' is ambiguous (game build or character build?). The in-game caption 'SENDS THE DEVELOPER YOUR BUILD AND PROGRESS' (:9447) is a real code-side problem: it sends nothing."
+ },
+ {
+  "doc": "itch-description",
+  "i": 14,
+  "file": "docs/store/itch/description.html",
+  "line": 44,
+  "claim": "The exe is unsigned: SmartScreen will say \"More info → Run anyway\" on first launch.",
+  "evidence": "The exe is unsigned: tools/publish/itch_push.sh:52-66 publishes win-x64 self-contained and never runs a signing step. 'Windows only' is also correct: win-x64 is the only publish target (:53), even though the engine package is DesktopGL (src/IdleXIdle.Game/IdleXIdle.Game.csproj:33). 'Will say' is too certain. SmartScreen only appears for files Windows marks as downloaded from the internet (a browser zip), and often not for itch app installs.",
+  "replacement": "Windows only for now. The exe is not signed, so Windows may warn you on first launch: press More info, then Run anyway.",
+  "note": "Confirmed. tools/publish/itch_push.sh (now :49-65, shifted because the file is modified) publishes win-x64 self-contained, and the repo's tools and source have no signing step. 'Windows only' is correct. 'Will say' is too certain: SmartScreen appears only when the files carry the downloaded-from-internet mark (for example a browser zip extracted with Explorer), and usually not for itch app installs. The replacement is accurate and plain."
+ }
+]

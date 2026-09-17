@@ -14,8 +14,8 @@
 #                           the .actors.txt of the run before doubting a miss.
 #   CAPPED     vfxdebug     THE ONE ACTOR THE RENDERER SHRINKS. A box may ask for more magnification
 #              + fight      than UiKit.RasterCeiling allows, and only the 488x492 box asks it of an
-#                           idle as deeply letterboxed as the rift guardian's (126 px of sky): it asks
-#                           1.275 and is drawn at 1.25.
+#                           idle as deeply letterboxed as the Flayed Brute's (Marrow Wastes, 120 px of sky; the
+#                           Dusk Ape's is the same): it asks 1.255 and is drawn at 1.25.
 #
 #                           THAT BOX IS EVERY BRUISER WAVE since 2026-09-07: a Bruiser rolls exactly one
 #                           creature (Archetypes.Shapes, min 1 max 1) and a lone creature now wears its
@@ -55,7 +55,7 @@ set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 TAG="${1:?tag}"
 G="RH_SHOT_GEOMETRY=1;RH_SHOT_DUMP=1"
-CAP="RH_SHOT_SOURCE=Spirit;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1"
+CAP="RH_SHOT_SOURCE=Body;RH_SHOT_ARCHETYPE=Bruiser;RH_SHOT_DUMP=1"
 NS="RH_SHOT_NOSTRIP=1;RH_SHOT_DUMP=1"
 bash tools/asset-pipeline/polish_shots.sh "$TAG" \
   "vfxdebug:100:RH_SHOT_DUMP=1" "vfxdebug:125:RH_SHOT_DUMP=1" "vfxdebug:150:RH_SHOT_DUMP=1" \

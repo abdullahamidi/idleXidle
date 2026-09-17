@@ -5,7 +5,7 @@ using Xunit;
 
 namespace IdleXIdle.Core.Tests.Expeditions;
 
-/// <summary>UX V2 P1.1: the fall plate names the limit; the name and the sentence come from the same thresholds.</summary>
+/// <summary>UX V2 P1.1: the log's diagnosis names the limit; the name and the sentence come from the same thresholds.</summary>
 public class run_report_limit_test
 {
     private static RunReport Report(WaveOutcome outcome = WaveOutcome.Wiped, float absorbed = 0f, float targets = 3f,

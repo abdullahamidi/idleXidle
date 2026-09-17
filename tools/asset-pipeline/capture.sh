@@ -12,8 +12,11 @@
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
-#        rosterswitch warrenready warrenfresh warrenlocked weavefresh keystonenotice
+#        rosterswitch warrenready warrenfresh warrenlocked weavefresh
 #        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport vfxdebug
+#        fightfall fightfade fightarrive fightcooldown
+#        dispatches dispatchesempty dispatchesunread dispatcheshover chestdispatch
+#        (the five above are dressed by RH_SHOT_DISPATCH=unread|read|many|longest|<key> — see below)
 #
 # THE VFX PLACEMENT CONTRACT'S OWN DIALS (brief §70, §71, §105, §106). A placement is not something a
 # screenshot can judge on its own, and two of the three states below could not be posed at all before:
@@ -40,6 +43,15 @@
 #
 #     RH_SHOT_HUNTER=magpie RH_SHOT_SHIELDFX=gain bash tools/asset-pipeline/capture.sh fightshield out.png
 #
+# RH_SHOT_SOURCE=<Source> and RH_SHOT_ARCHETYPE=<Swarm|Caster|Armoured|Bruiser> pose ANY normal fight
+#   on one cell of the enemy matrix (HuntScreen.CreatureLook, EnemyPresentation): the Source picks the
+#   FAMILY of the region whose theme it is (Nature = Verdant Hollow, Machine = Cinderworks, Shadow =
+#   Umbral Reach, Body = Marrow Wastes, Mind = The Still Archive, Spirit = The Pale Choir) and the wave
+#   glyph, the archetype picks the body and its box. Presentation only; a boss wave refuses the
+#   archetype dial. tools/asset-pipeline/enemy_fixtures.sh takes the whole matrix this way.
+#
+#     RH_SHOT_SOURCE=Machine RH_SHOT_ARCHETYPE=Bruiser bash tools/asset-pipeline/capture.sh fight out.png 0.8
+#
 # tools/asset-pipeline/vfx_shots.sh retakes the whole VFX evidence set in one command — six fight modes
 #   at the three density profiles, the debug view on four silhouettes, and the ledger.
 #
@@ -56,8 +68,12 @@
 # `fightmulti` VOLLEY's CLUSTER folding five arrows into one "-N ×5". (`fightfive` posed the FIVE-slot
 # strip and is gone with the fifth slot itself - a build is two skills that take an action and two
 # that do not, and a fixture posing a state the game cannot produce certifies nothing.)
-# All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument). `fightreport` takes
-# RH_SHOT_LIMIT=armour|reach|sustain to pose the log's diagnostic for that limit.
+# All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument).
+# The fall poses: `fightfall` is the COLLAPSE, RH_SHOT_T its progress (0 the instant of the fall, 1 the
+# settled body, the red flash held at full). `fightfade` is the DEATH TRANSITION, RH_SHOT_T sweeping it —
+# 0 the last readable instant before the fade, 0.5 the black with the next descent already begun beneath
+# it, 1 the stage back — and RH_SHOT_REDUCED=1 poses its cuts. `fightreport` opens the EXPEDITION LOG on a
+# seeded death's report; RH_SHOT_LIMIT=armour|reach|sustain poses the log's diagnostic for that limit.
 # `fightshieldbroken` and `fightmulti` aim the shutter at an EVENT (the first SHIELD BROKEN, SPRAY's
 # cast) rather than a second: the seek applies two frames before the shot so the event is crossed live
 # on the photographed frame (the replay is rebuilt from the wave's events, so it can land anywhere).
@@ -71,6 +87,20 @@
 #   photographed at all: 1 is the first instant of a screen switch, a modal fade, a currency pill's
 #   spend flash and its banked "+N"; 0.5 is halfway; unset means the game animates normally.
 # RH_SHOT_PAGE_MOUSE=x,y poses the cursor in PAGE space (a hover, a tooltip) on any menu screen.
+# RH_SHOT_GEAR_POSE poses the `character` fixture (GearScreen.DevPoseSpec reads it):
+#   equip[@N]  four NATURE pieces come off on the first frame and the chest goes back on N frames
+#              (5 unsaid) before the shutter — one slot pulses, GEAR POWER mid-tick, the set completes.
+#   best       EQUIP HIGHEST POWER has run, so the button draws OFF and says why.
+#   bare       everything is off: eight quiet EMPTY slots, UNEQUIP ALL off.
+#   press      the mouse button is held for the whole run (park RH_SHOT_PAGE_MOUSE on the control).
+#   showcase   the bag is Game1.GearShowcaseBag — one piece of every rarity across ring, weapon and
+#              chest, the darkest (item_weapon_bow_heavy) and brightest (item_weapon_keen, item_ring_swift)
+#              glyphs on disk, and a WARDEN's chest the starter cannot wear. The first Legendary is
+#              selected; the Commons close the grid, so RH_SHOT_PAGE_MOUSE on one poses the hover.
+#              PAGE space, not canvas pixels: page = ((canvas.x - 180) / 0.896, canvas.y / 0.896), so
+#              the Common ring's cell is 893,458 at 100 %, 858,567 at 125 % and 918,662 at 150 %:
+#
+#     RH_SHOT_GEAR_POSE=showcase RH_SHOT_PAGE_MOUSE=893,458 bash tools/asset-pipeline/capture.sh character out.png
 # `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
 # RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
 #
@@ -111,12 +141,10 @@
 # Every fixture that restores a conquered world lands on that frame, so the toast is suppressed
 # under the rig everywhere else; without that it covered the screen in every capture.
 #
-# `keystonenotice` poses the LONGEST notice toast the game can post - today CAPACITOR's keystone
-# reveal, which is its blurb plus the sentence naming the rung that taught it, 164 characters. The
-# fixture ASKS the catalogue which is longest rather than naming one, and builds the string through
-# the same helper the live reveal calls, so it is the real sentence at its real length rather than a
-# stand-in. Every keystone reveal is a notice: a conquest one too, since the map strip is one line
-# and, once the world is conquered, is not drawn at all.
+# `keystonenotice` is RETIRED. A keystone reveal is a DISPATCH now, not a toast, so the longest one
+# the game can produce - today CAPACITOR's, 164 characters - is photographed where it is actually
+# read: `dispatches` with RH_SHOT_DISPATCH=longest, which asks the catalogue which reveal is longest
+# rather than naming a keystone that may stop being the worst case.
 #
 # `world` is the map with a conquest's news in the strip - the compact headline, keystone named,
 # built by the same helper the live conquest calls. RH_SHOT_CONQUEST picks which conquest.
@@ -152,6 +180,17 @@
 #
 #   RH_SHOT_REDUCED=1 bash tools/asset-pipeline/capture.sh fight build/shots/fight_reduced.png
 #
+# THE HUNT TILE'S THREE SIGNALS — the live health bar in its foot band, the red wash of a bite and
+# the gold wash of a cleared wave — are drawn on every screen BUT the hunt, so they are photographed
+# on a menu fixture. RH_SHOT_HUNT_T=<seconds> drains the fight running under that menu (without it
+# the bar is full at the shutter, and a full bar proves only that a bar was drawn); RH_SHOT_DUMP=1
+# writes the health it was drained to, which is what the bar's length is checked against.
+# RH_SHOT_HUNTTILE=hurt|cleared|boss[:<0..1>] holds one wash part-played, through the same gate the
+# live tick asks (no tick under a chest reveal; no `hurt` under RH_SHOT_REDUCED=1 or with RED FLASH
+# off — the bar alone is the picture there). The evidence set is production/qa/evidence/visual-pass/hunttile/:
+#
+#   RH_SHOT_HUNT_T=6 RH_SHOT_DUMP=1 RH_SHOT_HUNTTILE=hurt:0.15 bash tools/asset-pipeline/capture.sh forge out.png
+#
 # `traits` (alias: `dust`) is the TRAITS screen — three worn characteristics, the collection, and the
 # undiscovered as `???`. Its fixture awakens eleven of the twenty-six and wears three, because an
 # empty account shows none of the four things the screen is for. RH_SHOT_TRAIT picks what the
@@ -164,11 +203,10 @@
 # only reachable by clicking a tile and a capture never clicks, so without this dial that state could
 # never have been looked at.
 #
-# RH_SHOT_WAKE poses the AWAKENING PLATE over the same screen — `one` for a single trait's reveal,
-# `many` for the combined plate an established save gets on its first load. The reveal fires once, in
-# a moment nobody can schedule, so this is the only way its three rungs are ever photographed:
+# RH_SHOT_WAKE is RETIRED with the awakening plate it posed. A trait that wakes is a DISPATCH now -
+# one letter per trait, named, kept - so the reveal is photographed where it is read:
 #
-#   RH_SHOT_WAKE=one RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh traits build/shots/wake.png
+#   RH_SHOT_DISPATCH=trait.t_scar_tissue bash tools/asset-pipeline/capture.sh dispatches out.png
 #
 # `dusttree` is the OLD Memory tree, which is no longer the trait system but is still the only
 # producer of the keystones and the vows until those move. It takes the third argument for the tree's
@@ -200,8 +238,112 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
 [ -n "$RH_SHOT_MOTION" ] && RH_ENV+=(RH_SHOT_MOTION="$RH_SHOT_MOTION")
+# RH_UI_TEXT=1 prints the TRUNCATION LEDGER for whatever this shot drew — every label the layout
+# could not fit, worst share lost first (see src/IdleXIdle.Game/UiTextLedger.cs). Truncation is the
+# one layout fault that leaves no trace in the source, because the source is a correct call.
+[ -n "$RH_UI_TEXT" ] && RH_ENV+=(RH_UI_TEXT="$RH_UI_TEXT")
+# RH_SHOT_LESSON=<OnboardingLessonId> holds one onboarding lesson on screen, so its card, its brackets
+# and its reflow can be photographed at 100 / 125 / 150. Most lessons depend on facts no fixture has.
+[ -n "$RH_SHOT_LESSON" ] && RH_ENV+=(RH_SHOT_LESSON="$RH_SHOT_LESSON")
+# RH_SHOT_NOTICE=1 posts ONE sample notice toast on any fixture, once, so what news does under an
+# attention owner can be photographed: queued under `lootforge`'s chest reveal it must not paint and
+# its clock must not burn; with RH_SHOT_T at or past the reveal's hold (3.8) the reveal is posed already
+# closed and the toast lands. Not with RH_SHOT_LESSON, which clears the toast slot for its pose.
+#
+#   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_owns.png 1.2
+#   RH_SHOT_NOTICE=1 bash tools/asset-pipeline/capture.sh lootforge build/shots/reveal_done.png 5
+[ -n "$RH_SHOT_NOTICE" ] && RH_ENV+=(RH_SHOT_NOTICE="$RH_SHOT_NOTICE")
+# RH_SHOT_DISPATCH=unread|read|many|<key> dresses the five DISPATCHES fixtures. All of them seed real
+# typed letters through the host's own PostDispatch (the inbox is STATE under the rig; only its
+# surfacing is posed), and this says how many and which one the reading pane has open:
+#   unread  six letters - a screen, a quest, a champion, the longest keystone reveal, a trait and a
+#           region - with the newest open and the rest still waiting, a MIXED list; the default
+#   read    the same six, everything already read: no dots, MARK ALL READ dead
+#   many    every region, seven traits, four screens, the gem and the socket — past the shortest
+#           column (nine rows at 150 %), so the scrollbar and the wheel have a fixture. Pair it with
+#           RH_SHOT_SCROLL=<rows>|end to photograph the list actually scrolled.
+#   longest the LONGEST keystone reveal in the catalogue, open in the pane - the worst case the wrap
+#           has to survive, asked of the catalogue so the pose follows the copy
+#   <key>   one letter by its key (unlock.warren, quest.q_cinder_deep.complete, hunter.anvil.joined,
+#           keystone.<id>, vow.<id>, trait.t_scar_tissue, region.verdant_hollow.conquered). A
+#           `keystone.<id>` or `vow.<id>` nobody has been told about is seeded on the spot, which is
+#           how a chosen reveal is posed. A VOW ARRIVES TWO WAYS and the letter says which:
+#           vow.vow_complete is the one the BUILD screen HANDS over (A VOW IS OFFERED TO YOU) and
+#           any other is one that had to be proved (A VOW HAS REVEALED ITSELF).
+# Any other key nothing answers to ABORTS rather than photographing the wrong letter.
+#   `dispatches` the panel over a fight · `dispatchesempty` its empty state · `dispatchesunread` the
+#   chrome alone with the mark on · `dispatcheshover` its caption (park RH_SHOT_MOUSE on the envelope)
+#   · `chestdispatch` a letter posted DURING a chest reveal — nothing pulses, nothing toasts, and with
+#   the third argument at or past the reveal's hold (3.8) the row is there afterwards.
+[ -n "$RH_SHOT_DISPATCH" ] && RH_ENV+=(RH_SHOT_DISPATCH="$RH_SHOT_DISPATCH")
+# RH_UI_BUDGET=1 prints the raster ledger the same way (BRIEF sec.74).
+[ -n "$RH_UI_BUDGET" ] && RH_ENV+=(RH_UI_BUDGET="$RH_UI_BUDGET")
+# RH_SAVE_DIR=<dir> points the whole save system at another folder — an EMPTY one is the only way to
+# photograph what a genuinely new account sees, which is the state the onboarding redesign is about
+# and the one no fixture can reach (every fixture starts from a dressed save):
+#
+#   RH_SAVE_DIR="$(cygpath -w "$TEMP/fresh")" bash tools/asset-pipeline/capture.sh fight out.png
+[ -n "${RH_SAVE_DIR:-}" ] && RH_ENV+=(RH_SAVE_DIR="$RH_SAVE_DIR")
+# RH_SHOT_LOCKED=<Activity> poses the LOCKED-TILE REFUSAL toast — what a rail tile that is not open
+# yet says when it is pressed. Three seconds behind a click no capture can make:
+#
+#   RH_SHOT_LOCKED=Warren RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh fight out.png
+[ -n "${RH_SHOT_LOCKED:-}" ] && RH_ENV+=(RH_SHOT_LOCKED="$RH_SHOT_LOCKED")
+# RH_SHOT_BOSSCALL=1 holds the BOSS INCOMING announcement up on any fight fixture — a second and a
+# half of the break before a boss wave, on a timer no capture could otherwise reach.
+[ -n "${RH_SHOT_BOSSCALL:-}" ] && RH_ENV+=(RH_SHOT_BOSSCALL="$RH_SHOT_BOSSCALL")
+# RH_SHOT_OPENING=<OpeningStage> poses one beat of the AUTHORED OPENING over whatever fixture the mode
+# dressed, and FREEZES the cursor there so a gate the fixture already satisfies cannot advance it
+# before the shutter. The rig skips the opening entirely without this, which is correct for every
+# other capture in the project and is exactly why the opening needed a dial of its own — a state no
+# capture can pose has never been looked at. Stage names come from OpeningScript.OpeningStage:
+#
+#   RH_SHOT_OPENING=IntroduceHunter bash tools/asset-pipeline/capture.sh fight build/shots/o1.png
+#   RH_SHOT_OPENING=ForceChestOpen  bash tools/asset-pipeline/capture.sh vaultfirst out.png
+#
+# RH_SHOT_BEAT=<n> picks which PROLOGUE beat, for RH_SHOT_OPENING=Prologue (0 .. the last).
+#   (each beat stands on its own plate_prologue_<id> since 2026-09-16 — PrologueArt.cs keys them)
+# RH_SHOT_BREAK=<Activity>[:<0..1>] holds the rail tile's CHAIN BREAK part-played — the nine-tenths
+# of a second in which a screen's chain tears in half and its padlock drops. It fires once per screen
+# per career, on a frame nothing can schedule:
+#
+#   RH_SHOT_BREAK=Vault:0.45 bash tools/asset-pipeline/capture.sh fight build/shots/break.png
+#
+# THE POSE ASKS THE SAME QUESTION THE BREAK DOES. The ceremony waits for a frame the player is not
+# already being shown something, so a fixture holding a chest reveal, a modal, a fall, the open log or
+# an authored opening beat photographs NO break — which is the picture, not a failed pose.
+[ -n "${RH_SHOT_BREAK:-}" ] && RH_ENV+=(RH_SHOT_BREAK="$RH_SHOT_BREAK")
+# RH_SHOT_HUNTTILE=hurt|cleared|boss[:<0..1>] holds one of the HUNT TILE'S TICKS part-played on any
+# menu fixture — the red wash of a bite (a tenth of a second) or the gold wash of a cleared wave (a
+# boss's brighter and longer) — over the tile's live health bar. Through the same gate as the break:
+# under a chest reveal there is no tick to photograph. `hurt` also keeps the arm's own gates (RED
+# FLASH on, Reduced Motion off), so with RH_SHOT_REDUCED=1 the picture is the bar and no wash.
+# RH_SHOT_HUNT_T=<seconds into the wave> DRAINS the fight running UNDER a menu fixture (forge,
+# character, stats ...) the way `fight`'s third argument drains the hunt's own: the menus never
+# DevStart or seek their fight, so without it the tile's bar is full in every capture.
+#
+#   RH_SHOT_HUNT_T=6 RH_SHOT_HUNTTILE=hurt:0.15 bash tools/asset-pipeline/capture.sh forge out.png
+[ -n "${RH_SHOT_HUNTTILE:-}" ] && RH_ENV+=(RH_SHOT_HUNTTILE="$RH_SHOT_HUNTTILE")
+[ -n "${RH_SHOT_HUNT_T:-}" ] && RH_ENV+=(RH_SHOT_HUNT_T="$RH_SHOT_HUNT_T")
+[ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
+[ -n "${RH_SHOT_BEAT:-}" ] && RH_ENV+=(RH_SHOT_BEAT="$RH_SHOT_BEAT")
+# RH_LESSON_LEDGER=1 prints the ONBOARDING counters for the state this run reached: one row per lesson
+# (eligible / shown / completed / muted / skipped) and one milestone row, ftue_loop_lived — did this
+# player open their first failure report, change something, and go back down. There is no analytics
+# sink in this project; the console is the sink.
+[ -n "$RH_LESSON_LEDGER" ] && RH_ENV+=(RH_LESSON_LEDGER="$RH_LESSON_LEDGER")
+# The gear screen's poses, including `drag`, which is the only way to photograph a carried item.
+[ -n "$RH_SHOT_GEAR_POSE" ] && RH_ENV+=(RH_SHOT_GEAR_POSE="$RH_SHOT_GEAR_POSE")
+[ -n "$RH_SHOT_TRAIT_DRAG" ] && RH_ENV+=(RH_SHOT_TRAIT_DRAG="$RH_SHOT_TRAIT_DRAG")
+[ -n "$RH_SHOT_REVEAL_WEARABLE" ] && RH_ENV+=(RH_SHOT_REVEAL_WEARABLE="$RH_SHOT_REVEAL_WEARABLE")
 [ -n "$RH_SHOT_SCROLL" ] && RH_ENV+=(RH_SHOT_SCROLL="$RH_SHOT_SCROLL")
 [ -n "$RH_SHOT_HELD" ] && RH_ENV+=(RH_SHOT_HELD="$RH_SHOT_HELD")
+# THE POSED CURSOR, in whichever of its three spaces the caller named (the game refuses more than one).
+[ -n "$RH_SHOT_MOUSE" ] && RH_ENV+=(RH_SHOT_MOUSE="$RH_SHOT_MOUSE")
+[ -n "$RH_SHOT_PAGE_MOUSE" ] && RH_ENV+=(RH_SHOT_PAGE_MOUSE="$RH_SHOT_PAGE_MOUSE")
+[ -n "$RH_SHOT_CANVAS_MOUSE" ] && RH_ENV+=(RH_SHOT_CANVAS_MOUSE="$RH_SHOT_CANVAS_MOUSE")
+# GEAR: the character fixture's pose (equip[@N] | best | bare | press | showcase). `character` only.
+[ -n "$RH_SHOT_GEAR_POSE" ] && RH_ENV+=(RH_SHOT_GEAR_POSE="$RH_SHOT_GEAR_POSE")
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
@@ -210,8 +352,6 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
 # TRAITS: what the inspector is reading — a trait id, or `unknown` for the `???` reading. `traits` only.
 [ -n "$RH_SHOT_TRAIT" ] && RH_ENV+=(RH_SHOT_TRAIT="$RH_SHOT_TRAIT")
-# TRAITS: pose the awakening plate — `one` or `many`. `traits` only.
-[ -n "$RH_SHOT_WAKE" ] && RH_ENV+=(RH_SHOT_WAKE="$RH_SHOT_WAKE")
 # RH_SHOT_RESPEC=1 poses the MASTERY tree with TAKE EVERY POINT BACK already ARMED, so the warning
 # that names the skills the respec would unequip can be photographed. It lives between two presses
 # of one button, and a capture never clicks. buildtree / buildzoom only:
@@ -232,15 +372,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # EVERY REGION BUT THE LAST. Posing a conquest conquers every region up to it, so `pale_choir` leaves
 # the world whole — and a whole world gives the strip to the corruption LADDER, which is exactly why
 # the reveal is a notice and not a line here. The capture then shows the ladder and no headline; that
-# is the real screen, not a broken dial, and `keystonenotice` is where the last conquest's news is
-# photographed.
-#
-# RH_SHOT_KEYSTONE=<keystone id> poses `keystonenotice` on a chosen keystone's reveal. With none the
-# fixture asks the catalogue which reveal is LONGEST and poses that, so the pose follows the copy
-# rather than naming a keystone that may stop being the worst case. `echo` is the shortest — the
-# first conquest's — and is how the one-line body is photographed:
-#
-#   RH_SHOT_KEYSTONE=echo bash tools/asset-pipeline/capture.sh keystonenotice out.png
+# is the real screen, not a broken dial, and RH_SHOT_DISPATCH=keystone.<id> is where the last
+# conquest's news is photographed.
 #
 # RH_SHOT_SHED=1 makes `rosterswitch` perform a REAL champion switch away from a hunter whose own
 # signature skill is woven, so the notice the game posts when it repairs the loadout is photographed
@@ -250,12 +383,17 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_SHED" ] && RH_ENV+=(RH_SHOT_SHED="$RH_SHOT_SHED")
 # THE MAP STRIP: which conquest's line it is carrying. `world` only.
 [ -n "$RH_SHOT_CONQUEST" ] && RH_ENV+=(RH_SHOT_CONQUEST="$RH_SHOT_CONQUEST")
-# THE NOTICE TOAST: which keystone's reveal it is showing. `keystonenotice` only; the longest by default.
-[ -n "$RH_SHOT_KEYSTONE" ] && RH_ENV+=(RH_SHOT_KEYSTONE="$RH_SHOT_KEYSTONE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
 # `tour`: the screen and the card. The game resolves the mode to that screen's own fixture.
 [ -n "$TOUR_TAB" ] && RH_ENV+=(RH_SHOT_TAB="$TOUR_TAB" RH_SHOT_STEP="$TOUR_STEP")
-dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
+# THE LEDGERS PRINT TO STDOUT, and this line used to throw stdout away — so RH_UI_TEXT=1 and
+# RH_UI_BUDGET=1 ran, measured, printed, and were discarded by the harness that asked for them.
+# With either dial on the run's output is kept; otherwise it is as quiet as it ever was.
+if [ -n "$RH_UI_TEXT" ] || [ -n "$RH_UI_BUDGET" ] || [ -n "$RH_LESSON_LEDGER" ]; then
+  dn run --project src/IdleXIdle.Game --no-build 2>/dev/null | grep -E '^(ui|text|lesson)	' || true
+else
+  dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
+fi
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

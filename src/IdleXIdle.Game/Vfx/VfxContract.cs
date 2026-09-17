@@ -431,7 +431,7 @@ public static class VfxFigure
     /// The body the effects measure is read off the idle strip alone, and that is load-bearing: a
     /// size read off the LIVE clip would make every effect jump on every cast. But an idle-only
     /// rectangle is too narrow for the pointer and the inspector — a swing reaches well past it
-    /// (the seeker's idle silhouette is 246 frame-px wide, his attack's 450; the rift guardian's
+    /// (the seeker's idle silhouette is 246 frame-px wide, his attack's 450; the retired rift guardian's
     /// spear goes from 207 to 381), so a wide pose visibly escaped the body it was hovered by.
     /// </para>
     /// <para>
@@ -439,7 +439,7 @@ public static class VfxFigure
     /// clip the figure can play — never from whichever one is playing — so an idle frame, an attack
     /// frame and an idle frame again produce the same rectangle, and the attack animates INSIDE it.
     /// EACH CLIP CARRIES ITS OWN UNIT, because each is cropped by its own headroom and capped on its
-    /// own terms — the rift guardian's idle is held at the ceiling in a box where its attack is not.
+    /// own terms — a letterboxed Bruiser's idle is held at the ceiling in a box where its attack is not.
     /// The union is taken in the box's pixels. It stays as close to the silhouettes as their alpha
     /// allows: transparent padding is never inside it, and neither is the space between what a box
     /// asked for and what the renderer granted.

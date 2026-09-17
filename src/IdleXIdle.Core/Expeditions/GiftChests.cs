@@ -114,11 +114,14 @@ public static class GiftChests
     };
 
     /// <summary>
-    /// Everything a NEW game starts with in its vault. One welcome chest, from the starting region.
+    /// The welcome gift as the starting region hands it over. One chest, contents decided.
     /// </summary>
     /// <remarks>
-    /// Read by the new-game seed and by nothing else: an existing save is never handed a gift
-    /// retroactively — its vault is whatever it saved.
+    /// This was the NEW-GAME SEED until 2026-09-10, when the gift moved off frame one and onto the
+    /// first boss — a chest earned by nothing, waiting in a screen the player had never been told
+    /// about, reversed the only order the game has. The host grants it through this shape on the frame
+    /// the tutorial boss falls; the capture fixtures use it to dress a vault. An existing save is still
+    /// never handed a gift retroactively: its vault is whatever it saved.
     /// </remarks>
     public static IReadOnlyList<Chest> NewGameChests()
     {

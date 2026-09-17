@@ -40,27 +40,86 @@ public sealed class SkillProgress
     private readonly Dictionary<string, HashSet<string>> _taken = new();
 
     /// <summary>The most a single skill can be levelled: one variation and its three reinforcements.</summary>
-    public const int MaxLevel = 4;
-
     /// <summary>
-    /// Waves-to-level, on a square root so the next level is always further than the last.
+    /// The most a single skill can be levelled: one variation, then TWO of its three reinforcements.
     /// </summary>
     /// <remarks>
-    /// Level 1 at 4 waves, 2 at 16, 3 at 36, 4 at 64. The first choice — which variation this skill
-    /// IS — arrives almost immediately, because a skill whose identity is still unchosen after an
-    /// hour is a skill the player has not really met. The reinforcements are the long part.
+    /// <para>
+    /// <b>Was four — a variation and all three (2026-09-09).</b> Playtest: <i>"once a path is chosen,
+    /// all three sub-upgrades unlock automatically anyway — so what's the point of making a choice?
+    /// There isn't really a decision to be made."</i> Nothing auto-took them: every reinforcement was
+    /// bought by hand. The complaint is exactly right anyway, because there was nothing to choose
+    /// BETWEEN — four levels bought four purchases, so the only freedom was the ORDER, and order stops
+    /// mattering the moment the last one lands. One decision per skill (which variation) and then
+    /// three inevitabilities.
+    /// </para>
+    /// <para>
+    /// Two of three makes the second and third levels real: <b>2 variations x 3 pairs = six distinct
+    /// end-states per skill</b> instead of two, with no content authored and every one of the 132
+    /// reinforcements still reachable. The question becomes "which one do I give up", which is a
+    /// question the three lines can be read to answer.
+    /// </para>
+    /// <para>
+    /// A save that already bought three keeps all three: <see cref="Restore"/> keeps every valid name
+    /// and <see cref="FreeOn"/> clamps at zero, so nothing crashes and nothing is confiscated.
+    /// </para>
     /// </remarks>
-    public static int LevelFor(int uses) => Math.Min(MaxLevel, (int)MathF.Floor(MathF.Sqrt(Math.Max(0, uses)) / 2f));
+    public const int MaxLevel = 3;
+
+    /// <summary>
+    /// Waves cleared for each level — the curve, as DATA rather than a formula.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Was <c>floor(sqrt(uses)/2)</c>: level 1 at 4 waves, 2 at 16, 3 at 36, 4 at 64.</b> Measured
+    /// against the real descent that is 23 seconds, 1m31, 3m25 and 6m05 of watched play — a skill
+    /// fully mastered inside six minutes, and every equipped skill mastered at the same moment because
+    /// they all accrue in parallel. A whole loadout's identity, sixteen purchases, finished before the
+    /// first coffee. Playtest: <i>"the skill levels up way too fast. This should be a significant part
+    /// of the experience."</i>
+    /// </para>
+    /// <para>
+    /// The file's own comment claimed "the reinforcements are the long part". They were five minutes.
+    /// At roughly 550 waves an hour the table below puts the variation inside the first sitting (about
+    /// four minutes — a skill whose identity is still unchosen after an hour is a skill nobody has
+    /// met), the first reinforcement around twenty-five minutes, and the second at about an hour and a
+    /// half. Data, not a formula, because the shape wanted is not a curve any formula gives and
+    /// because the project's own standard asks for gameplay values that can be read and changed.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlyList<int> WavesForLevel = new[] { 0, 40, 220, 800 };
+
+    /// <summary>What a skill's tally is worth, in levels.</summary>
+    public static int LevelFor(int uses)
+    {
+        var level = 0;
+        for (var i = 1; i < WavesForLevel.Count && uses >= WavesForLevel[i]; i++) level = i;
+        return Math.Min(MaxLevel, level);
+    }
 
     /// <summary>Waves needed to reach a level, for a readout that has to say "how much further".</summary>
-    public static int UsesForLevel(int level) => (2 * Math.Clamp(level, 0, MaxLevel)) * (2 * Math.Clamp(level, 0, MaxLevel));
+    public static int UsesForLevel(int level)
+        => WavesForLevel[Math.Clamp(level, 0, WavesForLevel.Count - 1)];
 
     public int UsesOf(string skillId) => _uses.GetValueOrDefault(skillId);
 
     /// <summary>Every skill's cleared-wave tally — the career fact the quest layer reads (P10).</summary>
     public IReadOnlyDictionary<string, int> UsesBySkill() => new Dictionary<string, int>(_uses);
 
-    public int LevelOf(string skillId) => LevelFor(UsesOf(skillId));
+    /// <summary>
+    /// This skill's level — what its waves have earned, and never less than what it has already SPENT.
+    /// </summary>
+    /// <remarks>
+    /// The floor is for the players who levelled under the old curve. It was
+    /// <c>floor(sqrt(uses)/2)</c> — level 4 at 64 waves — and it is a table now, so a skill sitting on
+    /// 120 waves with a variation and three reinforcements bought reads as level ONE against the new
+    /// numbers. Nothing is taken while they leave it alone (<see cref="FreeOn"/> clamps at zero), but
+    /// <see cref="Respec"/> is advertised as free and lossless, and without this floor it would hand
+    /// back one level for four purchases and permanently confiscate three. A level once earned is
+    /// earned: the curve decides when the NEXT one arrives, never whether an old one still counts.
+    /// Found by this session's own adversarial review.
+    /// </remarks>
+    public int LevelOf(string skillId) => Math.Max(LevelFor(UsesOf(skillId)), SpentOn(skillId));
 
     /// <summary>Levels already committed — the variation counts as one, each reinforcement as one.</summary>
     public int SpentOn(string skillId)

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Characters;
+using IdleXIdle.Core.Encounters;
 
 namespace IdleXIdle.Core.Progression;
 
@@ -155,7 +157,13 @@ public static class Unlocks
 
         // Chests are what the Forge is FOR. Also opened by owning items, because salvaging is the other
         // half of it and a player with junk and no chest still has a reason to be here.
-        Activity.Forge => f.ChestsEverHeld >= 1 || f.ItemsOwned >= 2,
+        // AN ITEM, NEVER A CHEST. This read `ChestsEverHeld >= 1 || ItemsOwned >= 2`, so the boss that
+        // gave you your first chest opened the VAULT and the FORGE in the same instant — two chains
+        // breaking at once, for a screen that would have opened onto NOTHING ON THE BENCH. Every one
+        // of the Forge's four jobs needs an ITEM: SALVAGE takes one wearable, UPGRADE and RE-ROLL take
+        // one plus a price, SOCKET takes one Rare-or-better plus a gem. A chest is the VAULT's
+        // business until it has been opened.
+        Activity.Forge => f.ItemsOwned >= 1,
 
         // WHEN THERE IS A REAL CHOICE. A hunter starts with one skill — its signature — and one slot;
         // a Build screen then is a page with one row and nothing to put in it. The screen opens the
@@ -187,10 +195,14 @@ public static class Unlocks
         // screen exists exactly when the player has just been told there is something in it.
         Activity.Traits => f.TraitsDiscovered >= 1,
 
-        // WHEN THERE IS SOMEONE TO MEET. The first conquest brings the second hunter, so the two
-        // clauses coincide in the shipping game; the second is there so a quest-earned hunter can never
-        // arrive on a save whose Roster is still shut (the lag this gate has shipped twice before).
-        Activity.Roster => f.RegionsConquered >= 1 || f.CharactersUnlocked >= 2,
+        // WHEN THERE IS SOMEONE TO MEET — and only then. This also read `RegionsConquered >= 1`, on the
+        // belief that the first conquest brings the second hunter. It did until 2026-08-26, when THE
+        // THORNWALL moved from the first region to a quest; since then the first champion a conquest
+        // brings is THE ANVIL, on the SECOND region, and the first conquest opened a Roster announcing
+        // "Another hunter joined you" to a player with one hunter (alpha copy check, 2026-09-17). The
+        // unlocked count IS the fact, for a conquest and a quest alike, so the gate cannot lag behind
+        // either (the lag this gate has shipped twice before).
+        Activity.Roster => f.CharactersUnlocked >= 2,
 
         // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
         // opens is the failure this whole file exists to prevent.
@@ -210,18 +222,35 @@ public static class Unlocks
         Activity.Vault => "Earn a chest from a boss",
         // BOTH CLAUSES, because the gate has two. It opens on a chest ever held OR two items owned,
         // and naming only the chest sent a player who already had the Forge open looking for a boss.
-        Activity.Forge => "Earn a chest, or find two items",
+        Activity.Forge => "Find an item",
         Activity.Build => "Learn a second skill, or find a keystone or a vow",
         Activity.Mastery => "Earn three mastery points by going deeper",
         Activity.Map => "Conquer a region",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Discover a characteristic by how you fight",
-        Activity.Roster => "Conquer a region, and a second hunter joins",
+        // THE PLACE, read off the roster — "Conquer a region" was falsified by the first conquest, which
+        // brings nobody. (Three champion quests need no region and can finish first — FELL 40 BOSSES
+        // among them — and the gate opens for them too; the line names the road every player is on.)
+        Activity.Roster => $"Conquer {FirstChampionRegionName()} for a second hunter",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.
         _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
+
+    /// <summary>
+    /// The earliest region, in the world's order, whose conquest brings a champion — derived from the
+    /// roster and the region list, so the Roster's lock line cannot drift from either table again.
+    /// </summary>
+    private static string FirstChampionRegionName()
+    {
+        var regions = Regions.All;
+        for (var i = 0; i < regions.Count; i++)
+            if (CharacterRoster.All.Any(c => c.Unlock.Kind == UnlockKind.Conquest
+                                             && string.Equals(c.Unlock.RegionId, regions[i].Id, StringComparison.OrdinalIgnoreCase)))
+                return regions[i].Name;
+        throw new InvalidOperationException("No champion is earned by conquest, so the Roster's lock line has no region to name.");
+    }
 
     /// <summary>
     /// The one line the notice says when an activity has just opened: the NEED that opened it, and
@@ -283,14 +312,65 @@ public static class Unlocks
     /// THIRD action-taking skill — which pushed the demand on the champion's own swing back toward the
     /// number the slot rework existed to bring down.
     /// </para>
+    /// <para>
+    /// <b>A SLOT MUST NOT OPEN BEFORE THERE IS A SKILL FOR IT (2026-09-09).</b> Playtest: <i>"Four skill
+    /// slots unlocked before the skills themselves were actually available."</i> The old ladder was
+    /// keyed to depth and conquest alone — wave 5, wave 12, one conquest — and none of those facts pays
+    /// for a skill. A fresh account can weave exactly ONE thing, its signature; every other skill is
+    /// taught by a road on the mastery tree that costs <see cref="MasteryCatalog.SkillRoadCost"/> plus
+    /// the trunk behind it, and depth pays points as <c>floor(0.9 · sqrt(depth))</c> per region. So all
+    /// four slots stood open at wave 20 while three of them had been unfillable for another forty waves
+    /// at least, and the BUILD screen greeted a first-time visitor with three congratulation banners in
+    /// a row over a library of one usable skill.
+    /// </para>
+    /// <para>
+    /// The gates are keyed to <see cref="UnlockFacts.MasteryPointsEarned"/> against the catalogue's own
+    /// road-path costs, and the old depth conditions are KEPT beside them, so a slot needs both "the
+    /// world could have taught you a skill" and "you have been that deep". Points are used rather than
+    /// <see cref="UnlockFacts.SkillsKnown"/> because points only ever grow: a respec refunds a road and
+    /// the skill leaves the known set, and a slot that could be taken away is a slot that can strand a
+    /// woven build. The costs come from <see cref="MasteryCatalog.CheapestRoadPaths"/> rather than being
+    /// typed here, so re-pricing a road moves these gates with it.
+    /// </para>
     /// </remarks>
     public static int SkillSlots(UnlockFacts f)
     {
         var slots = 1;
-        if (f.DeepestWave >= 5) slots++;      // with the Build screen itself
-        if (f.DeepestWave >= 12) slots++;
-        if (f.RegionsConquered >= 1) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[0] && f.DeepestWave >= 5) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[1] && f.DeepestWave >= 12) slots++;
+        if (f.MasteryPointsEarned >= RoadPaths[2] && f.RegionsConquered >= 1) slots++;
         return slots;
+    }
+
+    /// <summary>What the world charges for a 1st, 2nd and 3rd taught skill — the slot ladder's prices.</summary>
+    /// <remarks>
+    /// A lower bound (the cheapest routes, reusing trunks already paid for), which is the honest
+    /// direction for a gate: a player who spent elsewhere reaches a slot later, never sooner.
+    /// </remarks>
+    public static IReadOnlyList<int> RoadPaths { get; } = Builds.MasteryCatalog.CheapestRoadPaths(3);
+
+    /// <summary>What the player must do for their next skill slot, or "" when all four are open.</summary>
+    /// <remarks>
+    /// Says the SCARCER of the two conditions, because naming the one already met would read as a
+    /// gate that is stuck.
+    /// </remarks>
+    public static string NextSkillSlotNote(UnlockFacts f)
+    {
+        var slots = SkillSlots(f);
+        if (slots >= 4) return "";
+        var (points, depth, depthWord) = slots switch
+        {
+            1 => (RoadPaths[0], 5, "REACH WAVE 5"),
+            2 => (RoadPaths[1], 12, "REACH WAVE 12"),
+            _ => (RoadPaths[2], 0, "CONQUER A REGION"),
+        };
+        if (f.MasteryPointsEarned < points)
+            return $"EARN {points} MASTERY POINTS AND LEARN A SKILL FOR A {Ordinal(slots + 1)} SKILL SLOT";
+        return slots == 3 && f.RegionsConquered < 1
+            ? $"{depthWord} FOR A FOURTH SKILL SLOT"
+            : $"{depthWord} FOR A {Ordinal(slots + 1)} SKILL SLOT";
+
+        static string Ordinal(int n) => n switch { 2 => "SECOND", 3 => "THIRD", _ => "FOURTH" };
     }
 
     // ── Build vocabulary: what the world hands you, and how much of it you may wear at once ─────
@@ -369,17 +449,24 @@ public static class Unlocks
 
     /// <summary>What opening a new skill slot should say, for the slot just gained.</summary>
     /// <remarks>
+    /// <para>
     /// Indexed by the slot NUMBER rather than by a milestone, so the copy cannot drift out of step with
     /// <see cref="SkillSlots"/> when the gates are retuned.
+    /// </para>
+    /// <para>
+    /// ONE SHORT LINE EACH. These were two-sentence paragraphs of advice — how timers interleave, what
+    /// a SIGN is for, what a full build means — written when this note arrived at the end of the BUILD
+    /// tour, with the screen already explained. It is a REVEAL now, and a reveal says what happened and
+    /// gets out of the way; the advice belongs in the tour, which is still there behind LEARN THIS
+    /// SCREEN, and in the skills' own readings. The slot number is kept because "another" is vaguer
+    /// than "a third" for no gain.
+    /// </para>
     /// </remarks>
     public static string SkillSlotNote(int slot) => slot switch
     {
-        2 => "A SECOND SKILL. Each skill fires on its own timer, so what you pair matters — a slow "
-             + "heavy hit beside a fast one fills the gap the heavy one leaves.",
-        3 => "A THIRD SKILL. Room for a plan now: something to keep you alive, or a SIGN to make "
-             + "the other two hit harder.",
-        4 => "A FOURTH SKILL. A full build. Every skill and every style is open to you — the "
-             + "build is now the main thing you are playing with.",
+        2 => "You can equip a second skill.",
+        3 => "You can equip a third skill.",
+        4 => "You can equip a fourth skill — a full build.",
         _ => "",
     };
 

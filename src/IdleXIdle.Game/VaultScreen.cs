@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -60,9 +60,8 @@ public sealed class VaultScreen
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
 
-    /// <summary>The same ramp the Forge uses. A grade must read as one colour everywhere in the game.</summary>
-    private static readonly Color[] RarityColors =
-        [Bone, new Color(0x6E, 0xC8, 0x7A), new Color(0x4A, 0x90, 0xD9), new Color(0x8B, 0x3F, 0x82), Gold];
+    // A grade's colour is ItemCellLayout.RarityInk — the one ramp every screen reads (2026-09-16). This
+    // screen carried a copy of the Forge's, and the copy had drifted.
 
     /// <summary>Also shared with the fight screen, for the same reason.</summary>
     private static readonly Dictionary<Source, Color> SourceColor = new()
@@ -246,7 +245,9 @@ public sealed class VaultScreen
     /// <summary>Host-fed from <c>ForgeScreen.AutoMergeOnOpen</c>: spare items merge themselves.</summary>
     public bool AutoMergeOnOpen { get; set; }
 
-    /// <summary>The empty vault's one door. The host reads it once and clears it.</summary>
+    /// <summary>
+    /// The empty vault's one door. Raised in <see cref="Update"/>; the host reads it once and clears it.
+    /// </summary>
     public bool WantsHunt { get; set; }
 
     /// <summary>This week's stall, minted by the host (identity from the week, level from the buyer).</summary>
@@ -260,7 +261,9 @@ public sealed class VaultScreen
     public int? ConsumeTraderBuy() { var r = _traderBuy; _traderBuy = null; return r; }
 
     private bool _traderOpen;
-    private bool _modalOpenedNow;   // the click that OPENED a modal must not also click inside it
+    // The click that OPENED a modal must not also click inside it. Raised and cleared inside one
+    // ResolveChrome call since the input migration; it used to be cleared at the foot of Draw.
+    private bool _modalOpenedNow;
     /// <summary>DEV: pose the stall for a capture.</summary>
     public void DevOpenTrader() => _traderOpen = true;
 
@@ -490,7 +493,32 @@ public sealed class VaultScreen
     }
 
     /// <summary>How many cards this page actually shows — the last page is usually short.</summary>
-    private int OnPage(int count) => Math.Clamp(count - _scroll, 0, PerPage);
+    private int OnPage(int count) => OnPage(count, _scroll);
+
+    /// <summary>
+    /// The same reading off a GIVEN window. The paint pages off its own clamped local rather than
+    /// writing <c>_scroll</c>, which belongs to <see cref="Update"/> (ADR-006).
+    /// </summary>
+    private static int OnPage(int count, int scroll) => Math.Clamp(count - scroll, 0, PerPage);
+
+    /// <summary>
+    /// Where one chest's card is drawn right now, in page space — or null when that chest is not held
+    /// or its card is scrolled out of view.
+    /// </summary>
+    /// <remarks>
+    /// The card IS the button (see Update: a click anywhere on it opens that chest), so this is the
+    /// rectangle a click on that chest lands in. The same stacking and ordering the grid uses — a
+    /// chest's card is its stack's card, found by record equality like the host's open.
+    /// </remarks>
+    public Rectangle? CardOf(Chest chest, IReadOnlyList<Chest> chests)
+    {
+        ArgumentNullException.ThrowIfNull(chests);
+        var sorted = ChestDossiers.Stacked(chests).Select(st => st.Sample).ToList();
+        var idx = sorted.FindIndex(c => c == chest);
+        var onPage = OnPage(sorted.Count);
+        var vis = idx - _scroll;
+        return idx < 0 || vis < 0 || vis >= onPage ? null : Card(vis, onPage);
+    }
 
     /// <summary>How many rows the whole pile takes.</summary>
     private static int TotalRows(int count) => (count + Cols - 1) / Cols;
@@ -591,15 +619,17 @@ public sealed class VaultScreen
         // A burst that has finished is forgotten HERE, in Update — Draw only reads it.
         if (_devBurstT is null && !UiMotion.Pulsing(BurstKey)) _burst.Clear();
 
-        // OPEN ALL was clicked in the last Draw (UiKit.Button answers there, like every button in the
-        // game) and the host takes the request the moment this call returns — so this is the one
-        // frame the pile is still here to be remembered: every visible card's burst, and the cue for
-        // the pile's best chest, once.
-        if (_pending == OpenRequest.All && onPage > 0) BeginBurst(sorted, onPage, 0, all: true);
+        // OPEN ALL ARMS ITS BURST AT THE CLICK NOW — see ResolveChrome — which is what the
+        // single-chest path a few lines below has always done. It used to be armed HERE, off
+        // `_pending == OpenRequest.All`, because the click landed in the PREVIOUS frame's Draw and
+        // this was the one frame the pile was still there to be remembered. The click lands in this
+        // Update instead (ADR-006: Draw must not consume input), and the host opens nothing until
+        // this call returns — so the pile is still whole at the click itself, and the remembered
+        // rectangles and the cue are identical.
 
         // While the stall, an inspect card OR THE CHEST FILTER'S POPOVER is open, the grid underneath
         // is furniture: no hover, no wheel, and — decisive — no chest-opening click. The overlays' own
-        // buttons live in Draw.
+        // buttons are resolved below, in ResolveChrome.
         //
         // FilterOpen was missing from this gate, and the polish pass is what made it visible. The
         // popover sits ON the top-right card, so its `+`, its `-` and its slot medallions all lie
@@ -607,38 +637,175 @@ public sealed class VaultScreen
         // and the card lit and pressed under a pointer that was inside a different control. Nothing
         // announced either, which is why it survived — a burst on a chest nobody meant to open is
         // what finally said it out loud. (Closing on a click outside is unaffected: that lives in
-        // DrawFilterIfOpen, and Draw still sees every click.)
-        if (ModalOpen || FilterOpen) { _hoverIdx = -1; return; }
-
-        // The wheel moves the window one ROW at a time, never past a page that is still full.
-        if (wheel != 0)
-            _scroll = UiKit.Scrolled(_scroll / Cols, Math.Sign(wheel), Rows, TotalRows(sorted.Count)) * Cols;
-
-        // Hover, resolved here where dt lives. There is nothing on the card to hover SEPARATELY any
-        // more: the peek glass that used to win over the card it sat on is gone, and with it the rule
-        // that the card's OPEN affordance stood down while the pointer was on it.
-        var overCard = -1;
-        for (var vis = 0; vis < onPage; vis++)
+        // ResolveFilter, which runs after this block and sees every click.)
+        //
+        // IT IS A GUARDED BLOCK NOW, NOT A RETURN (input migration, ADR-006). The toolbar and the
+        // overlays' own controls are resolved after it, in ResolveChrome, in the order their Draw
+        // methods used to run in — and the toolbar was never gated on FilterOpen, only on ModalOpen,
+        // and only through `uiClicked`. Returning here would have taken the whole chrome with it.
+        if (ModalOpen || FilterOpen)
         {
-            if (!Card(vis, onPage).Contains(hit)) continue;
-            overCard = _scroll + vis;
-            break;
+            _hoverIdx = -1;
         }
-        _hoverIdx = overCard;
-
-        if (!clicked) return;
-
-        // THE CHEST IS THE BUTTON. A click anywhere on the card opens THAT chest — including on the
-        // OPEN chip, which is a label on the card and deliberately not a second click source. The
-        // burst and the cue are armed on this same edge: the card answers the click at once, and
-        // the host removes the chest before the next Draw.
-        if (overCard >= 0)
+        else
         {
-            _cursor = overCard;
-            SelectedChest = sorted[overCard];
-            _pending = OpenRequest.Selected;
-            BeginBurst(sorted, onPage, overCard - _scroll, all: false);
+            // The wheel moves the window one ROW at a time, never past a page that is still full.
+            if (wheel != 0)
+                _scroll = UiKit.Scrolled(_scroll / Cols, Math.Sign(wheel), Rows, TotalRows(sorted.Count)) * Cols;
+
+            // Hover, resolved here where dt lives. There is nothing on the card to hover SEPARATELY any
+            // more: the peek glass that used to win over the card it sat on is gone, and with it the rule
+            // that the card's OPEN affordance stood down while the pointer was on it.
+            var overCard = -1;
+            for (var vis = 0; vis < onPage; vis++)
+            {
+                if (!Card(vis, onPage).Contains(hit)) continue;
+                overCard = _scroll + vis;
+                break;
+            }
+            _hoverIdx = overCard;
+
+            // THE CHEST IS THE BUTTON. A click anywhere on the card opens THAT chest — including on the
+            // OPEN chip, which is a label on the card and deliberately not a second click source. The
+            // burst and the cue are armed on this same edge: the card answers the click at once, and
+            // the host removes the chest before the next Draw.
+            if (clicked && overCard >= 0)
+            {
+                _cursor = overCard;
+                SelectedChest = sorted[overCard];
+                _pending = OpenRequest.Selected;
+                BeginBurst(sorted, onPage, overCard - _scroll, all: false);
+            }
         }
+
+        // ── THE CHROME AND THE OVERLAYS, appended after the grid's own block and internally in the
+        //    exact order the Draw methods ran in — because that order IS this screen's
+        //    one-edge-at-most-one-action mechanism (`_modalOpenedNow`).
+        ResolveChrome(sorted, onPage, hit, clicked);
+    }
+
+    /// <summary>
+    /// Every click the screen's CHROME answers: the toolbar, the empty room's door, and then the
+    /// three overlays — in the order <see cref="Draw"/> used to run them in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ADR-006 moved these out of the paint pass. Nothing about WHAT they do changed: `uiClicked` is
+    /// read once, before the first button, exactly where Draw read it (so the TRADER click, which
+    /// opens a modal, cannot un-arm the PASTE link beside it); `_modalOpenedNow` is set by the two
+    /// controls that open a modal and re-read at each overlay, exactly as Draw re-read it; and the
+    /// popover's outside-click close still returns early, suppressing the popover's own controls for
+    /// that one edge.
+    /// </para>
+    /// <para>
+    /// Every rectangle is the one the paint uses — <see cref="OpenAllBtn"/>, <see cref="FilterBtn"/>,
+    /// <see cref="TraderBtn"/>, <see cref="PasteRect"/>, <see cref="DoorRect"/> — never a copy.
+    /// </para>
+    /// </remarks>
+    private void ResolveChrome(List<Chest> sorted, int onPage, Point hit, bool clicked)
+    {
+        // Read ONCE, before the first control, as Draw read it: a click that opens the stall must not
+        // be re-judged against a ModalOpen that its own click has just made true.
+        var uiClicked = clicked && !ModalOpen;
+
+        // OPEN ALL / OPEN THE CHEST. The burst is armed on this edge, with the `sorted`/`onPage` this
+        // Update already measured — the host does not open anything until Update returns.
+        if (sorted.Count > 0 && UiKit.ClickedIn(OpenAllBtn, hit, uiClicked))
+        {
+            _pending = OpenRequest.All;
+            if (onPage > 0) BeginBurst(sorted, onPage, 0, all: true);
+        }
+
+        if (UiKit.ClickedIn(FilterBtn, hit, uiClicked)) FilterOpen = !FilterOpen;
+
+        // Enabled on `TraderStock.Count > 0`, the same gate the painted button carries: UiKit.Button
+        // never returns true for a disabled control.
+        if (TraderStock.Count > 0 && UiKit.ClickedIn(TraderBtn, hit, uiClicked))
+        {
+            _traderOpen = true;
+            _modalOpenedNow = true;
+        }
+
+        if (UiKit.ClickedIn(PasteRect, hit, uiClicked))
+        {
+            PasteCode();
+            _modalOpenedNow = true;
+        }
+
+        // The empty room's one door. Draw hands DrawEmpty exactly `EmptyFrame` when the pile is empty
+        // (`frame = sorted.Count == 0 ? EmptyFrame : PanelAt(rows)`), so this is the same rectangle.
+        if (sorted.Count == 0 && UiKit.ClickedIn(DoorRect(EmptyFrame), hit, uiClicked))
+            WantsHunt = true;
+
+        // The three overlays, each handed the edge Draw handed them, re-read per call as Draw did.
+        ResolveFilter(hit, clicked && !_modalOpenedNow);
+        ResolveTrader(hit, clicked && !_modalOpenedNow);
+        ResolveInspect(hit, clicked && !_modalOpenedNow);
+        // THE LATCH RESET LIVES HERE NOW — it was at the foot of both of Draw's exit paths. The flag
+        // is raised and cleared inside this one call, so nothing outside it can see it set.
+        _modalOpenedNow = false;
+    }
+
+    /// <summary>The popover's edge: a click outside it (and off its button) closes it and nothing else.</summary>
+    private void ResolveFilter(Point hit, bool clicked)
+    {
+        if (!FilterOpen) return;
+        var pop = FilterPopover;
+        if (clicked && !pop.Contains(hit) && !FilterBtn.Contains(hit)) { FilterOpen = false; return; }
+        ResolveFilterPopover(pop, hit, clicked && pop.Contains(hit));
+    }
+
+    /// <summary>The filter popover's own controls, off the one row walk <see cref="FilterGeom"/> does.</summary>
+    private void ResolveFilterPopover(Rectangle pop, Point hit, bool clicked)
+    {
+        var g = FilterGeom(pop);
+        if (UiKit.ClickedIn(g.Close, hit, clicked)) FilterOpen = false;
+        if (UiKit.ClickedIn(g.Minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
+        if (UiKit.ClickedIn(g.Plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
+        for (var i = 0; i < SlotChips.Length; i++)
+        {
+            if (!UiKit.ClickedIn(FilterCell(g, i), hit, clicked)) continue;
+            if (!KeepSlots.Remove(SlotChips[i])) KeepSlots.Add(SlotChips[i]);
+            FilterDirty = true;
+        }
+        if (UiKit.ClickedIn(g.All, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
+        // THE SELL SWITCH — disabled until the Warren's facility unlocks it, and UiKit never fires a
+        // disabled control, so the gate is the same one MiniButton paints with.
+        if (AutoSellUnlocked && UiKit.ClickedIn(g.Sell, hit, clicked)) { AutoSellOn = !AutoSellOn; FilterDirty = true; }
+    }
+
+    /// <summary>The stall's CLOSE and its four BUYs. CLOSE returns early, as its button did in Draw.</summary>
+    private void ResolveTrader(Point hit, bool clicked)
+    {
+        if (!_traderOpen) return;
+        var g = TraderGeom();
+        if (UiKit.ClickedIn(TraderClose(g.Panel), hit, clicked)) { _traderOpen = false; return; }
+        for (var i = 0; i < TraderStock.Count && i < 4; i++)
+        {
+            // A bought slot has no BUY button at all — it says ALREADY BOUGHT instead.
+            if (TraderBought.Contains(i)) continue;
+            if (UiKit.ClickedIn(TraderBuyRect(g, i), hit, clicked)
+                && TraderAffordable(TraderStock[i]) && Hunter is not null)
+                _traderBuy = i;
+        }
+    }
+
+    /// <summary>The share-code cards' one button each — OK on the error, CLOSE on the two readings.</summary>
+    private void ResolveInspect(Point hit, bool clicked)
+    {
+        if (_inspectError.Length > 0)
+        {
+            if (UiKit.ClickedIn(InspectOkRect(InspectErrorPanel().Panel), hit, clicked)) _inspectError = "";
+            return;
+        }
+        if (_inspectItem is { } item)
+        {
+            if (UiKit.ClickedIn(InspectFootRect(InspectItemPanel(item)), hit, clicked)) _inspectItem = null;
+            return;
+        }
+        if (_inspectBuild is not null
+            && UiKit.ClickedIn(InspectFootRect(InspectBuildPanel()), hit, clicked))
+            _inspectBuild = null;
     }
 
     /// <summary>
@@ -692,7 +859,15 @@ public sealed class VaultScreen
         _cue = null;
     }
 
-    public void Draw(SpriteBatch b, IReadOnlyList<Chest> chests, Point mouse, bool clicked)
+    /// <summary>Paint the vault. This half takes no input edge — see the remarks.</summary>
+    /// <remarks>
+    /// ADR-006: DRAW MUST NOT CONSUME INPUT. Every click on this screen is resolved in
+    /// <see cref="Update"/> (the toolbar, the door and the three overlays in
+    /// <see cref="ResolveChrome"/>), so this half is handed no edge and every button it paints is
+    /// handed <c>false</c> — which changes only the return value it ignores. The pressed face comes
+    /// from the static <see cref="UiKit.MouseHeld"/>, so the pixels are identical.
+    /// </remarks>
+    public void Draw(SpriteBatch b, IReadOnlyList<Chest> chests, Point mouse)
     {
         ArgumentNullException.ThrowIfNull(b);
         ArgumentNullException.ThrowIfNull(chests);
@@ -701,7 +876,12 @@ public sealed class VaultScreen
 
         var stacks = ChestDossiers.Stacked(chests);
         var sorted = stacks.Select(st => st.Sample).ToList();
-        Clamp(sorted.Count);
+        // A LOCAL WINDOW, NOT THE FIELD. The host opens chests between Update and Draw, so the pile
+        // can be shorter here than the window Update clamped, and the page must still be paged off a
+        // value that fits it. This used to be `Clamp(sorted.Count)`, which wrote `_scroll` and
+        // `_cursor` from the paint pass. Update's own Clamp carries the same correction into the next
+        // tick, and the host clamps SelectedIndex itself, so nothing downstream notices.
+        var scroll = Math.Clamp(_scroll, 0, MaxScroll(sorted.Count));
 
         // ── THE SCREEN'S OWN FURNITURE. ──────────────────────────────────────────────────────────
         //
@@ -743,8 +923,6 @@ public sealed class VaultScreen
         var frame = sorted.Count == 0 ? EmptyFrame : PanelAt(rows);
         _ui.PanelQuiet(b, frame);
 
-        var uiClicked = clicked && !ModalOpen;
-
         // ── THE TOOLBAR, in three tiers. It was four ornate buttons of identical weight in a row, and
         //    the audit's finding was blunt: no primary at all, and on a first visit — one chest — the
         //    loudest thing on the screen was a greyed-out "OPEN ALL (1)" that refused to be clicked.
@@ -755,16 +933,16 @@ public sealed class VaultScreen
         //    PASTE A CODE is a plate: the one control that does not touch your chests.
         //
         //    _modalOpenedNow: the TRADER button's rect overlaps the stall's CLOSE (measured: a 72x28
-        //    region), and the click edge stays latched through the whole Draw — without this flag a
-        //    click in the overlap opened the stall and closed it IN THE SAME FRAME. ─────────────────
+        //    region), and one click edge is offered to every control in turn — without this flag a
+        //    click in the overlap opened the stall and closed it IN THE SAME FRAME. The flag lives in
+        //    ResolveChrome now; the buttons here only paint. ────────────────────────────────────────
         if (sorted.Count > 0)
         {
             var label = chests.Count == 1 ? "OPEN THE CHEST" : $"OPEN ALL ({chests.Count})";
-            if (_ui.Button(b, OpenAllBtn, label, hit, uiClicked, true, ButtonStyle.Primary))
-                _pending = OpenRequest.All;
+            _ui.Button(b, OpenAllBtn, label, hit, false, true, ButtonStyle.Primary);
         }
 
-        if (_ui.Button(b, FilterBtn, "CHEST FILTER", hit, uiClicked, true)) FilterOpen = !FilterOpen;
+        _ui.Button(b, FilterBtn, "CHEST FILTER", hit, false, true);
         // SELECTED IS NOT HOVER (§28). While its popover is up the button wears a gold ring —
         // persistent structure that does not leave with the pointer, at the SELECTED tier's weight
         // (§23) rather than the primary's ornate art, and it is the very mark this screen already
@@ -775,11 +953,7 @@ public sealed class VaultScreen
         // 2 px line inside it disappeared into the frame it was meant to be distinguished from.
         if (FilterOpen) Outline(b, FilterBtn, Gold * 0.8f, 2);
 
-        if (_ui.Button(b, TraderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
-        {
-            _traderOpen = true;
-            _modalOpenedNow = true;
-        }
+        _ui.Button(b, TraderBtn, "TRADER", hit, false, TraderStock.Count > 0);
 
         // THE SIDE DOOR IS A LINK (2026-09-06): it reads a stranger's code and shows it — a share
         // utility, never a chest action — so it wears the tertiary tier: a Secondary line in the quiet
@@ -791,13 +965,8 @@ public sealed class VaultScreen
         _ui.TextBig(b, "READ A SHARED CODE", PasteRect.X, pasteY, pasteInk, UiTypography.Secondary);
         var linkW = _ui.MeasureBig("READ A SHARED CODE", UiTypography.Secondary);
         _ui.Fill(b, new Rectangle(PasteRect.X, pasteY + UiTypography.Secondary + 2, linkW, 1), pasteInk * (0.35f + 0.65f * pasteLift));
-        if (UiKit.ClickedIn(PasteRect, hit, uiClicked))
-        {
-            PasteCode();
-            _modalOpenedNow = true;
-        }
         if (pasteHot)
-            _ui.HoverTip(b, "READ AN ITEM OR BUILD CODE SOMEONE SHARED WITH YOU. IT NEVER JOINS YOUR BAG.", hit);
+            _ui.HoverTip(b, "READ AN ITEM OR BUILD CODE SOMEONE SHARED WITH YOU. IT NEVER JOINS YOUR BAG.", PasteRect);
 
         // The hairline the toolbar stands on, so the buttons read as a header and the cards below as
         // the panel's contents — one rule instead of a gap the eye has to guess at.
@@ -833,27 +1002,26 @@ public sealed class VaultScreen
         // The page position, on the same row's right end — the words still say what moves the pile,
         // and since the P2 reflow the bar in the frame's margin shows how deep it is.
         if (sorted.Count > PerPage)
-            _ui.TextRightBig(b, $"PAGE {_scroll / PerPage + 1} OF {(sorted.Count + PerPage - 1) / PerPage}"
+            _ui.TextRightBig(b, $"PAGE {scroll / PerPage + 1} OF {(sorted.Count + PerPage - 1) / PerPage}"
                                 + "  —  THE MOUSE WHEEL SCROLLS",
                              UiKit.ContentRight(frame), conseqY, Slate, UiTypography.Secondary);
 
         if (sorted.Count == 0)
         {
-            DrawEmpty(b, frame, hit, uiClicked);
+            DrawEmpty(b, frame, hit);
             // OPEN ALL empties the room in the same frame it is clicked; its burst still plays here,
             // over where the pile was, while the Forge's cascade takes over above it.
             DrawBurst(b);
-            DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
-            DrawTrader(b, hit, clicked && !_modalOpenedNow);
-            DrawInspect(b, hit, clicked && !_modalOpenedNow);
-            _modalOpenedNow = false;
+            DrawFilterIfOpen(b, hit);
+            DrawTrader(b, hit);
+            DrawInspect(b, hit);
             return;
         }
 
-        var onPage = OnPage(sorted.Count);
+        var onPage = OnPage(sorted.Count, scroll);
         for (var vis = 0; vis < onPage; vis++)
         {
-            var idx = _scroll + vis;
+            var idx = scroll + vis;
             var hovered = idx == _hoverIdx && !ModalOpen;
             // PRESSED is the button held over the card (the rig poses it with `hold`).
             var pressed = hovered && Held;
@@ -861,15 +1029,14 @@ public sealed class VaultScreen
         }
 
         // The pile's depth, in the frame's own margin: drawn only when a wheel step would show more.
-        _ui.ScrollBar(b, ScrollTrack(frame, rows), _scroll / Cols, Rows, TotalRows(sorted.Count));
+        _ui.ScrollBar(b, ScrollTrack(frame, rows), scroll / Cols, Rows, TotalRows(sorted.Count));
 
         // Over the cards, so the ring is not under the neighbour that slid into the opened slot.
         DrawBurst(b);
 
-        DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
-        DrawTrader(b, hit, clicked && !_modalOpenedNow);
-        DrawInspect(b, hit, clicked && !_modalOpenedNow);
-        _modalOpenedNow = false;
+        DrawFilterIfOpen(b, hit);
+        DrawTrader(b, hit);
+        DrawInspect(b, hit);
     }
 
 
@@ -886,7 +1053,7 @@ public sealed class VaultScreen
     private void DrawCard(SpriteBatch b, Chest chest, int stackCount, Rectangle card, int idx, bool hovered, bool pressed)
     {
         var d = ChestDossiers.For(chest);
-        var grade = RarityColors[(int)chest.Rarity];
+        var grade = ItemCellLayout.RarityInk(chest.Rarity);
         // HOVER through the one vocabulary (§26): ~100 ms in, and out again when the pointer leaves.
         // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
         // the pointer at once, it just does not grow or ease into it.
@@ -1082,7 +1249,7 @@ public sealed class VaultScreen
         {
             var (card, art, grade) = _burst[i];
             var f = BurstAt(pulse, grade, UiMotion.Reduced);
-            var ink = RarityColors[(int)grade];
+            var ink = ItemCellLayout.RarityInk(grade);
 
             // The edge: the card's own hover edge, in the grade's colour, with a softer halo a step out.
             Outline(b, card, ink * (0.9f * f.Edge), 3);
@@ -1176,7 +1343,15 @@ public sealed class VaultScreen
         }
     }
 
-    private void DrawEmpty(SpriteBatch b, Rectangle frame, Point hit, bool clicked)
+    /// <summary>
+    /// The empty room's door out — ONE rectangle, hit-tested in <see cref="ResolveChrome"/> and
+    /// painted by <see cref="DrawEmpty"/>, both off the frame the room is drawn in.
+    /// </summary>
+    private static Rectangle DoorRect(Rectangle frame) =>
+        new(frame.Center.X - EmptyButtonW / 2, UiKit.ContentBottom(frame) - EmptyButtonH,
+            EmptyButtonW, EmptyButtonH);
+
+    private void DrawEmpty(SpriteBatch b, Rectangle frame, Point hit)
     {
         if (_ui.Assets.Get("chest_loot") is { } art)
             _ui.SpriteFit(b, art, new Rectangle(frame.Center.X - EmptyArtW / 2, GridTop, EmptyArtW, EmptyArtH), UiInk.Empty);
@@ -1188,7 +1363,9 @@ public sealed class VaultScreen
         _ui.TextCenterBig(b, $"CHESTS COME FROM BOSSES — ABOUT ONE BOSS IN {oneIn} DROPS ONE.",
                           frame.Center.X, y, Slate, UiTypography.Body);
         y += UiTypography.Pitch(UiTypography.Body);
-        _ui.TextCenterBig(b, "AND FROM GIFTS — A NEW GAME IS GIVEN ONE.",
+        // TRUE SINCE 2026-09-10: the welcome gift is the first boss's, not the new game's — and this line
+        // is on screen in the opening, right after the card that says the boss dropped it.
+        _ui.TextCenterBig(b, "AND FROM GIFTS — THE FIRST BOSS LEAVES ONE.",
                           frame.Center.X, y, Slate, UiTypography.Body);
 
         // Your own filter, if it is throwing chests away, said in the room where they would have been.
@@ -1206,10 +1383,7 @@ public sealed class VaultScreen
 
         // With no chests there is no OPEN ALL, so THIS is the screen's one primary action — a door
         // out, rather than a room with nothing in it and no way on.
-        var door = new Rectangle(frame.Center.X - EmptyButtonW / 2, UiKit.ContentBottom(frame) - EmptyButtonH,
-                                 EmptyButtonW, EmptyButtonH);
-        if (_ui.Button(b, door, "RETURN TO HUNT", hit, clicked, true, ButtonStyle.Primary))
-            WantsHunt = true;
+        _ui.Button(b, DoorRect(frame), "RETURN TO HUNT", hit, false, true, ButtonStyle.Primary);
     }
 
     // ── THE WANDERING TRADER — the weekly stall. Identity from the week, level from the buyer,
@@ -1239,48 +1413,36 @@ public sealed class VaultScreen
     /// </summary>
     private const int ModalCeiling = 96;
 
-    private void DrawTrader(SpriteBatch b, Point hit, bool clicked)
-    {
-        if (!_traderOpen) return;
+    /// <summary>
+    /// The stall's caption, hoisted: the WRAPPED LINE COUNT sets the panel's height, so both halves
+    /// have to wrap the same words.
+    /// </summary>
+    private const string TraderCaptionText =
+        "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN SCRAP, ESSENCE, CORE OR CRYSTAL.";
 
-        _ui.Scrim(b, 0.72f);
+    /// <summary>The stall's one geometry reading — see <see cref="TraderGeom"/>.</summary>
+    private readonly record struct TraderLayout(Rectangle Panel, IReadOnlyList<string> Caption,
+                                                int CardsTop, int CardW, int CardH, int CardGap);
+
+    /// <summary>
+    /// The stall, measured once: the panel, its wrapped caption, and the offer cards' row. Both
+    /// halves call this — <see cref="DrawTrader"/> to paint and <see cref="ResolveTrader"/> to
+    /// hit-test — so CLOSE and the four BUYs cannot drift apart (ADR-006).
+    /// </summary>
+    private TraderLayout TraderGeom()
+    {
         var pw = Math.Min(UiMetrics.Control(1320), UiKit.Page.Width - 80);
         // The stall's height is what its four cards need: the header, a card at this profile, and the
         // foot — clamped to the room under the chrome, and raised off its 100 % anchor only when it
         // would run past the bottom margin otherwise.
         var probe = new Rectangle(0, 0, pw, UiMetrics.Control(724));
         var captionW = UiKit.ContentRight(probe) - UiKit.ContentLeft(probe);
-        var caption = _ui.WrapBig(
-            "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN SCRAP, ESSENCE, CORE OR CRYSTAL.",
-            captionW, UiTypography.Secondary);
+        var caption = _ui.WrapBig(TraderCaptionText, captionW, UiTypography.Secondary);
         var cardsTopOff = UiTypography.PanelCaptionTop + caption.Count * UiTypography.Pitch(UiTypography.Secondary)
                           + UiMetrics.Space(40);
         var ph = Math.Min(cardsTopOff + TraderCardH + TraderFoot, UiKit.PageBottom(40) - ModalCeiling);
         var py = Math.Max(ModalCeiling, Math.Min(TraderTop, (UiKit.Page.Height - ph) / 2));
         var panel = new Rectangle(UiKit.PageCenterX - pw / 2, py, pw, ph);
-        _ui.Panel(b, panel, gold: true);
-
-        _ui.TextCenterBig(b, "THE WANDERING TRADER", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
-        // The four currencies by name — all four appear in WanderingTrader.PriceOf, so naming them is
-        // accurate rather than decorative, and "materials" was a category word for things the player
-        // only ever sees called SCRAP, ESSENCE, CORE and CRYSTAL.
-        for (var i = 0; i < caption.Count; i++)
-            _ui.TextCenterBig(b, caption[i], panel.Center.X,
-                              UiKit.CaptionTop(panel) + i * UiTypography.Pitch(UiTypography.Secondary), Slate,
-                              UiTypography.Secondary);
-
-        var closeW = UiMetrics.Control(130);
-        var closeBtn = new Rectangle(UiKit.ContentRight(panel) - closeW, UiKit.TitleTop(panel), closeW,
-                                     UiMetrics.Control(44));
-        if (_ui.Button(b, closeBtn, "CLOSE", hit, clicked, true))
-        {
-            _traderOpen = false;
-            return;
-        }
-
-        ItemInstance? hoverOffer = null;
-        var hoverCard = Rectangle.Empty;
-        var buyRects = new List<Rectangle>(4);
         var cardGap = UiMetrics.Space(20);
         var cardsTop = panel.Y + cardsTopOff;
         // The air under the cards gives way before the cards do: at 100 % the foot is the full 134,
@@ -1288,13 +1450,69 @@ public sealed class VaultScreen
         var foot = Math.Max(TraderFootMin, panel.Height - cardsTopOff - TraderCardH);
         var cardH = panel.Bottom - foot - cardsTop;
         var cw = (UiKit.ContentRight(panel) - UiKit.ContentLeft(panel) - 3 * cardGap) / 4;
+        return new TraderLayout(panel, caption, cardsTop, cw, cardH, cardGap);
+    }
+
+    /// <summary>The stall's CLOSE, in the panel's title row.</summary>
+    private static Rectangle TraderClose(Rectangle panel)
+    {
+        var closeW = UiMetrics.Control(130);
+        return new Rectangle(UiKit.ContentRight(panel) - closeW, UiKit.TitleTop(panel), closeW,
+                             UiMetrics.Control(44));
+    }
+
+    /// <summary>One offer card of the stall.</summary>
+    private static Rectangle TraderCardRect(TraderLayout g, int i) =>
+        new(UiKit.ContentLeft(g.Panel) + i * (g.CardW + g.CardGap), g.CardsTop, g.CardW, g.CardH);
+
+    /// <summary>One offer's BUY button, anchored to its card's foot.</summary>
+    private static Rectangle TraderBuyRect(TraderLayout g, int i)
+    {
+        var card = TraderCardRect(g, i);
         var buyH = UiMetrics.Control(54);
         var buyInset = UiMetrics.Space(40);
+        return new Rectangle(card.X + buyInset, card.Bottom - UiMetrics.Space(28) - buyH,
+                             card.Width - buyInset * 2, buyH);
+    }
+
+    /// <summary>
+    /// ONE affordability reading: can the wallet pay every line of this offer's price? It was an
+    /// `affordable &amp;= enough` accumulator inside the paint's price loop, which only the paint
+    /// could see — so the click had no way to ask the same question.
+    /// </summary>
+    private bool TraderAffordable(ItemInstance offer) =>
+        WanderingTrader.PriceOf(offer, TraderTuning.Default)
+                       .All(p => (Hunter?.MaterialOf(p.Item1) ?? 0) >= p.Item2);
+
+    private void DrawTrader(SpriteBatch b, Point hit)
+    {
+        if (!_traderOpen) return;
+
+        _ui.Scrim(b, 0.72f);
+        var g = TraderGeom();
+        var panel = g.Panel;
+        _ui.Panel(b, panel, gold: true);
+
+        _ui.TextCenterBig(b, "THE WANDERING TRADER", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
+        // The four currencies by name — all four appear in WanderingTrader.PriceOf, so naming them is
+        // accurate rather than decorative, and "materials" was a category word for things the player
+        // only ever sees called SCRAP, ESSENCE, CORE and CRYSTAL.
+        for (var i = 0; i < g.Caption.Count; i++)
+            _ui.TextCenterBig(b, g.Caption[i], panel.Center.X,
+                              UiKit.CaptionTop(panel) + i * UiTypography.Pitch(UiTypography.Secondary), Slate,
+                              UiTypography.Secondary);
+
+        _ui.Button(b, TraderClose(panel), "CLOSE", hit, false, true);
+
+        ItemInstance? hoverOffer = null;
+        var hoverCard = Rectangle.Empty;
+        var buyRects = new List<Rectangle>(4);
+        var cardsTop = g.CardsTop;
         for (var i = 0; i < TraderStock.Count && i < 4; i++)
         {
             var offer = TraderStock[i];
-            var card = new Rectangle(UiKit.ContentLeft(panel) + i * (cw + cardGap), cardsTop, cw, cardH);
-            var grade = RarityColors[(int)offer.Rarity];
+            var card = TraderCardRect(g, i);
+            var grade = ItemCellLayout.RarityInk(offer.Rarity);
             var over = card.Contains(hit);
             if (over) { hoverOffer = offer; hoverCard = card; }
 
@@ -1342,8 +1560,7 @@ public sealed class VaultScreen
             // THE PRICE AND BUY ARE ANCHORED TO THE FOOT (2026-09-06): the rows above hang from the top
             // and these hang from the bottom, so a short name leaves its air between the two halves
             // rather than under the price, and every card's PRICE label sits on the same line.
-            var buyBtn = new Rectangle(card.X + buyInset, card.Bottom - UiMetrics.Space(28) - buyH,
-                                       card.Width - buyInset * 2, buyH);
+            var buyBtn = TraderBuyRect(g, i);
             buyRects.Add(buyBtn);
             var prices = WanderingTrader.PriceOf(offer, TraderTuning.Default).ToList();
             var priceTop = buyBtn.Y - UiMetrics.Space(16) - prices.Count * UiTypography.Pitch(UiTypography.Body)
@@ -1351,12 +1568,10 @@ public sealed class VaultScreen
             y = Math.Max(y + UiMetrics.Space(10), priceTop);
             _ui.TextCenterBig(b, "PRICE", card.Center.X, y, Slate, UiTypography.SectionLabel);
             y += UiTypography.Pitch(UiTypography.SectionLabel) + UiMetrics.Space(4);
-            var affordable = true;
             foreach (var (m, amount) in prices)
             {
                 var held = Hunter?.MaterialOf(m) ?? 0;
                 var enough = held >= amount;
-                affordable &= enough;
                 _ui.TextCenterBig(b, $"{amount} {m.ToString().ToUpperInvariant()}  (YOU HOLD {held})",
                                   card.Center.X, y, enough ? Bone : Ember, UiTypography.Body);
                 y += UiTypography.Pitch(UiTypography.Body);
@@ -1365,10 +1580,10 @@ public sealed class VaultScreen
                 // Disabled ink, correctly: it IS unavailable, and its second cue is that where every
                 // other card has a BUY button this one has none.
                 _ui.TextCenterBig(b, "ALREADY BOUGHT", buyBtn.Center.X,
-                                  buyBtn.Y + (buyH - UiTypography.ButtonText) / 2, UiInk.Disabled,
+                                  buyBtn.Y + (buyBtn.Height - UiTypography.ButtonText) / 2, UiInk.Disabled,
                                   UiTypography.ButtonText);
-            else if (_ui.Button(b, buyBtn, "BUY", hit, clicked, affordable && Hunter is not null))
-                _traderBuy = i;
+            else
+                _ui.Button(b, buyBtn, "BUY", hit, false, TraderAffordable(offer) && Hunter is not null);
         }
 
         // The full tooltip beside the OFFER — the same card the forge would show for it — placed
@@ -1441,42 +1656,81 @@ public sealed class VaultScreen
     /// <summary>The build card at 100 %: 800x600, a ratio the frame picker reads as the medium frame (see below).</summary>
     private const int BuildCardW = 800, BuildCardH = 600, BuildCardTop = 230;
 
-    private void DrawInspect(SpriteBatch b, Point hit, bool clicked)
+    /// <summary>
+    /// The share-code ERROR card: the panel and the wrapped sentence together, because the wrapped
+    /// LINE COUNT is the height. One reading for the paint and for the OK's hit-test (ADR-006).
+    /// </summary>
+    private (Rectangle Panel, IReadOnlyList<string> Lines) InspectErrorPanel()
+    {
+        // Sized to the sentence: the message wraps to the card's width and the card is as tall as
+        // the wrapped message, its title and its OK need — 800x240 at 100 %, with one line.
+        var pw = Math.Min(UiMetrics.Control(800), UiKit.Page.Width - 80);
+        var probe = new Rectangle(0, 0, pw, UiMetrics.Control(240));
+        var lines = _ui.WrapBig(_inspectError, UiKit.ContentRight(probe) - UiKit.ContentLeft(probe), UiTypography.Body);
+        var ph = UiTypography.PanelBodyTop + lines.Count * UiTypography.Pitch(UiTypography.Body)
+                 + UiMetrics.Space(44) + InspectButtonH + UiMetrics.Space(28);
+        return (new Rectangle(UiKit.PageCenterX - pw / 2, (UiKit.Page.Height - ph) / 2, pw, ph), lines);
+    }
+
+    /// <summary>
+    /// The error card's OK. Its foot clearance is <c>Space(28)</c> — deliberately NOT
+    /// <see cref="InspectButtonPad"/>: the two were never the same expression.
+    /// </summary>
+    private static Rectangle InspectOkRect(Rectangle panel) =>
+        new(panel.Center.X - InspectButtonW / 2, panel.Bottom - UiMetrics.Space(28) - InspectButtonH,
+            InspectButtonW, InspectButtonH);
+
+    /// <summary>The item and the build cards' CLOSE, on the <see cref="InspectButtonPad"/> foot.</summary>
+    private static Rectangle InspectFootRect(Rectangle panel) =>
+        new(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
+            InspectButtonW, InspectButtonH);
+
+    /// <summary>Where the item card docks its tooltip: one caption line and a breath under the caption.</summary>
+    private static int InspectTipTop =>
+        UiTypography.PanelCaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(24);
+
+    /// <summary>
+    /// A friend's ITEM card: as tall as the tooltip needs, never shorter than its 100 % height,
+    /// never past the page.
+    /// </summary>
+    private Rectangle InspectItemPanel(ItemInstance item)
+    {
+        var need = InspectTipTop + ItemTooltip.HeightFor(_ui, item, Hunter)
+                   + InspectButtonPad + InspectButtonH + InspectButtonPad;
+        var pw = Math.Min(UiMetrics.Control(680), UiKit.Page.Width - 80);
+        var ph = Math.Min(Math.Max(need, ItemCardMinH), UiKit.PageBottom(40) - ModalCeiling);
+        return new Rectangle(UiKit.PageCenterX - pw / 2, Math.Max(ModalCeiling, (UiKit.Page.Height - ph) / 2),
+                             pw, ph);
+    }
+
+    /// <summary>A friend's BUILD card — see <see cref="BuildCardW"/> for why the ratio matters.</summary>
+    private static Rectangle InspectBuildPanel()
+    {
+        var pw = Math.Min(UiMetrics.Control(BuildCardW), UiKit.Page.Width - 80);
+        var ph = Math.Min(UiMetrics.Control(BuildCardH), UiKit.PageBottom(40) - ModalCeiling);
+        var py = Math.Max(ModalCeiling, Math.Min(BuildCardTop, (UiKit.Page.Height - ph) / 2));
+        return new Rectangle(UiKit.PageCenterX - pw / 2, py, pw, ph);
+    }
+
+    private void DrawInspect(SpriteBatch b, Point hit)
     {
         if (_inspectError.Length > 0)
         {
             _ui.Scrim(b, 0.6f);
-            // Sized to the sentence: the message wraps to the card's width and the card is as tall as
-            // the wrapped message, its title and its OK need — 800x240 at 100 %, with one line.
-            var pw = Math.Min(UiMetrics.Control(800), UiKit.Page.Width - 80);
-            var probe = new Rectangle(0, 0, pw, UiMetrics.Control(240));
-            var lines = _ui.WrapBig(_inspectError, UiKit.ContentRight(probe) - UiKit.ContentLeft(probe), UiTypography.Body);
-            var ph = UiTypography.PanelBodyTop + lines.Count * UiTypography.Pitch(UiTypography.Body)
-                     + UiMetrics.Space(44) + InspectButtonH + UiMetrics.Space(28);
-            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, (UiKit.Page.Height - ph) / 2, pw, ph);
+            var (panel, lines) = InspectErrorPanel();
             _ui.Panel(b, panel);
             _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", panel.Center.X, UiKit.TitleTop(panel), Ember, UiTypography.PanelTitle);
             for (var i = 0; i < lines.Count; i++)
                 _ui.TextCenterBig(b, lines[i], panel.Center.X,
                                   UiKit.BodyTop(panel) + i * UiTypography.Pitch(UiTypography.Body), Bone, UiTypography.Body);
-            var ok = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - UiMetrics.Space(28) - InspectButtonH,
-                                   InspectButtonW, InspectButtonH);
-            if (_ui.Button(b, ok, "OK", hit, clicked, true))
-                _inspectError = "";
+            _ui.Button(b, InspectOkRect(panel), "OK", hit, false, true);
             return;
         }
 
         if (_inspectItem is { } item)
         {
             _ui.Scrim(b, 0.7f);
-            // The tooltip sits one caption line and a breath under the caption; the card is as tall
-            // as the tooltip needs, never shorter than its 100 % height, never past the page.
-            var tipTop = UiTypography.PanelCaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(24);
-            var need = tipTop + ItemTooltip.HeightFor(_ui, item, Hunter) + InspectButtonPad + InspectButtonH + InspectButtonPad;
-            var pw = Math.Min(UiMetrics.Control(680), UiKit.Page.Width - 80);
-            var ph = Math.Min(Math.Max(need, ItemCardMinH), UiKit.PageBottom(40) - ModalCeiling);
-            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, Math.Max(ModalCeiling, (UiKit.Page.Height - ph) / 2),
-                                      pw, ph);
+            var panel = InspectItemPanel(item);
             // Fill+Outline, not Panel: this rect is nearly square and the frame picker would grab
             // the square art meant for icons (UiKit.Panel picks by aspect ratio).
             _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
@@ -1484,12 +1738,12 @@ public sealed class VaultScreen
             _ui.TextCenterBig(b, "A FRIEND'S ITEM", panel.Center.X, panel.Y + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
             _ui.TextCenterBig(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", panel.Center.X,
                               panel.Y + UiTypography.PanelCaptionTop, Slate, UiTypography.Secondary);
-            ItemTooltip.Draw(_ui, b, item, Hunter,
-                             new Point(panel.Center.X - ItemTooltip.Width / 2, panel.Y + tipTop), UiKit.Page);
-            var close = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
-                                      InspectButtonW, InspectButtonH);
-            if (_ui.Button(b, close, "CLOSE", hit, clicked, true))
-                _inspectItem = null;
+            // A FIXED DOCK inside the modal, never a placed popover: the position was always exact
+            // here, and Draw's job is to CHOOSE a position. DrawAt is the call that takes one.
+            ItemTooltip.DrawAt(_ui, b, item, Hunter,
+                               new Rectangle(panel.Center.X - ItemTooltip.Width / 2, panel.Y + InspectTipTop,
+                                             ItemTooltip.Width, ItemTooltip.HeightFor(_ui, item, Hunter)));
+            _ui.Button(b, InspectFootRect(panel), "CLOSE", hit, false, true);
             return;
         }
 
@@ -1499,10 +1753,7 @@ public sealed class VaultScreen
             // 800x600, not 620: at 620 the ratio was 1.29 and UiKit.Panel's aspect picker handed
             // this card the SQUARE frame meant for icons — the exact trap the item card above
             // dodges with Fill+Outline. Both edges grow at the same rate, so the ratio holds.
-            var pw = Math.Min(UiMetrics.Control(BuildCardW), UiKit.Page.Width - 80);
-            var ph = Math.Min(UiMetrics.Control(BuildCardH), UiKit.PageBottom(40) - ModalCeiling);
-            var py = Math.Max(ModalCeiling, Math.Min(BuildCardTop, (UiKit.Page.Height - ph) / 2));
-            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, py, pw, ph);
+            var panel = InspectBuildPanel();
             _ui.Panel(b, panel, gold: true);
             _ui.TextCenterBig(b, "A FRIEND'S BUILD", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
             _ui.TextCenterBig(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", panel.Center.X,
@@ -1565,22 +1816,44 @@ public sealed class VaultScreen
             _ui.TextBig(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", x1, y, Slate,
                         UiTypography.SectionLabel);
 
-            var close = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
-                                      InspectButtonW, InspectButtonH);
-            if (_ui.Button(b, close, "CLOSE", hit, clicked, true))
-                _inspectBuild = null;
+            _ui.Button(b, InspectFootRect(panel), "CLOSE", hit, false, true);
         }
     }
 
     // ── CHEST FILTER — which chests to keep (UX V2 P1.1: moved here from the HUNT; D12). ────────────────────────
     //    Host-fed and host-persisted; this screen only edits it and raises FilterDirty. The edit happens in
-    //    DRAW, so the host reads it back on the dirty flag and never pushes the saved value every frame.
+    //    UPDATE (ResolveFilterPopover), and the host reads it back on the dirty flag rather than pushing
+    //    the saved value every frame — which is what used to clobber the vault's edit.
     /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
     public int KeepMinTier { get; set; }
     /// <summary>Keep only chests whose region favours ANY of these slots (no-lean chests always pass). Empty = any.</summary>
     public HashSet<ItemBaseType> KeepSlots { get; } = new();
     /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
     public bool FilterDirty { get; set; }
+
+    /// <summary>
+    /// May the Warren's runners SELL a chest's low-grade gear as it is opened? Off until the player says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest, 2026-09-09: <i>"It sold an item obtained from a chest even though the item filter
+    /// wasn't active."</i> Both halves of that were true. The CHEST FILTER — the only thing the game
+    /// calls a filter in a place the player can reach — keeps or drops whole CHESTS and has never sold
+    /// anything; the sale came from SCAVENGER RUNS, a Warren facility whose level-2 upgrade is bought
+    /// for its output and carries auto-sell as an unannounced rider, with no off switch anywhere.
+    /// The reveal card then blamed "YOUR LOOT FILTER", which is why the report reads as a contradiction.
+    /// </para>
+    /// <para>
+    /// The facility level now UNLOCKS the capability and this switch turns it on, defaulting off even
+    /// for a save already past the level — nobody ever consented to the old behaviour, so nobody
+    /// inherits it. It lives in the CHEST FILTER popover because that is where the player already
+    /// looks for "what happens to my loot".
+    /// </para>
+    /// </remarks>
+    public bool AutoSellOn { get; set; }
+
+    /// <summary>Is the capability available at all — i.e. has the Warren's facility reached its level?</summary>
+    public bool AutoSellUnlocked { get; set; }
     /// <summary>The filter's popover is up. The toolbar button toggles it; its ×, a click outside it, and Escape close it.</summary>
     public bool FilterOpen { get; set; }
 
@@ -1618,10 +1891,24 @@ public sealed class VaultScreen
             h += pitch;                                                        // GEAR SLOTS THE CHEST IS FOR
             h += 2 * (FilterCellH + FilterCellGap) + UiMetrics.Space(6);       // the medallions
             h += FilterAllH + UiMetrics.Space(10);                             // ALL SLOTS
+            h += pitch + UiMetrics.Space(6);                                   // WHAT HAPPENS TO THE GEAR INSIDE
+            h += FilterAllH + UiMetrics.Space(6);                              // the sell switch
+            h += SellSentenceLines * pitch;                                    // its sentence
             h += 2 * pitch;                                                    // the closing sentence
             return h + inset;
         }
     }
+
+    /// <summary>
+    /// Lines budgeted for the sell switch's sentence — its LONGEST reading, measured at 100 %.
+    /// </summary>
+    /// <remarks>
+    /// The popover's height is a static sum of the rows it draws and has no UiKit to measure with, so
+    /// this is the one number that has to be right by inspection. Budgeted at two, the locked reading
+    /// wrapped to three and pushed the closing sentence out through the frame's foot — caught in the
+    /// capture, which is the only place it could have been caught.
+    /// </remarks>
+    private const int SellSentenceLines = 3;
 
     private Rectangle FilterPopover =>
         new(Math.Min(FilterBtn.X, UiKit.PageRight(24) - FilterPopoverW), FilterBtn.Bottom + UiMetrics.Space(10),
@@ -1659,51 +1946,79 @@ public sealed class VaultScreen
         _ => SlotLabel(t),
     };
 
-    /// <summary>The popover, when it is up; a click anywhere outside it (and off its button) closes it.</summary>
-    private void DrawFilterIfOpen(SpriteBatch b, Point hit, bool clicked)
-    {
-        if (!FilterOpen) return;
-        var pop = FilterPopover;
-        if (clicked && !pop.Contains(hit) && !FilterBtn.Contains(hit)) { FilterOpen = false; return; }
-        DrawFilterPopover(b, pop, hit, clicked && pop.Contains(hit));
-    }
+    /// <summary>
+    /// The popover's ROW WALK, done once: the rectangle of every control in it and the top of every
+    /// label between them. <see cref="DrawFilterPopover"/> paints off this and
+    /// <see cref="ResolveFilterPopover"/> hit-tests off this, so the two cannot drift (ADR-006). The
+    /// paint used to carry its own <c>y</c> cursor through the controls, which was the second copy.
+    /// </summary>
+    private readonly record struct FilterLayout(Rectangle Inner, Rectangle Close, int KeepLabelTop,
+                                                int TierLabelTop, Rectangle Minus, Rectangle Plus,
+                                                int SlotsLabelTop, int CellsTop, int CellW,
+                                                Rectangle All, int SellLabelTop, Rectangle Sell,
+                                                int SentenceTop);
 
-    /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
-    private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
+    /// <summary>The one walk. Every step is the same expression the paint's cursor used to take.</summary>
+    private static FilterLayout FilterGeom(Rectangle pop)
     {
         var inset = UiTypography.PanelPadNarrow;
         var pitch = UiTypography.Pitch(UiTypography.Secondary);
-        _ui.PanelQuiet(b, pop);
         var inner = new Rectangle(pop.X + inset, pop.Y + inset, pop.Width - inset * 2, pop.Height - inset * 2);
         var close = UiKit.CloseRect(pop, UiMetrics.HitTargetMinimum);
-        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + (close.Height - UiTypography.PanelTitle) / 2, Gold, UiTypography.PanelTitle);
-        if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
-        var y = close.Bottom + UiMetrics.Space(8);
-        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, UiTypography.Secondary);
-        y += pitch + UiMetrics.Space(6);
-
-        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
-        y += pitch;
+        var keepLabelTop = close.Bottom + UiMetrics.Space(8);              // WHICH CHESTS TO KEEP
+        var tierLabelTop = keepLabelTop + pitch + UiMetrics.Space(6);      // LOWEST TIER
+        var stepperTop = tierLabelTop + pitch;
         var stepper = FilterStepper;
-        var minus = new Rectangle(inner.X, y, stepper, stepper);
-        var plus = new Rectangle(inner.Right - stepper, y, stepper, stepper);
-        MiniButton(b, minus, "-", hit);
-        MiniButton(b, plus, "+", hit);
-        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X,
-                       y + (stepper - UiTypography.Label) / 2, KeepMinTier > 0 ? Gold : Slate);
-        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
-        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
+        var minus = new Rectangle(inner.X, stepperTop, stepper, stepper);
+        var plus = new Rectangle(inner.Right - stepper, stepperTop, stepper, stepper);
+        var slotsLabelTop = stepperTop + stepper + UiMetrics.Space(14);    // GEAR SLOTS THE CHEST IS FOR
+        var cellsTop = slotsLabelTop + pitch;
+        var allTop = cellsTop + 2 * (FilterCellH + FilterCellGap) + UiMetrics.Space(6);
+        var all = new Rectangle(inner.X, allTop, inner.Width, FilterAllH);
+        var sellLabelTop = allTop + FilterAllH + UiMetrics.Space(10);      // WHAT HAPPENS TO THE GEAR INSIDE
+        var sellTop = sellLabelTop + pitch + UiMetrics.Space(6);
+        var sell = new Rectangle(inner.X, sellTop, inner.Width, FilterAllH);
+        return new FilterLayout(inner, close, keepLabelTop, tierLabelTop, minus, plus, slotsLabelTop,
+                                cellsTop, inner.Width / 4, all, sellLabelTop, sell,
+                                sellTop + FilterAllH + UiMetrics.Space(6));
+    }
 
-        y += stepper + UiMetrics.Space(14);
-        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
-        y += pitch;
+    /// <summary>One slot medallion's cell — called by the paint loop and by the resolve loop.</summary>
+    private static Rectangle FilterCell(FilterLayout g, int i) =>
+        new(g.Inner.X + i % 4 * g.CellW, g.CellsTop + i / 4 * (FilterCellH + FilterCellGap),
+            g.CellW, FilterCellH);
+
+    /// <summary>The popover, when it is up. Its closes and its edits are resolved in Update.</summary>
+    private void DrawFilterIfOpen(SpriteBatch b, Point hit)
+    {
+        if (!FilterOpen) return;
+        DrawFilterPopover(b, FilterPopover, hit);
+    }
+
+    /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
+    private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit)
+    {
+        var pitch = UiTypography.Pitch(UiTypography.Secondary);
+        _ui.PanelQuiet(b, pop);
+        var g = FilterGeom(pop);
+        var inner = g.Inner;
+        _ui.TextBig(b, "CHEST FILTER", inner.X, g.Close.Y + (g.Close.Height - UiTypography.PanelTitle) / 2, Gold, UiTypography.PanelTitle);
+        _ui.CloseButton(b, g.Close, hit, false);
+        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, g.KeepLabelTop, Slate, UiTypography.Secondary);
+
+        _ui.TextBig(b, "LOWEST TIER", inner.X, g.TierLabelTop, Bone, UiTypography.Secondary);
+        MiniButton(b, g.Minus, "-", hit);
+        MiniButton(b, g.Plus, "+", hit);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X,
+                       g.Minus.Y + (g.Minus.Height - UiTypography.Label) / 2, KeepMinTier > 0 ? Gold : Slate);
+
+        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, g.SlotsLabelTop, Bone, UiTypography.Secondary);
         string? tip = null;
-        var cellH = FilterCellH;
-        var cellW = inner.Width / 4;
+        var tipAt = Rectangle.Empty;
         for (var i = 0; i < SlotChips.Length; i++)
         {
             var slot = SlotChips[i];
-            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + FilterCellGap), cellW, cellH);
+            var cell = FilterCell(g, i);
             var lit = KeepSlots.Contains(slot);
             var hot = cell.Contains(hit);
             if (lit) _ui.Fill(b, cell, Gold * 0.16f);
@@ -1715,18 +2030,30 @@ public sealed class VaultScreen
             if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
                 _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
             if (lit) Outline(b, cell, Gold * 0.8f, 2);
-            if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
-            if (UiKit.ClickedIn(cell, hit, clicked))
-            {
-                if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
-                FilterDirty = true;
-            }
+            if (hot) { tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it."); tipAt = cell; }
         }
-        y += 2 * (cellH + FilterCellGap) + UiMetrics.Space(6);
-        var all = new Rectangle(inner.X, y, inner.Width, FilterAllH);
-        MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
-        if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
-        y += FilterAllH + UiMetrics.Space(10);
+        MiniButton(b, g.All, "ALL SLOTS", hit, KeepSlots.Count == 0);
+
+        // ── AND WHAT HAPPENS TO THE GEAR INSIDE A CHEST YOU KEPT. The other half of "my loot", and
+        //    the half that was invisible: it lived on a Warren facility card, was switched on by an
+        //    upgrade bought for something else, and had no off switch at all. ──
+        _ui.TextBig(b, "WHAT HAPPENS TO THE GEAR INSIDE", inner.X, g.SellLabelTop, Bone, UiTypography.Secondary);
+        MiniButton(b, g.Sell, AutoSellOn ? "RUNNERS SELL LOW GEAR" : "KEEP EVERYTHING", hit, AutoSellOn,
+                   enabled: AutoSellUnlocked);
+        // The two sentences are the only rows left that stack off a running cursor — neither is a
+        // control, so the walk stops at the sell switch and this carries on from its foot.
+        var y = g.SentenceTop;
+        foreach (var l in _ui.WrapBig(!AutoSellUnlocked
+                                          ? "UPGRADE SCAVENGER RUNS IN THE WARREN TO UNLOCK THIS"
+                                          : AutoSellOn
+                                              ? "SOLD AS A CHEST OPENS. RARE AND BETTER ARE ALWAYS KEPT"
+                                              : "EVERY ITEM A CHEST GIVES YOU GOES INTO YOUR BAG",
+                                      inner.Width, UiTypography.Secondary))
+        {
+            _ui.TextBig(b, l, inner.X, y, Slate, UiTypography.Secondary);
+            y += pitch;
+        }
+
         foreach (var l in _ui.WrapBig(KeepMinTier > 0 || KeepSlots.Count > 0
                                           ? "OTHER CHESTS TURN INTO A LITTLE SCRAP"
                                           : "EVERY CHEST IS KEPT",
@@ -1735,20 +2062,21 @@ public sealed class VaultScreen
             _ui.TextBig(b, l, inner.X, y, Slate, UiTypography.Secondary);
             y += pitch;
         }
-        if (tip is not null) _ui.HoverTip(b, tip, hit);
+        if (tip is not null) _ui.HoverTip(b, tip, tipAt);
     }
 
-    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
+    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false, bool enabled = true)
     {
-        var hot = r.Contains(hit);
+        var hot = enabled && r.Contains(hit);
         // The same states as every control (§25): HOVER lifts the edge and the ink a value step,
         // PRESSED darkens the well while the button is held, LIT (selected) is gold and stays.
+        // DISABLED draws at rest in Dim and never reacts — the reason is on the line beneath it.
         var pressed = hot && Held;
         _ui.Fill(b, r, new Color(0x16, 0x11, 0x10, 0xE0));
         if (pressed) _ui.Fill(b, r, Color.Black * 0.18f);
-        Outline(b, r, lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
+        Outline(b, r, !enabled ? Dim * 0.6f : lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
         _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1 + (pressed ? 1 : 0),
-                          lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
+                          !enabled ? Dim : lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)

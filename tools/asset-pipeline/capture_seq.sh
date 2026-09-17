@@ -19,6 +19,13 @@ dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
 rm -f "${OUT}"_[0-9][0-9].png
 RH_ENV=(RH_SHOT="$WINDIR\\$OUT.png" RH_SHOT_MODE="$MODE" RH_SHOT_SEQ="$COUNT,$STRIDE")
+# THE POSES capture.sh forwards that a RHYTHM can need too: an authored opening beat over the fight
+# (its live scrim blazes and fades — a strip is the only way to see the fade), a held coach lesson,
+# and the UI SCALE. Without these a filmstrip could only ever photograph the plain fixture.
+[ -n "${RH_SHOT_OPENING:-}" ] && RH_ENV+=(RH_SHOT_OPENING="$RH_SHOT_OPENING")
+[ -n "${RH_SHOT_LESSON:-}" ] && RH_ENV+=(RH_SHOT_LESSON="$RH_SHOT_LESSON")
+[ -n "${RH_SHOT_UISCALE:-}" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
+[ -n "${RH_SHOT_T:-}" ] && RH_ENV+=(RH_SHOT_T="$RH_SHOT_T")
 dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1   # dn applies RH_ENV (shellenv.sh)
 N="$(ls "${OUT}"_[0-9][0-9].png 2>/dev/null | wc -l)"
 [ "$N" -gt 0 ] || { echo "capture failed" >&2; exit 1; }

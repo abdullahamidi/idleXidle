@@ -19,6 +19,7 @@
 | `characters.md` | Ten champions, one passive each, item classes (roads read RESONANCE/LOOT) |
 | `warren-facilities.md` | The Warren as of P12: four outputs, conquest unlock ramp, depth cap |
 | `sources.md` | The six Sources: signatures, the matchup, element sets, region themes |
+| `dispatches.md` | The inbox account news goes to: typed letters, semantic keys, the cap, the v8 seed, the envelope and the reading surface (quick design, 2026-09-15; architecture in ADR-007) |
 | `design/monetization.md` | Sold once, offline, no purchases |
 
 ## Mixed (one half true — the header says which)

@@ -116,6 +116,17 @@ def main() -> int:
                 if alias.get(key, key) not in have and key not in have:
                     missing.setdefault(key, []).append(f"VfxProfiles.cs:{line_no}")
 
+    # AND EVERY PROLOGUE PLATE. PrologueArt.cs keys a plate per beat as literals (plate_prologue_<id>),
+    # and DrawPrologue reaches them through UiKit.BackgroundPanned, whose call the CALLS regex does not
+    # read; a mistyped key there fails soft to a VoidInk fill and nothing says so. This reads the table.
+    prologue_cs = os.path.join(GAME, "PrologueArt.cs")
+    if os.path.exists(prologue_cs):
+        text = strip_comments(open(prologue_cs, encoding="utf-8").read())
+        for line_no, line in enumerate(text.split("\n"), 1):
+            for key in re.findall(r'"(plate_prologue_[a-z0-9_]+)"', line):
+                if alias.get(key, key) not in have and key not in have:
+                    missing.setdefault(key, []).append(f"PrologueArt.cs:{line_no}")
+
     # AND EVERY EFFECT KEY THE SKILL CATALOGUE NAMES. A skill's FxKey is expanded to `fx_<key>` (or
     # to the character's own `fx_<id>_<key>_strip8_512` where one was generated), so a catalogue entry
     # naming art nobody drew is the same silent failure one layer further back.

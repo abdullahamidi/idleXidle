@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -103,7 +103,7 @@ public static class ElementSets
         [Source.Machine] = Set(
             ("Every bite deals 4 less.", new SkillShape { FlatDamageReduction = 4f }),
             ("Each wave begins with a shield worth 12% of your maximum health.",
-             new SkillShape { WaveStartShieldFraction = 0.12f }),
+             new SkillShape { WaveStartShieldFraction = 0.06f }),
             // Read BEFORE absorption, so it is not counted twice against the same bite.
             ("While you hold a shield, bites deal 10% less.",
              new SkillShape { ShieldedDamageTaken = 0.90f }),

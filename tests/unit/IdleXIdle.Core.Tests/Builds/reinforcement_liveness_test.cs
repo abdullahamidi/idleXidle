@@ -139,7 +139,34 @@ public class ReinforcementLivenessTests
     /// </remarks>
     private const float ShallowPower = 90f, ShallowPressure = 9f;
 
+    /// <summary>
+    /// SEEDS PER DEPTH, because a conditional reinforcement needs its condition to ARISE.
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-09-09 with rolled critical hits. One seed is one sample of a fight whose damage is
+    /// now stochastic, and a rule that fires on a mid-cast death (RUNOUT's retarget, CLEANUP, PUNCH
+    /// THROUGH) needs a wave where a creature actually dies with hits still owed. On the single seed
+    /// this fixture used, RUNOUT's condition stopped arising at all and the reinforcement measured as
+    /// dormant while being perfectly alive — the fixture accusing the content. Four seeds per depth
+    /// pose the condition and average the noise; the seeds are fixed, so the test is reproducible.
+    /// </remarks>
+    private static readonly int[] Seeds = { 19, 7919, 15859, 23801 };
+
     private static Outcome Fight(Build build, (float Power, float Pressure) region)
+    {
+        long dealt = 0, healed = 0, shielded = 0;
+        var kept = 0;
+        var reached = 0;
+        foreach (var seed in Seeds)
+        {
+            var one = FightOnce(build, region, seed);
+            dealt += one.Dealt; healed += one.Healed; shielded += one.Shielded;
+            kept += one.Kept; reached += one.Reached;
+        }
+        return new Outcome(dealt, healed, shielded, kept, reached);
+    }
+
+    private static Outcome FightOnce(Build build, (float Power, float Pressure) region, int seed)
     {
         var hunter = new Hunter();
         var pool = SoloBattle.ChampionHealth(build, hunter);
@@ -150,7 +177,7 @@ public class ReinforcementLivenessTests
             ? new Champion { MaxHealth = pool * 40, Health = pool * 40 }
             : new Champion { MaxHealth = pool * 40, Health = pool * 20 };
         var run = new SoloExpedition(build, champ, hunter, region.Power, region.Pressure,
-                                     ExpeditionTuning.Default, new Random(19));
+                                     ExpeditionTuning.Default, new Random(seed));
 
         long dealt = 0, healed = 0, shielded = 0;
         for (var w = 0; w < 6; w++)

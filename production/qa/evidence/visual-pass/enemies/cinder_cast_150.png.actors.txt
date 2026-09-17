@@ -1,0 +1,5 @@
+Champion	body 486,400,268,412	envelope 375,400,530,412	keepout 365,390,550,432	box 420,382,400,430	GRANTED
+Creature/0	body 1255,478,243,331	envelope 1239,478,275,331	box 1206,466,340,343	GRANTED
+Creature/1	body 1438,476,243,331	envelope 1422,476,275,331	box 1389,464,340,343	GRANTED
+EnemyRow	body 1255,476,426,333	envelope 1239,476,458,333
+Hover	at -4096,-4096	creature none

@@ -289,8 +289,11 @@ public class TraitTreeMigrationTest
         Assert.Equal(4, loadout.Skills.Count);
         Assert.DoesNotContain("field_pulse", loadout.Skills.Select(s => s.SkillId));
 
+        // Enough waves to be past the SECOND rung of the curve, read from the curve rather than typed
+        // (SkillProgress.WavesForLevel moved on 2026-09-09 and a hard 40 quietly stopped meaning
+        // "well levelled").
         var progress = new SkillProgress();
-        for (var i = 0; i < 40; i++) progress.RecordWave("field_pulse");
+        for (var i = 0; i < SkillProgress.UsesForLevel(2); i++) progress.RecordWave("field_pulse");
         Assert.True(progress.LevelOf("field_pulse") > 1, "the dropped skill must keep what it earned");
     }
 
@@ -301,7 +304,12 @@ public class TraitTreeMigrationTest
         // Without the bump the ten-second autosave overwrites the only copy of the pre-migration file
         // and there is no undo at all — which is why the bump is a data-safety requirement here rather
         // than bookkeeping.
-        Assert.Equal(4, SaveGame.CurrentVersion);
-        Assert.True(3 < SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-11 (was six): the opening's cursor gained a stage mid-sequence
+        // (OpeningScript.FirstVersionWithSignatureWatch).
+        // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox, whose seed reads the file's version
+        // to tell a file that was never told anything from one whose inbox is honestly empty
+        // (Dispatches.FirstVersionWithInbox).
+        Assert.Equal(8, SaveGame.CurrentVersion);
+        Assert.True(5 < SaveGame.CurrentVersion);
     }
 }

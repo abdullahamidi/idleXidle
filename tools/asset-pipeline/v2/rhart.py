@@ -178,13 +178,25 @@ def build_strip(paths: list[str], out: str, frame: int = 512, fit: float = 0.90,
 MAX_SCALE_DRIFT = 0.12     # bbox height vs the median, per frame
 MAX_BASELINE_DRIFT = 0.06  # feet wander, in frame heights
 MIN_FILL = 0.08            # of the frame area; below this the frame is "empty"
-STRAY_FRACTION = 0.015     # a second blob above this share of the main one is a floating part
+STRAY_FRACTION = 0.015
+FALLEN_FLOOR = 0.22        # a prone body is a quarter to a third of its standing height (see gate)     # a second blob above this share of the main one is a floating part
 
 
-def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = False) -> list[str]:
+def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = False,
+         fallen: bool = False) -> list[str]:
     """`loose` is for attack / cast / death clips: a pounce or a collapse changes the silhouette's
     height and baseline on purpose, so the drift bars widen (30 % / 10 %) instead of failing every
     honest lunge. Idle clips keep the tight bars — an idle that drifts is a zoom, not a breath.
+
+    `fallen` is for a DEATH clip and replaces the median scale bar with a standing-height one: no
+    frame may be taller than the tallest (the figure standing) by more than the loose bar, and none
+    may drop below 22 % of it. A body that ends fully fallen is legitimately a quarter to a third of
+    its standing height by the last frame (the hollow seer lies at 28 %, the furnace priest at 37 %), which is the one thing the clip is FOR — and a clip that lies
+    flat for its second half has no honest MEDIAN at all (the hollow seer's was its own mid-stagger,
+    so its standing frame read as 64 % 'drift'). The first matrix deaths (2026-09-16: thorn ogre 32 %,
+    bog weaver 49 %, furnace priest 56 %) were all clean collapses the old bar refused; a generator's
+    zoom drift never looks like a monotone fall. The gate was failing the success, as `thrown` once
+    did. The baseline bar stays at the loose 10 %: a fallen body still lies on the same ground.
 
     `thrown` is for a PROJECTILE clip, and it turns off the stray-blob check. That check exists to
     catch a limb the generator detached by accident, and it cannot tell one from a thrown object: the
@@ -192,7 +204,7 @@ def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = Fa
     gem, in flight, which is the one thing the clip is FOR. A projectile whose object never leaves
     the hand is the failure; the gate was failing the success."""
     max_scale = 0.30 if loose else MAX_SCALE_DRIFT
-    max_base = 0.10 if loose else MAX_BASELINE_DRIFT
+    max_base = 0.10 if (loose or fallen) else MAX_BASELINE_DRIFT
     strip = load_rgba(path)
     problems: list[str] = []
     fw = strip.height
@@ -215,7 +227,12 @@ def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = Fa
             comps = components(f)
             if len(comps) > 1 and comps[1] > comps[0] * STRAY_FRACTION:
                 problems.append(f"frame {i} has a disconnected blob ({comps[1]} vs main {comps[0]})")
-    if heights and not effect:
+    if heights and not effect and fallen:
+        standing = max(heights)
+        for i, h in enumerate(heights):
+            if h < standing * FALLEN_FLOOR:
+                problems.append(f"frame {i} is under {FALLEN_FLOOR:.0%} of the standing height (h={h}, standing={standing})")
+    elif heights and not effect:
         med = statistics.median(heights)
         for i, h in enumerate(heights):
             if abs(h - med) / med > max_scale:

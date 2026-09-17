@@ -18,17 +18,19 @@ dotnet run --project src/IdleXIdle.Game
 
 ## What the game is
 
-- **Twelve skills across six styles** — HAMMER, VOLLEY, SNARE, SIGN, FIELD, DRAIN; one active and
-  one passive per style, each deepened by variations and reinforcements it earns from use. The
-  build is two active + two passive slots (a fifth on the trait spine), three keystones, and Vows —
-  restrictions accepted for power that only pays while the build keeps the rule.
+- **Twelve shared skills across six styles** — HAMMER, VOLLEY, SNARE, SIGN, FIELD, DRAIN; one
+  active and one passive per style, each deepened by variations and reinforcements it earns from
+  use. Each champion also has one SIGNATURE skill, and it always fills one of the build's slots. The
+  build is two active and two passive slots, three keystones, and Vows —
+  restrictions accepted for power. Most pay only while the build keeps the rule. Two always pay,
+  and always cost something.
 - **The wave is a question.** Depth is divided into bands; each band leans on an enemy archetype
   (Swarm / Armoured / Caster / Bruiser) and carries an affix that pressures a named answer —
   PLATED thickens armour, WARDED resists yesterday's favourite style, LEGION splits on death. The
   post-run report diagnoses the wall; the loop is build → run → read → build.
-- **Nothing resets.** Six regions conquered in a chain, then the Corruption ratchets. Skill points
-  come from depth (respec free); trait points from conquest and mastery (permanent); learned skills
-  are learned for good.
+- **Nothing resets.** Six regions conquered in a chain, then the Corruption ratchets. Mastery points
+  come from depth, and taking them back is free. Traits are awakened by play and never bought. A
+  skill keeps its levels for good, even when you take it off or give its road back.
 - **Idle buys gear, play buys identity.** The Warren's facilities produce Gleam, Memory Dust and
   forge materials while you are away — unlocked by conquest, level-capped by your own deepest
   descent, so the idle layer multiplies progress and never substitutes for it.
@@ -70,5 +72,5 @@ feature — built, tested green, and never actually reached by a player.
 - `production/audit/refactor-2026-08-31/` — the 2026-08-31 architectural refactor: fourteen area
   audits, adversarial verifications, and the phase log (P1–P16).
 
-**Status: pre-alpha.** The whole loop runs — fight, loot, forge, train, weave, conquer, warren,
+**Status: alpha.** The whole loop runs — fight, loot, forge, train, weave, conquer, warren,
 offline — and ships on itch. Balance past the mid-game is unproven; numbers move between builds.

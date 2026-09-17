@@ -50,15 +50,28 @@ public class TriggerLivenessTests
     }
 
     /// <summary>Total damage dealt to an unkillable, optionally-swinging enemy over the full ceiling.</summary>
+    /// <summary>How many seeded runs <see cref="Output"/> averages — crit is a rolled event.</summary>
+    /// <remarks>
+    /// One seed stopped being a readable number on 2026-09-09. A trigger worth a few percent is
+    /// smaller than one run's crit noise, so a single-seed comparison could report a live trigger as
+    /// dead (and, worse, an inert one as live). Same discipline as <see cref="DamageBench.Runs"/>.
+    /// </remarks>
+    private const int OutputRuns = 24;
+
     private static float Output(Build build, float enemyDamage = 0f)
     {
-        var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
-        var (_, events) = SoloBattle.ResolveWave(
-            champ, build, new Hunter(),
-            enemyHealth: 10_000_000f, enemyDamage: enemyDamage, enemyIntervalMs: 1_000,
-            ExpeditionTuning.Default, new Random(99));
+        var total = 0f;
+        for (var run = 0; run < OutputRuns; run++)
+        {
+            var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+            var (_, events) = SoloBattle.ResolveWave(
+                champ, build, new Hunter(),
+                enemyHealth: 10_000_000f, enemyDamage: enemyDamage, enemyIntervalMs: 1_000,
+                ExpeditionTuning.Default, new Random(99 + run * 7919));
 
-        return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+            total += events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+        return total / OutputRuns;
     }
 
     [Fact]
@@ -246,10 +259,17 @@ public class TriggerLivenessTests
 
         var mods = noSkills.Resolve(new Hunter());
         // MIGHT's and the weapon's multiplier is the basic attack's own (2026-08-26); the shared mods still apply.
-        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * new Hunter().AutoDamageMultiplier * mods.Damage);
+        var plain = SoloBattle.AutoAttackDamage * new Hunter().AutoDamageMultiplier * mods.Damage;
+        var expectedAuto = (int)MathF.Round(plain);
+        // THE SWING CRITS (2026-09-09). Since crit became a rolled event the basic attack rolls too, so
+        // a swing lands at one of exactly TWO sizes and never at a third — which is still the whole
+        // claim: a poisoned swing would land a bleed on top, and no bleed exists at either size.
+        var expectedCrit = (int)MathF.Round(plain * SoloBattle.CritMultiplier(new Hunter()));
 
-        Assert.All(events.Where(e => e.Kind == BattleEventKind.Strike),
-            e => Assert.Equal(expectedAuto, e.Amount));
+        var strikes = events.Where(e => e.Kind == BattleEventKind.Strike).ToList();
+        Assert.All(strikes, e => Assert.Equal(e.Crit ? expectedCrit : expectedAuto, e.Amount));
+        Assert.All(strikes, e => Assert.Equal(HitSource.Swing, e.Hit));
+        Assert.Contains(strikes, e => e.Crit);   // and the base rate really does land some
     }
 
     // ── The rest of the roll-call ─────────────────────────────────────────────────────────────

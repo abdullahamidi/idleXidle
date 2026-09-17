@@ -106,7 +106,7 @@ public static class UiTypography
     /// </remarks>
     public static int PanelTitle => UiMetrics.Text(28);
 
-    /// <summary>The arena's wave line — "WAVE 12 — RECOVERING". A panel title's rung, in the ceremony face.</summary>
+    /// <summary>The arena's wave line — "WAVE 12 — BOSS WAVE". A panel title's rung, in the ceremony face.</summary>
     public static int StageLabel => PanelTitle;
 
     /// <summary>

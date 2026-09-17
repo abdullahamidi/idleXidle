@@ -43,14 +43,23 @@ public class RevealTest
 
         Assert.Empty(Milestone("first wave", facts with { WavesCleared = 1, DeepestWave = 1 }));
         Assert.Equal(new[] { Activity.Training }, Milestone("third wave", facts with { WavesCleared = 3, DeepestWave = 3 }));
-        Assert.Equal(new[] { Activity.Gear }, Milestone("first item", facts with { ItemsOwned = 1 }));
-        Assert.Equal(new[] { Activity.Vault, Activity.Forge }, Milestone("first chest, from the first boss", facts with { WavesCleared = 5, DeepestWave = 5, ChestsEverHeld = 1 }));
+        // ONE ITEM OPENS BOTH, and that is the honest pair: the GEAR screen is where it is worn and the
+        // FORGE is where it is worked. (The Forge used to open on an unopened CHEST, one milestone
+        // earlier, onto a bench with nothing on it.)
+        Assert.Equal(new[] { Activity.Gear, Activity.Forge }, Milestone("first item", facts with { ItemsOwned = 1 }));
+        // THE CHEST OPENS THE VAULT AND NOTHING ELSE. It used to break the FORGE's chain in the same
+        // instant, which is two announcements for one event and a bench with nothing on it.
+        Assert.Equal(new[] { Activity.Vault }, Milestone("first chest, from the first boss", facts with { WavesCleared = 5, DeepestWave = 5, ChestsEverHeld = 1 }));
         var points = MasteryPoints.FromDepth(12);
         Assert.True(points >= Unlocks.MasteryOpensAtPoints, $"depth 12 pays {points}; the tree needs {Unlocks.MasteryOpensAtPoints}");
         Assert.Equal(new[] { Activity.Mastery }, Milestone("depth 12 — the first meaningful points", facts with { WavesCleared = 12, DeepestWave = 12, MasteryPointsEarned = points }));
-        Assert.Equal(new[] { Activity.Build, Activity.Map, Activity.Warren, Activity.Roster },
-                     Milestone("first conquest: a keystone, a region, a hunter", facts with { WavesCleared = 20, DeepestWave = 20, RegionsConquered = 1, KeystonesDiscovered = 1, CharactersUnlocked = 2 }));
+        // THE FIRST CONQUEST BRINGS NO HUNTER (THE ANVIL joins on the second, since 2026-08-26), so the
+        // Roster is not among its screens — it waits for the champion it exists to show.
+        Assert.Equal(new[] { Activity.Build, Activity.Map, Activity.Warren },
+                     Milestone("first conquest: a keystone, a region", facts with { WavesCleared = 20, DeepestWave = 20, RegionsConquered = 1, KeystonesDiscovered = 1, CharactersUnlocked = 1 }));
         Assert.Equal(new[] { Activity.Traits }, Milestone("first characteristic", facts with { TraitsDiscovered = 1 }));
+        Assert.Equal(new[] { Activity.Roster },
+                     Milestone("second conquest: THE ANVIL joins", facts with { WavesCleared = 45, DeepestWave = 20, RegionsConquered = 2, CharactersUnlocked = 2 }));
 
         Assert.Equal(Enum.GetValues<Activity>().OrderBy(a => a), revealed.OrderBy(a => a));
     }
@@ -69,7 +78,7 @@ public class RevealTest
     {
         // GEAR is the one gate that can close: it reads items owned, and a bag can be salvaged empty.
         var revealed = Reveal.Restore(Array.Empty<string>(), new UnlockFacts());
-        Assert.Equal(new[] { Activity.Gear }, Reveal.Newly(revealed, new UnlockFacts(ItemsOwned: 1)));
+        Assert.Equal(new[] { Activity.Gear, Activity.Forge }, Reveal.Newly(revealed, new UnlockFacts(ItemsOwned: 1)));
 
         Assert.Empty(Reveal.Newly(revealed, new UnlockFacts(ItemsOwned: 0)));
         Assert.Contains(Activity.Gear, revealed);
