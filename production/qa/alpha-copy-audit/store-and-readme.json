@@ -1,0 +1,182 @@
+[
+ {
+  "doc": "store-and-readme",
+  "i": 0,
+  "file": "docs/store/store-page.md",
+  "line": 39,
+  "claim": "The Forge upgrades, re-rolls, sockets and breaks down — and asks before it does anything you cannot undo.",
+  "evidence": "src/IdleXIdle.Game/ForgeScreen.cs:1684-1718 (DoRefine) takes the cost and rolls Forge.TryRefine with no question asked. Forge.cs:39-44 and 246-252: from the 6th upgrade an upgrade can slip (6%, rising to 60%). Forge.cs:280-292: a slip drops the item one level and one upgrade, and the cost is not refunded. ForgeScreen.cs:1647 (DoReforgeEnchant) replaces the enchant with no question either. The game asks only before sell, salvage, junk and crush gem (ForgeScreen.cs:891-893, 1508, 1551, 1583, 3524), and the player can turn that question off (AskBeforeScrap, ForgeScreen.cs:1127). The only exception is a worn item. The tab labels are UPGRADE / RE-ROLL / SOCKET / SALVAGE (ForgeScreen.cs:736). The same wrong sentence is in docs/store/itch/description.html.",
+  "replacement": "The Forge upgrades, re-rolls, sockets gems and salvages. It asks before you sell or salvage an item, and before you set or crush a gem. From the sixth upgrade on, an upgrade can slip and drop the item one level and one step. The button shows the chance of success first.",
+  "note": "Confirmed. DoRefine (ForgeScreen.cs:1684-1718) charges the player and rolls Forge.TryRefine without asking. From the 6th upgrade a slip is possible (6% rising to 60%, Forge.cs:41-44, 246-252), it drops the item one level and one upgrade step, and the cost is not refunded (Forge.cs:276-292). DoReforgeEnchant (1647) replaces the enchant without asking. Only sell, salvage and junk ask (and the player can turn that off with AskBeforeScrap, 1127; a worn item always asks), plus setting a gem (_socketAsk, 1139, 3478) and crushing a gem (3524). The tab labels are UPGRADE / RE-ROLL / SOCKET / SALVAGE (736). The proposed replacement is close but has two gaps. It misses that setting a gem also asks, although setting a gem destroys nothing. It also says a slip drops 'one level', but a slip drops one level AND one step; the game's own line is 'A SLIP DROPS ONE LEVEL AND ONE STEP'. description.html has the same wrong sentence."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 1,
+  "file": "docs/store/store-page.md",
+  "line": 109,
+  "claim": "Uploads: upload IDLExIDLE-prealpha-<sha>-win64.zip. Tick Windows as the platform. Label it '... <sha>' so testers can name their build.",
+  "evidence": "This is the old manual zip flow. tools/publish/itch_push.sh:11-16, 34, 41-59 now does the whole upload. It cleans build/release/IDLExIDLE-win64, runs dotnet publish (Release, win-x64, self-contained) into that folder, and copies docs/publisher-notes.md in as README.md. It then starts the exe once and stops if the title does not draw. Last, it runs `butler push <folder> <target>:windows --userversion <sha> --if-changed`, so the git sha is the build version. The last zips in build/release are from 2026-08-24..26. The folder the script pushes is dated 2026-09-08.",
+  "replacement": "2. **Uploads:** run `bash tools/publish/itch_push.sh abdullahamidi/idlexidle` (the channel is `windows` unless you name another). The script builds the game into `build/release/IDLExIDLE-win64`, adds the README, checks that the game opens, and pushes the folder with butler. The build version is the release label plus the git sha (for example `0.1.0-alpha+a6fc3c9`), so testers can name their build. Do not upload a zip by hand. On the Uploads list, check once that the `windows` channel is marked Windows.",
+  "note": "Confirmed. The script now does the whole upload: itch_push.sh cleans build/release/IDLExIDLE-win64, runs dotnet publish into it, copies publisher-notes.md in as README.md, starts the game once and stops if the title does not draw, then runs butler push on the folder with --if-changed. The newest zips in build/release are from Aug 24-26, and the folder is from Sep 8. The line numbers in the evidence are now off by about 5, because the script has uncommitted changes. One point in the replacement is out of date. The script now builds the version from <Version> in Directory.Build.props plus the git sha (USERVERSION, lines 36-38, 64), for example 0.1.0-alpha+sha. So 'the git sha is the build version' is no longer quite right. Note that Directory.Build.props is still untracked, so a clean checkout would stop at line 37 until it is committed."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 2,
+  "file": "docs/store/store-page.md",
+  "line": 12,
+  "claim": "`build/release/IDLExIDLE-prealpha-<sha>-win64.zip` | the self-contained Windows build | `dotnet publish … --self-contained` (see the session log)",
+  "evidence": "tools/publish/itch_push.sh:34 sets OUT=build/release/IDLExIDLE-win64, a FOLDER and not a zip. Lines 45-46 run the publish and line 59 pushes that folder. No step in the current flow makes a zip, and no session log is the source any more.",
+  "replacement": "| `build/release/IDLExIDLE-win64/` | the self-contained Windows build folder that butler pushes | `bash tools/publish/itch_push.sh abdullahamidi/idlexidle` |",
+  "note": "Confirmed. OUT=build/release/IDLExIDLE-win64 is a folder (itch_push.sh:39). The script publishes into it and pushes the folder with butler. Nothing in the current flow makes a zip. The table row (now line 13) still points to the old zip name and to 'the session log'. The replacement is accurate."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 3,
+  "file": "docs/store/store-page.md",
+  "line": 117,
+  "claim": "If you make an itch.io API key ... I will install butler and push every future build with one command (`butler push build/release/IDLExIDLE-win64 <you>/idlexidle:windows --userversion <sha>`).",
+  "evidence": "butler is already installed: itch_push.sh:8-9 and 23-30 use %LOCALAPPDATA%\\butler\\butler.exe and install it if it is missing. The key is read from BUTLER_API_KEY (itch_push.sh:6-7, 31). The one command is now the script. The raw butler line in the doc skips steps the script adds: the clean (lines 41-42), dotnet publish (45), the README copy (50), the smoke boot that refuses a broken build (52-56) and `--if-changed` (59).",
+  "replacement": "**Pushing a new build:** butler is installed and `BUTLER_API_KEY` is set in your user environment. One command builds, checks and pushes: `bash tools/publish/itch_push.sh abdullahamidi/idlexidle`. Do not call `butler push` by hand, because the script also cleans the folder, adds the README and refuses a build that cannot draw its title. The page text and images still need your hands, because itch has no API for them.",
+  "note": "Confirmed. butler.exe is installed in %LOCALAPPDATA%\\butler, and the script installs it if it is missing (lines 25-32). BUTLER_API_KEY is set in the User environment (checked; the value was not printed). The raw `butler push` line in the doc (now line 118) skips the clean, the publish, the README copy, the smoke boot and --if-changed, and uses the old bare-sha version. The replacement is accurate and does not state the version format, so the stamp change does not affect it."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 4,
+  "file": "docs/store/store-page.md",
+  "line": 110,
+  "claim": "Description: paste section 2 (itch's editor takes the paragraphs; bold the lead lines).",
+  "evidence": "This step contradicts the document's own note (store-page.md:27-31): 'itch.io uses docs/store/itch/ instead ... The text below is the older Steam draft.' docs/store/itch/README.md §2 says to paste description.html in HTML mode and place twelve images. Section 2 also still has the wrong Forge sentence and 'you buy it once'.",
+  "replacement": "3. **Description:** paste `docs/store/itch/description.html` in HTML mode, then place its twelve images, as `docs/store/itch/README.md` §2 says. Section 2 in this file is the older Steam draft. Do not paste it on itch.",
+  "note": "Confirmed. Step 3 (now line 111) says to paste section 2 on itch. The doc's own note (lines 28-32) and docs/store/itch/README.md section 2 say itch uses description.html in HTML mode with twelve images, and that section 2 is the older Steam draft. description.html already has its own Turkish block, so the old 'add the Turkish short' step is not needed. The replacement is accurate."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 5,
+  "file": "docs/store/store-page.md",
+  "line": 112,
+  "claim": "Optional banner: Edit theme → Banner → capsules/itch_banner.png. Screenshots → the nine files from section 5 in that order.",
+  "evidence": "docs/store/itch/README.md §1 makes docs/store/itch/header.png (1920×600) the Banner, with the page title hidden, and adds itch/background.png as the page background. capsules/itch_banner.png is 960×300 and is from the 2026-08-24 pack. The nine screenshots are out of date (see the finding on line 11).",
+  "replacement": "5. **Images:** Cover image → `capsules/itch_cover.png` (630×500). Screenshots → the section 5 files, in that order, after you take them again. Banner and background: *Edit theme* → `itch/header.png` (1920×600) and `itch/background.png`, as `docs/store/itch/README.md` §1 says.",
+  "note": "Confirmed. capsules/itch_banner.png is 960x300 (checked the PNG header) and is from commit c1f5dee (2026-08-24). itch/README.md section 1 makes itch/header.png (1920x600, checked) the Banner, with the page title hidden, and itch/background.png (1920x1400) the page background. The nine screenshots are out of date (see finding 6). The replacement is accurate."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 6,
+  "file": "docs/store/store-page.md",
+  "line": 11,
+  "claim": "docs/store/screenshots/ holds nine 1920×1080 screenshots from the capture rig (the ones section 5 and step 5 tell you to upload).",
+  "evidence": "All nine files are 1920×1080, but all of them come from commit c1f5dee (2026-08-24) and show retired game states. fight.png shows 'CONQUEST 0 / 7' (conquest is wave 20 now, Encounters/Checkpoints.cs:11,29), a 'STATS' rail button (now TRAINING, Progression/Unlocks.cs:20-24) and a 'BODY STRIKE' skill. warren.png shows an INSIGHT currency, which was cut on 2026-08-31 (Warrens/Warren.cs:11-14). It also shows 'BREEDING CHAMBER', which is now SOUNDING CHAMBER (Warren.cs:76), and a 131.9M Gleam mock-up number. dust.png shows the deleted trait TREE with 'TRAIT POINTS TO SPEND' and 'FIFTH WEAVE' (Prestige/MemoryDustWallet.cs:28-31, Builds/Build.cs:256-261). buildtree.png shows the directions WEIGHT/SPREAD (they are RESONANCE/LOOT/TEMPO/ENDURE now, Builds/MasteryCatalog.cs:13-26). Current shots look different, for example production/qa/evidence/visual-pass/enemies/capped_marrow_bruiser_100.png.",
+  "replacement": "| `docs/store/screenshots/` | nine 1920×1080 screenshots from the capture rig. The current files are from 2026-08-24 and out of date: take all nine again before you upload. | `bash tools/asset-pipeline/capture.sh <mode> docs/store/screenshots/<mode>.png` |",
+  "note": "Confirmed by opening the files. All nine were last committed in c1f5dee (2026-08-24). fight.png shows 'CONQUEST 0 / 7', a STATS rail tile and BODY STRIKE. dust.png shows the deleted trait tree with 'TRAIT POINTS TO SPEND' and 'FIFTH WEAVE'. warren.png shows the INSIGHT currency, BREEDING CHAMBER and 131.9M Gleam. buildtree.png shows WEIGHT/SPREAD and the old caption. A current capture (capped_marrow_bruiser_100.png) shows 'CONQUEST 1 / 20', TRAINING and the new skill bar. The capture modes still exist: capture.sh, and Game1.cs:2377-2385 maps traits->dust, mastery->buildtree, gear->character. The replacement is accurate."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 7,
+  "file": "docs/store/store-page.md",
+  "line": 91,
+  "claim": "dust.png — the trait tree",
+  "evidence": "The trait tree is deleted (Prestige/MemoryDustWallet.cs:10-15, 28-31). The capture mode 'dust' now opens the TRAITS screen (src/IdleXIdle.Game/Game1.cs:980, Activity.Traits => \"dust\"). That screen is titled TRAITS and says 'TRAITS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH' and '<HUNTER> WEARS THREE' (TraitCollectionScreen.cs:630-636, 682).",
+  "replacement": "6. `dust.png` — the traits screen: the traits you have awakened, and the three this hunter wears",
+  "note": "Confirmed. The trait tree is deleted (MemoryDustWallet.cs:10-15, 28-31). Capture mode 'dust' now opens the TRAITS screen (Game1.cs:980, 2377). That screen says 'TRAITS AWAKEN THROUGH WHAT YOU HAVE LIVED THROUGH', '<NAME> WEARS THREE' and 'WHAT YOU HAVE AWAKENED' (TraitCollectionScreen.cs:636, 682, 731). The replacement is accurate."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 8,
+  "file": "docs/store/store-page.md",
+  "line": 52,
+  "claim": "Weave skills from Source × Style × Vow — 6 sources, 6 styles, 13 vows",
+  "evidence": "The numbers are right: 6 sources (Sources/Source.cs:19), 6 styles (Builds/SkillCatalogue.cs:34-53) and 13 vows (Builds/Vows.cs:441-599). The model is wrong. Skills are no longer built from a Source and a style: 'A slot used to BE a Source and a Form, and the skill was composed from the pair; the Form column died' (Builds/PlayerLoadout.cs:28-32). A skill is now a fixed catalogue entry, and its chosen variation carries the Source (SkillCatalogue.cs:120-125). Vows are a separate layer and not part of a skill.",
+  "replacement": "- Weave a build from 12 shared skills in 6 styles, plus each champion's own skill. A skill's chosen variation gives it one of 6 sources. 13 vows to take on.",
+  "note": "Confirmed. The counts are right: 6 sources (Source.cs:19) and 13 vows (13 vow ids in Vows.cs). The 'Source x Style x Vow' model is wrong. A skill is a fixed catalogue entry with a fixed style, and its Source comes from the variation you choose (SkillVariation.Source; PlayerLoadout.cs:28-32 says 'the Form column died'). So you cannot pair any source with any style. There are also 10 signature skills, one per champion (SkillCatalogue.cs:809-1105), which the bullet leaves out. The proposed replacement ends with a loose fragment, '13 vows.'; the corrected text below fixes that."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 9,
+  "file": "README.md",
+  "line": 23,
+  "claim": "The build is two active + two passive slots (a fifth on the trait spine), three keystones, and Vows",
+  "evidence": "The fifth slot is removed. Builds/Build.cs:256-261 says 'The fifth slot is removed', with SkillSlots = 4. Build.cs:284-287 clamps the capacity at 4 and says 'there is no longer anything in the game that sells a fifth'. Progression/Unlocks.cs:286-290 says 'Four slots is where it STOPS ... the trait tree used to sell a fifth, and it no longer does.' The trait tree itself is deleted (Prestige/MemoryDustWallet.cs:10-15). This line is outside the Status paragraph, but it is in the same README.",
+  "replacement": "build is two active and two passive slots, three keystones, and Vows —",
+  "note": "Confirmed. Build.SkillSlots = 4, and the comment says 'The fifth slot is removed' (Build.cs:256-261). SlotCapacity is capped at 4 with 'there is no longer anything in the game that sells a fifth' (284-287). Unlocks.cs:286-288 agrees, and the trait tree is deleted. KeystoneSlots = 3 (Build.cs:615), so 'three keystones' is still right. The replacement starts with 'build is' because it continues the wrapped README line 22, which ends in 'The'."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 10,
+  "file": "README.md",
+  "line": 30,
+  "claim": "Skill points come from depth (respec free); trait points from conquest and mastery (permanent); learned skills are learned for good.",
+  "evidence": "Trait points are gone: 'TRAIT POINTS are gone with the tree ... nothing spends them now' (Prestige/MemoryDustWallet.cs:28-31, also Progression/Unlocks.cs:72-77). Traits are awakened by play (Traits/TraitCatalogue.cs, 26 entries). The depth points are called MASTERY points (Builds/MasteryPoints.cs:36-46; UI line 'Earn three mastery points by going deeper', Unlocks.cs:221). Learned skills are NOT kept for good any more. Builds/MasteryTree.cs:145-155 says the permanent _learned set was removed ('ACCESS IS TEMPORARY. EXPERIENCE IS PERMANENT.'). AvailableSkills (MasteryTree.cs:317) is exactly what the taken nodes teach, so a refunded road takes the skill away. Only the skill's levels stay (SkillProgress.cs:18-22). This line is outside the Status paragraph.",
+  "replacement": "- **Nothing resets.** Six regions conquered in a chain, then the Corruption ratchets. Mastery points come from depth, and taking them back is free. Traits are awakened by play and never bought. A skill keeps its levels for good, even when you take it off or give its road back.",
+  "note": "Confirmed on all three points. (1) Trait points are gone (MemoryDustWallet.cs:28-31). UnlockFacts now counts TraitsDiscovered (Unlocks.cs:71-77). (2) Depth pays mastery points (MasteryPoints.FromDepth; UI text 'Earn three mastery points by going deeper'), and respec is free (MasteryTree.cs:135, Respec/Refund). (3) Learned skills are not kept for good. MasteryTree removed _learned ('ACCESS IS TEMPORARY. EXPERIENCE IS PERMANENT.', 145-155). BuildComposer.cs:166-174 lets a champion weave only AvailableSkills() plus its signature. save.LearnedSkills now only records which skills you have ever seen, so the Build screen can name them; it grants no access (Game1.cs:1186-1195, 1543-1546). Skill levels do stay (SkillProgress 'Levels are never lost'). The replacement is accurate and plain."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 11,
+  "file": "docs/store/store-page.md",
+  "line": 31,
+  "claim": "Its copy is the current one (conquest at wave twenty, checkpoints paid in Memory Dust, trait points, five classes). [line 29: '... the six forms ...']",
+  "evidence": "Trait points no longer exist (Prestige/MemoryDustWallet.cs:28-31), and docs/store/itch/description.html does not mention them. 'Forms' is the retired name: Style replaced Form (Builds/SkillCatalogue.cs:14-19; PlayerLoadout.cs:28-30 'the Form column died'). The rest is correct: conquest is wave 20 (Checkpoints.cs:29), checkpoints cost 25 Dust per skipped wave (Checkpoints.cs:35), and there are five classes (CharacterRoster.cs:252-255).",
+  "replacement": "(line 29) '... section headers, the six styles, the five classes with their ten champions, the six regions ...' / (line 31) '(conquest at wave twenty, checkpoints paid in Memory Dust, traits you awaken by playing, five classes)'",
+  "note": "Confirmed. Trait points no longer exist, and description.html never mentions them, so saying its copy covers 'trait points' is wrong. 'Forms' is the retired name. The strip file is still called forms.png, but its alt text in description.html reads 'The six styles'. The other items check out: conquest is at wave 20 and checkpoints cost 25 Dust per skipped wave (Checkpoints.cs:29, 35). The replacement is fine. Note that the sentence still calls description.html 'the current one', which only becomes true once findings 0 and 14 are also fixed in description.html."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 12,
+  "file": "docs/store/store-page.md",
+  "line": 37,
+  "claim": "Twelve skills across six styles ... each carrying a SOURCE, and each deepened by a variation and two of its three reinforcements as it levels from use.",
+  "evidence": "There are 12 SHARED skills, one active and one passive per style (SkillCatalogue.cs:390-751). But SkillCatalogue.All holds 22 entries, because there are also 10 SIGNATURE skills, one per champion (SkillCatalogue.cs:804-1105, OwnerCharacterId; CharacterRoster.cs SignatureSkillId). A reviewer who counts the catalogue will doubt 'twelve'. 'A variation and two of three' is correct: SkillProgress.MaxLevel = 3 since 2026-09-09 (SkillProgress.cs:43-67). A skill's Source comes from its chosen variation (SkillCatalogue.cs:120-125).",
+  "replacement": "Twelve shared skills across six styles — HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds — and one signature skill for each champion. As a skill levels from use, you choose one of its two variations, which gives it a SOURCE. Then you choose two of that variation's three reinforcements.",
+  "note": "The evidence holds. SkillCatalogue.All has 22 entries: 12 shared skills plus 10 signature skills, one per champion, each with OwnerCharacterId. Signature skills have their own style, variations and reinforcements, and sit in a slot that cannot be removed (PlayerLoadout.SignatureSlot), so every player sees one. 'Twelve skills' leaves out a feature every player meets. 'Each carrying a SOURCE' describes the old model; the chosen variation now gives the Source. 'A variation and two of its three reinforcements' is right (MaxLevel = 3). The replacement is accurate and clearer."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 13,
+  "file": "docs/store/store-page.md",
+  "line": 37,
+  "claim": "Add Vows — rules you accept for extra power that only pay while your build keeps the rule",
+  "evidence": "11 of the 13 vows are Demand vows and pay only while the rule holds. Two are StaticCost vows, VOW OF FRAGILITY and RECKLESS OFFERING (Builds/Vows.cs:585-599). Those two always pay and always cost you something: IsActive returns true for StaticCost (Vows.cs:621-624).",
+  "replacement": "Add Vows — rules you accept for extra power. Most pay only while your build keeps the rule. Two always pay, and always cost you something.",
+  "note": "Confirmed. VOW OF FRAGILITY and RECKLESS OFFERING are StaticCost vows (Vows.cs:585, 599). Their text reads 'ALWAYS ON', and IsActive returns true for StaticCost (Vows.cs:624). So 'only pay while your build keeps the rule' is false for 2 of the 13. The replacement is accurate. README line 24 repeats the same phrase, which is outside this finding."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 14,
+  "file": "docs/store/store-page.md",
+  "line": 35,
+  "claim": "When it falls, it gets back up and pushes on. Nothing is banked, nothing is lost.",
+  "evidence": "A fall does not continue the same descent. It starts a new one with a fresh champion: 'A NEW DESCENT IS A NEW CHAMPION' (Expeditions/Descent.cs:119-148, after DownedSeconds = 1.6, Descent.cs:55). The new descent starts at Math.Max(StartWave, FreeStartWave), which means wave 1 or a checkpoint paid for in Dust (HuntScreen.cs:1369-1406). The rest of the sentence is correct: every wave pays when it clears (Descent.cs:172-177), so nothing earned is lost. The same sentence is in docs/store/itch/description.html.",
+  "replacement": "When it falls, it gets back up and starts again, from the first wave or from a checkpoint you paid for. What it earned stays earned.",
+  "note": "Confirmed. A fall does not continue the same descent. HuntScreen.StartRun mints a new champion ('A NEW DESCENT IS A NEW CHAMPION') and starts at Math.Max(StartWave, FreeStartWave) (HuntScreen.cs:1406). StartWave is the checkpoint, which costs Dust on every descent. FreeStartWave is a one-time resume after time away, used for one descent only (HuntScreen.cs:326-334). So after a fall, the next descent starts at wave 1 or at a paid checkpoint. Every wave pays as soon as it clears (Descent.PushWave), so 'what it earned stays earned' is right. The replacement is accurate. description.html has the same sentence."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 16,
+  "file": "docs/store/store-page.md",
+  "line": 57,
+  "claim": "Warren: idle production of three currencies while you are away (also line 43: 'Facilities produce Gleam, Memory Dust and Forge materials')",
+  "evidence": "The Warren makes FOUR resources: WarrenResource { Gleam, Dust, Scrap, Essence } (Warrens/Warren.cs:16). The eight facilities split into 2 Gleam, 2 Dust, 2 Scrap and 2 Essence (Warren.cs:67-77). 'Three currencies' only works if Scrap and Essence count as one. The Warren opens on the first conquest (Unlocks.cs:189), and more facilities open with each conquest (Warren.cs:75, 2 + conquered).",
+  "replacement": "- Warren: eight facilities make Gleam, Memory Dust and Forge materials, while you play and while you are away. (Leave line 44 as it is: 'Forge materials' already covers Scrap and Essence.)",
+  "note": "Partly right. WarrenResource has four members: Gleam, Dust, Scrap, Essence (Warren.cs:16), and the code itself calls them 'the currencies the Warren's facilities produce'. 'Three currencies' is left over from the Gleam/Insight/Dust Warren; INSIGHT was cut on 2026-08-31, and the old warren.png still shows it. So the line 58 bullet is wrong. Line 44, 'Gleam, Memory Dust and Forge materials', is already correct, because Scrap and Essence are the Forge materials, and it is plainer for a store reader. It does not need to change. Also, the Warren produces during play as well as while you are away (Game1.TickWarren runs every frame once the Warren is open)."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 20,
+  "file": "docs/store/store-page.md",
+  "line": 64,
+  "claim": "itch.io tags include `pixel-art`; Steam tags include Pixel Graphics and Clicker",
+  "evidence": "The newer itch kit (docs/store/itch/README.md §3) drops `pixel-art` from the same list. .claude/docs/technical-preferences.md (UPDATED 2026-07-29) says the render pipeline moved to hand-drawn art with LinearClamp, and 'pixel art is no longer the house style'. Current shots still show pixel-art arena backgrounds, so the art is mixed and the tag is a judgment call. 'Clicker' does not fit: no click earns anything, and the fight is fully automatic (Unlocks.cs:15-16, Activity.Hunt; OfflineHunt).",
+  "replacement": "- **Steam tags (pick up to 20 later):** Idler, Auto Battler, RPG, Pixel Graphics, Dark Fantasy, Singleplayer, Loot, Character Customization, Strategy, Casual, Relaxing, 2D, Indie, Early Access (no Clicker: nothing in the game is earned by clicking). Keep `pixel-art` in the itch list: the arena, enemies and bosses are PixelLab pixel art (`design/art/arena-art-contract.md`). docs/store/itch/README.md section 3 leaves it out and should add it back.",
+  "note": "Only the 'Clicker' part holds. The main claim, that `pixel-art` / Pixel Graphics is stale, is refuted. design/art/arena-art-contract.md (2026-08-22, AUTHORITATIVE for every figure on the HUNT stage) generates the champion, enemies and bosses with PixelLab. A current capture (capped_marrow_bruiser_100.png) shows pixel-art arena backgrounds and pixel-art enemies. The 2026-07-29 note in technical-preferences.md came before that contract. So the pixel-art tags describe what the game looks like today. 'Clicker' is wrong: the fight is fully automatic and clicking earns nothing ('You never swing the sword')."
+ },
+ {
+  "doc": "store-and-readme",
+  "i": 22,
+  "file": "docs/store/store-page.md",
+  "line": 23,
+  "claim": "Turkish short description block (implies a Turkish-reading audience can play)",
+  "evidence": "The game has no Turkish interface. A search of src finds no localisation or language setting, and all UI strings are English literals (e.g. Unlocks.cs:211-271). The current itch copy ends its Turkish block with 'Türkçe arayüz yolda.' (docs/store/itch/description.html). This block does not, so a Turkish reader could expect a Turkish game.",
+  "replacement": "  > Çevrimdışı bir idle otomatik-savaş oyunu. Şampiyonun dalgaları kendi başına temizler — oyun kapalıyken bile. Kılıcı sen sallamazsın: build'i sen örer, ekipmanı sen dövmede işler, dünya zorlaştıkça hangi yolu yürüyeceğine sen karar verirsin. Oyun şimdilik yalnızca İngilizce; Türkçe arayüz yolda.",
+  "note": "The mismatch is real. The game has no Turkish interface (no localisation code; all UI strings are English literals). The Turkish block (line 24) describes the game in Turkish and never says it is English only. The live itch copy (description.html) ends its Turkish block with 'Türkçe arayüz yolda.', and line 68 of this doc says 'Turkish to follow', so the promise matches the stated plan. The replacement's Turkish is correct. The replacement abbreviates the unchanged text with '...', so the full line is given below."
+ }
+]

@@ -897,7 +897,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        Window.Title = "IDLExIDLE — pre-alpha";
+        Window.Title = "IDLExIDLE — alpha";
     }
 
     // ── Persistence. For an idle game this is not plumbing — it IS the game. ──────────────────

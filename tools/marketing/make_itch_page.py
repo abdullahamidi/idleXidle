@@ -13,7 +13,7 @@ Outputs docs/store/itch/:
   section_<key>.png       1200 x 150   one ornate section header per body section (icon + title + rule)
   classes.png             1200 x 400   the five classes, their colours and their two champions as portraits
   regions.png             1200 x 300   the six regions in order
-  forms.png               1200 x 260   the six skill FORMS
+  forms.png               1200 x 260   the six skill STYLES (drawn with the Form-era icons)
   footer.png              1200 x 170   MADE BY ONE PERSON · OFFLINE · NO ACCOUNT · NO ADS
 
 Usage: python tools/marketing/make_itch_page.py
@@ -23,6 +23,11 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 OUT = 'docs/store/itch'
 FONT_TITLE = 'assets/fonts/Cinzel.ttf'
+# The page kit's body face is IBM Plex Sans Condensed, which left assets/fonts on 2026-09-09 (b46188a,
+# when the game moved to Spectral). A re-bake needs the two files back, e.g.
+#   git show b46188a~1:assets/fonts/IBMPlexSansCondensed-SemiBold.ttf > <somewhere>/…SemiBold.ttf
+# and FreeType cannot open a path with non-ASCII characters on Windows, so hand ImageFont.truetype the
+# bytes (io.BytesIO). The 2026-09-17 alpha re-bake did exactly that for the seven strips it changed.
 FONT_BODY = 'assets/fonts/IBMPlexSansCondensed-SemiBold.ttf'
 FONT_BODY_REG = 'assets/fonts/IBMPlexSansCondensed-Regular.ttf'
 
@@ -272,7 +277,7 @@ def header() -> Image.Image:
     img.alpha_composite(logo, pos)
     tag = gold_text('YOUR CHAMPION FIGHTS WHILE YOU ARE AWAY', 34)
     centre(img, tag, w // 2, pos[1] + logo.height + 40)
-    sub = plain_text('AN OFFLINE IDLE AUTO-BATTLER  ·  PRE-ALPHA', 24, VELLUM_DIM)
+    sub = plain_text('AN OFFLINE IDLE AUTO-BATTLER  ·  ALPHA', 24, VELLUM_DIM)
     centre(img, sub, w // 2, pos[1] + logo.height + 86)
     dv = divider(560, 22)
     centre(img, dv, w // 2, h - 40)
@@ -341,12 +346,14 @@ def classes_strip() -> Image.Image:
     """1200x400: five class badges, the class colour as a bar, the two champions as portraits."""
     h = 400
     img = card(W, h)
+    # (id, NAME, how it joins). THE SEEKER is the starter (CharacterRoster: CharacterUnlock.Start);
+    # the other four firsts each need their own region conquered; every second is a quest.
     classes = [
-        ('warden', 'WARDEN', ('anvil', 'THE ANVIL'), ('tower', 'THE FALLING TOWER')),
-        ('ranger', 'RANGER', ('chorus', 'THE CHORUS'), ('oathbound', 'THE OATHBOUND')),
-        ('mystic', 'MYSTIC', ('metronome', 'THE METRONOME'), ('quiver', 'THE QUIVER')),
-        ('bulwark', 'BULWARK', ('unbroken', 'THE UNBROKEN'), ('thornwall', 'THE THORNWALL')),
-        ('wanderer', 'WANDERER', ('seeker', 'THE SEEKER'), ('magpie', 'THE MAGPIE')),
+        ('warden', 'WARDEN', ('anvil', 'THE ANVIL', 'CONQUEST'), ('tower', 'THE FALLING TOWER', 'QUEST')),
+        ('ranger', 'RANGER', ('chorus', 'THE CHORUS', 'CONQUEST'), ('oathbound', 'THE OATHBOUND', 'QUEST')),
+        ('mystic', 'MYSTIC', ('metronome', 'THE METRONOME', 'CONQUEST'), ('quiver', 'THE QUIVER', 'QUEST')),
+        ('bulwark', 'BULWARK', ('unbroken', 'THE UNBROKEN', 'CONQUEST'), ('thornwall', 'THE THORNWALL', 'QUEST')),
+        ('wanderer', 'WANDERER', ('seeker', 'THE SEEKER', 'START'), ('magpie', 'THE MAGPIE', 'QUEST')),
     ]
     cw = (W - 80) // 5
     for i, (key, name, first, second) in enumerate(classes):
@@ -358,14 +365,14 @@ def classes_strip() -> Image.Image:
         centre(img, gold_text(name, 26), cx, 140)
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([cx - 56, 162, cx + 56, 166], radius=2, fill=colour + (255,))
-        for j, (cid, cname) in enumerate((first, second)):
+        for j, (cid, cname, how) in enumerate((first, second)):
             px = cx - 54 + j * 108
             centre(img, portrait(cid, 86, colour), px, 228)
             rest = cname[4:] if cname.startswith('THE ') else cname
             centre(img, plain_text('THE', 11, VELLUM_DIM, FONT_BODY_REG), px, 284)
             centre(img, plain_text(rest, 15, VELLUM), px, 302)
-            centre(img, plain_text('CONQUEST' if j == 0 else 'QUEST', 12, colour, FONT_BODY), px, 326)
-    centre(img, plain_text('THE FIRST OF EACH CLASS OPENS BY CONQUEST  ·  THE SECOND BY A QUEST', 16, VELLUM_DIM, FONT_BODY_REG), W // 2, 364)
+            centre(img, plain_text(how, 12, colour, FONT_BODY), px, 326)
+    centre(img, plain_text('THE SEEKER FROM THE START  ·  FOUR BY CONQUEST  ·  FIVE BY A QUEST', 16, VELLUM_DIM, FONT_BODY_REG), W // 2, 364)
     return img
 
 
@@ -402,16 +409,18 @@ def regions_strip() -> Image.Image:
 
 
 def forms_strip() -> Image.Image:
-    """1200x260: the six FORMS a skill can take — the half of Source x Form that has icons."""
+    """1200x260: the six STYLES a skill can have, on the icons the game draws them with."""
     h = 260
     img = card(W, h)
+    # (icon, STYLE, what it does). The icons keep their Form-era file names; the game reads each one as
+    # the style next to it (StyleAffinityDiagram.IconKey). Order matches the page's alt text.
     forms = [
-        ('strike', 'STRIKE', 'hits what is in reach'),
-        ('projectile', 'PROJECTILE', 'reaches the back row'),
-        ('aura', 'AURA', 'hurts everything, always'),
-        ('trap', 'TRAP', 'waits, then bites'),
-        ('mark', 'MARK', 'sets a target up'),
-        ('transformation', 'TRANSFORMATION', 'you become the weapon'),
+        ('strike', 'HAMMER', 'one huge blow'),
+        ('projectile', 'VOLLEY', 'many small hits'),
+        ('trap', 'SNARE', 'being hit works for you'),
+        ('mark', 'SIGN', 'boosts everything else'),
+        ('aura', 'FIELD', 'hits every enemy, always'),
+        ('transformation', 'DRAIN', 'turns damage into health'),
     ]
     cw = (W - 60) // 6
     for i, (key, name, line) in enumerate(forms):
@@ -436,13 +445,14 @@ def footer() -> Image.Image:
 
 
 SECTIONS = [
-    ('fight', 'THE FIGHT RUNS ITSELF', f'{ICONS}/nav/nav_hunt.png', 'On every screen — and while the game is closed.', False),
-    ('build', 'WEAVE A BUILD, NOT A ROTATION', f'{ICONS}/forms/icon_form_aura.png', 'Source × Form × Vow, then a Mastery tree that decides how it fights.', True),
-    ('forge', 'A FORGE THAT READS HONESTLY', f'{ICONS}/nav/icon_nav_forge.png', 'Every item shows its real numbers. It asks before anything you cannot undo.', True),
+    ('fight', 'THE FIGHT RUNS ITSELF', f'{ICONS}/nav/nav_hunt.png', 'On every screen — and for hours after you leave.', False),
+    ('build', 'WEAVE A BUILD, NOT A ROTATION', f'{ICONS}/forms/icon_form_aura.png', 'Skills, keystones and Vows. Then a Mastery tree decides how it fights.', True),
+    ('forge', 'A FORGE THAT READS HONESTLY', f'{ICONS}/nav/icon_nav_forge.png', 'Every item shows its real numbers. Every upgrade shows its chance.', True),
     ('world', 'SIX REGIONS, CONQUERED AT WAVE TWENTY', f'{ICONS}/regions/icon_region_umbral.png', 'Past the twentieth wave the counter reads OVERWAVE — and Memory Dust buys a head start.', False),
     ('champions', 'TEN CHAMPIONS, FIVE CLASSES', 'portrait:seeker', 'One always-on passive each. The second of every class must be earned.', False),
-    ('warren', 'A WARREN THAT WORKS WHILE YOU SLEEP', f'{ICONS}/nav/icon_nav_warren.png', 'Gleam and Memory Dust, produced while you are away.', True),
-    ('traits', 'TRAITS THAT NEVER RESET', f'{ICONS}/roads/icon_road_ruin.png', 'Four roads, fifty-one traits — and a capstone that closes the other three forever.', True),
+    ('warren', 'A WARREN THAT WORKS WHEN YOU LEAVE', f'{ICONS}/nav/icon_nav_warren.png', 'Gleam and Memory Dust, produced while you are away.', True),
+    ('traits', 'TRAITS YOU AWAKEN', f'{ICONS}/nav/nav_prestige.png',   # the TRAITS rail tile's own icon (roads are gone)
+     'Twenty-six of them, earned by how you play. Wear three. Change them for free.', True),
 ]
 
 

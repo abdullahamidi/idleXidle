@@ -56,11 +56,12 @@ screenshot sidebar in gold, and dims the itch chrome. The page does not depend o
 - **Tags:** `idle`, `auto-battler`, `incremental`, `rpg`, `singleplayer`, `offline`, `dark-fantasy`,
   `build-crafting`, `monogame` · Genre *Strategy* · Made with *MonoGame* · Inputs *Keyboard, Mouse*
   · Average session *A few minutes*.
-- Community: comments **on**; pin one asking for the **COPY FEEDBACK CODE** (Escape → Settings).
+- Community: comments **on**; pin one asking for the **COPY FEEDBACK CODE** (during play, Escape or the gear at the
+  top right opens SETTINGS; on the title screen, Escape quits the game).
 
 ## 4. Keeping it current
 
 Every strip is baked from the catalogues by hand-written lists in `make_itch_page.py` (the ten
-champions, the six regions, the six forms). When a champion, region or form is added, add it there
+champions, the six regions, the six styles). When a champion, region or style is added, add it there
 and re-run — the page has no other source of truth. The copy in `description.html` is the page's;
 `../store-page.md` §2 still holds the older Steam draft and says so.

@@ -1,6 +1,7 @@
 # IDLExIDLE — Store Page Pack
 
-Everything a store page needs, ready to paste. Written for the itch.io pre-alpha page first and
+Everything a store page needs, ready to paste. Written for the itch.io pre-alpha page first (now the
+alpha page, since 2026-09-17) and
 reused for the Steam page later (the copy is the same; only the asset sizes differ).
 
 Assets live beside this file:
@@ -8,8 +9,8 @@ Assets live beside this file:
 | Folder | What | Made by |
 |---|---|---|
 | `docs/store/capsules/` | every capsule at the sizes Steam and itch.io require | `python tools/marketing/make_capsules.py` |
-| `docs/store/screenshots/` | nine 1920×1080 screenshots from the capture rig | `bash tools/asset-pipeline/capture.sh <mode> docs/store/screenshots/<mode>.png` |
-| `build/release/IDLExIDLE-prealpha-<sha>-win64.zip` | the self-contained Windows build | `dotnet publish … --self-contained` (see the session log) |
+| `docs/store/screenshots/` | nine 1920×1080 screenshots from the capture rig. The current files are from 2026-08-24 and out of date: take all nine again before you upload. | `bash tools/asset-pipeline/capture.sh <mode> docs/store/screenshots/<mode>.png` |
+| `build/release/IDLExIDLE-win64/` | the self-contained Windows build folder that butler pushes | `bash tools/publish/itch_push.sh abdullahamidi/idlexidle` |
 
 ---
 
@@ -20,23 +21,23 @@ Assets live beside this file:
 - **Short description (itch "short text" / Steam short description, ≤ 300 characters):**
   > An offline idle auto-battler. Your champion clears waves on its own — even while the game is closed. You never swing the sword: you weave the build, forge the gear, and choose which road to walk when the world grows harder. Nothing is banked, nothing is lost.
 - **Turkish short (itch.io lets you add a second language block):**
-  > Çevrimdışı bir idle otomatik-savaş oyunu. Şampiyonun dalgaları kendi başına temizler — oyun kapalıyken bile. Kılıcı sen sallamazsın: build'i sen örer, ekipmanı sen dövmede işler, dünya zorlaştıkça hangi yolu yürüyeceğine sen karar verirsin.
+  > Çevrimdışı bir idle otomatik-savaş oyunu. Şampiyonun dalgaları kendi başına temizler — oyun kapalıyken bile. Kılıcı sen sallamazsın: build'i sen örer, ekipmanı sen dövmede işler, dünya zorlaştıkça hangi yolu yürüyeceğine sen karar verirsin. Oyun şimdilik yalnızca İngilizce; Türkçe arayüz yolda.
 
 ## 2. Long description (the page body)
 
 > **itch.io uses `docs/store/itch/` instead (2026-08-26).** That folder holds the styled page: the
-> banner, the page background, twelve baked strips (the loop, section headers, the six forms, the
+> banner, the page background, twelve baked strips (the loop, section headers, the six styles, the
 > five classes with their ten champions, the six regions), the paste-ready `description.html`, the
 > theme colours and a `custom.css`. Its copy is the current one (conquest at wave twenty, checkpoints
-> paid in Memory Dust, trait points, five classes). The text below is the older Steam draft.
+> paid in Memory Dust, traits you awaken by playing, five classes). The text below is the older Steam draft.
 
 > **The fight runs itself. The choices are yours.**
 >
-> Your champion stands in the arena and fights wave after wave — on every screen, and while the game is closed. Every wave it clears pays out at once. Every fifth is a boss. When it falls, it gets back up and pushes on. Nothing is banked, nothing is lost.
+> Your champion stands in the arena and fights wave after wave — on every screen, and while the game is closed. Every wave it clears pays out at once. Every fifth is a boss. When it falls, it gets back up and starts again, from the first wave or from a checkpoint you paid for. What it earned stays earned.
 >
-> **Weave a build, not a rotation.** Twelve skills across six styles — HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds — each carrying a SOURCE, and each deepened by a variation and two of its three reinforcements as it levels from use. Add Vows — rules you accept for extra power that only pay while your build keeps the rule — and Keystones that trade one thing for another. Then a Mastery tree of four directions and six Specialisations decides how your skills fight.
+> **Weave a build, not a rotation.** Twelve shared skills across six styles — HAMMER crushes, VOLLEY rains, SNARE answers, SIGN amplifies, FIELD ticks, DRAIN feeds — and one SIGNATURE skill for each champion. As a skill levels from use, you choose one of its two variations, which gives it a SOURCE. Then you choose two of that variation's three reinforcements. Add Vows — rules you accept for extra power. Most pay only while your build keeps the rule. Two always pay, and always cost you something. Add Keystones that trade one thing for another. Then a Mastery tree of four directions and six Specialisations decides how your skills fight.
 >
-> **Gear that reads honestly.** Every item shows its real numbers. The Forge upgrades, re-rolls, sockets and breaks down — and asks before it does anything you cannot undo.
+> **Gear that reads honestly.** Every item shows its real numbers. The Forge upgrades, re-rolls, sockets gems and salvages. It asks before you sell or salvage an item, unless you switch that question off. It always asks before you set or crush a gem. From the sixth upgrade on, an upgrade can slip and drop the item one level and one step. The button shows the chance of success first.
 >
 > **A world that gets harder on purpose.** Six regions, each clearly tougher than the last. Deepen the Corruption for richer rewards and enemies that wear it. Climb back down when it bites.
 >
@@ -49,12 +50,12 @@ Assets live beside this file:
 ### Bullet list (Steam "About this game" feature list / itch page sidebar)
 
 - Auto-battler that keeps fighting while the game is closed
-- Weave skills from Source × Style × Vow — 6 sources, 6 styles, 13 vows
+- Weave a build from 12 shared skills in 6 styles, plus each champion's own SIGNATURE skill. A skill's chosen variation gives it one of 6 sources. Choose from 13 vows.
 - 10 champions, each with an always-on passive that reshapes your build
 - Mastery tree: four directions, six Specialisations, one discipline per hunter
 - A forge with upgrades, re-rolls, sockets and gems — every stat shown in real numbers
 - Six regions, a five-rung Corruption ladder you can climb up and down
-- Warren: idle production of three currencies while you are away
+- Warren: eight facilities make Gleam, Memory Dust and Forge materials, while you play and while you are away
 - 26 characteristics that awaken from what you have done — three worn at a time
 - Offline. No account. No ads. No in-game purchases.
 
@@ -62,12 +63,13 @@ Assets live beside this file:
 
 - **Genre:** Idle · Auto-battler · RPG · Strategy
 - **itch.io tags:** `idle`, `auto-battler`, `incremental`, `pixel-art`, `rpg`, `singleplayer`, `offline`, `dark-fantasy`, `build-crafting`, `monogame`
-- **Steam tags (pick up to 20 later):** Idler, Auto Battler, Clicker, RPG, Pixel Graphics, Dark Fantasy, Singleplayer, Loot, Character Customization, Strategy, Casual, Relaxing, 2D, Indie, Early Access
+- **Steam tags (pick up to 20 later):** Idler, Auto Battler, RPG, Pixel Graphics, Dark Fantasy, Singleplayer, Loot, Character Customization, Strategy, Casual, Relaxing, 2D, Indie, Early Access (no Clicker: nothing in the game is earned by clicking).
+- **Keep `pixel-art` in the itch list.** The arena, the enemies and the bosses are pixel art (`design/art/arena-art-contract.md`). The tag list in `docs/store/itch/README.md` §3 leaves it out and should add it back.
 - **Steam features:** Single-player · Steam Cloud (later) · Family Sharing
 - **Languages:** English (interface, full audio N/A — no voice) — Turkish to follow
 - **Age rating:** stylised fantasy violence, no blood, no text chat → PEGI 7 / ESRB E10+ territory (fill the questionnaire honestly)
 - **Developer / Publisher:** your name or studio name
-- **Release state:** Pre-alpha (itch, restricted) → Early Access (Steam)
+- **Release state:** Alpha (itch; pre-alpha until 2026-09-17) → Early Access (Steam)
 
 ## 4. System requirements (Windows, self-contained build)
 
@@ -88,14 +90,14 @@ Assets live beside this file:
 3. `forge.png` — the four-tab forge with the materials wallet
 4. `buildtree.png` — the mastery tree with its four direction headers
 5. `map.png` — the world map and the corruption ladder
-6. `dust.png` — the trait tree
+6. `dust.png` — the traits screen: the traits you have awakened, and the three this hunter wears
 7. `character.png` — gear screen
 8. `warren.png` — the warren dashboard
 9. `title.png` — the title screen (last, not first — the logo is already on the capsule)
 
 ## 6. Pricing (from `design/monetization.md`)
 
-- itch.io pre-alpha: **no payments** (restricted / password page), "Donate" off.
+- itch.io alpha: **no payments** (restricted / password page), "Donate" off.
 - Steam Early Access: $6.99 → 1.0 at $9.99; regional matrix; parity across stores.
 
 ---
@@ -105,16 +107,23 @@ Assets live beside this file:
 1. **Create the project:** itch.io → Dashboard → *Create new project*.
    - Title: `IDLExIDLE` · Project URL: `idlexidle` · Classification: *Games* · Kind: *Downloadable*.
    - Short description / tagline: section 1.
-   - Pricing: *No payments* (pre-alpha).
-2. **Uploads:** upload `IDLExIDLE-prealpha-<sha>-win64.zip`. Tick **Windows** as the platform. Label it `Pre-alpha — <sha>` so testers can name their build.
-3. **Description:** paste section 2 (itch's editor takes the paragraphs; bold the lead lines). Add the Turkish short under a `---` line if you want a TR block.
+   - Pricing: *No payments* (alpha).
+2. **Uploads:** run `bash tools/publish/itch_push.sh abdullahamidi/idlexidle`. It needs `BUTLER_API_KEY` in your environment. The channel is `windows` unless you name another. The script does the whole upload, in this order:
+   - It empties `build/release/IDLExIDLE-win64`.
+   - It publishes the game into that folder as a self-contained Windows build (`win-x64`). Players need nothing else installed.
+   - It copies `docs/publisher-notes.md` into the folder as `README.md`.
+   - It starts the game once. If the title screen does not draw, it stops and uploads nothing.
+   - It pushes the folder with butler to the `windows` channel.
+
+   The build version is `0.1.0-alpha+` and the first 8 characters of the commit id, for example `0.1.0-alpha+a6fc3c9d`. The `0.1.0-alpha` part comes from `Directory.Build.props`. The game's BUILD line, in Settings and on the title screen, shows the same stamp, so testers can name their build. Old pre-alpha builds look different. On itch.io, their version is only the commit id. In the game, their BUILD line shows `1.0.0+` and the commit id. Do not upload a zip by hand. On the Uploads list, check once that the `windows` channel is marked **Windows**.
+3. **Description:** paste `docs/store/itch/description.html` in HTML mode, then place its twelve images, as `docs/store/itch/README.md` §2 says. Section 2 in this file is the older Steam draft. Do not paste it on itch.
 4. **Metadata:** Genre *Strategy* (itch has no Idle genre), tags from section 3, *Made with: MonoGame*, *Average session: A few minutes* (idle games are checked in on), *Inputs: Keyboard, Mouse*, *Accessibility: color-blind friendly* only if you believe it.
-5. **Images:** Cover image → `capsules/itch_cover.png` (630×500). Screenshots → the nine files from section 5 in that order. Optional banner: *Edit theme → Banner* → `capsules/itch_banner.png`.
+5. **Images:** Cover image → `capsules/itch_cover.png` (630×500). Screenshots → the section 5 files, in that order, after you take them again. Banner and background: *Edit theme* → `itch/header.png` (1920×600) and `itch/background.png`, as `docs/store/itch/README.md` §1 says.
 6. **Visibility & access:** *Restricted* + a password (send `https://<you>.itch.io/idlexidle?password=<pw>` to testers — the password prefills), or *Draft* while you type. Switch to *Public* only when you want strangers.
 7. **Community:** turn comments **on** — the cheapest feedback channel you have — and pin one comment asking testers to paste their **COPY FEEDBACK CODE** (Settings in-game).
 8. Save → View page → check it on a phone width too (itch traffic is very mobile).
 
-**Handing me the uploads:** if you make an itch.io API key (Settings → API keys), tell me the key exists in the environment as `BUTLER_API_KEY` and I will install butler and push every future build with one command (`butler push build/release/IDLExIDLE-win64 <you>/idlexidle:windows --userversion <sha>`). The page text and images still need your hands — itch has no API for them.
+**Pushing a new build:** butler is installed and `BUTLER_API_KEY` is set in your user environment. One command builds, checks and pushes: `bash tools/publish/itch_push.sh abdullahamidi/idlexidle`. Do not call `butler push` by hand, because the script also cleans the folder, adds the README and refuses a build that cannot draw its title. The page text and images still need your hands, because itch has no API for them.
 
 ## 8. Steam — what to prepare now, so the 30-day clock is not the bottleneck
 
@@ -126,7 +135,7 @@ Assets live beside this file:
    - A trailer is not required for the page to go live but is required to be featured — plan a 30–60 s capture of the arena, the forge and the tree once the animation pass settles.
 3. **Store text:** sections 1–4 paste straight into the Steamworks store editor (short description, About this game, features, system requirements).
 4. **Early Access questionnaire:** why EA (a long-grind idle needs real hours of play data to tune), how long (a season, then 1.0), how the full version differs (more regions and champions, the balance pass, Turkish), current state (the whole loop is playable; six regions, ten champions, the forge, the warren, the traits), price plan (section 6), how the community is involved (feedback codes + the itch page).
-5. **Steam Playtest:** once the app exists, create the free Playtest child app from *Associated Packages & DLC* — the pre-alpha channel with no reviews and no keys.
+5. **Steam Playtest:** once the app exists, create the free Playtest child app from *Associated Packages & DLC* — the testing channel (alpha today) with no reviews and no keys.
 
 ## 9. Things NOT to write on the page
 
