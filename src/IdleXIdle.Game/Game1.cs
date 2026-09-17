@@ -2294,6 +2294,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ReserveNoticeLane();
         TickChromeMotion((float)gameTime.ElapsedGameTime.TotalSeconds);
 
+        // A CLOSED MODAL IS BACK AT ITS TOP. The scrolls only ever leave zero at 150 %, where the rows
+        // outgrow the page — and the UI SCALE row is at the top of the settings panel, so a scroll that
+        // survived the close would hide the one control that can undo 150 %. This lived in Draw's
+        // in-game branch, which the TITLE's Draw returns before, so Settings opened from the title kept
+        // its scroll (alpha review, 2026-09-17, once the settings rows began to scroll at 150 %). Here
+        // it runs every frame on every screen, and a state write belongs in Update anyway (ADR-006).
+        if (!_showHelp) _helpScroll = 0;
+        if (!_showSettings) _settingsScroll = 0;
+        if (!_showDispatches) _dispatchScroll = 0;
+
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
         // exactly one Update, and _prevMouse is overwritten in Latch() at the end of Update — so a
         // property that recomputed the edge would read false during the following Draw(), which is
@@ -8254,13 +8264,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // game asks the player to stop and look, so nothing on the page should sit on top of it.
         if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch, _hunter);
 
-        // A CLOSED MODAL IS BACK AT ITS TOP. Both scrolls only ever leave zero at 150 %, where the
-        // rows outgrow the page — and the UI SCALE row is at the top of the settings panel, so a
-        // scroll that survived the close would hide the one control that can undo 150 %.
-        if (!_showHelp) _helpScroll = 0;
-        if (!_showSettings) _settingsScroll = 0;
-        if (!_showDispatches) _dispatchScroll = 0;
-
+        // (A closed modal's scroll is reset at the top of Update — see "A CLOSED MODAL IS BACK AT ITS TOP".)
         if (_showHelp) DrawHelp();
         if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
@@ -9130,6 +9134,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             CycleUiScale();
             SaveDisplay();
+            // The new profile's frame is laid out from its top: an offset scrolled at 150 % would
+            // otherwise shift this frame's Draw of a layout that may not scroll at all (alpha review).
+            _settingsScroll = 0;
             return;
         }
 

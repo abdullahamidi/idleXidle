@@ -120,6 +120,30 @@ public class ChromeReflowTests
         Assert.Equal(Read<int>("SettingsSwitchCount"), rows);
     }
 
+    [Fact]
+    public void test_settings_scroll_resets_on_close_before_draw_and_on_a_scale_change()
+    {
+        // Arrange — the panel's rows began to scroll at 150 % with the GUIDANCE caption, which made two
+        // old paths live (alpha review, 2026-09-17): the "closed modal is back at its top" reset sat in
+        // Draw's in-game branch, which the title's Draw returns before, and a UI SCALE click kept the
+        // old offset for the frame it changed the layout under.
+        var source = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs")).Replace("\r\n", "\n");
+        const string reset = "if (!_showSettings) _settingsScroll = 0;";
+        var update = source.IndexOf("protected override void Update(GameTime gameTime)", StringComparison.Ordinal);
+        var draw = source.IndexOf("protected override void Draw(GameTime gameTime)", StringComparison.Ordinal);
+
+        // Act
+        var at = source.IndexOf(reset, StringComparison.Ordinal);
+        var scaleClick = source.IndexOf("CycleUiScale();\n            SaveDisplay();", StringComparison.Ordinal);
+
+        // Assert — one reset, and it is in the frame's first half, which every screen runs.
+        Assert.True(update >= 0 && draw >= 0, "Game1's Update/Draw signatures moved — re-anchor this test.");
+        Assert.Equal(at, source.LastIndexOf(reset, StringComparison.Ordinal));
+        Assert.True(at > update && at < update + 3000, "the settings scroll reset is not at the top of Update.");
+        Assert.True(scaleClick >= 0, "the UI SCALE click moved — re-anchor this test.");
+        Assert.Contains("_settingsScroll = 0;", source.Substring(scaleClick, 400), StringComparison.Ordinal);
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var dir = AppContext.BaseDirectory;

@@ -229,7 +229,8 @@ public static class Unlocks
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Discover a characteristic by how you fight",
         // THE PLACE, read off the roster — "Conquer a region" was falsified by the first conquest, which
-        // brings nobody. (A quest can bring a hunter too, but only after this conquest is possible.)
+        // brings nobody. (Three champion quests need no region and can finish first — FELL 40 BOSSES
+        // among them — and the gate opens for them too; the line names the road every player is on.)
         Activity.Roster => $"Conquer {FirstChampionRegionName()} for a second hunter",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would

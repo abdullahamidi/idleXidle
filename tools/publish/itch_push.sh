@@ -33,7 +33,7 @@ fi
 [ -n "${BUTLER_API_KEY:-}" ] || { echo "BUTLER_API_KEY is not set in this shell" >&2; exit 1; }
 
 SHA="$(git rev-parse --short=8 HEAD)"   # 8, as BuildStamp.Short prints it
-VERSION="$(grep -o '<Version>[^<]*' Directory.Build.props | head -1 | cut -d'>' -f2)"
+VERSION="$(grep -o '<Version>[^<]*' Directory.Build.props | head -1 | cut -d'>' -f2 || true)"   # || true: under pipefail a miss would exit before the message below
 [ -n "$VERSION" ] || { echo "no <Version> in Directory.Build.props" >&2; exit 1; }
 USERVERSION="${VERSION}+${SHA}"
 OUT="build/release/IDLExIDLE-win64"
