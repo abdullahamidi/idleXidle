@@ -9440,11 +9440,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // ── THE FOOTER: the feedback code, and the one door that destroys something — pinned under
         //    the rows at every profile, outside the clip, so they are always on the panel (chrome-02). ──
         // The keys, in one line: only what the game really has, and where they are listed.
-        _ui.TextBig(_batch, _ui.ShortenBig("EVERY KEY IS LISTED IN HELP (F1) · KEYS CANNOT BE REBOUND YET", f.ColW, UiTypography.Secondary),
+        // ("THE MAIN KEYS", not "EVERY KEY": the F1 sheet leaves out T, D, ENTER and SPACE — alpha copy check.)
+        _ui.TextBig(_batch, _ui.ShortenBig("THE MAIN KEYS ARE LISTED IN HELP (F1) · KEYS CANNOT BE REBOUND YET", f.ColW, UiTypography.Secondary),
                     f.LeftX, f.KeysNoteY, Slate, UiTypography.Secondary);
         var copyBtn = f.CopyFeedback;
         if (_resetArmTimer <= 0f) _ui.Button(_batch, copyBtn, "COPY FEEDBACK CODE", mouse, clicked: false);
-        _ui.TextBig(_batch, "SENDS THE DEVELOPER YOUR BUILD AND PROGRESS", f.LeftX,
+        // It COPIES — nothing is sent anywhere; the player pastes the code (the COPIED line says where).
+        // It said "SENDS THE DEVELOPER ..." until the alpha copy check (2026-09-17).
+        _ui.TextBig(_batch, _ui.ShortenBig("COPIES A CODE WITH YOUR BUILD AND PROGRESS", f.ColW, UiTypography.Secondary), f.LeftX,
                     copyBtn.Bottom + UiMetrics.Space(8), Slate, UiTypography.Secondary);
 
         // DANGER ZONE — its own bordered region, so the button that deletes a save is not one of a
