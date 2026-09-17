@@ -2,7 +2,7 @@
 
 Inputs (all in-repo): the title background (assets/art/Environments/screens/bg_title.png,
 1920x1080), the logo lockup (assets/art/BrandingSymbols/branding/logo_idlexidle_full.png), and
-the raw emblem (assets/art/BrandingSymbols/branding/preview/emblem_idlexidle.png).
+the raw emblem (docs/store/source-art/emblem_idlexidle.png — store-only art, not shipped).
 
 Outputs docs/store/capsules/<name>.png at the sizes Steam and itch.io ask for (checked 2026-08):
   steam_header        920 x 430      steam_small       462 x 174
@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 BG = 'assets/art/Environments/screens/bg_title.png'
 LOGO = 'assets/art/BrandingSymbols/branding/logo_idlexidle_full.png'
-EMBLEM = 'assets/art/BrandingSymbols/branding/preview/emblem_idlexidle.png'
+EMBLEM = 'docs/store/source-art/emblem_idlexidle.png'
 OUT = 'docs/store/capsules'
 FONT = 'assets/fonts/Cinzel.ttf'
 

@@ -210,7 +210,7 @@ def build(region: str, ground_anchor: bool, show_guides: bool, L=None, gear: boo
         bx, by, bw, bh = CHAMP_BOX
         for slot in SOCKET_ORDER:
             cx, cy, hh = SOCKETS[slot]
-            tex = load(f"item_{slot}_keen") or load(f"item_slot_{slot}")
+            tex = load(f"item_{slot}_swift") or load(f"item_slot_{slot}")   # swift: the chest/boots/gloves/helm and weapon pools all draw it
             if not tex:
                 continue
             h = max(1, int(bh * hh))

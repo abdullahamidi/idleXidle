@@ -75,30 +75,6 @@
       "subject": "two large crossed golden swords filling the whole center"
     },
     {
-      "key": "icon_role_defender",
-      "dest": "assets/art/UI/icons/roles",
-      "style": "medallion",
-      "subject": "a stout golden tower shield"
-    },
-    {
-      "key": "icon_role_support",
-      "dest": "assets/art/UI/icons/roles",
-      "style": "medallion",
-      "subject": "a golden chalice radiating light"
-    },
-    {
-      "key": "icon_role_crafter",
-      "dest": "assets/art/UI/icons/roles",
-      "style": "medallion",
-      "subject": "a golden hammer resting on an anvil"
-    },
-    {
-      "key": "icon_role_producer",
-      "dest": "assets/art/UI/icons/roles",
-      "style": "medallion",
-      "subject": "a tall stack of golden coins"
-    },
-    {
       "key": "icon_region_verdant",
       "dest": "assets/art/UI/icons/regions",
       "style": "medallion",
@@ -339,66 +315,6 @@
       "subject": "a sword blade with jagged barbed battle-scarred iron"
     },
     {
-      "key": "item_weapon_warding",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with rune-etched blue-steel"
-    },
-    {
-      "key": "item_weapon_vital",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with warm red-bronze with crimson inlay"
-    },
-    {
-      "key": "item_weapon_greedy",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with gilded gold with fine ornament"
-    },
-    {
-      "key": "item_weapon_attuned",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with deep violet arcane metal"
-    },
-    {
-      "key": "item_weapon_focused",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with dark steel with a single bright inset gem"
-    },
-    {
-      "key": "item_weapon_wild",
-      "dest": "assets/art/ItemsLoot/traits/weapon",
-      "style": "item",
-      "subject": "a sword blade with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_charm_keen",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_charm_heavy",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with thick blunt blackened iron"
-    },
-    {
-      "key": "item_charm_swift",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with slender lightweight pale steel"
-    },
-    {
-      "key": "item_charm_savage",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with jagged barbed battle-scarred iron"
-    },
-    {
       "key": "item_charm_warding",
       "dest": "assets/art/ItemsLoot/traits/charm",
       "style": "item",
@@ -417,58 +333,16 @@
       "subject": "a hanging amulet with gilded gold with fine ornament"
     },
     {
-      "key": "item_charm_attuned",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with deep violet arcane metal"
-    },
-    {
-      "key": "item_charm_focused",
-      "dest": "assets/art/ItemsLoot/traits/charm",
-      "style": "item",
-      "subject": "a hanging amulet with dark steel with a single bright inset gem"
-    },
-    {
       "key": "item_charm_wild",
       "dest": "assets/art/ItemsLoot/traits/charm",
       "style": "item",
       "subject": "a hanging amulet with mossy bronze with green vine engraving"
     },
     {
-      "key": "item_focus_keen",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_focus_heavy",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with thick blunt blackened iron"
-    },
-    {
       "key": "item_focus_swift",
       "dest": "assets/art/ItemsLoot/traits/focus",
       "style": "item",
       "subject": "a round floating crystal orb with slender lightweight pale steel"
-    },
-    {
-      "key": "item_focus_savage",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_focus_warding",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with rune-etched blue-steel"
-    },
-    {
-      "key": "item_focus_vital",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_focus_greedy",
@@ -489,46 +363,10 @@
       "subject": "a round floating crystal orb with dark steel with a single bright inset gem"
     },
     {
-      "key": "item_focus_wild",
-      "dest": "assets/art/ItemsLoot/traits/focus",
-      "style": "item",
-      "subject": "a round floating crystal orb with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_helm_keen",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_helm_heavy",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with thick blunt blackened iron"
-    },
-    {
       "key": "item_helm_swift",
       "dest": "assets/art/ItemsLoot/traits/helm",
       "style": "item",
       "subject": "a knight helm with slender lightweight pale steel"
-    },
-    {
-      "key": "item_helm_savage",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_helm_warding",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with rune-etched blue-steel"
-    },
-    {
-      "key": "item_helm_vital",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_helm_greedy",
@@ -549,46 +387,10 @@
       "subject": "a knight helm with dark steel with a single bright inset gem"
     },
     {
-      "key": "item_helm_wild",
-      "dest": "assets/art/ItemsLoot/traits/helm",
-      "style": "item",
-      "subject": "a knight helm with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_chest_keen",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_chest_heavy",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with thick blunt blackened iron"
-    },
-    {
       "key": "item_chest_swift",
       "dest": "assets/art/ItemsLoot/traits/chest",
       "style": "item",
       "subject": "a breastplate with slender lightweight pale steel"
-    },
-    {
-      "key": "item_chest_savage",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_chest_warding",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with rune-etched blue-steel"
-    },
-    {
-      "key": "item_chest_vital",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_chest_greedy",
@@ -609,46 +411,10 @@
       "subject": "a breastplate with dark steel with a single bright inset gem"
     },
     {
-      "key": "item_chest_wild",
-      "dest": "assets/art/ItemsLoot/traits/chest",
-      "style": "item",
-      "subject": "a breastplate with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_gloves_keen",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_gloves_heavy",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with thick blunt blackened iron"
-    },
-    {
       "key": "item_gloves_swift",
       "dest": "assets/art/ItemsLoot/traits/gloves",
       "style": "item",
       "subject": "a gauntlet with slender lightweight pale steel"
-    },
-    {
-      "key": "item_gloves_savage",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_gloves_warding",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with rune-etched blue-steel"
-    },
-    {
-      "key": "item_gloves_vital",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_gloves_greedy",
@@ -669,46 +435,10 @@
       "subject": "a gauntlet with dark steel with a single bright inset gem"
     },
     {
-      "key": "item_gloves_wild",
-      "dest": "assets/art/ItemsLoot/traits/gloves",
-      "style": "item",
-      "subject": "a gauntlet with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_boots_keen",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_boots_heavy",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with thick blunt blackened iron"
-    },
-    {
       "key": "item_boots_swift",
       "dest": "assets/art/ItemsLoot/traits/boots",
       "style": "item",
       "subject": "an armoured boot with slender lightweight pale steel"
-    },
-    {
-      "key": "item_boots_savage",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_boots_warding",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with rune-etched blue-steel"
-    },
-    {
-      "key": "item_boots_vital",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_boots_greedy",
@@ -729,46 +459,10 @@
       "subject": "an armoured boot with dark steel with a single bright inset gem"
     },
     {
-      "key": "item_boots_wild",
-      "dest": "assets/art/ItemsLoot/traits/boots",
-      "style": "item",
-      "subject": "an armoured boot with mossy bronze with green vine engraving"
-    },
-    {
-      "key": "item_ring_keen",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with polished razor-edged bright steel"
-    },
-    {
-      "key": "item_ring_heavy",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with thick blunt blackened iron"
-    },
-    {
       "key": "item_ring_swift",
       "dest": "assets/art/ItemsLoot/traits/ring",
       "style": "item",
       "subject": "a jewelled ring with slender lightweight pale steel"
-    },
-    {
-      "key": "item_ring_savage",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with jagged barbed battle-scarred iron"
-    },
-    {
-      "key": "item_ring_warding",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with rune-etched blue-steel"
-    },
-    {
-      "key": "item_ring_vital",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with warm red-bronze with crimson inlay"
     },
     {
       "key": "item_ring_greedy",
@@ -787,12 +481,6 @@
       "dest": "assets/art/ItemsLoot/traits/ring",
       "style": "item",
       "subject": "a jewelled ring with dark steel with a single bright inset gem"
-    },
-    {
-      "key": "item_ring_wild",
-      "dest": "assets/art/ItemsLoot/traits/ring",
-      "style": "item",
-      "subject": "a jewelled ring with mossy bronze with green vine engraving"
     },
     {
       "key": "item_slot_weapon",
@@ -968,25 +656,6 @@
       "negative_description": "frame, border, trim, ornament, filigree, gold leaf, corners, panel, window, bar frame, text, icon, object, character"
     },
     {
-      "key": "ui_bar_frame",
-      "dest": "assets/art/UI/bars",
-      "style": "chrome",
-      "subject": "an ornate horizontal bar frame with a hollow dark window and gold trim",
-      "width": 256,
-      "height": 64
-    },
-    {
-      "key": "ui_bar_fill",
-      "dest": "assets/art/UI/bars",
-      "style": "barfill",
-      "subject": "glowing pale bone white",
-      "width": 256,
-      "height": 64,
-      "knockout": false,
-      "no_background": false,
-      "negative_description": "frame, border, trim, ornament, filigree, gold leaf, corners, panel, window, bar frame, text, icon, object, character"
-    },
-    {
       "key": "currency_gleam",
       "dest": "assets/art/ItemsLoot/materials",
       "style": "item",
@@ -997,12 +666,6 @@
       "dest": "assets/art/ItemsLoot/materials",
       "style": "item",
       "subject": "a pinch of luminous violet dust motes"
-    },
-    {
-      "key": "currency_resonance_shard",
-      "dest": "assets/art/ItemsLoot/materials",
-      "style": "item",
-      "subject": "a humming pale blue crystal shard"
     },
     {
       "key": "mat_scrap",
@@ -1039,12 +702,6 @@
       "dest": "assets/art/ItemsLoot/affixes",
       "style": "medallion",
       "subject": "a blue shield sigil"
-    },
-    {
-      "key": "affix_healing",
-      "dest": "assets/art/ItemsLoot/affixes",
-      "style": "medallion",
-      "subject": "a green cross-leaf sigil"
     },
     {
       "key": "affix_health",
@@ -1119,124 +776,10 @@
       "subject": "a hooded hunter head in profile"
     },
     {
-      "key": "icon_equipment_blade",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a sword blade"
-    },
-    {
-      "key": "icon_equipment_bow",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a longbow"
-    },
-    {
-      "key": "icon_equipment_spear",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a spear"
-    },
-    {
-      "key": "icon_equipment_scythe",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a scythe"
-    },
-    {
-      "key": "icon_equipment_helmet",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a knight helm"
-    },
-    {
-      "key": "icon_equipment_chest",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a breastplate"
-    },
-    {
-      "key": "icon_equipment_gloves",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a gauntlet"
-    },
-    {
-      "key": "icon_equipment_boots",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "an armoured boot"
-    },
-    {
-      "key": "icon_equipment_accessory",
-      "dest": "assets/art/UI/icons/equipment",
-      "style": "medallion",
-      "subject": "a jewelled amulet"
-    },
-    {
-      "key": "nav_hunt",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "crossed swords"
-    },
-    {
-      "key": "nav_forge",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a blacksmith hammer resting on an anvil, no cross"
-    },
-    {
-      "key": "nav_map",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a folded map"
-    },
-    {
-      "key": "nav_warren",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a burrow arch"
-    },
-    {
       "key": "nav_build",
       "dest": "assets/art/UI/icons/nav",
       "style": "medallion",
       "subject": "a branching skill tree"
-    },
-    {
-      "key": "nav_gear",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a breastplate"
-    },
-    {
-      "key": "nav_codex",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "an open book"
-    },
-    {
-      "key": "nav_evolve",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a spiral of ascending motes"
-    },
-    {
-      "key": "nav_shop",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a coin pouch"
-    },
-    {
-      "key": "nav_mail",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a sealed envelope"
-    },
-    {
-      "key": "nav_stats",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a bar chart"
     },
     {
       "key": "nav_prestige",
@@ -1250,14 +793,6 @@
       "style": "chrome",
       "subject": "an ornate rectangular panel with gold trim and a dark inset field",
       "width": 256,
-      "height": 256
-    },
-    {
-      "key": "ui_panel_large",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a large ornate rectangular panel with gold trim and a dark inset field",
-      "width": 384,
       "height": 256
     },
     {
@@ -1277,22 +812,6 @@
       "height": 96
     },
     {
-      "key": "ui_button_confirm",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a raised green-tinted confirm button with gold trim",
-      "width": 256,
-      "height": 96
-    },
-    {
-      "key": "ui_button_danger",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a raised red-tinted danger button with gold trim",
-      "width": 256,
-      "height": 96
-    },
-    {
       "key": "ui_button_disabled",
       "dest": "assets/art/UI/chrome",
       "style": "chrome",
@@ -1305,14 +824,6 @@
       "dest": "assets/art/UI/chrome",
       "style": "chrome",
       "subject": "a solid filled raised tab plate with a bright gold underline bar",
-      "width": 256,
-      "height": 96
-    },
-    {
-      "key": "ui_tab_inactive",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a dim recessed inactive tab",
       "width": 256,
       "height": 96
     },
@@ -1347,110 +858,6 @@
       "subject": "a plain hexagonal gold medallion frame with a hollow center",
       "width": 128,
       "height": 128
-    },
-    {
-      "key": "ui_divider_long",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a long thin ornate horizontal divider rule",
-      "width": 256,
-      "height": 32
-    },
-    {
-      "key": "ui_divider_short",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a short ornate horizontal divider rule",
-      "width": 128,
-      "height": 32
-    },
-    {
-      "key": "ui_scrollbar_track",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a narrow vertical scrollbar track groove",
-      "width": 32,
-      "height": 256
-    },
-    {
-      "key": "ui_scrollbar_handle",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a narrow vertical scrollbar handle with gold trim",
-      "width": 32,
-      "height": 128
-    },
-    {
-      "key": "ui_keycap_square_blank",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a blank square keyboard keycap",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_keycap_space_blank",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a blank wide spacebar keycap",
-      "width": 192,
-      "height": 64
-    },
-    {
-      "key": "ui_corner_top_left",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "an ornate gold corner bracket, top-left",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_corner_top_right",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "an ornate gold corner bracket, top-right",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_corner_bottom_left",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "an ornate gold corner bracket, bottom-left",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_corner_bottom_right",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "an ornate gold corner bracket, bottom-right",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_button_icon_close",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a small square button with an X glyph",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_button_icon_back",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a small square button with a left arrow glyph",
-      "width": 64,
-      "height": 64
-    },
-    {
-      "key": "ui_button_icon_square",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a small blank square icon button",
-      "width": 64,
-      "height": 64
     },
     {
       "key": "hunter_rig_base",
@@ -1775,24 +1182,6 @@
       "prompt": "An aged parchment campaign map, blank hand-inked chart with faint coastlines, contour hatching, compass rose in one corner and a worn creased border. Dark fantasy pixel art, muted browns and dim ochre, low contrast, evenly lit, NO characters, NO icons, NO markers, NO pins, NO text, NO labels, NO UI, NO frame"
     },
     {
-      "key": "icon_blessing_amplifier",
-      "dest": "assets/art/UI/icons/blessings",
-      "style": "medallion",
-      "subject": "a rising three-step chevron arrow pointing up"
-    },
-    {
-      "key": "icon_blessing_expansion",
-      "dest": "assets/art/UI/icons/blessings",
-      "style": "medallion",
-      "subject": "an open archway gate with a keystone"
-    },
-    {
-      "key": "icon_blessing_convenience",
-      "dest": "assets/art/UI/icons/blessings",
-      "style": "medallion",
-      "subject": "a slim hourglass with running sand"
-    },
-    {
       "key": "icon_branch_resonance",
       "dest": "assets/art/UI/icons/branches",
       "style": "glyph",
@@ -1888,15 +1277,6 @@
       "subject": "a diamond socket frame standing on one point with a small flourish at each of its four corners, hollow centre, transparent hollow middle, empty centre",
       "width": 192,
       "height": 192,
-      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
-    },
-    {
-      "key": "ui_node_mastery",
-      "dest": "assets/art/UI/nodes",
-      "style": "chrome",
-      "subject": "a wide ornate banner plaque with scrolled ends, a heavy trimmed rim and a hollow centre field, transparent hollow middle, empty centre",
-      "width": 320,
-      "height": 160,
       "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
     },
     {
@@ -2223,14 +1603,6 @@
       "height": 256
     },
     {
-      "key": "ui_panel_modal_wide",
-      "dest": "assets/art/UI/chrome",
-      "style": "chrome",
-      "subject": "a wide ornate modal panel with gold trim and a dark inset field",
-      "width": 384,
-      "height": 224
-    },
-    {
       "key": "ui_slot_skill_hex",
       "dest": "assets/art/UI/chrome",
       "style": "chrome",
@@ -2251,22 +1623,6 @@
       "dest": "assets/art/UI/icons/nav",
       "style": "medallion",
       "subject": "crossed swords",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "nav_forge_128",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a blacksmith hammer on an anvil",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "nav_warren_128",
-      "dest": "assets/art/UI/icons/nav",
-      "style": "medallion",
-      "subject": "a burrow arch",
       "width": 128,
       "height": 128
     },
@@ -2301,12 +1657,6 @@
       "subject": "a vibrating tuning fork",
       "width": 128,
       "height": 128
-    },
-    {
-      "key": "core_hatch",
-      "dest": "assets/art/ItemsLoot/materials",
-      "style": "item",
-      "subject": "a cracked glowing egg-like machine core hatching open"
     },
     {
       "key": "hunter_portrait",

@@ -33,9 +33,12 @@ FONT_BODY_REG = 'assets/fonts/IBMPlexSansCondensed-Regular.ttf'
 
 BG_TITLE = 'assets/art/Environments/screens/bg_title.png'
 LOGO = 'assets/art/BrandingSymbols/branding/logo_idlexidle_full.png'
-EMBLEM = 'assets/art/BrandingSymbols/branding/preview/emblem_idlexidle.png'
-PANEL_WIDE = 'assets/art/UI/panels/ui_panel_modal_wide.png'
-DIVIDER = 'assets/art/UI/decor/ui_divider_long.png'
+# Art only the store kit reads lives in docs/store/source-art, not assets/art: everything under
+# assets/art ships in the build and most of it is decoded at boot (moved there 2026-09-17).
+SOURCE_ART = 'docs/store/source-art'
+EMBLEM = f'{SOURCE_ART}/emblem_idlexidle.png'
+PANEL_WIDE = f'{SOURCE_ART}/ui_panel_modal_wide.png'
+DIVIDER = f'{SOURCE_ART}/ui_divider_long.png'
 MEDALLION = 'assets/art/UI/icons/ui_medallion_round.png'
 ICONS = 'assets/art/UI/icons'
 CLASS_ICONS = 'assets/art/Characters/Hunter/icons/class'
@@ -326,9 +329,9 @@ def loop_strip() -> Image.Image:
     h = 230
     img = card(W, h)
     steps = [
-        ('FIGHT', 'It clears waves on its own', load_icon(f'{ICONS}/nav/nav_hunt.png'), False),
+        ('FIGHT', 'It clears waves on its own', load_icon(f'{SOURCE_ART}/nav_hunt.png'), False),
         ('SPEND', 'Gear, build, traits, warren', load_icon(f'{ICONS}/nav/icon_nav_forge.png'), True),
-        ('LEAVE', 'It keeps fighting while you are gone', load_icon(f'{ICONS}/blessings/icon_blessing_convenience.png'), False),
+        ('LEAVE', 'It keeps fighting while you are gone', load_icon(f'{SOURCE_ART}/icon_blessing_convenience.png'), False),
     ]
     cols = [W * (2 * i + 1) // 6 for i in range(3)]
     for (name, line, icon, ring), cx in zip(steps, cols):
@@ -445,7 +448,7 @@ def footer() -> Image.Image:
 
 
 SECTIONS = [
-    ('fight', 'THE FIGHT RUNS ITSELF', f'{ICONS}/nav/nav_hunt.png', 'On every screen — and for hours after you leave.', False),
+    ('fight', 'THE FIGHT RUNS ITSELF', f'{SOURCE_ART}/nav_hunt.png', 'On every screen — and for hours after you leave.', False),
     ('build', 'WEAVE A BUILD, NOT A ROTATION', f'{ICONS}/forms/icon_form_aura.png', 'Skills, keystones and Vows. Then a Mastery tree decides how it fights.', True),
     ('forge', 'A FORGE THAT READS HONESTLY', f'{ICONS}/nav/icon_nav_forge.png', 'Every item shows its real numbers. Every upgrade shows its chance.', True),
     ('world', 'SIX REGIONS, CONQUERED AT WAVE TWENTY', f'{ICONS}/regions/icon_region_umbral.png', 'Past the twentieth wave the counter reads OVERWAVE — and Memory Dust buys a head start.', False),

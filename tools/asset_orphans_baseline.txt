@@ -5,35 +5,10 @@
 # asks for exactly that. Seventeen went on 2026-09-16 (the equipment, blessing and role icons, and
 # icon_peek), which is why the list is shorter than the day it was written.
 # --- pre-pivot debt ---
-assets/art/BrandingSymbols/branding/preview/emblem_idlexidle.png
-assets/art/BrandingSymbols/glyphs/navigation/color/nav_forge_128.png
-assets/art/BrandingSymbols/glyphs/navigation/color/nav_warren_128.png
-assets/art/ItemsLoot/glyphs/affix/affix_healing.png
-assets/art/ItemsLoot/loot/currency/currency_insight.png
-assets/art/ItemsLoot/loot/currency/currency_resonance_shard.png
-assets/art/UI/buttons/ui_button_confirm.png
-assets/art/UI/buttons/ui_button_danger.png
-assets/art/UI/buttons/ui_button_icon_back.png
-assets/art/UI/buttons/ui_button_icon_close.png
-assets/art/UI/buttons/ui_button_icon_square.png
-assets/art/UI/buttons/ui_tab_inactive.png
-assets/art/UI/decor/ui_corner_bottom_left.png
-assets/art/UI/decor/ui_corner_bottom_right.png
-assets/art/UI/decor/ui_corner_top_left.png
-assets/art/UI/decor/ui_corner_top_right.png
-assets/art/UI/decor/ui_divider_long.png
-assets/art/UI/decor/ui_divider_short.png
-assets/art/UI/decor/ui_keycap_space_blank.png
-assets/art/UI/decor/ui_scrollbar_handle.png
-assets/art/UI/decor/ui_scrollbar_track.png
-assets/art/UI/icons/nav/nav_codex.png
-assets/art/UI/icons/nav/nav_evolve.png
-assets/art/UI/icons/nav/nav_forge.png
-assets/art/UI/icons/nav/nav_gear.png
-assets/art/UI/icons/nav/nav_hunt.png
-assets/art/UI/icons/nav/nav_mail.png
-assets/art/UI/icons/nav/nav_map.png
-assets/art/UI/icons/nav/nav_shop.png
-assets/art/UI/icons/nav/nav_stats.png
-assets/art/UI/icons/nav/nav_warren.png
-assets/art/UI/nodes/ui_node_mastery.png
+# 2026-09-17: the list is EMPTY. Of the last 32 rows, 29 were deleted from assets/art (nothing asked for them
+# in the RH_ASSET_TRACE battery, and a code trace per family found no path that builds their keys) and 3 that
+# only the itch page kit reads moved to docs/store/source-art. See production/qa/asset-usage/.
+# CORRECTION: the seventeen "healed" on 2026-09-16 were never drawn. LoadoutScreen builds "icon_" + v.Id for
+# vows, so this gate's rule 3 counts EVERY icon_* file as reached; the equipment, role and blessing icons and
+# icon_peek went in the same deletion. A family head that short (icon_, fx_) proves nothing — the trace does
+# (tools/asset-pipeline/asset_usage.sh).

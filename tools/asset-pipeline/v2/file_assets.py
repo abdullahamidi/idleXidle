@@ -43,6 +43,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 STAGING = os.path.join(REPO, "tools", "asset-pipeline", ".staging", "v2")
 ART = os.path.join(REPO, "assets", "art")
+# Keys deliberately deleted from assets/art; filing must not copy them back (tools/asset-pipeline/retired_keys.txt).
+with open(os.path.join(REPO, "tools", "asset-pipeline", "retired_keys.txt"), encoding="utf-8") as _fh:
+    RETIRED = {line.strip() for line in _fh if line.strip() and not line.startswith("#")}
 
 sys.path.insert(0, HERE)
 import rhart  # noqa: E402
@@ -122,6 +125,8 @@ def plan_group(group: str) -> tuple[list[tuple[str, str]], list[str], list[tuple
         for fam in ("bow", "spear", "scythe"):
             for tr in ("keen", "heavy", "swift", "savage", "warding", "vital", "greedy", "attuned", "focused", "wild"):
                 name = f"item_weapon_{fam}_{tr}.png"
+                if name[:-4] in RETIRED:   # no pool draws it (retired 2026-09-17, retired_keys.txt)
+                    continue
                 copies.append((os.path.join(STAGING, "icons", name),
                                os.path.join(ART, "ItemsLoot", "traits", "weapon", name)))
     elif group == "portraits":

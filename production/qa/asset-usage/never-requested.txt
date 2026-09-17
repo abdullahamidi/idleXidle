@@ -1,0 +1,280 @@
+trace: 488 keys requested, 273 existence checks
+never asked: 276 files, 11.2 MB on disk; 173 load at boot = 58.4 MB of texture memory
+EAGER        8.4 MB      397 KB              assets/art/VFX/bind_chain/fx_bind_chain_strip8_512.png
+EAGER        8.4 MB      116 KB              assets/art/VFX/levelup/fx_levelup_strip8_512.png
+EAGER        1.0 MB       17 KB  WARMED      assets/art/Characters/Roster/char_anvil_base.png
+EAGER        1.0 MB       13 KB  WARMED      assets/art/Characters/Roster/char_chorus_base.png
+EAGER        1.0 MB       19 KB  tools/tests WARMED assets/art/Characters/Roster/char_magpie_base.png
+EAGER        1.0 MB       14 KB  WARMED      assets/art/Characters/Roster/char_metronome_base.png
+EAGER        1.0 MB       12 KB  WARMED      assets/art/Characters/Roster/char_oathbound_base.png
+EAGER        1.0 MB       16 KB  WARMED      assets/art/Characters/Roster/char_quiver_base.png
+EAGER        1.0 MB       20 KB  WARMED      assets/art/Characters/Roster/char_thornwall_base.png
+EAGER        1.0 MB       16 KB  WARMED      assets/art/Characters/Roster/char_tower_base.png
+EAGER        1.0 MB       21 KB  WARMED      assets/art/Characters/Roster/char_unbroken_base.png
+EAGER        0.4 MB       15 KB              assets/art/UI/panels/ui_panel_large.png
+EAGER        0.3 MB       16 KB  tools/tests assets/art/UI/panels/ui_panel_modal_wide.png
+EAGER        0.3 MB       16 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_accessory.png
+EAGER        0.3 MB       22 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_blade.png
+EAGER        0.3 MB       19 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_boots.png
+EAGER        0.3 MB       16 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_bow.png
+EAGER        0.3 MB       18 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_chest.png
+EAGER        0.3 MB       20 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_gloves.png
+EAGER        0.3 MB       21 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_helmet.png
+EAGER        0.3 MB       21 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_scythe.png
+EAGER        0.3 MB       17 KB              assets/art/Characters/Hunter/icons/equipment/icon_equipment_spear.png
+EAGER        0.3 MB       26 KB              assets/art/Characters/Hunter/portraits/hunter_portrait.png
+EAGER        0.3 MB       24 KB              assets/art/ItemsLoot/glyphs/affix/affix_defense.png
+EAGER        0.3 MB       20 KB              assets/art/ItemsLoot/glyphs/affix/affix_healing.png
+EAGER        0.3 MB       21 KB              assets/art/ItemsLoot/glyphs/affix/affix_timer.png
+EAGER        0.3 MB        4 KB              assets/art/ItemsLoot/loot/containers/core_hatch.png
+EAGER        0.3 MB       43 KB              assets/art/ItemsLoot/loot/currency/currency_insight.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/loot/currency/currency_resonance_shard.png
+EAGER        0.3 MB        8 KB              assets/art/ItemsLoot/traits/boots/item_boots_greedy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/boots/item_boots_heavy.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/boots/item_boots_keen.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/boots/item_boots_savage.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/boots/item_boots_vital.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/boots/item_boots_warding.png
+EAGER        0.3 MB       16 KB              assets/art/ItemsLoot/traits/boots/item_boots_wild.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/charm/item_charm_attuned.png
+EAGER        0.3 MB        8 KB              assets/art/ItemsLoot/traits/charm/item_charm_focused.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/charm/item_charm_heavy.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/charm/item_charm_keen.png
+EAGER        0.3 MB        9 KB              assets/art/ItemsLoot/traits/charm/item_charm_savage.png
+EAGER        0.3 MB        6 KB  tools/tests assets/art/ItemsLoot/traits/charm/item_charm_swift.png
+EAGER        0.3 MB       17 KB              assets/art/ItemsLoot/traits/chest/item_chest_heavy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/chest/item_chest_keen.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/chest/item_chest_savage.png
+EAGER        0.3 MB       20 KB              assets/art/ItemsLoot/traits/chest/item_chest_vital.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/chest/item_chest_warding.png
+EAGER        0.3 MB       16 KB              assets/art/ItemsLoot/traits/chest/item_chest_wild.png
+EAGER        0.3 MB        6 KB              assets/art/ItemsLoot/traits/focus/item_focus_heavy.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/focus/item_focus_keen.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/focus/item_focus_savage.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/focus/item_focus_vital.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/focus/item_focus_warding.png
+EAGER        0.3 MB       15 KB              assets/art/ItemsLoot/traits/focus/item_focus_wild.png
+EAGER        0.3 MB        9 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_heavy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_keen.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_savage.png
+EAGER        0.3 MB        9 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_vital.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_warding.png
+EAGER        0.3 MB       19 KB              assets/art/ItemsLoot/traits/gloves/item_gloves_wild.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/helm/item_helm_heavy.png
+EAGER        0.3 MB        6 KB              assets/art/ItemsLoot/traits/helm/item_helm_keen.png
+EAGER        0.3 MB       16 KB              assets/art/ItemsLoot/traits/helm/item_helm_savage.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/helm/item_helm_vital.png
+EAGER        0.3 MB       15 KB              assets/art/ItemsLoot/traits/helm/item_helm_warding.png
+EAGER        0.3 MB       16 KB              assets/art/ItemsLoot/traits/helm/item_helm_wild.png
+EAGER        0.3 MB       32 KB              assets/art/ItemsLoot/traits/ring/item_ring_heavy.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/ring/item_ring_keen.png
+EAGER        0.3 MB       23 KB              assets/art/ItemsLoot/traits/ring/item_ring_savage.png
+EAGER        0.3 MB       28 KB              assets/art/ItemsLoot/traits/ring/item_ring_vital.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/ring/item_ring_warding.png
+EAGER        0.3 MB       31 KB              assets/art/ItemsLoot/traits/ring/item_ring_wild.png
+EAGER        0.3 MB        7 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_attuned.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_attuned.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_focused.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_greedy.png
+EAGER        0.3 MB        9 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_savage.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_swift.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_vital.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_warding.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_bow_wild.png
+EAGER        0.3 MB        8 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_focused.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_greedy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_attuned.png
+EAGER        0.3 MB       15 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_focused.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_greedy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_heavy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_keen.png
+EAGER        0.3 MB       14 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_savage.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_vital.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_warding.png
+EAGER        0.3 MB       15 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_wild.png
+EAGER        0.3 MB       16 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_attuned.png
+EAGER        0.3 MB       13 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_focused.png
+EAGER        0.3 MB       14 KB  tools/tests assets/art/ItemsLoot/traits/weapon/item_weapon_spear_greedy.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_keen.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_vital.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_warding.png
+EAGER        0.3 MB       15 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_spear_wild.png
+EAGER        0.3 MB        8 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_swift.png
+EAGER        0.3 MB       10 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_vital.png
+EAGER        0.3 MB       11 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_warding.png
+EAGER        0.3 MB       12 KB              assets/art/ItemsLoot/traits/weapon/item_weapon_wild.png
+EAGER        0.3 MB       22 KB              assets/art/UI/icons/blessings/icon_blessing_amplifier.png
+EAGER        0.3 MB       18 KB  tools/tests assets/art/UI/icons/blessings/icon_blessing_convenience.png
+EAGER        0.3 MB       27 KB              assets/art/UI/icons/blessings/icon_blessing_expansion.png
+EAGER        0.3 MB       29 KB              assets/art/UI/icons/nav/nav_codex.png
+EAGER        0.3 MB       16 KB              assets/art/UI/icons/nav/nav_evolve.png
+EAGER        0.3 MB       18 KB              assets/art/UI/icons/nav/nav_forge.png
+EAGER        0.3 MB       23 KB              assets/art/UI/icons/nav/nav_gear.png
+EAGER        0.3 MB       24 KB  tools/tests assets/art/UI/icons/nav/nav_hunt.png
+EAGER        0.3 MB       25 KB              assets/art/UI/icons/nav/nav_mail.png
+EAGER        0.3 MB       16 KB              assets/art/UI/icons/nav/nav_map.png
+EAGER        0.3 MB       24 KB              assets/art/UI/icons/nav/nav_shop.png
+EAGER        0.3 MB       23 KB              assets/art/UI/icons/nav/nav_stats.png
+EAGER        0.3 MB       18 KB              assets/art/UI/icons/nav/nav_warren.png
+EAGER        0.3 MB       23 KB              assets/art/UI/icons/roles/icon_role_crafter.png
+EAGER        0.3 MB       23 KB              assets/art/UI/icons/roles/icon_role_defender.png
+EAGER        0.3 MB       17 KB              assets/art/UI/icons/roles/icon_role_producer.png
+EAGER        0.3 MB       26 KB              assets/art/UI/icons/roles/icon_role_support.png
+EAGER        0.2 MB       14 KB              assets/art/UI/nodes/ui_node_mastery.png
+EAGER        0.1 MB        6 KB              assets/art/UI/icons/sets/icon_set_afterimage.png
+EAGER        0.1 MB        8 KB              assets/art/UI/icons/sets/icon_set_certainty.png
+EAGER        0.1 MB       10 KB              assets/art/UI/icons/sets/icon_set_harmony.png
+EAGER        0.1 MB        7 KB              assets/art/UI/icons/sets/icon_set_momentum.png
+EAGER        0.1 MB        7 KB              assets/art/UI/buttons/ui_button_confirm.png
+EAGER        0.1 MB        8 KB              assets/art/UI/buttons/ui_button_danger.png
+EAGER        0.1 MB        6 KB              assets/art/UI/buttons/ui_tab_inactive.png
+EAGER        0.1 MB        7 KB              assets/art/BrandingSymbols/glyphs/navigation/color/nav_forge_128.png
+EAGER        0.1 MB        5 KB              assets/art/BrandingSymbols/glyphs/navigation/color/nav_warren_128.png
+EAGER        0.1 MB       12 KB              assets/art/UI/bars/ui_bar_fill.png
+EAGER        0.1 MB        7 KB              assets/art/UI/bars/ui_bar_frame.png
+EAGER        0.1 MB       16 KB              assets/art/UI/icons/traits/icon_trait_t_given_hand.png
+EAGER        0.1 MB       11 KB              assets/art/UI/icons/traits/icon_trait_t_kept_word.png
+EAGER        0.1 MB        9 KB              assets/art/UI/icons/traits/icon_trait_t_many_tongues.png
+EAGER        0.1 MB       17 KB              assets/art/UI/icons/traits/icon_trait_t_matched_suit.png
+EAGER        0.1 MB        8 KB              assets/art/UI/icons/traits/icon_trait_t_mirror.png
+EAGER        0.1 MB       15 KB              assets/art/UI/icons/traits/icon_trait_t_opened_vein.png
+EAGER        0.1 MB       10 KB              assets/art/UI/icons/traits/icon_trait_t_practised_flesh.png
+EAGER        0.1 MB       16 KB              assets/art/UI/icons/traits/icon_trait_t_spreading_fire.png
+EAGER        0.1 MB       12 KB              assets/art/UI/icons/traits/icon_trait_t_standing_plate.png
+EAGER        0.1 MB       15 KB              assets/art/UI/icons/traits/icon_trait_t_studied_place.png
+EAGER        0.1 MB       14 KB              assets/art/UI/icons/traits/icon_trait_t_thin_line.png
+EAGER        0.1 MB       18 KB              assets/art/UI/icons/traits/icon_trait_t_unbroken_thread.png
+EAGER        0.1 MB       16 KB              assets/art/UI/icons/traits/icon_trait_t_weight_of_vows.png
+EAGER        0.1 MB       12 KB              assets/art/UI/icons/traits/icon_trait_t_what_killed_you.png
+EAGER        0.1 MB       22 KB              assets/art/UI/icons/vows/icon_vow_barefoot.png
+EAGER        0.1 MB       17 KB              assets/art/UI/icons/vows/icon_vow_bareskull.png
+EAGER        0.1 MB       18 KB              assets/art/UI/icons/vows/icon_vow_bluntedge.png
+EAGER        0.1 MB       16 KB              assets/art/UI/icons/vows/icon_vow_complete.png
+EAGER        0.1 MB       14 KB              assets/art/UI/icons/vows/icon_vow_deliberate.png
+EAGER        0.1 MB        9 KB              assets/art/UI/icons/vows/icon_vow_fragility.png
+EAGER        0.1 MB       14 KB              assets/art/UI/icons/vows/icon_vow_frantic.png
+EAGER        0.1 MB       19 KB              assets/art/UI/icons/vows/icon_vow_openhand.png
+EAGER        0.1 MB       10 KB              assets/art/UI/icons/vows/icon_vow_pure.png
+EAGER        0.1 MB       11 KB              assets/art/UI/icons/vows/icon_vow_reckless_offering.png
+EAGER        0.1 MB       18 KB              assets/art/UI/icons/vows/icon_vow_singular.png
+EAGER        0.1 MB       12 KB              assets/art/UI/icons/vows/icon_vow_unbound.png
+EAGER        0.1 MB       14 KB              assets/art/UI/icons/vows/icon_vow_unguarded.png
+EAGER        0.0 MB        4 KB              assets/art/UI/decor/ui_keycap_space_blank.png
+EAGER        0.0 MB        2 KB  tools/tests assets/art/UI/decor/ui_divider_long.png
+EAGER        0.0 MB        2 KB              assets/art/UI/decor/ui_scrollbar_track.png
+EAGER        0.0 MB        2 KB              assets/art/UI/buttons/ui_button_icon_back.png
+EAGER        0.0 MB        2 KB              assets/art/UI/buttons/ui_button_icon_close.png
+EAGER        0.0 MB        2 KB              assets/art/UI/buttons/ui_button_icon_square.png
+EAGER        0.0 MB        1 KB              assets/art/UI/decor/ui_corner_bottom_left.png
+EAGER        0.0 MB        1 KB              assets/art/UI/decor/ui_corner_bottom_right.png
+EAGER        0.0 MB        1 KB              assets/art/UI/decor/ui_corner_top_left.png
+EAGER        0.0 MB        1 KB              assets/art/UI/decor/ui_corner_top_right.png
+EAGER        0.0 MB        1 KB              assets/art/UI/decor/ui_divider_short.png
+EAGER        0.0 MB        2 KB              assets/art/UI/decor/ui_keycap_square_blank.png
+EAGER        0.0 MB        3 KB              assets/art/UI/decor/ui_scrollbar_handle.png
+EAGER        0.0 MB        6 KB              assets/art/UI/icons/icon_peek.png
+DEFERRED     8.4 MB      225 KB  WARMED      assets/art/Animations/Bosses/forge_colossus_attack/forge_colossus_attack_strip8_512.png
+DEFERRED     8.4 MB      225 KB  WARMED      assets/art/Animations/Bosses/forge_colossus_death/forge_colossus_death_strip8_512.png
+DEFERRED     8.4 MB      237 KB  WARMED      assets/art/Animations/Bosses/forge_colossus_idle/forge_colossus_idle_strip8_512.png
+DEFERRED     8.4 MB      229 KB              assets/art/Animations/Bosses/lumen_angel_attack/lumen_angel_attack_strip8_512.png
+DEFERRED     8.4 MB      140 KB              assets/art/Animations/Bosses/lumen_angel_death/lumen_angel_death_strip8_512.png
+DEFERRED     8.4 MB      224 KB              assets/art/Animations/Bosses/lumen_angel_idle/lumen_angel_idle_strip8_512.png
+DEFERRED     8.4 MB      177 KB  WARMED      assets/art/Animations/Bosses/spirit_matron_attack/spirit_matron_attack_strip8_512.png
+DEFERRED     8.4 MB      163 KB  WARMED      assets/art/Animations/Bosses/spirit_matron_death/spirit_matron_death_strip8_512.png
+DEFERRED     8.4 MB      167 KB  WARMED      assets/art/Animations/Bosses/spirit_matron_idle/spirit_matron_idle_strip8_512.png
+DEFERRED     8.4 MB      174 KB  WARMED      assets/art/Animations/Bosses/void_reaper_death/void_reaper_death_strip8_512.png
+DEFERRED     8.4 MB      133 KB  WARMED      assets/art/Animations/Enemies/archive_armoured_death/archive_armoured_death_strip8_512.png
+DEFERRED     8.4 MB      163 KB  WARMED      assets/art/Animations/Enemies/archive_bruiser_death/archive_bruiser_death_strip8_512.png
+DEFERRED     8.4 MB      109 KB  WARMED      assets/art/Animations/Enemies/archive_caster_death/archive_caster_death_strip8_512.png
+DEFERRED     8.4 MB       44 KB  WARMED      assets/art/Animations/Enemies/archive_swarm_death/archive_swarm_death_strip8_512.png
+DEFERRED     8.4 MB      140 KB  WARMED      assets/art/Animations/Enemies/choir_armoured_death/choir_armoured_death_strip8_512.png
+DEFERRED     8.4 MB      156 KB  WARMED      assets/art/Animations/Enemies/choir_bruiser_death/choir_bruiser_death_strip8_512.png
+DEFERRED     8.4 MB       73 KB  WARMED      assets/art/Animations/Enemies/choir_caster_death/choir_caster_death_strip8_512.png
+DEFERRED     8.4 MB      136 KB  WARMED      assets/art/Animations/Enemies/choir_swarm_death/choir_swarm_death_strip8_512.png
+DEFERRED     8.4 MB      154 KB  WARMED      assets/art/Animations/Enemies/cinder_armoured_death/cinder_armoured_death_strip8_512.png
+DEFERRED     8.4 MB      151 KB  WARMED      assets/art/Animations/Enemies/cinder_bruiser_death/cinder_bruiser_death_strip8_512.png
+DEFERRED     8.4 MB       87 KB  WARMED      assets/art/Animations/Enemies/cinder_caster_death/cinder_caster_death_strip8_512.png
+DEFERRED     8.4 MB      127 KB  WARMED      assets/art/Animations/Enemies/cinder_swarm_death/cinder_swarm_death_strip8_512.png
+DEFERRED     8.4 MB      141 KB  WARMED      assets/art/Animations/Enemies/marrow_armoured_death/marrow_armoured_death_strip8_512.png
+DEFERRED     8.4 MB      105 KB  WARMED      assets/art/Animations/Enemies/marrow_caster_death/marrow_caster_death_strip8_512.png
+DEFERRED     8.4 MB      103 KB  WARMED      assets/art/Animations/Enemies/marrow_swarm_death/marrow_swarm_death_strip8_512.png
+DEFERRED     8.4 MB      122 KB  WARMED      assets/art/Animations/Enemies/umbral_armoured_death/umbral_armoured_death_strip8_512.png
+DEFERRED     8.4 MB      117 KB  WARMED      assets/art/Animations/Enemies/umbral_bruiser_death/umbral_bruiser_death_strip8_512.png
+DEFERRED     8.4 MB       65 KB  WARMED      assets/art/Animations/Enemies/umbral_caster_death/umbral_caster_death_strip8_512.png
+DEFERRED     8.4 MB      134 KB  WARMED      assets/art/Animations/Enemies/verdant_armoured_death/verdant_armoured_death_strip8_512.png
+DEFERRED     8.4 MB       89 KB  WARMED      assets/art/Animations/Enemies/verdant_caster_death/verdant_caster_death_strip8_512.png
+DEFERRED     8.4 MB      130 KB  tools/tests WARMED assets/art/Animations/Roster/anvil_cast/char_anvil_cast_strip8_512.png
+DEFERRED     8.4 MB      100 KB  WARMED      assets/art/Animations/Roster/anvil_mark/char_anvil_mark_strip8_512.png
+DEFERRED     8.4 MB      128 KB  WARMED      assets/art/Animations/Roster/anvil_transformation/char_anvil_transformation_strip8_512.png
+DEFERRED     8.4 MB       97 KB  WARMED      assets/art/Animations/Roster/chorus_cast/char_chorus_cast_strip8_512.png
+DEFERRED     8.4 MB       65 KB  WARMED      assets/art/Animations/Roster/chorus_mark/char_chorus_mark_strip8_512.png
+DEFERRED     8.4 MB       86 KB  WARMED      assets/art/Animations/Roster/chorus_transformation/char_chorus_transformation_strip8_512.png
+DEFERRED     8.4 MB      145 KB  tools/tests WARMED assets/art/Animations/Roster/magpie_cast/char_magpie_cast_strip8_512.png
+DEFERRED     8.4 MB      138 KB  WARMED      assets/art/Animations/Roster/magpie_mark/char_magpie_mark_strip8_512.png
+DEFERRED     8.4 MB      142 KB  WARMED      assets/art/Animations/Roster/magpie_transformation/char_magpie_transformation_strip8_512.png
+DEFERRED     8.4 MB       98 KB  WARMED      assets/art/Animations/Roster/metronome_cast/char_metronome_cast_strip8_512.png
+DEFERRED     8.4 MB       80 KB  WARMED      assets/art/Animations/Roster/metronome_mark/char_metronome_mark_strip8_512.png
+DEFERRED     8.4 MB       99 KB  WARMED      assets/art/Animations/Roster/metronome_transformation/char_metronome_transformation_strip8_512.png
+DEFERRED     8.4 MB       97 KB  WARMED      assets/art/Animations/Roster/oathbound_cast/char_oathbound_cast_strip8_512.png
+DEFERRED     8.4 MB       74 KB  WARMED      assets/art/Animations/Roster/oathbound_mark/char_oathbound_mark_strip8_512.png
+DEFERRED     8.4 MB       90 KB  WARMED      assets/art/Animations/Roster/oathbound_transformation/char_oathbound_transformation_strip8_512.png
+DEFERRED     8.4 MB      125 KB  WARMED      assets/art/Animations/Roster/quiver_cast/char_quiver_cast_strip8_512.png
+DEFERRED     8.4 MB      114 KB  WARMED      assets/art/Animations/Roster/quiver_mark/char_quiver_mark_strip8_512.png
+DEFERRED     8.4 MB      117 KB  WARMED      assets/art/Animations/Roster/quiver_transformation/char_quiver_transformation_strip8_512.png
+DEFERRED     8.4 MB      150 KB  WARMED      assets/art/Animations/Roster/thornwall_cast/char_thornwall_cast_strip8_512.png
+DEFERRED     8.4 MB      130 KB  WARMED      assets/art/Animations/Roster/thornwall_mark/char_thornwall_mark_strip8_512.png
+DEFERRED     8.4 MB      136 KB  WARMED      assets/art/Animations/Roster/thornwall_transformation/char_thornwall_transformation_strip8_512.png
+DEFERRED     8.4 MB      116 KB  WARMED      assets/art/Animations/Roster/tower_cast/char_tower_cast_strip8_512.png
+DEFERRED     8.4 MB      110 KB  WARMED      assets/art/Animations/Roster/tower_mark/char_tower_mark_strip8_512.png
+DEFERRED     8.4 MB      145 KB  WARMED      assets/art/Animations/Roster/tower_transformation/char_tower_transformation_strip8_512.png
+DEFERRED     8.4 MB      141 KB  WARMED      assets/art/Animations/Roster/unbroken_cast/char_unbroken_cast_strip8_512.png
+DEFERRED     8.4 MB      132 KB  WARMED      assets/art/Animations/Roster/unbroken_mark/char_unbroken_mark_strip8_512.png
+DEFERRED     8.4 MB      153 KB  WARMED      assets/art/Animations/Roster/unbroken_transformation/char_unbroken_transformation_strip8_512.png
+DEFERRED     1.0 MB       21 KB  WARMED      assets/art/Enemies/enemies/archive_armoured/archive_armoured_attack_01.png
+DEFERRED     1.0 MB       20 KB  WARMED      assets/art/Enemies/enemies/archive_armoured/archive_armoured_idle_01.png
+DEFERRED     1.0 MB       23 KB  WARMED      assets/art/Enemies/enemies/archive_bruiser/archive_bruiser_attack_01.png
+DEFERRED     1.0 MB       25 KB  WARMED      assets/art/Enemies/enemies/archive_bruiser/archive_bruiser_idle_01.png
+DEFERRED     1.0 MB       16 KB  WARMED      assets/art/Enemies/enemies/archive_caster/archive_caster_attack_01.png
+DEFERRED     1.0 MB       17 KB  WARMED      assets/art/Enemies/enemies/archive_caster/archive_caster_idle_01.png
+DEFERRED     1.0 MB        8 KB  WARMED      assets/art/Enemies/enemies/archive_swarm/archive_swarm_attack_01.png
+DEFERRED     1.0 MB        9 KB  WARMED      assets/art/Enemies/enemies/archive_swarm/archive_swarm_idle_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/choir_armoured/choir_armoured_attack_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/choir_armoured/choir_armoured_idle_01.png
+DEFERRED     1.0 MB       21 KB  WARMED      assets/art/Enemies/enemies/choir_bruiser/choir_bruiser_attack_01.png
+DEFERRED     1.0 MB       24 KB  WARMED      assets/art/Enemies/enemies/choir_bruiser/choir_bruiser_idle_01.png
+DEFERRED     1.0 MB       11 KB  WARMED      assets/art/Enemies/enemies/choir_caster/choir_caster_attack_01.png
+DEFERRED     1.0 MB       13 KB  WARMED      assets/art/Enemies/enemies/choir_caster/choir_caster_idle_01.png
+DEFERRED     1.0 MB       24 KB  WARMED      assets/art/Enemies/enemies/choir_swarm/choir_swarm_attack_01.png
+DEFERRED     1.0 MB       23 KB  WARMED      assets/art/Enemies/enemies/choir_swarm/choir_swarm_idle_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/cinder_armoured/cinder_armoured_attack_01.png
+DEFERRED     1.0 MB       23 KB  WARMED      assets/art/Enemies/enemies/cinder_armoured/cinder_armoured_idle_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/cinder_bruiser/cinder_bruiser_attack_01.png
+DEFERRED     1.0 MB       27 KB  WARMED      assets/art/Enemies/enemies/cinder_bruiser/cinder_bruiser_idle_01.png
+DEFERRED     1.0 MB       12 KB  WARMED      assets/art/Enemies/enemies/cinder_caster/cinder_caster_attack_01.png
+DEFERRED     1.0 MB       13 KB  WARMED      assets/art/Enemies/enemies/cinder_caster/cinder_caster_idle_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/cinder_swarm/cinder_swarm_attack_01.png
+DEFERRED     1.0 MB       22 KB  WARMED      assets/art/Enemies/enemies/cinder_swarm/cinder_swarm_idle_01.png
+DEFERRED     1.0 MB       20 KB  WARMED      assets/art/Enemies/enemies/marrow_armoured/marrow_armoured_attack_01.png
+DEFERRED     1.0 MB       20 KB  WARMED      assets/art/Enemies/enemies/marrow_armoured/marrow_armoured_idle_01.png
+DEFERRED     1.0 MB       21 KB  WARMED      assets/art/Enemies/enemies/marrow_bruiser/marrow_bruiser_attack_01.png
+DEFERRED     1.0 MB       21 KB  WARMED      assets/art/Enemies/enemies/marrow_bruiser/marrow_bruiser_idle_01.png
+DEFERRED     1.0 MB       15 KB  WARMED      assets/art/Enemies/enemies/marrow_caster/marrow_caster_attack_01.png
+DEFERRED     1.0 MB       16 KB  WARMED      assets/art/Enemies/enemies/marrow_caster/marrow_caster_idle_01.png
+DEFERRED     1.0 MB       15 KB  WARMED      assets/art/Enemies/enemies/marrow_swarm/marrow_swarm_attack_01.png
+DEFERRED     1.0 MB       15 KB  WARMED      assets/art/Enemies/enemies/marrow_swarm/marrow_swarm_idle_01.png
+DEFERRED     1.0 MB       19 KB  WARMED      assets/art/Enemies/enemies/umbral_armoured/umbral_armoured_attack_01.png
+DEFERRED     1.0 MB       18 KB  WARMED      assets/art/Enemies/enemies/umbral_armoured/umbral_armoured_idle_01.png
+DEFERRED     1.0 MB       17 KB  WARMED      assets/art/Enemies/enemies/umbral_bruiser/umbral_bruiser_attack_01.png
+DEFERRED     1.0 MB       17 KB  WARMED      assets/art/Enemies/enemies/umbral_bruiser/umbral_bruiser_idle_01.png
+DEFERRED     1.0 MB       11 KB  WARMED      assets/art/Enemies/enemies/umbral_caster/umbral_caster_attack_01.png
+DEFERRED     1.0 MB       11 KB  WARMED      assets/art/Enemies/enemies/umbral_caster/umbral_caster_idle_01.png
+DEFERRED     1.0 MB       18 KB  WARMED      assets/art/Enemies/enemies/verdant_armoured/verdant_armoured_attack_01.png
+DEFERRED     1.0 MB       18 KB  WARMED      assets/art/Enemies/enemies/verdant_armoured/verdant_armoured_idle_01.png
+DEFERRED     1.0 MB       20 KB  WARMED      assets/art/Enemies/enemies/verdant_bruiser/verdant_bruiser_attack_01.png
+DEFERRED     1.0 MB       23 KB  WARMED      assets/art/Enemies/enemies/verdant_bruiser/verdant_bruiser_idle_01.png
+DEFERRED     1.0 MB       13 KB  WARMED      assets/art/Enemies/enemies/verdant_caster/verdant_caster_attack_01.png
+DEFERRED     1.0 MB       14 KB  WARMED      assets/art/Enemies/enemies/verdant_caster/verdant_caster_idle_01.png
+DEFERRED     1.0 MB       24 KB  WARMED      assets/art/Enemies/enemies/verdant_swarm/verdant_swarm_attack_01.png
+DEFERRED     1.0 MB       26 KB  tools/tests WARMED assets/art/Enemies/enemies/verdant_swarm/verdant_swarm_idle_01.png
+
+only existence-checked (Has), never requested: 0 files (kept: the code branches on them)

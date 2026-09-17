@@ -257,9 +257,16 @@ public class EnemyPresentationTest
     [Fact]
     public void test_the_arena_warms_its_families_from_update_and_has_never_loads()
     {
-        var library = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "AssetLibrary.cs"));
-        Assert.Contains("public bool Has(string key)\n        => Present(key)", library.Replace("\r\n", "\n"), StringComparison.Ordinal);
-        Assert.DoesNotContain("public bool Has(string key) => Resolve(key)", library, StringComparison.Ordinal);
+        var library = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "AssetLibrary.cs")).Replace("\r\n", "\n");
+        // Has answers from the index: it asks Present, never Resolve/Loaded (which decode a deferred key).
+        // The body is read rather than matched character by character — RH_ASSET_TRACE wraps the key in a
+        // Trace(...) call (2026-09-17), and the claim under test is which lookup it uses, not its spelling.
+        var has = library.IndexOf("public bool Has(string key)", StringComparison.Ordinal);
+        Assert.True(has > 0, "AssetLibrary.Has was renamed — re-anchor this test.");
+        var body = library[has..library.IndexOf(';', has)];
+        Assert.Contains("Present(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Resolve(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Loaded(", body, StringComparison.Ordinal);
 
         var host = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
         Assert.Contains("_expedition.WarmArt();", host, StringComparison.Ordinal);

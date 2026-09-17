@@ -192,15 +192,13 @@ public sealed class AssetLibrary
         ["item_glyph_focus"] = "item_slot_focus", ["item_glyph_helm"] = "item_slot_helm",
         ["item_glyph_chest"] = "item_slot_chest", ["item_glyph_gloves"] = "item_slot_gloves",
         ["item_glyph_boots"] = "item_slot_boots", ["item_glyph_ring"] = "item_slot_ring",
-        ["item_glyph_core"] = "core_hatch",
+        // (item_glyph_core -> core_hatch went on 2026-09-17: no item is a core, and nothing asked.)
         // Rarity frames ship as ui_frame_rarity_<tier> (assets/art/UI/slots + ItemsLoot/frames). The
         // earlier frame_<tier> targets never existed on disk, so every one of these keys resolved to
         // null and no item ever drew a rarity frame.
         ["item_frame_common"] = "ui_frame_rarity_common", ["item_frame_uncommon"] = "ui_frame_rarity_uncommon",
         ["item_frame_rare"] = "ui_frame_rarity_rare", ["item_frame_epic"] = "ui_frame_rarity_epic",
         ["item_frame_legendary"] = "ui_frame_rarity_legendary",
-        // UiKit.KeyCap asks for ui_keycap; the pack ships the blank square variant under a longer name.
-        ["ui_keycap"] = "ui_keycap_square_blank",
         // STAT GEMS get a FACE. Six medallions (assets/art/ItemsLoot/glyphs/affix) shipped with the
         // item pack and were referenced by nothing in src/ — dormant art for a feature that was drawing
         // a flat coloured diamond instead, so every gem on every screen looked like every other gem.
@@ -252,14 +250,11 @@ public sealed class AssetLibrary
         // (VfxProfiles) so the gate has something to read, and vfx_asset_test walks the rest.
         ["fx_press"] = "fx_press_strip8_512", ["fx_weep"] = "fx_weep_strip8_512",
         ["fx_wilt"] = "fx_wilt_strip8_512",
-        // `fx_levelup` was aliased here, the file is on disk, and NOTHING has ever played it — §112's
-        // "every committed generated asset needs a live consumer". The alias is gone.
-        // THE FILE IS STILL THERE, and no gate will say so: check_asset_consumers.py counts any
-        // `fx_*` file as reached, because `fx_` is the literal head of an interpolated key family.
-        // It is NOT in tools/asset_orphans_baseline.txt either — adding it would be recorded as an
-        // entry that "gained a consumer" and shrink that list dishonestly. So the open item is
-        // exactly this: assets/art/VFX/levelup/fx_levelup_strip8_512.png is orphaned art awaiting a
-        // decision at the desk — delete it, or give it the level-up flourish it was generated for.
+        // `fx_levelup` was aliased here and NOTHING ever played it — §112's "every committed generated
+        // asset needs a live consumer". The alias went first; the strip itself (8.4 MB of texture memory
+        // at every boot) was deleted on 2026-09-17, when RH_ASSET_TRACE (tools/asset-pipeline/
+        // asset_usage.sh) showed what check_asset_consumers.py cannot: `fx_` heads an interpolated key
+        // family, so that gate counts every fx_* file as reached.
         // SHIELD BROKEN (UI polish §70, §95): generated through PixelLab (a cracked shell bursting into
         // shards) because fx_shield is the barrier STANDING — a held loop, not a break.
         ["fx_shield_break"] = "fx_shield_break_strip8_512",
@@ -271,8 +266,43 @@ public sealed class AssetLibrary
     };
 
     private Texture2D? Resolve(string key)
-        => Loaded(key)
-           ?? (Aliases.TryGetValue(key, out var aliased) ? Loaded(aliased) : null);
+    {
+        Trace(key);
+        return Loaded(key)
+               ?? (Aliases.TryGetValue(key, out var aliased) ? Loaded(Trace(aliased)) : null);
+    }
+
+    // ── RH_ASSET_TRACE=<file> (dev only): every key the game ASKS for, appended once per process. ──
+    // "Is this texture used?" has no static answer here — keys are built from catalogues, regions,
+    // champions and clip names at runtime, and the asset gate counts a whole interpolated family as
+    // reached. So the trace records the question itself: Get, Has, GetFirst, WhiteMask, an alias's
+    // target, and every key a Warm prefix matched. Run the capture battery with it on and the union is
+    // the set of textures some screen really asked for (tools/asset-pipeline/asset_usage.sh). Inert
+    // without the variable: one static bool read per request.
+    private static readonly string? TracePath = Environment.GetEnvironmentVariable("RH_ASSET_TRACE") is { Length: > 0 } t ? t : null;
+    private static readonly HashSet<string> Traced = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <param name="key">The key asked for.</param>
+    /// <param name="mark">How it was asked: empty for a request that returns the texture (Get, GetFirst,
+    /// WhiteMask, an alias target), <c>?</c> for an existence check (<see cref="Has"/>), <c>~</c> for a key
+    /// a <see cref="Warm"/> prefix loaded — so the report can tell a texture something DREW from one that
+    /// was only asked about, or only warmed as part of a family.</param>
+    private static string Trace(string key, string mark = "")
+    {
+        if (TracePath is null || string.IsNullOrEmpty(key)) return key;
+        var line = mark + key;
+        lock (Traced)
+        {
+            if (!Traced.Add(line)) return key;
+            try { File.AppendAllText(TracePath, line + "\n"); }
+            catch (IOException)
+            {
+                // A trace is best-effort; the game never fails for it. (A line comment on purpose: the
+                // asset gates strip block comments, and one here paired with the `**` in the class notes.)
+            }
+        }
+        return key;
+    }
 
     /// <summary>A loaded texture, loading a deferred one now if this is its first ask.</summary>
     private Texture2D? Loaded(string key)
@@ -290,6 +320,9 @@ public sealed class AssetLibrary
     /// </summary>
     public int Warm(string prefix)
     {
+        if (TracePath is not null && !string.IsNullOrEmpty(prefix))
+            foreach (var key in _deferred.Keys.Concat(_textures.Keys))
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) Trace(key, "~");
         if (_deferred.Count == 0 || string.IsNullOrEmpty(prefix)) return 0;
         _warmBuffer.Clear();
         foreach (var key in _deferred.Keys)
@@ -374,7 +407,7 @@ public sealed class AssetLibrary
     /// never loads anything.
     /// </summary>
     public bool Has(string key)
-        => Present(key) || (Aliases.TryGetValue(key, out var aliased) && Present(aliased));
+        => Present(Trace(key, "?")) || (Aliases.TryGetValue(key, out var aliased) && Present(Trace(aliased, "?")));
 
     private bool Present(string key) => _textures.ContainsKey(key) || _deferred.ContainsKey(key);
 

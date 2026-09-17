@@ -11,9 +11,9 @@ canvas (a filled canvas has no content bounds to find and would draw as a square
 that is neither a speck nor bleeding to the edge.
 
 The bbox is measured on the shorter side, alpha over 8 — the same floor ItemArtMetrics uses —
-so a thin charm on its chain (item_charm_swift, 0.22 wide) is a sliver and not a failure, and a
+so a thin charm on its chain (a charm 0.22 wide) is a sliver and not a failure, and a
 round medallion that fills its canvas (0.97) is not a bleed. A LONGER side that reaches the edge
-is reported as a WARN column (item_weapon_spear_greedy's tip sits one pixel from the top) rather
+is reported as a WARN column (a spear whose tip sits one pixel from the top) rather
 than a failure: it is a real spear, and the renderer clips nothing.
 
 RARITY FRAMES (ItemsLoot/frames) have their own contract, because a frame is MEANT to reach its

@@ -89,7 +89,7 @@ public class ItemCellLayoutTests
 
     [Theory]
     [InlineData(256, 256)]   // a full canvas
-    [InlineData(57, 241)]    // item_charm_swift: a sliver on its chain
+    [InlineData(57, 241)]    // a charm on its chain: a sliver (measured on item_charm_swift, retired 2026-09-17)
     [InlineData(241, 57)]    // the same, lying down
     [InlineData(40, 40)]     // a small file that must not be blurred up
     [InlineData(1, 1)]
@@ -308,7 +308,10 @@ public class ItemCellLayoutTests
     {
         var items = Path.Combine(RepoRoot(), "assets", "art", "ItemsLoot");
         var files = Directory.EnumerateFiles(items, "*.png", SearchOption.AllDirectories).ToList();
-        Assert.True(files.Count >= 138, $"expected the 138 item PNGs, found {files.Count}");
+        // 138 until 2026-09-17, when the 66 trait glyphs no pool can draw (ForgeScreen.ItemArt reads
+        // GearTraits.PoolFor) and four retired loot files were deleted: the 44 drawable trait glyphs, 12 glyphs,
+        // 7 loot icons and 5 frames remain.
+        Assert.True(files.Count >= 68, $"expected the 68 item PNGs, found {files.Count}");
         foreach (var f in files)
         {
             // PNG: 8-byte signature, then the IHDR chunk: length(4) "IHDR"(4) width(4) height(4), big-endian.

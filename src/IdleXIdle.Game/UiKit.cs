@@ -1874,15 +1874,8 @@ public sealed class UiKit
         => Math.Clamp(first - wheel, 0, Math.Max(0, total - visible));
     public static bool Hover(Rectangle r, Point mouse) => r.Contains(mouse);
 
-    // ── Key-caps and icons ──────────────────────────────────────────────────────────────────────
-    /// <summary>A key-cap chip with the key letters printed on it.</summary>
-    public void KeyCap(SpriteBatch b, int x, int y, string key, Color? textColor = null)
-    {
-        var w = Math.Max(16, Measure(key) + 8);
-        if (Assets.Get("ui_keycap") is { } cap) b.Draw(cap, new Rectangle(x, y, w, 16), Color.White);
-        else { Fill(b, new Rectangle(x, y, w, 16), Dim); Fill(b, new Rectangle(x + 1, y + 1, w - 2, 14), PanelBg); }
-        Font.DrawCentered(b, key, x + w / 2, y + 5, textColor ?? UiInk.Primary);
-    }
+    // ── Icons ───────────────────────────────────────────────────────────────────────────────────
+    // (KeyCap — a key-cap chip on ui_keycap — had no caller and went with its art on 2026-09-17.)
 
     /// <summary>
     /// THE LOCK GLYPH: the padlock cut from the centre of the locked-slot tile, so it fills its box.

@@ -1,0 +1,728 @@
+[
+ {
+  "path": "assets/art/BrandingSymbols/glyphs/navigation/color/nav_forge_128.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing in src/ asks for nav_forge_128. Game1.cs:10790 records it as an empty ring (0.00) that icon_nav_forge replaced (:10801). Even the consumer gate reports it as an orphan, and it is still listed in tools/asset_orphans_baseline.txt:9.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:860 and manifest.json. Listed in tools/asset_orphans_baseline.txt:9, which would need that row removed."
+ },
+ {
+  "path": "assets/art/BrandingSymbols/glyphs/navigation/color/nav_warren_128.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing in src/ asks for nav_warren_128. Game1.cs:10790 records it as an empty ring (0.00) that icon_nav_warren replaced (:10801). The gate reports it as an orphan, and it is in the baseline at line 10.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:861 and manifest.json. Listed in tools/asset_orphans_baseline.txt:10, which would need that row removed."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_accessory.png",
+  "verdict": "DELETE-upheld",
+  "why": "No code in src/ builds an icon_equipment_* key. Equipment art is reached as item_slot_<slot> (VaultScreen.cs:1930-1934, and the item_glyph_* aliases at AssetLibrary.cs:191-195) or item_<slot>[_<family>]_<pick> (ForgeScreen.cs:99-102). The consumer gate only counts this file as reached because of the unrelated \"icon_\" + v.Id head at LoadoutScreen.cs:621.",
+  "tools": "No tool reads the file. tools/asset-pipeline/build_spec.py:357 and manifest.json list the key as something to generate."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_blade.png",
+  "verdict": "DELETE-upheld",
+  "why": "No icon_equipment_* builder exists in src/. ItemNaming.WeaponFamilies (ItemNaming.cs:22) only feeds item_weapon_<family>_<pick> (ForgeScreen.cs:99-100), never icon_equipment_<family>. The gate's reach comes from the \"icon_\" + v.Id head at LoadoutScreen.cs:621.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:353 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_boots.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. Boots art is drawn through item_slot_boots (VaultScreen.cs:1933, AssetLibrary.cs:194).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:356 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_bow.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. The bow family is drawn as item_weapon_bow_<pick> (ForgeScreen.cs:99-100).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:353 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_chest.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. Chest art is drawn through item_slot_chest (VaultScreen.cs:1933, AssetLibrary.cs:193).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:355 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_gloves.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. Gloves art is drawn through item_slot_gloves (VaultScreen.cs:1933, AssetLibrary.cs:193).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:356 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_helmet.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. Helm art is drawn through item_slot_helm (VaultScreen.cs:1933, AssetLibrary.cs:192).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:355 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_scythe.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. The scythe family is drawn as item_weapon_scythe_<pick> (ForgeScreen.cs:99-100).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:354 and manifest.json."
+ },
+ {
+  "path": "assets/art/Characters/Hunter/icons/equipment/icon_equipment_spear.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing builds icon_equipment_*. The spear family is drawn as item_weapon_spear_<pick> (ForgeScreen.cs:99-100).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:354 and manifest.json."
+ },
+ {
+  "path": "assets/art/ItemsLoot/glyphs/affix/affix_healing.png",
+  "verdict": "DELETE-upheld",
+  "why": "No alias points at it: the gem_* aliases (AssetLibrary.cs:208-210) target power/health/timer/resonance/critical/defense. No code builds an affix_ key; the only \"affix\" + ... is ForgeScreen.cs:204 AffixFeel, which is an animation key, not a texture. AffixStat has no healing member (ItemAffixes.cs:8).",
+  "tools": "tools/asset_orphans_baseline.txt:11 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (generation specs)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/loot/containers/core_hatch.png",
+  "verdict": "DELETE-upheld",
+  "why": "Its only link is the alias item_glyph_core -> core_hatch (AssetLibrary.cs:195), and nothing in src/ produces any item_glyph_* key: no literal and no \"item_glyph_\" builder. Slot glyphs are item_slot_* (MapScreen.cs:613-623, VaultScreen.cs:1930-1934). Remove the alias entry in the same change, or check_asset_keys.py:207-212 fails on a missing alias target. The consumer gate calls this a 'content list' hit only because design docs mention it.",
+  "tools": "tools/asset-pipeline/build_spec.py and manifest.json (generation specs only)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/loot/currency/currency_insight.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. The only currency_ keys in src/ are currency_gleam (ForgeScreen.cs:2380,3949; HuntScreen.cs:5344) and the aliases ui_gleam_coin -> currency_gleam and ui_memory_dust -> currency_memory_dust (AssetLibrary.cs:187-188). Insight is a retired currency.",
+  "tools": "tools/asset_orphans_baseline.txt:12 (drop the row)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/loot/currency/currency_resonance_shard.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder for currency_resonance_shard. The only currency keys are currency_gleam and currency_memory_dust (AssetLibrary.cs:187-188, ForgeScreen.cs:2380). The purse and resource icon tables (Game1.cs:10323-10324, WarrenScreen.cs:674-681) name only mat_* and the two aliased currencies.",
+  "tools": "tools/asset_orphans_baseline.txt:13 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (generation specs)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85, 98, 102) builds item_boots_<pool word> only, and the picture comes from the item id, not its trait, so 'heavy' is never built for boots.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_keen.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never builds this key: boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103; ForgeScreen.cs:85-102). The only reader is a dev preview tool, which falls back to item_slot_boots if the file is gone.",
+  "tools": "tools/asset-pipeline/scene_preview.py:74,213 (loads item_<slot>_keen for chest/boots/gloves/helm/weapon, else item_slot_<slot>); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_boots_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_boots_vital.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_boots_warding.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/boots/item_boots_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Boots only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_boots_wild.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_attuned.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_attuned.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_focused.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_focused.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_heavy.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_keen.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_keen. scene_preview.py does not preview the charm slot (SOCKET_ORDER, scene_preview.py:74).",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/charm/item_charm_swift.png",
+  "verdict": "DELETE-upheld",
+  "why": "Charms only draw from CharmPool warding/vital/greedy/wild (GearTraits.cs:96, 102). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_charm_swift. The test and tool that mention it only name it in comments; neither opens the file.",
+  "tools": "named only in prose: tools/check_item_art.py:14 docstring; tests/unit/IdleXIdle.Game.Tests/item_cell_layout_test.cs:92 comment (InlineData 57x241 is a literal, no file read); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_chest_heavy.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_keen.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never builds this key: chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103; ForgeScreen.cs:85-102). The only reader is a dev preview tool, which falls back to item_slot_chest.",
+  "tools": "tools/asset-pipeline/scene_preview.py:74,213; plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_chest_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_chest_vital.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_chest_warding.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/chest/item_chest_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Chests only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_chest_wild.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot (ItemBaseType.AbilityFocus to GearSlot.Focus, Gear.cs:43) only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_heavy.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_keen.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_keen, and scene_preview does not preview the focus slot (scene_preview.py:74).",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_vital.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_warding.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/focus/item_focus_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Focus slot only draws from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_focus_wild.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_gloves_heavy.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_keen.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never builds this key: gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103; ForgeScreen.cs:85-102). The only reader is a dev preview tool, which falls back to item_slot_gloves.",
+  "tools": "tools/asset-pipeline/scene_preview.py:74,213; plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_gloves_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_gloves_vital.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_gloves_warding.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/gloves/item_gloves_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Gloves only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_gloves_wild.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_helm_heavy.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_keen.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never builds this key: helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103; ForgeScreen.cs:85-102). The only reader is a dev preview tool, which falls back to item_slot_helm.",
+  "tools": "tools/asset-pipeline/scene_preview.py:74,213; plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_helm_savage.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_helm_vital.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_helm_warding.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/helm/item_helm_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Helms only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_helm_wild.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_heavy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_heavy.",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (batch-processes the whole ring folder, no per-file need); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_keen.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_keen, and scene_preview does not preview the ring slot (scene_preview.py:74).",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (folder batch); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_savage.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_savage.",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (folder batch); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_vital.",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (folder batch); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_warding.",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (folder batch); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/ring/item_ring_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Rings only draw from FocusPool attuned/focused/swift/greedy (GearTraits.cs:97, 103). ForgeScreen.ItemArt (ForgeScreen.cs:85-102) never builds item_ring_wild.",
+  "tools": "tools/asset-pipeline/punch_ring_holes.py:156 (folder batch); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_attuned.png",
+  "verdict": "DELETE-upheld",
+  "why": "Weapons only draw from WeaponPool keen/heavy/swift/savage (GearTraits.cs:95, 101). The plain item_weapon_<pick> key (the blade face, and the fallback for other shapes) is only built for those four words (ForgeScreen.cs:98, 102), so 'attuned' is never built.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_attuned.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'attuned' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group copies all 30 shape x trait files from staging; re-running --apply would restore it); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_focused.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'focused' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_greedy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'greedy' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'vital' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'warding' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_bow_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Bow faces are built as item_weapon_bow_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'wild' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_focused.png",
+  "verdict": "DELETE-upheld",
+  "why": "The plain item_weapon_<pick> key (blade face and fallback) is only built for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98, 102; GearTraits.cs:95). 'focused' is not in that pool.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_greedy.png",
+  "verdict": "DELETE-upheld",
+  "why": "The plain item_weapon_<pick> key is only built for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98, 102; GearTraits.cs:95). 'greedy' is not in that pool.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_attuned.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'attuned' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_focused.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'focused' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_greedy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'greedy' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'vital' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'warding' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_scythe_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Scythe faces are built as item_weapon_scythe_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'wild' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_attuned.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'attuned' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_focused.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'focused' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_greedy.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'greedy' is not in that pool. The tool that mentions this file only names it in a docstring.",
+  "tools": "named only in prose: tools/check_item_art.py:16 docstring (example of an edge warning); tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'vital' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'warding' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_spear_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "Spear faces are built as item_weapon_spear_<pick> only for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98-100, GearTraits.cs:95). 'wild' is not in that pool.",
+  "tools": "tools/asset-pipeline/v2/file_assets.py:118-126 (icons group); plus generic (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_vital.png",
+  "verdict": "DELETE-upheld",
+  "why": "The plain item_weapon_<pick> key is only built for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98, 102; GearTraits.cs:95). 'vital' is not in that pool.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_warding.png",
+  "verdict": "DELETE-upheld",
+  "why": "The plain item_weapon_<pick> key is only built for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98, 102; GearTraits.cs:95). 'warding' is not in that pool.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/ItemsLoot/traits/weapon/item_weapon_wild.png",
+  "verdict": "DELETE-upheld",
+  "why": "The plain item_weapon_<pick> key is only built for WeaponPool keen/heavy/swift/savage (ForgeScreen.cs:98, 102; GearTraits.cs:95). 'wild' is not in that pool.",
+  "tools": "generic only (see family_notes)"
+ },
+ {
+  "path": "assets/art/UI/bars/ui_bar_fill.png",
+  "verdict": "DELETE-upheld",
+  "why": "BarArt builds $\"ui_bar_{type}_fill\" (UiKit.cs:2195), and its callers pass only health, boss, shield, progress and xp (HuntScreen.cs:3503,3585,4724,4765,5120; WarrenScreen.cs:1080). That can never produce the bare ui_bar_fill. The slim Bar is procedural (UiKit.cs:1499-1507 notes it stopped using this art). The consumer gate's 'family ui_bar_' match is a false positive.",
+  "tools": "tools/asset-pipeline/build_spec.py:321 and manifest.json (generation specs only)"
+ },
+ {
+  "path": "assets/art/UI/bars/ui_bar_frame.png",
+  "verdict": "DELETE-upheld",
+  "why": "BarArt builds $\"ui_bar_{type}_frame\" (UiKit.cs:2174) with type health/boss/shield/progress/xp only, so the bare key is never built. UiKit.cs:1504 records that the slim Bar stopped drawing ui_bar_frame. The shield uses the mana frame through an alias (AssetLibrary.cs:270).",
+  "tools": "tools/asset-pipeline/build_spec.py:319 and manifest.json (generation specs); tools/measure_frames.py:171 measures every *frame* file in UI/bars (not a dependency)"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_button_confirm.png",
+  "verdict": "DELETE-upheld",
+  "why": "Button art keys are only ui_button_disabled, ui_button_primary and ui_button_secondary (UiKit.cs:1669-1671 Button; :1788 Field). ButtonStyle has only Secondary and Primary (UiKit.cs:2232-2239). No ui_button_ builder exists.",
+  "tools": "tools/asset_orphans_baseline.txt:14 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json; tools/measure_frames.py:172 measures every ui_button_* file (not a dependency)"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_button_danger.png",
+  "verdict": "DELETE-upheld",
+  "why": "Same as ui_button_confirm: Button and Field pick only disabled, primary or secondary (UiKit.cs:1669-1671, :1788). ButtonStyle has no Danger member (UiKit.cs:2232-2239).",
+  "tools": "tools/asset_orphans_baseline.txt:15 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json; tools/measure_frames.py sweep (not a dependency)"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_button_icon_back.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. Button keys are only disabled, primary and secondary (UiKit.cs:1669-1671).",
+  "tools": "tools/asset_orphans_baseline.txt:16 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (measure_frames.py skips 'icon' files)"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_button_icon_close.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. Close actions are ordinary labelled Buttons (for example LoadoutScreen.cs:2360, \"CLOSE\" with ButtonStyle.Secondary).",
+  "tools": "tools/asset_orphans_baseline.txt:17 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_button_icon_square.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder anywhere in src/.",
+  "tools": "tools/asset_orphans_baseline.txt:18 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/buttons/ui_tab_inactive.png",
+  "verdict": "DELETE-upheld",
+  "why": "Only ui_tab_active is asked for (Game1.cs:11194/11205, with ui_button_primary as the fallback). No ui_tab_ builder exists and the inactive nav tab draws without this art.",
+  "tools": "tools/asset_orphans_baseline.txt:19 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json; tools/measure_frames.py sweeps ui_tab_* (not a dependency)"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_corner_bottom_left.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. There is no \"ui_corner\" string and no $\"ui_...\" family except ui_bar_{type}. Panel corners come from the sliced panel art (UiKit.SliceFrame).",
+  "tools": "tools/asset_orphans_baseline.txt:20 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_corner_bottom_right.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder for any ui_corner_* key in src/.",
+  "tools": "tools/asset_orphans_baseline.txt:21 (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_corner_top_left.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder for any ui_corner_* key in src/.",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_corner_top_right.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder for any ui_corner_* key in src/.",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_divider_long.png",
+  "verdict": "TOOL_ONLY",
+  "why": "No literal, alias or builder in src/, so the game never draws it.",
+  "tools": "tools/marketing/make_itch_page.py:38,211 (DIVIDER, read for the itch page); also tools/asset_orphans_baseline.txt (listed as a game orphan) and tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_divider_short.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. Unlike ui_divider_long, no marketing tool reads it either.",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_keycap_space_blank.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder anywhere in src/. The only keycap key is ui_keycap (UiKit.cs:1882), aliased to the square variant.",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (generation specs)"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_keycap_square_blank.png",
+  "verdict": "DELETE-upheld",
+  "why": "Its only link is the alias ui_keycap -> ui_keycap_square_blank (AssetLibrary.cs:203), asked for only by UiKit.KeyCap (UiKit.cs:1879-1882), which has zero callers in src/ and tests/. Remove it together with the alias and the dead KeyCap method (or its Get(\"ui_keycap\")), or check_asset_keys.py fails on a dead alias target (:207-212) or an unresolved literal.",
+  "tools": "tools/asset-pipeline/build_spec.py and manifest.json (generation specs only)"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_scrollbar_handle.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. The scrollbar thumb is a flat Fill in UiInk.Secondary (UiKit.cs ~1869).",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json"
+ },
+ {
+  "path": "assets/art/UI/decor/ui_scrollbar_track.png",
+  "verdict": "DELETE-upheld",
+  "why": "No literal, alias or builder. The scrollbar is drawn from rectangles (UiKit.cs ~1862-1872: Fill with UiInk.Plate, UiInk.Rule and UiInk.Secondary).",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (generation specs)"
+ },
+ {
+  "path": "assets/art/UI/icons/blessings/icon_blessing_amplifier.png",
+  "verdict": "DELETE-upheld",
+  "why": "src/ has no mention of blessing or Amplifier, in any case. The screen this was made for (build_spec.py:612, 'TraitsScreen' Memory-Dust blessing categories) no longer exists. The 2026-09-16 note that these were 'wired' is a gate artefact: \"icon_\" + v.Id (LoadoutScreen.cs:621) makes check_asset_consumers.py count every icon_* file as reached.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:622 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/blessings/icon_blessing_convenience.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never asks for it: src/ has no blessing key, and the gate's reach is the same \"icon_\" + v.Id artefact from LoadoutScreen.cs:621. The itch page generator does use it as the LEAVE medallion.",
+  "tools": "tools/marketing/make_itch_page.py:331 (loop_strip, the LEAVE step). Also named in build_spec.py:622 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/blessings/icon_blessing_expansion.png",
+  "verdict": "DELETE-upheld",
+  "why": "src/ has no blessing or Expansion key builder. The blessing screen is gone, and the gate's reach comes from the \"icon_\" + v.Id artefact (LoadoutScreen.cs:621).",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:622 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/icon_peek.png",
+  "verdict": "DELETE-upheld",
+  "why": "No code in src/ asks for icon_peek, and no builder can produce it. VaultScreen.cs:657 and :1308 say the peek glass on vault cards is gone. The gate counts it as reached only through the \"icon_\" + v.Id head (LoadoutScreen.cs:621).",
+  "tools": "None (only the baseline comment at tools/asset_orphans_baseline.txt:5-6 mentions it)."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_codex.png",
+  "verdict": "DELETE-upheld",
+  "why": "The rail table (Game1.cs:10794-10802) and WelcomeFigure (Game1.cs:7721-7724) are the only nav_* users, and neither names nav_codex. Game1.cs:10799 calls it an empty ring (0.01) that was rejected. No interpolated nav_ key exists.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:366 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_evolve.png",
+  "verdict": "DELETE-upheld",
+  "why": "The Nav table (Game1.cs:10794-10802) does not use it, and Game1.cs:10799 rejects it as an empty ring (0.00). No other nav_ key builder exists.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:366 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_forge.png",
+  "verdict": "DELETE-upheld",
+  "why": "The FORGE tile uses icon_nav_forge (Game1.cs:10801). Game1.cs:10790 says nav_forge scores 0.00, an empty ring. No code path asks for the nav_forge key.",
+  "tools": "No tool reads the file. make_itch_page.py uses the separate icon_nav_forge.png. Named in build_spec.py:363 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_gear.png",
+  "verdict": "DELETE-upheld",
+  "why": "The GEAR tile uses nav_inventory_128 (Game1.cs:10794). No code asks for nav_gear.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:365 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_hunt.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game asks for nav_hunt_128, a different key and file (Game1.cs:7721 and 10794). Nothing in src/ asks for plain nav_hunt. The itch page generator loads this file directly.",
+  "tools": "tools/marketing/make_itch_page.py:329 (loop_strip, FIGHT) and :448 (SECTIONS, fight). Also named in build_spec.py:363 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_mail.png",
+  "verdict": "DELETE-upheld",
+  "why": "There is no mail tile in the Nav table (Game1.cs:10794-10802). The inbox draws icon_dispatch (Game1.cs:~9850). No code asks for nav_mail.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:367 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_map.png",
+  "verdict": "DELETE-upheld",
+  "why": "The MAP tile uses nav_relics_128 (Game1.cs:10802). No code asks for nav_map.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:364 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_shop.png",
+  "verdict": "DELETE-upheld",
+  "why": "There is no shop tile in the Nav table (Game1.cs:10794-10802), and no code asks for nav_shop.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:367 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_stats.png",
+  "verdict": "DELETE-upheld",
+  "why": "The TRAINING tile uses state_resonance_128 (Game1.cs:10795). No code asks for nav_stats.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:368 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/nav/nav_warren.png",
+  "verdict": "DELETE-upheld",
+  "why": "The WARREN tile uses icon_nav_warren (Game1.cs:10801). Game1.cs:10790 says nav_warren scores 0.00, an empty ring. No code asks for nav_warren.",
+  "tools": "No tool reads the file. make_itch_page.py:453 uses the separate icon_nav_warren.png. Named in build_spec.py:364 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/roles/icon_role_crafter.png",
+  "verdict": "DELETE-upheld",
+  "why": "The only role key in src/ is the alias stat_focus -> icon_role_attacker (AssetLibrary.cs:222), which is a different file. The role badges belonged to AutomationScreen, which was retired 2026-08-24 (Game1.cs:663). No icon_role_ builder exists, and the gate's reach is the \"icon_\" + v.Id artefact.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:249-254 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/roles/icon_role_defender.png",
+  "verdict": "DELETE-upheld",
+  "why": "Only icon_role_attacker is reachable (the alias at AssetLibrary.cs:222). AutomationScreen, the consumer of the role badges, was retired (Game1.cs:663). Nothing builds icon_role_defender.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:249-254 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/roles/icon_role_producer.png",
+  "verdict": "DELETE-upheld",
+  "why": "Only icon_role_attacker is reachable (the alias at AssetLibrary.cs:222). Nothing builds icon_role_producer.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:249-254 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/icons/roles/icon_role_support.png",
+  "verdict": "DELETE-upheld",
+  "why": "Only icon_role_attacker is reachable (the alias at AssetLibrary.cs:222). Nothing builds icon_role_support.",
+  "tools": "No tool reads the file. Named as a generation output in build_spec.py:249-254 and manifest.json."
+ },
+ {
+  "path": "assets/art/UI/nodes/ui_node_mastery.png",
+  "verdict": "DELETE-upheld",
+  "why": "MasteryScreen.KindFrame (MasteryScreen.cs:2311-2321) maps every MasteryKind to start/minor/notable/greater/capstone/skill/spec and never to ui_node_mastery. The remark at :2295-2302 records that the capstone stopped using this plaque. There is no other ui_node builder.",
+  "tools": "tools/asset_orphans_baseline.txt (drop the row); tools/asset-pipeline/build_spec.py and manifest.json (generation specs)"
+ },
+ {
+  "path": "assets/art/UI/panels/ui_panel_large.png",
+  "verdict": "DELETE-upheld",
+  "why": "Nothing in src/ builds this key. Panel keys come only from UiKit.PanelArtKey (UiKit.cs:1151-1153: medium/square/vertical), the artKey pin \"ui_panel_medium\" (HuntScreen.cs:5338) and \"ui_panel_small\" (UiKit.cs:1617). There is no $\"ui_panel_{...}\" builder. The consumer gate counts it as reached only because design docs and pack guides mention it, and the game never reads those.",
+  "tools": "tools/asset-pipeline/build_spec.py and manifest.json (generation specs, not readers); tools/measure_frames.py:170 measures every file in UI/panels when run with no arguments, but nothing depends on this one"
+ },
+ {
+  "path": "assets/art/UI/panels/ui_panel_modal_wide.png",
+  "verdict": "TOOL_ONLY",
+  "why": "The game never asks for it. It is named only in a doc comment (UiKit.cs:1089) as the key for PanelNine, and PanelNine (UiKit.cs:1384) has no callers anywhere in src/. Modals call _ui.Panel(...), whose key comes from PanelArtKey.",
+  "tools": "tools/marketing/make_itch_page.py:37,241 (PANEL_WIDE, nine-sliced into the itch page); also tools/asset-pipeline/build_spec.py and manifest.json (generation specs); tools/measure_frames.py sweeps the UI/panels folder"
+ },
+ {
+  "path": "assets/art/VFX/levelup/fx_levelup_strip8_512.png",
+  "verdict": "DELETE-upheld",
+  "why": "No code path builds the key 'fx_levelup_strip8_512'. The only 'levelup' strings in src are sfx_levelup sound keys (Game1.cs:4509/4653/7397/10532). AssetLibrary.cs:255-262 says the fx_levelup alias was removed and that this file is orphaned. The interpolated fx keys cannot produce it either: fx_{FxKey} uses the catalogue FxKeys {strike, press, trap, mark, projectile, weep, aura, transformation, wilt} (SkillCatalogue.cs), and fx_{championId}_{fxKey}_strip8_512 (HuntScreen.cs:3866/5997) and Warm(\"fx_\"+champion+\"_\") (HuntScreen.cs:956) always put a champion id in the middle. The VfxProfiles literals never name levelup. It is also EAGER, so it takes 8.4 MB at every boot.",
+  "tools": "None read the file. tools/asset-pipeline/.staging/v2/vfx/levelup.log.txt is only a generation log. build_spec.py:1001 and animations.json:483 name a different, non-existent key (levelup_gold_purple_strip8_512 in VFX/levelup/gold_purple). asset_usage.sh:12 mentions it in a comment. Deleting the file leaves assets/art/VFX/levelup/ empty."
+ }
+]
