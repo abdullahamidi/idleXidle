@@ -205,7 +205,8 @@ public class OnboardingTest
     [Fact]
     public void test_a_save_from_before_the_intro_treats_every_open_screen_as_read()
     {
-        // Wave 8 with a conquest: Stats, Build, Mastery, Warren, Map, Roster and the Hunt are all open,
+        // Wave 8 with a conquest: Stats, Build, Mastery, Warren, Map and the Hunt are all open (the Roster
+        // waits for a second hunter, which the first conquest does not bring),
         // and the second, third and fourth skill slots are earned. None of it may be announced.
         // A slot needs the mastery points that pay for a skill to fill it as well as the depth, so the
         // facts carry both — a fixture posing "every slot is earned" with depth alone stopped being

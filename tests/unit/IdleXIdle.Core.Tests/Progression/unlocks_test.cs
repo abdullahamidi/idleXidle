@@ -55,9 +55,9 @@ public class UnlocksTest
             ("first chest earned",    new UnlockFacts(WavesCleared: 5, DeepestWave: 5, ItemsOwned: 1, ChestsEverHeld: 1)),
             ("wave 12 — three points", new UnlockFacts(WavesCleared: 20, DeepestWave: 12, ItemsOwned: 3, ChestsEverHeld: 1, TraitsDiscovered: 2, MasteryPointsEarned: 3)),
             ("first region taken",    new UnlockFacts(WavesCleared: 40, DeepestWave: 20, ItemsOwned: 5, ChestsEverHeld: 2, RegionsConquered: 1, TraitsDiscovered: 4,
-                                                      MasteryPointsEarned: 4, KeystonesDiscovered: 1, CharactersUnlocked: 2)),
+                                                      MasteryPointsEarned: 4, KeystonesDiscovered: 1, CharactersUnlocked: 1)),
             ("second region taken",   new UnlockFacts(WavesCleared: 90, DeepestWave: 30, ItemsOwned: 9, ChestsEverHeld: 3, RegionsConquered: 2, TraitsDiscovered: 6,
-                                                      MasteryPointsEarned: 8, SkillsKnown: 2, KeystonesDiscovered: 2, VowsKnown: 1, CharactersUnlocked: 3)),
+                                                      MasteryPointsEarned: 8, SkillsKnown: 2, KeystonesDiscovered: 2, VowsKnown: 1, CharactersUnlocked: 2)),
         };
 
         UnlockFacts? previous = null;
@@ -173,10 +173,65 @@ public class UnlocksTest
 
         _out.WriteLine($"the first conquest-earned champion arrives after {earliest} conquest(s)");
 
-        var atThatPoint = new UnlockFacts(RegionsConquered: earliest);
+        // (The champion that conquest brings is counted too — the Roster opens on the champion itself.)
+        var atThatPoint = new UnlockFacts(RegionsConquered: earliest, CharactersUnlocked: 2);
         Assert.True(Unlocks.IsOpen(Activity.Roster, atThatPoint),
             $"a champion is earned on conquest {earliest}, but the ROSTER is still locked then — the "
             + "player is handed something they cannot look at.");
+    }
+
+    /// <summary>The number of conquests after which the first conquest-earned champion joins.</summary>
+    private static int FirstChampionConquests() => CharacterRoster.All
+        .Where(c => c.Unlock.Kind == UnlockKind.Conquest && c.Unlock.RegionId is not null)
+        .Select(c => Regions.All.ToList().FindIndex(r => r.Id == c.Unlock.RegionId) + 1)
+        .Where(conquests => conquests > 0)
+        .Min();
+
+    [Fact]
+    public void test_unlocks_roster_conquest_with_no_champion_keeps_the_roster_shut()
+    {
+        // A GATE THAT OUTLIVED ITS REWARD. The Roster opened on the FIRST conquest because that
+        // conquest used to bring THE THORNWALL. On 2026-08-26 the Thornwall moved to a quest, the first
+        // conquest-earned champion became THE ANVIL on the SECOND region, and the first conquest went on
+        // opening a Roster whose notice said "Another hunter joined you. Meet them." to a player with
+        // one hunter (found in the alpha copy check, 2026-09-17).
+        // Arrange
+        var earliest = FirstChampionConquests();
+        _out.WriteLine($"the first conquest-earned champion arrives after {earliest} conquest(s)");
+        Assert.True(earliest > 1, "this regression needs a conquest that brings no champion");
+
+        // Act / Assert — every conquest short of it, with only the starter, keeps the Roster shut.
+        for (var conquests = 0; conquests < earliest; conquests++)
+            Assert.False(Unlocks.IsOpen(Activity.Roster, new UnlockFacts(RegionsConquered: conquests, CharactersUnlocked: 1)),
+                $"the ROSTER opens at {conquests} conquest(s) with nobody new to meet, and says a hunter joined.");
+    }
+
+    [Fact]
+    public void test_unlocks_roster_second_champion_opens_it_whatever_brought_them()
+    {
+        // Arrange — a conquest-earned champion, and a quest-earned one before any conquest.
+        var byConquest = new UnlockFacts(RegionsConquered: FirstChampionConquests(), CharactersUnlocked: 2);
+        var byQuest = new UnlockFacts(CharactersUnlocked: 2);
+
+        // Act / Assert
+        Assert.True(Unlocks.IsOpen(Activity.Roster, byConquest), "a champion joined by conquest, and the ROSTER is still shut");
+        Assert.True(Unlocks.IsOpen(Activity.Roster, byQuest), "a champion joined by quest, and the ROSTER is still shut");
+    }
+
+    [Fact]
+    public void test_unlocks_roster_requirement_names_the_region_that_brings_a_champion()
+    {
+        // Arrange — the region whose conquest brings the first champion after the starter.
+        var index = FirstChampionConquests() - 1;
+        var region = Regions.All[index];
+
+        // Act
+        var text = Unlocks.Requirement(Activity.Roster);
+        _out.WriteLine(text);
+
+        // Assert — the lock names that place, and never a bare "a region" that the first conquest would falsify.
+        Assert.Contains(region.Name, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("a region", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -190,6 +245,9 @@ public class UnlocksTest
         {
             var text = Unlocks.Requirement(activity);
             if (!text.Contains("Conquer", StringComparison.OrdinalIgnoreCase)) continue;
+            // A requirement that names a PLACE is a promise about that place, not a count — the Roster's,
+            // pinned by test_unlocks_roster_requirement_names_the_region_that_brings_a_champion.
+            if (Regions.All.Any(r => text.Contains(r.Name, StringComparison.Ordinal))) continue;
 
             var claimed = text.Contains(" two ", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
 

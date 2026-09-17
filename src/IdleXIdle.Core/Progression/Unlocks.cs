@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Characters;
+using IdleXIdle.Core.Encounters;
 
 namespace IdleXIdle.Core.Progression;
 
@@ -193,10 +195,14 @@ public static class Unlocks
         // screen exists exactly when the player has just been told there is something in it.
         Activity.Traits => f.TraitsDiscovered >= 1,
 
-        // WHEN THERE IS SOMEONE TO MEET. The first conquest brings the second hunter, so the two
-        // clauses coincide in the shipping game; the second is there so a quest-earned hunter can never
-        // arrive on a save whose Roster is still shut (the lag this gate has shipped twice before).
-        Activity.Roster => f.RegionsConquered >= 1 || f.CharactersUnlocked >= 2,
+        // WHEN THERE IS SOMEONE TO MEET — and only then. This also read `RegionsConquered >= 1`, on the
+        // belief that the first conquest brings the second hunter. It did until 2026-08-26, when THE
+        // THORNWALL moved from the first region to a quest; since then the first champion a conquest
+        // brings is THE ANVIL, on the SECOND region, and the first conquest opened a Roster announcing
+        // "Another hunter joined you" to a player with one hunter (alpha copy check, 2026-09-17). The
+        // unlocked count IS the fact, for a conquest and a quest alike, so the gate cannot lag behind
+        // either (the lag this gate has shipped twice before).
+        Activity.Roster => f.CharactersUnlocked >= 2,
 
         // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
         // opens is the failure this whole file exists to prevent.
@@ -222,12 +228,28 @@ public static class Unlocks
         Activity.Map => "Conquer a region",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Discover a characteristic by how you fight",
-        Activity.Roster => "Conquer a region, and a second hunter joins",
+        // THE PLACE, read off the roster — "Conquer a region" was falsified by the first conquest, which
+        // brings nobody. (A quest can bring a hunter too, but only after this conquest is possible.)
+        Activity.Roster => $"Conquer {FirstChampionRegionName()} for a second hunter",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.
         _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
+
+    /// <summary>
+    /// The earliest region, in the world's order, whose conquest brings a champion — derived from the
+    /// roster and the region list, so the Roster's lock line cannot drift from either table again.
+    /// </summary>
+    private static string FirstChampionRegionName()
+    {
+        var regions = Regions.All;
+        for (var i = 0; i < regions.Count; i++)
+            if (CharacterRoster.All.Any(c => c.Unlock.Kind == UnlockKind.Conquest
+                                             && string.Equals(c.Unlock.RegionId, regions[i].Id, StringComparison.OrdinalIgnoreCase)))
+                return regions[i].Name;
+        throw new InvalidOperationException("No champion is earned by conquest, so the Roster's lock line has no region to name.");
+    }
 
     /// <summary>
     /// The one line the notice says when an activity has just opened: the NEED that opened it, and
