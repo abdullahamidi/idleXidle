@@ -2402,6 +2402,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 or "gemtour" or "intro" or "typespec" or "vfxdebug")
             {
                 _showTitle = false;
+                if (ShowcaseRig) _guidanceOff = true;   // RH_SHOT_SHOWCASE: a progressed account has read the lessons
                 // RH_SHOT_HUNTER=<character id> poses the fixture on a DIFFERENT champion.
                 //
                 // The VFX contract measures every effect against the hunter's VISIBLE silhouette, and
@@ -2937,7 +2938,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     // it would stand over the very state those captures exist to show.
                     // No toast over `fightshield`: it would sit on the very strip the capture is for.
                     if (sm is not ("fightreport" or "fightfall" or "fightfade" or "fightarrive" or "fightcooldown" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"
-                                   or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover"))
+                                   or "dispatches" or "dispatchesempty" or "dispatchesunread" or "dispatcheshover")
+                        && !ShowcaseRig)
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
@@ -8444,6 +8446,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>RIG ONLY: true when RH_SHOT is set — the process exists to take one screenshot and exit.</summary>
     internal static readonly bool RigActive = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
 
+    /// <summary>
+    /// RIG: RH_SHOT_SHOWCASE=1 poses a fixture as a PROGRESSED account sees it — for the store screenshots
+    /// (tools/marketing/store_screenshots.sh). The fixtures are built to test one state, so they carry a
+    /// fresh account's chained rail, its coach cards and the short-trip WELCOME BACK toast; a player an
+    /// hour in has every screen open and has long since read the lessons. Under this dial every rail tile
+    /// is open, guidance is off, and the toast is not posed. Nothing about the fight or the numbers moves.
+    /// </summary>
+    internal static readonly bool ShowcaseRig = RigActive && Environment.GetEnvironmentVariable("RH_SHOT_SHOWCASE") == "1";
+
     /// <summary>RIG: RH_SHOT_HELD=1 poses the mouse button held down, so a PRESSED face can be photographed.</summary>
     private static readonly bool ShotHeld = Environment.GetEnvironmentVariable("RH_SHOT_HELD") == "1";
 
@@ -10898,7 +10909,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (i < 0 || i >= NavActivity.Length) return true;
         var activity = NavActivity[i];
-        return _openingGrants.Contains(activity) || Unlocks.IsOpen(activity, GuideUnlockFacts());
+        return ShowcaseRig || _openingGrants.Contains(activity) || Unlocks.IsOpen(activity, GuideUnlockFacts());
     }
 
     /// <summary>

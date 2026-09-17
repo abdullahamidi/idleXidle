@@ -289,6 +289,13 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 #
 #   RH_SHOT_LOCKED=Warren RH_SHOT_UISCALE=150 bash tools/asset-pipeline/capture.sh fight out.png
 [ -n "${RH_SHOT_LOCKED:-}" ] && RH_ENV+=(RH_SHOT_LOCKED="$RH_SHOT_LOCKED")
+# RH_SHOT_SHOWCASE=1 poses any fixture as a PROGRESSED account sees it — every rail tile open, guidance
+# off, no WELCOME BACK toast — for the store screenshots (tools/marketing/store_screenshots.sh). Pair it
+# with RH_SHOT_RAIL=all. The fixtures' own locks and lessons are what they test; this is for showing.
+#
+#   RH_SHOT_SHOWCASE=1 RH_SHOT_RAIL=all bash tools/asset-pipeline/capture.sh forge out.png
+[ -n "${RH_SHOT_SHOWCASE:-}" ] && RH_ENV+=(RH_SHOT_SHOWCASE="$RH_SHOT_SHOWCASE")
+[ -n "${RH_SHOT_RAIL:-}" ] && RH_ENV+=(RH_SHOT_RAIL="$RH_SHOT_RAIL")
 # RH_SHOT_BOSSCALL=1 holds the BOSS INCOMING announcement up on any fight fixture — a second and a
 # half of the break before a boss wave, on a timer no capture could otherwise reach.
 [ -n "${RH_SHOT_BOSSCALL:-}" ] && RH_ENV+=(RH_SHOT_BOSSCALL="$RH_SHOT_BOSSCALL")

@@ -9,7 +9,7 @@ Assets live beside this file:
 | Folder | What | Made by |
 |---|---|---|
 | `docs/store/capsules/` | every capsule at the sizes Steam and itch.io require | `python tools/marketing/make_capsules.py` |
-| `docs/store/screenshots/` | nine 1920×1080 screenshots from the capture rig. The current files are from 2026-08-24 and out of date: take all nine again before you upload. | `bash tools/asset-pipeline/capture.sh <mode> docs/store/screenshots/<mode>.png` |
+| `docs/store/screenshots/` | twelve 1920×1080 screenshots of the current build (re-shot 2026-09-17) | `bash tools/marketing/store_screenshots.sh` |
 | `build/release/IDLExIDLE-win64/` | the self-contained Windows build folder that butler pushes | `bash tools/publish/itch_push.sh abdullahamidi/idlexidle` |
 
 ---
@@ -85,15 +85,21 @@ Assets live beside this file:
 
 ## 5. Screenshot order (first three are what most people see)
 
-1. `fight.png` — the arena mid-fight (the game)
-2. `boss.png` — the Crystal Lich boss wave
-3. `forge.png` — the four-tab forge with the materials wallet
-4. `buildtree.png` — the mastery tree with its four direction headers
-5. `map.png` — the world map and the corruption ladder
-6. `dust.png` — the traits screen: the traits you have awakened, and the three this hunter wears
-7. `character.png` — gear screen
-8. `warren.png` — the warren dashboard
-9. `title.png` — the title screen (last, not first — the logo is already on the capsule)
+All twelve come from `bash tools/marketing/store_screenshots.sh`: capture-rig fixtures posed as a
+progressed account sees them (every screen open, no coach cards), at UI SCALE 100 %.
+
+1. `fight.png` — QUIVER's arrows landing a critical on a swarm in Umbral Reach
+2. `region.png` — Cinderworks: the forge golems of the second region
+3. `boss.png` — a boss wave, the region corrupted (the Fevered Crystal Lich)
+4. `build.png` — THE BUILD: four skill slots, the skill tree, keystones, SWEAR A VOW
+5. `forge.png` — the four-tab forge with the materials wallet
+6. `mastery.png` — the mastery tree at the frontier, taken nodes and their names
+7. `map.png` — six regions conquered, and the corruption ladder
+8. `traits.png` — eighteen traits awakened, three worn
+9. `gear.png` — the champion's gear and an item's real numbers
+10. `roster.png` — ten champions in five classes
+11. `warren.png` — the camp that works while you are away
+12. `title.png` — the title screen (last, not first — the logo is already on the capsule)
 
 ## 6. Pricing (from `design/monetization.md`)
 

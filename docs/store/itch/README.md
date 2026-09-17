@@ -11,7 +11,7 @@ icon or logo change); the body text is `description.html`; the colours are the g
 | `background.png` | Edit theme → **Background image**, *Fixed*, *no repeat*, position *top center* | 1920×1400 |
 | `loop.png` … `footer.png` | the Description body, at the spots `description.html` marks | 1200 wide |
 | `../capsules/itch_cover.png` | Edit project → **Cover image** (unchanged) | 630×500 |
-| `../screenshots/*.png` | Edit project → **Screenshots**, in the order `../store-page.md` §5 gives | 1920×1080 |
+| `../screenshots/*.png` | Edit project → **Screenshots**, in the order `../store-page.md` §5 gives (twelve, re-shot 2026-09-17 with `tools/marketing/store_screenshots.sh`) | 1920×1080 |
 
 ## 1. Theme (Edit theme, top of the project page)
 
