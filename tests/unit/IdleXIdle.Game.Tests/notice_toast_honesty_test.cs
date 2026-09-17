@@ -128,7 +128,7 @@ public class NoticeToastHonestyTest
         foreach (var half in new[] { draw, lane })
             Assert.DoesNotContain("WrapBig(", half, StringComparison.Ordinal);
         // Exactly one place says how wide the text may be.
-        Assert.Equal(1, Regex.Matches(game, @"private static int NoticeToastRoom").Count);
+        Assert.Single(Regex.Matches(game, @"private static int NoticeToastRoom"));
     }
 
     /// <summary>

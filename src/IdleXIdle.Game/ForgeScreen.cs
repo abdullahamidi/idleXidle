@@ -4849,7 +4849,9 @@ public sealed class ForgeScreen
         if (!canWear) return "CANNOT WEAR THIS";
         var verdict = ItemPresentation.Rows(item, hunter, Wearer)
                                       .FirstOrDefault(r => r.Kind == ItemRowKind.Verdict);
-        if (verdict.Label is not { Length: > 0 } word) return "EQUIP";
+        // Rows only writes a Verdict for an item with a slot, and this button only exists for one —
+        // but the row is a class, so a missing verdict is a plain EQUIP rather than a null dereference.
+        if (verdict?.Label is not { Length: > 0 } word) return "EQUIP";
         return verdict.Value is { Length: > 0 } figure ? $"EQUIP  ·  {word} {figure}" : $"EQUIP  ·  {word}";
     }
 

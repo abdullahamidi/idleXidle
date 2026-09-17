@@ -522,7 +522,7 @@ public class AttentionOwnerTest
         var envelope = IndexOf(update, "DispatchButton.Contains(ChromeMouse)");
         _out.WriteLine($"assign {assign} < envelope {envelope}");
         Assert.True(assign < envelope, "the envelope's click must read the owner below its one assignment.");
-        Assert.Equal(0, Regex.Matches(update[assign..envelope], @"\b_attention\s*=(?!=)").Count);
+        Assert.Empty(Regex.Matches(update[assign..envelope], @"\b_attention\s*=(?!=)"));
 
         // The click asks the paint's question, and only that question: no rung of its own, no flag.
         var lineStart = update.LastIndexOf('\n', envelope) + 1;

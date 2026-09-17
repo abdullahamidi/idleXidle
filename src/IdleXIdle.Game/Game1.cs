@@ -5949,7 +5949,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // THE NEW CHAMPION'S SKILL BECOMES THE UNTOUCHABLE ONE before anything is shed or placed: the
         // loadout's verbs refuse to move whatever is named here, and naming the OUTGOING champion's
         // skill would make the switch unable to take it out.
-        _loadout.SignatureSkillId = who?.SignatureSkillId;
+        // (Plain `.`, not `?.`: CharacterState.Active is never null, and a `?.` here taught the compiler
+        // that `who` might be — five nullable warnings below that broke the -warnaserror CI build.)
+        _loadout.SignatureSkillId = who.SignatureSkillId;
         var shed = new List<string>();
         foreach (var slot in Enum.GetValues<GearSlot>())
         {
