@@ -8616,8 +8616,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The toggle pitch is a ROW and a breath — at Control(58) the five switches alone were 435 px
         // at 150 %, which is what pushed the whole column into scrolling (chrome-02).
         var togglePitch = UiMetrics.RowHeight + UiMetrics.Space(6);
-        var accessCapY = toggleY + togglePitch * 4 + UiMetrics.RowHeight + UiMetrics.Space(6);
-        var rightRows = accessCapY + captionPitch;
+        // The caption goes under the LAST switch. This was `togglePitch * 4` — written for five switches —
+        // and GUIDANCE, the sixth, then had the sentence printed across its own row (alpha check 2026-09-17).
+        // It wraps to the column, so every line it may take is reserved.
+        var accessCapY = toggleY + togglePitch * (SettingsSwitchCount - 1) + UiMetrics.RowHeight + UiMetrics.Space(6);
+        var rightRows = accessCapY + captionPitch * SettingsSwitchCaptionLines;
         var dangerTextY = UiMetrics.Space(40);
         var dangerBtnY = dangerTextY + body + UiMetrics.Space(14);
         var dangerH = dangerBtnY + button + UiMetrics.Space(20);
@@ -8976,8 +8979,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>The k-th accessibility switch's row — the hover zone and the row the button sits in.</summary>
-    private Rectangle SettingsToggleZone(SettingsFrame f, int k)
-        => SettingsRow(new Rectangle(f.RightX, f.ToggleY + k * f.TogglePitch, f.RightW, UiMetrics.RowHeight));
+    private Rectangle SettingsToggleZone(SettingsFrame f, int k) => SettingsRow(SettingsToggleRowAt(f, k));
+
+    /// <summary>The k-th switch's row, unscrolled — what the layout places and the reflow test reads.</summary>
+    private static Rectangle SettingsToggleRowAt(SettingsFrame f, int k)
+        => new(f.RightX, f.ToggleY + k * f.TogglePitch, f.RightW, UiMetrics.RowHeight);
+
+    // The switches' caption against the last switch, for the reflow test (unscrolled, like the rows above).
+    private static Rectangle SettingsLastToggleRow => SettingsToggleRowAt(SettingsFrameNow(), SettingsSwitchCount - 1);
+    private static int SettingsSwitchCaptionY => SettingsFrameNow().AccessCaptionY;
+    private static int SettingsSwitchCaptionBottom
+        => SettingsFrameNow().AccessCaptionY + UiTypography.Pitch(UiTypography.Secondary) * SettingsSwitchCaptionLines;
+    private static bool SettingsRowsScroll => SettingsFrameNow().Scrolls;
+    private static int SettingsRowsBottom => SettingsFrameNow() is var f ? f.Top + f.ContentHeight : 0;
 
     /// <summary>
     /// ONE SWITCH IN THE ACCESSIBILITY COLUMN: what it says, what it reads, and what it writes.
@@ -8990,6 +9004,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// writes the SAVE instead and does its own work.
     /// </remarks>
     private readonly record struct SettingsSwitch(string Label, Func<bool> On, Action<bool> Set, bool Pref);
+
+    /// <summary>
+    /// How many rows <see cref="SettingsSwitches"/> stacks. The layout reads it to put the column's
+    /// caption under the LAST switch; a test counts the table against it.
+    /// </summary>
+    private const int SettingsSwitchCount = 6;
+
+    /// <summary>The lines the switches' caption may wrap to. The layout reserves every one of them.</summary>
+    private const int SettingsSwitchCaptionLines = 2;
 
     /// <summary>The six switches, in the order they are stacked.</summary>
     private SettingsSwitch[] SettingsSwitches() => new[]
@@ -9392,12 +9415,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var switches = SettingsSwitches();
         for (var k = 0; k < switches.Length; k++)
             DrawToggleRow(switches[k].Label, SettingsToggleZone(f, k), switches[k].On());
-        _ui.TextBig(_batch,
-                    _opening.Running
-                        ? "GUIDANCE OFF ENDS THE TUTORIAL WHERE YOU STAND — IT UNLOCKS AND GRANTS NOTHING"
-                        : "GUIDANCE OFF STOPS EVERY PROMPT — IT UNLOCKS AND GRANTS NOTHING",
-                    f.RightX, f.AccessCaptionY + dy,
-                    Slate, UiTypography.Secondary);
+        // WRAPPED to the column: on one line the tutorial's sentence ran past the panel's edge at every
+        // profile, and it is the sentence a brand-new player reads. The layout reserves the lines.
+        var guidanceCaption = _ui.WrapBig(_opening.Running
+                                              ? "GUIDANCE OFF ENDS THE TUTORIAL WHERE YOU STAND — IT UNLOCKS AND GRANTS NOTHING"
+                                              : "GUIDANCE OFF STOPS EVERY PROMPT — IT UNLOCKS AND GRANTS NOTHING",
+                                          f.RightW, UiTypography.Secondary);
+        if (guidanceCaption.Count > SettingsSwitchCaptionLines && CaptureRig)
+            throw new InvalidOperationException(
+                $"The settings switches' caption needs {guidanceCaption.Count} lines at this profile — it outgrew the {SettingsSwitchCaptionLines} the layout reserves.");
+        for (var i = 0; i < Math.Min(guidanceCaption.Count, SettingsSwitchCaptionLines); i++)
+            _ui.TextBig(_batch, guidanceCaption[i], f.RightX,
+                        f.AccessCaptionY + dy + i * UiTypography.Pitch(UiTypography.Secondary),
+                        Slate, UiTypography.Secondary);
 
         if (f.Scrolls)
         {

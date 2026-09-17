@@ -73,6 +73,66 @@ public class ChromeReflowTests
     }
 
     /// <summary>
+    /// THE ACCESSIBILITY COLUMN'S CAPTION SITS UNDER ITS LAST SWITCH. Its y was written for five
+    /// switches ("row four, plus a row") and GUIDANCE became the sixth, so the sentence printed across
+    /// GUIDANCE's own row — label under it, words running beneath the ON button — at every profile, until
+    /// the alpha check photographed it (2026-09-17). The layout now reads a switch count; the second half
+    /// pins that count to the table Update and Draw walk, so a seventh switch cannot repeat this.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void test_settings_guidance_caption_sits_under_the_last_switch(int percent)
+    {
+        UiMetrics.Apply(percent);
+        try
+        {
+            // Arrange — the frame's unscrolled geometry at this profile.
+            var last = Read<Rectangle>("SettingsLastToggleRow");
+            var captionTop = Read<int>("SettingsSwitchCaptionY");
+            var captionBottom = Read<int>("SettingsSwitchCaptionBottom");
+            var rowsBottom = Read<int>("SettingsRowsBottom");
+            var scrolls = Read<bool>("SettingsRowsScroll");
+            var danger = Read<Rectangle>("SettingsDanger");
+
+            // Assert — under the last row, inside what scrolls, and clear of the danger zone at rest.
+            Assert.True(captionTop >= last.Bottom,
+                        $"the switches' caption starts at y={captionTop}, inside the last switch's row {last} at {percent}%");
+            Assert.True(captionBottom <= rowsBottom,
+                        $"the caption ends at y={captionBottom}, past the rows' scroll range (bottom {rowsBottom}) at {percent}%");
+            if (!scrolls)
+                Assert.True(captionBottom <= danger.Y,
+                            $"the caption ends at y={captionBottom}, inside the DANGER ZONE {danger} at {percent}%");
+        }
+        finally { UiMetrics.Apply(100); }
+    }
+
+    [Fact]
+    public void test_settings_switch_count_matches_the_switch_table()
+    {
+        // Arrange — the table is an instance method (its switches close over the host's fields), so it
+        // is counted in the source, as the other host-shape tests here read Game1.
+        var source = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Game1.cs"));
+
+        // Act
+        var rows = System.Text.RegularExpressions.Regex.Matches(source, @"new SettingsSwitch\(").Count;
+
+        // Assert
+        Assert.Equal(Read<int>("SettingsSwitchCount"), rows);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir }.Concat(parts).ToArray());
+            if (File.Exists(candidate)) return candidate;
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new FileNotFoundException(string.Join('/', parts) + " not found above the test binary.");
+    }
+
+    /// <summary>
     /// THE RAIL'S ELEVEN TILES. The rail is a fixed 1080 tall at every profile — it is canvas geometry —
     /// so what must fit is the LABEL at the profile's own rung: its foot clearance, the breath over it
     /// and the icon at its floor. If this fails, the icon is being drawn through its own caption, which
