@@ -14,7 +14,13 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 8;
+    /// <remarks>
+    /// 9 (2026-09-21) renumbered <c>OpeningStage</c>: the Training chapter inserted five beats before
+    /// the tutorial boss, so every cursor from that point on sits five places further along. Nothing in
+    /// the record's SHAPE changed — the migration is entirely in
+    /// <c>OpeningScript.StageOf(int, int)</c>, which lifts an older ordinal into this numbering.
+    /// </remarks>
+    public const int CurrentVersion = 9;
 
     public int Version { get; init; } = CurrentVersion;
 

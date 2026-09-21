@@ -165,7 +165,14 @@ public partial class Game1
         BossesFelled: _bossesFelled,
         ChestsOpened: _forge?.ChestsOpened ?? 0,
         ItemSelected: OpeningItemPicked(),
-        ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null));
+        ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
+        // THE SCREEN'S OWN GATE, not a wave count copied out of it — the same call the rail makes.
+        TrainingOpen: Unlocks.IsOpen(Activity.Training, GuideUnlockFacts()),
+        // AND THE ROW'S OWN ANSWER. Hunter.CanTrain is what the TRAIN button obeys (rank cap AND
+        // price), so the beat cannot arrive over a panel that would refuse every row on it. ANY stat,
+        // because the deed is "make a choice" and naming one here would be making it.
+        CanAffordFirstRank: Enum.GetValues<HunterStat>().Any(_hunter.CanTrain),
+        StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf));
 
     /// <summary>
     /// Is the item the GEAR beats are about the GEAR screen's own selection, put there by the player?
@@ -407,9 +414,16 @@ public partial class Game1
         // buttons under the brackets (seen at 125 %, 2026-09-11). The reveal's own skip, not a new path.
         if (was == OpeningStage.IntroduceItem) _forge?.AdvanceReveal();
 
-        // BACK TO THE HUNT, AND THE CONTINUE IS THE WAY BACK. The last card says where the player goes
-        // next, so answering it goes there — the one navigation the opening makes for the player, and
-        // only once they have pressed for it. A SKIP from any other beat leaves them where they stand.
+        // BACK TO THE HUNT, AND THE ACKNOWLEDGEMENT IS THE WAY BACK. The last card of a chapter says
+        // where the player goes next, so answering it goes there — the only navigation the opening
+        // makes for the player, and only once they have pressed for it. A SKIP from any other beat
+        // leaves them where they stand.
+        //
+        // TWICE NOW: the Training chapter ends the same way the gear chapter does. Its last card is
+        // read on the TRAINING screen and the beat after it is the wait for the tutorial boss, which
+        // happens on the HUNT — so a player left standing in TRAINING would be watching a screen while
+        // the thing the next card is about arrived behind it.
+        if (was == OpeningStage.ShowTrained && _opening.Stage == OpeningStage.AwaitBoss && !CaptureRig) OpenNav(0);
         if (was == OpeningStage.ShowEquipped && _opening.Stage == OpeningStage.Complete && !CaptureRig) OpenNav(0);
 
         // AND THE END IS WRITTEN DOWN IMMEDIATELY. The autosave is ten seconds wide and the last beat
@@ -472,17 +486,56 @@ public partial class Game1
             return;
         }
 
-        // Every other acknowledged beat — the BEGIN gate and every PauseExplain — advances from its own
-        // button, from SPACE and from ENTER, and from nothing else.
-        if (_opening.WantsAcknowledgement || _opening.Stage == OpeningStage.AwaitBegin)
+        // The BEGIN gate keeps its own plate: it is the title's button, not an explanatory card, and
+        // the player has not been taught the acknowledgement grammar yet.
+        if (_opening.Stage == OpeningStage.AwaitBegin)
         {
             if (keyGo || (_clicked && _openingButton.Contains(ChromeMouse)))
             {
                 _opening.Acknowledge();
                 _sound.Play("sfx_click", 0.7f);
             }
+            return;
+        }
+
+        // ── AN EXPLANATORY CARD TAKES ANY KEY AND ANY CLICK, AND SPENDS THE EDGE. ────────────────
+        //
+        // One grammar for every explanation, so the player never has to work out whether the lit thing
+        // is a button: it is not, on any explanatory beat, and the card says so in the one sentence it
+        // ends with. ESCAPE and the gear are already gone above — they are the way out, not a way on —
+        // and a bare modifier is not an acknowledgement, because a player reaching for Alt-Tab has not
+        // read anything.
+        //
+        // THIS SHAPE WAS SHIPPED ONCE AND REVERTED. The optional tour advanced on any click and any key
+        // anywhere, and the playtest (2026-09-09) was "clicking outside the screen also fast-forwards
+        // it" — every gold ring in the intro was a button that did the wrong thing, because the control
+        // under the ring was still live and pressing it skipped the explanation instead of using it.
+        // What makes it safe here is the other half of this pass, and it is not optional: while a card
+        // is up the production UI is PRESENTATION ONLY (PointerWithheldFromScreens), so there is no
+        // control under the light to press, and the edge is spent below so the next beat cannot take it.
+        if (_opening.WantsAcknowledgement && (AnyKeyPressed() || _clicked))
+        {
+            _opening.Acknowledge();
+            // ONE EDGE, AT MOST ONE ACTION (ADR-006 §3). The cursor moves on THIS frame, and the beat it
+            // moves to may be a forced one whose control is under the pointer right now — the VAULT tile
+            // lit beneath "A CHEST DROPPED", the EQUIP button beneath "ITEM STATS". HandleNavClick and
+            // ForcedScreenClick both read the raw edge, so without this latch the click that closed the
+            // explanation would also perform the deed the next card is about to ask for.
+            _openingAckSpent = true;
+            _sound.Play("sfx_click", 0.7f);
         }
     }
+
+    /// <summary>
+    /// The acknowledging press is SPENT: nothing downstream may read this frame's edge as a deed.
+    /// </summary>
+    /// <remarks>
+    /// The opening's own <c>_modalOpenedNow</c>, and it exists for the same reason that field does:
+    /// <c>_swallowInput</c> cannot do this job, because the forced paths deliberately read the RAW edge
+    /// so the lit control can take a click the swallow would have eaten. Cleared at the top of every
+    /// Update beside the other one-frame latches.
+    /// </remarks>
+    private bool _openingAckSpent;
 
     /// <summary>One beat on, or out of the prologue at its end.</summary>
     private void NextPrologueBeat()
@@ -523,8 +576,80 @@ public partial class Game1
     /// no click at all rather than take one on the tutorial's behalf. The light's HALO is not part of
     /// the control (<see cref="ClickableOf"/>).
     /// </remarks>
+    /// <summary>
+    /// Does the screen under this beat get no pointer at all — the presentation-only rule?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A lit thing is pressable or it is not, and the player must never have to guess.</b> While an
+    /// explanation owns the frame nothing underneath it is pressable, so nothing underneath it may
+    /// react to the cursor: no hover wash, no button glow, no 2 px press, no tooltip, no lift. The
+    /// mechanism is the tour's, extended (<c>ReadCursor</c>) — the screens are simply handed an
+    /// off-page cursor, so every hit-test they already do answers "not here" without a single screen
+    /// learning that a tutorial exists.
+    /// </para>
+    /// <para>
+    /// <b>A FORCED ACTION is the one beat that keeps it</b>, and keeps it only where the deed is: the
+    /// pointer reaches the screen exactly inside the rectangle the light is cut from and the click is
+    /// tested against (<see cref="ClickableOf"/>), and nowhere else. So the lit control hovers like the
+    /// real control it is, and the dozen controls around it — equally unpressable — stay quiet. Same
+    /// rectangle for the light, the hover and the click, asked for once.
+    /// </para>
+    /// <para>
+    /// A forced NAVIGATION withholds it too: what is live there is a rail tile, which is chrome and
+    /// reads <c>ChromeMouse</c> (see <see cref="NavTileTakesPointer"/>), so the screen behind it has
+    /// nothing to offer either.
+    /// </para>
+    /// </remarks>
+    private bool PointerWithheldFromScreens
+        => PointerWithheld(_opening.Running && _opening.OwnsInput,
+                           _opening.ForcedTarget is not null,
+                           () => OpeningHoles().Any(h => ClickableOf(h).Contains(ChromeMouse)));
+
+    /// <summary>
+    /// THE RULE ITSELF, with nothing of the host in it: is the pointer withheld from the screen?
+    /// </summary>
+    /// <param name="beatOwnsInput">A beat has the controls — anything but a live one that is not settling.</param>
+    /// <param name="deedIsForced">That beat is a <see cref="TutorialStepMode.ForceAction"/>: one real control is live.</param>
+    /// <param name="cursorOnLitControl">
+    /// Is the cursor inside the rectangle the light is cut from and the click is tested against?
+    /// Deferred, because it is only asked on the one beat that can answer it — resolving a spotlight
+    /// costs a screen's layout, and every other branch decides without it.
+    /// </param>
+    /// <remarks>
+    /// Pure, so the truth table can be looked at directly rather than inferred from a wiring assertion.
+    /// The three rows that matter: an EXPLANATION withholds it everywhere, a FORCED NAVIGATION
+    /// withholds it from the screen (what is live there is a rail tile, which is chrome), and a FORCED
+    /// ACTION grants it exactly on the control the deed needs and nowhere else on the page.
+    /// </remarks>
+    internal static bool PointerWithheld(bool beatOwnsInput, bool deedIsForced, Func<bool> cursorOnLitControl)
+    {
+        if (!beatOwnsInput) return false;
+        if (!deedIsForced) return true;
+        return !cursorOnLitControl();
+    }
+
+    /// <summary>May this rail tile react to the cursor — is it a tile the player could actually press?</summary>
+    /// <remarks>
+    /// The rail is chrome and reads <c>ChromeMouse</c>, which stays live so the opening's own card and
+    /// its forced tile can be hit-tested — so the rail needs its own answer rather than inheriting the
+    /// screens' blanked pointer. Without this, "A CHEST DROPPED" lit the VAULT tile while it was still
+    /// only being POINTED at, and the tile painted its gold hover wash under a mouse that
+    /// <c>HandleNavClick</c> would refuse: the exact "it looks like a button and does nothing" the
+    /// uniform grammar exists to end.
+    /// </remarks>
+    private bool NavTileTakesPointer(Activity activity)
+        => NavTileTakesPointer(_opening.Running && _opening.OwnsInput, _opening.ForcedNav, activity);
+
+    /// <summary>The rail's half of the same rule, pure: only the ONE forced tile may react.</summary>
+    /// <param name="beatOwnsInput">A beat has the controls.</param>
+    /// <param name="forcedNav">The one tile a forced navigation makes live, or null.</param>
+    /// <param name="tile">The tile being drawn.</param>
+    internal static bool NavTileTakesPointer(bool beatOwnsInput, Activity? forcedNav, Activity tile)
+        => !beatOwnsInput || forcedNav == tile;
+
     private bool ForcedScreenClick()
-        => _clicked && !_showSettings && !_showHelp && !WelcomeUp
+        => _clicked && !_openingAckSpent && !_showSettings && !_showHelp && !WelcomeUp
            && _opening.ForcedTarget is not null
            && OpeningHoles().Any(h => ClickableOf(h).Contains(ChromeMouse));
 
@@ -660,23 +785,35 @@ public partial class Game1
 
         if (!acts) { _openingButton = Rectangle.Empty; return; }
 
-        // A PAUSED BEAT HAS A BUTTON; A FORCED ONE DOES NOT — its button is the lit control, and a
+        // ── NEITHER KIND OF BEAT HAS A BUTTON. ──────────────────────────────────────────────────
+        //
+        // An explanatory beat used to carry a CONTINUE plate, and it was the only thing telling the
+        // player which of the two identical-looking pictures they were looking at: the same scrim, the
+        // same halo, the same card — one wanting a press on a plate, the other a press on the lit
+        // control. A first-time player cannot be asked to read a footer to find out whether a spotlight
+        // is clickable. So there is ONE prompt for every explanation and a different one for every
+        // deed, and the words say which hand to use rather than which control to find.
+        //
+        // The forced beat never had a button and still does not: its button is the lit control, and a
         // second one beside the card would be the tutorial-only control this design does not have.
-        if (_opening.WantsAcknowledgement)
-        {
-            var btnW = Math.Min(_openingCard.Width - pad * 2, UiMetrics.Control(240));
-            _openingButton = new Rectangle(_openingCard.Right - pad - btnW, _openingCard.Bottom - pad - btnH + UiMetrics.Space(6), btnW, btnH);
-            // Drawn only — the press is spent in the input pass, which owns the whole frame.
-            _ui.Button(_batch, _openingButton, "CONTINUE", ChromeMouse, false, true, ButtonStyle.Primary);
-            return;
-        }
-
-        // A FORCED BEAT SAYS WHAT TO DO WITH ITS HANDS, in words a first-time player cannot misread.
         _openingButton = Rectangle.Empty;
-        _ui.TextBig(_batch, "CLICK WHAT IS HIGHLIGHTED", _openingCard.X + pad,
-                    _openingCard.Bottom - pad - btnH + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(6),
-                    UiInk.Secondary, UiTypography.Secondary);
+        var footerY = _openingCard.Bottom - pad - btnH
+                      + (btnH - UiTypography.Pitch(UiTypography.Secondary)) / 2 + UiMetrics.Space(6);
+        _ui.TextBig(_batch,
+                    _opening.WantsAcknowledgement ? AcknowledgePrompt : "CLICK WHAT IS HIGHLIGHTED",
+                    _openingCard.X + pad, footerY, UiInk.Secondary, UiTypography.Secondary);
     }
+
+    /// <summary>
+    /// The one sentence every explanatory beat ends with.
+    /// </summary>
+    /// <remarks>
+    /// Spelled out, both halves, and no abbreviation: the player this is written for reads the game in
+    /// a second language, and "PRESS ANY KEY" alone leaves a mouse user hunting for a button that is
+    /// not there. Naming both inputs is also the accessibility contract — the keyboard is never the
+    /// lesser path, it is the first one named.
+    /// </remarks>
+    internal const string AcknowledgePrompt = "PRESS ANY KEY OR CLICK TO CONTINUE";
 
     /// <summary>
     /// THE PROLOGUE: six beats over a dark ground, once per career.

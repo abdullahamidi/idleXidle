@@ -108,7 +108,12 @@ public class HostInputGatesTest
         Assert.Contains("KeyEdge(Keys.Escape)", update, StringComparison.Ordinal);
         // The screens' keyboard is empty under the welcome -- and under the two host panels and the open log,
         // which hold the host's own keys the same way (attention_owner_test).
-        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
+        // Two halves, not one wrapped line: the condition outgrew a single line when _openingAckSpent
+        // joined it, and pinning the wrapping fails on formatting rather than on behaviour.
+        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || _openingAckSpent",
+                        game, StringComparison.Ordinal);
+        Assert.Contains("|| WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;",
+                        game, StringComparison.Ordinal);
         Assert.Contains("private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);", game, StringComparison.Ordinal);
         // The hint slot paints OVER the welcome, so under its swallow it must not paint at all: the welcome is
         // Modal tier to the attention owner, and the slot is the coach's tier, so it asks the owner and waits.
@@ -121,7 +126,11 @@ public class HostInputGatesTest
     public void test_right_click_is_gated_like_a_left_click()
     {
         var game = Source("Game1.cs");
-        Assert.Contains("private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
+        // _openingAckSpent joined the left click (and the keyboard above) when the opening's
+        // acknowledgement became any key or any click: the cursor advances in the SAME Update, so by
+        // the time _swallowInput is recomputed the beat may be over and the press that answered the
+        // card is still a live edge. A RIGHT click can never answer a card, so it is not gated by it.
+        Assert.Contains("private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput && !_openingAckSpent;", game, StringComparison.Ordinal);
         Assert.Contains("private bool MouseRightClicked => _rightClicked && !HostModalUp && !WelcomeUp && !_swallowInput;", game, StringComparison.Ordinal);
         // THREE PANELS, ONE PREDICATE. Every gate that asks about a host panel reads this, so a fourth
         // one cannot be forgotten at one of the fourteen sites (the gear-dead-close class).

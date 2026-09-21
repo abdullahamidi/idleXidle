@@ -124,7 +124,10 @@ public class AttentionOwnerTest
         Assert.Contains(": _expedition.LogOpen ? AttentionOwner.Report", update, StringComparison.Ordinal);
         // The coach owns the frame only when something is LIT: a beat that aims at a fight control while the
         // player is on the Forge has no hole there, paints nothing, and must not hold the news back.
-        Assert.Contains(": _coach.Showing is { } aimed && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach", update, StringComparison.Ordinal);
+        // CoachAims joined the condition when LessonMode began to decide what is lit at all — a demoted
+        // lesson resolves a rectangle and paints nothing, and on the geometry alone it took the frame
+        // and silenced the quiet slot it had just been moved into (lesson_demotion_test).
+        Assert.Contains(": _coach.Showing is { } aimed && CoachAims(aimed) && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach", update, StringComparison.Ordinal);
         Assert.Contains(": _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback", update, StringComparison.Ordinal);
         Assert.Contains(": AttentionOwner.None;", update, StringComparison.Ordinal);
 
@@ -296,7 +299,13 @@ public class AttentionOwnerTest
         var hex = MemberOf(game, "private void DrawHexNav()");
         Assert.Contains("if (HostModalUp || _expedition.LogOpen) return;", hex, StringComparison.Ordinal);
 
-        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;", game, StringComparison.Ordinal);
+        // Asserted in two halves rather than as one wrapped line: the condition outgrew a single line
+        // when _openingAckSpent joined it, and a pin on the exact wrapping fails on formatting instead
+        // of on behaviour.
+        Assert.Contains("private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || _openingAckSpent",
+                        game, StringComparison.Ordinal);
+        Assert.Contains("|| WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;",
+                        game, StringComparison.Ordinal);
 
         // Esc peels the log after the three panels and before the Forge's question.
         var help = IndexOf(update, "else if (_showHelp) _showHelp = false;");

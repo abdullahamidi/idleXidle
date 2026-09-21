@@ -282,14 +282,29 @@ public partial class Game1
         var target = AutoplayTarget();
         _autoCursor = target ?? RestingHand;
         var press = false;
+        _autoKeys = default;
         if (target is { } t && _autoOnFrames >= AutoplayDwell * (_autoClicks + 1) && _autoClicks < AutoplayMaxClicks)
         {
             press = true;
             _autoClicks++;
             var what = _showTitle ? "Title" : _opening.Stage.ToString();
-            Trace($"CLICK {what} at={t.X:0},{t.Y:0} n={_autoClicks}");
+            // THE KEY LANE ANSWERS EXPLANATIONS AND NOTHING ELSE. A forced deed is a real press on a
+            // real control, so it keeps the mouse; the title's own plate does too. The trace says which
+            // hand was used, so check_opening_trace.py can assert the same ORDER on either lane.
+            var byKey = AutoplayUsesKeys && !_showTitle && _opening.WantsAcknowledgement;
+            if (byKey)
+            {
+                _autoKeys = new KeyboardState(AutoplayAckKey);
+                press = false;
+                Trace($"KEY {what} k={AutoplayAckKey[0]} n={_autoClicks}");
+            }
+            else
+            {
+                Trace($"CLICK {what} at={t.X:0},{t.Y:0} n={_autoClicks}");
+            }
             if (_opening.Stage is OpeningStage.IntroduceSignature or OpeningStage.ForceChestOpen
-                or OpeningStage.ForceItemSelect or OpeningStage.ForceEquip or OpeningStage.ShowEquipped)
+                or OpeningStage.ForceItemSelect or OpeningStage.ForceEquip or OpeningStage.ShowEquipped
+                or OpeningStage.ForceTrainStat or OpeningStage.ShowTrained)
                 Burst($"click_{what}", 0, 120, 3);
         }
 
@@ -321,11 +336,56 @@ public partial class Game1
             case OpeningStage.Prologue: return Centre(_prologueNext);
             case OpeningStage.AwaitBegin: return Centre(_openingButton);
         }
-        if (_opening.WantsAcknowledgement) return Centre(_openingButton);
+        // AN EXPLANATORY BEAT HAS NO BUTTON ANY MORE, so the hand answers it the way a player does:
+        // by clicking wherever it happens to be. It aims at the CARD — not because the card is a
+        // control (it is not; any point would do) but because a click there is the one the trace can
+        // read back unambiguously, and because aiming at the LIT thing is what the dedicated
+        // one-edge-one-action test does deliberately, and this run must not silently do it too.
+        if (_opening.WantsAcknowledgement) return Centre(_openingCard);
         if (_opening.ForcedNav is { } nav) return NavTile(nav) is { Length: > 0 } tile ? Centre(tile[0]) : null;
+
+        // TRAIN ANY STAT IS THE ONE FORCED BEAT WHOSE LIGHT IS A PANEL RATHER THAN A CONTROL, and
+        // deliberately: the deed is "make a choice", so lighting one row would be making it. Every
+        // other forced beat lights the very thing that takes the click, which is why aiming at the
+        // centre of the hole works for them and not for this one — the panel's centre is a row BODY,
+        // where a click selects and does not buy. The hand presses what a player would press.
+        //
+        // ...AND IT COMES BACK IN THE SCREEN'S PAGE SPACE, so it goes through the same transform every
+        // other light does (TourSpotlights' own OverlayToCanvas). The hand is a CANVAS point — it is
+        // fed to the field the real mouse fills — so a page rectangle handed over raw aims somewhere
+        // else entirely at any density but one, which is the whole reason nothing else in this file
+        // does its own conversion.
+        if (_opening.Stage == OpeningStage.ForceTrainStat)
+            return _training?.FirstAffordableBuyRect(_hunter) is { } buy
+                ? Centre(OverlayToCanvas(buy, Vector2.Zero))
+                : null;
+
         if (_opening.ForcedTarget is not null) return OpeningHoles() is { Length: > 0 } holes ? Centre(holes[0]) : null;
         return null;
     }
+
+    /// <summary>
+    /// RH_OPENING_KEYS: the hand acknowledges explanations with a KEY rather than a click.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the uniform grammar. Forced deeds still go through the mouse, because a forced
+    /// deed is a real press on a real production control and the screens have no keyboard path while
+    /// the opening holds their keys — a pre-existing gap this switch deliberately does not paper over.
+    /// </remarks>
+    private static readonly bool AutoplayUsesKeys = RigVariable("RH_OPENING_KEYS") is not null;
+
+    /// <summary>The synthetic board for this frame — empty except on the frames the hand presses.</summary>
+    private KeyboardState _autoKeys;
+
+    /// <summary>
+    /// A key no part of this game binds, so the run proves ANY key and never a key that happens to work.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not SPACE or ENTER: those two advanced a card before this pass and would pass the
+    /// test without the change being present at all. K is bound to nothing — if it advances the card,
+    /// it is the any-key rule that advanced it.
+    /// </remarks>
+    private static readonly Keys[] AutoplayAckKey = { Keys.K };
 
     private static Vector2? Centre(Rectangle r) => r.IsEmpty ? null : new Vector2(r.Center.X, r.Center.Y);
 

@@ -55,8 +55,15 @@ def main(path):
     def stage(name):
         return first("STAGE", lambda r: r == name)
 
+    # AN ACKNOWLEDGEMENT IS A CLICK OR A KEY, and this file must not care which. An explanatory beat
+    # takes ANY key or ANY click (2026-09-21), so the rig has two lanes — RH_OPENING_KEYS answers the
+    # explanations with a key — and every order asserted below is the same order on either lane. Keyed
+    # to CLICK alone, the key lane would find no events and every one of these checks would pass
+    # vacuously: a green run proving nothing, which is worse than a red one.
+    ACTS = ("CLICK", "KEY")
+
     def clicks(prefix, after=-1):
-        return [f for f, k, r in ev if k == "CLICK" and r.startswith(prefix + " ") and f > after]
+        return [f for f, k, r in ev if k in ACTS and r.startswith(prefix + " ") and f > after]
 
     # ── IT FINISHED ─────────────────────────────────────────────────────────────────────────────
     check(any(k == "COMPLETE" for _, k, _ in ev), "the opening reached Complete")
@@ -176,10 +183,10 @@ def main(path):
     # is the shape of a check that has stopped checking. A fresh career always answers cards, so no
     # anchor means the run did not play the opening, and that is a failure, not a pass.
     breaks = [(f, (r.split() or ["?"])[0]) for f, k, r in ev if k == "NAV_BREAK"]
-    last_beat = max([f for f, k, _ in ev if k == "CLICK"], default=None)
+    last_beat = max([f for f, k, _ in ev if k in ACTS], default=None)
     if last_beat is None:
         check(False, "the opening answered at least one authored card, so the rail has something to be "
-                     "measured against (no CLICK in the trace -- the run never played the opening)")
+                     "measured against (no CLICK or KEY in the trace -- the run never played the opening)")
     else:
         early = [f"{who} (frame {f})" for f, who in breaks if f < last_beat]
         check(not early, f"no rail tile performed its unlock while the opening still had the player "
@@ -232,10 +239,21 @@ def main(path):
     # the harness, so the harness could not fail on it. The hit test now lives in Update beside the
     # arrow keys (Game1's title branch), the edge is consumed in the same Update that latched it, and
     # the exemption is gone with it — a dropped title click fails this run.
-    extra = [r for _, k, r in ev if k == "CLICK" and kv(r).get("n", "1") != "1"]
-    check(not extra, "every clicked beat advanced on its first click" + (f" (again: {extra[0]})" if extra else ""))
-    for r in [r for _, k, r in ev if k == "CLICK" and r.startswith("Title ") and kv(r).get("n", "1") != "1"]:
+    extra = [r for _, k, r in ev if k in ACTS and kv(r).get("n", "1") != "1"]
+    check(not extra, "every answered beat advanced on its first press" + (f" (again: {extra[0]})" if extra else ""))
+    for r in [r for _, k, r in ev if k in ACTS and r.startswith("Title ") and kv(r).get("n", "1") != "1"]:
         print(f"WARN  the title took more than one click ({r})")
+
+    # ── THE LANE THAT WAS ASKED FOR IS THE LANE THAT RAN ────────────────────────────────────────
+    # RH_OPENING_KEYS answers explanations with a key. If the run was asked for that lane and the trace
+    # carries no KEY at all, the switch silently did nothing and this run tested the mouse twice.
+    if os.environ.get("RH_OPENING_KEYS"):
+        keys = [r for _, k, r in ev if k == "KEY"]
+        check(bool(keys), "the keyboard lane actually answered beats with a key"
+                          + ("" if keys else " (RH_OPENING_KEYS was set but no KEY reached the trace)"))
+        # ...and the forced deeds still went through the real control, on the mouse.
+        check(any(k == "CLICK" for _, k, _ in ev),
+              "the forced deeds still went through the real control")
 
     print(f"{len(fails)} failed" if fails else "opening trace: every order holds")
     return 1 if fails else 0

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Expeditions;
@@ -52,6 +52,12 @@ public class OpeningDirectorTest
         StageGate.BossSettled => f with { BossSettled = true },
         StageGate.BossFelled => f with { BossesFelled = 1, ClearShown = true },
         StageGate.OnScreen => f with { Screen = step.Screen ?? f.Screen },
+        // BOTH HALVES, because the gate asks for both: the screen has to be open and the purse has to
+        // cover a rank. A harness that answered only one of them would let the chapter start over rows
+        // that refuse — the exact state the gate exists to wait out.
+        StageGate.TrainingAffordable => f with { TrainingOpen = true, CanAffordFirstRank = true },
+        // THE DEED, and it is the Hunter's own summed ranks, so it is a number going up and not a flag.
+        StageGate.StatTrained => f with { StatsTrained = f.StatsTrained + 1 },
         StageGate.ChestOpened => f with { ChestsOpened = 1 },
         StageGate.ItemSelected => f with { ItemSelected = true },
         StageGate.ItemWorn => f with { ItemsWorn = 1 },

@@ -163,6 +163,18 @@ public readonly record struct LessonFacts(
     int GemsSet = 0,
     int MasterySpent = 0,
     int MasteryPointsFree = 0,
+    /// <summary>
+    /// Mastery points the account has EVER earned — the fact <see cref="Unlocks"/> opens the tree on.
+    /// </summary>
+    /// <remarks>
+    /// Not the same question as <see cref="MasteryPointsFree"/>, and the difference shipped as a bug:
+    /// SPEND ONE MASTERY POINT asked only whether a point was unspent, so it was offered from the first
+    /// point while <c>Unlocks.IsOpen(Activity.Mastery, …)</c> — the gate NAVIGATION obeys — waits for
+    /// three EARNED. The card lit a rail tile that was still chained shut. The catalogue carries the
+    /// earned count so eligibility can ask the production gate itself rather than a second copy of its
+    /// number; see <see cref="Eligible"/>.
+    /// </remarks>
+    int MasteryPointsEarned = 0,
     int SharedSkillsEquipped = 0,
     int SharedSkillsAvailable = 0,
     int EmptySkillSlots = 0,
@@ -369,7 +381,19 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstFailureReport => f.Falls >= 1,
         OnboardingLessonId.FirstPostFailureChange => f.Falls >= 1 && f.ReportOpenedEver,
 
-        OnboardingLessonId.FirstMasterySpend => f.MasteryPointsFree >= 1,
+        // THE SCREEN'S OWN GATE, ASKED OF THE SCREEN'S OWN RULE — then the point to spend on it.
+        //
+        // This read `f.MasteryPointsFree >= 1` alone, and the two are different facts: FREE counts what
+        // is unspent, EARNED is what ever arrived, and the tree opens on three EARNED
+        // (<c>Unlocks.MasteryOpensAtPoints</c>). So SPEND ONE MASTERY POINT was offered from the FIRST
+        // point, two short of the screen existing — a card sending the player at a rail tile that was
+        // still chained shut, which is the prompt-that-cannot-be-obeyed this file forbids.
+        //
+        // The number is NOT repeated here. `Unlocks.IsOpen` is the predicate navigation itself obeys,
+        // so the lesson and the rail can never disagree, and moving the threshold moves both at once.
+        OnboardingLessonId.FirstMasterySpend =>
+            Unlocks.IsOpen(Activity.Mastery, new UnlockFacts(MasteryPointsEarned: f.MasteryPointsEarned))
+            && f.MasteryPointsFree >= 1,
         // AVAILABLE means the tree reaches it NOW. Mastery access is not permanent: a respec that
         // gives the road back takes the skill with it, so this asks the live count.
         OnboardingLessonId.FirstSharedSkillEquip => f.SharedSkillsAvailable >= 1 && f.EmptySkillSlots >= 1,
@@ -477,12 +501,54 @@ public static class OnboardingLessons
 
     // ── PRESENTATION SHAPE ───────────────────────────────────────────────────────────────────────
 
+    /// <summary>How loudly this lesson asks — and, since 2026-09-21, what it is actually drawn as.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This used to be dead classification.</b> The host's <c>CoachAims</c> asked only whether a
+    /// rectangle could be resolved, so Observe, SoftGuide and HardGuide all came out as the same full
+    /// 0.66 scrim over the whole page with a spotlight cut in it. Twenty-four lessons declared three
+    /// loudnesses and the game had one. A shown property must DO something: the host now reads this,
+    /// and only a <see cref="LessonMode.HardGuide"/> darkens the page.
+    /// </para>
+    /// <para>
+    /// <b>What is left at HardGuide is the game's actual loop.</b> Only the two fall lessons —
+    /// observe, ask why it stopped, change one thing, go again. Everything else points from the quiet
+    /// slot on its own screen (the host's <c>SlotShowing</c>), which keeps the title, the line and the
+    /// ×, so nothing is lost: the slot is where a lesson goes when it is not lit.
+    /// </para>
+    /// <para>
+    /// <b>Three of the demotions were saying what the screen already said.</b>
+    /// <see cref="OnboardingLessonId.FirstMasterySpend"/> darkened the page to announce points that
+    /// <c>Onboarding.HintFor(Activity.Mastery, …)</c> already prints as YOU HAVE N MASTERY POINTS; the
+    /// two BUILD lessons duplicate AN EMPTY SKILL SLOT and HAS A LEVEL TO SPEND the same way. The other
+    /// four are taught by the authored opening itself (the chest, the item and — since the Training
+    /// chapter — the first rank), or are an offer the Forge refuses anyway (the gem).
+    /// </para>
+    /// </remarks>
     public static LessonMode Mode(OnboardingLessonId id) => id switch
     {
         OnboardingLessonId.FirstFight => LessonMode.Observe,
         OnboardingLessonId.SignatureSeen => LessonMode.Observe,
         OnboardingLessonId.FirstBoss => LessonMode.Observe,
         OnboardingLessonId.FirstRegionConquest => LessonMode.Observe,
+
+        // ── DEMOTED 2026-09-21. Each says what a quiet channel already says, or what the opening
+        //    now teaches by hand. None of them needs the page darkened to be read.
+        //
+        // The three the screen's own hint duplicates word for word:
+        OnboardingLessonId.FirstMasterySpend => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstSharedSkillEquip => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstVariationChoice => LessonMode.SoftGuide,
+        // An OFFER, not an instruction: the Forge refuses an illegal socket on its own, and Eligible
+        // already waits for GemCraft.CanSocketNow, so a full-screen light overstates a maybe.
+        OnboardingLessonId.FirstGemSocket => LessonMode.SoftGuide,
+        // THE THREE THE AUTHORED OPENING NOW TEACHES BY HAND. These only ever fire for a player who
+        // skipped the tutorial or reached the deed by another route — a share code, a trader, a
+        // fixture. They stay in the catalogue, because the deed still has to be teachable; they stop
+        // darkening the page, because the opening is where this teaching belongs.
+        OnboardingLessonId.FirstTrainingPurchase => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstChestOpen => LessonMode.SoftGuide,
+        OnboardingLessonId.FirstItemEquip => LessonMode.SoftGuide,
 
         OnboardingLessonId.FirstHunterInteraction => LessonMode.SoftGuide,
         OnboardingLessonId.FirstTraitEquip => LessonMode.SoftGuide,
@@ -500,6 +566,11 @@ public static class OnboardingLessons
         OnboardingLessonId.FirstTraderVisit => LessonMode.SoftGuide,
         OnboardingLessonId.FirstCorruptionOffer => LessonMode.SoftGuide,
 
+        // WHAT IS LEFT IS THE LOOP ITSELF, and nothing else reaches this arm: the fall, and the one
+        // change made because of it. Full focus is for critical first-use teaching, and this is the
+        // only teaching in the game that is critical — a player who never learns to read the report and
+        // change one thing has not learned this game at all. (A test pins the membership of this arm,
+        // so a lesson added later cannot inherit the page-darkening treatment by forgetting to say so.)
         _ => LessonMode.HardGuide,
     };
 

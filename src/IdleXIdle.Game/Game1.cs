@@ -142,7 +142,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// (Enter on the MAP) underneath the scrim (review 2026-08-26). Empty under the two host panels and
     /// the open Expedition Log too, which hold the host's own hotkeys the same way (see panelHolds).
     /// </summary>
-    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;
+    private KeyboardState ScreenKeys => _tourActive || _opening.OwnsInput || _openingAckSpent
+                                        || WelcomeUp || HostModalUp || _expedition.LogOpen ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -2280,6 +2281,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // real one is. Inert without RH_OPENING_*.
         if (OpeningRigOn) OpeningRigFrame();
         _mouse = Autoplay ? _autoMouse : Mouse.GetState();
+        // ...and the hand has a KEYBOARD too (RH_OPENING_KEYS): a card takes any key or any click, and
+        // a rig that can only click proves half the grammar. Assigned after the real read, so the
+        // synthetic board replaces it through the same field every reader already uses.
+        if (Autoplay && AutoplayUsesKeys) _keys = _autoKeys;
         ReadCursor();
         // PRESSED IS A STATE NO CAPTURE COULD POSE. The mouse button comes from the real device, so
         // every screen's pressed face — UiKit.Button's own, and the seven screens that draw their own
@@ -2288,7 +2293,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // can be looked at on any screen with the cursor parked on any control (RH_SHOT_MOUSE /
         // RH_SHOT_PAGE_MOUSE). Rig-only, and it feeds the same field the real mouse does rather than
         // opening a second path.
-        UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed || (RigActive && ShotHeld);
+        // ...AND NOT WHILE A TEACHING SURFACE OWNS THE FRAME. PRESSED is the third half of the hover
+        // story — the face drops 2 px and darkens for as long as the button is held — so a held mouse
+        // over a spotlit control animated a press that could never fire. The blanked pointer above
+        // cannot reach this: it is a global the buttons read directly, so it is answered here.
+        UiKit.MouseHeld = (_mouse.LeftButton == ButtonState.Pressed || (RigActive && ShotHeld))
+                          && !_tourActive && !PointerWithheldFromScreens;
         UiMotion.Reduced = ReducedMotion;
         UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
         ReserveNoticeLane();
@@ -2312,6 +2322,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _clicked = _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
         // ...and with it the "this edge opened a modal" mark, which lives exactly as long as the edge.
         _modalOpenedNow = false;
+        // ...and its sibling, "this edge acknowledged a card" — asked by the forced paths, which read
+        // the raw edge rather than the swallowed one.
+        _openingAckSpent = false;
 
         // THE BOOT CHECK SWITCHES SCREENS HERE, at the top, and the position took two tries to get
         // right. At the END of Update it flipped a flag after the `if (_showX)` blocks that hand each
@@ -4461,7 +4474,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // no hole for it there, nothing is painted, and a light that paints nothing must not hold
             // the news back. The holes are the geometry DrawCoachSpotlight paints — the lane is already
             // reserved for this frame, so resolving them here is safe where CoachLightsIt could not.
-            : _coach.Showing is { } aimed && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach
+            //
+            // ...AND "LIT" IS NOW A DECISION AS WELL AS A GEOMETRY (2026-09-21). Since only a HardGuide
+            // darkens the page, a demoted lesson still RESOLVES a rectangle while painting nothing —
+            // and on the geometry alone this line handed it the frame anyway. The slot is where a
+            // demoted lesson goes, SlotShowing stands the slot down for anything above Feedback, so the
+            // coach was claiming the frame for a light it had stopped drawing and silencing the very
+            // channel the lesson had been moved into: seven lessons made silent rather than quiet.
+            // CoachAims is the same question DrawCoachSpotlight asks, and it reads no owner, so asking
+            // it here is not circular the way CoachLightsIt would be.
+            : _coach.Showing is { } aimed && CoachAims(aimed) && CoachHoles(aimed).Length > 0 ? AttentionOwner.Coach
             : _noticeTimer > 0f || _lockedTimer > 0f || _feedbackToastTimer > 0f ? AttentionOwner.Feedback
             : AttentionOwner.None;
 
@@ -4822,8 +4844,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // (HighestWave / ChestsOpened / MasteryPoints are gone with the PROGRESS panel — they
             //  are the Map's, the Vault's and the Mastery tree's numbers, and none of them moves
             //  when you train.)
+            // THE UPDATE TAKES THE FORCED CLICK TOO, like GEAR and the VAULT before it. TRAIN ANY STAT
+            // is a forced deed now (OpeningStage.ForceTrainStat), and a forced deed reaches its screen
+            // through ForcedScreenClick — the raw edge, tested against the lit rectangle. Without that
+            // term the one control the beat lights is the one control the beat cannot press.
+            // (The push stays glued to the update below: a test pins the two as one statement pair.)
             PushTrainingState();
-            _training.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseWheel, _hunter);
+            _training.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked || ForcedScreenClick(),
+                             MouseWheel, _hunter);
             if (_training.Dirty) { _training.ClearDirty(); Save(); }
 
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The
@@ -5722,6 +5750,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                      + Enum.GetValues<GearSlot>().Sum(sl => _hunter.Worn(sl)?.Gems.Count ?? 0),
             MasterySpent: _mastery?.Spent ?? 0,
             MasteryPointsFree: _mastery?.Available ?? 0,
+            // EVER EARNED, which is the fact the tree's own gate opens on — the same number
+            // GuideUnlockFacts hands Unlocks. SPEND ONE MASTERY POINT asked only about UNSPENT points
+            // and so was offered two points before the MASTERY screen existed, pointing at a chained
+            // tile; the catalogue asks Unlocks.IsOpen now, and this is what it asks with.
+            MasteryPointsEarned: SkillPointsEarned(),
             SharedSkillsEquipped: shared,
             // LIVE ACCESS, not a latch: a respec that gives a road back takes its skill with it, so the
             // lesson stops asking for something the tree no longer reaches.
@@ -6624,6 +6657,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     private bool CoachAims(OnboardingLessonId id)
     {
+        // ── ONLY A HARD GUIDE DARKENS THE PAGE. ─────────────────────────────────────────────────
+        //
+        // This asked a purely geometric question — "can a rectangle be resolved?" — so every lesson
+        // that could be pointed at got the full 0.66 scrim and a spotlight, and the catalogue's three
+        // declared loudnesses rendered as one. Twenty-four lessons, one voice, and nine of them
+        // blacking out the screen for six seconds to say something the screen's own quiet banner was
+        // already saying.
+        //
+        // NOTHING IS LOST BY REFUSING HERE. A lesson this turns down is not silenced — it falls to the
+        // slot at the top of its own screen (SlotShowing), which carries its title, its line and its ×.
+        // That is the channel the UX standard gives it (§7: a lesson renders on the screen it is about;
+        // elsewhere it is a mark, not a banner), and the rail's NEW mark still points the way.
+        if (OnboardingLessons.Mode(id) != LessonMode.HardGuide) return false;
+
         if (OnboardingLessons.Sends(id) is { } sends && sends != ScreenActivity())
             return NavSlots().Contains(Array.IndexOf(NavActivity, sends));   // the tile must be on the rail
         return OnboardingLessons.Target(id) is not null;
@@ -7799,22 +7846,48 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         : SlotShowing() is { } slot ? HintSlotRect(slot).Bottom + UiMetrics.Space(8)
         : CanvasY(PageSubtitleBottom + UiMetrics.Space(8));
 
-    private bool Pressed(Keys k) => !_swallowInput && KeyEdge(k);
+    /// <remarks>
+    /// <c>_openingAckSpent</c> is here for the same reason it is on the two mouse paths, and the
+    /// keyboard lane of the opening rig is what found it: the acknowledgement lands while the beat
+    /// still owns the frame, but the cursor advances in the SAME Update — so by the time
+    /// <c>_swallowInput</c> is recomputed the opening may be over, and the very key that closed the
+    /// last card is still a live edge. The rig pressed K to answer BACK TO THE HUNT and the game
+    /// opened the VAULT on it, K being the Vault's hotkey. One edge, at most one action (ADR-006 §3),
+    /// and that holds for a key exactly as it holds for a click.
+    /// </remarks>
+    private bool Pressed(Keys k) => !_swallowInput && !_openingAckSpent && KeyEdge(k);
 
     /// <summary>A key going down this frame, before the frame's swallow — for a modal's own keys.</summary>
     private bool KeyEdge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 
     /// <summary>Any key going down this frame — for "press anything to continue" panels.</summary>
     /// <remarks>
+    /// <para>
     /// Edge-triggered against the previous frame, so a key still held from whatever the player was doing
     /// when the panel appeared does not dismiss it before they have seen it.
+    /// </para>
+    /// <para>
+    /// <b>Two kinds of key are not an acknowledgement.</b> ESCAPE is the way OUT — it opens Settings,
+    /// where GUIDANCE lives — and a card that consumed it would make the tutorial the one thing in the
+    /// game you cannot leave. A BARE MODIFIER is not a press a player means: a hand reaching for
+    /// Alt-Tab, Shift or a Ctrl chord has not read the card, and the whole point of the grammar is that
+    /// the acknowledgement is deliberate. A modifier used AS PART of a chord still does not count here,
+    /// because the chord's other key is itself an edge and answers on its own.
+    /// </para>
     /// </remarks>
     private bool AnyKeyPressed()
     {
         foreach (var k in _keys.GetPressedKeys())
-            if (_prevKeys.IsKeyUp(k)) return true;
+            if (_prevKeys.IsKeyUp(k) && !IgnoredAsAcknowledgement(k)) return true;
         return false;
     }
+
+    /// <summary>Keys that never mean "I have read this" — the way out, and the keys a player holds.</summary>
+    private static bool IgnoredAsAcknowledgement(Keys k) => k is Keys.Escape
+        or Keys.LeftShift or Keys.RightShift
+        or Keys.LeftControl or Keys.RightControl
+        or Keys.LeftAlt or Keys.RightAlt
+        or Keys.LeftWindows or Keys.RightWindows;
 
     // ── THE CURSOR: one transform, read once a frame ───────────────────────────────────────────
     //
@@ -7963,7 +8036,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // UNDER A TOUR THE SCREEN GETS NO POINTER — the mirror of the keyboard mute (ScreenKeys): with
         // the GEAR tour up, the cursor over a slot raised the item's hover card half inside and half
         // under the scrim (chrome-05). The tour's own click reads ChromeMouse, which stays live.
-        if (_tourActive)
+        //
+        // ...AND UNDER AN EXPLANATORY BEAT OF THE OPENING, for the same reason, which took a second
+        // playtest to extend: the opening swallowed CLICKS from the first day but never the POINTER, so
+        // the control it was lighting went on hovering, glowing and lifting under a mouse that could
+        // not press it. A lit thing that reacts to the cursor is a thing the player will try to press,
+        // and on an explanatory beat there is nothing to press. See PointerWithheldFromScreens.
+        if (_tourActive || PointerWithheldFromScreens)
         {
             PageMouseF = new Vector2(-1f, -1f);
             PageCursor = new Point(-1, -1);
@@ -8085,7 +8164,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Rectangle _helpView;
     private int _helpMaxScroll;
 
-    private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput;
+    private bool MouseClicked => _clicked && !HostModalUp && !WelcomeUp && !_swallowInput && !_openingAckSpent;
 
     private bool MouseRightClicked => _rightClicked && !HostModalUp && !WelcomeUp && !_swallowInput;
 
@@ -9827,7 +9906,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (!DispatchesOffered()) return;
         var r = DispatchButton;
-        var hot = r.Contains(ChromeMouse);
+        // The envelope is chrome and reads ChromeMouse, which the opening keeps live for its own
+        // hit-tests — so it needs the same explicit answer the rail does. Nothing in the chrome is
+        // pressable while a beat owns the frame, and nothing in it may look pressable either.
+        var hot = r.Contains(ChromeMouse) && !_tourActive && !(_opening.Running && _opening.OwnsInput);
         var pressed = hot && UiKit.MouseHeld;
         var lift = UiMotion.Ease(UiMotion.KeyOf(r), hot ? 1f : 0f);
         var side = UiMetrics.Control(36) + (int)MathF.Round(UiMetrics.Control(4) * lift);
@@ -11192,9 +11274,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var i = slots[slot];
             var r = NavHexRect(slot);
             var on = i == active;
-            var hover = r.Contains(ChromeMouse);
-            var unlocked = NavOpen(i);
             var activity = NavActivity[i];
+            // PRESENTATION ONLY WHILE A CARD OWNS THE FRAME. A tile the opening is merely POINTING at
+            // must not light under the mouse as though it would answer — see NavTileTakesPointer.
+            var hover = r.Contains(ChromeMouse) && NavTileTakesPointer(activity);
+            var unlocked = NavOpen(i);
             // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
             if (slot > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
 
@@ -11393,6 +11477,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // button in this design — and a press on any OTHER tile is swallowed in silence rather than
         // answered with "GEAR IS NOT OPEN YET" while the card says OPEN THE VAULT.
         var forced = _opening.ForcedNav;
+        // ...AND NEVER ON THE EDGE THAT CLOSED THE CARD IN FRONT OF IT. "A CHEST DROPPED" lights the
+        // VAULT tile while it is still only being POINTED at, and the very next beat makes that same
+        // tile the one live control — so the click that acknowledges the explanation lands on the tile
+        // the next step wants pressed. One edge, at most one action (ADR-006 §3).
+        if (_openingAckSpent) return;
         if (!MouseClicked && !(forced is not null && _clicked && !WelcomeUp)) return;
         // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor — slot by slot, the
         // same mapping the drawing used, so what lights up is what takes the click.

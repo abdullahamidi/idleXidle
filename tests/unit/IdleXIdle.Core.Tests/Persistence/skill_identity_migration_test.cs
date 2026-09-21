@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
@@ -163,7 +163,7 @@ public class SkillIdentityMigrationTest
     }
 
     [Fact]
-    public void test_the_current_save_version_is_eight()
+    public void test_the_current_save_version_is_nine()
     {
         // RE-PINNED 2026-09-09 (was four). The bump is what makes an OLDER build refuse a new file as
         // FromNewerVersion instead of reporting it Corrupt (required members) — quarantining the
@@ -184,6 +184,10 @@ public class SkillIdentityMigrationTest
         // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox. A file below 8 has been TOLD nothing,
         // and "told nothing" must be distinguishable from an honestly empty inbox - the v5 lesson
         // again. See Dispatches.FirstVersionWithInbox, frozen at 8.
-        Assert.Equal(8, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-21 (was eight): the authored opening gained the TRAINING chapter, five
+        // stages inserted before the tutorial boss, so every cursor from that point on is read one
+        // chapter further along than a v8 file wrote it. The same mid-sequence insertion that earned
+        // 7, at five times the size. See OpeningScript.FirstVersionWithTrainingChapter, frozen at 9.
+        Assert.Equal(9, SaveGame.CurrentVersion);
     }
 }

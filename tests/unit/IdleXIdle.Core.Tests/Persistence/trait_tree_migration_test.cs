@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
@@ -309,7 +309,9 @@ public class TraitTreeMigrationTest
         // RE-PINNED 2026-09-15 (was seven): the DISPATCHES inbox, whose seed reads the file's version
         // to tell a file that was never told anything from one whose inbox is honestly empty
         // (Dispatches.FirstVersionWithInbox).
-        Assert.Equal(8, SaveGame.CurrentVersion);
+        // RE-PINNED 2026-09-21 (was eight): the TRAINING chapter inserted five stages into
+        // OpeningStage before the tutorial boss (OpeningScript.FirstVersionWithTrainingChapter).
+        Assert.Equal(9, SaveGame.CurrentVersion);
         Assert.True(5 < SaveGame.CurrentVersion);
     }
 }

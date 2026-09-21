@@ -1,7 +1,7 @@
 #!/bin/bash
 # THE OPENING, PLAYED FROM A FRESH SAVE BY A HAND THAT IS NOT THERE — and read back for its ORDER.
 #
-#   bash tools/check_opening_flow.sh [uiscale=100] [dwell-frames=120] [outdir]
+#   bash tools/check_opening_flow.sh [uiscale=100] [dwell-frames=120] [outdir] [lane=mouse|keys]
 #
 # A brand-new career in an isolated save directory, driven through the whole authored opening by
 # Game1.OpeningRig.cs: a synthetic mouse on the REAL input path clicks BEGIN THE HUNT, NEXT, every
@@ -20,8 +20,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 SCALE="${1:-100}"
 DWELL="${2:-120}"
-OUT="${3:-build/shots/opening_flow/$SCALE}"
-SAVEDIR="${TEMP:-/tmp}/rh_opening_flow_$SCALE"
+# LANE: "mouse" (default) or "keys". An explanatory card takes ANY key or ANY click, so the run has
+# two lanes and the trace asserts the SAME order on both -- a grammar proved on one input only is
+# half a grammar. Forced deeds stay on the mouse in either lane: a forced deed is a real press on a
+# real production control, and the screens have no keyboard path while the opening holds their keys.
+LANE="${4:-mouse}"
+OUT="${3:-build/shots/opening_flow/$SCALE${LANE:+_$LANE}}"
+SAVEDIR="${TEMP:-/tmp}/rh_opening_flow_${SCALE}_$LANE"
 
 mkdir -p "$OUT" "$SAVEDIR"
 rm -f "$OUT"/*.png "$OUT/trace.txt" "$OUT/run.log"
@@ -34,8 +39,9 @@ dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 || { echo "build faile
 timeout 900 bash -c '
   . tools/shellenv.sh || exit 1
   RH_ENV=(RH_OPENING_AUTOPLAY="$1" RH_OPENING_TRACE="$2" RH_OPENING_FILM="$3" RH_SAVE_DIR="$4" RH_SHOT_UISCALE="$5")
+  [ "$6" = "keys" ] && RH_ENV+=(RH_OPENING_KEYS=1)
   dn run --project src/IdleXIdle.Game --no-build
-' _ "$DWELL" "$(winpath "$OUT/trace.txt")" "$(winpath "$OUT")" "$(winpath "$SAVEDIR")" "$SCALE" > "$OUT/run.log" 2>&1
+' _ "$DWELL" "$(winpath "$OUT/trace.txt")" "$(winpath "$OUT")" "$(winpath "$SAVEDIR")" "$SCALE" "$LANE" > "$OUT/run.log" 2>&1
 rc=$?
 
 if [ ! -s "$OUT/trace.txt" ]; then
@@ -43,7 +49,8 @@ if [ ! -s "$OUT/trace.txt" ]; then
   tail -20 "$OUT/run.log" >&2
   exit 1
 fi
-echo "ui scale $SCALE: $(ls "$OUT"/*.png 2>/dev/null | wc -l) frames filmed, exit $rc"
-py tools/check_opening_trace.py "$OUT/trace.txt" || exit 1
+echo "ui scale $SCALE ($LANE): $(ls "$OUT"/*.png 2>/dev/null | wc -l) frames filmed, exit $rc"
+if [ "$LANE" = "keys" ]; then RH_OPENING_KEYS=1 py tools/check_opening_trace.py "$OUT/trace.txt" || exit 1
+else py tools/check_opening_trace.py "$OUT/trace.txt" || exit 1; fi
 [ $rc -eq 0 ] || { echo "the run exited $rc" >&2; tail -20 "$OUT/run.log" >&2; exit 1; }
-echo "the opening plays from a fresh save, in order, at $SCALE %."
+echo "the opening plays from a fresh save, in order, at $SCALE % on the $LANE lane."

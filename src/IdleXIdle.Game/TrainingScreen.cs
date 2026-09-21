@@ -215,6 +215,36 @@ public sealed class TrainingScreen
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
     /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
     /// </summary>
+    /// <summary>
+    /// The TRAIN button of the first stat this Hunter can afford, or null when none is affordable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>For the autoplayed hand, and for nothing else.</b> The opening's TRAIN ANY STAT beat lights
+    /// the whole rows panel on purpose — the deed is "make a choice", and lighting one row would be
+    /// making it — so the lit rectangle's centre is a row BODY, where a click SELECTS and does not buy
+    /// (see <see cref="UpdateList"/>: click selects, the button commits). A rig aiming at the centre of
+    /// the light therefore clicked three times and bought nothing, and the beat stalled.
+    /// </para>
+    /// <para>
+    /// This walks the SAME layout the paint and the hit-test walk, so the rectangle it returns is the
+    /// rectangle a real press would land in, at every UI density and at any scroll offset. It picks the
+    /// first affordable stat for the same reason <c>DefaultSelection</c> does — an arbitrary legal
+    /// choice — and it decides nothing the player could not: the deed is still a real purchase through
+    /// the real control, and the step is still gated on the Hunter's own ranks.
+    /// </para>
+    /// </remarks>
+    internal Rectangle? FirstAffordableBuyRect(Hunter hunter)
+    {
+        foreach (var (i, _, row) in LayoutList(ListFirst))
+        {
+            if (Entries[i].Stat < 0) continue;
+            var stat = Groups[Entries[i].Group].Stats[Entries[i].Stat];
+            if (hunter.CanTrain(stat)) return BuyRect(row);
+        }
+        return null;
+    }
+
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.TrainingRows => new[] { ListPanel },

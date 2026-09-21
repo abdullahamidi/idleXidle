@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Progression;
@@ -34,6 +34,16 @@ namespace IdleXIdle.Game;
 /// off the screen's selection, never set by the tutorial.
 /// </param>
 /// <param name="ItemsWorn">How many slots are filled.</param>
+/// <param name="TrainingOpen">
+/// TRAINING is unlocked — the screen's own gate, asked of <see cref="Unlocks"/> so the opening can
+/// never walk the player at a chained tile.
+/// </param>
+/// <param name="CanAffordFirstRank">The purse can pay for a rank of something right now.</param>
+/// <param name="StatsTrained">
+/// The Hunter's ranks, summed. The deed TRAIN ANY STAT is answered from this and nothing else — it is
+/// the same number the coach's own <c>LessonFacts.StatsTrained</c> carries, so the opening and the
+/// catalogue cannot disagree about whether a rank was bought.
+/// </param>
 public readonly record struct OpeningFacts(
     Activity Screen = Activity.Hunt,
     bool ArrivalSettled = false,
@@ -46,7 +56,10 @@ public readonly record struct OpeningFacts(
     int BossesFelled = 0,
     int ChestsOpened = 0,
     bool ItemSelected = false,
-    int ItemsWorn = 0);
+    int ItemsWorn = 0,
+    bool TrainingOpen = false,
+    bool CanAffordFirstRank = false,
+    int StatsTrained = 0);
 
 /// <summary>
 /// THE AUTHORED OPENING, AS IT RUNS. A cursor over <see cref="OpeningScript"/>, and the authority on
@@ -345,6 +358,9 @@ public sealed class OpeningDirector
         StageGate.BossFelled => f.BossesFelled > 0,
         StageGate.ChestOpened => f.ChestsOpened > 0,
         StageGate.ItemWorn => f.ItemsWorn > 0,
+        // A RANK IS A LASTING FACT WITH NO MOMENT — the rows simply read one higher for ever. So a
+        // reload walks over TRAIN ANY STAT on the fact alone, the way it walks over an opened chest.
+        StageGate.StatTrained => f.StatsTrained >= 1,
         _ => false,
     };
 
@@ -380,6 +396,18 @@ public sealed class OpeningDirector
         // the fall it is about to follow, exactly as GLEAM waits for the first one.
         StageGate.BossFelled => f.BossesFelled > 0 && f.ClearShown,
         StageGate.OnScreen => Step is { Screen: { } want } && f.Screen == want,
+        // BOTH HALVES, or the card cannot be obeyed: the screen has to be open and the purse has to
+        // cover a rank. The host reads the first from Unlocks and the second from the Hunter's own
+        // affordability, so neither is a second copy of a rule that lives somewhere else.
+        StageGate.TrainingAffordable => f.TrainingOpen && f.CanAffordFirstRank,
+        // A RANK EXISTS. Monotone, exactly like ChestOpened beside it, and deliberately not a delta
+        // against what the Hunter held when the step began. The live wait ahead of this chapter does
+        // NOT swallow input, so a player is free to walk into TRAINING and buy a rank before being
+        // asked to — and the catalogue's own rule for that case is that the deed completes the lesson
+        // without ever asking (see OnboardingLessons' FirstChestOpen note). A delta would instead ask
+        // that player to spend a second 25 Gleam to prove they had done the thing they had just done,
+        // and would re-ask anyone whose save was written between the purchase and the stage advancing.
+        StageGate.StatTrained => f.StatsTrained >= 1,
         StageGate.ChestOpened => f.ChestsOpened > 0,
         StageGate.ItemSelected => f.ItemSelected,
         StageGate.ItemWorn => f.ItemsWorn > 0,

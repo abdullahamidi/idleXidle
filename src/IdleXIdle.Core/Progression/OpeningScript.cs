@@ -106,6 +106,25 @@ public enum StageGate
     /// <summary>The player is standing on the screen this step named.</summary>
     OnScreen,
 
+    /// <summary>
+    /// TRAINING is open and the purse can afford a first rank — the moment the lesson can be obeyed.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, because either alone is a prompt that cannot be acted on. The screen's gate is
+    /// <c>Unlocks.IsOpen(Activity.Training, …)</c> — three cleared waves — and the price is
+    /// <c>OnboardingLessons.FirstRankCost</c>, which is pinned against the real tuning. Asked of the
+    /// same facts navigation uses, so the opening can never walk the player at a chained tile.
+    /// </remarks>
+    TrainingAffordable,
+
+    /// <summary>A rank has actually been bought — any stat, never a named one.</summary>
+    /// <remarks>
+    /// The deed, and only the deed. A card closed is not a rank trained, exactly as a card closed is
+    /// not a chest opened: the host answers this from the Hunter's own summed ranks, so the fact the
+    /// step waits for is the fact the game records.
+    /// </remarks>
+    StatTrained,
+
     /// <summary>A chest has actually been opened.</summary>
     ChestOpened,
 
@@ -170,44 +189,61 @@ public enum OpeningStage
     /// <summary>THE HUNT. Live, on the stage header.</summary>
     IntroduceStage = 13,
 
+    // ── THE FIRST DECISION. Live until the purse can pay for one, then four beats that spend it. ──
+
+    /// <summary>Waiting for TRAINING to open and for the purse to afford a first rank. Live.</summary>
+    AwaitTraining = 14,
+
+    /// <summary>TRAINING. Paused, on the TRAINING tile the next step makes the player press.</summary>
+    IntroduceTraining = 15,
+
+    /// <summary>OPEN TRAINING. Only the TRAINING tile is live.</summary>
+    ForceTraining = 16,
+
+    /// <summary>TRAIN ANY STAT. Only the stat rows are live; a real rank advances it.</summary>
+    ForceTrainStat = 17,
+
+    /// <summary>YOUR CHOICE STANDS. Paused, on the rows the rank just moved.</summary>
+    ShowTrained = 18,
+
     /// <summary>Waiting for the tutorial boss to arrive.</summary>
-    AwaitBoss = 14,
+    AwaitBoss = 19,
 
     /// <summary>BOSS WAVE. Paused, before it swings.</summary>
-    IntroduceBoss = 15,
+    IntroduceBoss = 20,
 
     /// <summary>Waiting for the boss to fall.</summary>
-    AwaitBossFelled = 16,
+    AwaitBossFelled = 21,
 
     /// <summary>A CHEST DROPPED. Paused, on the VAULT tile the chest went to.</summary>
-    IntroduceChest = 17,
+    IntroduceChest = 22,
 
     /// <summary>OPEN THE VAULT. Only the VAULT tile is live.</summary>
-    ForceVault = 18,
+    ForceVault = 23,
 
     /// <summary>OPEN THE CHEST. Only the chest's own card is live.</summary>
-    ForceChestOpen = 19,
+    ForceChestOpen = 24,
 
     /// <summary>YOUR FIRST ITEM. Paused, on the reveal of what came out, which is held open while it is read.</summary>
-    IntroduceItem = 20,
+    IntroduceItem = 25,
 
     /// <summary>OPEN GEAR. Only the GEAR tile is live.</summary>
-    ForceGear = 21,
+    ForceGear = 26,
 
     /// <summary>SELECT THE ITEM. Only the item's own cell is live.</summary>
-    ForceItemSelect = 22,
+    ForceItemSelect = 27,
 
     /// <summary>ITEM STATS. Paused, on the inspector the click filled.</summary>
-    ExplainItem = 23,
+    ExplainItem = 28,
 
     /// <summary>EQUIP IT. Only the EQUIP button is live.</summary>
-    ForceEquip = 24,
+    ForceEquip = 29,
 
-    /// <summary>BACK TO THE HUNT. Paused, on the paper doll; CONTINUE returns to the fight.</summary>
-    ShowEquipped = 25,
+    /// <summary>BACK TO THE HUNT. Paused, on the paper doll; the acknowledgement returns to the fight.</summary>
+    ShowEquipped = 30,
 
     /// <summary>The opening is over and normal play is released.</summary>
-    Complete = 26,
+    Complete = 31,
 }
 
 /// <summary>One authored beat: what it says, what it lights, and what lets it go.</summary>
@@ -252,10 +288,20 @@ public readonly record struct OpeningStep(
 /// playtest that set this rule (2026-09-11) stopped on "No two waves are made of the same thing."
 /// </para>
 /// <para>
-/// <b>Training is deliberately absent.</b> Its facts may well become true during the opening — three
-/// waves and twenty-five Gleam arrive somewhere around the tutorial boss — and it still does not
-/// appear here. The opening owns the player's attention until it is finished; Training teaches itself
-/// afterwards, as a contextual lesson, when the player is free to be interrupted.
+/// <b>Training is taught here, and that reverses an earlier decision.</b> It used to be deliberately
+/// absent, on the reasoning that the opening owns the player until it is finished and Training could
+/// teach itself afterwards as a contextual lesson. The playtest that reversed it found the obvious
+/// hole in that: the first minutes teach the player to WATCH — the hunter fights, the waves pay, the
+/// skill fires on its own — and then hand over a game whose entire premise is that you choose how it
+/// grows, without ever asking them to choose anything. The chest and the item that follow are things
+/// the game GIVES; a rank is the first thing the player SPENDS. So the chapter sits before the boss,
+/// where its facts first become true, and it forces the deed and never the choice: TRAIN ANY STAT,
+/// never TRAIN MIGHT. Nothing about which stat is authored anywhere in this file.
+/// </para>
+/// <para>
+/// <b>And it waits for a purse that can pay.</b> <see cref="StageGate.TrainingAffordable"/> is both
+/// halves — the screen's own unlock and the first rank's price — because a card that says TRAIN ANY
+/// STAT over a row that refuses is the prompt-that-cannot-be-obeyed the whole catalogue forbids.
 /// </para>
 /// </remarks>
 public static class OpeningScript
@@ -329,6 +375,43 @@ public static class OpeningScript
                         Activity.Hunt, TourTarget.StageHeader,
                         "THE HUNT",
                         "This shows your wave and your progress through the region."),
+
+        // ── THE FIRST DECISION. The fight runs until the purse can pay for a rank; then it stops. ──
+        //
+        // The wait is LIVE, because the Gleam that pays for the rank is earned by the fight the player
+        // is watching. Everything after it is paused or forced, which is also what keeps the tutorial
+        // boss off the stage: a held beat does not advance the fight at all, so wave five cannot walk
+        // on in the middle of the chapter.
+        new OpeningStep(OpeningStage.AwaitTraining, TutorialStepMode.LiveExplain, StageGate.TrainingAffordable,
+                        Activity.Hunt, null, "", ""),
+
+        // THE TILE IS LIT BY THE CHAIN, not by name: a beat aimed at the rail lights whichever tile the
+        // next forced step is going to ask for (NextForcedScreen), which is TRAINING.
+        new OpeningStep(OpeningStage.IntroduceTraining, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
+                        Activity.Hunt, TourTarget.NavRail,
+                        "TRAINING",
+                        "Gleam buys permanent stats for your Hunter. Spend some in Training."),
+
+        new OpeningStep(OpeningStage.ForceTraining, TutorialStepMode.ForceNavigate, StageGate.OnScreen,
+                        Activity.Training, null,
+                        "OPEN TRAINING",
+                        "Your Gleam is spent here."),
+
+        // ANY STAT. The rows are lit as one region because the deed is "make a choice", and lighting
+        // one row would be making it for them. The panel holds only the stat rows and their TRAIN
+        // buttons — RESET ALL TRAINING sits below it, outside the light and outside the click.
+        new OpeningStep(OpeningStage.ForceTrainStat, TutorialStepMode.ForceAction, StageGate.StatTrained,
+                        Activity.Training, TourTarget.TrainingRows,
+                        "TRAIN ANY STAT",
+                        // THE DEED, NEVER THE CONTROL — and never a key. "Press TRAIN" named a button
+                        // and tripped the hotkey guard that exists to stop exactly that habit; the lit
+                        // control is what says where to click, and the card says what it is for.
+                        "Pick a stat and train it once. Any of them is a fine first choice."),
+
+        new OpeningStep(OpeningStage.ShowTrained, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
+                        Activity.Training, TourTarget.TrainingRows,
+                        "YOUR CHOICE STANDS",
+                        "That rank is permanent. Keep earning Gleam and keep spending it."),
 
         // ── THE TUTORIAL BOSS, which is simply the game's own first boss. ────────────────────────
         new OpeningStep(OpeningStage.AwaitBoss, TutorialStepMode.LiveExplain, StageGate.BossSettled,
@@ -504,16 +587,46 @@ public static class OpeningScript
     /// <param name="saved">The ordinal the file carries.</param>
     /// <param name="fileVersion">The Version of the file that was LOADED.</param>
     /// <remarks>
+    /// <para>
     /// <see cref="OpeningStage.WatchSignature"/> is the first stage ever inserted mid-sequence. A file
     /// written before it (version 6) numbered IntroduceHealth as 11 and Complete as 25, so every
     /// ordinal from 11 up is read one place further on. Read as written, a v6 player on IntroduceHealth
     /// would resume waiting for a cast that already landed, and a finished v6 opening would reopen on
     /// its last card.
+    /// </para>
+    /// <para>
+    /// <see cref="OpeningStage.AwaitTraining"/> is the SECOND such insertion (version 9), and it lands
+    /// five stages at once. The two shifts COMPOSE, oldest first: a v6 ordinal is lifted into v7/v8
+    /// numbering, and that result is lifted into v9 numbering. Applying them in the other order — or
+    /// comparing a raw v6 ordinal against this file's <c>AwaitTraining</c> — reads a v6 cursor against a
+    /// boundary that did not exist in its own numbering and moves it to the wrong beat. The worked
+    /// cases: a v6 AwaitBoss (13) becomes 14, then 19, which is this build's AwaitBoss; a v6
+    /// IntroduceHealth (11) becomes 12 and stops, because 12 is below the Training boundary; a v8
+    /// IntroduceStage (13) is untouched by both.
+    /// </para>
+    /// <para>
+    /// A cursor that lands INSIDE the new chapter cannot exist — no file was ever written there — so
+    /// nothing has to be mapped onto the Training beats. A resumed player either has not reached them
+    /// (and will play them) or is already past them (and will not).
+    /// </para>
     /// </remarks>
     public static OpeningStage StageOf(int saved, int fileVersion)
-        => StageOf(fileVersion < FirstVersionWithSignatureWatch && saved >= (int)OpeningStage.WatchSignature
-                       ? saved + 1
-                       : saved);
+    {
+        var ordinal = saved;
+        if (fileVersion < FirstVersionWithSignatureWatch && ordinal >= (int)OpeningStage.WatchSignature)
+            ordinal += 1;
+        if (fileVersion < FirstVersionWithTrainingChapter && ordinal >= (int)OpeningStage.AwaitTraining)
+            ordinal += TrainingChapterLength;
+        return StageOf(ordinal);
+    }
+
+    /// <summary>How many stages the Training chapter inserted — the v8 → v9 shift.</summary>
+    /// <remarks>
+    /// Derived from the enum rather than written down, so adding a beat to the chapter cannot leave the
+    /// migration reading one place short: AwaitBoss is the first stage that existed on both sides of
+    /// the insertion, and the gap in front of it IS the chapter.
+    /// </remarks>
+    private const int TrainingChapterLength = (int)OpeningStage.AwaitBoss - (int)OpeningStage.AwaitTraining;
 
     /// <summary>
     /// The stage a LOADED cursor resumes on: the saved one, unless that beat's moment cannot exist
@@ -576,4 +689,15 @@ public static class OpeningScript
     /// </summary>
     /// <remarks>A literal for the reason <see cref="FirstVersionWithOpeningState"/> is one.</remarks>
     public const int FirstVersionWithSignatureWatch = 7;
+
+    /// <summary>
+    /// THE FIRST SAVE VERSION WHOSE CURSOR COUNTS THE TRAINING CHAPTER. Frozen.
+    /// </summary>
+    /// <remarks>
+    /// A literal for the reason the two above are, and the one this family has been warned about three
+    /// times: written as <c>SaveGame.CurrentVersion</c>, the next unrelated version bump would start
+    /// lifting cursors that are already in this numbering, and every player standing in the Training
+    /// chapter would be moved five beats into the boss.
+    /// </remarks>
+    public const int FirstVersionWithTrainingChapter = 9;
 }

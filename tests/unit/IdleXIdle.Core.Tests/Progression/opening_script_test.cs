@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Progression;
@@ -57,9 +58,15 @@ public class OpeningScriptTest
     public void test_the_authored_order_is_the_one_the_playtest_asked_for()
     {
         // The sequence, named: story, arrival, hunter, enemy, resources, the signature BEFORE it
-        // fires and then the cast on its own, the live readouts, the boss, its chest, the vault, the
-        // gear. Written out rather than derived, because this list IS the product decision — if it
-        // changes, it should change here.
+        // fires and then the cast on its own, the live readouts, THE FIRST DECISION, the boss, its
+        // chest, the vault, the gear. Written out rather than derived, because this list IS the
+        // product decision — if it changes, it should change here.
+        //
+        // TRAINING ENTERED THE SEQUENCE 2026-09-21, between the live readouts and the boss. The first
+        // minutes teach the player to WATCH — the hunter fights, the waves pay, the skill fires by
+        // itself — and the chapter that follows hands them a chest and an item, which are things the
+        // game GIVES. A rank is the first thing the player SPENDS, and a game whose whole premise is
+        // that you choose how it grows cannot reach its first boss without having asked for a choice.
         var order = OpeningScript.Steps.Select(s => s.Stage).ToArray();
         Assert.Equal(new[]
         {
@@ -69,6 +76,8 @@ public class OpeningScriptTest
             OpeningStage.AwaitFirstReward, OpeningStage.IntroduceResources,
             OpeningStage.AwaitSignature, OpeningStage.IntroduceSignature, OpeningStage.WatchSignature,
             OpeningStage.IntroduceHealth, OpeningStage.IntroduceStage,
+            OpeningStage.AwaitTraining, OpeningStage.IntroduceTraining, OpeningStage.ForceTraining,
+            OpeningStage.ForceTrainStat, OpeningStage.ShowTrained,
             OpeningStage.AwaitBoss, OpeningStage.IntroduceBoss, OpeningStage.AwaitBossFelled,
             OpeningStage.IntroduceChest,
             OpeningStage.ForceVault, OpeningStage.ForceChestOpen, OpeningStage.IntroduceItem,
@@ -135,19 +144,48 @@ public class OpeningScriptTest
     }
 
     [Fact]
-    public void test_training_is_not_in_the_opening()
+    public void test_the_training_chapter_forces_a_real_rank_and_never_names_the_stat()
     {
-        // THE ORDERING THE PREVIOUS PASS ENFORCED IS SUPERSEDED. It made the opening
-        // fight -> Training -> chest -> Gear, on the reasoning that the decision loop should precede
-        // the loot loop. The authored opening is a different product: the boss gives the chest, the
-        // chest gives the item, and the item is what GEAR is for. Training's facts may well come true
-        // somewhere around the boss; it still waits, and teaches itself afterwards.
+        // THIS TEST WAS ITS OWN OPPOSITE UNTIL 2026-09-21. It asserted that no step touched TRAINING
+        // at all, on the reasoning that the opening owns the player until it is finished and Training
+        // could teach itself afterwards as a contextual lesson. The playtest reversed it: the opening
+        // reached its first boss without ever asking the player to make a decision, in a game whose
+        // premise is that you choose how your hunter grows.
+        //
+        // What replaces it is the part that was always the real rule — the chapter must force the
+        // DEED and never the CHOICE.
+        var chapter = OpeningScript.Steps.Where(s => s.Screen == Activity.Training).ToArray();
+        Assert.Equal(3, chapter.Length);   // open it, train on it, read what changed
+
+        // ONE FORCED DEED, GATED ON A RANK ACTUALLY BOUGHT. Not on an acknowledgement, and not on
+        // standing on the screen: a card closed is not a stat trained.
+        var deed = Assert.Single(OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceAction
+                                                                && s.Screen == Activity.Training));
+        Assert.Equal(OpeningStage.ForceTrainStat, deed.Stage);
+        Assert.Equal(StageGate.StatTrained, deed.Gate);
+        Assert.Equal(TourTarget.TrainingRows, deed.Target);
+
+        // ...AND NOT ONE WORD ABOUT WHICH STAT. The deed is "make a choice"; naming one would be
+        // making it. No step in the whole opening may name a trainable stat.
         foreach (var step in OpeningScript.Steps)
         {
-            Assert.NotEqual(Activity.Training, step.Screen);
-            Assert.NotEqual(TourTarget.TrainingRows, step.Target);
-            Assert.DoesNotContain("TRAIN", step.Title, StringComparison.OrdinalIgnoreCase);
+            var text = (step.Title + " " + step.Body).ToUpperInvariant();
+            foreach (var stat in Enum.GetNames<HunterStat>())
+                Assert.DoesNotContain(stat.ToUpperInvariant(), text, StringComparison.Ordinal);
         }
+
+        // THE CHAPTER WAITS FOR A PURSE THAT CAN PAY. A card saying TRAIN ANY STAT over rows that all
+        // refuse is the prompt-that-cannot-be-obeyed the catalogue forbids, so the live beat ahead of
+        // it holds until the screen is open AND a rank is affordable.
+        var wait = OpeningScript.Find(OpeningStage.AwaitTraining)!.Value;
+        Assert.Equal(TutorialStepMode.LiveExplain, wait.Mode);
+        Assert.Equal(StageGate.TrainingAffordable, wait.Gate);
+
+        // AND IT IS OVER BEFORE THE BOSS. Training opens on three cleared waves and the tutorial boss
+        // stands on the fifth, so the decision is asked for while the fight is still ordinary.
+        var order = OpeningScript.Steps.Select(s => s.Stage).ToList();
+        Assert.True(order.IndexOf(OpeningStage.ShowTrained) < order.IndexOf(OpeningStage.AwaitBoss));
+        Assert.True(Unlocks.TrainingOpensAtWaves < OpeningScript.TutorialBossWave);
     }
 
     [Fact]

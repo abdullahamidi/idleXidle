@@ -77,6 +77,7 @@ only be added here once actually integrated:
 - ADR-005 UI SCALE is a density profile, the cursor is mapped once, motion has one vocabulary (Accepted 2026-09-01) — `docs/architecture/ADR-005-ui-density-profile-and-one-cursor.md`
 - ADR-006 Draw must not consume input: Update owns every edge, and both halves read one geometry (Accepted 2026-09-12) — `docs/architecture/ADR-006-draw-must-not-consume-input.md`
 - ADR-007 One surface at a time: the attention owner, and the inbox background news goes to instead (Accepted 2026-09-15) — `docs/architecture/ADR-007-attention-ownership-and-dispatches.md`
+- ADR-008 One acknowledgement grammar, and a spotlight that is never a lie (Accepted 2026-09-21) — `docs/architecture/ADR-008-one-acknowledgement-grammar-and-presentation-only-spotlights.md`
 
 ## Engine Specialists
 

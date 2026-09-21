@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -185,9 +185,14 @@ public class OpeningFlowSeamsTest
         // all: the key is marked known instead, so it can never arrive later as news either.
         Assert.Contains("&& !OpeningWalksInto(opened))", game, StringComparison.Ordinal);
         Assert.Contains("KnowDispatch(DispatchKeys.Unlock(opened));", game, StringComparison.Ordinal);
+        // TRAINING JOINED THE WALK 2026-09-21. The set matters because OpeningWalksInto reads it to
+        // SUPPRESS a screen's unlock dispatch: a screen the opening takes the player into by hand has
+        // been introduced by hand, and a letter announcing it afterwards is news about nothing. The
+        // suppression is derived from the script, so this assertion is what notices a chapter being
+        // added without anyone thinking about the letter it silences.
         var walked = OpeningScript.Steps.Where(s => s.Mode == TutorialStepMode.ForceNavigate).Select(s => s.Screen).ToHashSet();
-        Assert.True(walked.SetEquals(new Activity?[] { Activity.Vault, Activity.Gear }),
-                    "the opening walks the player into VAULT and GEAR, and no other screen");
+        Assert.True(walked.SetEquals(new Activity?[] { Activity.Training, Activity.Vault, Activity.Gear }),
+                    "the opening walks the player into TRAINING, VAULT and GEAR, and no other screen");
     }
 
     [Fact]

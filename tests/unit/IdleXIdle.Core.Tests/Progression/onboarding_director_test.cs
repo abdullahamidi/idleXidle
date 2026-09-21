@@ -73,7 +73,10 @@ public class onboarding_director_test
         var fell = noGem with { Falls = 1, ReportOpenedEver = false };
         Assert.Equal(OnboardingLessonId.FirstFailureReport, OnboardingLessons.Next(fell));
 
-        var mastery = noGem with { MasteryPointsFree = 2 };
+        // A FREE POINT IS NOT ENOUGH: the MASTERY screen opens on points EARNED, and the lesson asks
+        // Unlocks.IsOpen for that, so a fixture holding unspent points with nothing earned describes a
+        // player whose tree is still chained shut. Earned comes from the gate itself, never a literal.
+        var mastery = noGem with { MasteryPointsFree = 2, MasteryPointsEarned = Unlocks.MasteryOpensAtPoints };
         Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(mastery));
 
         var conquered = noGem with { RegionsConquered = 1, RegionsOpen = 2 };
@@ -110,6 +113,7 @@ public class onboarding_director_test
         {
             RegionsConquered = 1, RegionsOpen = 2,
             KeystonesDiscovered = 1, GemsHeld = 1, CanSocketNow = true, MasteryPointsFree = 1,
+            MasteryPointsEarned = Unlocks.MasteryOpensAtPoints,
             TraitsDiscovered = 3, HuntersOwned = 2,
             WarrenOpen = true, WarrenPaidOffline = true,
         };
@@ -188,7 +192,7 @@ public class onboarding_director_test
 
         // AND IT BLOCKS NOTHING while it waits: an unopenable gem lesson never suppresses a lesson
         // that has nothing to do with gems.
-        var alsoOwed = gemNoHost with { MasteryPointsFree = 1 };
+        var alsoOwed = gemNoHost with { MasteryPointsFree = 1, MasteryPointsEarned = Unlocks.MasteryOpensAtPoints };
         Assert.Equal(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(alsoOwed));
     }
 
@@ -440,7 +444,8 @@ public class onboarding_director_test
         // unopened and a point waiting to be spent.
         var fell = new LessonFacts(WavesCleared: 24, DeepestWave: 24, Gleam: 400, StatsTrained: 1,
                                    BossesFelled: 4, ChestsHeld: 1, ChestsOpened: 2, ItemsOwned: 1, ItemsWorn: 1,
-                                   MasteryPointsFree: 1, RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
+                                   MasteryPointsFree: 1, MasteryPointsEarned: Unlocks.MasteryOpensAtPoints,
+                                   RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
 
         Assert.Equal(OnboardingLessonId.FirstFailureReport, OnboardingLessons.Next(fell));
 
@@ -466,7 +471,8 @@ public class onboarding_director_test
 
         var fell = new LessonFacts(WavesCleared: 24, DeepestWave: 24, Gleam: 400, StatsTrained: 1,
                                    BossesFelled: 4, ChestsHeld: 1, ChestsOpened: 2, ItemsOwned: 1, ItemsWorn: 1,
-                                   MasteryPointsFree: 1, RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
+                                   MasteryPointsFree: 1, MasteryPointsEarned: Unlocks.MasteryOpensAtPoints,
+                                   RegionsEntered: 1, HuntersOwned: 1, Falls: 1);
         var read = fell with { ReportOpenedEver = true };
         var changed = read with { ChangedAfterFall = true };
         var retried = changed with { RetriedAfterChange = true };   // the next descent already began
@@ -764,5 +770,72 @@ public class onboarding_director_test
         Assert.Equal(new[] { OnboardingLessonId.FirstGemSocket }, toTheForge);
         // ...and the one that does goes for a DEED, pointing at the bag the gem is in.
         Assert.Equal(TourTarget.Bag, OnboardingLessons.Target(OnboardingLessonId.FirstGemSocket));
+    }
+
+    [Fact]
+    public void test_spend_one_mastery_point_is_impossible_while_the_mastery_screen_is_locked()
+    {
+        // THE BUG THIS PINS. Eligibility read MasteryPointsFree >= 1 while Unlocks opens the tree on
+        // MasteryPointsEarned >= MasteryOpensAtPoints, so SPEND ONE MASTERY POINT was offered from the
+        // very first point — two short — and the card sent the player at a rail tile still chained
+        // shut. Two different facts wearing similar names.
+        //
+        // The sweep is over EVERY earned count below the gate, so the test cannot be satisfied by a
+        // fix that merely moves the boundary by one.
+        for (var earned = 0; earned < Unlocks.MasteryOpensAtPoints; earned++)
+        {
+            var locked = new LessonFacts(WavesCleared: 30, DeepestWave: 30, Gleam: 900, StatsTrained: 4,
+                                         ItemsOwned: 3, ItemsWorn: 3, HuntersOwned: 1,
+                                         MasteryPointsFree: 5, MasteryPointsEarned: earned);
+
+            // The lesson's own answer...
+            Assert.False(OnboardingLessons.Eligible(OnboardingLessonId.FirstMasterySpend, locked),
+                         $"offered with {earned} earned, below the gate of {Unlocks.MasteryOpensAtPoints}");
+            // ...and the director's, which is the one the player would actually have met.
+            Assert.NotEqual(OnboardingLessonId.FirstMasterySpend, OnboardingLessons.Next(locked));
+
+            // AND THE TWO AGREE WITH NAVIGATION, which is the whole point of asking Unlocks rather
+            // than keeping a second copy of the number: whatever the lesson says here, the rail says
+            // the same, so the card can never point at a tile the player cannot press.
+            Assert.False(Unlocks.IsOpen(Activity.Mastery, new UnlockFacts(MasteryPointsEarned: earned)));
+        }
+
+        // ...AND IT IS OFFERED THE MOMENT THE SCREEN IS REALLY OPEN, so the fix is a gate and not a mute.
+        var open = new LessonFacts(WavesCleared: 30, DeepestWave: 30, Gleam: 900, StatsTrained: 4,
+                                   ItemsOwned: 3, ItemsWorn: 3, HuntersOwned: 1,
+                                   MasteryPointsFree: 1, MasteryPointsEarned: Unlocks.MasteryOpensAtPoints);
+        Assert.True(OnboardingLessons.Eligible(OnboardingLessonId.FirstMasterySpend, open));
+        Assert.True(Unlocks.IsOpen(Activity.Mastery, new UnlockFacts(MasteryPointsEarned: Unlocks.MasteryOpensAtPoints)));
+
+        // ...and never on an open tree with nothing left to spend: the deed needs a point too.
+        Assert.False(OnboardingLessons.Eligible(OnboardingLessonId.FirstMasterySpend, open with { MasteryPointsFree = 0 }));
+    }
+
+    [Fact]
+    public void test_the_number_three_is_not_written_down_in_the_onboarding_catalogue()
+    {
+        // The gate has ONE home. The catalogue asks Unlocks.IsOpen for the Mastery screen rather than
+        // comparing against a literal, so moving MasteryOpensAtPoints moves the lesson with it — and a
+        // future pass cannot "fix" a drift by copying the number into a second place.
+        var catalogue = System.IO.File.ReadAllText(
+            System.IO.Path.Combine(RepoRoot(), "src", "IdleXIdle.Core", "Progression", "OnboardingLessons.cs"));
+        Assert.Contains("Unlocks.IsOpen(Activity.Mastery", catalogue, StringComparison.Ordinal);
+
+        // What is forbidden is a SECOND COMPARISON, not a mention: the remarks are free to name
+        // Unlocks.MasteryOpensAtPoints as the thing they defer to, and should. What must never appear
+        // is this file deciding the threshold for itself — any test of the earned count against a
+        // number is the drift the bug was made of.
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(catalogue, @"MasteryPointsEarned\s*(==|!=|<=|>=|<|>)"))
+            Assert.Fail($"the catalogue compares MasteryPointsEarned itself: \"{m.Value}\" — ask Unlocks instead.");
+    }
+
+    /// <summary>The repo root, found by walking up from the test binary until the solution is beside us.</summary>
+    private static string RepoRoot()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is { Length: > 0 } && !System.IO.File.Exists(System.IO.Path.Combine(dir, "IdleXIdle.sln")))
+            dir = System.IO.Path.GetDirectoryName(dir);
+        return dir ?? throw new InvalidOperationException("IdleXIdle.sln not found above the test binary.");
     }
 }

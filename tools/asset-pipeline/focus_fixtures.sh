@@ -28,8 +28,29 @@ ROWS=(
   "chest|vaultfirst|RH_SHOT_OPENING=ForceChestOpen|"
   "gear_cell|character|RH_SHOT_OPENING=ForceItemSelect|"
   "item_detail|character|RH_SHOT_OPENING=ExplainItem|"
-  "training_rows|stats|RH_SHOT_LESSON=FirstTrainingPurchase|"
-  "mastery_target|buildtree|RH_SHOT_LESSON=FirstMasterySpend|"
+  # THE ROWS ARE LIT BY THE OPENING NOW, not by the contextual lesson. TRAIN ANY STAT became an
+  # authored beat (OpeningStage.ForceTrainStat) and FirstTrainingPurchase was demoted to the quiet
+  # slot with it, so posing the LESSON here photographs a screen with no light on it at all.
+  "training_rows|stats|RH_SHOT_OPENING=ForceTrainStat|"
+
+  # ── PRESENTATION ONLY: the same lit control, explained and then forced. ──────────────────────
+  #
+  # The pair that proves the rule a screenshot of either frame alone cannot: the cursor is parked
+  # dead centre on the VAULT rail tile (canvas 90,539) in both, and the tile carries its gold hover
+  # wash ONLY in the frame where pressing it would do something. On the explanation it is lit and
+  # inert — which is the whole point, because a highlighted control that lights up under the mouse
+  # looks actionable whether or not it is.
+  "vault_tile_explained|fight|RH_SHOT_OPENING=IntroduceChest RH_SHOT_CANVAS_MOUSE=90,539|"
+  "vault_tile_forced|fight|RH_SHOT_OPENING=ForceVault RH_SHOT_CANVAS_MOUSE=90,539|"
+
+  # ── DEMOTED: what a lesson looks like once it stops darkening the page. ─────────────────────
+  #
+  # Not a light at all, and that is the state worth photographing: the lesson keeps its title, its
+  # line and its x in the screen's own quiet slot, with the page readable and live underneath. It
+  # is also the state that was silent until the attention owner stopped claiming the frame for a
+  # light it had stopped painting (lesson_demotion_test).
+  "demoted_slot_training|stats|RH_SHOT_LESSON=FirstTrainingPurchase|"
+  "demoted_slot_mastery|buildtree|RH_SHOT_LESSON=FirstMasterySpend|"
 )
 
 fail=0
@@ -39,7 +60,7 @@ for row in "${ROWS[@]}"; do
     name="${state}_${scale}"
     case "$name" in *"$FILTER"*) ;; *) continue ;; esac
     echo "── $name  ($mode $arg, $dials)"
-    if ! env RH_SHOT_UISCALE="$scale" ${dials:+"$dials"} bash tools/asset-pipeline/capture.sh "$mode" "$OUT/$name.png" $arg >/dev/null 2>&1; then
+    if ! env RH_SHOT_UISCALE="$scale" $dials bash tools/asset-pipeline/capture.sh "$mode" "$OUT/$name.png" $arg >/dev/null 2>&1; then
       echo "   FAILED"; fail=1
     fi
   done
