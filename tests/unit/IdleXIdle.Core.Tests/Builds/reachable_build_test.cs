@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
@@ -106,16 +106,47 @@ public class reachable_build_test
     }
 
     [Fact]
-    public void test_reachable_refuses_three_actives_because_the_split_would_drop_one()
+    public void test_reachable_refuses_three_actives_because_a_build_may_hold_only_two()
     {
-        // A four-slot account holds two actives and two passives. Three actives compose as two, and a
-        // benchmark that measured that would be measuring a build with a hole it did not ask for.
+        // THREE ACTIVES IS ILLEGAL AT ANY CAPACITY, and this harness must not compose one: a benchmark
+        // measuring a build with a hole it did not ask for is measuring nothing.
+        //
+        // The REASON changed on 2026-09-22 even though the refusal did not. It used to be "the
+        // active/passive split would drop one" — the slots themselves alternated active/passive, so a
+        // third active had nowhere to sit. Slots have no kind now; the cap is global and deliberate,
+        // and the composer records what it could not seat instead of discarding it.
+        //
+        // NOTE the fourth pick: the Seeker's own signature is NOT among these four, so this is three
+        // chosen actives plus a passive, not a champion's signature pushing a build over the line.
         var ex = Assert.Throws<InvalidOperationException>(() =>
             Reachable.Compose(Seeker, new[]
             {
                 S("hammer_blow", "FLATTEN"), S("volley_spray", "SPLAY"), S("sign_call", "STEADY"), S("field_mire", "NUMB"),
             }));
-        Assert.Contains("reached the fight", ex.Message);
+        // REFUSED AT THE DECISION SURFACE, not by the composer. SetSkill is where an illegal build is
+        // now stopped, so the harness never reaches the "what was asked is what fights" check below —
+        // which is the whole point of the fix: nothing gets far enough to be silently dropped.
+        Assert.Contains("takes an action", ex.Message);
+    }
+
+    [Fact]
+    public void test_reachable_composes_two_actives_at_the_capacity_that_used_to_drop_one()
+    {
+        // THE REGRESSION, THROUGH THE STRICTEST HARNESS IN THE SUITE. Reachable.Compose already
+        // asserts "what was asked is what fights" slot by slot — it was the ONLY place that checked,
+        // and it was never pointed at capacity 2. Pointed there, it reproduces the bug exactly.
+        var build = Reachable.Compose(Seeker, new[] { S("hammer_blow", "FLATTEN"), S("volley_spray", "SPLAY") },
+                                      slotCapacity: 2);
+
+        Assert.Equal(new[] { "hammer_blow", "volley_spray" }, build.Skills.Select(s => s.Def.Id));
+        Assert.Equal(2, build.ActiveCount);
+        Assert.Empty(build.RefusedSkills);
+
+        // ...and two PASSIVES at the same capacity, which is the half of the bug nobody reported.
+        var quiet = Reachable.Compose(Seeker, new[] { S("sign_brand", "ETCH"), S("field_mire", "NUMB") },
+                                      slotCapacity: 2);
+        Assert.Equal(2, quiet.PassiveCount);
+        Assert.Empty(quiet.RefusedSkills);
     }
 
     [Fact]

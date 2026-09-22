@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -34,25 +34,18 @@ public static class BuildComposer
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>ONE RULE, READ BY BOTH THE SIM AND THE SCREEN.</b> The weave screen has to tell the player
-    /// which of their skills costs an action and which does not, and the fight has to act on the same
-    /// answer. Two implementations of that walk would agree right up until one of them was edited —
-    /// which is the shape this project keeps paying for, most recently as a cadence dial that
-    /// reconstructed the beat count instead of reading it.
+    /// <b>FOR THE SCREEN. <see cref="Compose"/> does not call this.</b> The header above used to claim
+    /// this was "one rule read by both the sim and the screen", and it never was: the only production
+    /// callers are the BUILD screen's row grouping and the frozen legacy walk. That gap is how the
+    /// 2026-09-22 regression happened — this walk counted a named Active with no budget test at all
+    /// and reported both as ACTIVE, while <see cref="Build.Equip"/> refused the second against a
+    /// budget of one, and the composer discarded the refusal. The screen drew a build the fight did
+    /// not have. The legality rule is <see cref="Build.WouldRefuse"/>, and every layer asks IT.
     /// </para>
     /// <para>
-    /// The walk, in composition order:
-    /// </para>
-    /// <list type="number">
-    /// <item>A named skill brings its own kind — a Field or a Reaction is passive wherever it lands.</item>
-    /// <item>Otherwise it takes an active slot while the active budget has room.</item>
-    /// <item>Otherwise it SPILLS into a passive slot — it is not dropped. A build saved before the
-    ///   rework can hold four beat-taking skills against an active budget of two, and refusing the
-    ///   overflow would take half of someone's build away on load without a word.</item>
-    /// </list>
-    /// <para>
-    /// Composition order decides, so the skills woven FIRST keep their actives. Any other rule would
-    /// reorder a player's build for them.
+    /// What is left here is a KIND LOOKUP, which is all the screen ever needed: a named skill is
+    /// passive if its definition says so. The spill branch below survives only for an id-less legacy
+    /// pick, which no live row is — every row the editor writes carries a SkillId.
     /// </para>
     /// </remarks>
     public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity)
@@ -143,13 +136,16 @@ public static class BuildComposer
                 SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
                 traitShape ?? SkillShape.None),
             SlotCapacity = slotCapacity,
-            // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is
-            // divided: two actives and two passives at four slots, unlocked active-passive-active-
-            // passive. This is the change the whole rework is for — four beat-taking skills demanded
-            // about 0.80 of the beats and the champion's own swing only lands on what is left over,
-            // so the plain attack had almost stopped appearing. Two actives take that to about 0.44
-            // WITHOUT any cooldown moving, which is why the knob that had no room left in it stops
-            // being the problem. See design/gdd/skill-slots-and-skill-trees.md §2 and §10.
+            // THE KIND CAPS, GLOBAL AND INDEPENDENT of the total. At most two skills that take an
+            // action and two that do not, whatever capacity the account has unlocked — the slot itself
+            // has no kind. This is the change the rework is for: four beat-taking skills demanded about
+            // 0.80 of the beats and the champion's own swing only lands on what is left over, so the
+            // plain attack had almost stopped appearing. Two actives take that to about 0.44 WITHOUT
+            // any cooldown moving.
+            //
+            // THESE USED TO DIVIDE THE SLOTS instead of capping the kinds, and the division is what
+            // made a second Active at capacity 2 impossible — silently, because the refusal below was
+            // discarded. See design/gdd/skill-slots-and-skill-trees.md and Build.WouldRefuse.
             ActiveCapacity = Build.ActiveSlotsFor(slotCapacity),
             PassiveCapacity = Build.PassiveSlotsFor(slotCapacity),
         };
@@ -214,7 +210,14 @@ public static class BuildComposer
             // variation itself rides along so a reader can tell a chosen Source from a default one —
             // Build.PureSource (the trait ledger), and ChosenSingleSource / DistinctChosenSources, which
             // the fight reads once a wave for THE SINGLE NOTE, the PURE node and MANY TONGUES.
-            build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow, variation));
+            // ...AND THE ANSWER IS NOT THROWN AWAY. This line ignored Equip's bool, and that one
+            // discarded value was the whole defect: a second Active at capacity 2 was refused here and
+            // vanished between the BUILD screen and the fight, with no screen, log or test able to see
+            // it. It cannot throw — this runs once a frame behind the BUILD screen, and a legacy save
+            // must not crash the game — so it RECORDS, and the layers in front of it make sure there
+            // is nothing to record (see Build.RefusedSkills).
+            if (!build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow, variation)))
+                build.NoteRefused(def.Id);
         }
 
         // THE KEPT WORD — a build that has sworn NOTHING is held by the weakest promise it has found.

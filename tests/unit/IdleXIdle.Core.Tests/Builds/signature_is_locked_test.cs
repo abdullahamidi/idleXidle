@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Sources;
@@ -28,6 +28,13 @@ public class signature_is_locked_test
     private static readonly Character Seeker = CharacterRoster.Get("seeker");
 
     /// <summary>A loadout carrying the champion's signature plus one shared skill, host-configured.</summary>
+    /// <remarks>
+    /// THE SIGNATURE COUNTS AGAINST THE ACTIVE CAP, so the shared skills here are one Active and one
+    /// Passive rather than two Actives. The Seeker's HARD HANDS takes a beat, and a build holds at most
+    /// two skills that do — so this champion has exactly one Active left to spend, and a fixture that
+    /// wove two would be building a loadout the model now refuses. These tests are about the signature
+    /// being PINNED, not about the caps; the kinds are chosen so the pinning is what is under test.
+    /// </remarks>
     private static PlayerLoadout Woven(params string[] shared)
     {
         var loadout = new PlayerLoadout();
@@ -88,7 +95,7 @@ public class signature_is_locked_test
     [Fact]
     public void test_the_signature_cannot_be_dragged_off_the_top_and_nothing_can_be_dragged_onto_it()
     {
-        var loadout = Woven("hammer_blow", "volley_spray");
+        var loadout = Woven("hammer_blow", "sign_brand");
 
         Assert.False(loadout.MoveSkill(0, 2));               // it will not leave
         Assert.Equal(SigId, loadout.Skills[0].SkillId);
@@ -98,13 +105,13 @@ public class signature_is_locked_test
         // all would read as a broken drag rather than as a rule.
         Assert.True(loadout.MoveSkill(2, 0));
         Assert.Equal(SigId, loadout.Skills[0].SkillId);
-        Assert.Equal("volley_spray", loadout.Skills[1].SkillId);
+        Assert.Equal("sign_brand", loadout.Skills[1].SkillId);
         Assert.Equal("hammer_blow", loadout.Skills[2].SkillId);
 
         // The other two still reorder freely against each other.
         Assert.True(loadout.MoveSkill(2, 1));
         Assert.Equal("hammer_blow", loadout.Skills[1].SkillId);
-        Assert.Equal("volley_spray", loadout.Skills[2].SkillId);
+        Assert.Equal("sign_brand", loadout.Skills[2].SkillId);
     }
 
     [Fact]
@@ -114,7 +121,7 @@ public class signature_is_locked_test
         // repair, which placed it in "the first EMPTY slot". The load-time repair pins it.
         var loadout = new PlayerLoadout { SkillCapacity = PlayerLoadout.MaxSkills };
         var a = loadout.AddSkill(); loadout.SetSkill(a, "hammer_blow");
-        var b = loadout.AddSkill(); loadout.SetSkill(b, "volley_spray");
+        var b = loadout.AddSkill(); loadout.SetSkill(b, "sign_brand");
         var c = loadout.AddSkill(); loadout.SetSkill(c, SigId);
         Assert.Equal(2, loadout.IndexOfSkill(SigId));
 
@@ -123,7 +130,7 @@ public class signature_is_locked_test
 
         Assert.Equal(0, loadout.SignatureSlot);
         // Nothing was dropped — the list rotated.
-        Assert.Equal(new[] { SigId, "hammer_blow", "volley_spray" },
+        Assert.Equal(new[] { SigId, "hammer_blow", "sign_brand" },
                      loadout.Skills.Select(s => s.SkillId).ToArray());
     }
 
@@ -146,7 +153,7 @@ public class signature_is_locked_test
         // behaves exactly as it did before the rule existed.
         var loadout = new PlayerLoadout { SkillCapacity = PlayerLoadout.MaxSkills };
         var a = loadout.AddSkill(); loadout.SetSkill(a, "hammer_blow");
-        var b = loadout.AddSkill(); loadout.SetSkill(b, "volley_spray");
+        var b = loadout.AddSkill(); loadout.SetSkill(b, "sign_brand");
 
         Assert.Equal(-1, loadout.SignatureSlot);
         Assert.True(loadout.ClearSkill(0));

@@ -7,8 +7,10 @@
 
 ## 1. Overview
 
-The champion carries **two active and two passive skill slots** instead of four
-undifferentiated ones. There are **twelve skills, two per style** — one active and
+The champion carries at most **two active and two passive skills** instead of four
+undifferentiated ones. Progression unlocks TOTAL capacity (1 to 4); a skill brings its
+own kind, the slot has none, and a build holds at most two of each — so at capacity 2
+two Actives, one of each, or two Passives are all legal. There are **twelve skills, two per style** — one active and
 one passive, distinct abilities rather than two faces of one — each unlocked by its
 own node on the mastery tree, and each deepened by two variations and three
 reinforcements bought with levels the skill earns from being used.
@@ -60,7 +62,7 @@ STYLE  (6 — the hexagon, affinity, the mastery roads)   <- identity. Fixed at 
    ^ belongs to
 SKILL  (6 — one per style, each with its own tree)      <- Source + behaviour + Vow
    ^ equipped in
-SLOT   (2 active + 2 passive)
+SLOT   (capacity 1-4; at most 2 active and 2 passive across them)
 ```
 
 Mastery buys **style** advantage, never skill advantage: walking the HAMMER road
@@ -216,7 +218,7 @@ Everything that shipped. The slot machinery does not care how a skill got its ki
 
 | Still true | Now different |
 |---|---|
-| Two active slots and two passive ones | A skill has ONE kind; the slot follows from the skill |
+| At most two active skills and two passive ones | A skill has ONE kind; the slot follows from the skill |
 | Only an Active costs a beat | The catalogue is twelve entries, not six with two faces each |
 | The sim forks on the skill's Kind | `SkillDef.Active`/`.Passive` collapse to `SkillDef.Kind` |
 | A Field's damage scales to its own cadence | A spilled skill becomes its style's PASSIVE skill |
@@ -963,15 +965,27 @@ rather than one global rule.
 
 ## 11. Migration and staging
 
-### The slot count is driven by two systems, and both change
+### The slot count is driven by progression, and a slot has no kind
 
-| System | Today | After |
-|---|---|---|
-| `Unlocks.SkillSlots` | a new champion starts with 1 slot, earns up to 4 | unlock order becomes **active, passive, active, passive** — so the second slot a player ever earns already teaches the distinction |
-| `DustEffects.SkillSlots` | the prestige node `weave_5` sells a 5th slot | the 5th becomes **the player's choice** of a third active or a third passive, decided at the workbench |
+| System | Rule |
+|---|---|
+| `Unlocks.SkillSlots` | a new champion starts with 1 slot and earns up to 4. **Unlocks buy TOTAL capacity and nothing else** |
+| `Build.MaxActiveSkills` / `MaxPassiveSkills` | a build holds at most **two** skills that take an action and **two** that do not, at any capacity |
+| `DustEffects.SkillSlots` | *removed.* The prestige node `weave_5` sold a fifth slot; it bought a THIRD active, which is the number this rework exists to bring down |
 
-Making the fifth slot a choice rather than a fixed kind matters: a third active pushes beat
-demand back up toward 0.6, which is a real cost the player should be electing.
+**The slot itself has no kind. The skill brings its own.** So at capacity 2 a player may weave two
+Actives, one of each, or two Passives — whichever three they like, bounded by the total. At capacity 3
+the legal shapes are 2A+1P and 1A+2P; at capacity 4 the maximum composition is 2A+2P. A third skill of
+either kind is illegal at every capacity.
+
+> **CORRECTED 2026-09-22.** This table used to say the unlock order was *active, passive, active,
+> passive*, "so the second slot a player ever earns already teaches the distinction". It taught
+> something else instead. The BUILD screen let a player weave a second Active at capacity 2, the
+> composer's per-kind budget refused it, and `BuildComposer` discarded the refusal — so the skill was
+> on the screen and not in the fight, with nothing anywhere able to report it. The same arithmetic
+> made the passive budget ZERO at capacity 1, so the six champions whose signature is a Field or a
+> Reaction composed with no skills at all. Capacities are global caps now, never a share of the slots,
+> and one rule (`Build.WouldRefuse`) answers for the editor, the load path and the simulation alike.
 
 ### Save migration
 
@@ -993,7 +1007,7 @@ demand back up toward 0.6, which is a real cost the player should be electing.
 | **3** | `SoloBattle` branches on `SkillDef.Kind` instead of `FormBehaviour`; per-skill cooldown goes live | Existing combat suite must stay green |
 | **4** | Beat-demand assertion: a 2-active build must leave the swing more than half the beats | New test, and a capture of the hunt screen |
 | **5** | Numbers re-measured against `BalanceSweepTests` | The sweeps |
-| **6** | `WeaveScreen` shows 2 active + 2 passive | Screenshot |
+| **6** | `WeaveScreen` groups by kind and refuses a third of either | Screenshot, `SkillKindCapsTest` |
 | **7** | Skill trees: ring 0 only (the active/passive fork), then the outer rings | Per-tree tests |
 | **8a** | ~~WEIGHT -> RESONANCE~~ and ~~SPREAD -> LOOT~~ — **done 2026-08-30** (`110e3af`, `f4052b8`) | `MasteryNodeLivenessTests`, `LootNodeLivenessTests` |
 | **8b** | TEMPO and ENDURE gain §9b's plain-stat minors; the `MasteryNode.Stats` channel they need is built | Mastery tests |

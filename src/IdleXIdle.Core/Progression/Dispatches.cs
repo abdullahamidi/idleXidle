@@ -137,6 +137,16 @@ public static class DispatchKeys
 
     /// <summary>The migration that removed the fifth skill slot.</summary>
     public const string MigrationFifthSlot = "fifth_slot";
+
+    /// <summary>
+    /// The repair that made a save legal under the global kind caps (at most two of each kind).
+    /// </summary>
+    /// <remarks>
+    /// The BUILD screen enforced no kind rule until 2026-09-22, so a save can hold three Actives that
+    /// the fight had already been truncating in silence. The repair drops the excess once; this is how
+    /// the player is told, and the inbox's own permanent key is what makes it once.
+    /// </remarks>
+    public const string MigrationSkillKinds = "skill_kinds";
 }
 
 /// <summary>

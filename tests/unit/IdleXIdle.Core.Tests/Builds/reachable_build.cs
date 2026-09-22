@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
@@ -72,8 +72,21 @@ internal static class Reachable
 
             var slot = loadout.AddSkill();
             if (slot < 0) throw Reject($"no slot left for {def.Name}: the account has opened {loadout.SkillCapacity}.");
+            // THE REFUSAL NAMES ITSELF. SetSkill refuses for three different reasons now — the LAW 13
+            // duplicate, the signature lock, and the kind caps — and a harness that reported them all
+            // as "already woven elsewhere" would send a reader hunting for a duplicate that is not
+            // there. Ask the model which rule it was.
             if (!loadout.SetSkill(slot, def.Id))
-                throw Reject($"{def.Name} could not be woven into slot {slot} — it is already woven elsewhere.");
+                throw Reject(loadout.RefusalFor(slot, def) switch
+                {
+                    SkillRefusal.ActivesFull =>
+                        $"{def.Name} is the {Build.MaxActiveSkills + 1}th skill that takes an action — a build may hold {Build.MaxActiveSkills}.",
+                    SkillRefusal.PassivesFull =>
+                        $"{def.Name} is the {Build.MaxPassiveSkills + 1}th skill that takes no action — a build may hold {Build.MaxPassiveSkills}.",
+                    SkillRefusal.TotalFull =>
+                        $"{def.Name} has no slot: the account has opened {loadout.SkillCapacity}.",
+                    _ => $"{def.Name} could not be woven into slot {slot} — it is already woven elsewhere.",
+                });
             if (s.VowId is not null && !loadout.SetVow(slot, s.VowId, vows))
                 throw Reject($"{s.VowId} could not be sworn on {def.Name}: not a found vow, or past the vow capacity of {vowCapacity}.");
 

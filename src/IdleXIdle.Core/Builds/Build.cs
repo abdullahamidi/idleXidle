@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
@@ -245,6 +245,28 @@ public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null,
 /// something a player can reason about instead of something they have to test.
 /// </para>
 /// </remarks>
+/// <summary>Why one more skill will not fit — the single legality rule's answer.</summary>
+/// <remarks>
+/// A reason rather than a bool, because the BUILD screen has to SAY it. Every refusal a player can
+/// meet is named here, so the sentence beside the greyed button and the rule the simulation obeys
+/// cannot drift apart — which is exactly what happened while the screen counted slots one way and
+/// <see cref="Build.Equip"/> counted them another.
+/// </remarks>
+public enum SkillRefusal
+{
+    /// <summary>It fits.</summary>
+    None,
+
+    /// <summary>Every slot the account has unlocked already holds something.</summary>
+    TotalFull,
+
+    /// <summary>The build already carries <see cref="Build.MaxActiveSkills"/> skills that cost an action.</summary>
+    ActivesFull,
+
+    /// <summary>The build already carries <see cref="Build.MaxPassiveSkills"/> skills that cost none.</summary>
+    PassivesFull,
+}
+
 public sealed class Build
 {
     /// <summary>How many skills a character STARTS able to weave.</summary>
@@ -254,7 +276,8 @@ public sealed class Build
     /// "which item" into "the biggest number".
     ///
     /// This is also the CEILING. It was once only a floor: the trait tree sold a fifth slot
-    /// (<c>weave_5</c>), and that slot bought a THIRD ACTIVE — <c>ActiveSlotsFor(5)</c> is 3 — which
+    /// (<c>weave_5</c>), and under the ladder that split the slots by kind that fifth slot bought a
+    /// THIRD ACTIVE — the ladder gave 3 actives at 5 slots — which
     /// pushed beat demand back toward the number the slot rework existed to bring down. The fifth slot
     /// is removed, and it is the one capability this refactor deliberately takes away.
     /// </remarks>
@@ -294,19 +317,18 @@ public sealed class Build
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The rework's target is <b>two</b>, against two passive slots. Beat demand with four actives is
-    /// about 0.80 (Strike 0.17 + Projectile 0.25 + Mark 0.19 + Transformation 0.19), so four beats in
-    /// five were somebody's cast and the plain swing almost never played. Two actives takes it to
-    /// about 0.44 <i>without moving a single cooldown</i>, which is why the knob that had no room
-    /// left in it stops mattering.
+    /// The target is <b>two</b>, against two passives. Beat demand with four actives is about 0.80, so
+    /// four beats in five were somebody's cast and the plain swing almost never played. Two actives
+    /// takes it to about 0.44 <i>without moving a single cooldown</i>, which is why the knob that had
+    /// no room left in it stops mattering.
     /// </para>
     /// <para>
-    /// <b>It is deliberately still four here.</b> Stage 2 of the rework installs the machinery — the
-    /// per-kind capacities and the enforcement in <see cref="Weave"/> — with the numbers left where
-    /// they are, so the whole suite stays green while the mechanism is proven. Flipping this to 2
-    /// is stage 2b, and it lands together with the balance re-measurement that has to come with it:
-    /// halving the actives roughly halves cast output, so <c>AutoAttackDamage</c> and
-    /// <c>FormBaseValue</c> move with it. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §10.
+    /// <b>A CAP, NOT A SHARE OF THE SLOTS.</b> This used to be handed
+    /// <see cref="ActiveSlotsFor"/> of an active-passive-active-passive ladder, so the SECOND slot a
+    /// player earned was passive by construction and a second Active simply would not fit. It did not
+    /// refuse, either — the composer discarded <see cref="Equip"/>'s answer, so the skill vanished
+    /// between the BUILD screen and the fight. The kind caps are global now and the slot has no kind:
+    /// at most two of each, bounded by the total the account has unlocked.
     /// </para>
     /// </remarks>
     public int ActiveCapacity
@@ -330,28 +352,74 @@ public sealed class Build
     private int? _activeCapacity;
     private int? _passiveCapacity;
 
+    /// <summary>The most ACTIVE skills any build may carry, at any capacity.</summary>
+    /// <remarks>
+    /// Two, and this is the number the whole slot rework is for: four beat-taking skills demanded
+    /// about 0.80 of the beats and the champion's own swing only lands on what is left over, so the
+    /// plain attack had almost stopped appearing.
+    /// </remarks>
+    public const int MaxActiveSkills = 2;
+
+    /// <summary>The most PASSIVE skills any build may carry, at any capacity.</summary>
+    public const int MaxPassiveSkills = 2;
+
     /// <summary>
-    /// How many of a build's slots are ACTIVE, given the total it has earned.
+    /// THE ACTIVE CAP at a given unlocked capacity — a ceiling, not a share of the slots.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The unlock order is <b>active, passive, active, passive</b>, so a full four-slot build is
-    /// 2 + 2 and the SECOND slot a player ever earns already teaches that the two kinds are
-    /// different. A character that has earned one slot gets an active, because a build with nothing
-    /// but a Field never chooses an action at all.
+    /// <b>This used to be an alternating ladder</b> — <c>(total + 1) / 2</c>, so the slots unlocked
+    /// active, passive, active, passive and the second slot a player earned was passive by
+    /// construction. That made "two Active skills at capacity 2" illegal without anything ever saying
+    /// so: the BUILD screen accepted it, the composer's <see cref="Equip"/> refused it, and the
+    /// composer threw the refusal away, so one of the two skills disappeared on the way to the fight.
     /// </para>
     /// <para>
-    /// The fifth slot the trait spine sells falls to the active side here. §11 wants it to become the
-    /// player's own choice of a third active or a third passive — that is a workbench decision and a
-    /// save field, and it is deliberately not invented in this pass. It matters because a third
-    /// active pushes beat demand back toward 0.6, which is a real cost the player should be electing
-    /// rather than being handed.
+    /// <b>A slot has no kind now.</b> Progression unlocks TOTAL capacity; a skill brings its own kind;
+    /// a build holds at most two of each. So capacity 2 legally holds 2A, 1A+1P or 2P, and the total
+    /// is what stops it holding more — <see cref="Equip"/> checks that bound first, and it is the only
+    /// thing that bounds the sum now that the two caps no longer add up to it.
     /// </para>
     /// </remarks>
-    public static int ActiveSlotsFor(int totalSlots) => (Math.Max(1, totalSlots) + 1) / 2;
+    public static int ActiveSlotsFor(int totalSlots) => Math.Min(MaxActiveSkills, Math.Max(1, totalSlots));
 
-    /// <summary>The passive half of <see cref="ActiveSlotsFor"/>.</summary>
-    public static int PassiveSlotsFor(int totalSlots) => Math.Max(1, totalSlots) - ActiveSlotsFor(totalSlots);
+    /// <summary>
+    /// THE PASSIVE CAP at a given unlocked capacity — independently bounded, never the leftover.
+    /// </summary>
+    /// <remarks>
+    /// <b>Deliberately not <c>total - ActiveSlotsFor(total)</c>.</b> Subtracting recreates slot
+    /// ownership: it made the passive budget ZERO at capacity 1, so a champion whose signature is a
+    /// Field or a Reaction — six of the ten on the roster — composed with no skills at all, and ONE at
+    /// capacity 3, so any of those six lost a second passive with a slot still free.
+    /// </remarks>
+    public static int PassiveSlotsFor(int totalSlots) => Math.Min(MaxPassiveSkills, Math.Max(1, totalSlots));
+
+    /// <summary>Why a build would not take one more skill, or <see cref="SkillRefusal.None"/>.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THE ONE LEGALITY RULE, and every layer asks it.</b> The BUILD editor asks it to grey a
+    /// button and name a reason, <see cref="PlayerLoadout.SetSkill"/> asks it to refuse the write,
+    /// the load path asks it to repair a save the old editor allowed, and <see cref="Equip"/> asks it
+    /// on the composed build. The bug this file is being edited for was two rules — a screen that
+    /// counted one way and a composer that counted another — so there is now one, and it returns a
+    /// REASON rather than a bool precisely so the screen has nothing left to re-derive.
+    /// </para>
+    /// <para>
+    /// The total is checked first, because "there is no room at all" is a truer thing to tell a player
+    /// than "you have too many of this kind" when both are true.
+    /// </para>
+    /// </remarks>
+    /// <param name="totalSlots">The capacity the account has unlocked.</param>
+    /// <param name="actives">Active skills already held.</param>
+    /// <param name="passives">Passive skills already held.</param>
+    /// <param name="takesABeat">Is the skill being added an ACTIVE one?</param>
+    public static SkillRefusal WouldRefuse(int totalSlots, int actives, int passives, bool takesABeat)
+    {
+        if (actives + passives >= Math.Max(1, totalSlots)) return SkillRefusal.TotalFull;
+        if (takesABeat && actives >= ActiveSlotsFor(totalSlots)) return SkillRefusal.ActivesFull;
+        if (!takesABeat && passives >= PassiveSlotsFor(totalSlots)) return SkillRefusal.PassivesFull;
+        return SkillRefusal.None;
+    }
 
     /// <summary>Woven skills that cost the champion an action.</summary>
     public int ActiveCount => _skills.Count(s => s.TakesABeat);
@@ -587,6 +655,35 @@ public sealed class Build
         else if (PassiveCount >= PassiveCapacity) return false;
         _skills.Add(skill);
         return true;
+    }
+
+    /// <summary>
+    /// Skills a composition ASKED for and this build would not take — empty for every legal loadout.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>WHAT THE PLAYER EQUIPS IS WHAT ENTERS COMBAT.</b> <see cref="Equip"/> answers every refusal
+    /// with a bool, and <c>BuildComposer</c> discarded it — so a skill the BUILD screen showed as
+    /// woven simply was not in the fight, and nothing anywhere could tell. This is the smallest thing
+    /// that makes that observable: the composer records what it could not seat, and a caller that
+    /// cares can look.
+    /// </para>
+    /// <para>
+    /// <b>It records rather than throws, and that is deliberate.</b> The BUILD screen composes a build
+    /// every frame and malformed legacy data must not crash the game — so the refusal is prevented at
+    /// the decision surface (<see cref="PlayerLoadout.SetSkill"/>), repaired on load
+    /// (<c>PlayerLoadout.Restore</c>), and only then reported here, where it should never be reachable.
+    /// A non-empty list on a real player's build is a bug in one of the two layers above it.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> RefusedSkills => _refused;
+
+    private readonly List<string> _refused = new();
+
+    /// <summary>Record a skill this build would not take. Called by the composer, in composition order.</summary>
+    internal void NoteRefused(string skillId)
+    {
+        if (!string.IsNullOrEmpty(skillId)) _refused.Add(skillId);
     }
 
     /// <summary>Unequip a skill by its catalogue id — the only name a skill has left.</summary>

@@ -46,7 +46,7 @@ EXEMPT = {
     # Load-path bookkeeping. A fresh game has no file to have read, and SeedNewGame writes the
     # first-boot message itself.
     "_hasSave", "_bootMessage", "_bootColor", "_bootTimer", "_lastSeenUtc", "_saveVersionSeen",
-    "_fifthSkillDropped", "_completedSetsLoaded", "_legacyKeystoneGrant",
+    "_fifthSkillDropped", "_skillKindsRepaired", "_completedSetsLoaded", "_legacyKeystoneGrant",
 }
 
 

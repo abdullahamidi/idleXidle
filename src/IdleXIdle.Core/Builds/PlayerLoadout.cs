@@ -88,7 +88,7 @@ public sealed class PlayerLoadout
     /// <summary>The skill slots a build may ever hold. The CEILING as well as the floor.</summary>
     /// <remarks>
     /// It was briefly only a floor, while the trait tree sold a fifth slot. That slot bought a THIRD
-    /// action-taking skill — <c>Build.ActiveSlotsFor(5)</c> is 3 — which is the number the slot rework
+    /// action-taking skill — the old kind-split ladder gave 3 actives at 5 slots — which is the number the slot rework
     /// existed to bring down, so it is gone: the one capability this refactor deliberately removes.
     /// Four is the whole ladder again, and progression alone hands it out (<c>Unlocks.SkillSlots</c>).
     /// </remarks>
@@ -320,8 +320,52 @@ public sealed class PlayerLoadout
         if (IsSignatureSlot(slot) && def.Id != SignatureSkillId) return false;
         var elsewhere = IndexOfSkill(def.Id);
         if (elsewhere >= 0 && elsewhere != slot) return false;
+        if (RefusalFor(slot, def) != SkillRefusal.None) return false;
         _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };
         return true;
+    }
+
+    /// <summary>
+    /// Why this slot would not take this skill — the kind caps, asked of the ONE rule.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The model refuses, so the screen never has to re-derive the rule.</b> The BUILD screen shows
+    /// this reason on its greyed button (<c>LoadoutScreen.Primary</c>), exactly as it already does for
+    /// the signature lock and LAW 13 — an enabled button the model would refuse is a promise the model
+    /// does not keep, which this project has paid for once already.
+    /// </para>
+    /// <para>
+    /// <b>THE SIGNATURE IS EXEMPT, and it has to be.</b> A signature is not a choice — it is the
+    /// champion — and six of the ten on the roster are PASSIVE. <c>LoadoutRepair.EnsureSignature</c>
+    /// seats it through this very method, so a cap applied to it would refuse to seat a passive
+    /// signature into a build already holding two passives and quietly leave a champion without its
+    /// defining skill. The caps bound what the player CHOOSES; normalisation on load is what makes
+    /// room, by dropping the last excess non-signature skill.
+    /// </para>
+    /// <para>
+    /// The counts exclude whatever this slot holds now, because a slot being re-pointed frees its own
+    /// kind first — swapping one Active for another must not read as a third.
+    /// </para>
+    /// </remarks>
+    public SkillRefusal RefusalFor(int slot, SkillDef def)
+    {
+        ArgumentNullException.ThrowIfNull(def);
+        if (!InRange(slot)) return SkillRefusal.TotalFull;
+        if (def.Id == SignatureSkillId) return SkillRefusal.None;
+
+        var actives = 0;
+        var passives = 0;
+        for (var i = 0; i < _skills.Count; i++)
+        {
+            if (i == slot) continue;   // this slot is being written; what it held does not count
+            if (_skills[i].SkillId is not { } id || SkillCatalogue.Find(id) is not { } held) continue;
+            if (held.TakesABeat) actives++; else passives++;
+        }
+        // The slot itself is one of the unlocked ones, so the TOTAL bound is already satisfied by
+        // standing on it — what is being asked here is only the kind cap.
+        return Build.WouldRefuse(Math.Max(SkillCapacity, actives + passives + 1),
+                                 actives, passives, def.TakesABeat);
     }
 
     /// <summary>The slot that holds this skill, or -1 when no slot does.</summary>
@@ -493,6 +537,8 @@ public sealed class PlayerLoadout
             for (var i = 0; i < _skills.Count; i++)
                 if (_skills[i].SkillId is { } id && !resolved.Add(id))
                     _skills[i] = _skills[i] with { SkillId = null, Passive = null };
+
+            NormaliseKinds();
         }
 
         if (keystoneIds is not null)
@@ -503,6 +549,80 @@ public sealed class PlayerLoadout
             // BEFORE calling this, exactly as it does SkillCapacity for the skill rows above.
             _keystoneIds.AddRange(keystoneIds.Take(Math.Min(MaxKeystones, KeystoneCapacity)));
     }
+
+
+    /// <summary>
+    /// Drop the excess when a restored build breaks the kind caps — the LAST excess, never the first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Saves already exist that the old editor allowed and combat silently truncated.</b> Until
+    /// 2026-09-22 the BUILD screen enforced no kind rule at all, so a player could weave three Actives
+    /// at capacity 4 and the composer would quietly seat two; the third had never been in a fight. The
+    /// caps are real now, so such a save has to be made legal ONCE, deterministically, on the way in.
+    /// </para>
+    /// <para>
+    /// <b>The order of what survives is the player's own.</b> The walk is front to back, so the
+    /// choices made earliest are the ones kept, and each excess row is CLEARED to an empty slot rather
+    /// than removed — exactly as the duplicate migration above it does — so every slot behind it keeps
+    /// its position, its Source and its Vow. What is dropped is therefore always the LAST excess of
+    /// its kind, which is the one the player added most recently.
+    /// </para>
+    /// <para>
+    /// <b>The signature is never the excess.</b> It is not a choice and six of the ten champions carry
+    /// a PASSIVE one, so it is counted first and skipped by the eviction — a passive signature with
+    /// two other passives drops the second of those, never the champion's own skill.
+    /// </para>
+    /// <para>
+    /// <b>Idempotent, which is why this needs no save version.</b> A legal loadout is not touched, so
+    /// a second load changes nothing and the player is not told twice; the one-shot notice rides on
+    /// the inbox's own permanent key rather than on a migration gate. <see cref="Repaired"/> reports
+    /// what went, for the host to say once.
+    /// </para>
+    /// </remarks>
+    private void NormaliseKinds()
+    {
+        _repaired.Clear();
+        var actives = 0;
+        var passives = 0;
+
+        // THE SIGNATURE FIRST, wherever it sits, so it can never be the row that does not fit.
+        var signature = SignatureSkillId is { } sig ? IndexOfSkill(sig) : -1;
+        if (signature >= 0 && _skills[signature].SkillId is { } sigId
+            && SkillCatalogue.Find(sigId) is { } sigDef)
+        {
+            if (sigDef.TakesABeat) actives++; else passives++;
+        }
+
+        for (var i = 0; i < _skills.Count; i++)
+        {
+            if (i == signature) continue;
+            if (_skills[i].SkillId is not { } id || SkillCatalogue.Find(id) is not { } def) continue;
+            // The TOTAL is already bounded by the row count the host restored, so what is asked here
+            // is the kind cap — and a row that breaks it is cleared where it stands.
+            if (Build.WouldRefuse(Math.Max(SkillCapacity, actives + passives + 1),
+                                  actives, passives, def.TakesABeat) == SkillRefusal.None)
+            {
+                if (def.TakesABeat) actives++; else passives++;
+                continue;
+            }
+            _repaired.Add(def.Id);
+            _skills[i] = _skills[i] with { SkillId = null, Passive = null };
+        }
+    }
+
+    /// <summary>
+    /// Skills the last <see cref="Restore"/> had to drop to make the save legal — empty almost always.
+    /// </summary>
+    /// <remarks>
+    /// The host reads this once after a load and tells the player through the inbox, the way the fifth
+    /// slot's removal was told (<c>DispatchKeys.MigrationFifthSlot</c>). It is a report, not a state:
+    /// nothing else reads it and nothing persists it, because the repair it describes is idempotent
+    /// and a second load has nothing left to say.
+    /// </remarks>
+    public IReadOnlyList<string> Repaired => _repaired;
+
+    private readonly List<string> _repaired = new();
 
     /// <summary>
     /// A functional starter build so a new character can fight before opening the editor.

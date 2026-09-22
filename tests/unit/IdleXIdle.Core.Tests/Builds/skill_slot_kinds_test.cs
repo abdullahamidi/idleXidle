@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using IdleXIdle.Core.Sources;
@@ -190,17 +190,69 @@ public class ComposedSlotSplitTests
         => BuildComposer.Compose(Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: slots);
 
+    /// <summary>
+    /// UNLOCKS BUY TOTAL CAPACITY. The kinds are global caps, and a slot has no kind of its own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to assert the opposite — an active/passive/active/passive ladder, so the table read
+    /// 1/0, 1/1, 2/1, 2/2 and the SECOND slot a player earned was passive by construction. That made
+    /// "two Active skills at capacity 2" illegal without anything saying so: the BUILD screen accepted
+    /// it, <c>Build.Equip</c> refused it, and <c>BuildComposer</c> discarded the refusal, so one of the
+    /// two skills simply was not in the fight (playtest 2026-09-22).
+    /// </para>
+    /// <para>
+    /// The caps are independent of the total now, and deliberately NOT total-minus-the-other:
+    /// subtracting is what recreated slot ownership, and it made the passive budget ZERO at capacity 1
+    /// — so a champion whose signature is a Field or a Reaction, six of the ten on the roster, composed
+    /// with no skills at all.
+    /// </para>
+    /// </remarks>
     [Theory]
-    [InlineData(1, 1, 0)]
-    [InlineData(2, 1, 1)]
-    [InlineData(3, 2, 1)]
+    [InlineData(1, 1, 1)]
+    [InlineData(2, 2, 2)]
+    [InlineData(3, 2, 2)]
     [InlineData(4, 2, 2)]
-    [InlineData(5, 3, 2)]
-    public void test_slots_unlock_active_passive_active_passive(int total, int actives, int passives)
+    public void test_unlocks_buy_total_capacity_and_each_kind_caps_at_two(int total, int actives, int passives)
     {
         Assert.Equal(actives, Build.ActiveSlotsFor(total));
         Assert.Equal(passives, Build.PassiveSlotsFor(total));
-        Assert.Equal(total, Build.ActiveSlotsFor(total) + Build.PassiveSlotsFor(total));
+
+        // ...and neither cap is ever the leftover of the other. At capacity 3 both read 2, which does
+        // not sum to 3 — the TOTAL is what bounds the sum, and Build.Equip checks it first.
+        Assert.True(Build.ActiveSlotsFor(total) <= Build.MaxActiveSkills);
+        Assert.True(Build.PassiveSlotsFor(total) <= Build.MaxPassiveSkills);
+        Assert.True(Build.ActiveSlotsFor(total) <= Math.Max(1, total));
+        Assert.True(Build.PassiveSlotsFor(total) <= Math.Max(1, total));
+    }
+
+    /// <summary>The one rule, asked directly: what fits, and why not when it does not.</summary>
+    [Fact]
+    public void test_the_one_legality_rule_answers_every_shape_the_product_allows()
+    {
+        // CAPACITY 1 — either kind, but only one of them.
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(1, 0, 0, takesABeat: true));
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(1, 0, 0, takesABeat: false));
+        Assert.Equal(SkillRefusal.TotalFull, Build.WouldRefuse(1, 1, 0, takesABeat: false));
+
+        // CAPACITY 2 — 2A, 1A+1P and 2P are all legal; this is the bug the fix exists for.
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(2, 1, 0, takesABeat: true));
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(2, 1, 0, takesABeat: false));
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(2, 0, 1, takesABeat: false));
+        Assert.Equal(SkillRefusal.TotalFull, Build.WouldRefuse(2, 2, 0, takesABeat: true));
+
+        // CAPACITY 3 — 2A+1P and 1A+2P, and a THIRD of either kind is refused BY KIND, with a slot
+        // still free. That is the half of the bug nobody reported: it dropped passives too.
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(3, 2, 0, takesABeat: false));
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(3, 1, 1, takesABeat: false));
+        Assert.Equal(SkillRefusal.ActivesFull, Build.WouldRefuse(3, 2, 0, takesABeat: true));
+        Assert.Equal(SkillRefusal.PassivesFull, Build.WouldRefuse(3, 0, 2, takesABeat: false));
+
+        // CAPACITY 4 — the maximum composition is 2A + 2P, and three of either kind stays illegal.
+        Assert.Equal(SkillRefusal.None, Build.WouldRefuse(4, 2, 1, takesABeat: false));
+        Assert.Equal(SkillRefusal.ActivesFull, Build.WouldRefuse(4, 2, 1, takesABeat: true));
+        Assert.Equal(SkillRefusal.PassivesFull, Build.WouldRefuse(4, 1, 2, takesABeat: false));
+        Assert.Equal(SkillRefusal.TotalFull, Build.WouldRefuse(4, 2, 2, takesABeat: true));
     }
 
     [Fact]

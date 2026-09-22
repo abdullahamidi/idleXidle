@@ -408,6 +408,11 @@ public sealed class LoadoutScreen
         var actives = new List<int>();
         var passives = new List<int>();
         for (var i = 0; i < skills.Count; i++) (i < kinds.Count && kinds[i] ? passives : actives).Add(i);
+        // THE GROUPS ARE CAPS, NOT SLOT SHARES. These used to read a split that alternated
+        // active/passive as slots unlocked, so at capacity 2 the screen drew one of each and widened
+        // the ACTIVE group only when a second active was somehow already there — which is how an
+        // illegal build came to look legal. Both kinds cap at two, bounded by what is unlocked; the
+        // Math.Max stays so a legacy save being repaired still shows every row it currently holds.
         var activeCap = Math.Max(Build.ActiveSlotsFor(cap), actives.Count);
         var passiveCap = Math.Max(Build.PassiveSlotsFor(cap), passives.Count);
         var learned = DiscoveredKeystones.Count;
@@ -1113,6 +1118,25 @@ public sealed class LoadoutScreen
                 // going grey without a reason — the loadout itself refuses the write regardless.
                 if (Loadout.IndexOfSkill(def.Id) is var other && other >= 0)
                     return ($"ALREADY EQUIPPED IN SLOT {other + 1}", false, $"IT IS IN SLOT {other + 1} — PICK THAT SLOT TO CHANGE IT.");
+                // THE KIND CAPS, ASKED OF THE MODEL RATHER THAN RE-DERIVED HERE. This screen used to
+                // enforce no kind rule at all: it let a second Active into a two-slot build, wrote it
+                // to the save, and the composer then refused it in silence — the skill was on this
+                // screen and not in the fight. PlayerLoadout.RefusalFor is the one rule both halves
+                // ask now, and it hands back the reason so the sentence below cannot drift from it.
+                switch (Loadout.RefusalFor(_slot, def))
+                {
+                    case SkillRefusal.ActivesFull:
+                        return ($"EQUIP TO SLOT {_slot + 1}", false,
+                                $"YOU ALREADY HAVE {Build.MaxActiveSkills} SKILLS THAT TAKE AN ACTION. "
+                                + "REPLACE ONE OF THEM, OR PICK A SKILL THAT TAKES NO ACTION.");
+                    case SkillRefusal.PassivesFull:
+                        return ($"EQUIP TO SLOT {_slot + 1}", false,
+                                $"YOU ALREADY HAVE {Build.MaxPassiveSkills} SKILLS THAT TAKE NO ACTION. "
+                                + "REPLACE ONE OF THEM, OR PICK A SKILL THAT TAKES AN ACTION.");
+                    case SkillRefusal.TotalFull:
+                        return ($"EQUIP TO SLOT {_slot + 1}", false,
+                                "EVERY SKILL SLOT YOU HAVE OPENED IS FULL. REPLACE ONE, OR OPEN ANOTHER ON THE MASTERY TREE.");
+                }
                 return ($"EQUIP TO SLOT {_slot + 1}", true, "");
             }
             case Pick.Variation:

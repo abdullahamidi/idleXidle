@@ -597,6 +597,17 @@ public class trait_liveness_test
                              knownVows: Vows.Catalog);
         }
 
+        // ── THE SKILLS THIS FIXTURE WEAVES ACTUALLY REACH THE BUILD. ────────────────────────────
+        //
+        // This test posed the 2026-09-22 regression exactly — capacity 2, two ACTIVE skills, through
+        // the real SetSkill -> ToBuild path — and was blind to it: it asserted only about Vows, so it
+        // went on passing while volley_spray was silently dropped and the whole Vow claim below was
+        // being made about a build with one skill in it rather than two. A fixture that cannot see
+        // the thing it is standing on is a fixture that will let the next one through too.
+        var woven = Composed(sworn: null, SkillShape.None);
+        Assert.Equal(new[] { "hammer_blow", "volley_spray" }, woven.Skills.Select(s => s.Def.Id));
+        Assert.Empty(woven.RefusedSkills);
+
         var weakest = Vows.Catalog.OrderBy(v => Vows.Multiplier(v)).First();
 
         var lent = Composed(sworn: null, Trait("t_kept_word"));

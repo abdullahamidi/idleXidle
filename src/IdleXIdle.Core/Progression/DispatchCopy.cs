@@ -72,6 +72,7 @@ public static class DispatchCopy
                     ? $"THE WORLD HAS TAUGHT YOU {n} KEYSTONES"
                     : "THE WORLD HAS TAUGHT YOU A KEYSTONE",
                 DispatchKeys.MigrationFifthSlot => "THE FIFTH SKILL SLOT IS GONE",
+                DispatchKeys.MigrationSkillKinds => "A SKILL LEFT YOUR BUILD",
                 _ => "THE GAME HAS CHANGED",
             },
             _ => "NEWS",
@@ -99,6 +100,7 @@ public static class DispatchCopy
                 DispatchKeys.MigrationKeystones => (d.Count is int n && n > 1 ? "They are" : "It is")
                                                    + " on the BUILD screen, ready to wear. You find more by conquering and mastering regions.",
                 DispatchKeys.MigrationFifthSlot => "It was taken out of your build. It keeps its level — put it back any time in place of another skill.",
+                DispatchKeys.MigrationSkillKinds => "A build holds at most two skills that take an action and two that do not. One was taken out. It keeps its level — put it back any time in place of another skill.",
                 _ => "",
             },
             _ => "",

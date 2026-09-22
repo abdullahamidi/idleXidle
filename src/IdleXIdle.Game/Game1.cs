@@ -799,6 +799,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private string? _fifthSkillDropped;
 
+    /// <summary>A skill the kind caps had to drop on load, named for the one letter that says so.</summary>
+    private string? _skillKindsRepaired;
+
 
 
 
@@ -1168,9 +1171,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The woven build. Only overwrite the Starter when the save actually carries one — a pre-solo
         // save has an empty list, and restoring THAT would strip a returning player down to no skills.
         if (save.WovenSkills.Count > 0)
+        {
             _loadout.Restore(
                 save.WovenSkills.Select(s => (s.SkillId, (string?)s.Source, (string?)s.Form, s.VowId, s.Passive)),
                 save.SocketedKeystoneIds);
+            // WHAT THE KIND CAPS HAD TO DROP, read once, right where the fifth slot's loss is read.
+            // Almost always empty: only a save the old editor let past the caps has anything here, and
+            // the repair is idempotent, so the next load finds nothing and says nothing.
+            if (_loadout.Repaired.Count > 0)
+                _skillKindsRepaired = SkillCatalogue.Find(_loadout.Repaired[0])?.Name ?? "A SKILL";
+        }
 
         // AN UNTAUGHT VOW IS NOT WORN (P8). The composer refuses to pay one (P7's gate) — but a
         // restored slot silently wearing it would be invisible too: the weave screen lists only
@@ -5218,6 +5228,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 _fifthSkillDropped = null;
                 PostDispatch(Dispatches.Migration(DispatchKeys.MigrationFifthSlot, SaveFile.NowMs));
+            }
+            // ...AND THE SAME FOR A BUILD THE KIND CAPS REPAIRED. The BUILD screen enforced no kind
+            // rule until 2026-09-22, so a save can hold three Actives — which the fight had been
+            // truncating in silence all along. PlayerLoadout.Restore drops the excess once and names
+            // it here. Told through the inbox for the fifth slot's reason: it is news about the build
+            // rather than about this moment, and the inbox's own key is what makes it once. The repair
+            // is idempotent, so a second load finds nothing to report and posts nothing.
+            if (_skillKindsRepaired is not null)
+            {
+                _skillKindsRepaired = null;
+                PostDispatch(Dispatches.Migration(DispatchKeys.MigrationSkillKinds, SaveFile.NowMs));
             }
             return;
         }
