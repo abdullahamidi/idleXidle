@@ -36,7 +36,7 @@ import statistics
 import sys
 import urllib.request
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ALPHA = 8
 
@@ -302,6 +302,32 @@ def glow(path: str) -> str:
     return path
 
 
+def soften(path: str, radius: int = 5) -> str:
+    """Give a hard-cut silhouette an edge, so additive light stops looking like a sticker.
+
+    THE DEFECT THIS EXISTS FOR (playtest 2026-08-23, again 2026-09-22): the generator returns
+    ONE-BIT alpha. Measured across the library, 55 of 67 effect strips had exactly two alpha values,
+    0 and 255, and only 1.0% of all effect pixels carried any value in between. An effect with no
+    partial alpha cannot fade into anything: every ray ends on a step, and where the rays run off the
+    canvas the step is a straight line — "efekt bir dikdörtgen şeklinde çıkıp kaybolduğu çok belli".
+
+    `feather_fx.py` was written for the same complaint and ramps only the outer band of the FRAME,
+    so it does nothing for a shape whose hard edge sits well inside it — measured at 77-112 px in on
+    the trap strips. This blurs the ALPHA itself, so the falloff follows the silhouette wherever the
+    silhouette happens to be.
+
+    RGB is left alone on purpose. The strips are white-on-black by contract (see `whiten`), and the
+    blend is additive, so a softened alpha over unchanged RGB reads as the light thinning out — which
+    is what it is. Run AFTER `glow` (alpha must already mean brightness) and BEFORE the frame
+    feather, because blurring necessarily pushes a little alpha outward and the feather is what
+    guarantees the frame border still lands on zero.
+    """
+    im = load_rgba(path)
+    im.putalpha(im.getchannel("A").filter(ImageFilter.GaussianBlur(radius)))
+    im.save(path)
+    return path
+
+
 # ── review sheet ────────────────────────────────────────────────────────────────────────────────
 
 def sheet(out: str, paths: list[str], cell: int = 160, label: bool = True) -> str:
@@ -367,6 +393,8 @@ def main(argv: list[str]) -> int:
     wh = sub.add_parser("whiten"); wh.add_argument("paths", nargs="+")
     wh.add_argument("--floor", type=int, default=96)
     gl = sub.add_parser("glow"); gl.add_argument("paths", nargs="+")
+    so = sub.add_parser("soften"); so.add_argument("paths", nargs="+")
+    so.add_argument("--radius", type=int, default=5)
 
     a = ap.parse_args(argv)
     if a.cmd == "fetch":
@@ -393,6 +421,10 @@ def main(argv: list[str]) -> int:
     if a.cmd == "glow":
         for p in a.paths:
             print(glow(p))
+        return 0
+    if a.cmd == "soften":
+        for p in a.paths:
+            print(soften(p, a.radius))
         return 0
     if a.cmd == "info":
         for p in a.paths:

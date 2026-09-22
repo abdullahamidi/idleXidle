@@ -39,10 +39,29 @@ def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
     tail = (p.stdout or p.stderr).strip().splitlines()
     ok = p.returncode == 0
     if ok:
-        # Enforce the white/pale rule mechanically rather than hoping the generator obeys it — see
-        # rhart.whiten. Doing it here means every filed effect is tint-ready by construction.
-        subprocess.run([sys.executable, os.path.join(HERE, "rhart.py"), "whiten", out],
-                       capture_output=True, text=True)
+        # ── THE POST-PASS, AND IT IS FOUR STEPS, NOT ONE. ────────────────────────────────────────
+        #
+        # This ran `whiten` alone and stopped, which is how fifty-odd strips shipped as ONE-BIT alpha:
+        # 55 of 67 had exactly two alpha values, 0 and 255, and 1.0% of all effect pixels carried
+        # anything in between. Nothing could fade, so every ray ended on a step and the rays that ran
+        # off the canvas ended on a straight line — the rectangle players kept reporting (2026-08-23,
+        # and again 2026-09-22 on THE SEEKER's own signature, whose strip had 12.4% of its border ring
+        # at full opacity).
+        #
+        # The order is the whole point:
+        #   whiten  - enforce the white/pale rule mechanically rather than hoping the generator obeys
+        #   glow    - alpha := alpha x luminance, the additive contract: black becomes nothing
+        #   soften  - blur the ALPHA so the silhouette itself gains a falloff, wherever it sits
+        #   feather - ramp the outer frame band to zero LAST, because soften pushes alpha outward
+        #
+        # feather_fx alone was never enough: it only touches the frame's outer band, and a hard edge
+        # 77-112 px inside the frame (measured on the trap strips) never reaches it.
+        for step in (["rhart.py", "whiten", out],
+                     ["rhart.py", "glow", out],
+                     ["rhart.py", "soften", out],
+                     ["feather_fx.py", out]):
+            subprocess.run([sys.executable, os.path.join(HERE, step[0]), *step[1:]],
+                           capture_output=True, text=True)
     return form, ok, tail[-1] if tail else "(no output)"
 
 
