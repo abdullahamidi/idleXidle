@@ -116,3 +116,62 @@ so there is no keyboard path to a `ForceAction`/`ForceNavigate` control. The **a
 now fully input-equivalent, and the CONTINUE button this pass removed was itself a mouse-only target,
 so the change strictly reduces mouse-only progression. Closing the forced-deed half needs per-screen
 keyboard activation and is its own pass.
+
+---
+
+## Follow-up, 2026-09-22 — the two readout cards
+
+Playtest: the HEALTH spotlight over the Hunter HUD and the THE HUNT spotlight over the stage header
+still could not be dismissed. Root cause: `IntroduceHealth` and `IntroduceStage` were the last
+`LiveExplain` + `OneWaveCleared` beats — they showed a card, printed no affordance, and expired only
+when the fight cleared another wave. Both are now `PauseExplain` + `Acknowledged`.
+
+No stage renumbered, so **no save-version bump** (still 9): only the `Mode` and `Gate` of two existing
+steps changed.
+
+### Proof — one press, both inputs, all three densities
+
+`build/shots/opening_flow/<scale>_<lane>/trace.txt`, at 100 %:
+
+```
+mouse                                  keys
+F 2015 STAGE IntroduceHealth           F 2015 STAGE IntroduceHealth
+F 2104 CLICK IntroduceHealth n=1       F 2104 KEY   IntroduceHealth k=K n=1
+F 2105 STAGE IntroduceStage            F 2105 STAGE IntroduceStage
+F 2194 CLICK IntroduceStage  n=1       F 2194 KEY   IntroduceStage  k=K n=1
+F 2195 STAGE AwaitTraining             F 2195 STAGE AwaitTraining
+```
+
+`n=1` on every line — each card advanced on its **first** press, on the frame after it. Between frames
+2015 and 2195 the trace carries no `ENEMY_DOWN`, no reward and no `WAVE_BEGIN`: the fight stood still
+for both cards, and wave 3 begins the instant the second is answered. The old gate would have needed a
+whole wave to clear.
+
+| | mouse | keys |
+|---|---|---|
+| 100 % | PASS | PASS |
+| 125 % | PASS | PASS |
+| 150 % | PASS | PASS |
+
+Cards photographed at 150 %: `build/shots/opening_flow/150_mouse/02099_read_IntroduceHealth.png`,
+`02189_read_IntroduceStage.png` — both carry `PRESS ANY KEY OR CLICK TO CONTINUE` over a spotlit
+readout, with the page scrimmed and the fight frozen.
+
+### Coverage added
+
+- `test_the_two_readout_cards_advance_on_one_acknowledgement_and_never_wait_for_a_wave` — one
+  `Acknowledge()` advances each with `RewardsCredited` pinned at 0, and both hold the fight.
+- `test_the_readout_cards_take_the_same_key_and_click_every_other_card_takes` — they go through the
+  same `WantsAcknowledgement` branch, print the same prompt, and the spent edge cannot reach the
+  HUNT's nav hotkeys or its controls.
+- `test_no_beat_in_the_opening_speaks_without_a_way_to_answer_it` — the sweep that would have caught
+  this: every beat says nothing, or is answerable by a press or by its lit control.
+- `test_no_beat_that_speaks_can_be_burned_by_a_fact_the_player_did_not_watch` — replaces the old
+  narrated-live-beat test; the category is empty now and the guard that protected it is pinned.
+
+### Suites
+
+- `dotnet build IdleXIdle.sln -warnaserror` — 0 warnings, 0 errors
+- Core 1,838 passed · Game 703 passed · 0 failed
+- `bash tools/check_all.sh` — all gates green
+- Six end-to-end opening runs (100/125/150 x mouse/keys) — every order holds

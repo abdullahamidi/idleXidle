@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Progression;
@@ -338,18 +339,31 @@ public class OpeningDirectorTest
     }
 
     [Fact]
-    public void test_a_narrated_live_beat_is_not_spent_while_the_player_is_elsewhere()
+    public void test_no_beat_that_speaks_can_be_burned_by_a_fact_the_player_did_not_watch()
     {
-        // IntroduceHealth is a LiveExplain about the Hunter's card, on the HUNT screen, and its gate
-        // is a cleared wave — which the fight clears whether or not anyone is watching. Without this
-        // rule the beat is silently burned by a player who walked into the FORGE for ten seconds.
-        var d = At(OpeningStage.IntroduceHealth);
-        var away = new OpeningFacts(Screen: Activity.Forge, RewardsCredited: 9);
-        d.Update(away);
-        Assert.Equal(OpeningStage.IntroduceHealth, d.Stage);
+        // THE FAULT THIS GUARDS: a beat that SAYS something, whose gate is a fact the fight produces
+        // on its own, is spent whether or not anybody read it. HEALTH and THE HUNT were exactly that —
+        // LiveExplain cards expiring on a cleared wave — so a player who walked into the FORGE for ten
+        // seconds came back to two lessons that had already happened.
+        //
+        // Since 2026-09-22 the fault cannot occur, because it is answered at the source: every beat
+        // that speaks is now gated on the player's own acknowledgement, and every remaining LiveExplain
+        // is a silent wait with nothing to burn. That is the invariant, and it is stronger than the
+        // screen-check that used to enforce it.
+        foreach (var step in OpeningScript.Steps)
+        {
+            if (step.Title.Length == 0) continue;   // a silent wait is plumbing; it has no lesson to lose
+            Assert.True(step.Mode is not TutorialStepMode.LiveExplain,
+                        $"{step.Stage} speaks over a running fight and expires on a fact the player may not see");
+        }
 
-        d.Update(away with { Screen = Activity.Hunt });
-        Assert.Equal(OpeningStage.IntroduceStage, d.Stage);
+        // ...AND THE GUARD THAT MADE ONE SAFE IS STILL THERE, because the category being empty is a
+        // fact about today's script and not about the machine. A narrated live beat added tomorrow
+        // still waits for the player to be standing on its own screen.
+        var director = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "OpeningDirector.cs")).Replace("\r\n", "\n");
+        Assert.Contains("if (step.Mode is TutorialStepMode.LiveExplain && step.Title.Length > 0\n"
+                        + "            && step.Screen is { } narratedOn && f.Screen != narratedOn) return;",
+                        director, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -426,10 +440,14 @@ public class OpeningDirectorTest
         boss.Update(new OpeningFacts(BossesFelled: 1, ClearShown: true));
         Assert.Equal(OpeningStage.IntroduceChest, boss.Stage);
 
-        // The hold is the moment's, never the stage's: a live beat whose gate is not a moment holds nothing.
-        var health = At(OpeningStage.IntroduceHealth);
-        health.Update(new OpeningFacts(RewardsCredited: 0));
-        Assert.False(health.OwnsInput);
+        // The hold is the moment's, never the stage's: a live beat whose gate is not a moment holds
+        // nothing. (This used to read IntroduceHealth, which stopped being live on 2026-09-22 when it
+        // became an ordinary explanation; AwaitBoss is a wait for an ARRIVAL, which is not a moment
+        // the player has to be held through — the boss walking on is the thing they are watching.)
+        var waiting = At(OpeningStage.AwaitBoss);
+        waiting.Update(new OpeningFacts(BossSettled: false));
+        Assert.False(waiting.OwnsInput);
+        Assert.False(waiting.HoldsFight);
     }
 
     [Fact]
@@ -496,5 +514,15 @@ public class OpeningDirectorTest
     {
         foreach (var step in OpeningScript.Steps)
             Assert.Equal(step.Mode == TutorialStepMode.PauseExplain, At(step.Stage).WantsAcknowledgement);
+    }
+
+    /// <summary>A repo file, found by walking up from the test binary until the solution is beside us.</summary>
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is { Length: > 0 } && !File.Exists(Path.Combine(dir, "IdleXIdle.sln")))
+            dir = Path.GetDirectoryName(dir);
+        Assert.False(dir is null, "IdleXIdle.sln not found above the test binary.");
+        return Path.Combine(new[] { dir! }.Concat(parts).ToArray());
     }
 }

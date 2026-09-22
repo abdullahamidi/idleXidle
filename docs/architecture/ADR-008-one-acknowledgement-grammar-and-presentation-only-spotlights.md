@@ -114,6 +114,32 @@ card pointed at a rail tile that was still chained shut. Eligibility now calls `
 predicate navigation itself obeys. **The threshold is not repeated in onboarding code**, and a test
 fails any future comparison of `MasteryPointsEarned` against a literal.
 
+### Amendment, 2026-09-22 — the conversion had missed two beats
+
+`IntroduceHealth` and `IntroduceStage` were still `LiveExplain` + `OneWaveCleared`: they put a
+spotlight and a card on screen, printed **no** acknowledgement affordance, and could only be got rid
+of by letting the fight clear another wave. Under a grammar that had just told the player every card
+answers to a press, that is the guess-what-this-wants the grammar exists to end. Both are now
+ordinary `PauseExplain` + `Acknowledged` beats.
+
+They cost the fight nothing to pause: both are about a **readout that is already on screen** — the
+Hunter's life bar and the stage header — so there is no moment to watch and nothing to miss by
+stopping the clock while they are read. No stage was renumbered, so this carries **no save-version
+bump**; only the `Mode` and `Gate` of two existing steps changed.
+
+Two consequences worth recording:
+
+- **The narrated-live category is now empty.** Every remaining `LiveExplain` is a silent wait with
+  `Title == ""`. The director's guard that holds a narrated live beat until the player is back on its
+  own screen is kept — it is what makes such a beat safe to author — and a test pins the emptiness so
+  the guard is not mistaken for describing live behaviour that exists.
+- **`StageGate.OneWaveCleared` is now unused.** Kept as the only way an authored beat can say "let the
+  player watch one more wave", with a remark that a beat which *speaks* must not reach for it again.
+
+The sweep that would have caught this is now in the suite: every beat either says nothing, or can be
+answered by a press or by the lit control. A card on screen that nothing the player does can dismiss
+fails the build.
+
 ## Consequences
 
 ### Good

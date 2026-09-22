@@ -305,10 +305,16 @@ public sealed class OpeningDirector
         _settling = step.Mode is TutorialStepMode.LiveExplain && Settling(step.Gate, f);
 
         // A NARRATED LIVE BEAT IS NOT SPENT WHILE NOBODY IS LOOKING AT IT. A LiveExplain takes no
-        // control, so the player is free to walk off to the FORGE while "HEALTH" waits on the next
+        // control, so the player is free to walk off to the FORGE while a card waits on the next
         // cleared wave — and the wave clears anyway, because the fight is running. Holding the gate
         // until they are back on the beat's own screen costs nothing (the game is not paused) and is
         // the difference between a lesson delivered and a lesson quietly burned.
+        //
+        // THE CATEGORY IS CURRENTLY EMPTY, and that is the point rather than a reason to delete this.
+        // HEALTH and THE HUNT were its only members until 2026-09-22; they are answered by a press
+        // now, so every remaining LiveExplain is a silent wait with no words to burn. The guard stays
+        // because it is what makes a narrated live beat SAFE to author, and the day one is added back
+        // is the day nobody would remember to add it (opening_director_test pins the emptiness).
         if (step.Mode is TutorialStepMode.LiveExplain && step.Title.Length > 0
             && step.Screen is { } narratedOn && f.Screen != narratedOn) return;
 

@@ -108,9 +108,15 @@ public class OpeningScriptTest
         Assert.Equal("", watch.Title);
         Assert.Null(watch.Target);
 
-        // ...and it is the LAST paused beat before the boss, so the player consciously watches the
-        // cast and then gets the fight back.
-        Assert.Equal(TutorialStepMode.LiveExplain, OpeningScript.Steps[i + 3].Mode);
+        // ...AND WHAT PROTECTS THE CAST IS THE WAIT ITSELF, not what comes after it. This used to
+        // assert that the next beat was LIVE too — "the player watches the cast and then gets the
+        // fight back" — which stopped being true on 2026-09-22, when HEALTH became an ordinary
+        // explanation answered by a press. The card after the cast is a card either way; the rule
+        // that matters is that WatchSignature is silent and gated on the cast having PLAYED, which
+        // is asserted above and is what keeps anything from being drawn over it.
+        var afterTheCast = OpeningScript.Steps[i + 3];
+        Assert.Equal(OpeningStage.IntroduceHealth, afterTheCast.Stage);
+        Assert.NotEqual("", afterTheCast.Title);
     }
 
     [Fact]

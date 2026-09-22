@@ -252,6 +252,110 @@ public class OpeningAcknowledgementTest
         Assert.Contains("if (_opening.WantsAcknowledgement) return Centre(_openingCard);", rig, StringComparison.Ordinal);
     }
 
+    // ── EVERY CARD IS ANSWERABLE, INCLUDING THE TWO READOUTS ─────────────────────────────────────
+
+    [Fact]
+    public void test_the_two_readout_cards_advance_on_one_acknowledgement_and_never_wait_for_a_wave()
+    {
+        // THE BUG THIS PINS (playtest 2026-09-22). HEALTH and THE HUNT were the last beats the
+        // acknowledgement pass missed: LiveExplain cards gated on OneWaveCleared. They showed a
+        // spotlight and a card, printed no way to dismiss them, and then sat there until the fight
+        // cleared another wave — under a grammar that had just told the player every card answers to
+        // a press. A card you cannot answer is the guess-what-this-wants the grammar exists to end.
+        foreach (var stage in new[] { OpeningStage.IntroduceHealth, OpeningStage.IntroduceStage })
+        {
+            var step = OpeningScript.Find(stage)!.Value;
+
+            // It is an explanation, so it asks for a press...
+            Assert.Equal(TutorialStepMode.PauseExplain, step.Mode);
+            Assert.Equal(StageGate.Acknowledged, step.Gate);
+            // ...it still points at the readout it is about...
+            Assert.NotNull(step.Target);
+            Assert.Equal(Activity.Hunt, step.Screen);
+            // ...and it says something, which is why it needed answering in the first place.
+            Assert.NotEqual("", step.Title);
+
+            // ONE ACKNOWLEDGEMENT, AND IT MOVES — with the fight standing perfectly still underneath.
+            // No wave is cleared here: RewardsCredited never changes, which is exactly the fact the
+            // old gate waited on.
+            var d = new OpeningDirector();
+            d.Restore(stage);
+            var frozen = new OpeningFacts(Screen: Activity.Hunt, RewardsCredited: 0);
+
+            d.Update(frozen);
+            Assert.Equal(stage, d.Stage);   // nothing happens on its own
+
+            d.Acknowledge();
+            d.Update(frozen);
+            Assert.Equal(OpeningScript.After(stage), d.Stage);
+        }
+
+        // ...AND THE FIGHT IS HELD WHILE THEY ARE READ, which is what makes "no wave clears" true of
+        // the real game and not just of this harness.
+        foreach (var stage in new[] { OpeningStage.IntroduceHealth, OpeningStage.IntroduceStage })
+        {
+            var d = new OpeningDirector();
+            d.Restore(stage);
+            Assert.True(d.HoldsFight, $"{stage} must stop the clock while its card is up");
+            Assert.True(d.OwnsInput);
+            Assert.True(d.WantsAcknowledgement, $"{stage} must ask for the press it now waits on");
+        }
+    }
+
+    [Fact]
+    public void test_the_readout_cards_take_the_same_key_and_click_every_other_card_takes()
+    {
+        // THE POINT OF A GRAMMAR IS THAT IT HAS NO EXCEPTIONS. These two beats are answered by the
+        // same host branch as every other explanation — WantsAcknowledgement is a pure function of the
+        // mode — so there is no second input path to keep in step and nothing about them to remember.
+        foreach (var stage in new[] { OpeningStage.IntroduceHealth, OpeningStage.IntroduceStage })
+        {
+            var d = new OpeningDirector();
+            d.Restore(stage);
+            Assert.True(d.WantsAcknowledgement);
+        }
+
+        // ...which is the one condition that takes ANY key or ANY click, and spends the edge behind it.
+        var opening = Source("Game1.Opening.cs");
+        Assert.Contains("if (_opening.WantsAcknowledgement && (AnyKeyPressed() || _clicked))",
+                        opening, StringComparison.Ordinal);
+        Assert.Contains("_openingAckSpent = true;", opening, StringComparison.Ordinal);
+
+        // ...and the prompt is drawn from the same property, so a card that can be answered is a card
+        // that SAYS it can be answered. These two printed no affordance at all before.
+        Assert.Contains("_opening.WantsAcknowledgement ? AcknowledgePrompt : \"CLICK WHAT IS HIGHLIGHTED\"",
+                        opening, StringComparison.Ordinal);
+
+        // THE ACKNOWLEDGING EDGE CANNOT REACH THE HUNT UNDERNEATH. Both readouts are read ON the HUNT,
+        // whose nine nav hotkeys and whose own controls all read the gates below — so the press that
+        // answers HEALTH must not also open a screen or hit the fight.
+        var game = Source("Game1.cs");
+        Assert.Contains("private bool Pressed(Keys k) => !_swallowInput && !_openingAckSpent && KeyEdge(k);",
+                        game, StringComparison.Ordinal);
+        Assert.Contains("&& !_swallowInput && !_openingAckSpent;", game, StringComparison.Ordinal);
+        Assert.Contains("if (_openingAckSpent) return;", game, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void test_no_beat_in_the_opening_speaks_without_a_way_to_answer_it()
+    {
+        // THE SWEEP THAT WOULD HAVE CAUGHT THIS. Every beat either SAYS something and can be answered,
+        // or is a silent wait for a fact the game produces. What is forbidden is the third thing: a
+        // card on screen with no press that dismisses it, which is what HEALTH and THE HUNT were for
+        // eleven days. Written as a sweep rather than two assertions so a beat added later cannot
+        // reintroduce the shape.
+        foreach (var step in OpeningScript.Steps)
+        {
+            if (step.Title.Length == 0) continue;   // a silent wait says nothing and needs no answer
+
+            var answerable = step.Gate == StageGate.Acknowledged                      // a press
+                             || step.Mode is TutorialStepMode.ForceNavigate           // the lit tile
+                                          or TutorialStepMode.ForceAction;            // the lit control
+            Assert.True(answerable,
+                        $"{step.Stage} puts a card on screen that nothing the player does can dismiss");
+        }
+    }
+
     // ── THE RULE ITSELF, LOOKED AT DIRECTLY ──────────────────────────────────────────────────────
 
     [Fact]

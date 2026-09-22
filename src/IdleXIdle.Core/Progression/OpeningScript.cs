@@ -88,7 +88,15 @@ public enum StageGate
     /// </remarks>
     SignatureLanded,
 
-    /// <summary>A wave has been cleared since the step began — used to let a live lesson expire.</summary>
+    /// <summary>A wave has been cleared since the step began — a live lesson's own expiry.</summary>
+    /// <remarks>
+    /// <b>No step uses this today.</b> It expired the two readout cards (HEALTH, THE HUNT) until
+    /// 2026-09-22, when they became ordinary explanations answered by a press like every other card.
+    /// The arm is kept because it is the only way an authored beat can say "let the player watch one
+    /// more wave", and because a gate that expires on a fact costs nothing while unused — but a beat
+    /// that SPEAKS should not reach for it again: a card the player cannot answer is the thing the
+    /// acknowledgement grammar exists to remove.
+    /// </remarks>
     OneWaveCleared,
 
     /// <summary>The tutorial boss has arrived and is standing.</summary>
@@ -363,15 +371,25 @@ public static class OpeningScript
         new OpeningStep(OpeningStage.WatchSignature, TutorialStepMode.LiveExplain, StageGate.SignatureLanded,
                         Activity.Hunt, null, "", ""),
 
-        // ── LIVE. The fight runs underneath these; they leave on their own. ──────────────────────
-        new OpeningStep(OpeningStage.IntroduceHealth, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
+        // ── THE TWO READOUTS. Explanations, answered the way every explanation is. ───────────────
+        //
+        // These were the last LiveExplain beats that SAID anything, and the acknowledgement-grammar
+        // pass missed them: they showed a spotlight and a card and then could not be dismissed, so the
+        // player read "PRESS ANY KEY OR CLICK TO CONTINUE" on every other card and then sat waiting for
+        // these two to expire on a cleared wave. A card the player cannot answer is exactly the
+        // guess-what-this-wants the one grammar exists to end (playtest 2026-09-22).
+        //
+        // They cost the fight nothing to pause: both are about a READOUT that is already on the screen
+        // — the Hunter's life bar and the stage header — so there is no moment to watch and nothing to
+        // miss by stopping the clock while they are read.
+        new OpeningStep(OpeningStage.IntroduceHealth, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.HunterHud,
                         "HEALTH",
                         // THE HUD'S OWN WORDS. The header's wave lane reads "WAVE 1" again after a fall on a
                         // fresh career; "descent" is a word nothing on this screen shows (review 2026-09-11).
                         "If Health reaches zero, your Hunter falls. They start again from wave 1."),
 
-        new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.LiveExplain, StageGate.OneWaveCleared,
+        new OpeningStep(OpeningStage.IntroduceStage, TutorialStepMode.PauseExplain, StageGate.Acknowledged,
                         Activity.Hunt, TourTarget.StageHeader,
                         "THE HUNT",
                         "This shows your wave and your progress through the region."),
