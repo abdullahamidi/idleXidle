@@ -321,6 +321,10 @@ def soften(path: str, radius: int = 5) -> str:
     is what it is. Run AFTER `glow` (alpha must already mean brightness) and BEFORE the frame
     feather, because blurring necessarily pushes a little alpha outward and the feather is what
     guarantees the frame border still lands on zero.
+
+    THE RADIUS IS ONE SOURCE PIXEL, not a fixed number. `fxclips.py` passes ~1.1 pixels of the generated
+    canvas (3 for the recipe's 192, 2 for 256). The default 5 here is two source pixels at 192. That
+    erased every one-pixel splinter at combat size, and the gate's LIVE rule now fails it.
     """
     im = load_rgba(path)
     im.putalpha(im.getchannel("A").filter(ImageFilter.GaussianBlur(radius)))

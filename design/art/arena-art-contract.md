@@ -222,6 +222,17 @@ texel at alpha 0.5 adds half its light. Never bake a correction (such as √alph
 read brighter. Judge brightness in the arena, at combat size, where the effect is drawn at about 0.3×
 its native frame.
 
+**An impact is ONE event (2026-09-23).** Impact → expansion → breakup → fade, with one energy peak and
+the light trending down after it; shards may keep flying outward, but nothing re-forms at the centre.
+Open-ended `animate_image` drifts back toward a cycle. Three of four clips of the Seeker strike
+collapsed into a compact centre and burst again, and in the arena that reads as a SECOND HIT. So the action
+prompt names the one direction of travel and forbids the failure ("one single impact that happens once
+… the motion only goes outward, nothing moves back toward the middle, no second burst, no new shapes
+appear, it does not repeat or restart"). The reusable rules, with what each one cost, live in
+`tools/asset-pipeline/v2/spec.json` → `effects.prompt_rules`. `soften` blurs by about one SOURCE pixel
+(`fxclips.py`); `tools/check_fx_edges.py` fails a strip that is unreadable at combat size (LIVE), and
+`tools/fx_energy.py` draws the per-frame curve that shows a second hit.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

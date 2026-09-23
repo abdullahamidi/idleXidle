@@ -116,7 +116,33 @@
     "done": { "slash_pilot": { "first_job": "ebf6ce85-742e-495b-84be-af9a00004ff3", "anim_job": "200a9642-c3bd-4bd7-97d5-03f7a27bedc2" },
               "seeker_strike_pilot_2026_09_23": { "first_job": "83b78398-3f8c-4c4f-ae51-87310f480817", "anim_job": "bc6dcbd0-43d5-4b84-b4d3-bde8f715380e",
                                                    "filed_by": "fxclips.py seeker strike=bc6dcbd0-43d5-4b84-b4d3-bde8f715380e",
-                                                   "evidence": "production/qa/evidence/vfx-pilot/README.md" } },
+                                                   "evidence": "production/qa/evidence/vfx-pilot/README.md",
+                                                   "status": "REJECTED 2026-09-23: its frames 3-4 gather back into a compact second burst" },
+              "seeker_strike_pilot2_2026_09_23": { "first_job": "83b78398-3f8c-4c4f-ae51-87310f480817", "anim_job": "3e04a7c8-105f-4ae0-a035-f8538e57862a",
+                                                    "filed_by": "fxclips.py seeker strike=3e04a7c8-105f-4ae0-a035-f8538e57862a",
+                                                    "rejected_in_same_round": { "1a76308a-0ec3-45c2-a29a-3a7a572b040c": "pinned last frame: routed back through a central star into the full burst again" },
+                                                    "evidence": "production/qa/evidence/vfx-pilot-2/README.md" } },
+    "prompt_rules": {
+      "$comment": "Learned on the fx_seeker_strike pilots, 2026-09-23. The item prompts below PREDATE these rules and have NOT been rewritten yet; apply these when each is regenerated.",
+      "one_event": "Describe ONE event with one direction of travel: 'one single impact that happens once', 'the motion only goes outward'. An open-ended animate_image drifts back toward a cycle: three of four open clips collapsed and re-burst in their second half when the prompt only described the look.",
+      "forbid_the_second_hit": "Name the failure: 'nothing moves back toward the middle, no second burst, no new shapes appear, it does not repeat or restart'.",
+      "keep_a_remnant": "'the splinters stay clearly visible in every frame including the last one'. Never 'fades out completely': the renderer fades the tail itself, and asking the strip to reach nothing returns empty frames.",
+      "no_literal_emptiness": "Never 'empty centre' or 'nothing in the middle' in a SHAPE prompt: pixen painted an opaque transparency checkerboard. Describe what IS there.",
+      "no_disc_words": "Never 'round core', 'bright core' or 'glowing centre': pixen draws a solid sun disc. The impact point is 'one point in the centre' at most.",
+      "bold_strokes": "Ask for THICK shards ('each shard a long narrow white triangle'). One-pixel needles vanish at the ~0.3x the fight draws an effect (fx_energy LIVE). Bold subjects fill the canvas: accept tips that graze the edge, and let feather take them.",
+      "no_pinned_ending_for_bursts": "A pinned last_frame did NOT constrain a burst: the interpolation routed back through the start (1a76308a). Pinning stays right for HELD loops (first = last).",
+      "judge_after_the_post_pass": "Screen motion on the raw clip, but judge readability only AFTER whiten-glow-soften-feather: the soften step decides which thin parts survive."
+    },
+    "characters": {
+      "seeker": {
+        "strike": {
+          "shape_job": "83b78398-3f8c-4c4f-ae51-87310f480817",
+          "shape": "a solid white burst of about twelve thick sharp shards flying outward from one point in the centre, each shard a long narrow white triangle pointing outward, gaps of empty space between the shards, no circle and no disc in the middle. the burst sits in the middle of the picture with wide empty space around it, the shards stop well before the edges. no ground, no rocks, no background, no character, no weapon, no colour. solid white, on empty transparent space with nothing behind it",
+          "action": "one single impact that happens once: the white shards shoot outward from the centre and keep flying outward, getting thinner and splitting into small splinters. the motion only goes outward, nothing moves back toward the middle, no second burst, no new shapes appear, it does not repeat or restart. the splinters stay clearly visible in every frame including the last one",
+          "identity": "the knife stab's puncture burst (commit 8596685): white shards from one point, splintering outward"
+        }
+      }
+    },
     "items": {
       "strike":         { "look": "a single bright crescent slash arc of energy sweeping diagonally from upper left to lower right, a white-hot core with a pale glow and a few sparks",
                           "action": "the slash arc sweeps quickly from upper left to lower right, flares bright white at the peak with sparks flying, then thins and fades out completely by the last frame" },

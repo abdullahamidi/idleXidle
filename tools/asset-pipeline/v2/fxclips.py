@@ -27,6 +27,23 @@ VFX = os.path.join(REPO, "assets", "art", "VFX")
 
 FORMS = ("strike", "projectile", "mark", "trap", "transformation", "aura")
 
+# SOFTEN BY ONE SOURCE PIXEL, NOT BY A NUMBER OF STRIP PIXELS. The strip is the generated canvas scaled
+# up nearest-neighbour to 512 (x2.67 for the recipe's 192), and soften exists to take the one-bit STEP
+# off that upscale. It was a flat radius 5 — two source pixels — which erased every splinter one source
+# pixel wide: the 2026-09-23 Seeker candidate kept 1,008 bright cells at combat size before the post-pass
+# and 50 after it. At 1.1 source pixels it kept 294 and still has no step (tools/fx_energy.py LIVE).
+SOFTEN_SOURCE_PX = 1.1
+FRAME = 512
+
+
+def soften_radius(out: str) -> int:
+    """The blur radius, in strip pixels, that is SOFTEN_SOURCE_PX of the generated canvas."""
+    from PIL import Image
+    sys.path.insert(0, HERE)
+    import clip  # noqa: E402  (the frame cache clip.py just filled)
+    with Image.open(os.path.join(clip.cache_dir(out), "f0.png")) as f0:
+        return max(1, round(SOFTEN_SOURCE_PX * FRAME / max(f0.size)))
+
 
 def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
     out_dir = os.path.join(VFX, f"{char}_{form}")
@@ -58,7 +75,7 @@ def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
         # 77-112 px inside the frame (measured on the trap strips) never reaches it.
         for step in (["rhart.py", "whiten", out],
                      ["rhart.py", "glow", out],
-                     ["rhart.py", "soften", out],
+                     ["rhart.py", "soften", "--radius", str(soften_radius(out)), out],
                      ["feather_fx.py", out]):
             subprocess.run([sys.executable, os.path.join(HERE, step[0]), *step[1:]],
                            capture_output=True, text=True)
