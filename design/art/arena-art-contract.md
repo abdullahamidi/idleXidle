@@ -233,6 +233,20 @@ appear, it does not repeat or restart"). The reusable rules, with what each one 
 (`fxclips.py`); `tools/check_fx_edges.py` fails a strip that is unreadable at combat size (LIVE), and
 `tools/fx_energy.py` draws the per-frame curve that shows a second hit.
 
+**Owner decisions after the archetype cohort (2026-09-23).** The contracts are in
+`spec.json` → `effects.archetypes`. In short:
+- **Projectiles have two motion layers.** The renderer moves the strip to its target: one pass of the 8
+  frames over the 1.0 s flight, of which frames 0–5 are seen. The strip itself must also visibly change
+  (a blade tumbles or glints, an orb pulses). A picture that only translates is not approved.
+- **Impact assembly.** An open-ended IMPACT whose last generated frame comes back empty is assembled
+  from the input frame + generated 1–7 (`fxclips.py --impact-from-input`, refused for anything held).
+- **PRESS** is an abstract pressure field: a rune or line-art force symbol like the other fields. Never a
+  literal weight, box or machine.
+- **A trap's activation is a physical event**: appear, then a tighten or tension cue, then the held state.
+  After that it may stay still.
+- **The 512 frame stays.** On the widest row the budget clamp already draws a trap slightly smaller;
+  anything more is a world-space trap problem, not a new asset format.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

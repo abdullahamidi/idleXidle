@@ -128,6 +128,9 @@ def main(argv: list[str]) -> int:
     j.add_argument("--fallen", action="store_true",
                    help="a death clip: the body ends fully fallen, so frames may lie as flat as 22 %% of the standing one")
     j.add_argument("--flip", action="store_true")
+    j.add_argument("--from-input", dest="from_input", action="store_true",
+                   help="IMPACT policy (owner, 2026-09-23): frames = the input frame + generated 1-7, for an "
+                        "open-ended dispersal whose last generated frame came back empty. Never for held effects.")
 
     s = sub.add_parser("still")
     s.add_argument("--url", required=True); s.add_argument("--out", required=True)
@@ -142,7 +145,10 @@ def main(argv: list[str]) -> int:
         frames = fetch_all(urls, cache, a.anim)
         rhart.build_strip(frames, a.out, a.frame, a.fit, 0.035, a.flip, 8, False, False)
     elif a.cmd == "job":
-        urls = [f"{IMG_BASE}/{a.job}/download?index={i}" for i in range(1, 9)]
+        # index 0 is the input frame. The default drops it; --from-input keeps it and drops the last
+        # generated frame instead, which an open-ended outward dispersal empties in 3 of 8 clips.
+        first = 0 if getattr(a, "from_input", False) else 1
+        urls = [f"{IMG_BASE}/{a.job}/download?index={i}" for i in range(first, first + 8)]
         frames = fetch_all(urls, cache, a.job)
         rhart.build_strip(frames, a.out, a.frame, a.fit, 0.035, a.flip, 8, False, a.effect)
     else:

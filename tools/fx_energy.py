@@ -90,11 +90,13 @@ class Frame:
     """One frame's readings. `energy`/`core` carry the one-shot tail fade; `raw`, the centroid and the
     occupancy do not, because a HELD effect loops and never fades, and shape continuity is a property
     of the art, not of how brightly the renderer happens to be drawing it."""
-    __slots__ = ("energy", "bright", "core", "radius", "fade", "raw", "cx", "cy", "occ")
+    __slots__ = ("energy", "bright", "core", "radius", "fade", "raw", "cx", "cy", "occ", "angle", "gx", "gy")
 
-    def __init__(self, energy, bright, core, radius, fade, raw=0.0, cx=0.5, cy=0.5, occ=frozenset()):
+    def __init__(self, energy, bright, core, radius, fade, raw=0.0, cx=0.5, cy=0.5, occ=frozenset(),
+                 angle=0.0, gx=0.5, gy=0.5):
         self.energy, self.bright, self.core, self.radius, self.fade = energy, bright, core, radius, fade
         self.raw, self.cx, self.cy, self.occ = raw, cx, cy, occ
+        self.angle, self.gx, self.gy = angle, gx, gy
 
 
 def fade_light(frame, frames):
@@ -119,7 +121,8 @@ def curve(src):
     for f in range(n):
         x0 = f * fw
         w = fade_light(f, n)
-        total = wr = sx = sy = 0.0
+        total = wr = sx = sy = sxx = syy = sxy = 0.0
+        hot = []
         bright = core = 0
         coarse = {}
         for cy in range(cells):
@@ -144,6 +147,10 @@ def curve(src):
                 wr += light * r
                 sx += light * (cx + 0.5)
                 sy += light * (cy + 0.5)
+                sxx += light * (cx + 0.5) ** 2
+                syy += light * (cy + 0.5) ** 2
+                sxy += light * (cx + 0.5) * (cy + 0.5)
+                hot.append((light, cx + 0.5, cy + 0.5))
                 key = (cx // OCC_BLOCK, cy // OCC_BLOCK)
                 coarse[key] = coarse.get(key, 0.0) + light
                 if light >= BRIGHT:
@@ -151,10 +158,21 @@ def curve(src):
                     if r < CORE_R:
                         core += 1
         occ_min = OCC_LIGHT * OCC_BLOCK * OCC_BLOCK
+        angle, gx, gy = 0.0, 0.5, 0.5
+        if total:
+            mx, my = sx / total, sy / total
+            cxx, cyy, cxy = sxx / total - mx * mx, syy / total - my * my, sxy / total - mx * my
+            angle = math.degrees(0.5 * math.atan2(2 * cxy, cxx - cyy))
+            # THE GLINT: the centroid of the brightest tenth of the lit cells
+            hot.sort(reverse=True)
+            top = hot[:max(1, len(hot) // 10)]
+            tl = sum(h[0] for h in top)
+            gx, gy = sum(h[0] * h[1] for h in top) / tl / cells, sum(h[0] * h[2] for h in top) / tl / cells
         out.append(Frame(w * total / (cells * cells), bright, w * core, wr / total if total else 0.0, w,
                          raw=total / (cells * cells),
                          cx=sx / total / cells if total else 0.5, cy=sy / total / cells if total else 0.5,
-                         occ=frozenset(k for k, v in coarse.items() if v >= occ_min)))
+                         occ=frozenset(k for k, v in coarse.items() if v >= occ_min),
+                         angle=angle, gx=gx, gy=gy))
     return out
 
 
@@ -256,6 +274,25 @@ def loop_findings(frames):
     if min(raw) > 0 and max(raw) / min(raw) > LOOP_SWING:
         found.append(f"LOOP: its light swings {max(raw) / min(raw):.1f}x across the loop (more than breathing)")
     return found
+
+
+VISIBLE_FRAMES = 6    # PROJECTILE: frames 0-5; 6-7 sit in the renderer's tail fade (measured with a digit strip)
+
+
+def internal_motion(frames):
+    """How much a projectile's picture changes on its own, over the frames the player actually sees.
+
+    Reported, never enforced (2026-09-23 projectile pilot): `change` is the mean silhouette change
+    between consecutive frames (1 - overlap of the combat-scale occupancy), `turn` the range of its
+    principal-axis angle in degrees, and `glint` how far its brightest tenth travels, as a share of the
+    frame. A picture that only translates scores ~0 on all three.
+    """
+    vis = frames[:VISIBLE_FRAMES]
+    steps = [1.0 - _iou(vis[k].occ, vis[k + 1].occ) for k in range(len(vis) - 1)]
+    angles = [f.angle for f in vis]
+    glint = max(math.hypot(a.gx - b.gx, a.gy - b.gy) for a in vis for b in vis)
+    return {"change": sum(steps) / len(steps) if steps else 0.0,
+            "turn": max(angles) - min(angles), "glint": glint}
 
 
 _SPEC = None

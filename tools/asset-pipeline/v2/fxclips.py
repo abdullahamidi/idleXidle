@@ -3,6 +3,12 @@
 
     python tools/asset-pipeline/v2/fxclips.py <charId> <form>=<animate_image jobId> [...]
     python tools/asset-pipeline/v2/fxclips.py shared <key>=<animate_image jobId> [...]
+    python tools/asset-pipeline/v2/fxclips.py <charId> --impact-from-input strike=<jobId>
+
+`--impact-from-input` is the owner's IMPACT assembly policy (2026-09-23): the input frame + generated
+frames 1-7, for an open-ended impact whose last generated frame came back EMPTY (3 of 8 dispersal clips).
+It is refused for any strip that is not purely an IMPACT (spec.json effects.archetypes): a field, a mark,
+the shield, or anything also HELD keeps the default assembly.
 
 Each pair becomes `assets/art/VFX/<char>_<form>/fx_<char>_<form>_strip8_512.png`, which is the key
 `HuntScreen.FxFor` asks for first, before it falls back to the shared `fx_<form>`.
@@ -51,14 +57,22 @@ def soften_radius(out: str) -> int:
         return max(1, round(SOFTEN_SOURCE_PX * FRAME / max(f0.size)))
 
 
-def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
+def is_pure_impact(key: str) -> bool:
+    """Whether the IMPACT assembly policy may touch this strip: an IMPACT, and never also HELD."""
+    sys.path.insert(0, os.path.join(REPO, "tools"))
+    import fx_energy  # noqa: E402
+    arch = fx_energy.archetypes_of(f"{key}_strip8_512.png")
+    return arch == ["IMPACT"]
+
+
+def run(char: str, form: str, job: str, from_input: bool = False) -> tuple[str, bool, str]:
     stem = form if char == "shared" else f"{char}_{form}"
     out_dir = os.path.join(VFX, stem)
     out = os.path.join(out_dir, f"fx_{stem}_strip8_512.png")
     os.makedirs(out_dir, exist_ok=True)
     p = subprocess.run(
         [sys.executable, os.path.join(HERE, "clip.py"), "job",
-         "--job", job, "--out", out, "--effect"],
+         "--job", job, "--out", out, "--effect", *(["--from-input"] if from_input else [])],
         capture_output=True, text=True)
     tail = (p.stdout or p.stderr).strip().splitlines()
     ok = p.returncode == 0
@@ -94,8 +108,9 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     char = argv[0]
+    from_input = "--impact-from-input" in argv[1:]
     pairs = []
-    for a in argv[1:]:
+    for a in (x for x in argv[1:] if x != "--impact-from-input"):
         if "=" not in a:
             print(f"expected <form>=<jobId>, got {a!r}")
             return 2
@@ -107,12 +122,16 @@ def main(argv: list[str]) -> int:
         elif form not in FORMS:
             print(f"unknown form {form!r}; expected one of {', '.join(FORMS)}")
             return 2
+        stem = form if char == "shared" else f"{char}_{form}"
+        if from_input and not is_pure_impact(f"fx_{stem}"):
+            print(f"--impact-from-input refused for fx_{stem}: it is not purely an IMPACT (spec.json effects.archetypes)")
+            return 2
         pairs.append((form, job))
 
     bad = 0
     print(f"-- {char} effects --")
     for form, job in pairs:
-        name, ok, line = run(char, form, job)
+        name, ok, line = run(char, form, job, from_input)
         print(f"  {name:16} {'PASS' if ok else 'FAIL'}  {line}")
         bad += 0 if ok else 1
     print(f"  {len(pairs) - bad}/{len(pairs)} filed")

@@ -126,15 +126,18 @@
       "$comment": "Temporal contracts by what the GAME does with a strip (production/qa/evidence/vfx-cohort/taxonomy.md, 2026-09-23). tools/fx_energy.py reads membership from here and runs the matching diagnostic; none of them is a CI gate. Hard rules for every strip stay EDGE + SOFT + LIVE (check_fx_edges.py).",
       "IMPACT": { "reading": "ONE PEAK",
                   "contract": "one event: optional build-up, one primary peak, outward breakup, fade. Reject a collapse and second explosion, a loop or reset, a late new central hit.",
+                  "assembly": "OWNER DECISION 2026-09-23: an open-ended IMPACT whose last generated frame comes back empty is assembled from the input frame + generated 1-7 (fxclips.py --impact-from-input; clip.py --from-input). IMPACT policy only: fxclips refuses it for anything also HELD, and it is never applied to fields, marks or shields.",
                   "keys": ["fx_hit", "fx_weakhit", "fx_crit", "fx_death", "fx_heal", "fx_shield_break"], "suffixes": ["_strike", "_transformation"] },
       "PROJECTILE": { "reading": "FLIGHT",
-                      "contract": "the renderer flies the strip from hunter to target; the art is ONE continuous in-place flight pose (a spin, a flicker). No teleport or reset, no backward jump, no second launch, stable size.",
+                      "contract": "OWNER DECISION 2026-09-23 - TWO MOTION LAYERS. World motion: the renderer flies the strip from hunter to target (one pass of the 8 frames over the 1.0 s flight, 8 fps; frames 0-5 are seen, 6-7 sit in the tail fade). Internal motion: the strip itself must visibly change - a blade tumbles, tilts or glints, an orb pulses or flows, a shard tumbles - so it reads as an object moving through the world, not an icon translated across the screen. A picture that only translates is NOT approved. Also: no teleport or reset, no backward jump, no second launch, no size pumping, no disappearing, no full cartoon pinwheel; a subtle trail that stays behind the object and decays is welcome. fx_energy.internal_motion() reports change / turn / glint (never a gate).",
                       "suffixes": ["_projectile"] },
       "TRAP/MARK": { "reading": "SETTLE",
-                     "contract": "establish, read clearly, settle into the intended held form. Energy need not fall after the first peak. No repeated apparent placement, no blink.",
+                     "contract": "establish, read clearly, settle into the intended held form. Energy need not fall after the first peak. No repeated apparent placement, no blink. OWNER DECISION 2026-09-23: a held trap may stay still once established, but its ACTIVATION must read as a physical event - for a snare: appear / establish, then a tighten / tension cue, then the held state. Continuous motion through the held life is not required.",
+                     "frame_size": "OWNER DECISION 2026-09-23: keep the 512 square frame contract; no wider native trap frame in this batch. Traps span the canvas width; on the widest enemy row the renderer's own budget clamp (VfxBudget.Max 1.25) already draws the trap slightly smaller than asked (the Seeker snare at 96 %). If that ever reads too small, it is a world-space trap rendering problem, not an asset-format change.",
                      "suffixes": ["_trap", "_mark"] },
       "FIELD/AURA": { "reading": "LOOP",
-                      "contract": "a HELD loop behind the hunter: one coherent silhouette; breathing and repeated peaks allowed while visually continuous; frame 7 flows into frame 0; no structural reset.",
+                      "contract": "a HELD loop behind the hunter: one coherent silhouette; breathing and repeated peaks allowed while visually continuous; frame 7 flows into frame 0; no structural reset. Visual language: line-art sigils and runes (fx_aura, fx_wilt), readable behind the champion, never a large opaque prop.",
+                      "press_direction": "OWNER DECISION 2026-09-23: the cohort's square-weight PRESS (0f6a221b) is NOT approved and was reverted. PRESS must be an abstract pressure field - a rune, line-art or force symbol consistent with the other fields - not a literal weight, box or machine. Not regenerated in this pass.",
                       "keys": ["fx_press", "fx_wilt", "fx_aura", "fx_tower_strike"] },
       "SHIELD/BARRIER": { "reading": "LOOP",
                           "contract": "stable main geometry with a modest continuous breath; no respawn; no size jump. The same strip also flares once as a one-shot (gain, absorb, undying).",
@@ -158,7 +161,7 @@
       "no_pinned_ending_for_bursts": "A pinned last_frame did NOT constrain a burst: the interpolation routed back through the start (1a76308a). Pinning stays right for HELD loops (first = last).",
       "held_is_pinned_and_flat": "HELD (field, shield, and every DUAL strip): pin first = last and describe motion that cannot vanish or flash: 'staying the same size, complete and equally bright in every frame; nothing flashes'. Never ask a held strip to brighten or breathe; the renderer breathes it (barrier 0.40-0.60, field pulse). 'The rings breathe: they glow a little brighter' returned a 3.1x flash (cab1f308).",
       "impact_ends_empty": "An open-ended outward dispersal emptied its last frame in 3 of 8 clips (anvil 1d7971cb, 7ace0477; Seeker 6ae66427), whatever the prompt says. The motion is usually right. Assembling from the input frame plus generated 1-7 rescues it (offline proof on 1d7971cb), but that changes the assembly rule and awaits the owner's decision.",
-      "rigid_objects_barely_move": "The image route keeps a rigid object almost still: the knife did not spin (17f76b3d), the snare did not snap shut (72fe5a7a), the weight barely sank (0f6a221b). Accept a subtle held pose for projectiles and traps; do not spend re-rolls asking a rigid prop for big motion.",
+      "rigid_objects_barely_move": "The image route keeps a rigid object almost still when first = last or open-ended: the knife did not spin (17f76b3d), the snare did not snap shut (72fe5a7a), the weight barely sank (0f6a221b). A PROJECTILE still needs internal motion (owner decision): pin DIFFERENT endpoints - the object at launch and the same object re-posed by edit_image_pixen (tilted) - and the interpolation turns it (7ea56119). Expect it to take the long way round, and expect the rotation to shrink the projectile on screen (sizing is by the union box height).",
       "props_become_props": "A bold object prompt returns a shaded 3D PROP (a hydraulic press, a box with dials, three tyres), and 'symbol' returned an opaque checkerboard. Fields read best as line-art sigils (fx_aura, fx_wilt, the mark). PRESS still needs an identity decision.",
       "trap_fills_width": "A trap is sized to 80 % of the enemy row's WIDTH, so its art must span the canvas width ('stretching across almost the whole width of the picture'). The snare did: 1.50 over budget became 1.10.",
       "judge_after_the_post_pass": "Screen motion on the raw clip, but judge readability only AFTER whiten-glow-soften-feather: the soften step decides which thin parts survive."
@@ -184,10 +187,15 @@
           "identity": "a hunter's sigil that contracts and locks (8596685)"
         },
         "projectile": {
-          "shape_job": "cd704393-43c4-4829-b752-a1e4767700ed", "anim_job": "17f76b3d-f417-4a73-bbbc-9dc508d306bc", "archetype": "PROJECTILE", "pinned": "first = last",
+          "shape_job": "cd704393-43c4-4829-b752-a1e4767700ed", "archetype": "PROJECTILE (two motion layers)",
+          "anim_job": "7ea56119-4c41-434a-9c21-349a40c14884",
+          "pinned": "first = the level knife (cd704393), last = the same knife tilted ~45 deg point-down (edit_image_pixen 6948b14a)",
+          "rejected": { "17f76b3d-f417-4a73-bbbc-9dc508d306bc": "cohort: first = last pinned 'spins one full turn' - a static picture translated (change 0.07)",
+                        "ccf65102-07ea-4a64-919b-20649321d7bf": "open-ended tumble/glint/streak: stays level (7.6 deg) and the blade tip bends - shape change" },
           "shape": "a white throwing knife seen from the side, blade pointing to the right: a straight double-edged blade, a short cross guard and a short wrapped handle, one bold clean shape, centred with a wide margin around it. solid white, no hand, no character, no background, no colour, on empty transparent space with nothing behind it",
-          "action": "the knife spins end over end one full turn around its middle, staying the same size and in the same place in every frame",
-          "identity": "a thrown blade (it did not spin: rigid_objects_barely_move)"
+          "action": "the thrown knife tumbles forward as it flies: it turns smoothly from level to point-down, a bright glint slides along the blade, and a short thin speed streak trails behind the handle. the knife keeps exactly the same shape and size in every frame",
+          "result": "tumbles the long way (nose up through vertical), ~110 deg visible in frames 0-5; no glint, no streak. The rotation shrinks it on screen (sizing is by the union content box's height): frame 376 -> 174 px.",
+          "identity": "a thrown blade, now tumbling (projectile pilot 2026-09-23, production/qa/evidence/vfx-projectile)"
         }
       },
       "shared": {

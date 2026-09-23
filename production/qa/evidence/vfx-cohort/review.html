@@ -59,32 +59,32 @@
 <div class="wrap">
   <header style="display:grid;gap:10px">
     <h1>VFX Cohort Review</h1>
-    <p class="lede">Six strips across five temporal archetypes, regenerated through the approved pipeline (assemble → whiten → glow → soften at one source pixel → feather) and filmed in HUNT at true game speed. Every in-game picture is a real frame; each GIF plays every second game frame at exactly 33.3 ms. <span class="mono">fix/vfx-fade</span>, 2026-09-23. Nothing is merged, and no other strip was touched.</p>
+    <p class="lede">Six strips across five temporal archetypes, plus a projectile-motion pilot, regenerated through the approved pipeline (assemble → whiten → glow → soften at one source pixel → feather) and filmed in HUNT at true game speed. Every in-game picture is a real frame; each GIF plays every second game frame at exactly 33.3 ms. <span class="mono">fix/vfx-fade</span>, 2026-09-23. Nothing is merged, and no other strip was touched.</p>
   </header>
 
   <div class="summary">
     <table>
       <thead><tr><th>Strip</th><th>Archetype</th><th>Runtime route</th><th>Generations</th><th>Scale ratio old → new</th><th>Recommendation</th></tr></thead>
       <tbody>
-        <tr><td><code>fx_seeker_trap</code></td><td class="arch">Trap</td><td>JAWS / REPAY, under the enemy row</td><td class="num">6</td><td class="num">1.50 → 1.10 (widest row 1.79 → 1.31)</td><td><span class="chip pass">Pass</span></td></tr>
+        <tr><td><code>fx_seeker_trap</code></td><td class="arch">Trap</td><td>JAWS / REPAY, under the enemy row</td><td class="num">6</td><td class="num">1.50 → 1.10 (widest row 1.79 → 1.31)</td><td><span class="chip cond">Needs tighten cue</span></td></tr>
         <tr><td><code>fx_seeker_mark</code></td><td class="arch">Mark · dual</td><td>CALL over the head, BRAND held behind the hunter</td><td class="num">6</td><td class="num">0.28 → 0.25 · held 1.15 → 1.01</td><td><span class="chip pass">Pass</span></td></tr>
         <tr><td><code>fx_shield</code></td><td class="arch">Shield · dual</td><td>Held barrier and the gain / absorb / undying flares</td><td class="num">11</td><td class="num">0.93 → 1.19</td><td><span class="chip pass">Pass</span></td></tr>
-        <tr><td><code>fx_seeker_projectile</code></td><td class="arch">Projectile</td><td>SPRAY, flown hunter → target</td><td class="num">6</td><td class="num">0.84 → 0.74</td><td><span class="chip pass">Pass</span></td></tr>
-        <tr><td><code>fx_press</code></td><td class="arch">Field</td><td>PRESS, held behind the hunter all fight</td><td class="num">10</td><td class="num">1.44 over → 0.95</td><td><span class="chip cond">Conditional</span></td></tr>
+        <tr><td><code>fx_seeker_projectile</code></td><td class="arch">Projectile</td><td>SPRAY, flown hunter → target</td><td class="num">6 + 11</td><td class="num">0.84 → 0.34 (now tumbles)</td><td><span class="chip cond">Pilot: review</span></td></tr>
+        <tr><td><code>fx_press</code></td><td class="arch">Field</td><td>PRESS, held behind the hunter all fight</td><td class="num">10</td><td class="num">reverted to the old strip</td><td><span class="chip stop">Not approved</span></td></tr>
         <tr><td><code>fx_anvil_strike</code></td><td class="arch">Impact</td><td>THE ANVIL's HARDFACE on a creature</td><td class="num">14</td><td class="num">unchanged (old strip kept)</td><td><span class="chip stop">Stopped</span></td></tr>
       </tbody>
     </table>
   </div>
 
   <section class="fx" id="trap">
-    <div class="fx-head"><h2>Seeker trap</h2><span class="key">fx_seeker_trap</span><span class="chip arch">Trap</span><span class="chip pass">Pass</span></div>
+    <div class="fx-head"><h2>Seeker trap</h2><span class="key">fx_seeker_trap</span><span class="chip arch">Trap</span><span class="chip cond">Needs tighten cue</span></div>
     <div class="pair">
       <figure><img src="img/trap_strips.png" alt="Old drum-shaped trap strip above the new cord snare strip"><figcaption>Old: a drum or wheel. New: a snare of cords, the identity the 2026-08-28 commit asked for.</figcaption></figure>
       <figure><img src="img/trap_realspeed.gif" alt="JAWS in HUNT at game speed, before and after"><figcaption>JAWS at 4.0 s, true speed. Resolved key <code>fx_seeker_trap_strip8_512</code>.</figcaption></figure>
     </div>
     <div class="scroll"><img src="img/trap_ingame.png" alt="Trap frames before and after, aligned on the cast"></div>
     <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 0.0 % / 4,352 → 0 / 37.3 % / 3,842</td></tr><tr><td>Diagnostic (settle)</td><td>none, before or after</td></tr><tr><td>Cost</td><td class="num">1 shape + 1 animation = 6</td></tr></table>
-    <div class="verdict pass"><p>One placement, settles and holds, fades, with no rectangle and no second placement. The art spans the frame width, so the standard row fits the scale budget (1.50 → 1.10). The widest row still needs 1.31, the structural remainder you asked me to report. Caveat: PixelLab barely moved the rope, so the snare appears whole instead of snapping shut.</p></div>
+    <div class="verdict pass"><p>One placement, settles and holds, fades, with no rectangle and no second placement. The art spans the frame width, so the standard row fits the scale budget (1.50 → 1.10). The widest row still needs 1.31, the structural remainder you asked me to report. Under the recorded trap decision this is not yet enough: PixelLab barely moved the rope, so the snare appears already tight, with no appear → tighten → hold event. It passes every gate and needs one re-roll for the tension cue.</p></div>
   </section>
 
   <section class="fx" id="mark">
@@ -116,25 +116,29 @@
   </section>
 
   <section class="fx" id="knife">
-    <div class="fx-head"><h2>Seeker projectile</h2><span class="key">fx_seeker_projectile</span><span class="chip arch">Projectile</span><span class="chip pass">Pass</span></div>
+    <div class="fx-head"><h2>Seeker projectile — motion pilot</h2><span class="key">fx_seeker_projectile</span><span class="chip arch">Projectile · two motion layers</span><span class="chip cond">For review</span></div>
+    <p>The cohort knife was rejected: it read as a static picture moved across the screen. The runtime was not at fault. A diagnostic strip of the digits 0–7, filmed through SPRAY, shows the frames advancing at 8 fps while it flies (0 → 5 visible, 6–7 inside the tail fade). The strip itself was still.</p>
     <div class="pair">
-      <figure><img src="img/knife_strips.png" alt="Old and new thrown-knife strips"><figcaption>Same thrown knife, now with soft alpha.</figcaption></figure>
-      <figure><img src="img/knife_realspeed.gif" alt="SPRAY at game speed"><figcaption>SPRAY at 5.2 s: the renderer flies the strip. Key <code>fx_seeker_projectile_strip8_512</code>.</figcaption></figure>
+      <figure><img src="img/proj_frozen_realspeed.gif" alt="A window following each projectile, old versus new, at game speed"><figcaption><strong>Frozen view:</strong> the window follows each projectile, so world motion cancels. Old: the same picture every frame. New: the knife tumbles.</figcaption></figure>
+      <figure><img src="img/proj_world_realspeed.gif" alt="Old and new projectile on the same flight, at game speed"><figcaption><strong>World view:</strong> the same SPRAY flight, old above new, true speed.</figcaption></figure>
     </div>
-    <div class="scroll"><img src="img/knife_ingame.png" alt="Knife flight frames before and after"></div>
-    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 0.0 % / 1,006 → 0 / 11.2 % / 1,234</td></tr><tr><td>Diagnostic (flight)</td><td>none</td></tr><tr><td>Cost</td><td class="num">1 shape + 1 pinned animation = 6</td></tr></table>
-    <div class="verdict pass"><p>Continuous flight, stable size, no reset. Caveat: it does not spin. The image route keeps rigid objects still, so "a spinning thrown blade" reads as a knife thrown straight, which is what the old strip already did.</p></div>
+    <div class="pair">
+      <figure><img src="img/proj_digit_proof.png" alt="Digits 0 to 5 appearing in order during the flight"><figcaption>Runtime proof: the digit strip advances frame by frame during travel.</figcaption></figure>
+      <figure><img src="img/proj_candidates.png" alt="Rejected and selected projectile candidates"><figcaption>Rejected: the open-ended clip (stays level, the blade bends). Selected: pinned level → tilted, using a tilted pose made with PixelLab's editor.</figcaption></figure>
+    </div>
+    <table class="metrics"><tr><td>Internal motion over frames 0–5 (change / turn / glint)</td><td class="num">cohort 0.07 / 1.4° / 0.03 → new 0.60 / ~110° / 0.05</td></tr><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 10.3 % / 883</td></tr><tr><td>Cost</td><td class="num">11 (two animations + one edit)</td></tr></table>
+    <div class="verdict cond"><p>It is alive at combat size and it is the same knife throughout. But it tumbles the long way (nose up through vertical, about 110° visible), has no glint or streak, and the rotation shrinks it on screen: sizing uses the height of the box around all eight frames, so the knife drops from about 320 px to about 130 px long. That is closer to a real knife, but it is a visible change.</p></div>
   </section>
 
   <section class="fx" id="press">
-    <div class="fx-head"><h2>Press field</h2><span class="key">fx_press</span><span class="chip arch">Field</span><span class="chip cond">Conditional</span></div>
+    <div class="fx-head"><h2>Press field</h2><span class="key">fx_press</span><span class="chip arch">Field</span><span class="chip stop">Not approved · reverted</span></div>
     <div class="pair">
       <figure><img src="img/press_strips.png" alt="Old flat slab above the new square weight"><figcaption>Old: a wide flat slab. Its short height is why it was over budget. New: a square weight.</figcaption></figure>
       <figure><img src="img/press_realspeed.gif" alt="PRESS held behind the hunter at game speed"><figcaption>Held all fight behind the hunter. Key <code>fx_press</code>.</figcaption></figure>
     </div>
     <div class="scroll"><img src="img/press_ingame.png" alt="PRESS frames before and after across one loop"></div>
     <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 23.3 % / 3,991 → 0 / 51.6 % / 7,363</td></tr><tr><td>Scale ratio</td><td class="num">1.44 over (clamped, magnified) → 0.95</td></tr><tr><td>Cost</td><td class="num">5 shapes + 1 pinned animation = 10</td></tr></table>
-    <div class="verdict cond"><p>What regeneration was for is done: the field is within budget and loops cleanly, with no bloom over the hunter. But behind the hunter it reads as a plain box, and at its pulses as a big pink box. Every bold prop prompt returned a shaded object (a hydraulic press, a box with dials, three tyres), and "symbol" returned an opaque checkerboard. <strong>What should the PRESS field depict?</strong> The fields that read well are line-art sigils (<code>fx_aura</code>, <code>fx_wilt</code>).</p></div>
+    <div class="verdict cond"><p>What regeneration was for is done: the field is within budget and loops cleanly, with no bloom over the hunter. But behind the hunter it reads as a plain box, and at its pulses as a big pink box. Every bold prop prompt returned a shaded object (a hydraulic press, a box with dials, three tyres), and "symbol" returned an opaque checkerboard. Decision: PRESS will be an abstract pressure field, a rune or line-art force symbol like the other fields. The square weight was reverted to the old strip, and PRESS is not regenerated in this pass.</p></div>
   </section>
 
   <section class="fx" id="anvil">
@@ -152,12 +156,13 @@
   </section>
 
   <section class="fx">
-    <h3>Decisions for you</h3>
+    <h3>Decisions recorded (spec.json effects.archetypes, arena-art-contract.md)</h3>
     <ul class="decisions">
-      <li><strong>Assembly rule for impacts:</strong> assemble open-ended impacts from the input frame plus generated 1–7. It removes the most common failure (an empty last frame: 3 of the 8 open-ended dispersal clips across all three rounds) and would rescue the anvil for free. The approved Seeker strike is unaffected unless it is refiled.</li>
-      <li><strong>PRESS field picture:</strong> keep the square weight, or redraw it as a line-art sigil like the other fields.</li>
-      <li><strong>Subtle motion:</strong> accept a knife that flies without spinning and a snare that appears already tight. PixelLab does not move rigid objects.</li>
-      <li><strong>Widest-row traps:</strong> 1.31 over budget even when the art fills its width. Options: a wider native frame, or a smaller trap scale.</li>
+      <li><strong>Projectiles:</strong> two motion layers. The runtime flies the strip; the strip itself must visibly change. A translated static picture is not approved.</li>
+      <li><strong>Impact assembly:</strong> input frame + generated 1–7 when an open-ended impact ends empty (<code>fxclips.py --impact-from-input</code>, refused for anything held).</li>
+      <li><strong>PRESS:</strong> an abstract line-art pressure field. The square weight is not approved and was reverted.</li>
+      <li><strong>Traps:</strong> activation must read as appear, then tighten, then hold; after that a trap may stay still. The Seeker snare installed in this cohort appears already tight, so it does not yet show the tighten cue.</li>
+      <li><strong>Trap frames:</strong> keep the 512 contract. On the widest row the budget clamp already draws the trap slightly smaller.</li>
     </ul>
   </section>
 </div>
