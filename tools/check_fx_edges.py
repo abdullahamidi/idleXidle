@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Every VFX strip must fade into the scene instead of ending on a rectangle.
 
-    python3 tools/check_fx_edges.py
+    python3 tools/check_fx_edges.py                 # every strip in assets/art/VFX
+    python3 tools/check_fx_edges.py <strip.png>...  # just these (a candidate, before install)
 
 TWO RULES, AND THE SECOND ONE IS THE POINT.
 
@@ -107,8 +108,11 @@ def check(path):
     return problems, worst_edge, share
 
 
-def main():
-    paths = sorted(glob.glob("assets/art/VFX/*/fx_*_strip8_512.png"))
+def main(argv=None):
+    # Named strips are measured instead of the library — how a single regenerated candidate is
+    # compared against the production strip it would replace, before either is installed.
+    named = list(sys.argv[1:] if argv is None else argv)
+    paths = named or sorted(glob.glob("assets/art/VFX/*/fx_*_strip8_512.png"))
     if not paths:
         print("   no VFX strips found", file=sys.stderr)
         return 1

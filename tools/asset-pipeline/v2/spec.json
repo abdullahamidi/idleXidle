@@ -113,7 +113,10 @@
   "effects": {
     "route": "image", "size": 256, "dest": "vfx", "key": "fx_{id}_strip8_512",
     "common": "a 2D game effect sprite on a transparent background, pixel art, white and pale silver light with a soft glow, NO colour, no character, no weapon, no text",
-    "done": { "slash_pilot": { "first_job": "ebf6ce85-742e-495b-84be-af9a00004ff3", "anim_job": "200a9642-c3bd-4bd7-97d5-03f7a27bedc2" } },
+    "done": { "slash_pilot": { "first_job": "ebf6ce85-742e-495b-84be-af9a00004ff3", "anim_job": "200a9642-c3bd-4bd7-97d5-03f7a27bedc2" },
+              "seeker_strike_pilot_2026_09_23": { "first_job": "83b78398-3f8c-4c4f-ae51-87310f480817", "anim_job": "bc6dcbd0-43d5-4b84-b4d3-bde8f715380e",
+                                                   "filed_by": "fxclips.py seeker strike=bc6dcbd0-43d5-4b84-b4d3-bde8f715380e",
+                                                   "evidence": "production/qa/evidence/vfx-pilot/README.md" } },
     "items": {
       "strike":         { "look": "a single bright crescent slash arc of energy sweeping diagonally from upper left to lower right, a white-hot core with a pale glow and a few sparks",
                           "action": "the slash arc sweeps quickly from upper left to lower right, flares bright white at the peak with sparks flying, then thins and fades out completely by the last frame" },
