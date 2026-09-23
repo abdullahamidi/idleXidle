@@ -2450,6 +2450,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             string.Join(", ", CharacterRoster.All.Select(c => c.Id)) + ".");
                     _characters.Restore(posed.Id, _characters.SaveQuests(),
                                         _characters.SaveUnlocked().Append(posed.Id));
+                    // AND THE POSED CHAMPION FIGHTS WITH ITS OWN SIGNATURE. Restore swapped the body
+                    // and left the build alone, so every other champion fought with the starter's
+                    // signature refused and nothing in its place — a build the game cannot produce, and
+                    // the reason no other champion's signature strip could ever be filmed (measured
+                    // 2026-09-23: THE ANVIL, THE FALLING TOWER and THE UNBROKEN each fought with three
+                    // skills). These are the two loadout steps of the real switch (RepairForSwitch),
+                    // without its toast and without its Save — a capture never writes the save.
+                    _loadout.SignatureSkillId = posed.SignatureSkillId;
+                    LoadoutRepair.ShedForeignSignatures(_loadout, posed);
+                    LoadoutRepair.EnsureSignature(_loadout, posed);
                 }
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
                 // they pose nothing beyond skipping the title.)
@@ -2880,6 +2890,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(jawsSlot, Source.Nature);
                         _loadout.SetSkill(jawsSlot, "field_mire");
                     }
+                    // RH_SHOT_SWAP=<skill>:<skill>[,<skill>:<skill>] weaves a different skill into a fixture
+                    // slot, the way fightinspect does by hand — so any skill's effect can be filmed
+                    // through its real route (BRAND holding a mark behind the hunter, HAMMER BLOW on
+                    // any champion). Refused loudly, never silently: an unknown id, a skill not in the
+                    // fixture, or a swap the build rule refuses would photograph the build it did NOT pose.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_SWAP")?.Trim() is { Length: > 0 } shotSwap)
+                        foreach (var pair in shotSwap.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            var parts = pair.Split(':', StringSplitOptions.TrimEntries);
+                            var from = parts.Length == 2 ? _loadout.IndexOfSkill(parts[0]) : -1;
+                            if (from < 0 || SkillCatalogue.Find(parts[1]) is null || !_loadout.SetSkill(from, parts[1]))
+                                throw new InvalidOperationException(
+                                    $"RH_SHOT_SWAP='{pair}' cannot be posed: it needs <skill in the fixture>:<skill the build accepts>.");
+                        }
                     // THE CREATURE POSES. Which family the arena draws is the REGION's (EnemyPresentation),
                     // and which body of it, and how big its box is, is the wave's ARCHETYPE, a seeded roll.
                     // RH_SHOT_SOURCE picks the family of the region whose theme that Source is (Spirit

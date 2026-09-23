@@ -1,0 +1,163 @@
+<title>VFX Cohort Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #15110d;
+    --surface: #1f1813;
+    --raised: #2a2119;
+    --line: #3b2f24;
+    --ink: #ede3d2;
+    --muted: #a6977f;
+    --bronze: #c58b4b;
+    --pass: #82bd88;
+    --cond: #dcae4c;
+    --stop: #d8705a;
+    --display: "Spectral", Georgia, "Times New Roman", serif;
+    --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  body { background: var(--ground); color: var(--ink); font: 15px/1.55 var(--body); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: grid; gap: 28px; }
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+  h1 { font-size: clamp(28px, 4vw, 40px); }
+  h2 { font-size: 24px; }
+  h3 { font-size: 15px; font-family: var(--body); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0; max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 16px; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font: 600 12px/1.6 var(--body); letter-spacing: .05em; text-transform: uppercase; border: 1px solid currentColor; white-space: nowrap; }
+  .pass { color: var(--pass); } .cond { color: var(--cond); } .stop { color: var(--stop); }
+  .arch { color: var(--bronze); }
+  .summary { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 12px/1.4 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--raised); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-size: 13px; }
+  section.fx { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px; display: grid; gap: 16px; }
+  .fx-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; }
+  .fx-head .key { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  figure { margin: 0; display: grid; gap: 6px; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #0e0b08; image-rendering: auto; }
+  figcaption { color: var(--muted); font-size: 13px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
+  .scroll img { display: block; max-width: none; height: 190px; width: auto; border: 0; }
+  .verdict { border-left: 3px solid var(--bronze); padding: 4px 0 4px 14px; display: grid; gap: 6px; }
+  .verdict.pass { border-color: var(--pass); color: var(--ink); }
+  .verdict.cond { border-color: var(--cond); color: var(--ink); }
+  .verdict.stop { border-color: var(--stop); color: var(--ink); }
+  .metrics td:first-child { color: var(--muted); }
+  ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .decisions li strong { color: var(--bronze); }
+  @media (max-width: 760px) { .pair { grid-template-columns: 1fr; } .scroll img { height: 140px; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <h1>VFX Cohort Review</h1>
+    <p class="lede">Six strips across five temporal archetypes, regenerated through the approved pipeline (assemble → whiten → glow → soften at one source pixel → feather) and filmed in HUNT at true game speed. Every in-game picture is a real frame; each GIF plays every second game frame at exactly 33.3 ms. <span class="mono">fix/vfx-fade</span>, 2026-09-23. Nothing is merged, and no other strip was touched.</p>
+  </header>
+
+  <div class="summary">
+    <table>
+      <thead><tr><th>Strip</th><th>Archetype</th><th>Runtime route</th><th>Generations</th><th>Scale ratio old → new</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr><td><code>fx_seeker_trap</code></td><td class="arch">Trap</td><td>JAWS / REPAY, under the enemy row</td><td class="num">6</td><td class="num">1.50 → 1.10 (widest row 1.79 → 1.31)</td><td><span class="chip pass">Pass</span></td></tr>
+        <tr><td><code>fx_seeker_mark</code></td><td class="arch">Mark · dual</td><td>CALL over the head, BRAND held behind the hunter</td><td class="num">6</td><td class="num">0.28 → 0.25 · held 1.15 → 1.01</td><td><span class="chip pass">Pass</span></td></tr>
+        <tr><td><code>fx_shield</code></td><td class="arch">Shield · dual</td><td>Held barrier and the gain / absorb / undying flares</td><td class="num">11</td><td class="num">0.93 → 1.19</td><td><span class="chip pass">Pass</span></td></tr>
+        <tr><td><code>fx_seeker_projectile</code></td><td class="arch">Projectile</td><td>SPRAY, flown hunter → target</td><td class="num">6</td><td class="num">0.84 → 0.74</td><td><span class="chip pass">Pass</span></td></tr>
+        <tr><td><code>fx_press</code></td><td class="arch">Field</td><td>PRESS, held behind the hunter all fight</td><td class="num">10</td><td class="num">1.44 over → 0.95</td><td><span class="chip cond">Conditional</span></td></tr>
+        <tr><td><code>fx_anvil_strike</code></td><td class="arch">Impact</td><td>THE ANVIL's HARDFACE on a creature</td><td class="num">14</td><td class="num">unchanged (old strip kept)</td><td><span class="chip stop">Stopped</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="fx" id="trap">
+    <div class="fx-head"><h2>Seeker trap</h2><span class="key">fx_seeker_trap</span><span class="chip arch">Trap</span><span class="chip pass">Pass</span></div>
+    <div class="pair">
+      <figure><img src="img/trap_strips.png" alt="Old drum-shaped trap strip above the new cord snare strip"><figcaption>Old: a drum or wheel. New: a snare of cords, the identity the 2026-08-28 commit asked for.</figcaption></figure>
+      <figure><img src="img/trap_realspeed.gif" alt="JAWS in HUNT at game speed, before and after"><figcaption>JAWS at 4.0 s, true speed. Resolved key <code>fx_seeker_trap_strip8_512</code>.</figcaption></figure>
+    </div>
+    <div class="scroll"><img src="img/trap_ingame.png" alt="Trap frames before and after, aligned on the cast"></div>
+    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 0.0 % / 4,352 → 0 / 37.3 % / 3,842</td></tr><tr><td>Diagnostic (settle)</td><td>none, before or after</td></tr><tr><td>Cost</td><td class="num">1 shape + 1 animation = 6</td></tr></table>
+    <div class="verdict pass"><p>One placement, settles and holds, fades, with no rectangle and no second placement. The art spans the frame width, so the standard row fits the scale budget (1.50 → 1.10). The widest row still needs 1.31, the structural remainder you asked me to report. Caveat: PixelLab barely moved the rope, so the snare appears whole instead of snapping shut.</p></div>
+  </section>
+
+  <section class="fx" id="mark">
+    <div class="fx-head"><h2>Seeker mark</h2><span class="key">fx_seeker_mark</span><span class="chip arch">Mark · dual</span><span class="chip pass">Pass</span></div>
+    <div class="pair">
+      <figure><img src="img/mark_call_strips.png" alt="Old mark strip that loses its ring, above the new steady sigil"><figcaption>Old: the ring vanishes in frames 1–4 and re-forms as a smaller crossed circle. New: one steady sigil whose ticks twist from + to × and back.</figcaption></figure>
+      <figure><img src="img/mark_call_realspeed.gif" alt="CALL over the target's head at game speed"><figcaption>Fired: CALL at 6.7 s over the target's head. Key <code>fx_seeker_mark_strip8_512</code>.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="img/mark_brand_realspeed.gif" alt="BRAND holding the mark behind the hunter"><figcaption>Held: BRAND (posed with <code>RH_SHOT_SWAP=hammer_press:sign_brand</code>) loops the same strip behind the hunter. The old strip blinks; the new one holds.</figcaption></figure>
+      <figure><img src="img/mark_call_ingame.png" alt="CALL frames before and after"><figcaption>CALL frames, hit-aligned.</figcaption></figure>
+    </div>
+    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 0.0 % / 1,649 → 0 / 23.3 % / 1,569</td></tr><tr><td>Diagnostic (settle + loop)</td><td>old: loop reset, broken 7→0 seam, 4.9× light swing · new: none</td></tr><tr><td>Cost</td><td class="num">1 shape + 1 pinned animation = 6</td></tr></table>
+    <div class="verdict pass"><p>This is the dual-use contract all ten marks share, and pinning first = last is the recipe that satisfies it: it locks on as a one-shot and loops cleanly when held. It is the strongest result in the cohort.</p></div>
+  </section>
+
+  <section class="fx" id="shield">
+    <div class="fx-head"><h2>Shield barrier</h2><span class="key">fx_shield</span><span class="chip arch">Shield · dual</span><span class="chip pass">Pass</span></div>
+    <div class="pair">
+      <figure><img src="img/shield_strips.png" alt="Old edge-touching ring above the new ring with a margin"><figcaption>Old: the ring touches the frame edge (border alpha 255). New: the same double ring inside a margin.</figcaption></figure>
+      <figure><img src="img/shield_realspeed.gif" alt="The held barrier at game speed"><figcaption>Held barrier in <code>fightshield</code>. Key <code>fx_shield</code>.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="img/shield_gain_realspeed.gif" alt="The GAIN flare"><figcaption>The same strip fired once as the GAIN flare.</figcaption></figure>
+      <figure><img src="img/raw_shield1.png" alt="The rejected first shield loop, which flashes"><figcaption>Rejected first attempt (5 generations): "glow a little brighter" became a 3.1× flash, a 1 Hz pulse on a state the code says must never flash. The loop diagnostic caught it.</figcaption></figure>
+    </div>
+    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">255 / 0.0 % / 1,878 → 0 / 28.5 % / 1,826</td></tr><tr><td>Diagnostic (loop)</td><td>new: light swing 1.23×, no reset</td></tr><tr><td>Cost</td><td class="num">1 shape + 2 animations = 11</td></tr></table>
+    <div class="verdict pass"><p>Stable geometry, no flash, no edge. The visible ring stays the same size (481 × 474 vs 474 × 474); its frame grew to 1.19× native to hold that size, which is within budget.</p></div>
+  </section>
+
+  <section class="fx" id="knife">
+    <div class="fx-head"><h2>Seeker projectile</h2><span class="key">fx_seeker_projectile</span><span class="chip arch">Projectile</span><span class="chip pass">Pass</span></div>
+    <div class="pair">
+      <figure><img src="img/knife_strips.png" alt="Old and new thrown-knife strips"><figcaption>Same thrown knife, now with soft alpha.</figcaption></figure>
+      <figure><img src="img/knife_realspeed.gif" alt="SPRAY at game speed"><figcaption>SPRAY at 5.2 s: the renderer flies the strip. Key <code>fx_seeker_projectile_strip8_512</code>.</figcaption></figure>
+    </div>
+    <div class="scroll"><img src="img/knife_ingame.png" alt="Knife flight frames before and after"></div>
+    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 0.0 % / 1,006 → 0 / 11.2 % / 1,234</td></tr><tr><td>Diagnostic (flight)</td><td>none</td></tr><tr><td>Cost</td><td class="num">1 shape + 1 pinned animation = 6</td></tr></table>
+    <div class="verdict pass"><p>Continuous flight, stable size, no reset. Caveat: it does not spin. The image route keeps rigid objects still, so "a spinning thrown blade" reads as a knife thrown straight, which is what the old strip already did.</p></div>
+  </section>
+
+  <section class="fx" id="press">
+    <div class="fx-head"><h2>Press field</h2><span class="key">fx_press</span><span class="chip arch">Field</span><span class="chip cond">Conditional</span></div>
+    <div class="pair">
+      <figure><img src="img/press_strips.png" alt="Old flat slab above the new square weight"><figcaption>Old: a wide flat slab. Its short height is why it was over budget. New: a square weight.</figcaption></figure>
+      <figure><img src="img/press_realspeed.gif" alt="PRESS held behind the hunter at game speed"><figcaption>Held all fight behind the hunter. Key <code>fx_press</code>.</figcaption></figure>
+    </div>
+    <div class="scroll"><img src="img/press_ingame.png" alt="PRESS frames before and after across one loop"></div>
+    <table class="metrics"><tr><td>Edge / soft / combat-size core</td><td class="num">0 / 23.3 % / 3,991 → 0 / 51.6 % / 7,363</td></tr><tr><td>Scale ratio</td><td class="num">1.44 over (clamped, magnified) → 0.95</td></tr><tr><td>Cost</td><td class="num">5 shapes + 1 pinned animation = 10</td></tr></table>
+    <div class="verdict cond"><p>What regeneration was for is done: the field is within budget and loops cleanly, with no bloom over the hunter. But behind the hunter it reads as a plain box, and at its pulses as a big pink box. Every bold prop prompt returned a shaded object (a hydraulic press, a box with dials, three tyres), and "symbol" returned an opaque checkerboard. <strong>What should the PRESS field depict?</strong> The fields that read well are line-art sigils (<code>fx_aura</code>, <code>fx_wilt</code>).</p></div>
+  </section>
+
+  <section class="fx" id="anvil">
+    <div class="fx-head"><h2>Anvil strike</h2><span class="key">fx_anvil_strike</span><span class="chip arch">Impact</span><span class="chip stop">Stopped at 14</span></div>
+    <div class="pair">
+      <figure><img src="img/anvil_raw.png" alt="Both anvil animations, each ending on an empty frame"><figcaption>Both clips have the right single outward motion and an <strong>empty final frame</strong> (0 lit pixels), despite "stay clearly visible in every frame including the last one". <code>clip.py</code> refuses empty frames.</figcaption></figure>
+      <figure><img src="img/anvil_strips.png" alt="Old crescent strip above the offline 0-7 assembly"><figcaption>Offline only, not installed: the same clip assembled from its input frame plus generated frames 1–7 passes every gate with no warning (edge 0, soft 24.1 %, core 1,887).</figcaption></figure>
+    </div>
+    <div class="verdict stop"><p>Stopped one short of the 15 cap, as agreed. Of the four shapes, two drifted to full-canvas spark bursts, one to a small needle star with a disc core, and the fourth (used) leaned toward a sun. The fix the evidence points to is an assembly rule, not more generations: build open-ended impacts from the input frame plus generated 1–7. That changes the rule for every future strip, so it is yours to decide.</p></div>
+  </section>
+
+  <section class="fx">
+    <h3>Every generation, including the rejected ones</h3>
+    <figure><img src="img/all_shapes.png" alt="All eleven shapes generated for the cohort"><figcaption>Shapes, left to right, in four rounds: snare, sigil, press frame, box with dials, ring, spark spray, knife; press symbol (checkerboard), spark burst; square weight, plate stack (tyres), flake star; wedge chunks.</figcaption></figure>
+  </section>
+
+  <section class="fx">
+    <h3>Decisions for you</h3>
+    <ul class="decisions">
+      <li><strong>Assembly rule for impacts:</strong> assemble open-ended impacts from the input frame plus generated 1–7. It removes the most common failure (an empty last frame: 3 of the 8 open-ended dispersal clips across all three rounds) and would rescue the anvil for free. The approved Seeker strike is unaffected unless it is refiled.</li>
+      <li><strong>PRESS field picture:</strong> keep the square weight, or redraw it as a line-art sigil like the other fields.</li>
+      <li><strong>Subtle motion:</strong> accept a knife that flies without spinning and a snare that appears already tight. PixelLab does not move rigid objects.</li>
+      <li><strong>Widest-row traps:</strong> 1.31 over budget even when the art fills its width. Options: a wider native frame, or a smaller trap scale.</li>
+    </ul>
+  </section>
+</div>

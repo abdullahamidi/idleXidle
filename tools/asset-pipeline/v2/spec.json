@@ -122,6 +122,31 @@
                                                     "filed_by": "fxclips.py seeker strike=3e04a7c8-105f-4ae0-a035-f8538e57862a",
                                                     "rejected_in_same_round": { "1a76308a-0ec3-45c2-a29a-3a7a572b040c": "pinned last frame: routed back through a central star into the full burst again" },
                                                     "evidence": "production/qa/evidence/vfx-pilot-2/README.md" } },
+    "archetypes": {
+      "$comment": "Temporal contracts by what the GAME does with a strip (production/qa/evidence/vfx-cohort/taxonomy.md, 2026-09-23). tools/fx_energy.py reads membership from here and runs the matching diagnostic; none of them is a CI gate. Hard rules for every strip stay EDGE + SOFT + LIVE (check_fx_edges.py).",
+      "IMPACT": { "reading": "ONE PEAK",
+                  "contract": "one event: optional build-up, one primary peak, outward breakup, fade. Reject a collapse and second explosion, a loop or reset, a late new central hit.",
+                  "keys": ["fx_hit", "fx_weakhit", "fx_crit", "fx_death", "fx_heal", "fx_shield_break"], "suffixes": ["_strike", "_transformation"] },
+      "PROJECTILE": { "reading": "FLIGHT",
+                      "contract": "the renderer flies the strip from hunter to target; the art is ONE continuous in-place flight pose (a spin, a flicker). No teleport or reset, no backward jump, no second launch, stable size.",
+                      "suffixes": ["_projectile"] },
+      "TRAP/MARK": { "reading": "SETTLE",
+                     "contract": "establish, read clearly, settle into the intended held form. Energy need not fall after the first peak. No repeated apparent placement, no blink.",
+                     "suffixes": ["_trap", "_mark"] },
+      "FIELD/AURA": { "reading": "LOOP",
+                      "contract": "a HELD loop behind the hunter: one coherent silhouette; breathing and repeated peaks allowed while visually continuous; frame 7 flows into frame 0; no structural reset.",
+                      "keys": ["fx_press", "fx_wilt", "fx_aura", "fx_tower_strike"] },
+      "SHIELD/BARRIER": { "reading": "LOOP",
+                          "contract": "stable main geometry with a modest continuous breath; no respawn; no size jump. The same strip also flares once as a one-shot (gain, absorb, undying).",
+                          "keys": ["fx_shield"] },
+      "OTHER": { "reading": "none",
+                 "contract": "fx_weep is a one-shot rain whose falling streaks are cyclic inside it; fx_bind_chain is a BUILD-screen animation drawn with AlphaBlend, not a HUNT effect.",
+                 "keys": ["fx_weep", "fx_bind_chain"] },
+      "dual": ["fx_anvil_mark", "fx_chorus_mark", "fx_magpie_mark", "fx_metronome_mark", "fx_oathbound_mark", "fx_quiver_mark",
+               "fx_seeker_mark", "fx_thornwall_mark", "fx_tower_mark", "fx_unbroken_mark",
+               "fx_tower_strike", "fx_unbroken_trap", "fx_aura", "fx_shield"],
+      "dual_contract": "HELD and fired: it must read as a one-shot under the renderer's tail fade AND loop seamlessly when held (frame 7 into frame 0). Marks are held by BRAND (any hunter), fx_tower_strike and fx_unbroken_trap by their champion's signature field."
+    },
     "prompt_rules": {
       "$comment": "Learned on the fx_seeker_strike pilots, 2026-09-23. The item prompts below PREDATE these rules and have NOT been rewritten yet; apply these when each is regenerated.",
       "one_event": "Describe ONE event with one direction of travel: 'one single impact that happens once', 'the motion only goes outward'. An open-ended animate_image drifts back toward a cycle: three of four open clips collapsed and re-burst in their second half when the prompt only described the look.",
@@ -131,6 +156,11 @@
       "no_disc_words": "Never 'round core', 'bright core' or 'glowing centre': pixen draws a solid sun disc. The impact point is 'one point in the centre' at most.",
       "bold_strokes": "Ask for THICK shards ('each shard a long narrow white triangle'). One-pixel needles vanish at the ~0.3x the fight draws an effect (fx_energy LIVE). Bold subjects fill the canvas: accept tips that graze the edge, and let feather take them.",
       "no_pinned_ending_for_bursts": "A pinned last_frame did NOT constrain a burst: the interpolation routed back through the start (1a76308a). Pinning stays right for HELD loops (first = last).",
+      "held_is_pinned_and_flat": "HELD (field, shield, and every DUAL strip): pin first = last and describe motion that cannot vanish or flash: 'staying the same size, complete and equally bright in every frame; nothing flashes'. Never ask a held strip to brighten or breathe; the renderer breathes it (barrier 0.40-0.60, field pulse). 'The rings breathe: they glow a little brighter' returned a 3.1x flash (cab1f308).",
+      "impact_ends_empty": "An open-ended outward dispersal emptied its last frame in 3 of 8 clips (anvil 1d7971cb, 7ace0477; Seeker 6ae66427), whatever the prompt says. The motion is usually right. Assembling from the input frame plus generated 1-7 rescues it (offline proof on 1d7971cb), but that changes the assembly rule and awaits the owner's decision.",
+      "rigid_objects_barely_move": "The image route keeps a rigid object almost still: the knife did not spin (17f76b3d), the snare did not snap shut (72fe5a7a), the weight barely sank (0f6a221b). Accept a subtle held pose for projectiles and traps; do not spend re-rolls asking a rigid prop for big motion.",
+      "props_become_props": "A bold object prompt returns a shaded 3D PROP (a hydraulic press, a box with dials, three tyres), and 'symbol' returned an opaque checkerboard. Fields read best as line-art sigils (fx_aura, fx_wilt, the mark). PRESS still needs an identity decision.",
+      "trap_fills_width": "A trap is sized to 80 % of the enemy row's WIDTH, so its art must span the canvas width ('stretching across almost the whole width of the picture'). The snare did: 1.50 over budget became 1.10.",
       "judge_after_the_post_pass": "Screen motion on the raw clip, but judge readability only AFTER whiten-glow-soften-feather: the soften step decides which thin parts survive."
     },
     "characters": {
@@ -140,6 +170,38 @@
           "shape": "a solid white burst of about twelve thick sharp shards flying outward from one point in the centre, each shard a long narrow white triangle pointing outward, gaps of empty space between the shards, no circle and no disc in the middle. the burst sits in the middle of the picture with wide empty space around it, the shards stop well before the edges. no ground, no rocks, no background, no character, no weapon, no colour. solid white, on empty transparent space with nothing behind it",
           "action": "one single impact that happens once: the white shards shoot outward from the centre and keep flying outward, getting thinner and splitting into small splinters. the motion only goes outward, nothing moves back toward the middle, no second burst, no new shapes appear, it does not repeat or restart. the splinters stay clearly visible in every frame including the last one",
           "identity": "the knife stab's puncture burst (commit 8596685): white shards from one point, splintering outward"
+        },
+        "trap": {
+          "shape_job": "4c05eede-c0a5-47a9-a799-0ba2bb83c0b8", "anim_job": "72fe5a7a-5ae1-4c1b-91eb-5cd17f16c4d3", "archetype": "TRAP/MARK",
+          "shape": "a wide flat loop of thick white cord seen from a low side view: an oval ring of twisted rope much wider than it is tall, with two bold knots and a few short loose cord tails, stretching across almost the whole width of the picture, sitting in the lower half of the picture. thick bold strokes. solid white, no ground, no rocks, no grass, no background, no character, no weapon, no colour, on empty transparent space with nothing behind it",
+          "action": "the rope loop snaps shut once: it pulls tight quickly, the loop narrows and the knot cinches, and then it holds still, tight and clearly visible in every frame including the last one. it does not open again, it does not repeat, nothing new appears",
+          "identity": "a snare of cords snapping shut (8596685); replaces the drum/wheel"
+        },
+        "mark": {
+          "shape_job": "3f8e3552-ec01-4f66-9355-3d571bc83518", "anim_job": "ff75e03f-cacc-4495-a8c6-454a64130780", "archetype": "TRAP/MARK + DUAL (held by BRAND)", "pinned": "first = last",
+          "shape": "a white hunter's targeting sigil: one thick circle with four short bold ticks pointing inward at the top, bottom, left and right, and a small bold diamond at the very centre. thick clean white lines, centred, with a clear margin around it on every side. solid white, no background, no character, no colour, on empty transparent space with nothing behind it",
+          "action": "the sigil locks on: the four crosshair ticks slide a little toward the centre and ease back out, while the circle stays complete and equally bright in every frame and the diamond in the middle pulses gently",
+          "identity": "a hunter's sigil that contracts and locks (8596685)"
+        },
+        "projectile": {
+          "shape_job": "cd704393-43c4-4829-b752-a1e4767700ed", "anim_job": "17f76b3d-f417-4a73-bbbc-9dc508d306bc", "archetype": "PROJECTILE", "pinned": "first = last",
+          "shape": "a white throwing knife seen from the side, blade pointing to the right: a straight double-edged blade, a short cross guard and a short wrapped handle, one bold clean shape, centred with a wide margin around it. solid white, no hand, no character, no background, no colour, on empty transparent space with nothing behind it",
+          "action": "the knife spins end over end one full turn around its middle, staying the same size and in the same place in every frame",
+          "identity": "a thrown blade (it did not spin: rigid_objects_barely_move)"
+        }
+      },
+      "shared": {
+        "shield": {
+          "shape_job": "aa0342cb-fb7d-42a9-b9f7-650c32cfb5aa", "anim_job": "c5311738-1ee2-429f-8f15-8102b8edfe75", "archetype": "SHIELD/BARRIER + DUAL", "pinned": "first = last",
+          "rejected": { "cab1f308-3efa-47a7-8783-11b016175471": "3.1x light swing: a 1 Hz flash on a held state" },
+          "shape": "a solid white ring of light: two thin perfectly round circles close together, one inside the other, with a few small four-point sparkles along the ring. the outer circle stays well inside the picture with a clear margin on every side. solid white, no background, no character, no colour, on empty transparent space with nothing behind it",
+          "action": "small sparkles travel slowly around the two rings. the rings themselves stay exactly the same thickness, brightness, size and shape in every frame; nothing flashes, nothing thickens"
+        },
+        "press": {
+          "shape_job": "dbba7434-315a-4031-8c46-efa1bb55d1fd", "anim_job": "0f6a221b-693b-4a9b-9be1-838181707522", "archetype": "FIELD/AURA", "pinned": "first = last",
+          "status": "CONDITIONAL: within the scale budget now (1.44 -> 0.95) and a clean loop, but it reads as a plain box behind the hunter; the PRESS field's picture is an owner decision",
+          "shape": "a heavy white weight plate seen from slightly above and in front: a thick square slab with a smaller square block on top of it and four short stubby feet under it, the whole weight about as tall as it is wide and filling most of the picture with a small margin around it. bold simple solid shapes. solid white, no ground, no background, no character, no colour, on empty transparent space with nothing behind it",
+          "action": "the heavy weight presses down: it sinks a little and rises back, staying the same size, complete and equally bright in every frame; nothing flashes"
         }
       }
     },

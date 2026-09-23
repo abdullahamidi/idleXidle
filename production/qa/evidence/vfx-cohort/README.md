@@ -1,4 +1,26 @@
-# VFX validation cohort — PROPOSAL (awaiting approval; no PixelLab job spent)
+# VFX validation cohort — RESULT (2026-09-23)
+
+**Review page:** [`review.html`](review.html) shows every effect together: old and new strips, the real-speed
+HUNT GIF, hit-aligned stills, metrics and a verdict. Images are in `img/`.
+
+| Strip | Archetype | Gens | Verdict |
+|---|---|---|---|
+| `fx_seeker_trap` | trap | 6 | **PASS**: a snare instead of a drum; scale 1.50 → 1.10 (widest row 1.79 → 1.31) |
+| `fx_seeker_mark` | mark, dual | 6 | **PASS**: locks on once, loops cleanly held by BRAND (old: 3 loop warnings) |
+| `fx_shield` | shield, dual | 11 | **PASS**: edge 255 → 0; first loop rejected for a 3.1x flash |
+| `fx_seeker_projectile` | projectile | 6 | **PASS**: soft alpha, continuous flight (it does not spin) |
+| `fx_press` | field | 10 | **CONDITIONAL**: scale 1.44 over → 0.95, clean loop, but it reads as a plain box |
+| `fx_anvil_strike` | impact | 14 | **STOPPED**: both clips had the right motion and an empty last frame |
+
+**53 generations** (4,418 → 4,365). All installed strips pass EDGE, SOFT and LIVE with no diagnostic
+warning. The library went from 60 to 56 of 67 failing. `-warnaserror` 0/0; Core 1,850 · Game 712 ·
+Integration 2; `check_all.sh` green. Capture prerequisites landed: `RH_SHOT_HUNTER` installs the posed
+champion's signature (the real switch's loadout steps, no toast, no save), and `RH_SHOT_SWAP` weaves any
+skill into a fixture slot.
+
+---
+
+## The proposal as approved
 
 **Date** 2026-09-23 · **Branch** `fix/vfx-fade` · Taxonomy of all 67 strips: [`taxonomy.md`](taxonomy.md)
 

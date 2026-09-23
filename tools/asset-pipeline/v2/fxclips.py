@@ -2,9 +2,15 @@
 """fxclips -- file a character's per-Form EFFECT strips where the renderer looks for them.
 
     python tools/asset-pipeline/v2/fxclips.py <charId> <form>=<animate_image jobId> [...]
+    python tools/asset-pipeline/v2/fxclips.py shared <key>=<animate_image jobId> [...]
 
 Each pair becomes `assets/art/VFX/<char>_<form>/fx_<char>_<form>_strip8_512.png`, which is the key
 `HuntScreen.FxFor` asks for first, before it falls back to the shared `fx_<form>`.
+
+`shared` files the strips that are not a champion's: `shield=<job>` becomes
+`assets/art/VFX/shield/fx_shield_strip8_512.png`. Only a key that already exists there is accepted, so a
+typo cannot invent an effect nothing asks for. It is the same fetch and the same post-pass; before
+2026-09-23 the shared strips were filed by hand with clip.py and whiten alone.
 
 This is skillclips.py's twin and exists for the same reason: 45 effects arrive in nine batches of
 five, each needing fetch -> strip -> gate -> file in that order, and a loop typed fresh per character
@@ -46,8 +52,9 @@ def soften_radius(out: str) -> int:
 
 
 def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
-    out_dir = os.path.join(VFX, f"{char}_{form}")
-    out = os.path.join(out_dir, f"fx_{char}_{form}_strip8_512.png")
+    stem = form if char == "shared" else f"{char}_{form}"
+    out_dir = os.path.join(VFX, stem)
+    out = os.path.join(out_dir, f"fx_{stem}_strip8_512.png")
     os.makedirs(out_dir, exist_ok=True)
     p = subprocess.run(
         [sys.executable, os.path.join(HERE, "clip.py"), "job",
@@ -93,7 +100,11 @@ def main(argv: list[str]) -> int:
             print(f"expected <form>=<jobId>, got {a!r}")
             return 2
         form, job = a.split("=", 1)
-        if form not in FORMS:
+        if char == "shared":
+            if not os.path.exists(os.path.join(VFX, form, f"fx_{form}_strip8_512.png")):
+                print(f"no shared strip fx_{form}; only an existing shared key can be refiled")
+                return 2
+        elif form not in FORMS:
             print(f"unknown form {form!r}; expected one of {', '.join(FORMS)}")
             return 2
         pairs.append((form, job))

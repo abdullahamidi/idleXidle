@@ -27,11 +27,10 @@ THREE RULES. The second is the one the old library fails; the third is the one a
          scale, and every frame of the impact window must keep a core (see LIVE there). The fade after
          the window is exempt.
 
-A fourth reading is PRINTED, NOT ENFORCED: fx_energy's ONE PEAK, a second hit after the first (the light
-climbing back, or gathering back at the centre). It is shown as a warning for the IMPACT forms only,
-because marks lock on by closing, traps and fields hold a shape, and a PNG cannot say which grammar it
-was drawn to. On the 2026-09-23 library it flagged the rejected Seeker pilot and nothing else among the
-impact strips; that is too little evidence for a hard rule yet.
+A fourth reading is PRINTED, NOT ENFORCED: the temporal diagnostic for the strip's ARCHETYPE (fx_energy.py,
+membership in spec.json effects.archetypes): ONE PEAK for an impact, FLIGHT for a projectile, SETTLE for
+a trap or mark, LOOP for a field, the shield and every strip that is also HELD. It is context, never a pass
+or fail: a field may breathe, a mark may close on purpose, and a PNG cannot say which grammar it was drawn to.
 
 WHAT THIS DOES NOT PROVE. It is a contract check, not an art review: it cannot tell a beautiful
 burst from an ugly one, and it cannot tell that a "trap" is drawn as a drum rather than as the
@@ -125,7 +124,7 @@ def check(path):
         problems.append(f"only {share * 100:.2f}% partial alpha — one-bit art cannot fade (needs {SOFT_MIN * 100:.0f}%)")
     frames = fx_energy.curve(img)
     problems.extend(fx_energy.live_problems(frames))
-    warnings = fx_energy.one_peak_findings(frames) if fx_energy.is_impact(path) else []
+    warnings = fx_energy.findings_for(path, frames)
     return problems, worst_edge, share, warnings
 
 

@@ -37,6 +37,17 @@ Two readings are built on the curve:
             PNG cannot say which grammar it was drawn to. check_fx_edges.py prints it as a warning for
             the impact forms.
 
+  PER ARCHETYPE (2026-09-23 cohort). A strip's archetype comes from spec.json effects.archetypes, and it
+            gets the reading its motion was drawn to. None of them is a gate:
+            IMPACT      ONE PEAK (above)
+            PROJECTILE  FLIGHT: no centroid jump, no light swing between frames (a reset or second launch)
+            TRAP/MARK   SETTLE: after establishing, no fade-and-return (a blink or a second placement)
+            FIELD/AURA, SHIELD and every DUAL strip: LOOP, unweighted because held effects never fade.
+                        No silhouette reset between frames, the 7 -> 0 seam no worse than a normal step, and
+                        light swinging no more than LOOP_SWING (the renderer does the breathing).
+            On the cohort it caught the shield loop that flashed 3.1x, and it passed the mark whose old
+            strip broke its seam.
+
 Pure python on tools/asset-pipeline/pixelpng.py, like every gate here (`py` has no Pillow or numpy).
 Samples every 2nd pixel on both axes inside each block; the curve's shape does not hide between them.
 """
@@ -62,12 +73,28 @@ TAIL_POWER = 6        # ... and VfxBlend.Light squares the draw opacity, so ligh
 # The forms whose grammar IS one impact: the ONE PEAK reading applies to these.
 IMPACT_FORMS = ("strike", "hit", "crit", "weakhit", "death", "shield_break")
 
+# Shape continuity is read on a coarse 32-cell grid (4 x 4 of the combat cells): a cell is OCCUPIED when
+# its mean light reaches OCC_LIGHT. Coarse on purpose — a splinter moving one cell is continuity, not a reset.
+OCC_BLOCK = 4
+OCC_LIGHT = 0.08
+FLIGHT_JUMP = 0.25     # PROJECTILE: centroid moving more than this share of the frame in one step
+FLIGHT_SWING = 2.0     # PROJECTILE: raw energy changing by more than this factor in one step
+SETTLE_LOW = 0.50      # TRAP/MARK: after establishing, dropping below this share of its peak ...
+SETTLE_BACK = 0.75     # ... and climbing back above this share reads as a second placement / a blink
+LOOP_RESET = 0.35      # HELD: consecutive silhouettes overlapping less than this (IoU) is a reset
+LOOP_SEAM = 0.60       # HELD: the 7 -> 0 seam overlapping less than this share of the median step
+LOOP_SWING = 2.0       # HELD: raw energy max/min beyond this is a pulse too big to read as breathing
+
 
 class Frame:
-    __slots__ = ("energy", "bright", "core", "radius", "fade")
+    """One frame's readings. `energy`/`core` carry the one-shot tail fade; `raw`, the centroid and the
+    occupancy do not, because a HELD effect loops and never fades, and shape continuity is a property
+    of the art, not of how brightly the renderer happens to be drawing it."""
+    __slots__ = ("energy", "bright", "core", "radius", "fade", "raw", "cx", "cy", "occ")
 
-    def __init__(self, energy, bright, core, radius, fade):
+    def __init__(self, energy, bright, core, radius, fade, raw=0.0, cx=0.5, cy=0.5, occ=frozenset()):
         self.energy, self.bright, self.core, self.radius, self.fade = energy, bright, core, radius, fade
+        self.raw, self.cx, self.cy, self.occ = raw, cx, cy, occ
 
 
 def fade_light(frame, frames):
@@ -92,8 +119,9 @@ def curve(src):
     for f in range(n):
         x0 = f * fw
         w = fade_light(f, n)
-        total = wr = 0.0
+        total = wr = sx = sy = 0.0
         bright = core = 0
+        coarse = {}
         for cy in range(cells):
             by = cy * BLOCK
             ddy = (cy + 0.5) * BLOCK - half
@@ -114,11 +142,19 @@ def curve(src):
                 r = math.sqrt(ddx * ddx + ddy * ddy) / half
                 total += light
                 wr += light * r
+                sx += light * (cx + 0.5)
+                sy += light * (cy + 0.5)
+                key = (cx // OCC_BLOCK, cy // OCC_BLOCK)
+                coarse[key] = coarse.get(key, 0.0) + light
                 if light >= BRIGHT:
                     bright += 1
                     if r < CORE_R:
                         core += 1
-        out.append(Frame(w * total / (cells * cells), bright, w * core, wr / total if total else 0.0, w))
+        occ_min = OCC_LIGHT * OCC_BLOCK * OCC_BLOCK
+        out.append(Frame(w * total / (cells * cells), bright, w * core, wr / total if total else 0.0, w,
+                         raw=total / (cells * cells),
+                         cx=sx / total / cells if total else 0.5, cy=sy / total / cells if total else 0.5,
+                         occ=frozenset(k for k, v in coarse.items() if v >= occ_min)))
     return out
 
 
@@ -165,8 +201,95 @@ def one_peak_findings(frames):
 
 def is_impact(path):
     """Whether a strip's key names an impact form (fx_<form> or fx_<char>_<form>)."""
+    return "IMPACT" in archetypes_of(path)
+
+
+def _iou(a, b):
+    return len(a & b) / len(a | b) if (a or b) else 1.0
+
+
+def flight_findings(frames):
+    """PROJECTILE: the renderer flies the strip, so the art must hold one continuous pose — no jump, no reset."""
+    found = []
+    for k in range(1, len(frames)):
+        a, b = frames[k - 1], frames[k]
+        jump = math.hypot(b.cx - a.cx, b.cy - a.cy)
+        if jump > FLIGHT_JUMP:
+            found.append(f"FLIGHT: the object jumps {jump:.2f} of the frame between frames {k - 1} and {k}")
+            break
+        lo, hi = sorted((a.raw, b.raw))
+        if lo > 0 and hi / lo > FLIGHT_SWING:
+            found.append(f"FLIGHT: its light changes {hi / lo:.1f}x between frames {k - 1} and {k} (a reset or a second launch)")
+            break
+    return found
+
+
+def settle_findings(frames):
+    """TRAP/MARK: establish, then hold. A drop well below the peak and a climb back reads as a second placement."""
+    raw = [fr.raw for fr in frames]
+    peak = max(raw)
+    if peak <= 0:
+        return []
+    est = next(i for i, v in enumerate(raw) if v >= SETTLE_BACK * peak)
+    low = raw[est]
+    for k in range(est + 1, len(raw)):
+        low = min(low, raw[k])
+        if low < SETTLE_LOW * peak and raw[k] >= SETTLE_BACK * peak:
+            return [f"SETTLE: it fades to {low / peak:.2f} of its peak and comes back at frame {k} (a blink or a second placement)"]
+    return []
+
+
+def loop_findings(frames):
+    """HELD (field, shield, and every DUAL strip): one silhouette that breathes and loops, 7 flowing into 0."""
+    found = []
+    n = len(frames)
+    steps = [_iou(frames[k].occ, frames[k + 1].occ) for k in range(n - 1)]
+    seam = _iou(frames[-1].occ, frames[0].occ)
+    worst = min(steps) if steps else 1.0
+    if worst < LOOP_RESET:
+        k = steps.index(worst)
+        found.append(f"LOOP: the silhouette resets between frames {k} and {k + 1} (overlap {worst:.2f})")
+    med = sorted(steps)[len(steps) // 2] if steps else 1.0
+    if seam < LOOP_SEAM * med:
+        found.append(f"LOOP: the seam 7 -> 0 breaks (overlap {seam:.2f} against a typical step of {med:.2f})")
+    raw = [fr.raw for fr in frames]
+    if min(raw) > 0 and max(raw) / min(raw) > LOOP_SWING:
+        found.append(f"LOOP: its light swings {max(raw) / min(raw):.1f}x across the loop (more than breathing)")
+    return found
+
+
+_SPEC = None
+
+
+def archetypes_of(path):
+    """The archetype(s) a strip is drawn to, from spec.json effects.archetypes (the taxonomy of 2026-09-23).
+    A DUAL strip is held AND fired, so it answers to both of its readings."""
+    global _SPEC
+    if _SPEC is None:
+        import json
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "asset-pipeline", "v2", "spec.json"), encoding="utf-8") as fh:
+            _SPEC = json.load(fh)["effects"]["archetypes"]
     key = os.path.basename(path).replace("_strip8_512.png", "")
-    return any(key == f"fx_{f}" or key.endswith(f"_{f}") for f in IMPACT_FORMS)
+    found = [name for name, a in _SPEC.items() if isinstance(a, dict)
+             and (key in a.get("keys", []) or any(key.endswith(s) for s in a.get("suffixes", [])))]
+    if key in _SPEC.get("dual", []):
+        found.append("HELD")
+    return found or ["IMPACT"]
+
+
+READINGS = {"IMPACT": one_peak_findings, "PROJECTILE": flight_findings, "TRAP/MARK": settle_findings,
+            "FIELD/AURA": loop_findings, "SHIELD/BARRIER": loop_findings, "HELD": loop_findings, "OTHER": None}
+
+
+def findings_for(path, frames):
+    """Every archetype-appropriate diagnostic for this strip. Contextual evidence, never a pass/fail."""
+    out = []
+    for arch in archetypes_of(path):
+        fn = READINGS.get(arch)
+        if fn is not None:
+            out.extend(m for m in fn(frames) if m not in out)
+    return out
 
 
 def spark(values, top=None):
@@ -181,8 +304,8 @@ def main(argv=None):
     paths = named or sorted(glob.glob("assets/art/VFX/*/fx_*_strip8_512.png"))
     for p in paths:
         frames = curve(p)
-        live, peak = live_problems(frames), one_peak_findings(frames)
-        tag = ("LIVE! " if live else "      ") + (("2HIT! " if is_impact(p) else "2hit? ") if peak else "      ")
+        live, peak = live_problems(frames), findings_for(p, frames)
+        tag = ("LIVE! " if live else "      ") + ("WARN  " if peak else "      ") + f"{'+'.join(archetypes_of(p)):24}"
         print(f"{tag} energy[{spark([fr.energy for fr in frames])}] core[{spark([fr.core for fr in frames])}] "
               f"impact-window bright min {min((frames[i].bright for i in impact_window(frames)), default=0):5}  "
               f"{os.path.relpath(p)}")
