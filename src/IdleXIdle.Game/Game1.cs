@@ -8419,6 +8419,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 var seqPath = System.IO.Path.ChangeExtension(shotPath, null) + $"_{idx:00}.png";
                 using var fsq = System.IO.File.Create(seqPath);
                 _canvas.SaveAsPng(fsq, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+                // THE SAVE IS NOT GAME TIME. Encoding a full canvas takes far longer than a frame, and the
+                // fixed step then ran several catch-up Updates before the next Draw — so a "stride 1" film
+                // advanced ~100-300 ms per picture and a 0.67 s effect showed on two frames (measured on the
+                // VFX pilot, 2026-09-23). Forgetting the elapsed time makes a stride of N exactly N steps.
+                ResetElapsedTime();
                 if (idx + 1 >= seqCount) Exit();
             }
         }

@@ -215,6 +215,13 @@ darkest surviving pixel is 96, written back over the same alpha — runs on ever
 files. The generator returns gold traps and blue tick bars whatever the prompt says, and re-rolling
 for colour spends a generation on something a transform does for free and for certain.
 
+**Alpha is honest, and the renderer adds it once (ADR-009, 2026-09-23).** A strip's alpha means what it
+says: the fading post-pass (whiten → glow → soften → feather) gives it partial alpha, `AssetLibrary`
+premultiplies at load, and the VFX pass blends with `VfxBlend.PremultipliedAdditive` (One + One), so a
+texel at alpha 0.5 adds half its light. Never bake a correction (such as √alpha) into a strip to make it
+read brighter. Judge brightness in the arena, at combat size, where the effect is drawn at about 0.3×
+its native frame.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

@@ -118,7 +118,9 @@ public sealed class VfxPlayer
         /// </para>
         /// <para>
         /// Cubed rather than linear because these draw ADDITIVELY: additive alpha reads far brighter
-        /// than its number suggests, so a linear ramp still looks like a hard cut at the end.
+        /// than its number suggests, so a linear ramp still looks like a hard cut at the end. The fade
+        /// rides the draw colour's opacity, which <see cref="VfxBlend.Light"/> applies squared — so the
+        /// light of the tail is k⁶, which is what this curve was tuned against.
         /// </para>
         /// </remarks>
         public float Fade
@@ -391,6 +393,8 @@ public sealed class VfxPlayer
         // as hard ring OUTLINES (the "reticles" bug). End the caller's batch, run additive, then restore
         // AlphaBlend for what draws after — with the arena's own rasterizer, so callouts and the overlay
         // keep the arena's edge whether or not a burst is live.
+        // PREMULTIPLIED additive, and it must stay that: the textures are premultiplied at load, so the
+        // stock source-alpha additive state would square every soft pixel's alpha. See VfxBlend / ADR-009.
         var opened = false;
         foreach (var a in list)
         {
@@ -398,14 +402,14 @@ public sealed class VfxPlayer
             if (!opened)
             {
                 b.End();
-                b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, Rasterizer);
+                b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, null, Rasterizer);
                 opened = true;
             }
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
             var drift = a.Drift;
             var dest = a.Placement.Frame;
             dest.Offset(drift);
-            b.Draw(a.Sheet, dest, src, a.Tint * a.Fade);
+            b.Draw(a.Sheet, dest, src, VfxBlend.Light(a.Tint * a.Fade));
 
             var content = a.Placement.Content;
             content.Offset(drift);

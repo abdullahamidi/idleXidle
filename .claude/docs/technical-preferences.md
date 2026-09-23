@@ -78,6 +78,7 @@ only be added here once actually integrated:
 - ADR-006 Draw must not consume input: Update owns every edge, and both halves read one geometry (Accepted 2026-09-12) — `docs/architecture/ADR-006-draw-must-not-consume-input.md`
 - ADR-007 One surface at a time: the attention owner, and the inbox background news goes to instead (Accepted 2026-09-15) — `docs/architecture/ADR-007-attention-ownership-and-dispatches.md`
 - ADR-008 One acknowledgement grammar, and a spotlight that is never a lie (Accepted 2026-09-21) — `docs/architecture/ADR-008-one-acknowledgement-grammar-and-presentation-only-spotlights.md`
+- ADR-009 A VFX texel adds its own light once: `VfxBlend.PremultipliedAdditive` (Proposed 2026-09-23, awaiting owner approval) — `docs/architecture/ADR-009-vfx-premultiplied-additive-blend.md`
 
 ## Engine Specialists
 
