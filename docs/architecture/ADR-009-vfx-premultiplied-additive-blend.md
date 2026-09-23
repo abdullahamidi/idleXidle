@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed — the renderer experiment is complete. It becomes Accepted when the owner approves the contract; the fx_seeker_strike pilot is judged separately. |
+| **Status** | Accepted 2026-09-23 — the owner approved the renderer contract (`VfxBlend.PremultipliedAdditive` + `VfxBlend.Light`) as an accepted VFX contract, and the second Seeker strike built on it was approved for production. |
 | **Date** | 2026-09-23 |
 | **Deciders** | user (chose a renderer correction over a √alpha bake in the assets) + technical-artist, lead-programmer |
 | **Related** | ADR-003 (Superseded pixel-perfect path; its successor is the LinearClamp + premultiplied-at-load path), `design/art/arena-art-contract.md` §3.6 |

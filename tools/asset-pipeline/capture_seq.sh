@@ -26,7 +26,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT.png" RH_SHOT_MODE="$MODE" RH_SHOT_SEQ="$COUNT,$ST
 [ -n "${RH_SHOT_LESSON:-}" ] && RH_ENV+=(RH_SHOT_LESSON="$RH_SHOT_LESSON")
 [ -n "${RH_SHOT_UISCALE:-}" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
 [ -n "${RH_SHOT_T:-}" ] && RH_ENV+=(RH_SHOT_T="$RH_SHOT_T")
-dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1   # dn applies RH_ENV (shellenv.sh)
+# RH_SEQ_LOG=<file> keeps the game's stdout (the RH_VFX_DUMP / RH_VFX_METRICS lines) instead of dropping it.
+dn run --project src/IdleXIdle.Game --no-build >"${RH_SEQ_LOG:-/dev/null}" 2>&1   # dn applies RH_ENV (shellenv.sh)
 N="$(ls "${OUT}"_[0-9][0-9].png 2>/dev/null | wc -l)"
 [ "$N" -gt 0 ] || { echo "capture failed" >&2; exit 1; }
 py tools/asset-pipeline/v2/filmstrip.py "$OUT" "${OUT}"_[0-9][0-9].png

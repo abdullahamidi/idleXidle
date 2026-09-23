@@ -2890,19 +2890,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(jawsSlot, Source.Nature);
                         _loadout.SetSkill(jawsSlot, "field_mire");
                     }
-                    // RH_SHOT_SWAP=<skill>:<skill>[,<skill>:<skill>] weaves a different skill into a fixture
+                    // RH_SHOT_SWAP=<skill>:<skill>[@Source][,...] weaves a different skill into a fixture
                     // slot, the way fightinspect does by hand — so any skill's effect can be filmed
                     // through its real route (BRAND holding a mark behind the hunter, HAMMER BLOW on
-                    // any champion). Refused loudly, never silently: an unknown id, a skill not in the
-                    // fixture, or a swap the build rule refuses would photograph the build it did NOT pose.
+                    // any champion). @Source also weaves the slot's Source, which is the effect's COLOUR
+                    // (volley_spray:volley_spray@Body films the Seeker's own SPRAY in Body's red). Refused
+                    // loudly, never silently: an unknown id or Source, a skill not in the fixture, or a swap
+                    // the build rule refuses would photograph the build it did NOT pose.
                     if (Environment.GetEnvironmentVariable("RH_SHOT_SWAP")?.Trim() is { Length: > 0 } shotSwap)
                         foreach (var pair in shotSwap.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         {
                             var parts = pair.Split(':', StringSplitOptions.TrimEntries);
+                            var into = parts.Length == 2 ? parts[1].Split('@', StringSplitOptions.TrimEntries) : [];
                             var from = parts.Length == 2 ? _loadout.IndexOfSkill(parts[0]) : -1;
-                            if (from < 0 || SkillCatalogue.Find(parts[1]) is null || !_loadout.SetSkill(from, parts[1]))
+                            Source? woven = null;
+                            if (into.Length == 2 && Enum.TryParse<Source>(into[1], ignoreCase: true, out var ws)) woven = ws;
+                            if (from < 0 || into.Length is 0 or > 2 || (into.Length == 2 && woven is null)
+                                || SkillCatalogue.Find(into[0]) is null || !_loadout.SetSkill(from, into[0]))
                                 throw new InvalidOperationException(
-                                    $"RH_SHOT_SWAP='{pair}' cannot be posed: it needs <skill in the fixture>:<skill the build accepts>.");
+                                    $"RH_SHOT_SWAP='{pair}' cannot be posed: it needs <skill in the fixture>:<skill the build accepts>[@Source].");
+                            if (woven is { } colour) _loadout.SetSource(from, colour);
                         }
                     // THE CREATURE POSES. Which family the arena draws is the REGION's (EnemyPresentation),
                     // and which body of it, and how big its box is, is the wave's ARCHETYPE, a seeded roll.

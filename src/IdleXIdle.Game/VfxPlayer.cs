@@ -45,6 +45,12 @@ public sealed class VfxPlayer
         public required VfxSubject Subject { get; set; }
         public VfxSubject? TravelTo { get; init; }
         public required Color Tint { get; set; }
+
+        /// <summary>
+        /// The composite projectile drawn INSTEAD of the strip, when the strip key has a
+        /// <see cref="ProjectileLooks"/> entry (ADR-010). Null for every other effect.
+        /// </summary>
+        public ProjectileVisual? Visual;
         public required float SecondsPerFrame { get; init; }
         public float Elapsed;
 
@@ -152,6 +158,34 @@ public sealed class VfxPlayer
     private readonly List<Anim> _active = new();
 
     /// <summary>
+    /// Composite projectiles that have LANDED: their wake, sparks and impact are still fading. Kept out of
+    /// <see cref="_active"/> on purpose — <see cref="AnyPlaying"/> paces the fight on a cast's own effects,
+    /// and a residue that outlived the flight must not hold the next beat.
+    /// </summary>
+    private readonly List<(ProjectileVisual Visual, VfxLayer Layer)> _landed = new();
+
+    /// <summary><c>RH_VFX_METRICS=1</c>: one line per frame with the composite projectiles' live cost.</summary>
+    public static readonly bool MetricsEnabled =
+        Environment.GetEnvironmentVariable("RH_VFX_METRICS") is "1" or "true";
+
+    /// <summary>Bytes the composite projectiles allocated since the last metrics line (update + draw).</summary>
+    private long _compositeBytes;
+
+    private static long AllocMark() => MetricsEnabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+
+    private void AllocCount(long mark)
+    {
+        if (MetricsEnabled) _compositeBytes += GC.GetAllocatedBytesForCurrentThread() - mark;
+    }
+
+    /// <summary>
+    /// <c>RH_VFX_COMPOSITE=0</c>: draw every projectile as its strip, as before ADR-010. A review switch, so the
+    /// old and the composite projectile can be filmed through the same fight; the game never sets it.
+    /// </summary>
+    public static readonly bool CompositesEnabled =
+        Environment.GetEnvironmentVariable("RH_VFX_COMPOSITE") is not ("0" or "false");
+
+    /// <summary>
     /// Effects that are HELD rather than fired: refreshed every frame by their owner, looping, never fading.
     /// </summary>
     /// <remarks>
@@ -238,6 +272,10 @@ public sealed class VfxPlayer
         if (Spawn(p, assetKey, subject, tint, travelTo, fps) is { } a)
         {
             a.Seq = ++_launched;
+            // A TRAVELLING effect whose strip has a composite look is drawn as a projectile, not a strip.
+            // The flight itself (placement, clock, lifetime) stays the anim's, so nothing about timing moves.
+            if (CompositesEnabled && p.Travel == VfxTravel.ToTarget && ProjectileLooks.For(assetKey) is { } look)
+                a.Visual = new ProjectileVisual(look, (int)(a.Seq & 0x7FFFFFFF));
             _active.Add(a);
         }
     }
@@ -334,7 +372,28 @@ public sealed class VfxPlayer
                 continue;
             }
             a.Elapsed += dt;
-            if (a.Done) _active.RemoveAt(i);
+            if (a.Visual is { } flying && a.Resolved && a.Elapsed >= 0f)
+            {
+                var mark = AllocMark();
+                flying.Fly(dt, a.Life, a.Tint);
+                AllocCount(mark);
+            }
+            if (a.Done)
+            {
+                if (a.Visual is { Placed: true } landing)
+                {
+                    landing.Land();
+                    _landed.Add((landing, a.Profile.Layer));
+                }
+                _active.RemoveAt(i);
+            }
+        }
+        for (var i = _landed.Count - 1; i >= 0; i--)
+        {
+            var lingerMark = AllocMark();
+            _landed[i].Visual.Linger(dt);
+            AllocCount(lingerMark);
+            if (_landed[i].Visual.Finished) _landed.RemoveAt(i);
         }
         // A held effect lives only as long as someone asked for it THIS frame.
         foreach (var id in _held.Keys.ToList())
@@ -387,7 +446,10 @@ public sealed class VfxPlayer
             .Where(a => IsUnderLayer(a.Profile.Layer) == under && a.Elapsed >= 0f)
             .OrderBy(a => (int)a.Profile.Layer)
             .ToList();
-        if (list.Count == 0) return;
+        var residue = _landed.Any(l => IsUnderLayer(l.Layer) == under);
+        if (list.Count == 0 && !residue) return;
+        var drawsBefore = MetricsEnabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
+        var compositeSprites = 0;
 
         // Additive. These are radial GLOW effects; in the caller's AlphaBlend batch their soft edges read
         // as hard ring OUTLINES (the "reticles" bug). End the caller's batch, run additive, then restore
@@ -405,6 +467,20 @@ public sealed class VfxPlayer
                 b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, null, Rasterizer);
                 opened = true;
             }
+            if (a.Visual is { Placed: true } composite)
+            {
+                // THE PROJECTILE IS COMPOSED, NOT PLAYED (ADR-010): the strip frame is not drawn.
+                var drawMark = AllocMark();
+                composite.Draw(b);
+                AllocCount(drawMark);
+                compositeSprites += composite.LastSprites;
+                var len = (int)composite.HeadLengthPx;
+                var at = composite.Position.ToPoint();
+                var head = new Rectangle(at.X - len / 2, at.Y - len / 6, len, len / 3);
+                _debug.Add(new DebugItem(a.Profile.Id, a.Key, a.Subject, a.Profile.Layer, head, head,
+                                         at, a.HonestRatio, a.Loop, false));
+                continue;
+            }
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
             var drift = a.Drift;
             var dest = a.Placement.Frame;
@@ -416,9 +492,32 @@ public sealed class VfxPlayer
             _debug.Add(new DebugItem(a.Profile.Id, a.Key, a.Subject, a.Profile.Layer, dest, content,
                                      a.Placement.Anchor + drift, a.HonestRatio, a.Loop, a.OverBudget));
         }
+        // THE LANDED RESIDUE: the wake fading behind a head that has arrived, its sparks and its impact.
+        foreach (var (visual, layer) in _landed)
+        {
+            if (IsUnderLayer(layer) != under) continue;
+            if (!opened)
+            {
+                b.End();
+                b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, null, Rasterizer);
+                opened = true;
+            }
+            var residueMark = AllocMark();
+            visual.Draw(b);
+            AllocCount(residueMark);
+            compositeSprites += visual.LastSprites;
+        }
         if (!opened) return;
         b.End();
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, RestoreRasterizer ?? Rasterizer);
+        if (MetricsEnabled && !under)
+        {
+            var flights = _active.Count(a => a.Visual is { Placed: true });
+            var trail = _active.Where(a => a.Visual is not null).Sum(a => a.Visual!.TrailSamples);
+            Console.WriteLine($"vfx-metrics\tflights={flights}\tlanded={_landed.Count}\tsprites={compositeSprites}"
+                              + $"\ttrailSamples={trail}\tpassDraws={b.GraphicsDevice.Metrics.DrawCount - drawsBefore}\tcompositeBytes={_compositeBytes}");
+            _compositeBytes = 0;
+        }
     }
 
     /// <summary>
@@ -447,6 +546,8 @@ public sealed class VfxPlayer
             if (a.Profile.Travel == VfxTravel.ToTarget && a.TravelTo is { } t
                 && Bounds.TryBounds(t, out var target))
                 a.To = target.Rect.Center;
+            if (a.Visual is { } composite && !PlaceComposite(a, composite, s.Rect.Height))
+                a.Visual = null;   // a missing part: fall back to drawing the strip, never to nothing
             a.Resolved = true;
             if (DumpEnabled) Dump(a, honest.NativeRatio);
         }
@@ -454,6 +555,27 @@ public sealed class VfxPlayer
         {
             a.From = centre;   // Pinned: the rectangle moved with the figure
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Place a composite projectile: its path, its body size from its OWN head (never the strip's union box),
+    /// and its part textures. False if a part is missing — the caller then draws the strip instead.
+    /// </summary>
+    private bool PlaceComposite(Anim a, ProjectileVisual v, int casterHeight)
+    {
+        var look = v.Look;
+        if (_ui.Assets.Get(look.HeadKey) is not { } head || _ui.Assets.Get(look.TrailKey) is not { } trail
+            || _ui.Assets.Get(look.GlintKey) is not { } glint || _ui.Assets.Get(look.SparkKey) is not { } spark
+            || _ui.Assets.Get(look.ShardKey) is not { } shard || _ui.Assets.Get(look.FlashKey) is not { } flash)
+            return false;
+        var c = _ui.Content(look.HeadKey, 1);
+        var box = new Rectangle((int)(c.Left * head.Width), (int)(c.Top * head.Height),
+                                Math.Max(1, (int)(c.Width * head.Width)), Math.Max(1, (int)(c.Height * head.Height)));
+        v.Place(a.From.ToVector2(), a.To.ToVector2(), casterHeight, a.Tint, head, box, trail, glint, spark, shard, flash);
+        if (DumpEnabled)
+            Console.WriteLine($"vfx-projectile\tkey={a.Key}\tlook={look.HeadKey}\tcaster={casterHeight}"
+                              + $"\thead={v.HeadLengthPx:0}px\tfrom={a.From.X},{a.From.Y}\tto={a.To.X},{a.To.Y}");
         return true;
     }
 
@@ -497,6 +619,7 @@ public sealed class VfxPlayer
     public void Clear()
     {
         _active.Clear();
+        _landed.Clear();
         _held.Clear();
         _heldThisFrame.Clear();
         _debug.Clear();

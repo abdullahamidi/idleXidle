@@ -247,6 +247,38 @@ appear, it does not repeat or restart"). The reusable rules, with what each one 
 - **The 512 frame stays.** On the widest row the budget clamp already draws a trap slightly smaller;
   anything more is a world-space trap problem, not a new asset format.
 
+### 3.7 A projectile is COMPOSED, not played (ADR-010, 2026-09-23 — Seeker pilot, awaiting approval)
+
+Two PixelLab pilots tried to put a projectile's motion inside its strip. One came back static: a PNG
+translated across the arena. The other tumbled through about 110° and, because a strip is sized by the
+box around all its frames, drew the knife at 40 % of its old size. A thrown thing's motion is mostly its
+TRAIL, and only the runtime knows where the projectile was. So a projectile listed in `ProjectileLooks`
+is drawn by `ProjectileVisual`, from parts:
+
+| Layer | What it is | Seeker knife |
+|---|---|---|
+| **Head** (primary) | one white frame, drawn along the direction of travel | `fxp_seeker_knife_head`, 0.68 × the hunter's height, ±6° wobble |
+| **Core trail** (secondary) | a short, narrow, hot streak starting at the head's rear edge | 0.09 s of the real path, 0.32 × the head's thickness, 50 % toward white |
+| **Wake** (tertiary) | a longer, softer, dimmer ribbon with a small lateral wave | 0.30 s, 0.9 × thickness, tapering and dissolving with age |
+| **Glint** (tertiary) | one point of light that crosses the blade once | from 0.30 to 0.46 of the flight, rear to tip |
+| **Sparks** (tertiary) | at most 3, shed from the rear quarter, falling back | 0.22 s each |
+| **Impact** | a hot contact flash, then slim shards thrown mostly FORWARD | 0.09 s flash; 8 shards, 75 % inside ±32° of the incoming direction, gone in 0.26 s |
+
+- **The body has one size.** Head length = `HeadLength` × the caster's height, measured on the head's
+  own texture. The strip's union box, the trail and the wobble never enter it.
+- **The flight does not change.** Same from and to, same ease-out, same 1.0 s clock. The head strikes
+  when its centre is `ContactReach` × its length from the target (about 0.67 of the flight for the knife,
+  where the old strip began to fade), and the trail then tapers and dims away in 0.12 s. It never stands
+  as a block.
+- **The colour is the Source**, on every layer. The Seeker's red/pink is Body's glow.
+- **PixelLab's role is parts.** It draws the head and the glint, through the usual post-pass. Pure
+  gradients (the streak, the spark, the flash, the shard) are written by
+  `tools/asset-pipeline/v2/fxparts.py`. Do not ask PixelLab for projectile motion, rotation or a baked
+  trail.
+- **A new projectile is a new `ProjectileLook`**, not a new code path. An orb's pulse or a shard's small
+  tumble is an optional field on the look. Nothing in the shared path spins the head.
+- Projectiles that are not yet listed still follow the two-layer strip rule above.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |
