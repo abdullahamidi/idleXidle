@@ -1215,6 +1215,7 @@ public sealed class HuntScreen : IFocusActors
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
+        PresentTrace.Tick(dt);
         // THE WHEEL IS NOT SAMPLED HERE ANY MORE. It used to be read off Mouse.GetState() in this
         // method, which the host calls only while the fight is allowed to run — so the log's scroll
         // columns went dead for the whole of the authored hold, and any stretch without an Update
@@ -1648,6 +1649,7 @@ public sealed class HuntScreen : IFocusActors
     /// <param name="life">How long it holds before it starts to go; a crit lingers 1.3.</param>
     private void Say(string text, Color color, int px = 0, float life = 1f, int lift = 0)
     {
+        if (PresentTrace.Enabled) PresentTrace.Log("callout", text);
         _callouts.Add(new Callout
         {
             Text = text,
@@ -1741,6 +1743,7 @@ public sealed class HuntScreen : IFocusActors
     private void SpawnDamage(int amount, int slot, bool crit, bool skill, int hits = 1, string? critWord = null)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
+        if (PresentTrace.Enabled) PresentTrace.Log("number", $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}");
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
         // which is exactly where the wave's health bar is drawn — so a hit printed "-203" through the
         // bar and the next one printed "-344" through the first. Two unreadable numbers and an
@@ -1872,6 +1875,7 @@ public sealed class HuntScreen : IFocusActors
         ReplayHeld = hold.Held;
         HeldEventAtMs = hold.HeldAtMs;
         _playheadMs = hold.PlayheadMs;
+        PresentTrace.PlayheadMs = _playheadMs;
 
         // ── THE READY CROSSING, ARMED HERE AND NOWHERE ELSE. A pulse belongs to Update: a Draw that
         //    armed one would re-arm it every frame and the medallion would swell for as long as you
@@ -1965,6 +1969,7 @@ public sealed class HuntScreen : IFocusActors
         for (var bi = 0; bi < batch.Count; bi++)
         {
             var e = batch[bi];
+            if (PresentTrace.Enabled) PresentTrace.Log("event", $"{e.Kind}\tslot={e.Slot}\tamount={e.Amount}\tat={e.AtMs}\tcrit={e.Crit}\tskill={e.FromSkill}");
             // EVERY EFFECT USED THE SAME DEFAULT SIZE, so a glancing blow, a critical and a death all
             // burst at 208px — on a 430px champion and on swarm creatures barely 100px across. Playtest:
             // "HUNT ekranında efektlerin boyutları düzgün değil." Size is the loudest channel an effect
@@ -2051,7 +2056,11 @@ public sealed class HuntScreen : IFocusActors
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
                     // together they strobed the pack ("the enemy blinks like a disco ball", playtest
                     // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
-                    if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f) _hitFlash[e.Slot] = 1f;
+                    if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
+                    {
+                        _hitFlash[e.Slot] = 1f;
+                        if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={e.Slot}");
+                    }
                     if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
@@ -5854,6 +5863,7 @@ public sealed class HuntScreen : IFocusActors
         // which would run it backwards; either way the commitment is over.
         if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + SettleMs || _playheadMs < _clipStartMs))
         {
+            if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
             _clipName = null;
             _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
         }
@@ -5903,6 +5913,7 @@ public sealed class HuntScreen : IFocusActors
             _clipStartMs = trapMs;
             _clipName = "trap";
             _clipBeatMs = (int)trapMs;
+            if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"trap\tbeat={trapMs:0}\tspeed={_clipSpeed:0.000}");
             return;
         }
 
@@ -5932,6 +5943,7 @@ public sealed class HuntScreen : IFocusActors
         _clipStartMs = _playheadMs;
         _clipName = clip;
         _clipBeatMs = (int)beatMs.Value;
+        if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"{clip}\tbeat={beatMs.Value:0}\tspeed={_clipSpeed:0.000}\tcontactMs={contactMs:0}\tframeMs={1000f / ChampionFps / _clipSpeed:0}");
     }
 
     /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
@@ -6258,6 +6270,10 @@ public sealed class HuntScreen : IFocusActors
         _auraTotalMs = -1;
     }
 
+    // RH_PRESENT_TRACE: the champion frame last logged, so a frame is logged when it CHANGES.
+    private string? _traceClip;
+    private int _traceFrame = -1;
+
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;
 
@@ -6364,6 +6380,16 @@ public sealed class HuntScreen : IFocusActors
         // MOST SPECIFIC FIRST: the character's own clip for this Form, then the generic attack/cast it
         // stands in for. See Character.StripKeys — the art arrives a character at a time and nothing
         // may blank out while it does.
+        if (PresentTrace.Enabled)
+        {
+            var traceFrame = loop ? (int)(seconds * ChampionFps) % 8 : Math.Clamp((int)(seconds * ChampionFps), 0, 7);
+            if (clip != _traceClip || traceFrame != _traceFrame)
+            {
+                _traceClip = clip;
+                _traceFrame = traceFrame;
+                PresentTrace.Log("champ-frame", $"{clip}\tframe={traceFrame}\tbox={box.X},{box.Y},{box.Width},{box.Height}");
+            }
+        }
         foreach (var key in Character.StripKeys(clip))
             if (ActorSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
                                flip: ChampionFacesRight, record: VfxSubject.Champion)) return;

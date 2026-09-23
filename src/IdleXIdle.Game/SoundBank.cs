@@ -145,6 +145,9 @@ public sealed class SoundBank
     public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true,
                      float vary = 0f)
     {
+        // Logged as ASKED, before the enabled check: a capture runs with the bank off, and what the audit
+        // needs is the moment the screen wanted the sound, not whether a device played it.
+        if (PresentTrace.Enabled) PresentTrace.Log("sound", $"{key}\tvol={volume:0.00}\tpitch={pitch:0.00}\tpan={pan:0.00}");
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
         if (vary > 0f) pitch += ((float)_vary.NextDouble() * 2f - 1f) * vary;
 

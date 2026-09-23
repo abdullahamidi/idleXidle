@@ -272,6 +272,7 @@ public sealed class VfxPlayer
         if (Spawn(p, assetKey, subject, tint, travelTo, fps) is { } a)
         {
             a.Seq = ++_launched;
+            if (PresentTrace.Enabled) PresentTrace.Log("vfx-spawn", $"{assetKey}\tprofile={p.Id}\tsubject={subject}\ttravel={(travelTo is { } tt ? tt.ToString() : "-")}");
             // A TRAVELLING effect whose strip has a composite look is drawn as a projectile, not a strip.
             // The flight itself (placement, clock, lifetime) stays the anim's, so nothing about timing moves.
             if (CompositesEnabled && p.Travel == VfxTravel.ToTarget && ProjectileLooks.For(assetKey) is { } look)
@@ -375,8 +376,12 @@ public sealed class VfxPlayer
             if (a.Visual is { } flying && a.Resolved && a.Elapsed >= 0f)
             {
                 var mark = AllocMark();
+                var wasLanded = flying.Landed;
                 flying.Fly(dt, a.Life, a.Tint);
                 AllocCount(mark);
+                if (PresentTrace.Enabled)
+                    PresentTrace.Log(flying.Landed && !wasLanded ? "proj-contact" : flying.Landed ? "proj-residue" : "proj-head",
+                                     $"{a.Key}\tx={flying.Position.X:0}\ty={flying.Position.Y:0}\tlife={a.Life:0.000}");
             }
             if (a.Done)
             {
@@ -485,6 +490,8 @@ public sealed class VfxPlayer
             var drift = a.Drift;
             var dest = a.Placement.Frame;
             dest.Offset(drift);
+            if (PresentTrace.Enabled && a.Profile.Travel == VfxTravel.ToTarget)
+                PresentTrace.Log("proj-strip", $"{a.Key}\tx={dest.Center.X}\ty={dest.Center.Y}\tframe={a.CurrentFrame}\tlife={a.Life:0.000}\tfade={a.Fade:0.000}");
             b.Draw(a.Sheet, dest, src, VfxBlend.Light(a.Tint * a.Fade));
 
             var content = a.Placement.Content;

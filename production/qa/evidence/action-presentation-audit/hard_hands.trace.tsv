@@ -1,0 +1,99 @@
+present	483	0	champ-frame	idle	frame=3	box=420,451,400,430
+present	833	6150	champ-frame	idle	frame=6	box=420,451,400,430
+present	883	6200	champ-frame	idle	frame=7	box=420,451,400,430
+present	900	6217	clip-start	attack	beat=6700	speed=1.293	contactMs=486	frameMs=97
+present	900	6217	champ-frame	attack	frame=0	box=420,451,400,430
+present	1000	6317	champ-frame	attack	frame=1	box=420,451,400,430
+present	1100	6417	champ-frame	attack	frame=2	box=420,451,400,430
+present	1200	6517	champ-frame	attack	frame=3	box=420,451,400,430
+present	1300	6617	champ-frame	attack	frame=4	box=420,451,400,430
+present	1400	6717	event	Strike	slot=0	amount=150	at=6700	crit=False	skill=False
+present	1400	6717	sound	sfx_hit	vol=0.38	pitch=0.00	pan=0.00
+present	1400	6717	number	slot=0	amount=150	hits=1	crit=False	skill=False
+present	1400	6717	flash	slot=0
+present	1400	6717	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/0	travel=-
+present	1400	6717	event	Beat	slot=0	amount=5	at=6700	crit=False	skill=False
+present	1400	6717	champ-frame	attack	frame=5	box=460,451,400,430
+present	1483	6800	champ-frame	attack	frame=6	box=443,451,400,430
+present	1583	6900	champ-frame	attack	frame=7	box=423,451,400,430
+present	1700	7017	event	EnemyStrike	slot=0	amount=4	at=7000	crit=False	skill=False
+present	1700	7017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	1700	7017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	1700	7017	event	Skill	slot=3	amount=0	at=7000	crit=False	skill=False
+present	1700	7017	callout	SNARE
+present	1700	7017	vfx-spawn	fx_seeker_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	1700	7017	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	1700	7017	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	1700	7017	event	Strike	slot=0	amount=4	at=7000	crit=False	skill=True
+present	1700	7017	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	1700	7017	number	slot=0	amount=4	hits=1	crit=False	skill=True
+present	1700	7017	flash	slot=0
+present	1983	7300	clip-end	attack
+present	1983	7300	champ-frame	idle	frame=7	box=420,451,400,430
+present	2000	7317	champ-frame	idle	frame=0	box=420,451,400,430
+present	2100	7417	clip-start	strike	beat=8200	speed=0.798	contactMs=796	frameMs=157
+present	2100	7417	champ-frame	strike	frame=0	box=420,451,400,430
+present	2267	7583	champ-frame	strike	frame=1	box=420,451,400,430
+present	2417	7733	champ-frame	strike	frame=2	box=420,451,400,430
+present	2583	7900	champ-frame	strike	frame=3	box=420,451,400,430
+present	2700	8017	event	Aura	slot=2	amount=0	at=8000	crit=False	skill=False
+present	2700	8017	event	Break	slot=0	amount=4	at=8000	crit=False	skill=False
+present	2700	8017	event	DefenceNow	slot=0	amount=-20	at=8000	crit=False	skill=False
+present	2700	8017	event	EnemyStrike	slot=0	amount=4	at=8000	crit=False	skill=False
+present	2700	8017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	2700	8017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	2733	8050	champ-frame	strike	frame=4	box=420,451,400,430
+present	2900	8217	event	Skill	slot=0	amount=0	at=8200	crit=False	skill=False
+present	2900	8217	callout	HAMMER
+present	2900	8217	vfx-spawn	fx_seeker_strike_strip8_512	profile=cast.strike	subject=Creature/0	travel=-
+present	2900	8217	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	2900	8217	event	Strike	slot=0	amount=477	at=8200	crit=False	skill=True
+present	2900	8217	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	2900	8217	number	slot=0	amount=477	hits=1	crit=False	skill=True
+present	2900	8217	flash	slot=0
+present	2900	8217	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/0	travel=-
+present	2900	8217	event	EnemyDown	slot=0	amount=0	at=8200	crit=False	skill=False
+present	2900	8217	sound	sfx_enemy_down	vol=0.36	pitch=0.00	pan=0.00
+present	2900	8217	vfx-spawn	fx_death	profile=death.creature	subject=Creature/0	travel=-
+present	2900	8217	event	Beat	slot=0	amount=6	at=8200	crit=False	skill=False
+present	2900	8217	champ-frame	strike	frame=5	box=420,451,400,430
+present	3050	8367	champ-frame	strike	frame=6	box=420,451,400,430
+present	3200	8517	champ-frame	strike	frame=7	box=420,451,400,430
+present	3517	8833	clip-end	strike
+present	3517	8833	champ-frame	idle	frame=4	box=420,451,400,430
+present	3633	8950	champ-frame	idle	frame=5	box=420,451,400,430
+present	3700	9017	event	EnemyStrike	slot=0	amount=3	at=9000	crit=False	skill=False
+present	3700	9017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	3700	9017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	3767	9083	champ-frame	idle	frame=6	box=420,451,400,430
+present	3883	9200	champ-frame	idle	frame=7	box=420,451,400,430
+present	3900	9217	clip-start	attack	beat=9700	speed=1.293	contactMs=486	frameMs=97
+present	3900	9217	champ-frame	attack	frame=0	box=420,451,400,430
+present	4000	9317	champ-frame	attack	frame=1	box=420,451,400,430
+present	4100	9417	champ-frame	attack	frame=2	box=420,451,400,430
+present	4200	9517	champ-frame	attack	frame=3	box=420,451,400,430
+present	4300	9617	champ-frame	attack	frame=4	box=420,451,400,430
+present	4383	9700	sound	sfx_trait_lit	vol=0.16	pitch=0.00	pan=0.00
+present	4383	9700	event	Strike	slot=1	amount=135	at=9700	crit=False	skill=False
+present	4383	9700	sound	sfx_hit	vol=0.38	pitch=0.00	pan=0.00
+present	4383	9700	number	slot=1	amount=135	hits=1	crit=False	skill=False
+present	4383	9700	flash	slot=1
+present	4383	9700	event	Beat	slot=0	amount=7	at=9700	crit=False	skill=False
+present	4383	9700	champ-frame	attack	frame=5	box=460,451,400,430
+present	4483	9800	champ-frame	attack	frame=6	box=439,451,400,430
+present	4583	9900	champ-frame	attack	frame=7	box=420,451,400,430
+present	4683	10000	event	Aura	slot=2	amount=0	at=10000	crit=False	skill=False
+present	4683	10000	event	Break	slot=1	amount=1	at=10000	crit=False	skill=False
+present	4683	10000	event	DefenceNow	slot=1	amount=-5	at=10000	crit=False	skill=False
+present	4683	10000	event	EnemyStrike	slot=0	amount=3	at=10000	crit=False	skill=False
+present	4683	10000	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	4683	10000	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	4683	10000	event	Skill	slot=3	amount=0	at=10000	crit=False	skill=False
+present	4683	10000	callout	SNARE
+present	4683	10000	vfx-spawn	fx_seeker_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	4683	10000	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	4683	10000	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	4683	10000	event	Strike	slot=1	amount=3	at=10000	crit=False	skill=True
+present	4983	10300	clip-end	attack
+present	4983	10300	champ-frame	idle	frame=7	box=420,451,400,430
+present	5000	10317	champ-frame	idle	frame=0	box=420,451,400,430

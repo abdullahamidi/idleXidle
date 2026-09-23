@@ -8448,6 +8448,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 var idx = (_shotFrame - 60) / seqStride;
                 var seqPath = System.IO.Path.ChangeExtension(shotPath, null) + $"_{idx:00}.png";
+                if (PresentTrace.Enabled) PresentTrace.Log("shot", $"{idx}");
                 using var fsq = System.IO.File.Create(seqPath);
                 _canvas.SaveAsPng(fsq, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
                 // THE SAVE IS NOT GAME TIME. Encoding a full canvas takes far longer than a frame, and the

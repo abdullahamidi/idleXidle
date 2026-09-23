@@ -1,0 +1,170 @@
+present	483	0	champ-frame	idle	frame=3	box=420,451,400,430
+present	817	3133	champ-frame	idle	frame=6	box=420,451,400,430
+present	883	3200	champ-frame	idle	frame=7	box=420,451,400,430
+present	900	3217	clip-start	attack	beat=3700	speed=1.293	contactMs=486	frameMs=97
+present	900	3217	champ-frame	attack	frame=0	box=420,451,400,430
+present	1000	3317	champ-frame	attack	frame=1	box=420,451,400,430
+present	1100	3417	champ-frame	attack	frame=2	box=420,451,400,430
+present	1200	3517	champ-frame	attack	frame=3	box=420,451,400,430
+present	1300	3617	champ-frame	attack	frame=4	box=420,451,400,430
+present	1383	3700	event	Strike	slot=0	amount=140	at=3700	crit=False	skill=False
+present	1383	3700	sound	sfx_hit	vol=0.38	pitch=0.00	pan=0.00
+present	1383	3700	number	slot=0	amount=140	hits=1	crit=False	skill=False
+present	1383	3700	flash	slot=0
+present	1383	3700	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/0	travel=-
+present	1383	3700	event	Beat	slot=0	amount=3	at=3700	crit=False	skill=False
+present	1383	3700	champ-frame	attack	frame=5	box=460,451,400,430
+present	1483	3800	champ-frame	attack	frame=6	box=439,451,400,430
+present	1583	3900	champ-frame	attack	frame=7	box=420,451,400,430
+present	1683	4000	event	Aura	slot=2	amount=0	at=4000	crit=False	skill=False
+present	1683	4000	event	Break	slot=0	amount=2	at=4000	crit=False	skill=False
+present	1683	4000	event	DefenceNow	slot=0	amount=-10	at=4000	crit=False	skill=False
+present	1683	4000	event	EnemyStrike	slot=0	amount=4	at=4000	crit=False	skill=False
+present	1683	4000	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	1683	4000	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	1683	4000	event	Skill	slot=3	amount=0	at=4000	crit=False	skill=False
+present	1683	4000	callout	SNARE
+present	1683	4000	vfx-spawn	fx_seeker_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	1683	4000	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	1683	4000	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	1683	4000	event	Strike	slot=0	amount=4	at=4000	crit=False	skill=True
+present	1983	4300	clip-end	attack
+present	1983	4300	champ-frame	idle	frame=7	box=420,451,400,430
+present	2000	4317	champ-frame	idle	frame=0	box=420,451,400,430
+present	2100	4417	clip-start	projectile	beat=5200	speed=0.798	contactMs=796	frameMs=157
+present	2100	4417	champ-frame	projectile	frame=0	box=420,451,400,430
+present	2183	4500	number	slot=0	amount=4	hits=1	crit=False	skill=False
+present	2267	4583	champ-frame	projectile	frame=1	box=420,451,400,430
+present	2417	4733	champ-frame	projectile	frame=2	box=420,451,400,430
+present	2583	4900	champ-frame	projectile	frame=3	box=420,451,400,430
+present	2700	5017	event	EnemyStrike	slot=0	amount=4	at=5000	crit=False	skill=False
+present	2700	5017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	2700	5017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	2733	5050	champ-frame	projectile	frame=4	box=420,451,400,430
+present	2900	5217	event	Skill	slot=1	amount=0	at=5200	crit=False	skill=False
+present	2900	5217	callout	VOLLEY
+present	2900	5217	vfx-spawn	fx_seeker_projectile_strip8_512	profile=cast.projectile	subject=Champion	travel=Creature/0
+present	2900	5217	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	2900	5217	event	Strike	slot=0	amount=248	at=5200	crit=False	skill=True
+present	2900	5217	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	2900	5217	number	slot=0	amount=248	hits=1	crit=False	skill=True
+present	2900	5217	flash	slot=0
+present	2900	5217	event	Strike	slot=1	amount=274	at=5200	crit=False	skill=True
+present	2900	5217	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	2900	5217	number	slot=1	amount=274	hits=1	crit=False	skill=True
+present	2900	5217	flash	slot=1
+present	2900	5217	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/1	travel=-
+present	2900	5217	event	Strike	slot=2	amount=238	at=5200	crit=False	skill=True
+present	2900	5217	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	2900	5217	number	slot=2	amount=238	hits=1	crit=False	skill=True
+present	2900	5217	flash	slot=2
+present	2900	5217	event	Strike	slot=3	amount=274	at=5200	crit=False	skill=True
+present	2900	5217	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	2900	5217	number	slot=3	amount=274	hits=1	crit=False	skill=True
+present	2900	5217	flash	slot=3
+present	2900	5217	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/3	travel=-
+present	2900	5217	event	Beat	slot=0	amount=4	at=5200	crit=False	skill=False
+present	2900	5217	champ-frame	projectile	frame=5	box=420,451,400,430
+present	2917	5217	proj-head	fx_seeker_projectile_strip8_512	x=749	y=685	life=0.017
+present	2933	5233	proj-head	fx_seeker_projectile_strip8_512	x=766	y=688	life=0.033
+present	2950	5250	proj-head	fx_seeker_projectile_strip8_512	x=782	y=690	life=0.050
+present	2967	5267	proj-head	fx_seeker_projectile_strip8_512	x=798	y=692	life=0.067
+present	2983	5283	proj-head	fx_seeker_projectile_strip8_512	x=814	y=695	life=0.083
+present	3000	5300	proj-head	fx_seeker_projectile_strip8_512	x=830	y=697	life=0.100
+present	3017	5317	proj-head	fx_seeker_projectile_strip8_512	x=845	y=699	life=0.117
+present	3033	5333	proj-head	fx_seeker_projectile_strip8_512	x=860	y=701	life=0.133
+present	3050	5350	proj-head	fx_seeker_projectile_strip8_512	x=875	y=703	life=0.150
+present	3050	5367	champ-frame	projectile	frame=6	box=420,451,400,430
+present	3067	5367	proj-head	fx_seeker_projectile_strip8_512	x=889	y=705	life=0.167
+present	3083	5383	proj-head	fx_seeker_projectile_strip8_512	x=903	y=707	life=0.183
+present	3100	5400	proj-head	fx_seeker_projectile_strip8_512	x=917	y=709	life=0.200
+present	3117	5417	proj-head	fx_seeker_projectile_strip8_512	x=931	y=711	life=0.217
+present	3133	5433	proj-head	fx_seeker_projectile_strip8_512	x=944	y=713	life=0.233
+present	3150	5450	proj-head	fx_seeker_projectile_strip8_512	x=957	y=715	life=0.250
+present	3167	5467	proj-head	fx_seeker_projectile_strip8_512	x=970	y=716	life=0.267
+present	3183	5483	proj-head	fx_seeker_projectile_strip8_512	x=982	y=718	life=0.283
+present	3200	5500	proj-head	fx_seeker_projectile_strip8_512	x=994	y=720	life=0.300
+present	3200	5517	champ-frame	projectile	frame=7	box=420,451,400,430
+present	3217	5517	proj-head	fx_seeker_projectile_strip8_512	x=1006	y=721	life=0.317
+present	3233	5533	proj-head	fx_seeker_projectile_strip8_512	x=1018	y=723	life=0.333
+present	3250	5550	proj-head	fx_seeker_projectile_strip8_512	x=1029	y=725	life=0.350
+present	3267	5567	proj-head	fx_seeker_projectile_strip8_512	x=1040	y=726	life=0.367
+present	3283	5583	proj-head	fx_seeker_projectile_strip8_512	x=1051	y=728	life=0.383
+present	3300	5600	proj-head	fx_seeker_projectile_strip8_512	x=1061	y=729	life=0.400
+present	3317	5617	proj-head	fx_seeker_projectile_strip8_512	x=1071	y=731	life=0.417
+present	3333	5633	proj-head	fx_seeker_projectile_strip8_512	x=1081	y=732	life=0.433
+present	3350	5650	proj-head	fx_seeker_projectile_strip8_512	x=1091	y=733	life=0.450
+present	3367	5667	proj-head	fx_seeker_projectile_strip8_512	x=1100	y=735	life=0.467
+present	3383	5683	proj-head	fx_seeker_projectile_strip8_512	x=1109	y=736	life=0.483
+present	3400	5700	proj-head	fx_seeker_projectile_strip8_512	x=1118	y=737	life=0.500
+present	3417	5717	proj-head	fx_seeker_projectile_strip8_512	x=1126	y=738	life=0.517
+present	3433	5733	proj-head	fx_seeker_projectile_strip8_512	x=1134	y=739	life=0.533
+present	3450	5750	proj-head	fx_seeker_projectile_strip8_512	x=1142	y=740	life=0.550
+present	3467	5767	proj-head	fx_seeker_projectile_strip8_512	x=1149	y=741	life=0.567
+present	3483	5783	proj-head	fx_seeker_projectile_strip8_512	x=1157	y=743	life=0.583
+present	3500	5800	proj-head	fx_seeker_projectile_strip8_512	x=1164	y=743	life=0.600
+present	3517	5817	proj-head	fx_seeker_projectile_strip8_512	x=1170	y=744	life=0.617
+present	3517	5833	clip-end	projectile
+present	3517	5833	champ-frame	idle	frame=4	box=420,451,400,430
+present	3533	5833	proj-head	fx_seeker_projectile_strip8_512	x=1177	y=745	life=0.633
+present	3550	5850	proj-head	fx_seeker_projectile_strip8_512	x=1183	y=746	life=0.650
+present	3567	5867	proj-head	fx_seeker_projectile_strip8_512	x=1189	y=747	life=0.667
+present	3583	5883	proj-contact	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.683
+present	3600	5900	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.700
+present	3617	5917	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.717
+present	3633	5933	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.733
+present	3633	5950	champ-frame	idle	frame=5	box=420,451,400,430
+present	3650	5950	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.750
+present	3667	5967	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.767
+present	3683	5983	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.783
+present	3700	6000	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.800
+present	3700	6017	event	Aura	slot=2	amount=0	at=6000	crit=False	skill=False
+present	3700	6017	event	Break	slot=0	amount=3	at=6000	crit=False	skill=False
+present	3700	6017	event	DefenceNow	slot=0	amount=-15	at=6000	crit=False	skill=False
+present	3700	6017	event	EnemyStrike	slot=0	amount=4	at=6000	crit=False	skill=False
+present	3700	6017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	3700	6017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	3717	6017	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.817
+present	3733	6033	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.833
+present	3750	6050	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.850
+present	3767	6067	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.867
+present	3767	6083	champ-frame	idle	frame=6	box=420,451,400,430
+present	3783	6083	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.883
+present	3800	6100	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.900
+present	3817	6117	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.917
+present	3833	6133	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.933
+present	3850	6150	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.950
+present	3867	6167	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.967
+present	3883	6183	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=0.983
+present	3883	6200	champ-frame	idle	frame=7	box=420,451,400,430
+present	3900	6200	proj-residue	fx_seeker_projectile_strip8_512	x=1194	y=748	life=1.000
+present	3900	6217	clip-start	attack	beat=6700	speed=1.293	contactMs=486	frameMs=97
+present	3900	6217	champ-frame	attack	frame=0	box=420,451,400,430
+present	4000	6317	champ-frame	attack	frame=1	box=420,451,400,430
+present	4100	6417	champ-frame	attack	frame=2	box=420,451,400,430
+present	4200	6517	champ-frame	attack	frame=3	box=420,451,400,430
+present	4300	6617	champ-frame	attack	frame=4	box=420,451,400,430
+present	4400	6717	event	Strike	slot=0	amount=150	at=6700	crit=False	skill=False
+present	4400	6717	sound	sfx_hit	vol=0.38	pitch=0.00	pan=0.00
+present	4400	6717	number	slot=0	amount=150	hits=1	crit=False	skill=False
+present	4400	6717	flash	slot=0
+present	4400	6717	event	Beat	slot=0	amount=5	at=6700	crit=False	skill=False
+present	4400	6717	champ-frame	attack	frame=5	box=460,451,400,430
+present	4483	6800	champ-frame	attack	frame=6	box=443,451,400,430
+present	4583	6900	champ-frame	attack	frame=7	box=423,451,400,430
+present	4700	7017	event	EnemyStrike	slot=0	amount=4	at=7000	crit=False	skill=False
+present	4700	7017	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	4700	7017	vfx-spawn	fx_hit	profile=impact.bite	subject=Champion	travel=-
+present	4700	7017	event	Skill	slot=3	amount=0	at=7000	crit=False	skill=False
+present	4700	7017	callout	SNARE
+present	4700	7017	vfx-spawn	fx_seeker_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	4700	7017	sound	sfx_cast	vol=0.42	pitch=0.00	pan=0.00
+present	4700	7017	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	4700	7017	event	Strike	slot=0	amount=4	at=7000	crit=False	skill=True
+present	4700	7017	sound	sfx_hit	vol=0.22	pitch=0.00	pan=0.00
+present	4700	7017	number	slot=0	amount=4	hits=1	crit=False	skill=True
+present	4700	7017	flash	slot=0
+present	4700	7017	vfx-spawn	fx_weakhit	profile=impact.weak	subject=Creature/0	travel=-
+present	4983	7300	clip-end	attack
+present	4983	7300	champ-frame	idle	frame=7	box=420,451,400,430
+present	5000	7317	champ-frame	idle	frame=0	box=420,451,400,430
