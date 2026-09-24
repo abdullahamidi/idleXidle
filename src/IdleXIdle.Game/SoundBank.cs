@@ -148,14 +148,18 @@ public sealed class SoundBank
     /// always rides <see cref="SfxVolume"/>, so the settings slider governs every effect in the game.
     /// <paramref name="pitch"/> is in octaves (-1 = one octave down, +1 = one octave up, MonoGame's
     /// convention); <paramref name="vary"/> adds a random offset in ±<paramref name="vary"/> octaves
-    /// on every play, so a cue that fires constantly never repeats itself exactly.
+    /// on every play, so a cue that fires constantly never repeats itself exactly. A <paramref name="lead"/> cue
+    /// ignores <see cref="Duck"/>: it is the voice the duck makes room for.
     /// </remarks>
     public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true,
-                     float vary = 0f)
+                     float vary = 0f, bool lead = false)
     {
+        var duck = lead ? 1f : _duck;
         // Logged as ASKED, before the enabled check: a capture runs with the bank off, and what the audit
         // needs is the moment the screen wanted the sound, not whether a device played it.
-        if (PresentTrace.Enabled) PresentTrace.Log("sound", $"{key}\tvol={volume:0.00}\tpitch={pitch:0.00}\tpan={pan:0.00}");
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("sound", $"{key}\tvol={volume:0.00}\tpitch={pitch:0.00}\tpan={pan:0.00}" + (duck < 1f ? $"\tduck={duck:0.00}" : ""));
+        volume *= duck;
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
         if (vary > 0f) pitch += ((float)_vary.NextDouble() * 2f - 1f) * vary;
 
@@ -206,11 +210,24 @@ public sealed class SoundBank
     /// Play the first cue of <paramref name="keys"/> that exists, with <see cref="Play"/>'s pitch, pan and
     /// variation — the action audio chain (specific -> archetype -> generic). Returns the cue chosen, or null.
     /// </summary>
-    public string? PlayFirst(IReadOnlyList<string> keys, float volume, float pitch = 0f, float pan = 0f, float vary = 0f)
+    public string? PlayFirst(IReadOnlyList<string> keys, float volume, float pitch = 0f, float pan = 0f, float vary = 0f,
+                             bool lead = false)
     {
         if (Resolve(keys) is not { } key) return null;
-        Play(key, volume, pitch, pan, vary: vary);
+        Play(key, volume, pitch, pan, vary: vary, lead: lead);
         return key;
+    }
+
+    private float _duck = 1f;
+
+    /// <summary>
+    /// The share of its volume every one-shot NOT marked <c>lead</c> plays at (1 = no duck). An authored action
+    /// sets it while it speaks — its release, its flight, its contact — and its own cues play as lead.
+    /// </summary>
+    public float Duck
+    {
+        get => _duck;
+        set => _duck = Clamp01(value);
     }
 
     /// <summary>

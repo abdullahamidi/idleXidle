@@ -26,8 +26,11 @@ public interface IActionStage
     float CasterHeight { get; }
 }
 
-/// <summary>What one <see cref="ActionPerformance.Update"/> crossed, for the screen to voice.</summary>
-public readonly record struct PerformanceStep(bool Released, bool Contacted, Vector2 ReleaseAt, Vector2 ContactAt);
+/// <summary>
+/// What one <see cref="ActionPerformance.Update"/> crossed, for the screen to voice: the release, the contact, and
+/// at most one of the contact's secondary ticks (<paramref name="Tick"/> is where, when one is due).
+/// </summary>
+public readonly record struct PerformanceStep(bool Released, bool Contacted, Vector2 ReleaseAt, Vector2 ContactAt, Vector2? Tick = null);
 
 /// <summary>
 /// ONE PROJECTILE ACTION BEING PERFORMED (ADR-011): the champion's authored clip, the bundle in the hand,
@@ -52,12 +55,16 @@ public sealed class ActionPerformance
     private readonly Flight[] _flights;
     private Vector2 _smearFrom, _smearTo;
     private bool _smear;
+    // the contact's secondary ticks: where (the outermost targets) and how many are still due
+    private readonly Vector2[] _ticks = new Vector2[2];
+    private int _tickCount, _ticksPlayed;
 
     private sealed class Flight
     {
         public int Slot;
         public Vector2 From, To;
         public float Bulge;
+        public bool Placed;              // its path is known (the sounds need it even when no picture loaded)
         public ProjectileVisual? Visual;
     }
 
@@ -122,6 +129,13 @@ public sealed class ActionPerformance
         return (releaseMs - fitted.MarkerMs(recipe.ReleaseMarker), fitted);
     }
 
+    /// <summary>
+    /// The least time before its beat the action can start and still play its whole wind-up at the tightest fit
+    /// <see cref="Schedule"/> allows: the rigid frames, the elastic ones at their floor, and the flight.
+    /// </summary>
+    public static float MinLeadMs(ProjectileActionRecipe recipe, ActionClipTiming timing)
+        => recipe.TravelMs + timing.FitBefore(recipe.ReleaseMarker, 0f).MarkerMs(recipe.ReleaseMarker);
+
     /// <summary>The clip frame showing at <paramref name="playheadMs"/>.</summary>
     public int FrameAt(float playheadMs) => Timing.FrameAt(playheadMs - ClipStartMs);
 
@@ -171,15 +185,51 @@ public sealed class ActionPerformance
                 var n = 0;
                 foreach (var f in _flights)
                 {
-                    if (f.Visual is not { } v) continue;
-                    v.Land();
+                    if (!f.Placed) continue;
+                    f.Visual?.Land();
                     sum += f.To;
                     n++;
                 }
                 contactAt = n > 0 ? sum / n : releaseAt;
+                PlanTicks(contactAt);
             }
         }
-        return new PerformanceStep(released, contacted, releaseAt, contactAt);
+        Vector2? tick = null;
+        if (Contacted && _ticksPlayed < _tickCount
+            && playheadMs >= BeatMs + Recipe.ContactTickSpacingMs * (_ticksPlayed + 1))
+            tick = _ticks[_ticksPlayed++];
+        return new PerformanceStep(released, contacted, releaseAt, contactAt, tick);
+    }
+
+    /// <summary>
+    /// The level every OTHER one-shot should play at on <paramref name="playheadMs"/>: the recipe's
+    /// <see cref="ProjectileActionRecipe.DuckOthers"/> from the release to <see cref="ProjectileActionRecipe.DuckTailMs"/>
+    /// after the contact, 1 outside that window.
+    /// </summary>
+    public float DuckAt(float playheadMs)
+        => playheadMs >= ReleaseMs && playheadMs < BeatMs + Recipe.DuckTailMs ? Recipe.DuckOthers : 1f;
+
+    /// <summary>The outermost contacts of a fan of three or more, farthest from its centre first.</summary>
+    private void PlanTicks(Vector2 centre)
+    {
+        _tickCount = 0;
+        if (_flights.Length < 3) return;
+        var limit = Math.Min(Math.Min(Recipe.ContactTicks, _ticks.Length), _flights.Length - 1);
+        for (var k = 0; k < limit; k++)
+        {
+            float best = -1f;
+            var pick = Vector2.Zero;
+            foreach (var f in _flights)
+            {
+                if (!f.Placed) continue;
+                var d = Vector2.DistanceSquared(f.To, centre);
+                var taken = false;
+                for (var j = 0; j < _tickCount; j++) taken |= _ticks[j] == f.To;
+                if (!taken && d > best) { best = d; pick = f.To; }
+            }
+            if (best < 0f) break;
+            _ticks[_tickCount++] = pick;
+        }
     }
 
     private Vector2 Release(IActionStage stage)
@@ -202,8 +252,10 @@ public sealed class ActionPerformance
         var spark = stage.Texture(look.SparkKey);
         var shard = stage.Texture(look.ShardKey);
         var flash = stage.Texture(look.FlashKey);
-        if (material is null || edge is null || trail is null || glint is null || spark is null || shard is null || flash is null)
-            return hand;
+        // Without its pictures the throw is still PLACED — the contact sound and its ticks pan by where the
+        // blades land — it just draws nothing.
+        var drawable = material is not null && edge is not null && trail is not null && glint is not null
+                       && spark is not null && shard is not null && flash is not null;
 
         // The blades leave the hand AS THE FAN it holds: each starts where its copy in the bundle is, turned by
         // its share of the fan, and flies to its own enemy. The outermost bow apart at mid-flight, ordered by
@@ -211,8 +263,8 @@ public sealed class ActionPerformance
         var n = _flights.Length;
         var order = _flights.Select((f, i) => (i, y: stage.TryTargetBody(f.Slot, out var body) ? body.Center.Y : 0))
                             .OrderBy(t => t.y).Select(t => t.i).ToArray();
-        var centreFromPivot = new Vector2(material.Width / 2f, material.Height / 2f) - Recipe.PropPivot;
-        var tipFromCentre = (material.Width / 2f - KnifePad) * scale;
+        var centreFromPivot = material is null ? Vector2.Zero : new Vector2(material.Width / 2f, material.Height / 2f) - Recipe.PropPivot;
+        var tipFromCentre = material is null ? 0f : (material.Width / 2f - KnifePad) * scale;
         for (var rank = 0; rank < n; rank++)
         {
             var f = _flights[order[rank]];
@@ -228,8 +280,10 @@ public sealed class ActionPerformance
             f.From = from;
             f.To = contact - dir * tipFromCentre;                                  // the TIP meets the contact point
             f.Bulge = Recipe.FanBulge * stage.CasterHeight * share;
+            f.Placed = true;
+            if (!drawable) continue;
             var v = new ProjectileVisual(look, f.Slot * 97 + 13);
-            v.PlaceDriven(f.From, f.To, Tint, material, edge, scale, KnifePad, trail, glint, spark, shard, flash);
+            v.PlaceDriven(f.From, f.To, Tint, material!, edge!, scale, KnifePad, trail!, glint!, spark!, shard!, flash!);
             v.Drive(0f, 0f, f.From, ProjectileMotion.ThrowHeading(f.From, f.To, f.Bulge, Recipe.Departure, 0f));
             f.Visual = v;
         }
@@ -288,28 +342,45 @@ public sealed class ActionPerformance
     {
         if (_smear && streak is not null)
         {
-            // THE RELEASE ARC: one brief pale sweep from the coil to the release point — the smear the fast arm
-            // would leave, drawn from the two real hand positions rather than invented by an interpolator.
-            var t = (playheadMs - (ReleaseMs - Recipe.SmearMs * 0.35f)) / Recipe.SmearMs;
-            if (t is > 0f and < 1f)
+            // THE RELEASE ACCENT: the last stretch of the hand's path, arriving at the release point — drawn from
+            // the two real hand positions, not invented by an interpolator. Only the END: the whole path from the
+            // coil runs through the head (a full-length streak read as a beam from the eye), and the accent starts
+            // ON the release frame, because before it the hand is still up behind the head.
+            var t = (playheadMs - ReleaseMs) / Recipe.SmearMs;
+            if (t is >= 0f and < 1f)
             {
-                var keep = MathF.Sin(MathHelper.Pi * t);
-                var mid = (_smearFrom + _smearTo) / 2f + new Vector2(0f, -Vector2.Distance(_smearFrom, _smearTo) * 0.22f);
-                ArcSegment(b, streak, _smearFrom, mid, keep * 0.35f);
-                ArcSegment(b, streak, mid, _smearTo, keep * 0.55f);
+                var keep = 1f - t * t;
+                var span = Vector2.Distance(_smearFrom, _smearTo);
+                var over = new Vector2((_smearFrom.X + _smearTo.X) / 2f,
+                                       MathF.Min(_smearFrom.Y, _smearTo.Y) - span * Recipe.SmearLift);
+                var from = 1f - Math.Clamp(Recipe.SmearTail, 0.02f, 1f);
+                var prev = Bezier(_smearFrom, over, _smearTo, from);
+                // three pieces, thin and faint to thick and bright: the arm is fastest where it lets go
+                for (var k = 1; k <= 3; k++)
+                {
+                    var next = Bezier(_smearFrom, over, _smearTo, from + (1f - from) * k / 3f);
+                    ArcSegment(b, streak, prev, next, keep * (0.15f + 0.2f * k), 4f + 4f * k);
+                    prev = next;
+                }
             }
         }
         foreach (var f in _flights) f.Visual?.Draw(b);
     }
 
-    private void ArcSegment(SpriteBatch b, Texture2D tex, Vector2 from, Vector2 to, float opacity)
+    private static Vector2 Bezier(Vector2 a, Vector2 c, Vector2 b, float t)
+    {
+        var u = 1f - t;
+        return u * u * a + 2f * u * t * c + t * t * b;
+    }
+
+    private void ArcSegment(SpriteBatch b, Texture2D tex, Vector2 from, Vector2 to, float opacity, float width)
     {
         var d = to - from;
         var len = d.Length();
         if (len < 1f) return;
         var colour = Color.Lerp(new Color(200, 210, 225), Tint, 0.35f) * opacity;
         b.Draw(tex, from, null, VfxBlend.Light(colour), MathF.Atan2(d.Y, d.X), new Vector2(0f, tex.Height / 2f),
-               new Vector2(len / tex.Width, 14f / tex.Height), SpriteEffects.None, 0f);
+               new Vector2(len / tex.Width, width / tex.Height), SpriteEffects.None, 0f);
     }
 
     /// <summary>The first positions of the blades (after <see cref="Released"/>), for the socket overlay.</summary>

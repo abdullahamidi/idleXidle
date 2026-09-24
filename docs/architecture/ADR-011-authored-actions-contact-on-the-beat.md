@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed. The Seeker SPRAY gold-standard slice is built and filmed. It becomes Accepted when the owner approves the slice. No other action uses it until then. |
+| **Status** | Proposed. The Seeker SPRAY slice is built (2026-09-24), and its art, animation and audio polish pass is filmed (`production/qa/evidence/action-presentation-slice/polish/`). It stays Proposed until the owner has watched the polish films and the three SPRAY cues have passed a listening test (`design/audio/seeker-spray-audio-brief.md`). No other action uses it until then. |
 | **Date** | 2026-09-24 |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
@@ -36,6 +36,9 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 1. **Contact is the beat.** For a damaging projectile, the fight's event timestamp is the moment the object lands.
    - `ActionPerformance.Schedule` starts the clip at `beat − travel − time-to-release`, so the release lands `TravelMs` before the beat.
    - A late start compresses only the clip's **elastic** frames before the release. The release is never slowed.
+   - **A recovery gives way to a performed wind-up** (polish pass). A plain clip whose blow has already landed is only recovering. It yields the figure on the last frame the performed cast can still start with its minimum wind-up (`ActionPerformance.MinLeadMs`: the flight, the rigid frames, and the elastic frames at their 35 % floor).
+     - Without this, a fast TEMPO build's clips ran on to ~100 ms before the next beat. SPRAY committed at its release: no wind-up, and a ~100 ms flight.
+     - The timing model is unchanged. Only which clip holds the figure changes. A clip that has not landed its blow is never cut, and an authored clip is never cut.
    - Melee actions (future recipes) put their contact frame on the beat. Non-damaging actions may name another semantic marker.
    - There is **no** deferred-health or deferred-death buffer. Because contact is on the beat, the fight's feedback is already at the right time.
 
@@ -44,6 +47,10 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
    - elastic flags;
    - markers (`anticipation`, `commit`, `release`, `recovery`, `settle`);
    - sockets per frame.
+
+   **The follow-through outlasts the flight.** The release frame plus the follow-through frame equal `TravelMs` plus one or two 60 fps frames. The open hand is still reaching toward the pack on the frame the knives land, and the recovery starts just after. The SPRAY: 50 + 230 ms.
+   - The first build ended the follow-through 67 ms before the contact, so the arm was already down when the blades hit.
+   - Exactly `TravelMs` was tried next, and the arm dropped on the contact frame itself.
 
    A strip without a timing file keeps the old uniform 5/8 behaviour exactly. The clip's last frame is the idle's first pose, and the idle then **restarts from frame 0** (`_anim − _idleFrom`) instead of resuming at a random phase.
 
@@ -62,6 +69,8 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 
    It runs **before** the frame's events are crossed, so the blades land on the frame the hits are presented.
 
+   **The release accent** is a short smear. It shows only the last 18 % of the hand's path from the coil (`SmearTail`), lifted over the head (`SmearLift`). It starts ON the release frame and fades over 90 ms. The first version drew the whole path from the coil, which ran through the head, and at combat size it read as a beam from the eye.
+
 5. **Colour roles.**
    - The flying object is drawn in two layers: its **material** (steel, untinted, alpha-blended) and its **emissive** edge (Source-coloured light).
    - The trail, glint, sparks and contact are Source-coloured light.
@@ -69,16 +78,20 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 
 6. **Impact priority.**
    - A performed hit replaces the generic hit puff and the generic hit sound, because they describe the same blow.
-   - The enemy's flash and number stay. The flash is scaled by the recipe (`TargetFlash`, 0.38 for a four-to-five-target fan) so the pack does not turn solid white.
+   - The enemy's flash and number stay. The recipe sets the flash's strength (`TargetFlash`, 0.38 for a four-to-five-target fan), so the pack does not turn solid white.
+   - The recipe also sets the flash's shape (`TargetFlashRise` 0, `TargetFlashMs` 130). A thrown blade has already arrived on its contact frame, so its flash peaks there and is gone in 130 ms.
+   - The fight's usual flash rises over the first fifth of 200 ms, so a swing's white arrives inside the blow. That rise put the SPRAY pack's peak 40 ms after the knives and kept it grey for 200 ms, the largest change on screen after the hit.
    - The contact is directional: a hot slash carried through the target along the incoming line, a small flash, and slivers thrown mostly forward.
 
-7. **One focal point.** While the champion is performing, an ordinary bite on him is drawn at 0.55 opacity. Its number and sound are unchanged.
+7. **One focal point.** While the champion is performing, an ordinary bite on him is drawn at 0.55 opacity. Its number is unchanged, and its sound is ducked (below).
 
-8. **Audio** (`SoundBank.PlayFirst(keys, volume, pitch, pan, vary)`):
+8. **Audio** (`SoundBank.PlayFirst(keys, volume, pitch, pan, vary, lead)`):
    - Release and contact cues resolve from the most specific to the most generic: champion + action, then archetype, then the generic cue.
    - They are played by the performance at **its** release and contact, with a gentle pan (±0.3).
-   - One contact sound plays for the whole fan.
+   - **One contact** sound plays for the whole fan. A fan of three or more adds at most two quiet **ticks** (`ContactTicks`, volume 0.2) at the OUTERMOST blades, 18 and 36 ms after the contact, panned to them. Five knives are heard as one contact with width, never as five impacts.
    - A performed cast plays no `sfx_cast` at the beat and no generic `sfx_hit`.
+   - **The mix** (`DuckOthers`, `DuckTailMs`): from the release until 160 ms after the contact, every other one-shot plays at 45 % (`SoundBank.Duck`). That covers an enemy's bite, another skill's cast, a critical's cue and a death. The performance's own cues play as `lead` and are never ducked. It is a duck, not a mute, because those sounds are still combat information. `Game1.Update` resets the duck every frame, so leaving the hunt mid-throw cannot leave another screen ducked.
+   - The SPRAY's own cues exist (`sfx_seeker_spray_release/_hit/_tick`, synthesized by `tools/asset-pipeline/make_action_sfx.py`). They are measured, but no one has listened to them.
 
 9. **The callout at the release.** The skill's name is shown at the release: presentation only. The skill tile's pulse, the cooldown and every piece of state stay on the gameplay event.
 
@@ -92,11 +105,12 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 
 ## Consequences
 
-- **Timing.** The Seeker's SPRAY now starts about 600 ms before its beat instead of 844 ms.
-  - Anticipation begins at −600 ms, with a 150 ms held coil.
-  - Release at −250 ms; contact at 0.
-  - Recovery runs from +50 ms to +317 ms, and then the idle restarts.
-- **Cost.** A four-knife fan peaks at 60 sprites. At its busiest frames (contact: slash, slivers and flash for every blade)
+- **Timing** (polish pass, measured from the trace; `tools/asset-pipeline/action_timeline.py`). The fight's beat is t = 0. Everything that happens on it is presented on the first 60 fps frame after it (+17 ms). That frame carries the knives, health, flash, number and contact sound together.
+  - Clip start −583 ms, anticipation −500 ms, extreme hold −383 ms (150 ms).
+  - Release −233 ms: the pose, the sound and the blades on one frame. The flight is 250 ms.
+  - Contact +17 ms. The follow-through holds through the contact frame.
+  - The recovery starts about two frames after the contact; the idle restarts at +333 ms. The clip is still 920 ms (90/110/150/50/230/90/90/110).
+- **Cost** (re-measured in the polish pass: unchanged for four knives; a real five-knife cast peaks at 85 sprites and at most 50 effects-pass draw calls). A four-knife fan peaks at 60 sprites. At its busiest frames (contact: slash, slivers and flash for every blade)
   the effects pass rises from 16–17 draw calls to at most 39, which is +22 including the one extra Begin/End of its light
   pass. The cause is texture switches per blade. Drawing each layer across all the blades (all trails, then all
   heads) would bring that down to about +6; nothing does that yet, and 39 is well inside the "low hundreds" budget.
@@ -123,10 +137,11 @@ None directly: this is presentation, and the fight's rules and numbers do not ch
 
 ## Known limits (reported, not solved)
 
-- **Audio.** No bespoke throw or blade sounds exist yet. The release uses `sfx_cast` pitched up and the contact uses `sfx_hit` pitched up. Dropping `sfx_seeker_spray_release.wav` / `sfx_seeker_spray_hit.wav` (or the archetype `sfx_throw_release` / `sfx_blade_hit`) into `assets/audio` replaces them with no code change.
-- **Hand shape.** The release pose's hand is a closed fist, where a real release would show an open hand. It reads as a throw at combat scale because the blades leave it, but it is the weakest pose.
+- **Audio is unverified by ear.** The three SPRAY cues are synthesized candidates: measured, wired, and rendered into the review films from the trace (`tools/asset-pipeline/film_audio.py`). The capture rig is silent, and no one has listened to them on real hardware. `design/audio/seeker-spray-audio-brief.md` is the contract a replacement must meet.
+- **The hand is an edit.** The release and follow-through hands are PixelLab `edit_image_pixen` results, taken only inside a hand box (the edits also redrew part of the body, painted three knives and redrew the other arm). The edit drew bare skin. The whole hand is recoloured to his glove, as he is gloved in every other frame, idle included. A first build gloved only the back of the hand, so for 250 ms he wore a fingerless glove. At combat size it reads as an open, flicked hand. At 3× the seam between the edit and the pose is visible.
+- **Fast TEMPO snaps once.** The recovery cut happens on the last frame SPRAY can still wind up. On the RHYTHM + VOLLEY build, that frame falls between the swing's frames 6 and 7, and the figure snaps from the swing's low lunge to the upright ready pose in one frame. It is one frame, and it replaces a SPRAY with no wind-up and a 100 ms flight. Shortening the ready frame's floor would move the cut, but that is a timing-model change the owner ruled out for this pass.
 - **Other actions.** HARD HANDS, the other Seeker clips and every other champion are untouched. The old strips still disagree about the Seeker's weapon.
-- **The held field.** It still draws a hard-edged pink rectangle behind him (the old press strip).
+- **The held field (fixed in the polish pass).** The pink rectangle was `fx_press`: a white weight slab that the field aura tinted and held behind him. It is now line art (`tools/asset-pipeline/v2/press_field.py`), awaiting the owner's look.
 
 ## Alternatives rejected
 

@@ -12,13 +12,14 @@ MODE="${1:-fight}"
 COUNT="${2:-24}"
 STRIDE="${3:-6}"
 OUT="${4:-seq_$MODE}"
+START="${5:-}"   # optional: start the film this many frames later, or @N = 1 s before the first performed cast striking N+ (RH_SHOT_SEQ count,stride,start)
 . "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 WINDIR="$(winpath "$PWD")"
 dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
 rm -f "${OUT}"_[0-9][0-9].png
-RH_ENV=(RH_SHOT="$WINDIR\\$OUT.png" RH_SHOT_MODE="$MODE" RH_SHOT_SEQ="$COUNT,$STRIDE")
+RH_ENV=(RH_SHOT="$WINDIR\\$OUT.png" RH_SHOT_MODE="$MODE" RH_SHOT_SEQ="$COUNT,$STRIDE${START:+,$START}")
 # THE POSES capture.sh forwards that a RHYTHM can need too: an authored opening beat over the fight
 # (its live scrim blazes and fades — a strip is the only way to see the fade), a held coach lesson,
 # and the UI SCALE. Without these a filmstrip could only ever photograph the plain fixture.

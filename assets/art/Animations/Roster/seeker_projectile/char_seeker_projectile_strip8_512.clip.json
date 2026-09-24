@@ -4,10 +4,10 @@
   110,
   150,
   50,
-  120,
-  140,
-  140,
-  120
+  230,
+  90,
+  90,
+  110
  ],
  "elastic": [
   true,
@@ -43,8 +43,8 @@
   },
   "3": {
    "ThrowHand": [
-    0.726,
-    0.419,
+    0.731,
+    0.395,
     4
    ]
   }
@@ -53,7 +53,9 @@
   "tool": "tools/asset-pipeline/v2/keyposes.py seeker_spray",
   "jobs": {
    "f66bc55f-ffd7-4446-9695-d8c97e43a8b1": "REJECTED (3 gens): skeleton pass A, no_background. Identity and follow-through good, but the generator keyed the dark cloak out as background (fragments in ready/anticipation/return) and left a stray blob behind the head on the release.",
-   "e7d49c06-789c-4baa-b2d8-e4fe273975e6": "ACCEPTED (3 gens): skeleton pass B, opaque black ground keyed here. Solid cloak in every frame; frames 0-6 used, frame 7 replaced by the original idle frame 0 for a seamless return."
+   "e7d49c06-789c-4baa-b2d8-e4fe273975e6": "ACCEPTED (3 gens): skeleton pass B, opaque black ground keyed here. Solid cloak in every frame; frames 0-6 used, frame 7 replaced by the original idle frame 0 for a seamless return.",
+   "6b80e1bf-cff1-46d4-82ed-7f845080aeca": "USED FOR THE HAND ONLY (1 gen, edit_image_pixen of pass B #3): opened the release fist into a flicked, spread hand. The edit also redrew ~7% of the body and painted three knives, so only the hand region is taken, and the whole hand is recoloured to his glove (the edit drew bare skin).",
+   "047b1f4e-1c92-4098-b4fa-27f3e6e18ddf": "USED FOR THE HAND ONLY (1 gen, edit of pass B #4): an open, relaxed follow-through hand. The edit also redrew the other arm, so only the forward hand region is taken, recoloured the same way."
   }
  }
 }

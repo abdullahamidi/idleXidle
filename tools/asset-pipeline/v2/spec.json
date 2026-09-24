@@ -214,10 +214,9 @@
           "action": "small sparkles travel slowly around the two rings. the rings themselves stay exactly the same thickness, brightness, size and shape in every frame; nothing flashes, nothing thickens"
         },
         "press": {
-          "shape_job": "dbba7434-315a-4031-8c46-efa1bb55d1fd", "anim_job": "0f6a221b-693b-4a9b-9be1-838181707522", "archetype": "FIELD/AURA", "pinned": "first = last",
-          "status": "CONDITIONAL: within the scale budget now (1.44 -> 0.95) and a clean loop, but it reads as a plain box behind the hunter; the PRESS field's picture is an owner decision",
-          "shape": "a heavy white weight plate seen from slightly above and in front: a thick square slab with a smaller square block on top of it and four short stubby feet under it, the whole weight about as tall as it is wide and filling most of the picture with a small margin around it. bold simple solid shapes. solid white, no ground, no background, no character, no colour, on empty transparent space with nothing behind it",
-          "action": "the heavy weight presses down: it sinks a little and rises back, staying the same size, complete and equally bright in every frame; nothing flashes"
+          "built_by": "tools/asset-pipeline/v2/press_field.py (2026-09-24)", "shape_job": "0f584123-0b7f-4d75-917a-832e09229ede", "archetype": "FIELD/AURA", "pinned": "first = last",
+          "status": "REBUILT 2026-09-24 as LINE ART, awaiting the owner's look: a white ring with a downward arrow and chevrons pressing onto a bar (one create_image_pixen, 1 generation). The motion is deterministic, not generated: the ring and bar hold, the arrow group presses 0,1,2,3,4,3,2,1 source px. Post-pass as fxclips (whiten, glow, soften 1 source px, feather); check_fx_edges EDGE 0. It replaced the square weight slab that the field aura tinted pink and held behind the hunter at 1.10x his height: the pink rectangle of the SPRAY films.",
+          "rejected": { "dbba7434-315a-4031-8c46-efa1bb55d1fd + 0f6a221b-693b-4a9b-9be1-838181707522": "a literal weight slab with feet: owner decision 2026-09-23, PRESS is never a weight, box or machine" }
         }
       }
     },

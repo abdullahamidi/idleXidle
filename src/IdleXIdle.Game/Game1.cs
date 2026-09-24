@@ -2323,6 +2323,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (!_showHelp) _helpScroll = 0;
         if (!_showSettings) _settingsScroll = 0;
         if (!_showDispatches) _dispatchScroll = 0;
+        // The mix duck is re-asked every frame: only the hunt's live performance sets it (HuntScreen.
+        // UpdatePerformance), so leaving the hunt mid-throw can never leave another screen's sounds ducked.
+        _sound.Duck = 1f;
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
         // exactly one Update, and _prevMouse is overwritten in Latch() at the end of Update — so a
@@ -2911,6 +2914,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                                     $"RH_SHOT_SWAP='{pair}' cannot be posed: it needs <skill in the fixture>:<skill the build accepts>[@Source].");
                             if (woven is { } colour) _loadout.SetSource(from, colour);
                         }
+                    // RH_SHOT_TAKE=<node>[,<node>...] takes mastery nodes before the fight, so a real BUILD can be
+                    // filmed through its real route (a fast TEMPO build: blitz, volley, rhythm, brisk). Taken
+                    // as given (repair: false), the way the other harnesses do; an unknown id is refused loudly.
+                    // The same dial means "take this node" on the MASTERY fixtures too (MasteryScreen.DevTakeId,
+                    // taken at the posed instant of its reveal); only the fight family reads it here.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_TAKE")?.Trim() is { Length: > 0 } shotTake)
+                    {
+                        var ids = shotTake.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        foreach (var id in ids)
+                            if (MasteryCatalog.ById(id) is null)
+                                throw new InvalidOperationException($"RH_SHOT_TAKE: '{id}' is not a mastery node.");
+                        _mastery.RestoreTaken(_mastery.Taken.Concat(ids).Distinct().ToList(), repair: false);
+                    }
                     // THE CREATURE POSES. Which family the arena draws is the REGION's (EnemyPresentation),
                     // and which body of it, and how big its box is, is the wave's ARCHETYPE, a seeded roll.
                     // RH_SHOT_SOURCE picks the family of the region whose theme that Source is (Spirit
@@ -8451,14 +8467,27 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // capture can prove a layout; it cannot prove a rhythm — whether the swing lands on the hit, how
         // long a burst lingers, whether the cast opens as the effect appears. Assemble the strip with
         // tools/asset-pipeline/v2/filmstrip.py and LOOK at it. Fixed-step updates make it deterministic.
+        // An optional third value starts the film that many frames later: a long fight can be filmed at the
+        // one moment that matters without saving everything before it. `@N` instead starts it ON that moment:
+        // one second before the beat of the first performed cast that strikes N or more (the replay already
+        // knows). A frame offset could not hold a five-target SPRAY: crits are rolled per run, and the fight,
+        // and the wave that rolls five creatures, drifted by seconds between runs.
         if (shotPath is not null && Environment.GetEnvironmentVariable("RH_SHOT_SEQ") is { } seqSpec
-            && seqSpec.Split(',') is { Length: 2 } seqParts
+            && seqSpec.Split(',') is { Length: 2 or 3 } seqParts
             && int.TryParse(seqParts[0], out var seqCount) && int.TryParse(seqParts[1], out var seqStride)
             && seqStride > 0)
         {
-            if (_shotFrame >= 60 && (_shotFrame - 60) % seqStride == 0)
+            int seqStart;
+            if (seqParts.Length == 3 && seqParts[2].StartsWith('@') && int.TryParse(seqParts[2][1..], out var wantStruck))
             {
-                var idx = (_shotFrame - 60) / seqStride;
+                if (_seqTriggeredAt is null && _expedition.DevNextPerformedCast(1000f) is { } next && next.Targets >= wantStruck)
+                    _seqTriggeredAt = _shotFrame;
+                seqStart = _seqTriggeredAt ?? int.MaxValue;
+            }
+            else seqStart = 60 + (seqParts.Length == 3 && int.TryParse(seqParts[2], out var skip) ? Math.Max(0, skip) : 0);
+            if (_shotFrame >= seqStart && (_shotFrame - seqStart) % seqStride == 0)
+            {
+                var idx = (_shotFrame - seqStart) / seqStride;
                 var seqPath = System.IO.Path.ChangeExtension(shotPath, null) + $"_{idx:00}.png";
                 if (PresentTrace.Enabled) PresentTrace.Log("shot", $"{idx}");
                 using var fsq = System.IO.File.Create(seqPath);
@@ -8591,6 +8620,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     private int _shotFrame;
+
+    /// <summary>RIG ONLY: the frame an `@N` film (RH_SHOT_SEQ) was triggered on, once it has been.</summary>
+    private int? _seqTriggeredAt;
 
     /// <summary>RIG ONLY: true when RH_SHOT is set — the process exists to take one screenshot and exit.</summary>
     internal static readonly bool RigActive = Environment.GetEnvironmentVariable("RH_SHOT") is not null;

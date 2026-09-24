@@ -306,10 +306,22 @@ The rule is one coherent action: intention, preparation, release, motion, contac
   - Material stays material: steel is drawn untinted.
   - The Source is light: edge, glint, trail, sparks, contact.
   - The champion's motif is the object's shape.
+- **The hand tells the throw** (polish pass, 2026-09-24).
+  - The release frame shows an OPEN, flicked hand pointing along the fan, and the follow-through keeps it open. A fist on the release frame reads as a punch.
+  - The follow-through outlasts the flight (release frame + follow-through = `TravelMs` + one or two frames). The hand still reaches toward the targets on the frame they are hit, and the recovery starts just after. If the recovery starts on the contact frame, the arm drops at the hit.
+  - A hand may be corrected with a PixelLab edit (`edit_image_pixen` of the accepted key pose). Take ONLY the hand's box from it: the edits also redraw part of the body, paint props and redraw the other arm. Match the champion's own materials: the Seeker is gloved in every frame, so the whole edited hand takes his glove ramp. An edit that draws bare skin changes his costume for a quarter-second.
+  - After two failed edits, correct the hand by hand. Do not keep generating.
+- **A smear is an accent, not a path.** It shows the last part of the hand's travel only, starts on the release frame (never before it, because the hand is not there yet), and never crosses the head or face. A full-length streak from the coil read as a beam from the eye.
+- **Sound is one phrase** (`design/audio/seeker-spray-audio-brief.md`).
+  - The release is the action's own cue. The flight is silent of the action's sounds.
+  - The contact is ONE cue, with at most two quiet ticks at the outermost targets.
+  - Everything else is ducked from the release until 160 ms after the contact.
+  - A cue exists only when it has passed a listening test. A measured file is a candidate.
 - **Impact shape follows force.**
   - A blade's contact is a hot slash carried through the target along the incoming line, with slivers mostly forward. It is never a round burst.
   - A performed hit replaces the generic hit puff and thud, which describe the same blow.
   - The enemy's flash and number stay, scaled by the recipe so a fan across the whole pack does not turn it solid white.
+  - A thrown object has ARRIVED on its contact frame, so its flash peaks there and is short (SPRAY: 0.38, 130 ms, no rise). A swing's flash keeps its swell.
 - **Review gate.** A performed action is approved only when all of these read at combat size:
   - true speed and slow motion;
   - a frame sheet with its markers;
@@ -317,7 +329,9 @@ The rule is one coherent action: intention, preparation, release, motion, contac
   - effects off;
   - champion hidden;
   - the socket overlay;
-  - several consecutive casts.
+  - several consecutive casts;
+  - the widest real case (five targets), and a fast TEMPO build;
+  - the sound, rendered from the trace (`film_audio.py`) and then listened to.
 
   Technical pass is not artistic pass.
 

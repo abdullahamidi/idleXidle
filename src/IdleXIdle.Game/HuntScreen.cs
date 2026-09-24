@@ -1938,7 +1938,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
-                var left = _hitFlash[key] - dt * 5f;   // ~200 ms of life; FlashAt shapes it
+                var left = _hitFlash[key] - dt * FlashLook(key).Rate;   // ~200 ms of life (a recipe's own); FlashAt shapes it
                 if (left <= 0f) _hitFlash.Remove(key); else _hitFlash[key] = left;
             }
         // The skill tiles' cast pulses used to decay here, on a private 0.42 s clock. They are
@@ -2070,7 +2070,9 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                     if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
                     {
                         _hitFlash[e.Slot] = 1f;
-                        _hitFlashPeak[e.Slot] = performedHit ? _performance!.Recipe.TargetFlash : 1f;
+                        _hitFlashLook[e.Slot] = performedHit
+                            ? (_performance!.Recipe.TargetFlash, _performance.Recipe.TargetFlashRise, 1000f / Math.Max(1f, _performance.Recipe.TargetFlashMs))
+                            : UsualFlash;
                         if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={e.Slot}");
                     }
                     if (!auraTick && !performedHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
@@ -5930,6 +5932,17 @@ public sealed class HuntScreen : IFocusActors, IActionStage
             _clipTiming = null;
             _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
         }
+        // A RECOVERY GIVES WAY TO A PERFORMED WIND-UP (ADR-011). At a fast TEMPO every committed clip plays on
+        // to ~100 ms before the next beat, so a performed cast committed only when the figure came free: it
+        // started AT its release, skipped the whole wind-up and crossed the arena in ~100 ms (the fast-TEMPO
+        // film, 2026-09-24). A plain clip whose blow has LANDED is only recovering: it yields the figure on the
+        // last frame the cast can still start with its minimum wind-up. The timing model is unchanged.
+        if (_clipName is not null && _clipTiming is null && _playheadMs > _clipBeatMs && PerformedCastNeedsTheFigure())
+        {
+            if (PresentTrace.Enabled) PresentTrace.Log("clip-cut", $"{_clipName}\tbeat={_clipBeatMs}");
+            _clipName = null;
+            _idleFrom = _anim;
+        }
         if (_clipName is not null) return;   // committed — plays through
         if (_replay is null) return;
 
@@ -5942,9 +5955,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         //
         // A Trap is still excluded HERE because it fires on being bitten rather than on the beat, so it
         // has no beat to be aimed at. It gets its own commitment below.
-        var reactionSlots = new HashSet<int>();
-        for (var ri = 0; ri < _waveSkills.Count; ri++)
-            if (_waveSkills[ri].Def.Kind == SkillKind.Reaction) reactionSlots.Add(ri);
+        var reactionSlots = ReactionSlots();
         if (_replay.NextSkillEventAfter(_playheadMs, reactionSlots) is { } nextSkill
             && nextSkill.Slot >= 0 && nextSkill.Slot < _waveSkills.Count)
         {
@@ -6032,10 +6043,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
     private PerformCommit TryCommitPerformance(BattleEvent cast, string clip)
     {
         if (cast.Slot < 0 || cast.Slot >= _waveSkills.Count) return PerformCommit.NoRecipe;
-        if (ActionRecipes.For(Character.Id, clip) is not { } recipe) return PerformCommit.NoRecipe;
-        var stripKey = Character.StripKeys(clip).FirstOrDefault(k => _ui.Assets.Has(k));
-        if (stripKey is null || ActionClipLibrary.For(stripKey) is not { } timing || !timing.HasMarker(recipe.ReleaseMarker))
-            return PerformCommit.NoRecipe;
+        if (!TryAuthored(clip, out var recipe, out var timing)) return PerformCommit.NoRecipe;
         if (ActionPerformance.Schedule(recipe, timing, cast.AtMs, _playheadMs) is not { } plan) return PerformCommit.NotYet;
         var sk = _waveSkills[cast.Slot];
         _performance = new ActionPerformance(recipe, plan.Timing, cast.AtMs, plan.StartMs, cast.Slot, CastTargets(cast), SourceGlow(sk.Source));
@@ -6048,6 +6056,55 @@ public sealed class HuntScreen : IFocusActors, IActionStage
             PresentTrace.Log("clip-start", $"{clip}\tauthored\tbeat={cast.AtMs}\tstart={plan.StartMs:0}\trelease={_performance.ReleaseMs:0}"
                              + $"\ttargets={string.Join(",", _performance.Targets)}\trecipe={recipe.Id}");
         return PerformCommit.Committed;
+    }
+
+    /// <summary>This champion's recipe for <paramref name="clip"/> and its strip's authored timing, when both exist.</summary>
+    private bool TryAuthored(string clip, out ProjectileActionRecipe recipe, out ActionClipTiming timing)
+    {
+        recipe = null!;
+        timing = null!;
+        if (ActionRecipes.For(Character.Id, clip) is not { } r) return false;
+        var stripKey = Character.StripKeys(clip).FirstOrDefault(k => _ui.Assets.Has(k));
+        if (stripKey is null || ActionClipLibrary.For(stripKey) is not { } t || !t.HasMarker(r.ReleaseMarker)) return false;
+        recipe = r;
+        timing = t;
+        return true;
+    }
+
+    /// <summary>The slots whose skill REACTS (a Trap): they fire on a bite, not on a beat, so no clip is aimed at them.</summary>
+    private HashSet<int> ReactionSlots()
+    {
+        var slots = new HashSet<int>();
+        for (var ri = 0; ri < _waveSkills.Count; ri++)
+            if (_waveSkills[ri].Def.Kind == SkillKind.Reaction) slots.Add(ri);
+        return slots;
+    }
+
+    /// <summary>
+    /// True when the next beat the figure will play is a PERFORMED cast (the same pick
+    /// <see cref="UpdateChampionClip"/> makes: a swing due first wins) and this frame is the last one on which
+    /// it can still start with its minimum wind-up (<see cref="ActionPerformance.MinLeadMs"/>).
+    /// </summary>
+    private bool PerformedCastNeedsTheFigure()
+    {
+        if (_replay?.NextSkillEventAfter(_playheadMs, ReactionSlots()) is not { } cast
+            || cast.Slot < 0 || cast.Slot >= _waveSkills.Count) return false;
+        if (_nextChampStrikeMs > _playheadMs && _nextChampStrikeMs < cast.AtMs) return false;
+        if (ReplayHeld && HeldEventAtMs is { } heldAt && cast.AtMs >= heldAt) return false;
+        if (!TryAuthored(_waveSkills[cast.Slot].Def.ClipKey, out var recipe, out var timing)) return false;
+        return cast.AtMs - _playheadMs <= ActionPerformance.MinLeadMs(recipe, timing) + 1000f / 60f;
+    }
+
+    /// <summary>
+    /// Rig only (RH_SHOT_SEQ `@N`): the next PERFORMED cast whose beat is within <paramref name="withinMs"/> of the
+    /// playhead, with how many enemies it strikes. Read from the replay, which already holds the wave's events.
+    /// </summary>
+    internal (int Targets, float BeatMs)? DevNextPerformedCast(float withinMs)
+    {
+        if (_replay?.NextSkillEventAfter(_playheadMs, ReactionSlots()) is not { } cast
+            || cast.Slot < 0 || cast.Slot >= _waveSkills.Count || cast.AtMs - _playheadMs > withinMs) return null;
+        if (!TryAuthored(_waveSkills[cast.Slot].Def.ClipKey, out _, out _)) return null;
+        return (CastTargets(cast).Count, cast.AtMs);
     }
 
     /// <summary>The enemies <paramref name="cast"/> strikes (see <see cref="ActionTargets.StruckBy"/>).</summary>
@@ -6063,6 +6120,9 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         if (_performance is not { } p) return;
         if (_playheadMs < p.ClipStartMs - 1f) { _performance = null; return; }   // rewound past it (a seek)
         var step = p.Update(_playheadMs, dt, this);
+        // THE MIX: from the release to the contact's ring every other one-shot plays ducked. Game1 resets the duck
+        // each frame, and this runs before the frame's events are crossed, so their sounds hear it.
+        if (Sound is not null) Sound.Duck = p.DuckAt(_playheadMs);
         if (step.Released)
         {
             if (PresentTrace.Enabled)
@@ -6074,14 +6134,21 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                 var (text, colour) = CalloutFor(_waveSkills[p.SkillSlot].Def.Style);
                 Say(text, colour);
             }
-            Sound?.PlayFirst(p.Recipe.ReleaseCues, p.Recipe.ReleaseVolume, p.Recipe.ReleasePitch, Pan(step.ReleaseAt.X, p.Recipe.PanWidth), 0.04f);
+            Sound?.PlayFirst(p.Recipe.ReleaseCues, p.Recipe.ReleaseVolume, p.Recipe.ReleasePitch, Pan(step.ReleaseAt.X, p.Recipe.PanWidth), 0.04f, lead: true);
         }
         if (step.Contacted)
         {
             if (PresentTrace.Enabled) PresentTrace.Log("contact", $"{p.Recipe.Id}\tx={step.ContactAt.X:0}\ty={step.ContactAt.Y:0}\tknives={p.Targets.Count}");
             // ONE contact sound for the fan: the blades land together, and four copies of one sample are one
             // sample four times as loud (and the bank's own repeat rule would drop three of them anyway).
-            Sound?.PlayFirst(p.Recipe.ContactCues, p.Recipe.ContactVolume, p.Recipe.ContactPitch, Pan(step.ContactAt.X, p.Recipe.PanWidth), 0.05f);
+            Sound?.PlayFirst(p.Recipe.ContactCues, p.Recipe.ContactVolume, p.Recipe.ContactPitch, Pan(step.ContactAt.X, p.Recipe.PanWidth), 0.05f, lead: true);
+        }
+        // the fan's WIDTH: a quiet tick for an outer target, a few ms after the one contact. Unthrottled on
+        // purpose — the performance already bounds them to two, and the bank's 90 ms gap would eat the second.
+        if (step.Tick is { } tick && Sound?.Resolve(p.Recipe.ContactTickCues) is { } tickKey)
+        {
+            if (PresentTrace.Enabled) PresentTrace.Log("contact-tick", $"x={tick.X:0}\ty={tick.Y:0}");
+            Sound.Play(tickKey, p.Recipe.ContactTickVolume, 0f, Pan(tick.X, p.Recipe.PanWidth), throttle: false, vary: 0.08f, lead: true);
         }
         if (p.Finished(_playheadMs) && _clipName is null) _performance = null;
     }
@@ -6233,11 +6300,21 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         var life = _hitFlash.GetValueOrDefault(slot);
         if (life <= 0f) return 0f;
         var t = 1f - life;                       // 0 at the blow, 1 at the end
-        return (t < 0.2f ? t / 0.2f : 1f - (t - 0.2f) / 0.8f) * _hitFlashPeak.GetValueOrDefault(slot, 1f);
+        var look = FlashLook(slot);
+        var shape = t < look.Rise ? t / look.Rise : 1f - (t - look.Rise) / Math.Max(1e-3f, 1f - look.Rise);
+        return shape * look.Peak;
     }
 
-    /// <summary>How strong each creature's current flash is (1 = the fight's usual). A performed hit sets its recipe's.</summary>
-    private readonly Dictionary<int, float> _hitFlashPeak = new();
+    /// <summary>The fight's usual flash: full strength, swelling over its first fifth, ~200 ms of life.</summary>
+    private static readonly (float Peak, float Rise, float Rate) UsualFlash = (1f, 0.2f, 5f);
+
+    /// <summary>
+    /// Each creature's current flash: its peak (1 = the fight's usual), the share of its life spent rising, and how
+    /// fast its life runs out (per second). A performed hit sets its recipe's (<see cref="ProjectileActionRecipe.TargetFlashMs"/>).
+    /// </summary>
+    private readonly Dictionary<int, (float Peak, float Rise, float Rate)> _hitFlashLook = new();
+
+    private (float Peak, float Rise, float Rate) FlashLook(int slot) => _hitFlashLook.GetValueOrDefault(slot, UsualFlash);
 
     /// <summary>
     /// Draw a creature's white silhouette over itself at <paramref name="strength"/>. EVERY enemy path

@@ -134,6 +134,26 @@ public class ActionPresentationTest
         Assert.Equal(releaseMs, late.StartMs + late.Timing.MarkerMs(recipe.ReleaseMarker), 2);
     }
 
+    [Fact]
+    public void test_the_tightest_start_keeps_the_extreme_hold_and_the_whole_flight()
+    {
+        // Arrange: the latest a recovering clip may hold the figure before a performed cast (HuntScreen cuts there)
+        var recipe = ActionRecipes.SeekerSpray;
+        var t = SeekerThrow();
+        const float beat = 5200f;
+        var minLead = ActionPerformance.MinLeadMs(recipe, t);
+
+        // Act
+        var plan = ActionPerformance.Schedule(recipe, t, beat, beat - minLead)!.Value;
+
+        // Assert: the flight is whole, the rigid frames (the extreme hold) are untouched, only the elastic shrank
+        Assert.Equal(beat - recipe.TravelMs, plan.StartMs + plan.Timing.MarkerMs(recipe.ReleaseMarker), 2);
+        Assert.Equal(beat - minLead, plan.StartMs, 2);
+        var commit = t.Markers["commit"];
+        Assert.Equal(t.FrameMs[commit], plan.Timing.FrameMs[commit]);
+        Assert.True(minLead < recipe.TravelMs + t.MarkerMs(recipe.ReleaseMarker));
+    }
+
     private sealed class Stage : IActionStage
     {
         public bool TryActorFrame(string clipKey, int frame, out SpriteFrame drawn, out int frameSize)
@@ -176,6 +196,61 @@ public class ActionPresentationTest
         Assert.True(p.IsBeat(5200) && !p.IsBeat(5217));
     }
 
+    private static List<(float At, PerformanceStep Step)> Perform(int[] targets)
+    {
+        var recipe = ActionRecipes.SeekerSpray;
+        var t = SeekerThrow();
+        const float beat = 5200f;
+        var plan = ActionPerformance.Schedule(recipe, t, beat, beat - recipe.TravelMs - t.MarkerMs(recipe.ReleaseMarker))!.Value;
+        var p = new ActionPerformance(recipe, plan.Timing, beat, plan.StartMs, 1, targets, Color.Red);
+        var stage = new Stage();
+        var steps = new List<(float, PerformanceStep)>();
+        for (var ph = plan.StartMs; ph <= beat + 400f; ph += 1000f / 60f)
+            steps.Add((ph, p.Update(ph, 1f / 60f, stage)));
+        return steps;
+    }
+
+    [Fact]
+    public void test_a_five_blade_fan_is_heard_as_one_contact_and_two_outer_ticks()
+    {
+        // Arrange / Act: the whole pack struck (the stage lays the bodies out left to right, 90 px apart)
+        var steps = Perform(new[] { 0, 1, 2, 3, 4 });
+
+        // Assert: ONE contact, then at most the recipe's two ticks, after it, at the OUTERMOST blades
+        var contact = Assert.Single(steps, s => s.Step.Contacted);
+        var ticks = steps.Where(s => s.Step.Tick is not null).ToList();
+        Assert.Equal(ActionRecipes.SeekerSpray.ContactTicks, ticks.Count);
+        Assert.All(ticks, k => Assert.True(k.At > contact.At));
+        var xs = ticks.Select(k => k.Step.Tick!.Value.X).OrderBy(x => x).ToArray();
+        Assert.True(xs[0] < contact.Step.ContactAt.X && xs[1] > contact.Step.ContactAt.X, "one tick on each flank");
+    }
+
+    [Fact]
+    public void test_a_narrow_fan_has_no_ticks()
+    {
+        var steps = Perform(new[] { 0, 1 });
+        Assert.Single(steps, s => s.Step.Contacted);
+        Assert.DoesNotContain(steps, s => s.Step.Tick is not null);
+    }
+
+    [Fact]
+    public void test_other_sounds_duck_only_from_the_release_to_the_contact_ring()
+    {
+        // Arrange
+        var recipe = ActionRecipes.SeekerSpray;
+        var t = SeekerThrow();
+        const float beat = 5200f;
+        var plan = ActionPerformance.Schedule(recipe, t, beat, beat - recipe.TravelMs - t.MarkerMs(recipe.ReleaseMarker))!.Value;
+        var p = new ActionPerformance(recipe, plan.Timing, beat, plan.StartMs, 1, new[] { 0 }, Color.Red);
+
+        // Act / Assert: a duck, never a mute, and only inside the window
+        Assert.InRange(recipe.DuckOthers, 0.2f, 0.9f);
+        Assert.Equal(1f, p.DuckAt(p.ReleaseMs - 1f));
+        Assert.Equal(recipe.DuckOthers, p.DuckAt(p.ReleaseMs));
+        Assert.Equal(recipe.DuckOthers, p.DuckAt(beat + recipe.DuckTailMs - 1f));
+        Assert.Equal(1f, p.DuckAt(beat + recipe.DuckTailMs));
+    }
+
     [Fact]
     public void test_one_blade_per_enemy_the_cast_actually_strikes()
     {
@@ -215,6 +290,36 @@ public class ActionPresentationTest
         Assert.NotNull(t.Socket(release, "ThrowHand"));
         Assert.Contains(release - 1, t.FramesWithSocket("ThrowHand"));   // the coil the smear sweeps from
         Assert.True(t.Elastic[0] && !t.Elastic[release], "the wait stretches with tempo; the release never does");
+    }
+
+    [Fact]
+    public void test_the_seeker_throw_holds_its_follow_through_until_the_knives_land()
+    {
+        // Arrange
+        var t = SeekerThrow();
+        var release = t.Markers["release"];
+
+        // Act: the release frame plus the follow-through frame, from the moment the knives leave
+        var reaching = t.FrameMs[release] + t.FrameMs[release + 1];
+
+        // Assert: the open hand still reaches toward the pack on the contact frame, and the recovery begins within
+        // two 60 fps frames after it (not before it: the arm was down when the blades hit; not on it: it dropped AT the hit)
+        var travel = ActionRecipes.SeekerSpray.TravelMs;
+        Assert.InRange(reaching, travel + 1000f / 60f, travel + 2 * 1000f / 60f);
+    }
+
+    [Fact]
+    public void test_a_thrown_blades_flash_peaks_on_the_contact_and_is_shorter_than_a_swings()
+    {
+        // Arrange: the recipe the fight's flash takes for a performed hit, and the defaults every other hit keeps
+        var spray = ActionRecipes.SeekerSpray;
+        var usual = new ProjectileActionRecipe { Id = "x", ClipKey = "x", PropKey = "x", PropEdgeKey = "x", Look = spray.Look };
+
+        // Assert: no swell (the blade has arrived), a shorter life, a reduced peak; a swing's flash is unchanged
+        Assert.Equal(0f, spray.TargetFlashRise);
+        Assert.True(spray.TargetFlashMs < usual.TargetFlashMs);
+        Assert.InRange(spray.TargetFlash, 0.2f, 0.6f);
+        Assert.Equal((1f, 0.2f, 200f), (usual.TargetFlash, usual.TargetFlashRise, usual.TargetFlashMs));
     }
 
     [Fact]

@@ -102,8 +102,32 @@ public sealed record ProjectileActionRecipe
     public float ContactVolume { get; init; } = 0.34f;
     public float ContactPitch { get; init; }
 
+    /// <summary>
+    /// The contact's SECONDARY voice: quiet ticks for the outermost targets of a wide fan, so four or five blades
+    /// landing together are heard as one contact with width — never as four or five equal impacts.
+    /// </summary>
+    public IReadOnlyList<string> ContactTickCues { get; init; } = Array.Empty<string>();
+
+    /// <summary>At most this many ticks (for fans of three or more), and their volume.</summary>
+    public int ContactTicks { get; init; }
+    public float ContactTickVolume { get; init; } = 0.2f;
+
+    /// <summary>How far apart the ticks fall after the main contact, in ms: a spread the ear reads as width.</summary>
+    public float ContactTickSpacingMs { get; init; } = 18f;
+
     /// <summary>How far a sound pans at the arena's edge (0 = centred, 1 = hard). Kept small on purpose.</summary>
     public float PanWidth { get; init; } = 0.3f;
+
+    /// <summary>
+    /// THE MIX WHILE THE ACTION SPEAKS: every OTHER one-shot (an enemy's bite, another skill's cast, a death) plays
+    /// at this share of its volume from the release until <see cref="DuckTailMs"/> after the contact, so the
+    /// release, the silent flight and the contact are heard as one phrase. A duck, never a mute: those sounds are
+    /// still combat information. 1 = no duck.
+    /// </summary>
+    public float DuckOthers { get; init; } = 1f;
+
+    /// <summary>How long after the contact the other sounds stay ducked, in ms: the contact's own ring.</summary>
+    public float DuckTailMs { get; init; } = 160f;
 
     /// <summary>The action's weight on screen.</summary>
     public ActionWeight Weight { get; init; } = ActionWeight.Skill;
@@ -115,14 +139,35 @@ public sealed record ProjectileActionRecipe
     /// </summary>
     public float TargetFlash { get; init; } = 1f;
 
+    /// <summary>
+    /// The struck enemy's flash ENVELOPE: how long it lives (ms) and what share of that it spends rising. The fight's
+    /// usual flash swells over its first fifth of 200 ms, so a SWING's white arrives inside the blow. A thrown blade
+    /// has already arrived on its contact frame: its flash peaks there (rise 0) and is gone sooner. The swell put
+    /// the pack's peak 40 ms after the knives and held it grey for 200 ms, the largest change on screen after the hit.
+    /// </summary>
+    public float TargetFlashMs { get; init; } = 200f;
+    public float TargetFlashRise { get; init; } = 0.2f;
+
     /// <summary>The generic hit puff and hit sound give way to this action's own contact, which describes the same blow.</summary>
     public bool ReplacesGenericHit { get; init; } = true;
 
     /// <summary>The skill's name is announced at the release (presentation only), not at the beat.</summary>
     public bool CalloutAtRelease { get; init; } = true;
 
-    /// <summary>How long the release arc — the smear the hand leaves between the coil and the release — lasts, in ms.</summary>
+    /// <summary>
+    /// How long the release accent — the smear the hand leaves as it arrives at the release — lasts, in ms. It
+    /// appears ON the release frame (never before: the hand is not there yet) and fades out over this time.
+    /// </summary>
     public float SmearMs { get; init; } = 90f;
+
+    /// <summary>
+    /// How much of the hand's path the accent shows, as the share nearest the release (0.18 = the last 18%). The
+    /// whole path from the coil crosses the head; only its end belongs to the throw.
+    /// </summary>
+    public float SmearTail { get; init; } = 0.18f;
+
+    /// <summary>How high the hand's path arcs over the chord from the coil to the release, as a share of its length.</summary>
+    public float SmearLift { get; init; } = 0.5f;
 }
 
 /// <summary>Which actions have a recipe, by champion and Form. Everything else plays exactly as it did.</summary>
@@ -145,13 +190,17 @@ public static class ActionRecipes
         PropPivot = new Vector2(22.5f, 12f),
         FanBulge = 0.11f,
         TargetFlash = 0.38f,
+        TargetFlashMs = 130f,
+        TargetFlashRise = 0f,
         Look = ProjectileLooks.SeekerThrowingKnife,
         ReleaseCues = new[] { "sfx_seeker_spray_release", "sfx_throw_release", "sfx_cast" },
-        ReleaseVolume = 0.24f,
-        ReleasePitch = 0.45f,
+        ReleaseVolume = 0.40f,
         ContactCues = new[] { "sfx_seeker_spray_hit", "sfx_blade_hit", "sfx_hit" },
-        ContactVolume = 0.36f,
-        ContactPitch = 0.18f,
+        ContactVolume = 0.50f,
+        ContactTickCues = new[] { "sfx_seeker_spray_tick", "sfx_blade_tick" },
+        ContactTicks = 2,
+        ContactTickVolume = 0.2f,
+        DuckOthers = 0.45f,
         Weight = ActionWeight.Skill,
     };
 
