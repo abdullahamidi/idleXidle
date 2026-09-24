@@ -5942,7 +5942,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
             _mastery?.Spent ?? 0,
             _loadout.Skills.Count * 97 + _loadout.KeystoneIds.Count * 31
-            + _loadout.Skills.Sum(k => k.SkillId?.GetHashCode() ?? 0));
+            + WrappingSum(_loadout.Skills.Select(k => k.SkillId?.GetHashCode() ?? 0)));
+
+    /// <summary>
+    /// The sum of <paramref name="values"/>, wrapping on overflow. Never <c>Enumerable.Sum</c> over hash codes:
+    /// Sum is CHECKED, a string's hash is a random int per process, and two of them overflow a quarter of the
+    /// time — <see cref="BuildSnapshot"/> used it, and the hunter's first fall crashed the game (0.1.0-alpha).
+    /// </summary>
+    internal static int WrappingSum(IEnumerable<int> values)
+    {
+        var sum = 0;
+        foreach (var v in values) sum = unchecked(sum + v);
+        return sum;
+    }
 
     /// <summary>The descent count at the moment the change landed — the retry is the next one after it.</summary>
     private int? _retryFrom;
