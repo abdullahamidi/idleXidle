@@ -65,6 +65,10 @@
              Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- ADR-011: an action strip's AUTHORED TIMING (per-frame durations, markers, sockets) sits beside it. -->
+    <Content Include="..\..\assets\art\**\*.clip.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <!-- Audio, same pipeline-free drop-in as the art: raw WAVs copied to output, loaded by SoundBank. -->
     <Content Include="..\..\assets\audio\**\*.wav" Link="assets\audio\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

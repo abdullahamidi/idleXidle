@@ -55,9 +55,15 @@ public sealed class SoundBank
     /// </param>
     public SoundBank(bool disable = false)
     {
+        var root = Path.Combine(AppContext.BaseDirectory, "assets", "audio");
+        // THE NAMES ARE KNOWN EVEN WHEN THE BANK IS OFF. A capture runs silent, and an action's cue chain
+        // (specific -> archetype -> generic) must still resolve to the cue it WOULD play, so the trace can
+        // say which sound belongs at the release and which at the contact.
+        if (Directory.Exists(root))
+            foreach (var path in Directory.EnumerateFiles(root, "*.wav", SearchOption.AllDirectories))
+                _known.Add(Path.GetFileNameWithoutExtension(path));
         if (disable) { _enabled = false; return; }
 
-        var root = Path.Combine(AppContext.BaseDirectory, "assets", "audio");
         if (!Directory.Exists(root)) { _enabled = false; return; }
 
         var loadedAny = false;
@@ -86,6 +92,8 @@ public sealed class SoundBank
             _enabled = false;
         }
     }
+
+    private readonly HashSet<string> _known = new(StringComparer.OrdinalIgnoreCase);
 
     public int Count => _sounds.Count;
     public bool Enabled => _enabled;
@@ -181,6 +189,28 @@ public sealed class SoundBank
     {
         foreach (var k in keys)
             if (_sounds.ContainsKey(k)) { Play(k, volume); return; }
+    }
+
+    /// <summary>
+    /// The first cue of <paramref name="keys"/> that exists on disk (loaded or not), or null: the most specific
+    /// sound an action has. An action ships with its generic fallback and gains its own sound by adding a file.
+    /// </summary>
+    public string? Resolve(IReadOnlyList<string> keys)
+    {
+        foreach (var k in keys)
+            if (_known.Contains(k)) return k;
+        return null;
+    }
+
+    /// <summary>
+    /// Play the first cue of <paramref name="keys"/> that exists, with <see cref="Play"/>'s pitch, pan and
+    /// variation — the action audio chain (specific -> archetype -> generic). Returns the cue chosen, or null.
+    /// </summary>
+    public string? PlayFirst(IReadOnlyList<string> keys, float volume, float pitch = 0f, float pan = 0f, float vary = 0f)
+    {
+        if (Resolve(keys) is not { } key) return null;
+        Play(key, volume, pitch, pan, vary: vary);
+        return key;
     }
 
     /// <summary>

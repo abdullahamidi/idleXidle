@@ -90,6 +90,40 @@ public static class ProjectileMotion
         return 1f - MathF.Sqrt(remaining);
     }
 
+    /// <summary>
+    /// THE PHYSICAL THROW (ADR-011): how far along its line a thrown blade is at <paramref name="u"/> (0..1 of
+    /// its flight). Nearly constant speed — <paramref name="departure"/> 0.06 leaves 6 % faster than average and
+    /// arrives 6 % slower — so it keeps its momentum through contact instead of coasting in on the old ease-out.
+    /// </summary>
+    public static float ThrowProgress(float u, float departure)
+    {
+        var t = Math.Clamp(u, 0f, 1f);
+        return t + departure * t * (1f - t);
+    }
+
+    /// <summary>
+    /// Where a thrown blade is at <paramref name="u"/>: along its line by <see cref="ThrowProgress"/>, bowed
+    /// sideways by <paramref name="bulge"/> pixels at mid-flight (the fan separating), exactly at
+    /// <paramref name="to"/> at u = 1.
+    /// </summary>
+    public static Vector2 ThrowPosition(Vector2 from, Vector2 to, float bulge, float departure, float u)
+    {
+        var line = to - from;
+        var normal = line.LengthSquared() > 1e-6f ? Vector2.Normalize(new Vector2(-line.Y, line.X)) : Vector2.Zero;
+        var t = Math.Clamp(u, 0f, 1f);
+        return from + line * ThrowProgress(t, departure) + normal * (bulge * MathF.Sin(MathHelper.Pi * t));
+    }
+
+    /// <summary>The direction a thrown blade is moving at <paramref name="u"/> (its heading), unit length.</summary>
+    public static Vector2 ThrowHeading(Vector2 from, Vector2 to, float bulge, float departure, float u)
+    {
+        var line = to - from;
+        var normal = line.LengthSquared() > 1e-6f ? Vector2.Normalize(new Vector2(-line.Y, line.X)) : Vector2.Zero;
+        var t = Math.Clamp(u, 0f, 1f);
+        var v = line * (1f + departure * (1f - 2f * t)) + normal * (bulge * MathHelper.Pi * MathF.Cos(MathHelper.Pi * t));
+        return v.LengthSquared() > 1e-6f ? Vector2.Normalize(v) : Vector2.UnitX;
+    }
+
     /// <summary>How far the head still has to go, in canvas pixels.</summary>
     public static float Remaining(Vector2 position, Vector2 target) => Vector2.Distance(position, target);
 

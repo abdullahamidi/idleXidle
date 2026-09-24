@@ -1,0 +1,59 @@
+{
+ "frameMs": [
+  90,
+  110,
+  150,
+  50,
+  120,
+  140,
+  140,
+  120
+ ],
+ "elastic": [
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  true,
+  true
+ ],
+ "markers": {
+  "anticipation": 1,
+  "commit": 2,
+  "release": 3,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "1": {
+   "ThrowHand": [
+    0.368,
+    0.413,
+    -115
+   ]
+  },
+  "2": {
+   "ThrowHand": [
+    0.344,
+    0.324,
+    -140
+   ]
+  },
+  "3": {
+   "ThrowHand": [
+    0.726,
+    0.419,
+    4
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/keyposes.py seeker_spray",
+  "jobs": {
+   "f66bc55f-ffd7-4446-9695-d8c97e43a8b1": "REJECTED (3 gens): skeleton pass A, no_background. Identity and follow-through good, but the generator keyed the dark cloak out as background (fragments in ready/anticipation/return) and left a stray blob behind the head on the release.",
+   "e7d49c06-789c-4baa-b2d8-e4fe273975e6": "ACCEPTED (3 gens): skeleton pass B, opaque black ground keyed here. Solid cloak in every frame; frames 0-6 used, frame 7 replaced by the original idle frame 0 for a seamless return."
+  }
+ }
+}

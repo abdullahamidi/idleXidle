@@ -566,6 +566,24 @@ public sealed class VfxPlayer
     }
 
     /// <summary>
+    /// Open the VFX pass's own premultiplied-additive batch for light drawn by someone else (a performance's
+    /// blades, ADR-011) — the same blend, sampler and rasterizer as the effects — and <see cref="EndLight"/>
+    /// restores the caller's alpha-blended batch.
+    /// </summary>
+    public void BeginLight(SpriteBatch b)
+    {
+        b.End();
+        b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, null, Rasterizer);
+    }
+
+    /// <summary>Close a <see cref="BeginLight"/> batch and restore the caller's alpha-blended one.</summary>
+    public void EndLight(SpriteBatch b)
+    {
+        b.End();
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, RestoreRasterizer ?? Rasterizer);
+    }
+
+    /// <summary>
     /// Place a composite projectile: its path, its body size from its OWN head (never the strip's union box),
     /// and its part textures. False if a part is missing — the caller then draws the strip instead.
     /// </summary>

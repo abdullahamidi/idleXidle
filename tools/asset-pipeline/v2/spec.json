@@ -16,7 +16,8 @@
   "roster": {
     "route": "character", "size": 128, "rotation": "south-east", "clips": ["idle", "attack", "cast", "death"],
     "dest": "roster", "key": "char_{id}_{clip}_strip8_512", "still": "char_{id}_base",
-    "done": { "seeker": { "character_id": "22e6d4d3-a470-462c-a39c-bfb67315e08a" } },
+    "done": { "seeker": { "character_id": "22e6d4d3-a470-462c-a39c-bfb67315e08a",
+                         "actions": {"projectile": {"method": "ADR-011 key poses: animate_with_skeleton_v3 from the idle frame 0, assembled by keyposes.py seeker_spray", "accepted": "e7d49c06-789c-4baa-b2d8-e4fe273975e6 (opaque black ground, keyed by the tool; frames 0-6 + the idle's frame 0)", "rejected": "f66bc55f-ffd7-4446-9695-d8c97e43a8b1 (no_background keyed the dark cloak out; stray blob on the release)", "prop": "assets/art/Props/prop_seeker_throwing_knife.png, drawn by seeker_knife.py (not generated)"}} } },
     "items": {
       "seeker":    { "look": "a lean human hooded ranger, an ordinary adult person with a plain human face, wearing a fitted dark leather jerkin and bracers, a short knife at the belt, hood up, watchful, standing in a ready fighting stance",
                      "attack": "melee attack: draws the knife back, lunges forward and slashes hard across to the front, then returns fully to the starting stance by the last frame" },

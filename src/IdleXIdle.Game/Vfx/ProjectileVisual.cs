@@ -34,6 +34,10 @@ public sealed class ProjectileVisual
     private int _sparksShed;
 
     private Texture2D? _head, _trailTex, _glint, _spark, _shard, _flash;
+    // DRIVEN (ADR-011): a performance moves the head along its own path and says when it lands; the head is a
+    // material sprite (drawn by DrawMaterial, untinted) with an emissive edge (_head) drawn as light.
+    private Texture2D? _material;
+    private bool _driven;
     private Vector2 _headOrigin;
     private Vector2 _from, _to, _dir, _pos;
     private float _headLen, _headThick, _headScale;
@@ -87,7 +91,8 @@ public sealed class ProjectileVisual
         get
         {
             if (!Landed) return false;
-            var tail = MathF.Max(MathF.Max(Look.LandedTrailSeconds, Look.SparkSeconds), MathF.Max(Look.ImpactSeconds, Look.FlashSeconds));
+            var tail = MathF.Max(MathF.Max(Look.LandedTrailSeconds, Look.SparkSeconds),
+                                 MathF.Max(MathF.Max(Look.ImpactSeconds, Look.FlashSeconds), Look.ImpactSlash > 0f ? Look.ImpactSlashSeconds : 0f));
             return _time - _arrivedAt > tail;
         }
     }
@@ -116,6 +121,58 @@ public sealed class ProjectileVisual
     }
 
     /// <summary>
+    /// Place a DRIVEN flight (ADR-011): the head is <paramref name="material"/> drawn at the thrower's own
+    /// <paramref name="pixelScale"/> — so it is exactly as big in the air as in the hand — with
+    /// <paramref name="edge"/> as its Source-coloured edge light. A performance then moves it with
+    /// <see cref="Drive"/> and lands it with <see cref="Land"/>.
+    /// </summary>
+    /// <param name="to">Where its centre is at contact (the performance aims the tip at the target).</param>
+    /// <param name="pixelScale">Arena pixels per texture pixel: the actor's draw scale.</param>
+    /// <param name="padPx">The transparent margin around the object in its texture, per side, in texture pixels.</param>
+    public void PlaceDriven(Vector2 from, Vector2 to, Color tint, Texture2D material, Texture2D edge, float pixelScale, int padPx,
+                            Texture2D trail, Texture2D glint, Texture2D spark, Texture2D shard, Texture2D flash)
+    {
+        _from = from;
+        _to = to;
+        _tint = tint;
+        var d = to - from;
+        _dir = d.LengthSquared() > 1e-6f ? Vector2.Normalize(d) : Vector2.UnitX;
+        _pos = from;
+        _material = material;
+        _head = edge; _trailTex = trail; _glint = glint; _spark = spark; _shard = shard; _flash = flash;
+        _headScale = pixelScale;
+        _headLen = Math.Max(1, material.Width - 2 * padPx) * pixelScale;
+        _headThick = Math.Max(1, material.Height - 2 * padPx) * pixelScale;
+        _headOrigin = new Vector2(material.Width / 2f, material.Height / 2f);
+        _contactLife = 1f;
+        _driven = true;
+        Placed = true;
+    }
+
+    /// <summary>True when a performance moves this head (<see cref="PlaceDriven"/>), not its own clock.</summary>
+    public bool Driven => _driven;
+
+    /// <summary>
+    /// Move a DRIVEN head to <paramref name="position"/>, travelling along <paramref name="heading"/>, at
+    /// <paramref name="u"/> (0..1) of its flight. It samples its trail and sheds its sparks exactly as a
+    /// self-flying head does; it does NOT land itself — contact is the performance's decision (the beat).
+    /// </summary>
+    public void Drive(float dt, float u, Vector2 position, Vector2 heading)
+    {
+        if (!Placed) return;
+        if (Landed) { Linger(dt); return; }
+        _time += dt;
+        var next = Math.Clamp(u, 0f, 1f);
+        if (dt > 0f && next > _life) _lifeRate = (next - _life) / dt;
+        _life = next;
+        _pos = position;
+        if (heading.LengthSquared() > 1e-6f) _dir = Vector2.Normalize(heading);
+        _trail.Push(Rear(), _time);
+        ShedSparks();
+        Step(_sparks, dt, drag: 7f);
+    }
+
+    /// <summary>
     /// Advance the flight to <paramref name="life"/> (0..1 of the flight), sampling the trail. When the tip
     /// reaches the target (<see cref="ProjectileLook.ContactReach"/>) the flight lands by itself; after that
     /// this only lets the residue age.
@@ -132,8 +189,13 @@ public sealed class ProjectileVisual
         _pos = Vector2.Lerp(_from, _to, ProjectileMotion.Ease(_life));
         _trail.Push(Rear(), _time);
         if (ProjectileMotion.Remaining(_pos, _to) <= _headLen * Look.ContactReach) { Land(); return; }
+        ShedSparks();
+        Step(_sparks, dt, drag: 7f);
+    }
 
-        // SPARKS: 1-3 per flight, shed from the rear quarter, falling back relative to the travel.
+    /// <summary>SPARKS: 1-3 per flight, shed from the rear quarter, falling back relative to the travel.</summary>
+    private void ShedSparks()
+    {
         while (_sparksShed < _sparks.Length && _life >= ProjectileMotion.SparkLife(_sparksShed, _sparks.Length, _seed))
         {
             var j = _sparksShed++;
@@ -146,7 +208,6 @@ public sealed class ProjectileVisual
                 Born = _time, Life = Look.SparkSeconds, Live = true,
             };
         }
-        Step(_sparks, dt, drag: 7f);
     }
 
     /// <summary>
@@ -193,6 +254,21 @@ public sealed class ProjectileVisual
             ps[i].Velocity *= keep;
         }
     }
+
+    /// <summary>
+    /// Draw a material head (<see cref="ProjectileLook.MaterialKey"/>) into the caller's ALPHA-BLENDED batch: the
+    /// object as it is, untinted. Nothing for a pure-energy head, or once it has landed.
+    /// </summary>
+    public void DrawMaterial(SpriteBatch b)
+    {
+        if (!Placed || Landed || _material is null) return;
+        var angle = HeadAngle();
+        b.Draw(_material, _pos, null, Color.White, angle, _headOrigin, _headScale, HeadFlip(), 0f);
+    }
+
+    private float HeadAngle() => MathF.Atan2(_dir.Y, _dir.X) + ProjectileMotion.Wobble(_time, Look.WobbleDegrees, Look.WobbleHz, _seed * 0.37f);
+
+    private SpriteEffects HeadFlip() => _dir.X < 0f ? SpriteEffects.FlipVertically : SpriteEffects.None;
 
     /// <summary>Draw the composite into the caller's additive batch (<see cref="VfxBlend.PremultipliedAdditive"/>).</summary>
     public void Draw(SpriteBatch b)
@@ -256,17 +332,20 @@ public sealed class ProjectileVisual
         if (!Landed)
         {
             // 4. THE HEAD — the gameplay element: one size, forward-readable, a small wobble.
-            var angle = MathF.Atan2(_dir.Y, _dir.X) + ProjectileMotion.Wobble(_time, Look.WobbleDegrees, Look.WobbleHz, _seed * 0.37f);
-            var flip = _dir.X < 0f ? SpriteEffects.FlipVertically : SpriteEffects.None;
-            // LAUNCH: crisp at once, not a fade-in — 60 % on the frame it is placed, full on the next.
-            var appear = Math.Clamp(0.6f + _time / 0.04f, 0f, 1f);
+            var angle = HeadAngle();
+            var flip = HeadFlip();
+            // LAUNCH: crisp at once, not a fade-in — 60 % on the frame it is placed, full on the next. A driven
+            // head leaves a hand that was already holding it, so it is simply there.
+            var appear = _driven ? 1f : Math.Clamp(0.6f + _time / 0.04f, 0f, 1f);
             for (var i = Look.AfterImages; i >= 1; i--)
             {
                 var back = _pos - _dir * _headLen * 0.14f * i;
                 b.Draw(_head, back, null, VfxBlend.Light(_tint * (appear * (i == 1 ? 0.35f : 0.16f))), angle, _headOrigin, _headScale, flip, 0f);
                 LastSprites++;
             }
-            b.Draw(_head, _pos, null, VfxBlend.Light(_tint * appear), angle, _headOrigin, _headScale, flip, 0f);
+            // A material head's body is drawn by DrawMaterial; here only its EDGE is light, in the Source colour.
+            var body = _material is null ? _tint * appear : Color.Lerp(_tint, Color.White, 0.3f) * (Look.EdgeBrightness * appear);
+            b.Draw(_head, _pos, null, VfxBlend.Light(body), angle, _headOrigin, _headScale, flip, 0f);
             LastSprites++;
             // PRE-IMPACT: the last ~80 ms, a little extra light on the head, never a bigger head.
             var pre = PreImpact();
@@ -301,6 +380,18 @@ public sealed class ProjectileVisual
         {
             // 6. THE IMPACT — a hot instant at contact, then shards carrying the incoming direction.
             var since = _time - _arrivedAt;
+            // THE CONTACT SLASH: the blade's force carried on through the target along the line it came in on,
+            // thin, hot and gone in ~100 ms — sliding forward as it dies, never growing back.
+            if (_trailTex is not null && Look.ImpactSlash > 0f && since < Look.ImpactSlashSeconds)
+            {
+                var k = since / Look.ImpactSlashSeconds;
+                var keep = ProjectileMotion.Fall(since, Look.ImpactSlashSeconds, 1.2f);
+                var tip = _to + _dir * _headLen * 0.5f;
+                var start = tip - _dir * _headLen * Look.ImpactSlash * (0.35f - 0.3f * k);
+                var end = tip + _dir * _headLen * Look.ImpactSlash * (0.25f + 0.45f * k);
+                Segment(b, _trailTex, start, end, _headThick * 0.55f * (1f - 0.5f * k),
+                        Color.Lerp(_tint, Color.White, 0.45f) * keep);
+            }
             if (_flash is not null && since < Look.FlashSeconds)
             {
                 var keep = ProjectileMotion.Fall(since, Look.FlashSeconds, 1.5f);

@@ -25,7 +25,17 @@ namespace IdleXIdle.Game.Vfx;
 public sealed record ProjectileLook
 {
     /// <summary>The head: one frame, drawn pointing along +X, white (the Source tint colours it).</summary>
+    /// <remarks>With a <see cref="MaterialKey"/>, this is the head's EMISSIVE mask (its edge light), not its body.</remarks>
     public required string HeadKey { get; init; }
+
+    /// <summary>
+    /// The head's MATERIAL texture, drawn as it is and never tinted: steel stays steel (ADR-011's colour roles).
+    /// Null for a head that is pure energy, whose body is the Source-tinted <see cref="HeadKey"/>.
+    /// </summary>
+    public string? MaterialKey { get; init; }
+
+    /// <summary>How bright the emissive edge is over a material head, as an opacity (light = opacity²).</summary>
+    public float EdgeBrightness { get; init; } = 0.75f;
 
     /// <summary>
     /// THE BODY-SIZE CONTRACT: the head's visible LENGTH as a share of the caster's visible height. The
@@ -126,6 +136,16 @@ public sealed record ProjectileLook
     public float ShardWhite { get; init; } = 0.2f;
     /// <summary>The contact flash's size, as a share of the head's length.</summary>
     public float FlashSize { get; init; } = 0.45f;
+    /// <summary>
+    /// THE CONTACT SLASH (ADR-011): a hot streak carried THROUGH the contact point along the incoming line, as
+    /// a share of the head's length (0 = none). A blade's force goes on in the direction it came from; this is
+    /// that force, drawn — the impact's primary shape, where a round burst would say "explosion".
+    /// </summary>
+    public float ImpactSlash { get; init; }
+
+    /// <summary>How long the contact slash lives, in seconds.</summary>
+    public float ImpactSlashSeconds { get; init; } = 0.09f;
+
     /// <summary>How long the flash lives, in seconds: a hot instant, not a glow.</summary>
     public float FlashSeconds { get; init; } = 0.09f;
 
@@ -153,6 +173,60 @@ public static class ProjectileLooks
         SparkKey = "fxp_spark_dot",
         ShardKey = "fxp_shard_sliver",
         FlashKey = "fxp_flash_soft",
+    };
+
+    /// <summary>
+    /// THE SEEKER's canonical THROWING KNIFE in flight (ADR-011, the SPRAY slice): the same steel object his hand
+    /// holds, at his pixel scale (~99 px). The steel is its material; the Source is only in its edge light, its
+    /// glint, its trail and its contact. Tuned as a FAMILY: SPRAY throws four or five of these at once.
+    /// </summary>
+    /// <remarks>
+    /// Its size is not a share of the caster any more: a performance places it at the actor's own draw scale,
+    /// so it is exactly as big in the air as in the hand. The trail is shorter and thinner than the ADR-010
+    /// knife's, because a ~100 px blade with a 300 px wake reads as a spear.
+    /// </remarks>
+    public static readonly ProjectileLook SeekerThrowingKnife = new()
+    {
+        HeadKey = "prop_seeker_throwing_knife_edge",
+        MaterialKey = "prop_seeker_throwing_knife",
+        HeadLength = 0.24f,
+        EdgeBrightness = 0.5f,
+        WobbleDegrees = 4f,
+        WobbleHz = 3.2f,
+        TrailKey = "fxp_trail_soft",
+        CoreSeconds = 0.05f,
+        CoreWidth = 0.45f,
+        CoreBrightness = 0.9f,
+        CoreWhite = 0.45f,
+        WakeSeconds = 0.13f,
+        WakeWidth = 0.8f,
+        WakeBrightness = 0.55f,
+        WakeFalloff = 1.1f,
+        WakeWave = 0.015f,
+        LandedTrailSeconds = 0.07f,
+        GlintKey = "fxp_glint_star",
+        GlintStart = 0.25f,
+        GlintEnd = 0.55f,
+        GlintSize = 0.32f,
+        SparkKey = "fxp_spark_dot",
+        Sparks = 1,
+        SparkSeconds = 0.16f,
+        SparkSize = 0.06f,
+        ShardKey = "fxp_shard_sliver",
+        FlashKey = "fxp_flash_soft",
+        ImpactShards = 5,
+        ImpactForward = 0.6f,
+        ImpactSpread = 24f,
+        ImpactReach = 0.6f,
+        ImpactSeconds = 0.2f,
+        ShardLength = 0.2f,
+        ShardThickness = 0.24f,
+        ShardWhite = 0.3f,
+        FlashSize = 0.3f,
+        FlashSeconds = 0.06f,
+        ImpactSlash = 0.95f,
+        ImpactSlashSeconds = 0.1f,
+        PreImpactSeconds = 0.06f,
     };
 
     private static readonly Dictionary<string, ProjectileLook> ByStrip = new(StringComparer.Ordinal)

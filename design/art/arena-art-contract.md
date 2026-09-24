@@ -279,6 +279,48 @@ is drawn by `ProjectileVisual`, from parts:
   tumble is an optional field on the look. Nothing in the shared path spins the head.
 - Projectiles that are not yet listed still follow the two-layer strip rule above.
 
+### 3.8 An important action is PERFORMED from key poses (ADR-011, 2026-09-24 — Seeker SPRAY slice, awaiting approval)
+
+The rule is one coherent action: intention, preparation, release, motion, contact, consequence, recovery. The player should not be noticing the separate systems (clip, effect, number, sound) that make it.
+
+- **The contact is the fight's beat.** A projectile's clip starts early enough that it releases one flight (about 250 ms for a thrown blade) before the beat. The blade lands on the beat, together with the fight's health, flash, number, death and contact sound.
+- **Clips have authored timing.** A `<strip>.clip.json` beside the strip gives:
+  - each frame's duration;
+  - the elastic frames (the wait and the settle, which absorb TEMPO);
+  - markers: `anticipation`, `commit`, `release`, `recovery`, `settle`;
+  - hand sockets.
+
+  Its last frame is the idle's first pose, so the idle restarts cleanly. A strip without a timing file keeps the old uniform "contact on frame 5 of 8".
+- **Key poses, not "eight frames of an attack".**
+  - Pose the action as 18-joint skeletons.
+  - Generate with `animate_with_skeleton_v3` from ONE reference frame of the champion, so his identity holds.
+  - Generate on an opaque ground: the no-background mode keyed the Seeker's dark cloak away as background.
+  - Key it with `keyposes.py`, which also places the frames with the champion's own idle transform (pixel-exact, so the switch from idle and back never pops).
+  - Test every pose as a flat silhouette at HUNT size.
+  - Record every job, accepted or rejected, with the reason.
+- **Props are the same object in the hand and in the air.**
+  - A thrown prop is drawn at a hand socket until the release. The projectile is the same texture at the same scale, so the ratio is exactly 1:1.
+  - The Seeker's THROWING KNIFE (`assets/art/Props/prop_seeker_throwing_knife.png`, drawn by `seeker_knife.py`) is a kunai-style blade, 30 source px long: about 99 px on screen, 0.24 of his height.
+  - It is not his MELEE blade (the curved knife of his strike and attack clips), and his idle shows neither. SPRAY draws the bundle from his belt on the ready frame.
+- **Colour roles.**
+  - Material stays material: steel is drawn untinted.
+  - The Source is light: edge, glint, trail, sparks, contact.
+  - The champion's motif is the object's shape.
+- **Impact shape follows force.**
+  - A blade's contact is a hot slash carried through the target along the incoming line, with slivers mostly forward. It is never a round burst.
+  - A performed hit replaces the generic hit puff and thud, which describe the same blow.
+  - The enemy's flash and number stay, scaled by the recipe so a fan across the whole pack does not turn it solid white.
+- **Review gate.** A performed action is approved only when all of these read at combat size:
+  - true speed and slow motion;
+  - a frame sheet with its markers;
+  - silhouettes;
+  - effects off;
+  - champion hidden;
+  - the socket overlay;
+  - several consecutive casts.
+
+  Technical pass is not artistic pass.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

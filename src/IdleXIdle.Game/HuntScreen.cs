@@ -20,6 +20,7 @@ using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
+using IdleXIdle.Game.Presentation;
 using IdleXIdle.Game.Vfx;
 
 namespace IdleXIdle.Game;
@@ -40,7 +41,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class HuntScreen : IFocusActors
+public sealed class HuntScreen : IFocusActors, IActionStage
 {
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -1425,6 +1426,8 @@ public sealed class HuntScreen : IFocusActors
         // reaches here with the playhead back at zero, and a clip left standing from the last wave
         // held the figure on its first frame for the whole opening wave (review 2026-08-25).
         _clipName = null;
+        _clipTiming = null;
+        _performance = null;
 
         // THE WAVE BEING SHOWN, captured BEFORE the push: PushWave resolves wave+1 and, on a clear, counts
         // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
@@ -1798,6 +1801,8 @@ public sealed class HuntScreen : IFocusActors
         {
             _enemyWindup = 0f;
             _clipName = null;   // a clip never survives the wave it was swung in
+            _clipTiming = null;
+            _performance = null;
             // ...AND THE HOST MAY KEEP THE NEXT PACK OFF THE STAGE (HoldNextWave): the break plays every
             // beat of its own, then rests on the empty stage until it is let go.
             if (ClearBeat.Tick(ref _breakTimer, dt, HoldNextWave)) BeginWave();   // ...which arms the arrival itself now
@@ -1953,6 +1958,7 @@ public sealed class HuntScreen : IFocusActors
         // The champion's clip: one committed swing at a time, aimed at the next beat.
         UpdateChampionClip();
 
+        UpdatePerformance(dt);
         var batch = _replay.Advance(_playheadMs);
         // Which blows in THIS batch have already been folded into another's number. A field, not a
         // local: this runs every frame and §93 forbids a per-frame allocation.
@@ -1999,13 +2005,18 @@ public sealed class HuntScreen : IFocusActors
                     // that cast's — the whole pack flashed, four damage numbers printed as skill hits and
                     // four hit sounds fired at once.
                     var auraTick = e.FromSkill && e.AtMs == auraAtMs;
+                    // IMPACT PRIORITY (ADR-011): a blow the champion PERFORMED has its own contact — the blade's
+                    // directional impact and its contact sound — so the generic puff and thud, which describe
+                    // the same physical event, give way. The flash and the number stay: they are the enemy's.
+                    var performedHit = !auraTick && e.FromSkill && _performance is { } performer
+                                       && performer.IsBeat(e.AtMs) && performer.Recipe.ReplacesGenericHit;
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
                     // already announced them, and four projectile impacts on top of it were "two sounds at
                     // once" (playtest 2026-08-26). An aura tick is silent: it hums, it does not strike.
-                    if (!auraTick) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
+                    if (!auraTick && !performedHit) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
                     // The number is the blow: the event's amount, over the creature that took it.
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
@@ -2059,9 +2070,10 @@ public sealed class HuntScreen : IFocusActors
                     if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
                     {
                         _hitFlash[e.Slot] = 1f;
+                        _hitFlashPeak[e.Slot] = performedHit ? _performance!.Recipe.TargetFlash : 1f;
                         if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={e.Slot}");
                     }
-                    if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
+                    if (!auraTick && !performedHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
                     }
@@ -2072,7 +2084,11 @@ public sealed class HuntScreen : IFocusActors
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f, vary: 0.06f);   // same thud pitched down: taking, not giving
-                    PlayFx(VfxProfiles.ImpactBite, VfxSubject.Champion, Ember);
+                    // ONE FOCAL POINT (ADR-011): while the champion is performing an action, an ordinary bite on
+                    // him is drawn quieter — it still lands and still shows its number, but it does not put a red
+                    // burst on the throwing arm at the moment the eye should be on the hand and the blades.
+                    PlayFx(VfxProfiles.ImpactBite, VfxSubject.Champion,
+                           _performance is { } acting && !acting.ClipOver(_playheadMs) ? Ember * 0.55f : Ember);
                     HunterHit(e);   // the Health the hunter lost, as a number — nothing for a shielded or prevented bite
                     break;
                 case BattleEventKind.Skill:
@@ -2094,16 +2110,19 @@ public sealed class HuntScreen : IFocusActors
                     // re-armed it would be a tile that blinks for as long as you look at it.
                     UiMotion.Flash(SkillCastKey(e.Slot), UiMotion.Transition);
                     var (text, colour) = CalloutFor(castDef.Style);
-                    if (ShowSkillCallouts) Say(text, colour);   // settings: SKILL NAMES hides exactly this
+                    // A PERFORMED cast (ADR-011) was announced at its release, launched from the hand and voiced
+                    // there; at the beat — its contact — the fight's own hits carry it.
+                    var performed = _performance is { } perf && perf.SkillSlot == e.Slot && perf.IsBeat(e.AtMs);
+                    if (ShowSkillCallouts && !(performed && _performance!.Recipe.CalloutAtRelease)) Say(text, colour);   // settings: SKILL NAMES hides exactly this
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
                     // batch has already applied the kill, so "first alive" would point past a creature the
                     // cast just killed and the flash would land on its neighbour.
                     int? castTarget = null;
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
-                    PlaySkillVfx(castDef, castSk.Source, castTarget);
+                    if (!performed) PlaySkillVfx(castDef, castSk.Source, castTarget);
                     if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
-                    Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
+                    if (!performed) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
                     // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
                     // to the roll now (see the Strike case), and the answer keeps the cast's own thud
@@ -2624,6 +2643,28 @@ public sealed class HuntScreen : IFocusActors
         }
     }
 
+    /// <summary>
+    /// RH_SHOT_SOCKETS: every live hand socket as a crosshair, and each blade's first position — the review of
+    /// "does the knife leave the hand, or appear near it".
+    /// </summary>
+    private void DrawSocketOverlay(SpriteBatch b)
+    {
+        if (_performance is not { } p) return;
+        var frame = p.FrameAt(_playheadMs);
+        if (p.Timing.Socket(frame, p.Recipe.HandSocket) is { } socket
+            && ((IActionStage)this).TryActorFrame(p.Recipe.ClipKey, frame, out var drawn, out var size))
+        {
+            var at = ActorSocketMap.ToArena(drawn, size, frame, socket).ToPoint();
+            _ui.Fill(b, new Rectangle(at.X - 14, at.Y - 1, 29, 3), new Color(80, 255, 140));
+            _ui.Fill(b, new Rectangle(at.X - 1, at.Y - 14, 3, 29), new Color(80, 255, 140));
+        }
+        foreach (var v in p.LaunchPoints)
+        {
+            var at = v.ToPoint();
+            _ui.Fill(b, new Rectangle(at.X - 5, at.Y - 5, 11, 11), new Color(255, 220, 60) * 0.8f);
+        }
+    }
+
     private void DrawArena(SpriteBatch b, HuntOverlay overlay)
     {
         // EVERY FIGURE IS PLACED BEFORE ANY OF THEM IS DRAWN. The effects pass resolves against what
@@ -2636,15 +2677,35 @@ public sealed class HuntScreen : IFocusActors
         // UNDER the figures: the ground ring the pack stands in, and the field behind the body. This
         // tier did not exist before — one flat effects pass ran after both figures, so §68's layer
         // vocabulary had nowhere to land and a field could only ever haze the champion it wrapped.
-        _vfx.DrawUnder(b);
+        if (!ShotNoVfx) _vfx.DrawUnder(b);
 
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
         // Champion (arena left). Name/HP live in the top-left HUD.
-        DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);
+        if (!ShotNoChamp)
+        {
+            DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);
+            // THE BUNDLE IN THE HAND (ADR-011): the same knives that will fly, drawn at his hand socket.
+            _performance?.DrawProp(b, this, _playheadMs);
+        }
+        // The flying blades' STEEL, over every figure, in the normal batch: material, not light.
+        var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
+        if (!ShotNoVfx) _performance?.DrawMaterial(b);
 
-        _vfx.DrawOver(b);
+        if (!ShotNoVfx) _vfx.DrawOver(b);
+        // ...and everything about them that IS light, in one additive pass of its own.
+        if (!ShotNoVfx && _performance is { } performer)
+        {
+            _vfx.BeginLight(b);
+            performer.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
+            _vfx.EndLight(b);
+            // the performance's own cost: its blades' sprites and the draw calls from its material to its light
+            // (the effects pass between them is counted too, so this is an upper bound)
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("perf-draw", $"sprites={performer.SpriteCount}\tdraws={b.GraphicsDevice.Metrics.DrawCount - perfDraws}\treleased={performer.Released}");
+        }
+        if (ShotSockets) DrawSocketOverlay(b);
         DrawCallouts(b);
         // The death flash used to be drawn HERE, inside the arena pass — whose rasterizer scissors
         // everything to ArenaRect, so the "full screen" flash was silently cropped to the arena
@@ -5861,10 +5922,12 @@ public sealed class HuntScreen : IFocusActors
         // held frame is the pose the action ends in; without it the cut to idle was the "did it finish?"
         // the playtest could not read) — or the playhead is BEHIND the clip's start (a rewound fixture),
         // which would run it backwards; either way the commitment is over.
-        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + SettleMs || _playheadMs < _clipStartMs))
+        var clipEnds = _clipTiming is { } authored ? _clipStartMs + authored.TotalMs : _clipStartMs + ClipMs / _clipSpeed + SettleMs;
+        if (_clipName is not null && (_playheadMs >= clipEnds || _playheadMs < _clipStartMs))
         {
             if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
             _clipName = null;
+            _clipTiming = null;
             _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
         }
         if (_clipName is not null) return;   // committed — plays through
@@ -5872,6 +5935,7 @@ public sealed class HuntScreen : IFocusActors
 
         float? beatMs = null;
         string? clip = null;
+        BattleEvent? skillEvent = null;
         // EACH FORM THROWS ITS OWN SHAPE. The clip is named after the Form, and Character.StripKeys
         // falls back to the old attack/cast pair for any character whose strip is not generated yet —
         // so a Strike is still a swing and a Mark is still a cast until the art lands.
@@ -5886,6 +5950,7 @@ public sealed class HuntScreen : IFocusActors
         {
             beatMs = nextSkill.AtMs;
             clip = _waveSkills[nextSkill.Slot].Def.ClipKey;
+            skillEvent = nextSkill;
         }
         // The basic attack's swing. It is a real action now (MIGHT's hit, at TEMPO's cadence) and the
         // sim holds one lock for swings and casts alike, so this clip can never start inside a cast nor
@@ -5894,6 +5959,7 @@ public sealed class HuntScreen : IFocusActors
         {
             beatMs = _nextChampStrikeMs;
             clip = "attack";
+            skillEvent = null;
         }
         // THE TRAP, WHICH IS NOT AN ACTION. It answers the enemy's bite, off the beat, so it can never
         // be aimed at one — and for the whole life of the fight it therefore had no champion animation
@@ -5925,6 +5991,17 @@ public sealed class HuntScreen : IFocusActors
         // stands in idle rather than half-way through a cast the card has not introduced yet.
         if (ReplayHeld && HeldEventAtMs is { } heldAt && beatMs.Value >= heldAt) return;
 
+        // THE AUTHORED ACTION (ADR-011). A cast whose Form has a recipe for this champion is PERFORMED: its
+        // clip starts so that its release lands one flight before the beat, and the beat is the contact.
+        // Too early for it is "not yet" — never a fall-through into the old 5/8 clip.
+        if (skillEvent is { } cast && clip is not null)
+            switch (TryCommitPerformance(cast, clip))
+            {
+                case PerformCommit.Committed:
+                case PerformCommit.NotYet:
+                    return;
+            }
+
         // EVERY action fills its share of the BEAT (ClipShareOfBeat): the sim acts on the
         // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
         // before the next action's clip may start, and a fast build visibly fights fast.
@@ -5945,6 +6022,94 @@ public sealed class HuntScreen : IFocusActors
         _clipBeatMs = (int)beatMs.Value;
         if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"{clip}\tbeat={beatMs.Value:0}\tspeed={_clipSpeed:0.000}\tcontactMs={contactMs:0}\tframeMs={1000f / ChampionFps / _clipSpeed:0}");
     }
+
+    private enum PerformCommit { NoRecipe, NotYet, Committed }
+
+    /// <summary>
+    /// Commit the champion to PERFORMING <paramref name="cast"/> (ADR-011) when its Form has a recipe and its
+    /// strip an authored timing: the clip, its fitted timing and the performance, whose contact is the beat.
+    /// </summary>
+    private PerformCommit TryCommitPerformance(BattleEvent cast, string clip)
+    {
+        if (cast.Slot < 0 || cast.Slot >= _waveSkills.Count) return PerformCommit.NoRecipe;
+        if (ActionRecipes.For(Character.Id, clip) is not { } recipe) return PerformCommit.NoRecipe;
+        var stripKey = Character.StripKeys(clip).FirstOrDefault(k => _ui.Assets.Has(k));
+        if (stripKey is null || ActionClipLibrary.For(stripKey) is not { } timing || !timing.HasMarker(recipe.ReleaseMarker))
+            return PerformCommit.NoRecipe;
+        if (ActionPerformance.Schedule(recipe, timing, cast.AtMs, _playheadMs) is not { } plan) return PerformCommit.NotYet;
+        var sk = _waveSkills[cast.Slot];
+        _performance = new ActionPerformance(recipe, plan.Timing, cast.AtMs, plan.StartMs, cast.Slot, CastTargets(cast), SourceGlow(sk.Source));
+        _clipTiming = plan.Timing;
+        _clipStartMs = plan.StartMs;
+        _clipSpeed = 1f;
+        _clipName = clip;
+        _clipBeatMs = cast.AtMs;
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("clip-start", $"{clip}\tauthored\tbeat={cast.AtMs}\tstart={plan.StartMs:0}\trelease={_performance.ReleaseMs:0}"
+                             + $"\ttargets={string.Join(",", _performance.Targets)}\trecipe={recipe.Id}");
+        return PerformCommit.Committed;
+    }
+
+    /// <summary>The enemies <paramref name="cast"/> strikes (see <see cref="ActionTargets.StruckBy"/>).</summary>
+    private IReadOnlyList<int> CastTargets(BattleEvent cast)
+        => _run?.LastWaveEvents is { } events ? ActionTargets.StruckBy(events, cast) : Array.Empty<int>();
+
+    /// <summary>
+    /// Advance the performance on the fight's playhead — BEFORE the frame's events are crossed, so the blades
+    /// land on the very frame the fight's hits are presented — and voice its release and contact.
+    /// </summary>
+    private void UpdatePerformance(float dt)
+    {
+        if (_performance is not { } p) return;
+        if (_playheadMs < p.ClipStartMs - 1f) { _performance = null; return; }   // rewound past it (a seek)
+        var step = p.Update(_playheadMs, dt, this);
+        if (step.Released)
+        {
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("release", $"{p.Recipe.Id}\tx={step.ReleaseAt.X:0}\ty={step.ReleaseAt.Y:0}\tknives={p.Targets.Count}\tlaunch={string.Join(";", p.LaunchPoints.Select(v => $"{v.X:0},{v.Y:0}"))}");
+            // THE NAME AT THE RELEASE: the callout says what the champion is DOING, so it belongs to the
+            // throw, not to the impact. Presentation only — the cast's cooldown and state stay on the event.
+            if (p.Recipe.CalloutAtRelease && ShowSkillCallouts && p.SkillSlot < _waveSkills.Count)
+            {
+                var (text, colour) = CalloutFor(_waveSkills[p.SkillSlot].Def.Style);
+                Say(text, colour);
+            }
+            Sound?.PlayFirst(p.Recipe.ReleaseCues, p.Recipe.ReleaseVolume, p.Recipe.ReleasePitch, Pan(step.ReleaseAt.X, p.Recipe.PanWidth), 0.04f);
+        }
+        if (step.Contacted)
+        {
+            if (PresentTrace.Enabled) PresentTrace.Log("contact", $"{p.Recipe.Id}\tx={step.ContactAt.X:0}\ty={step.ContactAt.Y:0}\tknives={p.Targets.Count}");
+            // ONE contact sound for the fan: the blades land together, and four copies of one sample are one
+            // sample four times as loud (and the bank's own repeat rule would drop three of them anyway).
+            Sound?.PlayFirst(p.Recipe.ContactCues, p.Recipe.ContactVolume, p.Recipe.ContactPitch, Pan(step.ContactAt.X, p.Recipe.PanWidth), 0.05f);
+        }
+        if (p.Finished(_playheadMs) && _clipName is null) _performance = null;
+    }
+
+    /// <summary>A gentle stereo position for an arena x: ±<paramref name="width"/> at the arena's edges.</summary>
+    private static float Pan(float x, float width)
+        => Math.Clamp((x - ArenaRect.Center.X) / Math.Max(1f, ArenaRect.Width / 2f), -1f, 1f) * width;
+
+    bool IActionStage.TryActorFrame(string clipKey, int frame, out SpriteFrame drawn, out int frameSize)
+    {
+        foreach (var key in Character.StripKeys(clipKey))
+            if (_ui.ResolveFrame(key, _champDrawBox, (frame + 0.5f) / ChampionFps, ChampionFps, loop: false, topCrop: -1f,
+                                 flip: ChampionFacesRight) is { } f)
+            {
+                drawn = f;
+                frameSize = f.Texture.Height;
+                return true;
+            }
+        drawn = default;
+        frameSize = 0;
+        return false;
+    }
+
+    bool IActionStage.TryTargetBody(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
+
+    Texture2D? IActionStage.Texture(string key) => _ui.Assets.Get(key);
+
+    float IActionStage.CasterHeight => TryBody(VfxSubject.Champion, out var champ) ? champ.Height : ChampBox.Height;
 
     /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
     /// <remarks>
@@ -6068,8 +6233,11 @@ public sealed class HuntScreen : IFocusActors
         var life = _hitFlash.GetValueOrDefault(slot);
         if (life <= 0f) return 0f;
         var t = 1f - life;                       // 0 at the blow, 1 at the end
-        return t < 0.2f ? t / 0.2f : 1f - (t - 0.2f) / 0.8f;
+        return (t < 0.2f ? t / 0.2f : 1f - (t - 0.2f) / 0.8f) * _hitFlashPeak.GetValueOrDefault(slot, 1f);
     }
+
+    /// <summary>How strong each creature's current flash is (1 = the fight's usual). A performed hit sets its recipe's.</summary>
+    private readonly Dictionary<int, float> _hitFlashPeak = new();
 
     /// <summary>
     /// Draw a creature's white silhouette over itself at <paramref name="strength"/>. EVERY enemy path
@@ -6270,6 +6438,17 @@ public sealed class HuntScreen : IFocusActors
         _auraTotalMs = -1;
     }
 
+    // ADR-011: the projectile action being performed (one at a time: the champion acts once per beat), and
+    // the authored timing its clip plays by. Both null for every action that has no recipe.
+    private ActionPerformance? _performance;
+    private ActionClipTiming? _clipTiming;
+
+    // THE ACTION REVIEW VIEWS (capture only; the game never sets them): effects off (does the animation read
+    // alone?), champion off (does the force path read alone?), and the hand sockets drawn as crosshairs.
+    private static readonly bool ShotNoVfx = Environment.GetEnvironmentVariable("RH_SHOT_NOVFX") == "1";
+    private static readonly bool ShotNoChamp = Environment.GetEnvironmentVariable("RH_SHOT_NOCHAMP") == "1";
+    private static readonly bool ShotSockets = Environment.GetEnvironmentVariable("RH_SHOT_SOCKETS") == "1";
+
     // RH_PRESENT_TRACE: the champion frame last logged, so a frame is logged when it CHANGES.
     private string? _traceClip;
     private int _traceFrame = -1;
@@ -6367,8 +6546,11 @@ public sealed class HuntScreen : IFocusActors
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
             : hasDeathClip ? (DownedSeconds - _downedTimer)   // plays through, then CLAMPS on the last frame
-            : !dead && _clipName is not null ? ClipSeconds
-            : _anim;
+            : !dead && _clipName is not null
+                ? (_clipTiming is { } authored ? (authored.FrameAt(_playheadMs - _clipStartMs) + 0.5f) / ChampionFps : ClipSeconds)
+            // THE IDLE RESTARTS FROM ITS FIRST FRAME after an action (ADR-011): an authored action ends on the
+            // idle's first pose, and a loop resumed at a random phase snapped mid-breath.
+            : _anim - _idleFrom;
 
         // A DEAD CHAMPION WITHOUT A DEATH CLIP HOLDS ITS LAST POSE — the fallback freezes the idle.
         if (dead && !hasDeathClip) seconds = 0f;
