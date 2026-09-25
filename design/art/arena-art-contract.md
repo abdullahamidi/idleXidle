@@ -351,31 +351,33 @@ The rule is one coherent action: intention, preparation, release, motion, contac
 
   Technical pass is not artistic pass.
 
-### 3.9 A reaction is a LAYER, never a clip (ADR-011, JAWS base slice 2026-09-25 — awaiting the owner's review)
+### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture approved; the polish awaits review)
 
 A REACTION (JAWS) takes no beat: the enemy's bite is its cause. It is drawn on its own layer, over both figures, and
 never takes the champion's figure: no cast, no lunge, no post-bite "lay a trap" clip (that clip is REPAY's cast).
 
-- **The object, in two states from ONE source.** JAWS is an iron jaw trap (the skill's name and its icon): OPEN
-  (`prop_seeker_jaws_open`, PixelLab pixflux `2126658f`) and SHUT (`prop_seeker_jaws_shut`, a PixelLab EDIT of that
-  very image, `b3c7ee25`), so the hinge, the rings and the framing are the same pixels' descendants. The shut ring's
-  teeth carry an emissive mask (`prop_seeker_jaws_shut_edge`). Built and post-passed by
-  `tools/asset-pipeline/v2/seeker_jaws.py` (the white fill made transparent, the palette drift snapped back, the rust
-  teeth recoloured to steel, the iron lifted one shade so it reads on the floor). A rejected candidate is recorded
-  there with its reason.
-- **PixelLab draws no motion.** The rise, the snap, the overshoot, the chain's tension and shiver, the recoil, the
-  release, the sparks and the fade are the runtime's (`ReactionPerformance`). Never ask for a trap animation or a chain.
-- **The chain is runtime geometry.** One drawn link in two cells (face-on, edge-on: `prop_seeker_chain_link`), placed
-  along a curve between two LIVE anchors: the Seeker's BELT (a share of his drawn body, so it rides a leap) and the
-  jaws' eye. Never one long chain image tied to one arena distance. At most 64 links; a longer chain draws bigger
-  links, never gaps.
-- **Size and place.** The jaws are ~0.48 of the caught creature's height (56 to 130 px) and close on its FRONT-LOWER
-  silhouette facing the Seeker, read off the frame it bites in (never a fixed "foreleg": the anatomy differs).
-- **Material vs Source**, as SPRAY: the iron is untinted; the Source is light only (the teeth's glint, a small
-  flattened snap flash, sparks, a restrained tension accent). Never tint the object.
-- **Review gate:** true speed and slow motion, effects only, champion only, during SPRAY, during HARD HANDS, during a
-  basic swing, sixteen seconds of repeats, the dock's sweep, a killing answer, a fatal bite, the REPAY isolation, the
-  anchor overlay (`RH_SHOT_SOCKETS`), and the sound heard.
+- **World art is the icon's mechanism seen from the ARENA, never the icon enlarged.** The UI icon is symbolic and
+  face-on (a toothed ring, a central spring, a chain). In the world JAWS is a compact steel TRAP HEAD in side view: a
+  chain eye, a spring, a hub with its pivot bolt, and TWO SEPARATE serrated jaws whose teeth interlock on a seam. Shut,
+  it must still read as two jaws: never a ring (the first world art shut into a toothed circle and read as a portal).
+- **Rigid parts on one canvas, drawn.** `prop_seeker_jaws_base` (the hub, drawn over the jaws' roots),
+  `prop_seeker_jaws_upper`, `prop_seeker_jaws_lower` (each drawn CLOSED) and each jaw's teeth mask, all on one
+  132 x 96 canvas so one pivot, one eye and one bite point serve them (`tools/asset-pipeline/v2/seeker_jaws.py`, on the
+  Seeker's pixel grid). PixelLab was asked twice for a side-view head and both were rejected on sight (a robot crocodile
+  with an eye; a flat vise): a rigid part needs an exact pivot, which is arithmetic.
+- **The metal is never scaled.** The jaws ROTATE about the bolt (open 30 degrees each, a hard stop 3 degrees apart on
+  what they bite, a 5 degree recoil); the head moves along its chain; nothing pumps, rises from the floor or swaps.
+- **The chain is a dark metal body with a few links.** A cross-section (`prop_seeker_chain_body`) stretched along the
+  live curve between the belt and the head's eye, and 11 link accents (`prop_seeker_chain_link`), dense at the two ends
+  and sparse across the middle. Never one long chain image, never sixty-four equal stamps, never a rope, never a laser.
+- **Size and place.** The head is ~0.53 of the caught creature's height long (56 to 104 px), chosen at play size; it
+  closes on the creature's FRONT-LOWER silhouette facing the Seeker, read off the frame it bites in, and lies along its
+  tether's line.
+- **Material vs Source**, as SPRAY: the iron is untinted; the Source is light only (the tether's streak as it fires,
+  the teeth's glint at the stop, three small sparks from the mouth). Never tint the object, never a generic flash.
+- **Review gate:** true speed and slow motion, a close crop of belt, chain, jaws and target, effects only, champion
+  only, during SPRAY, during HARD HANDS, during a basic swing, repeats, the dock's ready at true speed, a killing
+  answer, a fatal bite, the REPAY isolation, the anchor overlay on two bodies, a size comparison, and the sound heard.
 
 ## 4. Naming (unchanged where the code already asks)
 
