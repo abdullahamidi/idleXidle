@@ -351,72 +351,79 @@ The rule is one coherent action: intention, preparation, release, motion, contac
 
   Technical pass is not artistic pass.
 
-### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture and timing approved; the identity pass awaits review)
+### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture approved; the readable-clamp pass awaits review)
 
 A REACTION (JAWS) takes no beat: the enemy's bite is its cause. It is drawn on its own layer, over both figures, and
 never takes the champion's figure: no cast, no lunge, no post-bite "lay a trap" clip (that clip is REPAY's cast).
 
-- **JAWS is a SPRING-LOADED HUNTING CLAMP, a mantrap mechanism: never a face.** "JAWS" names the mechanism's two
-  opposing clamp arms. It is never an animal head, a monster mouth, a mechanical dinosaur, a skull or a biting robot.
-  REJECT any source that looks like a creature's head BEFORE it is animated. That means:
-  - no eye-like bolt or bright round point at the middle height;
-  - no brow;
-  - no snout, and no two pieces tapering to one "nose";
-  - no upper and lower jaw with an animal's proportions;
-  - no mirrored, biological row of teeth;
-  - no clean horizontal mouth seam, and no lens-shaped closed head.
+- **JAWS is a SPRING-LOADED BEAR TRAP, a mantrap: never a face, never a hook.** "JAWS" names its two opposing jaws. It is
+  never:
+  - an animal head, a monster mouth, a mechanical dinosaur, a skull or a biting robot;
+  - a hook, a claw, a grabber or a pincer.
 
-  The polish pass's head did most of these: a round hub (the eye) behind two long toothed plates (the snout). At true
-  speed it read as a metal crocodile.
-- **The shape language.** The world clamp is:
-  - **a HOUSING that reads first:** the chain's rectangular shackle, a riveted spring box with its coil spring OUTSIDE
-    along its top, a tall reinforced front plate, and a hinge flange at each corner (each pin one small dark rivet);
-  - **two short, forged CRESCENT arms** with one thickness, each hinged on its OWN pin at a corner of the plate (as a
-    bear trap's jaws hinge at the two ends of its base). Teeth sit on the inner edge only: three spikes per arm, the
-    lower row one pixel along from the upper, interleaved and never mirrored.
+  REJECT any source that reads as one of these BEFORE it is animated. The history:
+  - the polish pass's long toothed head on a round hub read as a crocodile (the hub was an eye);
+  - the identity pass's big box with two thin quarter-arc arms read as a grabber with two hooks.
+- **The JAWS DOMINATE (about 70-80 % of the silhouette).** At play size, with the eyes half shut, it reads OPEN CLAMP,
+  never a rectangular device.
+  - **The jaws:** two broad forged "( )" bands, each a semicircle with a few LARGE teeth on its inner edge, interleaved
+    with the other's and never mirrored.
+  - **The housing, small:** a short base bar carrying the two pins (a compact pair at its middle, never a tall bracket),
+    the trigger coil under it, and the chain eye at its rear end. Nothing on it may form a face: no pair of bright dots,
+    no window of bars, no square pin in a square.
+- **OPEN must look nothing like SHUT.**
+  - Open, the jaws lie spread in a wide toothed cup: the space something is about to be caught in.
+  - Shut, they stand "( )" around the limb with their tips apart at the top, where the limb comes out: steel jaw, TARGET,
+    steel jaw. Never a ring, a horizontal seam or a mouth.
+  - A sideways toothed opening (jaws above and below, hinged at the back) reads as a mouth. Upright jaws that spring up
+    and shut left-right read as a bear trap.
+- **The close must be SEEN.**
+  - At 60 fps a close needs at least three drawn frames: open, moving, SHUT.
+  - The jaws travel as the SQUARE of the time: slow for a frame, violent at the end, a hard stop at ~50 ms.
+  - Then ONE small rebound (3-5 degrees), and lock. Never a bounce train, never a scale pump.
+  - A 16 ms close is one open frame and one shut frame, which nobody sees.
+- **The answer lands on the stop.** The fight resolves the reflected blow at the bite. The screen presents it on the
+  jaws' stop: the CLACK, the reflected number, the creature's flash, and a kill's fall. The bite keeps its own t 0.
+- **Layered round the limb.** The NEAR jaw is drawn BEHIND the caught creature, and the far jaw and the base in front, so
+  the limb is between the jaws. This is one extra draw call before the creature's sprite, never a masking framework.
+  Put behind the jaw that lies OUTSIDE the creature: drawn behind a dark body, the far jaw vanished and the close read
+  as one jaw swinging up.
+- **Chosen by silhouette first, in motion.** Three silhouettes went through OPEN → LOCK at play size
+  (`jaws-readable/20`), each read blind against the words HOOK, CLAW, GRAPPLING HOOK, PINCER, TRAP, BEAR TRAP, CLAMP and
+  MOUTH:
+  - A, the upright bear trap: chosen ("a bear trap"; BEAR TRAP, CLAMP);
+  - B, a mantrap along the chain: a mouth;
+  - C, a spring yoke: "fang-like jaws on a stand".
 
-  Shut, it reads upper arm, then the caught limb, then lower arm, with a real gap that the creature fills.
-- **Nothing on the housing may form a face.** Never:
-  - two dots over a line;
-  - a window of vertical bars (that read as a robot's visor);
-  - a dark square pin in a lit square (that read as an eye socket).
-- **World art is the icon's MECHANISM seen from the ARENA, never the icon enlarged.** The UI icon is a face-on bear trap:
-  opposing serrated arcs, a mechanical centre and a chain. The world clamp keeps its construction, not its perspective.
-- **Chosen by silhouette first.** Three monochrome silhouettes were compared at play size (`jaws-identity/20`):
-  - A, a bear-trap clamp: chosen, read blind as "bear trap jaws";
-  - B, a crossed-lever spring clamp: "a throwing star";
-  - C, a round drum with crescents on one pivot: "a crab claw".
+  A model reader is only a diagnostic; true-speed footage is the test.
+- **Rigid parts on one canvas, drawn.** Every part sits on one 120 x 120 canvas, so the two pins, the eye and the clamp
+  point serve them all (`tools/asset-pipeline/v2/seeker_jaws.py`, on the Seeker's pixel grid). The parts are:
+  - `prop_seeker_jaws_base`;
+  - `prop_seeker_jaws_near` and `prop_seeker_jaws_far`, each drawn shut;
+  - each jaw's teeth mask.
 
-  The final art was checked blind in colour (`jaws-identity/24`).
-- **Rigid parts on one canvas, drawn.** Every part sits on one 99 x 102 canvas, so the two pins, the shackle and the
-  clamp point serve them all (`tools/asset-pipeline/v2/seeker_jaws.py`, on the Seeker's pixel grid). The parts are:
-  - `prop_seeker_jaws_base`: the housing, drawn over the arms' roots;
-  - `prop_seeker_jaws_upper` and `prop_seeker_jaws_lower`: each drawn at its stop;
-  - each arm's teeth mask.
-
-  PixelLab is for CONCEPTS only (three were made; none has exact pins).
-- **The metal is never scaled.** Each arm ROTATES about its own pin: open 30 degrees, a hard stop 3 degrees open on what
-  it grips, a 5 degree recoil. The housing moves only along its chain. Nothing pumps, rises from the floor or swaps.
+  PixelLab is for CONCEPTS only.
+- **The metal is never scaled.** Each jaw ROTATES about its own pin (open 34 degrees, a hard stop 3 degrees open on what
+  it grips). The trap stands upright and leans only a little toward its chain. It is never a projectile in flight: the
+  chain says where it came from.
 - **The chain is a dark metal body with a few links.** A cross-section (`prop_seeker_chain_body`) is stretched along the
-  live curve between the belt and the shackle, with 11 link accents (`prop_seeker_chain_link`), dense at the two ends and
-  sparse across the middle. Never one long chain image, never sixty-four equal stamps, never a rope, never a laser.
+  live curve between the belt and the trap's eye, with 11 link accents (`prop_seeker_chain_link`), dense at the two ends
+  and sparse across the middle. Never one long chain image, never sixty-four equal stamps, never a rope, never a laser.
 - **Size and place.**
-  - The clamp is ~0.42 of the caught creature's height long (48 to 88 px). It is about as tall as it is long, and was
-    chosen at play size.
+  - The trap is ~0.40 of the caught creature's height tall (52 to 96 px), chosen at play size.
   - Its clamp point goes on the creature's FRONT-LOWER silhouette facing the Seeker, read off the frame it bites in.
-  - It lies along its tether's line.
 - **Material vs Source**, as SPRAY: the iron is untinted. The Source is light only: the tether's streak as it fires and
-  one brief tooth-edge glint at the stop (never white teeth, never an outline of light round the clamp). No sparks: at
-  play size a hinge spark is invisible. The silhouette must survive with the Source off.
+  one brief tooth-edge glint at the stop, never through the limb. There are no sparks. The silhouette must survive with
+  the Source off.
 - **Review gate:**
-  - true speed and slow motion;
-  - a close crop of belt, chain, clamp and target;
-  - effects only and champion only;
-  - during SPRAY, during HARD HANDS and during a basic swing;
-  - repeats, and the dock's ready at true speed;
-  - a killing answer, a fatal bite, and the REPAY isolation;
-  - the anchor overlay on two bodies and a size comparison;
-  - the blind "what object is this?" check;
+  - true speed WITH sound and MUTED ("can I SEE it close?");
+  - 4× slow motion and the OPEN → LOCK frame sheet at play size;
+  - a close crop of belt, chain, trap and target;
+  - the layering view (is the limb between the jaws?);
+  - effects only, during SPRAY and during HARD HANDS;
+  - repeats, a killing answer and a fatal bite;
+  - the size comparison;
+  - the blind silhouette words;
   - the sound heard.
 
 ## 4. Naming (unchanged where the code already asks)
