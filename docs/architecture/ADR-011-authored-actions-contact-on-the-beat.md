@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS, the MELEE reference, was built the same day and awaits the owner's review (`production/qa/evidence/hard-hands/`). |
 | **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
-| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs` |
-| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form (SPRAY). The action handoff applies to every committed champion clip. |
+| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs`, `melee_action_test.cs` |
+| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form (SPRAY) and his `strike` Form's `strike` effect (HARD HANDS; BLOW on him plays the same blow). The action handoff applies to every committed champion clip. |
 
 ## Summary
 
@@ -38,6 +38,23 @@ Every future authored combat action is judged against the Seeker's SPRAY. It is 
 
 Its three sounds are HUMAN-APPROVED (2026-09-25): `sfx_seeker_spray_release`, `sfx_seeker_spray_hit`, `sfx_seeker_spray_tick`.
 
+## The melee reference: HARD HANDS (built 2026-09-25, awaiting the owner's review)
+
+The Seeker's HARD HANDS is the reference for MELEE / DIRECT CONTACT: a leaping overhand HAMMER-FIST. He draws his
+fist up, bounds in, drives it down onto the creature with his whole weight on the beat, and hops back.
+
+| Concern | Where HARD HANDS does it |
+|---|---|
+| One physical verb in five phases | key poses: ready, anticipation, loaded (held), COMMIT (the leap), CONTACT, follow-through (lowest), half-rise, exit = the idle's first frame |
+| Contact on the beat | `MeleeActionRecipe`: the anchor is the `contact` marker with no flight (`TravelMs` 0), so the clip's contact frame IS the beat |
+| Closing the distance | `MeleePerformance.RootMotion`: presentation root motion (pull-back, an accelerating commit, overshoot, a hop home), the reach measured from the fist's socket on the contact frame to the target |
+| Per-frame timing | 70 100 90 120 80 90 120 100 ms; contact 380 ms in; commit, contact and follow-through rigid, the late recovery elastic |
+| Impact follows force | a compressed white-hot flash, a soft shock ring squashed along the force, light chips, dark slivers, sparks, all starting AT the fist on the beat |
+| Impact priority | the performed blow replaces the generic strike strip, puff, `sfx_cast` and `sfx_hit` |
+| Semantic audio | `sfx_seeker_hard_hands_commit` at the leap (beat − 120 ms), `sfx_seeker_hard_hands_hit` on the beat; candidates, not yet heard |
+| Exit pose | the idle's own frame 0, reached through a half-rise: its joins into idle are sub-pixel |
+| Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:
@@ -63,7 +80,13 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
      - **Not begun.** A plain clip that could not reach its exit pose before the next PERFORMED action's latest start is not begun (`yield` in the trace). Its hit, number, flash and sound still fire, as they already do for any beat that falls while the figure is busy. This only happens on the fastest builds.
      - **What it replaced.** The recovery cut handed SPRAY the figure at its latest start whatever the swing was showing. At a fast TEMPO the swing was still in its low lunge, so the Seeker jumped in one frame to SPRAY's ready pose. Before that cut existed, SPRAY committed at its release: no wind-up, and a ~100 ms flight.
      - **The timing model is unchanged.** The beat, the release (beat − 250 ms), the flight and every piece of gameplay feedback stay where the fight put them.
-   - Melee actions (future recipes) put their contact frame on the beat. Non-damaging actions may name another semantic marker.
+     - **A performed action behind: YIELD after the contact** (the fast-TEMPO policy, 2026-09-25, `HandoffFit.Yielded`). When the next action is PERFORMED and its latest start falls inside this action's protected frames, a squeeze would start it late, and it would enter mid-wind-up. So this action YIELDS at that latest start instead, which is never before its contact: its gameplay event has resolved, the rest of it is not shown (`ActionClipTiming.CutAt`), and the incoming action keeps its minimum readable anticipation from its first pose. A plain action behind still waits and starts late, inside its own speed range.
+     - **The outgoing action runs on** (`HuntScreen._outgoing`). A performance that hands the figure over keeps updating and drawing until it is finished: its impact fades, its ticks sound, and a melee lunge finishes its way home. It used to be dropped the moment the next one committed, taking its impact with it.
+   - **Melee actions put their contact frame on the beat** (`MeleeActionRecipe`, `MeleePerformance`). The anchor is the `contact` marker with no flight, so the fist lands on the beat and everything describing the hit meets on one frame. The `commit` marker plays the commit cue and the callout.
+     - **The body is carried, the arm is never stretched.** The champion stands hundreds of pixels from the creatures. The reach is measured at the clip's start, from the fist's authored socket on the contact frame to the target's contact point (`ContactPoint`, 0.3 × 0.32 of its body). PRESENTATION ROOT MOTION then carries the figure: a small pull-back through the anticipation (`LungeBack`), the whole distance during the commit, accelerating into the blow (`LungeAccel`: the fastest spacing is at contact), a small overshoot (`LungeOvershoot`), then home as a HOP (`RootLift`, `HopHeight`) over `ReturnShare` of the recovery and never quicker than `MinReturnMs` (110 ms). His shadow stays on the ground. The root offset is added to the champion's draw box, so the body, the effects on him and his sockets all follow; the fight's positions never move.
+     - **The way home is owned by the performance.** It reads the timing its clip actually played (`IActionPerformance.Retime`), so a compressed recovery brings the body home sooner. A squeezed one, or a yield, carries the rest of the return on under whatever the figure plays next, finished by the next action's release: never a one-frame snap.
+     - **One recipe per effect, not per strip.** A Form's strip is shared: on the Seeker the Strike clip is HARD HANDS', BLOW's and PRESS's. `IActionRecipe.EffectKeys` names the skill effects a recipe performs, so HARD HANDS' lunge takes BLOW (the same blow) and never PRESS, a FIELD whose pulse is its picture.
+   - Non-damaging actions may name another semantic marker.
    - There is **no** deferred-health or deferred-death buffer. Because contact is on the beat, the fight's feedback is already at the right time.
 
 2. **Authored timing** (`ActionClipTiming`, `<strip>.clip.json`):
@@ -127,6 +150,10 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 
     Props are drawn deterministically (`seeker_knife.py`).
 
+    **An authored clip is drawn as its idle** (`UiKit.ResolveFrame` `placeAs`, HARD HANDS). The key poses are placed pixel-exact onto the idle in frame space, but the renderer measured every strip on its OWN extremes: HARD HANDS' raised fist (row 117 against the idle's 114) and wide loaded stance (498 against 495) drew the whole action 0.8 % larger and 3 px lower than the idle, a pop at every join. An authored clip now takes the idle's scale and ground line; its own crop still decides what of its texture is drawn. SPRAY's extremes equal the idle's, so nothing about SPRAY changed.
+
+    **A light ground is repaired, not regenerated.** HARD HANDS' passes came back on a light ground in the reference's own glint colour, which the generator also used to fill his face and sleeves. `keyposes.py` keys the ground from the border, transplants the reference's face onto the blank region nearest the pose's nose joint, gives other blanks his sleeve grey, and turns light edge pixels into his dark outline. The accepted sources are cached in the repository, because PixelLab's links expire.
+
 ## Consequences
 
 - **Timing** (polish pass, measured from the trace; `tools/asset-pipeline/action_timeline.py`). The fight's beat is t = 0. Everything that happens on it is presented on the first 60 fps frame after it (+17 ms). That frame carries the knives, health, flash, number and contact sound together.
@@ -145,6 +172,11 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
   - the fast fixture (RHYTHM + VOLLEY), 33 s: 25 handoffs (15 settle-only, 9 at the readable floor, 1 compressed to the ideal start), no squeeze, worst recovery compression 2.60× (a HARD HANDS recovery frame, 87 ms in 33 ms);
   - the fastest build (TEMPO trained to 60 as well), 33 s: the plain action just before a SPRAY yields (11 swings, and 6 of the 11 HARD HANDS casts), and SPRAY's own recovery compresses up to 1.74× into the next action;
   - every SPRAY on both builds began on its first pose, released at −250 ms (−233 on the frame grid) and landed on the beat.
+- **HARD HANDS** (measured, `production/qa/evidence/hard-hands/`; `root` lines in `RH_PRESENT_TRACE`):
+  - normal TEMPO, beat = 0: clip start −367 ms, anticipation −300, loaded hold −200 (deepest pull-back −16 px at −133), COMMIT −117 (the leap, the commit cue, the first speed line at −83), the body at the target by the beat (+399 px), and on the +17 ms frame the contact pose, the fist's impact, health, flash, number and the hit cue together; follow-through +83, furthest +411 px at +133, recovery +183, the hop's peak −25 px at +233, home at +317, idle at +400;
+  - joins, through the renderer's own placement (`tools/asset-pipeline/action_joins.py`): HARD HANDS → idle moves the silhouette by less than half a pixel (as SPRAY → idle does). HARD HANDS → SPRAY now measures exactly as idle → SPRAY: the ready pose's own change. The old crouched exit popped the head ~40 px there;
+  - the fastest build (TEMPO trained to 60), 33 s: the old plain HARD HANDS was not animated at all on 6 of its 11 casts (it yielded to SPRAY). Now every HARD HANDS is performed. 6 of the 10 are followed by a SPRAY only 500 ms later, and those YIELD after their contact: the contact is on screen one or two frames, the follow-through is not shown, and the body hops home under SPRAY's wind-up. The swings' yields to SPRAY (11) are unchanged. Before the yield existed, those six squeezed: SPRAY entered in the middle of its hold, and the body jumped 523 px home in one frame;
+  - joins that no pair of these actions can reach whole at that tempo are a demand problem, not a timing bug: SPRAY needs 470 ms of lead and HARD HANDS 243 ms after its contact, inside 500 ms.
 - **Switches:**
   - `RH_ACTION_RECIPES=0` plays every action the old way, for old-versus-new films.
   - `RH_SHOT_NOVFX=1` and `RH_SHOT_NOCHAMP=1` are the review views.
@@ -167,9 +199,13 @@ None directly: this is presentation, and the fight's rules and numbers do not ch
 ## Known limits (reported, not solved)
 
 - **The hand is an edit.** The release and follow-through hands are PixelLab `edit_image_pixen` results, taken only inside a hand box (the edits also redrew part of the body, painted three knives and redrew the other arm). The edit drew bare skin. The whole hand is recoloured to his glove, as he is gloved in every other frame, idle included. A first build gloved only the back of the hand, so for 250 ms he wore a fingerless glove. At combat size it reads as an open, flicked hand. At 3× the seam between the edit and the pose is visible.
-- **A neighbouring action's defect, not SPRAY's: HARD HANDS' exit pose.** HARD HANDS' strip (`seeker_strike`) ends in a low fighting crouch. Its exit pose is not compatible with idle or with SPRAY's ready pose, so after its (correct) handoff the head rises ~40 px in one frame, into SPRAY or into idle. It is HARD HANDS' art (the exit pose contract), and it is the next task. The basic swing's exit pose is a half-rise with the blade still out: its blade disappears at the join, as it does into idle after every swing.
-- **THE FAST-TEMPO PRESENTATION POLICY (owner, 2026-09-25).** The incoming authored action keeps its minimum readable anticipation: SPRAY never begins at its third frame, because its first frames are part of the approved action. If the outgoing action cannot complete its presentation in the time left, its presentation may YIELD, and only after its gameplay event has resolved (its hit, number, flash and sound still play). Yielding is a FALLBACK, not the presentation model: an action that yields often is an action whose protected phase is too long or whose recovery does not compress. Measured on the fastest build (TEMPO trained to 60), 33 s: 17 yields (11 swings, 6 of 11 HARD HANDS casts). HARD HANDS' rebuild must reduce its share.
-- **Other actions.** Besides SPRAY, the Seeker's clips and every other champion are still plain strips (the old uniform model), handed off by the same rule. The old strips still disagree about the Seeker's weapon.
+- **HARD HANDS' exit pose: resolved** (2026-09-25). The old strip ended in a low crouch, so the head rose ~40 px in one frame into SPRAY or idle. The rebuilt HARD HANDS ends on the idle's own first frame, reached through a half-rise. The basic swing's exit pose is still a half-rise with the blade out: its blade disappears at the join, as it does into idle after every swing (a plain clip, not rebuilt).
+- **HARD HANDS is awaiting review, and its sounds are unheard.** Its two cues are measured candidates (`design/audio/seeker-hard-hands-audio-brief.md`). Its key poses are PixelLab pass B, deterministically repaired (face, sleeves, outline): at 3× the transplanted face is the idle's face on a lunging head. Its follow-through cloak flares grey-green (the hood's colour), where the idle's cloak is dark; it reads as the cloak's lighter lining.
+- **At the fastest build, HARD HANDS before a SPRAY is mostly its contact.** See the measured consequence above. The fallback keeps both actions' gameplay truth and SPRAY's anticipation. What it gives up is HARD HANDS' follow-through. The alternatives are a shorter SPRAY lead (an approved action) or not performing HARD HANDS at all (the old yield); both were judged worse.
+- **The basic swing is measured on its own extremes.** The `attack` strip is a plain clip: its headroom (117) differs from the idle's (114), so it is drawn 0.8 % larger than idle, and its low frames' lowest row differs. Every swing → idle join carries that, as it always did. It is the swing's own art, outside this pass.
+- **PRESS shows the new strike strip in place.** PRESS (a field on the Strike Form) is not performed, so its plain clip now plays the hammer-fist where he stands, with its own pulse unchanged: a fist driven down into the ground. BLOW woven on the Seeker is performed as HARD HANDS.
+- **THE FAST-TEMPO PRESENTATION POLICY (owner, 2026-09-25).** The incoming authored action keeps its minimum readable anticipation: SPRAY never begins at its third frame, because its first frames are part of the approved action. If the outgoing action cannot complete its presentation in the time left, its presentation may YIELD, and only after its gameplay event has resolved (its hit, number, flash and sound still play). Yielding is a FALLBACK, not the presentation model: an action that yields often is an action whose protected phase is too long or whose recovery does not compress. Measured on the fastest build (TEMPO trained to 60), 33 s, before HARD HANDS was rebuilt: 17 yields (11 swings, 6 of 11 HARD HANDS casts). After: 11 swing yields, no HARD HANDS cast unanimated, and 6 HARD HANDS handoffs that yield after their contact (`HandoffFit.Yielded`).
+- **Other actions.** Besides SPRAY and HARD HANDS, the Seeker's clips and every other champion are still plain strips (the old uniform model), handed off by the same rule. The old strips still disagree about the Seeker's weapon.
 - **The held field.** The pink rectangle (`fx_press`, a weight slab the aura tinted) is line art now (`tools/asset-pipeline/v2/press_field.py`). Its once-per-second brightness pulse belongs to the FIELD/AURA gold-standard task.
 
 ## Alternatives rejected

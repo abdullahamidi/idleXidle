@@ -279,7 +279,7 @@ is drawn by `ProjectileVisual`, from parts:
   tumble is an optional field on the look. Nothing in the shared path spins the head.
 - Projectiles that are not yet listed still follow the two-layer strip rule above.
 
-### 3.8 An important action is PERFORMED from key poses (ADR-011, Accepted 2026-09-25 — the Seeker's SPRAY is the reference)
+### 3.8 An important action is PERFORMED from key poses (ADR-011, Accepted 2026-09-25 — the Seeker's SPRAY is the reference; his HARD HANDS is the melee reference, awaiting review)
 
 The rule is one coherent action: intention, preparation, release, motion, contact, consequence, recovery. The player should not be noticing the separate systems (clip, effect, number, sound) that make it.
 
@@ -313,8 +313,17 @@ The rule is one coherent action: intention, preparation, release, motion, contac
   - After two failed edits, correct the hand by hand. Do not keep generating.
 - **An action ends on an EXIT POSE** (the action handoff, ADR-011, 2026-09-25). Its last frame is where the next action starts from, so it must be compatible with idle and with any action's first pose: standing, weapon away or at rest.
   - When the next action needs the figure early, the outgoing recovery is played faster to ARRIVE at that pose, never cut mid-pose. So a crouched or lunging last frame pops however it is timed.
-  - HARD HANDS (`seeker_strike`) ends in a low crouch and pops into idle and into SPRAY: a HARD HANDS defect, being rebuilt. The basic swing ends in a half-rise with its blade out: its blade disappears at the join.
+  - HARD HANDS (`seeker_strike`) was rebuilt (2026-09-25) to end on the idle's own first frame, reached through a half-rise: its follow-through is the lowest pose and the rise back is two even steps, never "crouch → instant stand". The basic swing still ends in a half-rise with its blade out: its blade disappears at the join (a plain clip, not yet rebuilt).
+  - An authored clip is DRAWN at the idle's scale and on the idle's ground line (`UiKit.ResolveFrame` `placeAs`), whatever its own extremes: a raised fist above the idle's head or a stance wider than its feet must not rescale or re-ground the whole action. Measured on its own extremes, HARD HANDS drew 0.8 % larger and 3 px lower than the idle it starts and ends on.
   - No bespoke `a_to_b` transition clips and no whole-sprite crossfades: the exit pose + recovery compression + the next action's authored first pose are the bridge.
+- **A melee blow is CARRIED to its target** (HARD HANDS, 2026-09-25). The champion stands hundreds of pixels from the creatures; an arm is never stretched and the body is never teleported.
+  - The lunge is PRESENTATION ROOT MOTION (`MeleePerformance.RootMotion`): a small pull-back through the anticipation, the whole distance during the commit, accelerating into the blow (the fastest spacing is at contact), a small overshoot through the follow-through, then home as a HOP (`RootLift`) with his shadow left on the ground. The fight's positions never move; the body, its effects and its sockets all follow the drawn box.
+  - The reach is measured at the clip's start from the fist's authored socket on the contact frame to the target's contact point, so the fist lands where the creature actually stands.
+  - The way home has a minimum length (110 ms): a handoff that squeezes the recovery, or a yield after the contact at the fastest TEMPO, carries it on under the next action's wind-up. It is never a one-frame snap.
+  - Speed lines trail the body on the commit only. The way home is a controlled return, not a second attack.
+  - The impact follows the force and starts AT the fist: a white-hot flash compressed across the blow, a soft shock ring squashed along it (gone in ~110 ms), light chips thrown mostly along the force with a share kicked back, dark material slivers, a few sparks. On shadow creatures over a dark floor, debris drawn only as dark matter is invisible: draw it as light, as SPRAY does.
+  - Every effect that lands ON the champion's body (a bite, a heal, a shield) is pinned to him and follows the lunge.
+- **Key poses from a light ground are repaired, not regenerated** (HARD HANDS). `animate_with_skeleton_v3` ignored "pure black background" twice and drew a light ground in the reference's own glint colour, which it also used to FILL his face and sleeves. `keyposes.py` keys the ground from the border, transplants the reference's own face onto the blank face region nearest the pose's nose joint, gives other blanks his sleeve grey, and turns every light edge pixel into his near-black outline. Accepted sources are cached in `tools/asset-pipeline/v2/keypose_sources/`: PixelLab's links expire.
 - **A smear is an accent, not a path.** It shows the last part of the hand's travel only, starts on the release frame (never before it, because the hand is not there yet), and never crosses the head or face. A full-length streak from the coil read as a beam from the eye.
 - **Sound is one phrase** (`design/audio/seeker-spray-audio-brief.md`).
   - The release is the action's own cue. The flight is silent of the action's sounds.
