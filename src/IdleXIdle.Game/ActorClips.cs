@@ -51,7 +51,13 @@ public static class ActorClips
         foreach (var equipped in skills)
         {
             var def = equipped.Def;
-            if (def.Kind == SkillKind.Reaction) { Add("trap"); continue; }
+            // a Reaction's post-bite trap clip, unless the reaction is presented on its own layer (JAWS: it never owns the
+            // figure, so the Seeker's lay-a-trap clip is not his JAWS and is not loaded for it)
+            if (def.Kind == SkillKind.Reaction)
+            {
+                if (Presentation.ReactionRecipes.For(who.Id, def.Id) is null) Add("trap");
+                continue;
+            }
             // a skill with its OWN authored clip (HARD HANDS' hard_hands) plays it; its Form's is the fallback
             if (Presentation.ActionRecipes.For(who.Id, def.Id, def.ClipKey, def.FxKey) is { } recipe && recipe.ClipKey != def.ClipKey)
                 Add(recipe.ClipKey);

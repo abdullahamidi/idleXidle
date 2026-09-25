@@ -140,9 +140,11 @@ public class actor_clips_test
     [Fact]
     public void test_a_reaction_commits_to_the_trap_clip()
     {
-        // A Reaction is drawn as the trap it sets, whatever its own clip key says.
-        var reaction = SkillCatalogue.All.FirstOrDefault(d => d.Kind == SkillKind.Reaction);
-        Assert.True(reaction is not null, "no Reaction in the catalogue — this rule has nothing to guard");
+        // A LEGACY Reaction is drawn as the trap it sets, whatever its own clip key says. A reaction presented on its
+        // own layer (JAWS, ReactionRecipes) never takes the figure and loads no trap clip (jaws_reaction_test).
+        var reaction = SkillCatalogue.All.FirstOrDefault(d => d.Kind == SkillKind.Reaction
+                                                              && Presentation.ReactionRecipes.For(Seeker.Id, d.Id) is null);
+        Assert.True(reaction is not null, "no legacy Reaction in the catalogue — this rule has nothing to guard");
         var trap = Seeker.StripKeys("trap").First();
         var idle = Seeker.StripKeys("idle").First();
 

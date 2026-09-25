@@ -41,7 +41,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class HuntScreen : IFocusActors, IActionStage
+public sealed class HuntScreen : IFocusActors, IReactionStage
 {
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -1273,6 +1273,15 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         {
             case Mode.Fighting: UpdateFight(dt); break;
             case Mode.Downed:
+                // THE ANSWER PLAYS OUT UNDER THE FALL (JAWS, ADR-011): the fight answers the bite that fells him
+                // BEFORE he falls, and the replay ends on that same millisecond. Its reaction runs on for its
+                // ~0.3 s on the fall's clock (the jaws let go as he falls), rather than freezing on its first frame.
+                if (ReactionStillPlaying())
+                {
+                    _playheadMs += dt * 1000f * _speedMul;
+                    PresentTrace.PlayheadMs = _playheadMs;
+                    UpdateReactions();
+                }
                 if (DevHoldReport) break;   // capture fixture: keep the fallen beat up instead of restarting
                 _downedTimer -= dt;
                 if (_downedTimer <= 0f)
@@ -1429,6 +1438,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         _clipTiming = null;
         _performance = null;
         _outgoing = null;
+        _reactions.Clear();   // a reaction belongs to the wave whose bite set it off
 
         // THE WAVE BEING SHOWN, captured BEFORE the push: PushWave resolves wave+1 and, on a clear, counts
         // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
@@ -1539,7 +1549,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         {
             var def = _waveSkills[slot].Def;
             var t0 = Timing(slot, def);
-            _railReady[slot] = def.TakesABeat && t0.Swept >= 1f;
+            _railReady[slot] = RearmsOnTheRail(def) && t0.Swept >= 1f;
             // ...and the notch it opens on, for the same reason: an unseeded map reads as notch zero,
             // and every ring would tick on the wave's first frame.
             _railStep[slot] = t0.RingSteps > 0 ? (int)MathF.Floor(t0.Swept * t0.RingSteps + 0.001f) : 0;
@@ -1810,6 +1820,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                 _playheadMs += dt * 1000f * _speedMul;
                 PresentTrace.PlayheadMs = _playheadMs;
                 UpdatePerformance(dt);
+                UpdateReactions();
                 if (_clipName is not null && _clipTiming is { } playing && _playheadMs >= _clipStartMs + playing.TotalMs)
                 {
                     if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
@@ -1824,6 +1835,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                 _clipTiming = null;
                 _performance = null;
                 _outgoing = null;
+                _reactions.Clear();
             }
             // ...AND THE HOST MAY KEEP THE NEXT PACK OFF THE STAGE (HoldNextWave): the break plays every
             // beat of its own, then rests on the empty stage until it is let go.
@@ -1912,7 +1924,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         for (var slot = 0; slot < _waveSkills.Count; slot++)
         {
             var def = _waveSkills[slot].Def;
-            if (!def.TakesABeat) continue;             // a passive is always ready; it never crosses
+            if (!RearmsOnTheRail(def)) continue;      // a passive is always ready; it never crosses
             var timing = Timing(slot, def);
             var nowReady = timing.Swept >= 1f;
 
@@ -1938,7 +1950,10 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                 // 2026-09-09) and not the one that was asked for. A ring now leaves the medallion and
                 // fades over the REWARD beat — the same length the game uses for a haul landing —
                 // because a skill coming up IS the fight's reward beat.
-                UiMotion.Flash(SkillBurstKey(slot), UiMotion.Reward);
+                // A REACTION's ready is restrained (it comes up every few seconds and answers on its own): the swell
+                // and a short ring, no reward-length burst. A zero-ms window never gets here at all: no frame sees
+                // it armed, so the dock goes straight from one rearm into the next, which is the truth.
+                UiMotion.Flash(SkillBurstKey(slot), def.Kind == SkillKind.Reaction ? UiMotion.Transition : UiMotion.Reward);
                 // A CUE, but a quiet and a rare one. The screen already plays a thud every beat and a
                 // cast every action; four Actives coming up every few beats would be the disco-ball
                 // note again, one modality over. Only a skill with a real wait (two notches or more)
@@ -1986,6 +2001,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         UpdateChampionClip();
 
         UpdatePerformance(dt);
+        UpdateReactions();
         var batch = _replay.Advance(_playheadMs);
         // Which blows in THIS batch have already been folded into another's number. A field, not a
         // local: this runs every frame and §93 forbids a per-frame allocation.
@@ -1996,6 +2012,10 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         var skillAtMs = -1;
         var trapAtMs = -1;
         var auraAtMs = -1;
+        // A PRESENTED REACTION'S ANSWER (JAWS, ADR-011): its reflected Strikes at this millisecond are part of the
+        // jaws' own sentence, so the generic thud and puff that would describe the same blow give way to its snap.
+        var reactionHitAtMs = -1;
+        ReactionRecipe? reactionHitRecipe = null;
         // ...and WHAT the reaction at that beat is called, so its blow can print its own name instead of
         // the word CRITICAL (§63: a critical is the expected value there; the skill is the news).
         string? trapName = null;
@@ -2037,13 +2057,14 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                     // the same physical event, give way. The flash and the number stay: they are the enemy's.
                     var performedHit = !auraTick && e.FromSkill && _performance is { } performer
                                        && performer.IsBeat(e.AtMs) && performer.Recipe.ReplacesGenericHit;
+                    var reactionHit = !auraTick && e.FromSkill && e.AtMs == reactionHitAtMs && reactionHitRecipe is not null;
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
                     // already announced them, and four projectile impacts on top of it were "two sounds at
                     // once" (playtest 2026-08-26). An aura tick is silent: it hums, it does not strike.
-                    if (!auraTick && !performedHit) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
+                    if (!auraTick && !performedHit && !reactionHit) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
                     // The number is the blow: the event's amount, over the creature that took it.
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
@@ -2099,10 +2120,12 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                         _hitFlash[e.Slot] = 1f;
                         _hitFlashLook[e.Slot] = performedHit
                             ? (_performance!.Recipe.TargetFlash, _performance.Recipe.TargetFlashRise, 1000f / Math.Max(1f, _performance.Recipe.TargetFlashMs))
-                            : UsualFlash;
+                            : reactionHit
+                                ? (reactionHitRecipe!.TargetFlash, 0f, 1000f / Math.Max(1f, reactionHitRecipe.TargetFlashMs))
+                                : UsualFlash;
                         if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={e.Slot}");
                     }
-                    if (!auraTick && !performedHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
+                    if (!auraTick && !performedHit && !reactionHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
                     }
@@ -2142,21 +2165,28 @@ public sealed class HuntScreen : IFocusActors, IActionStage
                     // A PERFORMED cast (ADR-011) was announced at its release, launched from the hand and voiced
                     // there; at the beat — its contact — the fight's own hits carry it.
                     var performed = _performance is { } perf && perf.SkillSlot == e.Slot && perf.IsBeat(e.AtMs);
-                    if (ShowSkillCallouts && !(performed && _performance!.Recipe.CalloutAtRelease)) Say(text, colour);   // settings: SKILL NAMES hides exactly this
+                    // A PRESENTED REACTION (JAWS, ADR-011) is its own sentence on its own layer: the jaws, the chain,
+                    // the snap and the number say it. No callout every few seconds, no cast breath (it is not a cast),
+                    // no generic thud, no row ring: none of those describe it, and all of them buried it.
+                    var reactionRecipe = castDef.Kind == SkillKind.Reaction ? ReactionRecipes.For(Character.Id, castDef.Id) : null;
+                    var calloutOk = reactionRecipe is null || reactionRecipe.Callout || ReactionRecipes.CalloutOverride;
+                    if (ShowSkillCallouts && calloutOk && !(performed && _performance!.Recipe.CalloutAtRelease)) Say(text, colour);   // settings: SKILL NAMES hides exactly this
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
                     // batch has already applied the kill, so "first alive" would point past a creature the
                     // cast just killed and the flash would land on its neighbour.
                     int? castTarget = null;
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
-                    if (!performed) PlaySkillVfx(castDef, castSk.Source, castTarget);
+                    if (reactionRecipe is not null) SpawnReaction(reactionRecipe, e, castSk.Source);
+                    if (!performed && reactionRecipe is null) PlaySkillVfx(castDef, castSk.Source, castTarget);
                     if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
-                    if (!performed) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
+                    if (!performed && reactionRecipe is null) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
                     // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
                     // to the roll now (see the Strike case), and the answer keeps the cast's own thud
                     // pitched up, so the two events stay tellable apart by ear.
-                    if (isReaction) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
+                    if (isReaction && reactionRecipe is null) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
+                    if (reactionRecipe is not null) { reactionHitAtMs = e.AtMs; reactionHitRecipe = reactionRecipe; }
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
                     if (isReaction) { trapAtMs = e.AtMs; trapName = castDef.Name; }   // ...and a reaction's are graded up, under its OWN name
                     break;
@@ -2678,6 +2708,20 @@ public sealed class HuntScreen : IFocusActors, IActionStage
     /// </summary>
     private void DrawSocketOverlay(SpriteBatch b)
     {
+        // THE REACTION'S ANCHORS (JAWS): the belt in cyan, each clamp point in magenta, and the caught body's outline
+        foreach (var r in _reactions)
+        {
+            var belt = r.BeltAt.ToPoint();
+            _ui.Fill(b, new Rectangle(belt.X - 12, belt.Y - 1, 25, 3), new Color(70, 230, 255));
+            _ui.Fill(b, new Rectangle(belt.X - 1, belt.Y - 12, 3, 25), new Color(70, 230, 255));
+            for (var k = 0; k < r.ClampAt.Count; k++)
+            {
+                var at = r.ClampAt[k].ToPoint();
+                _ui.Fill(b, new Rectangle(at.X - 12, at.Y - 1, 25, 3), new Color(255, 80, 220));
+                _ui.Fill(b, new Rectangle(at.X - 1, at.Y - 12, 3, 25), new Color(255, 80, 220));
+                if (TryBody(VfxSubject.Creature(r.Targets[k]), out var body)) Outline(b, body, new Color(255, 80, 220) * 0.6f, 1);
+            }
+        }
         if (_performance is not { } p) return;
         var frame = p.FrameAt(_playheadMs);
         if (p.Timing.Socket(frame, p.Recipe.HandSocket) is { } socket
@@ -2722,22 +2766,37 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
         if (!ShotNoVfx) _outgoing?.DrawMaterial(b);
         if (!ShotNoVfx) _performance?.DrawMaterial(b);
+        // THE REACTION LAYER's iron (JAWS): the chain from his belt, the jaws on the creature — over both figures
+        var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
+        var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
+        if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
 
         if (!ShotNoVfx) _vfx.DrawOver(b);
         // ...and everything about them that IS light, in one additive pass of its own.
-        if (!ShotNoVfx && _performance is { } performer)
+        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0))
         {
             _vfx.BeginLight(b);
-            _outgoing?.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
-            performer.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
-            // a lunge's speed lines trail the body, on its way in only
-            if (performer is MeleePerformance lunge && _ui.Assets.Get("fxp_trail_soft") is { } streak)
-                lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
+            if (_performance is { } performer)
+            {
+                _outgoing?.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
+                performer.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
+                // a lunge's speed lines trail the body, on its way in only
+                if (performer is MeleePerformance lunge && _ui.Assets.Get("fxp_trail_soft") is { } streak)
+                    lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
+            }
+            var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+            foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);
+            if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
             // (the effects pass between them is counted too, so this is an upper bound)
-            if (PresentTrace.Enabled)
-                PresentTrace.Log("perf-draw", $"sprites={performer.SpriteCount}\tdraws={b.GraphicsDevice.Metrics.DrawCount - perfDraws}\treleased={performer.Released}");
+            if (PresentTrace.Enabled && _performance is { } traced)
+                PresentTrace.Log("perf-draw", $"sprites={traced.SpriteCount}\tdraws={b.GraphicsDevice.Metrics.DrawCount - perfDraws}\treleased={traced.Released}");
+            if (PresentTrace.Enabled && _reactions.Count > 0)
+                PresentTrace.Log("reaction-draw", $"alive={_reactions.Count}\tsprites={_reactions.Sum(r => r.SpriteCount)}"
+                                                  + $"\tlinks={_reactions.Sum(r => r.ChainLinks)}\tdraws={b.GraphicsDevice.Metrics.DrawCount - reactionDraws}"
+                                                  + $"\talloc={_reactionAllocBytes}\taction={(((IReactionStage)this).ActionInFocus ? 1 : 0)}");
         }
         if (ShotSockets) DrawSocketOverlay(b);
         DrawCallouts(b);
@@ -3305,6 +3364,21 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         RequireArchetypeReached();
         if (_isBossWave) LayoutBoss();
         else LayoutComposition(comp.Count);   // one or many: the same row, the same archetype scale
+
+        // A CAUGHT CREATURE RECOILS (JAWS, ADR-011): pushed a few pixels away from the champion and eased back, where it
+        // is DRAWN only. Before anything is published, so its body, its jaws and its effects all see the same place;
+        // never on a creature that fell (its fall owns it).
+        _recoilPx.Clear();
+        foreach (var r in _reactions)
+            foreach (var slot in r.Targets)
+                if (_creatureBoxes.TryGetValue(slot, out var box)
+                    && r.RecoilOffsetX(slot, _playheadMs, box.Width, _diedAt.ContainsKey(slot)) is var recoil and not 0f)
+                {
+                    var px = (int)MathF.Round(recoil);
+                    box.Offset(px, 0);
+                    _creatureBoxes[slot] = box;
+                    _recoilPx[slot] = _recoilPx.GetValueOrDefault(slot) + px;
+                }
 
         // The row: the union of the bodies standing in it. A trap ring is a statement about the PACK,
         // and the pack is nine hundred pixels wide and one creature tall — which is why it is the one
@@ -5796,7 +5870,8 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         {
             var age = 1f - burst;                       // 0 at the crossing, 1 when spent
             SkillBurstRing(b, ringCentre, ringR, age, Gold);
-            if (age > 0.18f) SkillBurstRing(b, ringCentre, ringR, age - 0.18f, sc);
+            // a Reaction comes up every few seconds: its ready is the gold front alone, not the Source wake behind it
+            if (age > 0.18f && def.Kind != SkillKind.Reaction) SkillBurstRing(b, ringCentre, ringR, age - 0.18f, sc);
         }
 
         // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
@@ -5809,7 +5884,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         var ty = nameY + UiTypography.Pitch(UiTypography.Headline);
         var source = s.Source.ToString().ToUpperInvariant();
         var wordW = _ui.MeasureBig(word, UiTypography.Body);
-        ShadowText(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
+        ShadowText(b, word, tx, ty, t.Swept >= 1f || !RearmsOnTheRail(def) ? Bone : Slate, UiTypography.Body);
         // The Source word ALWAYS prints — the slot is sized for it (DrawSkillDock, hunt-09).
         ShadowText(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
         ShadowText(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
@@ -5822,6 +5897,9 @@ public sealed class HuntScreen : IFocusActors, IActionStage
             b.Draw(sg2, new Rectangle(tx + nameW + UiMetrics.Space(8), nameY + (UiTypography.Headline - gem) / 2 + 1, gem, gem), Color.White * 0.9f);
         }
     }
+
+    /// <summary>Whether the rail shows this skill coming ready: an Active's cooldown, or a Reaction's rearm (a Field never waits).</summary>
+    private static bool RearmsOnTheRail(SkillDef def) => def.TakesABeat || def.Kind == SkillKind.Reaction;
 
     /// <summary>The readiness in a word: READY · 2 ACTIONS · 1.4s · ACTIVE (a Field) · ON BITE (a Reaction).</summary>
     private string ReadinessWord(SkillDef def, SkillTiming t)
@@ -5850,6 +5928,16 @@ public sealed class HuntScreen : IFocusActors, IActionStage
     private SkillTiming Timing(int i, SkillDef def)
     {
         var flash = UiMotion.Pulse(SkillCastKey(i));   // 1 → 0 over a Transition, armed by the cast event
+        // A REACTION'S REARM IS THE FIGHT'S OWN (JAWS, ADR-011): the sweep runs from its trigger to the moment the fight
+        // REPORTED it armed (ReactionArmed), never to "last trigger + RearmMs" (the champion's rate, COILED, RECOIL and a
+        // cleared cooldown all move it). The wave's last trigger sweeps to the pending moment the fight left behind.
+        if (def.Kind == SkillKind.Reaction)
+        {
+            if (_replay is null) return new SkillTiming(1f, 1f, 0, 0f, flash, int.MaxValue);
+            var r = _replay.ReactionReadinessAt(_playheadMs, i, _run?.ReactionReadyAfterLastWave(i));
+            var armed = r.IsRearming ? r.Progress : 1f;
+            return new SkillTiming(armed, armed, 0, 0f, flash, r.IsRearming ? r.ReadyMs : int.MaxValue);
+        }
         var isPassiveSlot = !def.TakesABeat;
         var ready = isPassiveSlot ? 1f : 0f;
         var ringSteps = 0;
@@ -6004,8 +6092,13 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         // swing — off the champion's own metronome — is what makes the opening usually there.
         float? lastTrap = null;
         foreach (var ri in reactionSlots)
+        {
+            // A PRESENTED REACTION NEVER TAKES THE FIGURE (JAWS, ADR-011): its answer is drawn on its own layer at the
+            // bite, and "bitten, answered, THEN he lays a trap" is the old sentence backwards. Other reactions keep it.
+            if (ReactionRecipes.For(Character.Id, _waveSkills[ri].Def.Id) is not null) continue;
             if (_replay.LastTrapBefore(_playheadMs, ri) is { } tms && (lastTrap is null || tms > lastTrap))
                 lastTrap = tms;
+        }
         if (beatMs is null && lastTrap is { } trapMs
             && _playheadMs - trapMs < TrapClipGraceMs)
         {
@@ -6290,7 +6383,16 @@ public sealed class HuntScreen : IFocusActors, IActionStage
     /// </summary>
     private bool ActionStillPlaying()
         => _performance is { } p && !p.Finished(_playheadMs)
-           || _outgoing is { } o && !o.Finished(_playheadMs);
+           || _outgoing is { } o && !o.Finished(_playheadMs)
+           || ReactionStillPlaying();
+
+    /// <summary>A reaction still in the world: the wave's last bite may have set one off, and it plays out too.</summary>
+    private bool ReactionStillPlaying()
+    {
+        foreach (var r in _reactions)
+            if (!r.Finished(_playheadMs)) return true;
+        return false;
+    }
 
     /// <summary>
     /// PRESENTATION ROOT MOTION (ADR-011): how far the performed actions carry the figure right now — a melee lunge to
@@ -6331,6 +6433,60 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         Voice(p, step);
         if (p.Finished(_playheadMs) && _clipName is null) _performance = null;
     }
+
+    /// <summary>
+    /// THE REACTION LAYER (ADR-011, JAWS): each answer to a bite, presented beside the champion and never through him.
+    /// Started by the reaction's own Skill event in the pump, on the bite's frame; advanced here on the playhead.
+    /// </summary>
+    private readonly List<ReactionPerformance> _reactions = new();
+
+    /// <summary>How far each caught creature is drawn off its own place this frame (the recoil), so actions can ignore it.</summary>
+    private readonly Dictionary<int, int> _recoilPx = new();
+
+    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its jaws, its chain, its snap.</summary>
+    private void SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
+    {
+        var targets = CastTargets(cast);
+        if (targets.Count == 0) return;   // nothing standing to bite back at
+        // bounded: a reaction lives ~0.3 s and rearms in seconds, so more than a few alive is a scrub or a seek
+        if (_reactions.Count >= 4) _reactions.RemoveAt(0);
+        var r = new ReactionPerformance(recipe, cast.Slot, cast.AtMs, targets, SourceColor.GetValueOrDefault(source, Bone));
+        _reactions.Add(r);
+        r.Update(_playheadMs, this);
+        // ONE authored cue for the whole answer, right after the enemy's bite thud: BITE -> CLACK. Not lead: under a
+        // performing action the duck keeps it secondary to the action's own voice.
+        var x = TryBody(VfxSubject.Creature(targets[0]), out var body) ? body.Center.X : ArenaRect.Center.X;
+        var cue = Sound?.PlayFirst(recipe.SnapCues, recipe.SnapVolume, 0f, Pan(x, recipe.PanWidth), 0.04f);
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("reaction-spawn", $"{recipe.Id}\tslot={cast.Slot}\tcontact={cast.AtMs}\ttargets={string.Join(",", targets)}"
+                                               + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}\tcue={cue ?? "-"}");
+    }
+
+    /// <summary>Advance every reaction on the playhead; drop the finished ones and any a seek rewound past.</summary>
+    private void UpdateReactions()
+    {
+        _reactionAllocBytes = 0;
+        for (var i = _reactions.Count - 1; i >= 0; i--)
+        {
+            var r = _reactions[i];
+            if (_playheadMs < r.TriggerMs - 1f || r.Finished(_playheadMs))
+            {
+                if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}");
+                _reactions.RemoveAt(i);
+                continue;
+            }
+            var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+            var step = r.Update(_playheadMs, this);
+            if (!PresentTrace.Enabled) continue;
+            _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // measured before any trace text
+            var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
+            if (step.Snapped) PresentTrace.Log("reaction-snap", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
+            if (step.RecoilEnded) PresentTrace.Log("reaction-recoil-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
+            if (step.Released) PresentTrace.Log("reaction-release", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tearly={r.ReleaseFromMs < r.Recipe.ReleaseAtMs}");
+        }
+    }
+
+    private long _reactionAllocBytes;   // bytes the reaction layer allocated this frame (update + draw), for the trace
 
     /// <summary>Voice what one performance's update crossed: its release, its contact, a contact tick.</summary>
     private void Voice(IActionPerformance p, PerformanceStep step)
@@ -6384,11 +6540,33 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         return false;
     }
 
-    bool IActionStage.TryTargetBody(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
+    // AN ACTION AIMS AT THE CREATURE'S OWN PLACE, never at a reaction's recoil (JAWS, ADR-011): a HARD HANDS leap planned
+    // while JAWS was pushing its target measured the push (671 -> 673 px), and the accepted references must not move
+    // because a reaction happened to be on screen. The reaction layer reads the drawn, recoiled body instead.
+    bool IActionStage.TryTargetBody(int slot, out Rectangle body)
+    {
+        if (!TryBody(VfxSubject.Creature(slot), out body)) return false;
+        if (_recoilPx.TryGetValue(slot, out var push)) body.Offset(-push, 0);
+        return true;
+    }
 
     Texture2D? IActionStage.Texture(string key) => _ui.Assets.Get(key);
 
     float IActionStage.CasterHeight => TryBody(VfxSubject.Champion, out var champ) ? champ.Height : ChampBox.Height;
+
+    bool IReactionStage.TryChampionBody(out Rectangle body) => TryBody(VfxSubject.Champion, out body);
+
+    bool IReactionStage.TryCaughtBody(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
+
+    bool IReactionStage.TryTargetFrame(int slot, out SpriteFrame frame) => TryDrawnFrame(VfxSubject.Creature(slot), out frame);
+
+    bool IReactionStage.TargetFalling(int slot) => _diedAt.ContainsKey(slot);
+
+    bool IReactionStage.ChampionFalling => _mode == Mode.Downed;
+
+    // the action's FOCUS is exactly the window its duck covers (release to the contact's ring)
+    bool IReactionStage.ActionInFocus => _performance is { } p && p.DuckAt(_playheadMs) < 1f
+                                         || _outgoing is { } o && o.DuckAt(_playheadMs) < 1f;
 
     /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
     /// <remarks>
@@ -7138,6 +7316,11 @@ public sealed class HuntScreen : IFocusActors, IActionStage
     /// <summary>DEV: start a run and play partway into a wave, for screenshots.</summary>
     public void DevStart(Hunter hunter, float ehp, float edmg)
     {
+        // RH_SHOT_SEED=<n> SEEDS THE FIGHT'S DICE (the descent's stream, which mints every wave's crit rolls). It is
+        // `new Random()` otherwise, so two captures of one fixture agree on every beat and differ on every critical:
+        // the JAWS slice found its discovery film printing "-4 JAWS" where the new one printed "-7 JAWS CRITICAL".
+        // A comparison of two builds, or of one build with a layer on and off, needs the same dice.
+        if (int.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_SEED"), out var seed)) _descent.Rng = new Random(seed);
         _hunter = hunter;
         _enemyBaseHealth = ehp;
         _enemyBaseDamage = edmg;

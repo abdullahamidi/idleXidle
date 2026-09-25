@@ -3158,8 +3158,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         // PINNED THROUGH THE HOST, like the broken-shield pose: every fight fixture said
                         // "a deliberately beefy enemy, 1400" and photographed the region's real baseline,
                         // because the host pushes that baseline every frame and restarts the run once.
-                        _shotEnemyBaseline = (1400f, 9f);
-                        _expedition.DevStart(_hunter, 1400f, 9f);
+                        // RH_SHOT_ENEMY=<health>,<bite> pins a different one: the WAVE changes, never a
+                        // skill, which is how JAWS' killing answer (a frail pack that bites hard) and the
+                        // bite that fells the champion as JAWS answers it are posed through the real fight.
+                        var (fxHealth, fxBite) = ShotEnemyBaseline() ?? (1400f, 9f);
+                        _shotEnemyBaseline = (fxHealth, fxBite);
+                        _expedition.DevStart(_hunter, fxHealth, fxBite);
                     }
                     // `fightmulti`: the shutter opens on SPRAY's cast, when its five CLUSTER hits print.
                     if (sm == "fightmulti")
@@ -7589,6 +7593,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// DevStart alone is gone before the shutter opens; this is what `fightshieldbroken` fights.
     /// </summary>
     private (float Health, float Damage)? _shotEnemyBaseline;
+
+    /// <summary>FIXTURE ONLY: <c>RH_SHOT_ENEMY=&lt;health&gt;,&lt;bite&gt;</c>, the fight pose's enemy baseline; refused loudly if malformed.</summary>
+    private static (float Health, float Damage)? ShotEnemyBaseline()
+    {
+        if (Environment.GetEnvironmentVariable("RH_SHOT_ENEMY")?.Trim() is not { Length: > 0 } raw) return null;
+        var parts = raw.Split(',');
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (parts.Length == 2
+            && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, inv, out var health) && health > 0f
+            && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, inv, out var bite) && bite >= 0f)
+            return (health, bite);
+        throw new InvalidOperationException($"RH_SHOT_ENEMY='{raw}' is not '<health>,<bite>' (two numbers, health above zero).");
+    }
 
     /// <summary>
     /// RIG ONLY: how far before its target event a posed seek lands (RH_SHOT_LEAD seconds). 0.02 when
