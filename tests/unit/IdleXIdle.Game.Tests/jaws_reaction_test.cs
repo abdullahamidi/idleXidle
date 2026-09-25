@@ -14,9 +14,10 @@ namespace IdleXIdle.Game.Tests;
 
 /// <summary>
 /// THE REACTION CONTRACT (ADR-011, JAWS, 2026-09-25): a reaction is presented on its own layer, belongs to its SKILL,
-/// never owns the champion's figure, is a RIGID mechanism (a spring-loaded clamp: each arm turns about its own hinge,
-/// the metal never scales), is fired from and reeled back to the Seeker within about a quarter of a second, pulls its
-/// creature toward him, and yields to a death.
+/// never owns the champion's figure, is a RIGID mechanism (a spring-loaded bear trap: each jaw turns about its own pin,
+/// the metal never scales) whose close is SEEN (open, moving, shut over ~50 ms), whose answer lands on its stop, is fired
+/// from and reeled back to the Seeker within about a third of a second, pulls its creature toward him, and yields to a
+/// death.
 /// </summary>
 /// <remarks>
 /// The failures these stop were measured in the JAWS discovery: a row-wide rope ring that no one could tie to the bite,
@@ -116,26 +117,40 @@ public class JawsReactionTest
     // ── THE MECHANISM, on the fight's playhead (u = ms after the first frame that showed the bite) ─
 
     [Fact]
-    public void test_the_jaws_are_open_on_the_first_frame_and_shut_by_the_next()
+    public void test_the_jaws_close_over_several_frames_the_eye_can_see()
     {
-        // the open head is SEEN once (the tether fired), then the slam: the closed pose is on screen one 60 fps frame later
+        // THE CLOSE IS SEEN. The polish pass shut in 16 ms: one open frame, one shut frame, no motion anyone perceived.
+        // At 60 fps the eye now gets OPEN (+0), still open (+17), about half shut (+33), SHUT (+50)
+        const float frame = 1000f / 60f;
         Assert.Equal(Jaws.OpenDeg, ReactionPerformance.JawAngle(Jaws, 0f, Jaws.RetractAtMs));
-        Assert.InRange(Jaws.CloseMs, 1f, 1000f / 60f);
+        Assert.InRange(Jaws.CloseMs, 2.9f * frame, 4.2f * frame);
         Assert.Equal(Jaws.StopDeg, ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs, Jaws.RetractAtMs), 3);
-        // ACCELERATING: most of the travel happens in the second half of the close (a spring's slam, not an ease)
-        var half = ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs / 2f, Jaws.RetractAtMs);
-        Assert.True(Jaws.OpenDeg - half < (Jaws.OpenDeg - Jaws.StopDeg) / 2f, "the jaws close accelerating");
+        var travel = Jaws.OpenDeg - Jaws.StopDeg;
+        float Travelled(float ms) => (Jaws.OpenDeg - ReactionPerformance.JawAngle(Jaws, ms, Jaws.RetractAtMs)) / travel;
+        Assert.InRange(Travelled(frame), 0.02f, 0.2f);        // the first frame after the bite: still clearly open, starting
+        Assert.InRange(Travelled(2f * frame), 0.3f, 0.6f);    // the next: visibly on its way
+        // A SPRING, NOT AN EASE: slow first degrees, most of the travel near contact (the last third of the close)
+        Assert.True(1f - Travelled(Jaws.CloseMs * 2f / 3f) > 0.5f, "the majority of the travel happens near contact");
+        // and the open pose is unmistakably not the shut one: the jaws each travel a good 30 degrees
+        Assert.True(travel >= 28f, "open must look unmistakably different from shut");
     }
 
     [Fact]
-    public void test_the_jaws_stop_hard_recoil_by_a_few_degrees_and_lock_on_the_limb()
+    public void test_the_jaws_stop_hard_rebound_once_and_lock_on_the_limb()
     {
         var held = (int)(Jaws.RetractAtMs - Jaws.CloseMs);   // from the stop to the moment it starts home
         var angles = Enumerable.Range(0, held).Select(ms => ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs + ms, Jaws.RetractAtMs)).ToArray();
-        Assert.All(angles, a => Assert.InRange(a, Jaws.StopDeg, Jaws.StopDeg + Jaws.ReboundDeg));   // a recoil, never a re-open
-        Assert.Equal(Jaws.StopDeg, angles[^1], 3);                                                   // locked
+        Assert.All(angles, a => Assert.InRange(a, Jaws.StopDeg, Jaws.StopDeg + Jaws.ReboundDeg + 0.001f));   // never re-opens
+        // ONE small rebound of 3-5 degrees: up, then down, then locked (metal hitting resistance, not a spring bouncing)
+        Assert.InRange(Jaws.ReboundDeg, 3f, 5f);
+        Assert.InRange(angles.Max() - Jaws.StopDeg, Jaws.ReboundDeg * 0.9f, Jaws.ReboundDeg + 0.001f);
+        var peak = Array.IndexOf(angles, angles.Max());
+        for (var i = 1; i <= peak; i++) Assert.True(angles[i] >= angles[i - 1] - 1e-4f, "the rebound rises once");
+        for (var i = peak + 1; i < angles.Length; i++) Assert.True(angles[i] <= angles[i - 1] + 1e-4f, "then settles, never bounces again");
+        Assert.InRange(Jaws.ReboundMs, 20f, 30f);
+        Assert.Equal(Jaws.StopDeg, angles[(int)Jaws.ReboundMs + 1], 3);   // locked
         Assert.True(Jaws.StopDeg > 0f, "a trap stops ON what it bites: the jaws stand a little apart");
-        // and they unlock only as the head is reeled home
+        // and they unlock only as the trap is reeled home
         Assert.Equal(Jaws.UnlockDeg, ReactionPerformance.JawAngle(Jaws, Jaws.RetractAtMs + Jaws.UnlockMs, Jaws.RetractAtMs), 3);
     }
 
@@ -152,65 +167,91 @@ public class JawsReactionTest
         Assert.Contains("pose.Scale", draw);
     }
 
-    // ── IDENTITY: a mechanical hunting clamp, never an animal's head (the identity pass, 2026-09-25) ──
+    // ── THE OBJECT: a bear trap whose jaws dominate, never a head or a hook (identity + readable-clamp passes) ──
 
     [Fact]
-    public void test_each_arm_turns_about_its_own_hinge_and_the_housing_never_turns()
+    public void test_each_jaw_turns_about_its_own_pin_and_the_base_never_turns()
     {
-        // the polish pass hinged two long jaws on ONE round hub behind them: at true speed a snout, two jaws and an eye.
-        // A trap's arms hinge at the two ends of its base: two pins, one above and one below the clamp's line
-        Assert.NotEqual(Jaws.UpperPivot, Jaws.LowerPivot);
-        Assert.True(Jaws.UpperPivot.Y < Jaws.BitePoint.Y && Jaws.LowerPivot.Y > Jaws.BitePoint.Y, "one hinge above the line, one below");
-        Assert.Equal(Jaws.BitePoint.Y - Jaws.UpperPivot.Y, Jaws.LowerPivot.Y - Jaws.BitePoint.Y, 3);
-        Assert.True(Jaws.UpperPivot.X < Jaws.BitePoint.X && Jaws.Eye.X < Jaws.UpperPivot.X, "shackle, hinges, then the arms' grip");
+        // the polish pass hinged two long jaws on ONE round hub (a snout and an eye); the identity pass put two thin arms
+        // on pins 57 px apart at a plate's corners (a bracket with two hooks). A bear trap's two jaws turn on a COMPACT
+        // pair of pins on its base, below the limb they close around
+        Assert.NotEqual(Jaws.NearPivot, Jaws.FarPivot);
+        Assert.True(Jaws.NearPivot.X < Jaws.BitePoint.X && Jaws.FarPivot.X > Jaws.BitePoint.X, "the near jaw's pin on the Seeker's side, the far one past it");
+        Assert.True(Vector2.Distance(Jaws.NearPivot, Jaws.FarPivot) < 0.25f * Jaws.ClampArtHeight, "a compact pair, never a tall bracket");
+        Assert.True(Jaws.NearPivot.Y > Jaws.BitePoint.Y && Jaws.FarPivot.Y > Jaws.BitePoint.Y, "the pins on the base, below the jaws' grip");
         var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
         var material = src[src.IndexOf("public void DrawMaterial(", StringComparison.Ordinal)..];
         material = material[..material.IndexOf("private void DrawPart(", StringComparison.Ordinal)];
-        Assert.Contains("DrawPart(b, stage, Recipe.UpperKey, pose.UpperPivot, Recipe.UpperPivot, pose, pose.Angle - pose.Jaw", material);
-        Assert.Contains("DrawPart(b, stage, Recipe.LowerKey, pose.LowerPivot, Recipe.LowerPivot, pose, pose.Angle + pose.Jaw", material);
-        Assert.Contains("DrawPart(b, stage, Recipe.BaseKey, pose.Bite, Recipe.BitePoint, pose, pose.Angle,", material);   // rigid on the line
+        Assert.Contains("DrawPart(b, stage, Recipe.NearKey, pose.NearPivot, Recipe.NearPivot, pose, pose.Angle - pose.Jaw", material);
+        Assert.Contains("DrawPart(b, stage, Recipe.FarKey, pose.FarPivot, Recipe.FarPivot, pose, pose.Angle + pose.Jaw", material);
+        Assert.Contains("DrawPart(b, stage, Recipe.BaseKey, pose.Bite, Recipe.BitePoint, pose, pose.Angle,", material);   // rigid
     }
 
     [Fact]
-    public void test_the_recipe_describes_a_clamp_with_no_hub_and_no_head()
+    public void test_the_recipe_describes_a_trap_with_no_hub_no_head_and_no_arms()
     {
-        // no single shared pivot (the hub read as an eye) and no "head" to size: the object is a clamp
+        // no single shared pivot (the hub read as an eye), no "head" (a crocodile), no upper/lower "arms" (two hooks)
         var props = typeof(ReactionRecipe).GetProperties().Select(p => p.Name).ToArray();
         Assert.DoesNotContain("Pivot", props);
-        Assert.DoesNotContain(props, n => n.StartsWith("Head", StringComparison.Ordinal));
-        Assert.Contains("ClampArtLength", props);
+        Assert.DoesNotContain(props, n => n.StartsWith("Head", StringComparison.Ordinal) || n.StartsWith("Upper", StringComparison.Ordinal)
+                                          || n.StartsWith("Lower", StringComparison.Ordinal));
+        Assert.Contains("ClampArtHeight", props);
     }
 
     [Fact]
-    public void test_the_sparks_are_few_and_come_from_the_hinges()
+    public void test_one_jaw_is_drawn_behind_the_caught_creature()
     {
-        // the mechanism's motion carries the snap: at most a spark per hinge, where steel met steel, never a fan round the target
+        // THE LIMB IS BETWEEN THE JAWS: the screen draws each trap's NEAR jaw just before the creature it caught, in the
+        // same batch, and the material pass then skips it; its glint is never drawn through the limb that hides it. The
+        // near jaw, not the far one: the far jaw lies over the body, and behind a dark creature it vanished (the close read
+        // as one jaw swinging up)
+        var perf = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
+        var behind = perf[perf.IndexOf("public void DrawBehind(", StringComparison.Ordinal)..];
+        behind = behind[..behind.IndexOf("public void DrawMaterial(", StringComparison.Ordinal)];
+        Assert.Contains("Recipe.NearKey", behind);
+        Assert.DoesNotContain("Recipe.FarKey", behind);
+        Assert.Contains("if (_nearBehind[k]) _sprites++;", perf);
+        Assert.Contains("if (!_nearBehind[k]) DrawPart(b, stage, Recipe.NearEdgeKey", perf);
+        var src = Hunt();
+        foreach (var drawer in new[] { "private void DrawComposition(", "private void DrawNormalEnemy(", "private void DrawBoss(" })
+        {
+            var body = src[src.IndexOf(drawer, StringComparison.Ordinal)..];
+            var call = body.IndexOf("r.DrawBehind(b, this, _playheadMs,", StringComparison.Ordinal);
+            var sprite = body.IndexOf("ActorSprite(b,", StringComparison.Ordinal);
+            Assert.True(call > 0 && call < sprite, $"{drawer} draws the far jaw BEFORE the creature's sprite");
+        }
+    }
+
+    [Fact]
+    public void test_the_sparks_are_few_and_come_from_the_pins()
+    {
+        // the jaws' motion carries the snap: at most a spark per pin, where steel met steel, never a fan round the target
         Assert.InRange(Jaws.Sparks, 0, 2);
         var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
         var light = src[src.IndexOf("public void DrawLight(", StringComparison.Ordinal)..];
         light = light[..light.IndexOf("private void DrawChain(", StringComparison.Ordinal)];
-        Assert.Contains("var hinge = s == 0 ? pose.UpperPivot : pose.LowerPivot;", light);
+        Assert.Contains("var hinge = s == 0 ? pose.NearPivot : pose.FarPivot;", light);
         Assert.Contains("Math.Min(Recipe.Sparks, 2)", light);
     }
 
     [Fact]
-    public void test_the_clamp_parts_share_one_canvas_and_its_points_lie_on_it()
+    public void test_the_trap_parts_share_one_canvas_and_its_points_lie_on_it()
     {
-        // the housing, both arms and both teeth masks are drawn on ONE canvas, so the pins, the shackle and the clamp
-        // point serve them all. PNG IHDR: width and height are the big-endian ints at bytes 16..24 (no device needed)
-        var sizes = new[] { Jaws.BaseKey, Jaws.UpperKey, Jaws.LowerKey, Jaws.UpperEdgeKey, Jaws.LowerEdgeKey }.Select(key =>
+        // the base, both jaws and both teeth masks are drawn on ONE canvas, so the pins, the eye and the clamp point serve
+        // them all. PNG IHDR: width and height are the big-endian ints at bytes 16..24 (no device needed)
+        var sizes = new[] { Jaws.BaseKey, Jaws.NearKey, Jaws.FarKey, Jaws.NearEdgeKey, Jaws.FarEdgeKey }.Select(key =>
         {
             var head = new byte[24];
             using (var f = File.OpenRead(RepoFile("assets", "art", "Props", key + ".png"))) f.ReadExactly(head);
             return (W: (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19], H: (head[20] << 24) | (head[21] << 16) | (head[22] << 8) | head[23]);
         }).Distinct().ToArray();
         Assert.Single(sizes);
-        foreach (var at in new[] { Jaws.UpperPivot, Jaws.LowerPivot, Jaws.Eye, Jaws.BitePoint })
+        foreach (var at in new[] { Jaws.NearPivot, Jaws.FarPivot, Jaws.Eye, Jaws.BitePoint })
         {
             Assert.InRange(at.X, 0f, sizes[0].W);
             Assert.InRange(at.Y, 0f, sizes[0].H);
         }
-        Assert.InRange(Jaws.ClampArtLength, Jaws.BitePoint.X - Jaws.Eye.X, sizes[0].W);
+        Assert.InRange(Jaws.ClampArtHeight, 0.5f * sizes[0].H, sizes[0].H);
     }
 
     [Fact]
@@ -228,7 +269,7 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_the_clamp_is_reeled_home_and_nothing_stays()
+    public void test_the_trap_is_reeled_home_and_nothing_stays()
     {
         var p = Answer();
         p.Update(7000, new Stage());
@@ -310,6 +351,33 @@ public class JawsReactionTest
         var loop = src[src.IndexOf("float? lastTrap = null;", StringComparison.Ordinal)..];
         loop = loop[..loop.IndexOf("if (beatMs is null && lastTrap", StringComparison.Ordinal)];
         Assert.Contains("ReactionRecipes.For(Character.Id, _waveSkills[ri].Def.Id) is not null) continue;", loop);
+    }
+
+    [Fact]
+    public void test_the_answer_lands_on_the_jaws_stop_and_the_bite_keeps_its_own_moment()
+    {
+        // PRESENTATION SCHEDULING ONLY. The fight resolved the reflected blow at the bite; on screen the answer's number,
+        // the creature's flash and a kill's fall wait for the jaws' stop (~50 ms), and the enemy's bite keeps t 0
+        var src = Hunt();
+        var strike = src[src.IndexOf("case BattleEventKind.Strike:", StringComparison.Ordinal)..];
+        strike = strike[..strike.IndexOf("case BattleEventKind.EnemyStrike:", StringComparison.Ordinal)];
+        Assert.Contains("if (reactionHit && reactionHitPerf is { Clamped: false } answering)", strike);
+        Assert.Contains("ReactionEchoKind.Number", strike);
+        Assert.Contains("ReactionEchoKind.Flash", strike);
+        var down = src[src.IndexOf("case BattleEventKind.EnemyDown:", StringComparison.Ordinal)..];
+        down = down[..down.IndexOf("case BattleEventKind.Charge:", StringComparison.Ordinal)];
+        Assert.Contains("ReactionEchoKind.Death", down);
+        Assert.Contains("_deathDeferred.Add(e.Slot)", down);
+        // released on the stop, dropped on a rewind; a deferred-dead creature is drawn standing until then
+        var update = src[src.IndexOf("private void UpdateReactions()", StringComparison.Ordinal)..];
+        update = update[..update.IndexOf("private long _reactionAllocBytes", StringComparison.Ordinal)];
+        Assert.Contains("if (step.Clamped) ReleaseEchoes(r, present: true);", update);
+        Assert.Contains("ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);", update);
+        Assert.Contains("!_replay.CreatureAlive(i) && !_deathDeferred.Contains(i)", src);
+        // the enemy's own bite is untouched: its thud and burst stay on its own frame
+        var bite = src[src.IndexOf("case BattleEventKind.EnemyStrike:", StringComparison.Ordinal)..];
+        bite = bite[..bite.IndexOf("break;", StringComparison.Ordinal)];
+        Assert.DoesNotContain("Echo", bite);
     }
 
     [Fact]

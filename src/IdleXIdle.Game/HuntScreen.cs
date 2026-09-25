@@ -1439,6 +1439,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         _performance = null;
         _outgoing = null;
         _reactions.Clear();   // a reaction belongs to the wave whose bite set it off
+        _reactionEchoes.Clear();
+        _deathDeferred.Clear();
 
         // THE WAVE BEING SHOWN, captured BEFORE the push: PushWave resolves wave+1 and, on a clear, counts
         // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
@@ -1836,6 +1838,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 _performance = null;
                 _outgoing = null;
                 _reactions.Clear();
+                _reactionEchoes.Clear();
+                _deathDeferred.Clear();
             }
             // ...AND THE HOST MAY KEEP THE NEXT PACK OFF THE STAGE (HoldNextWave): the break plays every
             // beat of its own, then rests on the empty stage until it is let go.
@@ -2016,6 +2020,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // jaws' own sentence, so the generic thud and puff that would describe the same blow give way to its snap.
         var reactionHitAtMs = -1;
         ReactionRecipe? reactionHitRecipe = null;
+        // ...and the presented reaction itself: its answer's number, flash and any kill are PRESENTED on its jaws' stop
+        // (~50 ms on), not on the bite's frame; the fight has already resolved them (see ReactionEcho)
+        ReactionPerformance? reactionHitPerf = null;
         // ...and WHAT the reaction at that beat is called, so its blow can print its own name instead of
         // the word CRITICAL (§63: a critical is the expected value there; the skill is the news).
         string? trapName = null;
@@ -2105,17 +2112,26 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         }
                         if (!_summed.Contains(bi))
                         {
-                            SpawnDamage(total, e.Slot, crit, skill, hits, reaction ? trapName : null);
-                            // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
-                            // sound the file is named for had never once accompanied a critical hit.
-                            if (crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                            // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER ON THE JAWS' STOP, where it lands on screen
+                            if (reactionHit && reactionHitPerf is { Clamped: false } answering)
+                                _reactionEchoes.Add(new ReactionEcho(answering, ReactionEchoKind.Number, e.Slot, total, crit, skill, hits,
+                                                                     reaction ? trapName : null));
+                            else
+                            {
+                                SpawnDamage(total, e.Slot, crit, skill, hits, reaction ? trapName : null);
+                                // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
+                                // sound the file is named for had never once accompanied a critical hit.
+                                if (crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                            }
                         }
                     }
                     // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
                     // together they strobed the pack ("the enemy blinks like a disco ball", playtest
                     // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
-                    if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
+                    if (!auraTick && reactionHit && reactionHitPerf is { Clamped: false } flashing)
+                        _reactionEchoes.Add(new ReactionEcho(flashing, ReactionEchoKind.Flash, e.Slot));   // ...and its flash
+                    else if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
                     {
                         _hitFlash[e.Slot] = 1f;
                         _hitFlashLook[e.Slot] = performedHit
@@ -2177,7 +2193,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     int? castTarget = null;
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
-                    if (reactionRecipe is not null) SpawnReaction(reactionRecipe, e, castSk.Source);
+                    if (reactionRecipe is not null) reactionHitPerf = SpawnReaction(reactionRecipe, e, castSk.Source);
                     if (!performed && reactionRecipe is null) PlaySkillVfx(castDef, castSk.Source, castTarget);
                     if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
                     if (!performed && reactionRecipe is null) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
@@ -2210,19 +2226,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     break;
                 case BattleEventKind.EnemyDown:
                 {
-                    // The creature FALLS (its death clip, from this moment), and the plume rises over the
-                    // body half a second later — after the fall, not instead of it. Playtest: "düşman
-                    // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
-                    _diedAt[e.Slot] = _anim;
-                    EnemyDownsSeen++;
-                    // A boss has its own fall (sfx_boss_down: deeper, longer, a second thump when the mass lands)
-                    // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
-                    if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
-                    else Sound?.Play("sfx_enemy_down", 0.36f, vary: 0.06f);
-                    // A boss falling is the loudest beat in the fight: the starburst AND the plume.
-                    // The plume's half-second wait is the profile's DelaySeconds now, not the caller's.
-                    if (_isBossWave) PlayFx(VfxProfiles.DeathBossBurst, VfxSubject.Creature(e.Slot), Gold);
-                    PlayFx(VfxProfiles.DeathCreature, VfxSubject.Creature(e.Slot), Color.White);
+                    // A CREATURE A PRESENTED REACTION'S ANSWER KILLED falls on the jaws' STOP, not on the bite's frame:
+                    // the fight killed it at the bite, but on screen the trap has not shut yet (JAWS, ADR-011). Until
+                    // then it is drawn standing, in the jaws (_deathDeferred).
+                    if (reactionHitPerf is { Clamped: false } killing && e.AtMs == reactionHitAtMs && killing.Targets.Contains(e.Slot))
+                    {
+                        _reactionEchoes.Add(new ReactionEcho(killing, ReactionEchoKind.Death, e.Slot));
+                        _deathDeferred.Add(e.Slot);
+                        break;
+                    }
+                    PresentEnemyDown(e.Slot);
                     break;
                 }
                 case BattleEventKind.Charge:
@@ -3551,7 +3564,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // flash does not work"). No knock-back: the user asked for the flash alone.
             var hitFl = FlashAt(i);
             var creatureTint = enterTint;
-            if (_replay is not null && !_replay.CreatureAlive(i))
+            // THE NEAR JAW OF A TRAP ON THIS CREATURE goes behind it (JAWS): the limb is drawn between the two jaws
+            if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, i);
+            if (_replay is not null && !_replay.CreatureAlive(i) && !_deathDeferred.Contains(i))
             {
                 DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
                 continue;
@@ -3644,7 +3659,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = _rowTopY;
-        if (_replay is not null && !_replay.CreatureAlive(0))
+        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, 0);   // a trap's near jaw, behind it
+        if (_replay is not null && !_replay.CreatureAlive(0) && !_deathDeferred.Contains(0))
         {
             DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey);
             return;
@@ -3720,6 +3736,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         var box = CreatureBox(0);   // LayoutBoss's, so the effects and the figure share one rectangle
         ActorShadow(b, box.Center.X, BossAnchor.Y, (int)(box.Width * 0.62f), 44, 0.6f);
+        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, 0);   // a trap's near jaw, behind it
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
@@ -6457,6 +6474,77 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (p.Finished(_playheadMs) && _clipName is null) _performance = null;
     }
 
+    /// <summary>A creature FALLS: its death clip from this moment, its sound, and the plume over the body a moment later.</summary>
+    private void PresentEnemyDown(int slot)
+    {
+        // The creature FALLS (its death clip, from this moment), and the plume rises over the
+        // body half a second later — after the fall, not instead of it. Playtest: "düşman
+        // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
+        _diedAt[slot] = _anim;
+        _deathDeferred.Remove(slot);
+        EnemyDownsSeen++;
+        // A boss has its own fall (sfx_boss_down: deeper, longer, a second thump when the mass lands)
+        // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
+        if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
+        else Sound?.Play("sfx_enemy_down", 0.36f, vary: 0.06f);
+        // A boss falling is the loudest beat in the fight: the starburst AND the plume.
+        // The plume's half-second wait is the profile's DelaySeconds now, not the caller's.
+        if (_isBossWave) PlayFx(VfxProfiles.DeathBossBurst, VfxSubject.Creature(slot), Gold);
+        PlayFx(VfxProfiles.DeathCreature, VfxSubject.Creature(slot), Color.White);
+    }
+
+    /// <summary>What a presented reaction's answer shows on its jaws' stop instead of on the bite's frame.</summary>
+    private enum ReactionEchoKind { Number, Flash, Death }
+
+    /// <summary>
+    /// ONE PIECE OF A REACTION'S ANSWER, held for its jaws' stop (JAWS, ADR-011 readable-clamp pass). The fight resolved
+    /// the reflected blow on the bite's millisecond; the trap takes ~50 ms to spring shut on screen, and the answer's own
+    /// feedback (its number, the creature's flash, a kill's fall) belongs to the moment steel meets the limb. The enemy's
+    /// bite keeps its own feedback at t 0. Presentation only: nothing here changes what the fight did.
+    /// </summary>
+    private readonly record struct ReactionEcho(ReactionPerformance Reaction, ReactionEchoKind Kind, int Slot, int Amount = 0,
+                                                bool Crit = false, bool Skill = false, int Hits = 1, string? Word = null);
+
+    /// <summary>The answers waiting for their jaws' stop, oldest first (a few at most: a reaction every few seconds).</summary>
+    private readonly List<ReactionEcho> _reactionEchoes = new();
+
+    /// <summary>Creatures the fight has killed whose fall waits for the jaws' stop: drawn standing until then.</summary>
+    private readonly HashSet<int> _deathDeferred = new();
+
+    /// <summary>
+    /// Present <paramref name="r"/>'s held answer: on its stop (<paramref name="present"/>), or dropped when a seek rewound
+    /// past its bite (the replay is rebuilt; the kill has not happened there yet).
+    /// </summary>
+    private void ReleaseEchoes(ReactionPerformance r, bool present)
+    {
+        for (var i = 0; i < _reactionEchoes.Count; i++)
+        {
+            var echo = _reactionEchoes[i];
+            if (!ReferenceEquals(echo.Reaction, r)) continue;
+            _reactionEchoes.RemoveAt(i--);
+            if (!present)
+            {
+                if (echo.Kind == ReactionEchoKind.Death) _deathDeferred.Remove(echo.Slot);
+                continue;
+            }
+            switch (echo.Kind)
+            {
+                case ReactionEchoKind.Number:
+                    SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Skill, echo.Hits, echo.Word);
+                    if (echo.Crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                    break;
+                case ReactionEchoKind.Flash when _hitFlash.GetValueOrDefault(echo.Slot) <= 0f:
+                    _hitFlash[echo.Slot] = 1f;
+                    _hitFlashLook[echo.Slot] = (r.Recipe.TargetFlash, 0f, 1000f / Math.Max(1f, r.Recipe.TargetFlashMs));
+                    if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={echo.Slot}");
+                    break;
+                case ReactionEchoKind.Death:
+                    PresentEnemyDown(echo.Slot);
+                    break;
+            }
+        }
+    }
+
     /// <summary>
     /// THE REACTION LAYER (ADR-011, JAWS): each answer to a bite, presented beside the champion and never through him.
     /// Started by the reaction's own Skill event in the pump, on the bite's frame; advanced here on the playhead.
@@ -6467,12 +6555,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private readonly Dictionary<int, int> _recoilPx = new();
 
     /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its jaws, its chain, its snap.</summary>
-    private void SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
+    private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
         var targets = CastTargets(cast);
-        if (targets.Count == 0) return;   // nothing standing to bite back at
+        if (targets.Count == 0) return null;   // nothing standing to bite back at
         // bounded: a reaction lives ~0.3 s and rearms in seconds, so more than a few alive is a scrub or a seek
-        if (_reactions.Count >= 4) _reactions.RemoveAt(0);
+        if (_reactions.Count >= 4)
+        {
+            ReleaseEchoes(_reactions[0], present: true);
+            _reactions.RemoveAt(0);
+        }
         var r = new ReactionPerformance(recipe, cast.Slot, cast.AtMs, targets, SourceColor.GetValueOrDefault(source, Bone));
         _reactions.Add(r);
         r.Update(_playheadMs, this);
@@ -6483,6 +6575,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (PresentTrace.Enabled)
             PresentTrace.Log("reaction-spawn", $"{recipe.Id}\tslot={cast.Slot}\tcontact={cast.AtMs}\ttargets={string.Join(",", targets)}"
                                                + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}\tcue={cue ?? "-"}");
+        return r;
     }
 
     /// <summary>Advance every reaction on the playhead; drop the finished ones and any a seek rewound past.</summary>
@@ -6495,13 +6588,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (_playheadMs < r.TriggerMs - 1f || r.Finished(_playheadMs))
             {
                 if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}\tslack={r.Slack}");
+                ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);   // a rewind drops them; an end presents them
                 _reactions.RemoveAt(i);
                 continue;
             }
             var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             var step = r.Update(_playheadMs, this);
+            if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // the layer's own
+            // THE JAWS HIT THEIR STOP: the answer lands on screen now (its number, its flash, a kill's fall)
+            if (step.Clamped) ReleaseEchoes(r, present: true);
             if (!PresentTrace.Enabled) continue;
-            _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // measured before any trace text
             var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
             if (step.Clamped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
             if (step.YankEnded) PresentTrace.Log("reaction-yank-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
