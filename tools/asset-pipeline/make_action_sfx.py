@@ -24,8 +24,8 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        heavy dull thud with a pitch drop and a small hard room. No ring, no tail.
                                        Heavier than the basic swing's thud, but tighter, so ten in a fight do not tire.
 
-The SPRAY cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
-quiet enough; only an ear says it sounds like a knife, so every new cue here is a candidate until it is
+The SPRAY and HARD HANDS cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
+quiet enough; only an ear says it sounds like a knife (or a fist), so every new cue here is a candidate until it is
 listened to (design/audio/seeker-spray-audio-brief.md is the contract the approved ones keep).
 """
 from __future__ import annotations

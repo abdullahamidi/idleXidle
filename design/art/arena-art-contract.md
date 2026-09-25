@@ -279,7 +279,7 @@ is drawn by `ProjectileVisual`, from parts:
   tumble is an optional field on the look. Nothing in the shared path spins the head.
 - Projectiles that are not yet listed still follow the two-layer strip rule above.
 
-### 3.8 An important action is PERFORMED from key poses (ADR-011, Accepted 2026-09-25 — the Seeker's SPRAY is the reference; his HARD HANDS is the melee reference, awaiting review)
+### 3.8 An important action is PERFORMED from key poses (ADR-011, Accepted 2026-09-25 — the Seeker's SPRAY is the projectile / travel reference; his HARD HANDS is the melee / direct-contact reference, both accepted)
 
 The rule is one coherent action: intention, preparation, release, motion, contact, consequence, recovery. The player should not be noticing the separate systems (clip, effect, number, sound) that make it.
 

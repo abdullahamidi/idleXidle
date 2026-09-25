@@ -1,10 +1,10 @@
 # Audio brief: the Seeker's HARD HANDS (the melee action's two cues)
 
-> **Status (2026-09-25): CANDIDATES, not yet heard by the owner.** Built by `tools/asset-pipeline/make_action_sfx.py`
-> with the same layered kit as SPRAY's approved cues and the fight's shipped ones. They are measured and wired.
-> Only an ear can say they sound like a fist, so they stay candidates until the owner listens. This brief is the
-> contract a revision must keep: if a cue is reported as cheap, thin, boomy or tiring, the SOUND is revised
-> against it, and the action's timing stays.
+> **Status (2026-09-25): HUMAN-APPROVED.** The owner listened to both cues and approved them: HARD HANDS is the
+> accepted MELEE / DIRECT-CONTACT reference. They are built by `tools/asset-pipeline/make_action_sfx.py` with the
+> same layered kit as SPRAY's approved cues and the fight's shipped ones. This brief stays as the contract a revision
+> must keep: if a cue is ever reported as cheap, thin, boomy or tiring, the SOUND is revised against it, and the
+> action's timing stays.
 
 ## What the player hears (the phrase)
 
@@ -39,7 +39,7 @@ overhand arm cutting the air toward the creature.
   120 ms after the commit, and the hit's own transient cuts it.
 - **Must not:** be a blade whoosh or carry steel (nothing is drawn or thrown). No magic riser: the Source colour is
   in the picture. Not louder than the hit: it is the lead-in.
-- Candidate (2026-09-25): 200 ms file, peak −12.4 dBFS, centroid 1745 Hz, −20 dB at 137 ms. Its 10 ms RMS
+- Approved (2026-09-25): 200 ms file, peak −12.4 dBFS, centroid 1745 Hz, −20 dB at 137 ms. Its 10 ms RMS
   envelope: −17 dB at the scuff, dipping to −33, swelling to −21 at 100 ms, gone by 190 ms.
 
 ### `sfx_seeker_hard_hands_hit`: a FIST landing, with weight
@@ -53,7 +53,7 @@ behind the blow.
   thud, ~330 Hz, −20 dB at ~190 ms): a string of them in a fight must not tire.
 - **Must not:** ring (no tonal tail), boom (no sub held past ~100 ms), or chop: every layer runs to the file's end
   and decays there. The first candidate cut its thud at 220 ms, a 22 dB step in 10 ms at −42 dBFS.
-- Candidate (2026-09-25): 260 ms file, peak −8.2 dBFS, centroid 655 Hz, −20 dB at 118 ms; its 10 ms RMS falls
+- Approved (2026-09-25): 260 ms file, peak −8.2 dBFS, centroid 655 Hz, −20 dB at 118 ms; its 10 ms RMS falls
   smoothly to −59 dB, no step.
 
 ## Delivery format

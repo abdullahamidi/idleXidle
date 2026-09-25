@@ -1,9 +1,11 @@
-# HARD HANDS — second pass: skill identity, the retreat, the cloak (2026-09-25)
+# HARD HANDS — second pass: skill identity, the retreat, the cloak (2026-09-25) — ACCEPTED
+
+The owner accepted HARD HANDS as the MELEE / DIRECT-CONTACT reference after this pass, and approved its two sounds.
 
 The owner approved HARD HANDS' choreography (the leaping overhand hammer-fist, the held fist, the contact on the
 beat, the root motion to the target, the impact, the exit pose, the handoff and the fast-TEMPO yield) and asked for
-three fixes before it becomes the accepted melee reference. The two HARD HANDS sounds are unchanged and still
-unheard.
+three fixes before it becomes the accepted melee reference. The two HARD HANDS sounds were unchanged by this pass
+(the owner has since listened to and approved them).
 
 1. **Skill identity.** HARD HANDS' recipe was found through the Seeker's Strike Form and its `strike` effect, and BLOW
    says the same two words, so BLOW was performed as HARD HANDS: the lunge, HARD HANDS' sounds, impact, flash, duck

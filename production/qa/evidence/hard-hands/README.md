@@ -1,4 +1,4 @@
-# HARD HANDS — the melee gold standard (ADR-011, 2026-09-25) — AWAITING THE OWNER'S REVIEW
+# HARD HANDS — the melee gold standard (ADR-011, 2026-09-25) — ACCEPTED (after the second pass, `pass2/`)
 
 Review page: https://claude.ai/artifact/MUVvsDxsEZkdfcktNC8qEY
 
@@ -8,7 +8,7 @@ with his whole weight ON the beat, and hops back.
 
 Every film is the real game, traced (`RH_PRESENT_TRACE=1`). The sound in an MP4 is rendered from the cues the game
 asked for, on the trace's clock (`tools/asset-pipeline/film_audio.py`): it is the game's mix, not a device
-recording. **The two HARD HANDS cues are candidates: no one has listened to them yet.**
+recording. **The two HARD HANDS cues were human-listened and approved by the owner (2026-09-25).**
 
 OLD = the committed build before this pass (b607e8e, filmed in a worktree). NEW = this pass. The fight is the same
 seed and the same beats in both.
@@ -35,7 +35,7 @@ seed and the same beats in both.
 
 - ADR-011 (§ The melee reference, Decision 1 and 10, Consequences, Known limits).
 - `design/art/arena-art-contract.md` §3.8 (a melee blow is carried; key poses from a light ground are repaired).
-- `design/audio/seeker-hard-hands-audio-brief.md` (the two cues, candidates).
+- `design/audio/seeker-hard-hands-audio-brief.md` (the two cues, human-approved).
 - PixelLab jobs, with the reason for each verdict: `tools/asset-pipeline/v2/keyposes.py` `ACTIONS["seeker_hard_hands"]`;
   skeletons in `tools/asset-pipeline/v2/keypose_skeletons/seeker_hard_hands.json`; sources cached in
   `tools/asset-pipeline/v2/keypose_sources/`.
