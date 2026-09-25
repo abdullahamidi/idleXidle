@@ -1975,7 +1975,12 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         // player can see a creature commit before it lands.
         const float windupMs = 900f;
         var lead = _nextEnemyStrikeMs - _playheadMs;
+        var windupWas = _enemyWindup;
         _enemyWindup = lead > 0f && lead < windupMs ? 1f - lead / windupMs : 0f;
+        // the row's ANTICIPATION, for the reaction timeline (tools/asset-pipeline/reaction_timeline.py): the moment
+        // the creatures start winding up toward the next bite, whose contact frame is the bite itself
+        if (PresentTrace.Enabled && windupWas <= 0f && _enemyWindup > 0f)
+            PresentTrace.Log("enemy-windup", $"bite={_nextEnemyStrikeMs:0}\tfollowing={_enemySinceHit < EnemyFollowSeconds}");
 
         // The champion's clip: one committed swing at a time, aimed at the next beat.
         UpdateChampionClip();
