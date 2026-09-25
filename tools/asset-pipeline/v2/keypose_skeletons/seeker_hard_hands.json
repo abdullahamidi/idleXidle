@@ -929,5 +929,230 @@
    ]
   }
  },
- "halfrise_job": "e21c6425-b733-45b5-a699-d140d549c013 (action 'recover from a punch', seed 31, opaque ground)"
+ "halfrise_job": "e21c6425-b733-45b5-a699-d140d549c013 (action 'recover from a punch', seed 31, opaque ground)",
+ "retreat": {
+  "0 push-off (front foot planted, rear leg reaching back, guard up)": {
+   "NOSE": [
+    0.53,
+    0.31
+   ],
+   "NECK": [
+    0.5,
+    0.35
+   ],
+   "RIGHT SHOULDER": [
+    0.42,
+    0.39
+   ],
+   "LEFT SHOULDER": [
+    0.58,
+    0.39
+   ],
+   "RIGHT ELBOW": [
+    0.4,
+    0.48
+   ],
+   "RIGHT ARM": [
+    0.47,
+    0.46
+   ],
+   "LEFT ELBOW": [
+    0.62,
+    0.47
+   ],
+   "LEFT ARM": [
+    0.66,
+    0.42
+   ],
+   "RIGHT HIP": [
+    0.45,
+    0.58
+   ],
+   "LEFT HIP": [
+    0.54,
+    0.58
+   ],
+   "RIGHT KNEE": [
+    0.38,
+    0.67
+   ],
+   "RIGHT LEG": [
+    0.31,
+    0.75
+   ],
+   "LEFT KNEE": [
+    0.58,
+    0.69
+   ],
+   "LEFT LEG": [
+    0.63,
+    0.8
+   ],
+   "RIGHT EYE": [
+    0.5,
+    0.29
+   ],
+   "LEFT EYE": [
+    0.54,
+    0.29
+   ],
+   "RIGHT EAR": [
+    0.47,
+    0.29
+   ],
+   "LEFT EAR": [
+    0.56,
+    0.28
+   ]
+  },
+  "1 low bound back (rear leg taking the weight back, front foot pushing off, guard up)": {
+   "NOSE": [
+    0.53,
+    0.32
+   ],
+   "NECK": [
+    0.5,
+    0.36
+   ],
+   "RIGHT SHOULDER": [
+    0.42,
+    0.4
+   ],
+   "LEFT SHOULDER": [
+    0.58,
+    0.4
+   ],
+   "RIGHT ELBOW": [
+    0.39,
+    0.49
+   ],
+   "RIGHT ARM": [
+    0.46,
+    0.47
+   ],
+   "LEFT ELBOW": [
+    0.62,
+    0.48
+   ],
+   "LEFT ARM": [
+    0.66,
+    0.43
+   ],
+   "RIGHT HIP": [
+    0.45,
+    0.59
+   ],
+   "LEFT HIP": [
+    0.54,
+    0.59
+   ],
+   "RIGHT KNEE": [
+    0.39,
+    0.68
+   ],
+   "RIGHT LEG": [
+    0.34,
+    0.77
+   ],
+   "LEFT KNEE": [
+    0.61,
+    0.67
+   ],
+   "LEFT LEG": [
+    0.67,
+    0.74
+   ],
+   "RIGHT EYE": [
+    0.5,
+    0.3
+   ],
+   "LEFT EYE": [
+    0.54,
+    0.3
+   ],
+   "RIGHT EAR": [
+    0.47,
+    0.3
+   ],
+   "LEFT EAR": [
+    0.56,
+    0.29
+   ]
+  },
+  "2 landing back (rear foot planted, front foot closing)": {
+   "NOSE": [
+    0.52,
+    0.32
+   ],
+   "NECK": [
+    0.49,
+    0.36
+   ],
+   "RIGHT SHOULDER": [
+    0.41,
+    0.4
+   ],
+   "LEFT SHOULDER": [
+    0.57,
+    0.4
+   ],
+   "RIGHT ELBOW": [
+    0.39,
+    0.49
+   ],
+   "RIGHT ARM": [
+    0.46,
+    0.47
+   ],
+   "LEFT ELBOW": [
+    0.61,
+    0.48
+   ],
+   "LEFT ARM": [
+    0.65,
+    0.44
+   ],
+   "RIGHT HIP": [
+    0.45,
+    0.59
+   ],
+   "LEFT HIP": [
+    0.54,
+    0.59
+   ],
+   "RIGHT KNEE": [
+    0.4,
+    0.69
+   ],
+   "RIGHT LEG": [
+    0.37,
+    0.8
+   ],
+   "LEFT KNEE": [
+    0.6,
+    0.68
+   ],
+   "LEFT LEG": [
+    0.64,
+    0.77
+   ],
+   "RIGHT EYE": [
+    0.49,
+    0.3
+   ],
+   "LEFT EYE": [
+    0.53,
+    0.3
+   ],
+   "RIGHT EAR": [
+    0.46,
+    0.3
+   ],
+   "LEFT EAR": [
+    0.55,
+    0.29
+   ]
+  }
+ },
+ "retreat_job": "96b2c4c9-1a11-4d98-8255-d8129393ca51 (action 'step back from a punch into a guard', seed 41, opaque ground)"
 }

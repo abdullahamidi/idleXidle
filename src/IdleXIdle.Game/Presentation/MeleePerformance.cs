@@ -239,17 +239,27 @@ public sealed class MeleePerformance : IActionPerformance
     }
 
     /// <summary>
-    /// The return's hop as a function of time into the clip: 0 until the recovery, an arc up to
-    /// <see cref="MeleeActionRecipe.HopHeight"/> and back down as the body travels home, landing exactly when it is
-    /// home. Negative is up. Pure, so it is tested directly.
+    /// The retreat's low bound as a function of time into the clip: 0 until the retreat, a low arc up to
+    /// <see cref="MeleeActionRecipe.HopHeight"/> through its middle (<see cref="MeleeActionRecipe.BoundFrom"/> to
+    /// <see cref="MeleeActionRecipe.BoundTo"/>), grounded again before it settles home. Negative is up. Pure, so it
+    /// is tested directly.
     /// </summary>
     public static float RootLift(MeleeActionRecipe recipe, ActionClipTiming timing, float reach, float t, float casterHeight,
                                  float? returnFrom = null, float returnMs = 0f)
     {
         if (reach <= 0f || recipe.HopHeight <= 0f) return 0f;
         var (from, ms) = ReturnWindow(recipe, timing, returnFrom, returnMs);
-        if (t <= from || t >= from + ms) return 0f;
-        return -recipe.HopHeight * casterHeight * MathF.Sin(MathF.PI * (t - from) / Math.Max(1f, ms));
+        var u = (t - from) / Math.Max(1f, ms);
+        var b = (u - recipe.BoundFrom) / Math.Max(0.01f, recipe.BoundTo - recipe.BoundFrom);
+        if (b <= 0f || b >= 1f) return 0f;
+        return -recipe.HopHeight * casterHeight * MathF.Sin(MathF.PI * b);
+    }
+
+    /// <summary>The retreat's spacing, 0 at the target to 1 at home: slow to leave, fastest mid-way, settling in.</summary>
+    public static float Retreat(MeleeActionRecipe recipe, float u)
+    {
+        u = Math.Clamp(u, 0f, 1f);
+        return MathF.Pow(u * u * (3f - 2f * u), Math.Max(0.1f, recipe.ReturnEase));
     }
 
     /// <summary>The caster's height the lunge's pull-back and overshoot are shares of (set by the screen each frame).</summary>
@@ -267,9 +277,8 @@ public sealed class MeleePerformance : IActionPerformance
     {
         if (reach <= 0f || t <= 0f) return 0f;
         var (from, ms) = ReturnWindow(recipe, timing, returnFrom, returnMs);
-        static float Smooth(float u) => u * u * (3f - 2f * u);
         if (t >= from + ms) return 0f;
-        if (t >= from) return Travel(recipe, timing, reach, from, casterHeight) * (1f - Smooth((t - from) / Math.Max(1f, ms)));
+        if (t >= from) return Travel(recipe, timing, reach, from, casterHeight) * (1f - Retreat(recipe, (t - from) / Math.Max(1f, ms)));
         return Travel(recipe, timing, reach, t, casterHeight);
     }
 

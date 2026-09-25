@@ -326,9 +326,9 @@ public class ActionPresentationTest
     public void test_only_listed_actions_are_performed()
     {
         if (!ActionRecipes.Enabled) return;                    // RH_ACTION_RECIPES=0 in the environment
-        Assert.Same(ActionRecipes.SeekerSpray, ActionRecipes.For("seeker", "projectile"));
-        Assert.Same(ActionRecipes.SeekerHardHands, ActionRecipes.For("seeker", "strike"));
-        Assert.Null(ActionRecipes.For("seeker", "attack"));    // the basic swing plays as it always has
-        Assert.Null(ActionRecipes.For("anvil", "projectile"));
+        Assert.Same(ActionRecipes.SeekerSpray, ActionRecipes.For("seeker", "volley_spray", "projectile", "projectile"));
+        Assert.Same(ActionRecipes.SeekerHardHands, ActionRecipes.For("seeker", "sig_seeker_hard_hands", "strike", "strike"));
+        Assert.Null(ActionRecipes.For("seeker", "none", "attack", "attack"));             // the basic swing plays as it always has
+        Assert.Null(ActionRecipes.For("anvil", "volley_spray", "projectile", "projectile"));
     }
 }

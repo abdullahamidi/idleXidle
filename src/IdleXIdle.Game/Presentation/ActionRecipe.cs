@@ -35,13 +35,17 @@ public interface IActionRecipe
     /// <summary>A name for the recipe, for traces and evidence.</summary>
     string Id { get; }
 
-    /// <summary>The Form clip this recipe performs (the skill's ClipKey).</summary>
+    /// <summary>
+    /// The authored clip this recipe plays: the champion's strip <c>char_&lt;id&gt;_&lt;clip&gt;_strip8_512</c> with
+    /// its timing file beside it. A Form recipe plays the Form's clip (SPRAY: <c>projectile</c>). A skill's own recipe
+    /// names its own clip (HARD HANDS: <c>hard_hands</c>), so the Form's shared strip stays the other skills' (BLOW
+    /// still swings <c>strike</c>). When that strip is absent the skill plays its Form's plain clip, as before.
+    /// </summary>
     string ClipKey { get; }
 
     /// <summary>
-    /// The skill effects (the skill's FxKey) this recipe performs, or null for every skill of its Form. A Form's strip
-    /// is shared: on the Seeker the Strike clip is HARD HANDS', BLOW's and PRESS's, and PRESS is a FIELD whose own
-    /// pulse is its picture, so a lunge must not take it over.
+    /// For a FORM recipe (<see cref="ActionRecipes"/>' second tier), the skill effects (the skill's FxKey) it
+    /// performs, or null for every skill of its Form. A skill's own recipe ignores it.
     /// </summary>
     IReadOnlyCollection<string>? EffectKeys { get; }
 
@@ -355,10 +359,18 @@ public sealed record MeleeActionRecipe : IActionRecipe
     public float LungeAccel { get; init; } = 1.35f;
 
     /// <summary>
-    /// The share of the recovery the return takes, from its start: the body travels home in the recovery's first
-    /// part and SETTLES in place for the rest (1 = the whole recovery).
+    /// The share of the recovery the RETREAT takes, from its start: the body travels home in the recovery's retreat
+    /// pose and has almost arrived when the exit pose shows, which settles the last few pixels (1 = the whole
+    /// recovery). At normal TEMPO that is ~250 ms: a heavy blow's controlled withdrawal. It was 0.62 of a shorter
+    /// recovery (~136 ms, a 25 px hop), which read as a spring back rather than a body recovering.
     /// </summary>
-    public float ReturnShare { get; init; } = 0.62f;
+    public float ReturnShare { get; init; } = 0.76f;
+
+    /// <summary>
+    /// How slowly the retreat LEAVES the target: its spacing is a smoothstep raised to this power, so it starts slow
+    /// (the blow spent the body's forward momentum), is fastest mid-way and settles into home. 1 = symmetric.
+    /// </summary>
+    public float ReturnEase { get; init; } = 1.3f;
 
     /// <summary>
     /// The shortest the way home may take, in ms, however hard a handoff compresses the recovery: a 500 px return in
@@ -368,10 +380,13 @@ public sealed record MeleeActionRecipe : IActionRecipe
     public float MinReturnMs { get; init; } = 110f;
 
     /// <summary>
-    /// The return's HOP: the body's highest lift (a share of the caster's height) on the way home. Without it the
-    /// recovery pose slid 400 px backwards with its feet planted, a skate, not a return (HARD HANDS, 2026-09-25).
+    /// The retreat's LOW BOUND: the body's highest lift (a share of the caster's height), only through the middle of
+    /// the retreat (<see cref="BoundFrom"/> to <see cref="BoundTo"/> of it): it pushes off, travels low, and has landed
+    /// before the exit pose shows. The first cut was a 0.06 hop over the whole return, an airborne spring back.
     /// </summary>
-    public float HopHeight { get; init; } = 0.06f;
+    public float HopHeight { get; init; } = 0.018f;
+    public float BoundFrom { get; init; } = 0.15f;
+    public float BoundTo { get; init; } = 0.85f;
 
     /// <summary>
     /// The SPEED LINES behind a lunging body (the commit and the return): how many, their length against the
@@ -439,6 +454,7 @@ public static class ActionRecipes
     {
         Id = "seeker.spray",
         ClipKey = "projectile",
+        EffectKeys = new[] { "projectile" },      // his knife volley; WEEP (a reaction, "weep") is never it
         PropKey = "prop_seeker_throwing_knife",
         PropEdgeKey = "prop_seeker_throwing_knife_edge",
         PropPivot = new Vector2(22.5f, 12f),
@@ -460,14 +476,14 @@ public static class ActionRecipes
 
     /// <summary>
     /// THE SEEKER's HARD HANDS (the melee gold standard, 2026-09-25): a leaping overhand HAMMER-FIST. He bounds in,
-    /// drives his closed right fist down onto the creature with his whole weight on the beat, and hops back. His
-    /// Strike Form, so BLOW woven on him is the same blow; nothing in the performance knows it is the Seeker.
+    /// drives his closed right fist down onto the creature with his whole weight on the beat, and retreats home. It is
+    /// HARD HANDS' OWN (a signature action belongs to its skill): BLOW shares his Strike Form and its "strike" effect,
+    /// and swings its own plain clip. Its own strip, <c>char_seeker_hard_hands</c>.
     /// </summary>
     public static readonly MeleeActionRecipe SeekerHardHands = new()
     {
         Id = "seeker.hard_hands",
-        ClipKey = "strike",
-        EffectKeys = new[] { "strike" },          // HARD HANDS and BLOW; never PRESS (a field: its pulse is its picture)
+        ClipKey = "hard_hands",
         ReleaseCues = new[] { "sfx_seeker_hard_hands_commit", "sfx_fist_commit", "sfx_cast" },
         ReleaseVolume = 0.34f,
         ContactCues = new[] { "sfx_seeker_hard_hands_hit", "sfx_fist_hit", "sfx_hit" },
@@ -479,20 +495,34 @@ public static class ActionRecipes
         Weight = ActionWeight.Signature,
     };
 
-    private static readonly Dictionary<(string Character, string Clip), IActionRecipe> ByActor = new()
+    // THE LOOKUP, most specific first (2026-09-25). A SIGNATURE action belongs to its SKILL: HARD HANDS' recipe once
+    // resolved from the Seeker's Strike Form and "strike" effect, and BLOW, which says the same two words, was
+    // performed as HARD HANDS (its lunge, its sounds, its impact, its flash, its duck, its callout timing).
+    //   1. the skill's own recipe: champion + the stable SkillDef.Id;
+    //   2. the champion's FORM recipe, deliberately shared by every skill of that Form and effect (EffectKeys);
+    //   3. none: the skill plays its Form's plain clip, as it always did.
+
+    private static readonly Dictionary<(string Character, string Skill), IActionRecipe> BySkill = new()
+    {
+        [("seeker", "sig_seeker_hard_hands")] = SeekerHardHands,
+    };
+
+    private static readonly Dictionary<(string Character, string Clip), IActionRecipe> ByForm = new()
     {
         [("seeker", "projectile")] = SeekerSpray,
-        [("seeker", "strike")] = SeekerHardHands,
     };
 
     /// <summary>
-    /// The recipe this champion performs for this Form, or null: that action plays as before. With
-    /// <paramref name="effectKey"/> (the skill's FxKey), only a recipe that performs that skill's effect.
+    /// The recipe this champion performs for this skill, or null: that action plays as before. The skill's own recipe
+    /// (<paramref name="skillId"/>, a SkillDef.Id) first; else the champion's recipe for the skill's Form
+    /// (<paramref name="clipKey"/>) when it performs the skill's effect (<paramref name="effectKey"/>).
     /// </summary>
-    public static IActionRecipe? For(string characterId, string clipKey, string? effectKey = null)
-        => Enabled && ByActor.TryGetValue((characterId, clipKey), out var r)
-                   && (effectKey is null || r.EffectKeys is null || r.EffectKeys.Contains(effectKey, StringComparer.Ordinal)) ? r : null;
-
-    /// <summary>Every recipe, keyed by champion and Form.</summary>
-    public static IReadOnlyDictionary<(string Character, string Clip), IActionRecipe> All => ByActor;
+    public static IActionRecipe? For(string characterId, string skillId, string clipKey, string effectKey)
+    {
+        if (!Enabled) return null;
+        if (BySkill.TryGetValue((characterId, skillId), out var own)) return own;
+        return ByForm.TryGetValue((characterId, clipKey), out var shared)
+               && (shared.EffectKeys is null || shared.EffectKeys.Contains(effectKey, StringComparer.Ordinal))
+            ? shared : null;
+    }
 }

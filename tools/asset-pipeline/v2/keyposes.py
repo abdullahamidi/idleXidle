@@ -41,15 +41,19 @@ REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 IMG = "https://api.pixellab.ai/mcp/images/{job}/download?index={i}"
 CHAR = "https://backblaze.pixellab.ai/file/pixellab-characters/a5e233f5-b48a-4bf3-8ed5-ea649a71f38d/{char}/animations/{anim}/south-east/{i}.png"
 
-# HARD HANDS: the half-rise job's frame used as the recovery (its head sits midway between the follow-through's and
-# the idle's, so the rise is two even steps, not one jump)
-HALF_RISE = 1
+# HARD HANDS: the retreat job's frame used as the recovery (the low bound back: rear leg taking the weight, front foot
+# pushing off, guard up). Its head sits midway between the follow-through's and the idle's, so the rise is two even
+# steps; it replaced the half-rise, which slid 400 px home with its feet planted.
+RETREAT = 1
 # HARD HANDS timing (2026-09-25). Contact is frame 4, 380 ms in. The leap (f3) is the lunge: 120 ms for the body to
 # cross to the target, accelerating into the blow. The contact and the follow-through (f4-f5) are PROTECTED: the blow
-# is seen landing and the weight driving through, whatever the tempo. Only the half-rise and the exit (f6-f7) are
+# is seen landing and the weight driving through, whatever the tempo. Only the retreat and the exit (f6-f7) are
 # recovery a handoff may compress, and the exit IS the idle's first frame, so there is nothing to hide.
+# The RETREAT (second pass): f6 225 + f7 105 ms. The way home takes ~0.76 of it (~250 ms, MeleeActionRecipe.ReturnShare)
+# and is 96 % done when the exit pose shows, so the idle pose only settles the last few pixels. It was 120 + 100: a
+# 136 ms spring back.
 HH_TIMING = {
-    "frameMs": [70, 100, 90, 120, 80, 90, 120, 100],
+    "frameMs": [70, 100, 90, 120, 80, 90, 225, 105],
     "elastic": [True, True, False, False, False, False, True, True],
     "markers": {"anticipation": 1, "commit": 3, "contact": 4, "recovery": 6, "settle": 7},
     # the striking fist: [x, y] as fractions of the 512 frame (the fist's striking edge, measured on the assembled
@@ -111,7 +115,7 @@ ACTIONS = {
     # keypose_skeletons/seeker_hard_hands.json; the accepted sources are cached in keypose_sources/ so the strip
     # can be rebuilt after PixelLab's links expire (SPRAY's already have).
     "seeker_hard_hands": {
-        "strip": "assets/art/Animations/Roster/seeker_strike/char_seeker_strike_strip8_512.png",
+        "strip": "assets/art/Animations/Roster/seeker_hard_hands/char_seeker_hard_hands_strip8_512.png",
         "character": "22e6d4d3-a470-462c-a39c-bfb67315e08a",
         "idle_anim": "27373220-70eb-4ba3-abc0-29c1ac50c9ad",
         "idle_strip": "assets/art/Animations/Roster/seeker_idle/char_seeker_idle_strip8_512.png",
@@ -125,9 +129,14 @@ ACTIONS = {
                                                     "face TRANSPLANTED from the reference idle frame into the head box (placed by the skeleton's "
                                                     "nose joint), and white elsewhere (sleeve highlights on the white-ground frames) set to his "
                                                     "sleeve's lightest grey. Frames 0-5 used; its upright frame 6 dropped (see the next job).",
-            "e21c6425-b733-45b5-a699-d140d549c013": "USED FOR FRAME 6 (2 gens): three half-rise skeletons between the low follow-through and "
-                                                    "idle. Pass B went from its lowest pose straight to upright (the head ~20 source px in one "
-                                                    "frame, the 'crouch -> instant standing' the brief forbids); the half-rise bridges it.",
+            "e21c6425-b733-45b5-a699-d140d549c013": "SUPERSEDED (2 gens): three half-rise skeletons between the low follow-through and idle "
+                                                    "(pass B went from its lowest pose straight to upright). Frame 6 until the return pass: "
+                                                    "translated 400 px home it was a feet-planted slide, and the hop that hid it read as a "
+                                                    "spring back.",
+            "96b2c4c9-1a11-4d98-8255-d8129393ca51": "USED FOR FRAME 6 (2 gens, 2026-09-25): three RETREAT skeletons (push-off, low bound back, "
+                                                    "landing). #1, the low bound (rear leg taking the weight back, front foot pushing off, guard "
+                                                    "up), is the retreat pose: placed with its rear foot on the idle's ground (+5 source px), a "
+                                                    "planted backstep the root motion carries home. Faces blank white again: repaired as pass B.",
         },
         # (source, index, shift_y): pass B 0-5, the half-rise, then the idle's own frame 0 (the exit pose). No shift:
         # the ready pose's boots land on the idle frame's exact pixels (measured on the strip).
@@ -137,12 +146,16 @@ ACTIONS = {
                    ("8e439cfb-631f-4692-a2a5-64599c70b182", 3, 0),   # commit: the leap
                    ("8e439cfb-631f-4692-a2a5-64599c70b182", 4, 0),   # CONTACT: the fist driven low into the target
                    ("8e439cfb-631f-4692-a2a5-64599c70b182", 5, 0),   # follow-through: driven through, lowest
-                   ("e21c6425-b733-45b5-a699-d140d549c013", HALF_RISE, 0),  # recovery: the half-rise, pushing back up
+                   ("96b2c4c9-1a11-4d98-8255-d8129393ca51", RETREAT, 5),    # recovery: the retreat, stepping back into guard
                    ("idle", 0, 0)],                                    # exit: exactly the idle's first frame
         "ground": "light",
         # the skeleton frame each strip frame was posed from (its nose places the face transplant)
         "posed_as": {0: ("pass", 0), 1: ("pass", 1), 2: ("pass", 2), 3: ("pass", 3), 4: ("pass", 4), 5: ("pass", 5),
-                     6: ("halfrise", HALF_RISE)},
+                     6: ("retreat", RETREAT)},
+        # THE CLOAK (second pass): the flared cloak on the contact and the follow-through was painted in the HOOD's
+        # grey-green highlights, where the idle's cloak is dark purple with a grey-green rim. Boxes (source px, behind
+        # his shoulders, clear of the hood) whose cloak colours are remapped to the idle cloak's own distribution.
+        "cloak": {4: [(30, 52, 108, 98)], 5: [(40, 58, 109, 105)]},
         "timing": HH_TIMING,
     },
 }
@@ -254,6 +267,77 @@ def fix_ground_colours(im: Image.Image, reference: Image.Image, nose: tuple[floa
     return out
 
 
+REF_CLOAK = [(52, 62, 67, 130), (108, 88, 120, 125)]   # the reference idle's cloak, left and right of him
+
+
+def cloak_colour(c: tuple[int, int, int]) -> bool:
+    """A cloak or hood colour (dark purples, grey-greens, near-black), not leather, sleeve or skin."""
+    r, g, b = c
+    if max(c) >= 130:
+        return False
+    return (b >= g - 3 and not r > b + 12) or (g >= r - 2 and abs(g - b) <= 16)
+
+
+def recolour_cloak(im: Image.Image, reference: Image.Image, boxes) -> Image.Image:
+    """
+    THE CLOAK, the same garment throughout: the cloak colours inside `boxes` (not the outline) remapped, in order of
+    brightness, to the distribution of the reference idle's own cloak. The lightest pixels become his grey-green rim,
+    the rest his dark purple; the shading's order, the silhouette and the outline stay the generator's.
+    """
+    lum = lambda c: 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
+
+    def inside(img, bxs):
+        px = img.load()
+        w, h = img.size
+        out = []
+        for x0, y0, x1, y1 in bxs:
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    p = px[x, y]
+                    if p[3] == 0 or not cloak_colour(p[:3]):
+                        continue
+                    if any(not (0 <= x + dx < w and 0 <= y + dy < h) or px[x + dx, y + dy][3] == 0
+                           for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                        continue                       # the outline stays
+                    out.append((x, y, p[:3]))
+        return out
+
+    target: dict = {}
+    for _, _, c in inside(reference, REF_CLOAK):
+        target[c] = target.get(c, 0) + 1
+    ramp, acc, total = [], 0, sum(target.values())
+    for c, n in sorted(target.items(), key=lambda kv: lum(kv[0])):
+        acc += n
+        ramp.append((acc / total, c))
+    src = inside(im, boxes)
+    counts: dict = {}
+    for _, _, c in src:
+        counts[c] = counts.get(c, 0) + 1
+    mapping, acc, total = {}, 0, max(1, len(src))
+    for c, n in sorted(counts.items(), key=lambda kv: lum(kv[0])):
+        mid = (acc + n / 2) / total
+        acc += n
+        mapping[c] = next(tc for q, tc in ramp if mid <= q)
+    out = im.copy()
+    px = out.load()
+    for x, y, c in src:
+        px[x, y] = mapping[c] + (255,)
+    # the light-ground FRINGE: pale anti-alias pixels one or two pixels inside the cloak's edge, invisible on the
+    # generator's light ground and a dotted pale line on a dark cloak; they take the cloak's shadow colour
+    w, h = out.size
+    shadow = next(c for _, c in ramp if max(c) > 12)
+    for x0, y0, x1, y1 in boxes:
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                p = px[x, y]
+                if p[3] == 0 or lum(p) <= 120 or p[:3] in SKIN:
+                    continue
+                if any(not (0 <= x + dx < w and 0 <= y + dy < h) or px[x + dx, y + dy][3] == 0
+                       for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)):
+                    px[x, y] = shadow + (255,)
+    return out
+
+
 def key_black(im: Image.Image) -> Image.Image:
     """Flood the border over near-black, keep the largest figure, give back the outline ring the flood took."""
     w, h = im.size
@@ -346,7 +430,8 @@ def main() -> int:
     noses = {}
     if "skeletons" in a:
         sk = json.load(open(os.path.join(HERE, a["skeletons"]), encoding="utf-8"))
-        sets = {"pass": list(sk["frames"].values()), "halfrise": list(sk["halfrise"].values())}
+        sets = {"pass": list(sk["frames"].values()), "halfrise": list(sk["halfrise"].values()),
+                "retreat": list(sk.get("retreat", {}).values())}
         noses = {i: tuple(sets[kind][n]["NOSE"]) for i, (kind, n) in a.get("posed_as", {}).items()}
     strip = Image.new("RGBA", (512 * len(a["frames"]), 512))
     for i, (src, idx, shift) in enumerate(a["frames"]):
@@ -356,8 +441,10 @@ def main() -> int:
             key = (src, idx)
             if key not in cache:
                 if a.get("ground") == "light":
-                    cache[key] = fix_ground_colours(key_light(fetch_frame(src, idx)), idle_src, noses[i]) if i in noses \
-                        else key_light(fetch_frame(src, idx))
+                    keyed = key_light(fetch_frame(src, idx))
+                    if i in a.get("cloak", {}):
+                        keyed = recolour_cloak(keyed, idle_src, a["cloak"][i])
+                    cache[key] = fix_ground_colours(keyed, idle_src, noses[i]) if i in noses else keyed
                 else:
                     cache[key] = key_black(fetch(IMG.format(job=src, i=idx)))
             im = cache[key]

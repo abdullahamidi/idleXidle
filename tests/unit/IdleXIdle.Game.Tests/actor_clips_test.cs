@@ -43,6 +43,21 @@ public class actor_clips_test
         => (List<string>)ActorClips.ChampionStrips(Seeker, skills, available, new List<string>());
 
     [Fact]
+    public void test_a_skill_with_its_own_authored_clip_lists_it_before_its_forms()
+    {
+        // HARD HANDS plays its own strip; BLOW, on the same Strike Form, plays the Form's
+        var idle = Seeker.StripKeys("idle").First();
+        var own = Seeker.StripKey("hard_hands");
+        var strike = Seeker.StripKey("strike");
+
+        var hands = Strips(Shipped(idle, own, strike), Skill("sig_seeker_hard_hands"));
+        var blow = Strips(Shipped(idle, own, strike), Skill("hammer_blow"));
+
+        Assert.Equal(new[] { idle, own, strike }, hands);
+        Assert.Equal(new[] { idle, strike }, blow);
+    }
+
+    [Fact]
     public void test_the_idle_and_the_swing_come_first_and_in_that_order()
     {
         // The order is the order the draw resolves in, and the envelope is measured from this list, so

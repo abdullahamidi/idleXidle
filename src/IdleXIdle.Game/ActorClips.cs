@@ -25,7 +25,8 @@ public static class ActorClips
 {
     /// <summary>
     /// Every strip the champion can play this wave, most specific first and without duplicates: the
-    /// idle, the basic swing, then one per equipped skill (a Reaction commits to the trap clip).
+    /// idle, the basic swing, then one per equipped skill (a Reaction commits to the trap clip), and a skill's own
+    /// authored clip before its Form's (ADR-011).
     /// </summary>
     /// <param name="who">The champion, which owns the clip-to-strip-key ladder.</param>
     /// <param name="skills">The skills woven for this wave, in rail order.</param>
@@ -48,7 +49,14 @@ public static class ActorClips
         Add("idle");
         Add("attack");
         foreach (var equipped in skills)
-            Add(equipped.Def.Kind == SkillKind.Reaction ? "trap" : equipped.Def.ClipKey);
+        {
+            var def = equipped.Def;
+            if (def.Kind == SkillKind.Reaction) { Add("trap"); continue; }
+            // a skill with its OWN authored clip (HARD HANDS' hard_hands) plays it; its Form's is the fallback
+            if (Presentation.ActionRecipes.For(who.Id, def.Id, def.ClipKey, def.FxKey) is { } recipe && recipe.ClipKey != def.ClipKey)
+                Add(recipe.ClipKey);
+            Add(def.ClipKey);
+        }
         return into;
 
         void Add(string clip)

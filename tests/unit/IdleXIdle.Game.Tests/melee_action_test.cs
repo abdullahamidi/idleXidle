@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using IdleXIdle.Core.Builds;
 using IdleXIdle.Game.Presentation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -30,8 +31,8 @@ public class MeleeActionTest
     }
 
     private static ActionClipTiming HardHands()
-        => ActionClipTiming.Parse(File.ReadAllText(RepoFile("assets", "art", "Animations", "Roster", "seeker_strike",
-                                                            "char_seeker_strike_strip8_512.clip.json")));
+        => ActionClipTiming.Parse(File.ReadAllText(RepoFile("assets", "art", "Animations", "Roster", "seeker_hard_hands",
+                                                            "char_seeker_hard_hands_strip8_512.clip.json")));
 
     private const float Caster = 412f;
 
@@ -94,22 +95,28 @@ public class MeleeActionTest
     }
 
     [Fact]
-    public void test_the_return_is_a_hop_that_lands_when_the_body_is_home()
+    public void test_the_retreat_leaves_slowly_bounds_low_and_is_home_when_the_exit_pose_shows()
     {
+        // Arrange: the normal-TEMPO clip, a normal arena gap
         var recipe = ActionRecipes.SeekerHardHands;
         var t = HardHands();
         const float reach = 480f;
         float Lift(float ms) => MeleePerformance.RootLift(recipe, t, reach, ms, Caster);
         float Home(float ms) => MeleePerformance.RootMotion(recipe, t, reach, ms, Caster);
         var tRecover = t.MarkerMs(recipe.RecoveryMarker);
+        var retreatMs = (t.TotalMs - tRecover) * recipe.ReturnShare;
+        var tExit = t.MarkerMs("settle");
+        var from = Home(tRecover);
 
-        Assert.Equal(0f, Lift(t.MarkerMs(recipe.ContactMarker)));             // the blow is grounded
-        var mid = tRecover + 0.5f * (t.TotalMs - tRecover) * recipe.ReturnShare;
-        Assert.True(Lift(mid) < -0.04f * Caster, "off the ground halfway home");
-        Assert.True(Home(mid) > 0f, "while still travelling");
-        var landed = tRecover + (t.TotalMs - tRecover) * recipe.ReturnShare + 1f;
-        Assert.Equal(0f, Lift(landed));
-        Assert.Equal(0f, Home(landed), 1);                                        // it lands home, not short of it
+        // Assert: a heavy blow's controlled withdrawal, not a spring back (the first cut: 136 ms and a 25 px hop)
+        Assert.InRange(retreatMs, 200f, 300f);
+        Assert.Equal(0f, Lift(t.MarkerMs(recipe.ContactMarker)));                 // the blow is grounded
+        Assert.True(Home(tRecover + 0.15f * retreatMs) > 0.92f * from, "it LEAVES slowly: the blow spent the momentum");
+        var peak = Enumerable.Range(0, 101).Select(k => Lift(tRecover + retreatMs * k / 100f)).Min();
+        Assert.InRange(-peak, 0.01f * Caster, 0.02f * Caster);                   // a low bound, ~7 px
+        Assert.Equal(0f, Lift(tExit));                                            // landed before the exit pose
+        Assert.True(Home(tExit) < 0.06f * from, "the exit pose only settles the last few pixels");
+        Assert.Equal(0f, Home(tRecover + retreatMs + 1f));                        // home, not short of it
     }
 
     [Fact]
@@ -128,7 +135,7 @@ public class MeleeActionTest
         // Act + Assert: out at the cut, home by the release, off the ground in between, and no frame jumps
         Assert.True(At(cutAt) >= reach);
         Assert.Equal(0f, At(cutAt + returnMs));
-        Assert.True(Lift(cutAt + returnMs / 2f) < 0f, "a hop, not a slide");
+        Assert.True(Lift(cutAt + returnMs / 2f) < 0f, "a low bound, not a slide");
         var frame = 1000f / 60f;
         for (var ms = cutAt - frame; ms < cutAt + returnMs + frame; ms += frame)
             Assert.True(MathF.Abs(At(ms + frame) - At(ms)) < reach / 6f, $"a {At(ms + frame) - At(ms):0} px jump at {ms:0} ms");
@@ -204,12 +211,51 @@ public class MeleeActionTest
                     "the performance is dropped only when nothing is running");
     }
 
+    private static IActionRecipe? RecipeFor(string skillId)
+    {
+        var def = SkillCatalogue.ById(skillId);
+        return ActionRecipes.For("seeker", def.Id, def.ClipKey, def.FxKey);
+    }
+
     [Fact]
-    public void test_a_shared_form_performs_only_the_effects_its_recipe_names()
+    public void test_a_signature_action_belongs_to_its_skill_not_to_the_form_it_shares()
     {
         if (!ActionRecipes.Enabled) return;                    // RH_ACTION_RECIPES=0 in the environment
-        Assert.Same(ActionRecipes.SeekerHardHands, ActionRecipes.For("seeker", "strike", "strike"));   // HARD HANDS, BLOW
-        Assert.Null(ActionRecipes.For("seeker", "strike", "press"));                                    // PRESS: a field
-        Assert.Same(ActionRecipes.SeekerSpray, ActionRecipes.For("seeker", "projectile", "projectile"));
+        // Arrange: BLOW says exactly what HARD HANDS says (the Strike Form, the "strike" effect): that is how it was
+        // performed as HARD HANDS, lunge, sounds, impact, flash, duck and all
+        var hands = SkillCatalogue.ById("sig_seeker_hard_hands");
+        var blow = SkillCatalogue.ById("hammer_blow");
+        Assert.Equal((hands.ClipKey, hands.FxKey), (blow.ClipKey, blow.FxKey));
+
+        // Act + Assert: HARD HANDS' recipe is HARD HANDS' own; BLOW, PRESS and WEEP get none
+        Assert.Same(ActionRecipes.SeekerHardHands, RecipeFor("sig_seeker_hard_hands"));
+        Assert.Null(RecipeFor("hammer_blow"));
+        Assert.Null(RecipeFor("hammer_press"));
+        Assert.Null(RecipeFor("volley_weep"));
+        // ...and SPRAY stays the Seeker's knife-volley FORM recipe, unchanged
+        Assert.Same(ActionRecipes.SeekerSpray, RecipeFor("volley_spray"));
+    }
+
+    [Fact]
+    public void test_the_screen_times_a_performance_by_the_recipes_own_clip()
+    {
+        // The first build of the skill-specific lookup timed HARD HANDS by its FORM's strip (strike, no timing file
+        // any more), so it silently fell back to the plain swing: the screen must read the recipe's own clip.
+        var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
+        var body = src[src.IndexOf("private bool TryAuthored(", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("return true;", StringComparison.Ordinal)];
+        Assert.Contains("Character.StripKeys(r.ClipKey)", body);
+        Assert.Contains("_clipName = recipe.ClipKey;", src);
+    }
+
+    [Fact]
+    public void test_hard_hands_plays_its_own_strip_and_leaves_the_strike_form_to_the_others()
+    {
+        // Its strip is its own: the Strike Form's strip is BLOW's knife swing again, the art it had before HARD HANDS
+        Assert.NotEqual(SkillCatalogue.ById("sig_seeker_hard_hands").ClipKey, ActionRecipes.SeekerHardHands.ClipKey);
+        Assert.True(File.Exists(RepoFile("assets", "art", "Animations", "Roster", "seeker_hard_hands", "char_seeker_hard_hands_strip8_512.png")));
+        Assert.True(File.Exists(RepoFile("assets", "art", "Animations", "Roster", "seeker_strike", "char_seeker_strike_strip8_512.png")));
+        Assert.False(File.Exists(RepoFile("assets", "art", "Animations", "Roster", "seeker_strike", "char_seeker_strike_strip8_512.clip.json")),
+                     "the Strike Form's strip has no authored timing: BLOW plays it as the plain clip it always was");
     }
 }

@@ -6221,18 +6221,19 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         _clipTiming = plan.Timing;
         _clipStartMs = plan.StartMs;
         _clipSpeed = 1f;
-        _clipName = clip;
+        _clipName = recipe.ClipKey;   // its own authored clip (HARD HANDS' hard_hands), not always the Form's
         _clipBeatMs = cast.AtMs;
         _handoffPlanned = false;
         if (PresentTrace.Enabled)
-            PresentTrace.Log("clip-start", $"{clip}\tauthored\tbeat={cast.AtMs}\tstart={plan.StartMs:0}\trelease={_performance.ReleaseMs:0}"
+            PresentTrace.Log("clip-start", $"{recipe.ClipKey}\tauthored\tbeat={cast.AtMs}\tstart={plan.StartMs:0}\trelease={_performance.ReleaseMs:0}"
                              + $"\ttargets={string.Join(",", _performance.Targets)}\trecipe={recipe.Id}");
         return PerformCommit.Committed;
     }
 
     /// <summary>
-    /// This champion's recipe for <paramref name="cast"/>'s skill (its Form's clip, and its effect: see
-    /// <see cref="IActionRecipe.EffectKeys"/>) and its strip's authored timing, when both exist.
+    /// This champion's recipe for <paramref name="cast"/>'s skill (the skill's own, else its Form's: see
+    /// <see cref="ActionRecipes.For"/>) and the authored timing of the strip it plays, when both exist. A recipe whose
+    /// own strip is absent falls back to nothing: the skill plays its Form's plain clip.
     /// </summary>
     private bool TryAuthored(BattleEvent cast, out IActionRecipe recipe, out ActionClipTiming timing)
     {
@@ -6241,8 +6242,8 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         if (cast.Slot < 0 || cast.Slot >= _waveSkills.Count) return false;
         var def = _waveSkills[cast.Slot].Def;
         var clip = def.ClipKey;
-        if (ActionRecipes.For(Character.Id, clip, def.FxKey) is not { } r) return false;
-        var stripKey = Character.StripKeys(clip).FirstOrDefault(k => _ui.Assets.Has(k));
+        if (ActionRecipes.For(Character.Id, def.Id, clip, def.FxKey) is not { } r) return false;
+        var stripKey = Character.StripKeys(r.ClipKey).FirstOrDefault(k => _ui.Assets.Has(k));   // the recipe's own clip
         if (stripKey is null || ActionClipLibrary.For(stripKey) is not { } t || !t.HasMarker(r.ReleaseMarker)) return false;
         recipe = r;
         timing = t;
