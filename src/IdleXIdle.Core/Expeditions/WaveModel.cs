@@ -443,6 +443,28 @@ public enum BattleEventKind
 
     /// <summary>The next primary hit released it: Slot = the creature, Amount = the damage released, rounded. The release lands as its own Strike.</summary>
     DeadweightReleased,
+
+    /// <summary>
+    /// A REACTION IS ARMED AGAIN: Slot = the skill's slot in the build, Amount = how long the rearm that just
+    /// ended ran, in ms (so it began at <c>AtMs - Amount</c>, possibly in the previous wave), AtMs = the moment
+    /// the fight considers the reaction ready. Information only: it reports a state the fight already resolved.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Reaction (JAWS, BACKDRAW) takes no beat, so the rail had nothing to read its rearm from and drew it
+    /// "always ready" (JAWS discovery, 2026-09-25). Rebuilding the ready moment as "last trigger + RearmMs" would
+    /// be a second copy of a rule the fight owns, and a wrong one: the real ready time is also shaped by
+    /// CooldownMultiplier, COILED, the live action rate, and anything that edits the cooldown table after the
+    /// trigger (LOOSE AGAIN clears it on a death). So the fight says the moment itself, read off its own
+    /// <see cref="Builds.Champion.ReadyAt"/>.
+    /// </para>
+    /// <para>
+    /// ORDER: when the reaction becomes ready on the very millisecond it answers again, this event comes first,
+    /// then the trigger, so the rearm windows never overlap. A ready moment that falls after the wave ends is said
+    /// by the next wave, at its own time there.
+    /// </para>
+    /// </remarks>
+    ReactionArmed,
 }
 
 /// <summary>

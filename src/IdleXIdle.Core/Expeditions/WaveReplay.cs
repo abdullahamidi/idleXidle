@@ -397,6 +397,44 @@ public sealed class WaveReplay
     /// </remarks>
     public int NextEventOfKindAfter(float ms, BattleEventKind kind) => NextAfter(ms, kind);
 
+    /// <summary>
+    /// Whether the Reaction in <paramref name="slot"/> is rearming at <paramref name="ms"/>, and how far through,
+    /// read off the fight's own <see cref="BattleEventKind.ReactionArmed"/> reports — never rebuilt from a rearm
+    /// time.
+    /// </summary>
+    /// <param name="pendingReadyMs">
+    /// When a rearm still running at the wave's end comes due, in this wave's ms (the expedition's
+    /// <c>ReactionReadyAfterLastWave</c>); null when none is. Its report belongs to the next wave, so without this
+    /// the wave's last trigger would have no end to sweep toward.
+    /// </param>
+    /// <remarks>
+    /// A report at R carrying Amount L says the reaction rearmed over [R - L, R]; the window that holds
+    /// <paramref name="ms"/> is the first report after it whose rearm had already begun. A rearm carried in from
+    /// the previous wave begins before 0. With no report ahead, a trigger this wave has not closed is still
+    /// rearming only when the fight says one is pending; a reaction that never rearms (a Reaction with no number
+    /// of its own) is simply always armed.
+    /// </remarks>
+    public ReactionReadiness ReactionReadinessAt(float ms, int slot, int? pendingReadyMs = null)
+    {
+        int? open = null;   // a trigger at or before ms that no report at or before ms has closed
+        foreach (var e in _events)
+        {
+            if (e.Slot != slot) continue;
+            if (e.AtMs <= ms)
+            {
+                if (e.Kind == BattleEventKind.Skill) open = e.AtMs;
+                else if (e.Kind == BattleEventKind.ReactionArmed) open = null;
+                continue;
+            }
+            if (e.Kind != BattleEventKind.ReactionArmed) continue;
+            var from = e.AtMs - e.Amount;
+            return from <= ms ? ReactionReadiness.Rearming(from, e.AtMs, ms) : ReactionReadiness.Armed;
+        }
+        return open is { } t && pendingReadyMs is { } ready && ready > t
+            ? ReactionReadiness.Rearming(t, ready, ms)
+            : ReactionReadiness.Armed;
+    }
+
     private int NextAfter(float ms, BattleEventKind kind)
     {
         foreach (var e in _events)
@@ -484,4 +522,19 @@ public sealed class WaveReplay
                 break;
         }
     }
+}
+
+/// <summary>
+/// A Reaction's readiness at one moment of the replay (<see cref="WaveReplay.ReactionReadinessAt"/>): armed, or
+/// rearming from <see cref="FromMs"/> to <see cref="ReadyMs"/> (wave ms; FromMs may be negative, a rearm begun in
+/// the previous wave) with <see cref="Progress"/> of it done.
+/// </summary>
+public readonly record struct ReactionReadiness(bool IsRearming, float Progress, int FromMs, int ReadyMs)
+{
+    /// <summary>Armed: nothing to wait for.</summary>
+    public static ReactionReadiness Armed => new(false, 1f, 0, 0);
+
+    /// <summary>Rearming over [<paramref name="fromMs"/>, <paramref name="readyMs"/>], seen at <paramref name="ms"/>.</summary>
+    public static ReactionReadiness Rearming(int fromMs, int readyMs, float ms)
+        => new(true, Math.Clamp((ms - fromMs) / Math.Max(1f, readyMs - fromMs), 0f, 1f), fromMs, readyMs);
 }

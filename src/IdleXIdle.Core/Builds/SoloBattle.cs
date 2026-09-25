@@ -86,6 +86,17 @@ public sealed class Champion
     /// <summary>Ready-at time per skill index, in expedition-absolute ms.</summary>
     public Dictionary<int, int> ReadyAt { get; } = new();
 
+    /// <summary>
+    /// Per Reaction slot, while it is rearming: the expedition-absolute ms its rearm began (the trigger). Present
+    /// only between a trigger and the <see cref="Expeditions.BattleEventKind.ReactionArmed"/> that ends it.
+    /// </summary>
+    /// <remarks>
+    /// INFORMATION ONLY. Nothing that decides the fight reads it: whether a reaction may fire is still
+    /// <see cref="ReadyAt"/>. It exists so the armed report can say how long the rearm ran, including one that
+    /// began in the previous wave.
+    /// </remarks>
+    public Dictionary<int, int> ReactionRearmFrom { get; } = new();
+
     /// <summary>Expedition-absolute ms elapsed before the current wave. See SkillClock for why.</summary>
     public int ElapsedMs { get; set; }
 
@@ -775,6 +786,10 @@ public static class SoloBattle
     /// <summary>
     /// Resolve one wave against a composition. Terminates on a clear, a death, or the tick ceiling.
     /// </summary>
+    /// <param name="reportReadiness">
+    /// Emit <see cref="BattleEventKind.ReactionArmed"/> (on by default). It changes nothing the fight decides; the
+    /// switch exists so a test can resolve the same wave with and without it and prove exactly that.
+    /// </param>
     public static (WaveOutcome Outcome, List<BattleEvent> Events) ResolveWave(
         Champion champ,
         Build build,
@@ -789,7 +804,8 @@ public static class SoloBattle
         float sustain = 1f,
         Style? wardedStyle = null,
         bool entrenched = false,
-        bool legionSplits = false)
+        bool legionSplits = false,
+        bool reportReadiness = true)
     {
         ArgumentNullException.ThrowIfNull(creatures);
         if (creatures.Count == 0) throw new ArgumentException("A wave needs at least one creature.", nameof(creatures));
@@ -1244,8 +1260,49 @@ public static class SoloBattle
                                   ? 1f + traits.LowHealthRateBonus
                                   : 1f);
 
+        // ── A REACTION'S READINESS, REPORTED (JAWS, ADR-011, 2026-09-25). ──────────────────────────────
+        //
+        // The fight decides whether a Reaction may answer by comparing the clock with champ.ReadyAt, at the tick
+        // the bite or the death arrives. These three read that SAME table and say, as ReactionArmed, the moment it
+        // came due, so the rail can show a real rearm without a second copy of the arithmetic that set it
+        // (RearmMs, CooldownMultiplier, COILED, the live rate, a LOOSE AGAIN clear). They only ever ADD events,
+        // in time order, and write nothing but ReactionRearmFrom, which nothing that decides the fight reads.
+
+        // Say that the reaction in `slot` is armed again at `atMs` (wave-relative), and close its rearm.
+        void ReportArmed(int slot, int atMs)
+        {
+            var from = champ.ReactionRearmFrom[slot];
+            champ.ReactionRearmFrom.Remove(slot);
+            events.Add(new BattleEvent(BattleEventKind.ReactionArmed, slot, Math.Max(0, since + atMs - from), atMs));
+        }
+
+        // Every rearming reaction whose ready moment the clock has reached by `atMs`. A ready moment later than
+        // `floorMs` came due on its own and is said at its own millisecond; an earlier one was pulled forward by
+        // something that happened in the tick at `floorMs` (a cleared cooldown), which is when it became true.
+        void ObserveReadiness(int atMs, int floorMs)
+        {
+            if (!reportReadiness || champ.ReactionRearmFrom.Count == 0) return;
+            for (var k = 0; k < skills.Count; k++)
+            {
+                if (!champ.ReactionRearmFrom.ContainsKey(k)) continue;
+                var readyRel = champ.ReadyAt.GetValueOrDefault(k, 0) - since;
+                if (readyRel <= atMs) ReportArmed(k, Math.Max(readyRel, floorMs));
+            }
+        }
+
+        // A reaction in `slot` answers at `atMs` and starts a rearm. Called before its ReadyAt is stamped: if a
+        // clear earlier in this very tick had already armed it, that is said first, so ARMED precedes the trigger.
+        void BeginRearm(int slot, int atMs)
+        {
+            if (!reportReadiness) return;
+            if (champ.ReactionRearmFrom.ContainsKey(slot)) ReportArmed(slot, atMs);
+            champ.ReactionRearmFrom[slot] = since + atMs;
+        }
+
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
+            // a cooldown cleared in the wave's last tick came due then; one still running is said by the next wave
+            ObserveReadiness(atMs, atMs);
             champ.ElapsedMs += atMs;
             if (metrics is not null)
             {
@@ -1852,6 +1909,7 @@ public static class SoloBattle
                         var armBase = (int)(Math.Max(1_000, kd.RearmMs) * kd.CooldownMultiplier);
                         if (triggers.Contains(BuildTrigger.Coiled)) armBase = (int)(armBase * CoiledCooldownFactor);
                         var arm = Math.Max(1, (int)(armBase / Math.Max(0.1f, RateNow())));
+                        BeginRearm(k, atMs);   // information only, as the Bitten dispatch
                         champ.ReadyAt[k] = absAt + arm;
 
                         var shot = SkillCatalogue.PoweredBase(kd, resonance)
@@ -2132,6 +2190,8 @@ public static class SoloBattle
         for (var ms = tuning.TickMs; ms <= tuning.TickCeilingMs; ms += tuning.TickMs)
         {
             var abs = since + ms;
+            // A reaction that came ready since the last tick is said before anything this tick does (see ReportArmed).
+            ObserveReadiness(ms, ms - tuning.TickMs);
             // ON THE BEAT the champion takes ONE action: the first ready skill in slot order, else a swing.
             var onBeat = champ.Alive && ms >= nextBeat;
             if (onBeat) beatOwed = true;
@@ -3091,6 +3151,7 @@ public static class SoloBattle
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
                     var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
+                    BeginRearm(idx, ms);   // information only: its armed moment is reported from this ReadyAt
                     champ.ReadyAt[idx] = abs + cd;
 
                     // MESH and SPITE — the reflect grows with every bite the trap has answered this

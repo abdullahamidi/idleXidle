@@ -187,6 +187,24 @@ public sealed class SoloExpedition
     public Haul Carried { get; private set; }
     public IReadOnlyList<BattleEvent> LastWaveEvents { get; private set; } = Array.Empty<BattleEvent>();
 
+    /// <summary>Where the last wave began on the expedition's clock (the champion's elapsed ms before it).</summary>
+    public int LastWaveStartMs { get; private set; }
+
+    /// <summary>
+    /// When a Reaction still rearming as the last wave ended becomes ready, in that wave's own ms (later than its
+    /// end), or null when it is not rearming. Read off the champion's cooldown table, the one the fight decides by.
+    /// </summary>
+    /// <remarks>
+    /// The last trigger of a wave usually rearms past the wave's end, and its
+    /// <see cref="BattleEventKind.ReactionArmed"/> is said by the NEXT wave, which is not resolved yet. This is the
+    /// same fact, available now, so the rail's sweep can run to the true moment instead of guessing one.
+    /// Meaningful until the next wave is resolved.
+    /// </remarks>
+    public int? ReactionReadyAfterLastWave(int slot)
+        => _champion.ReactionRearmFrom.ContainsKey(slot) && _champion.ReadyAt.TryGetValue(slot, out var at)
+            ? at - LastWaveStartMs
+            : null;
+
     /// <summary>
     /// What the wave JUST cleared was worth, on its own. Zero if the last push did not clear.
     /// </summary>
@@ -263,6 +281,7 @@ public sealed class SoloExpedition
             {
                 _champion.ReadyAt.Remove(i);
                 _champion.ReadyAtBeat.Remove(i);   // the beat-counted table is keyed the same way
+                _champion.ReactionRearmFrom.Remove(i);   // ...and so is a reaction's rearm report
             }
         _build = build;
     }
@@ -402,6 +421,7 @@ public sealed class SoloExpedition
 
         var metrics = new WaveMetrics();
         var sustain = Bands.SustainMultiplier(affixes);
+        LastWaveStartMs = _champion.ElapsedMs;
         var (outcome, events) = SoloBattle.ResolveWave(
             _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss, metrics,
             sustain,
