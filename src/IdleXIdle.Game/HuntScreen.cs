@@ -5924,7 +5924,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         // held frame is the pose the action ends in; without it the cut to idle was the "did it finish?"
         // the playtest could not read) — or the playhead is BEHIND the clip's start (a rewound fixture),
         // which would run it backwards; either way the commitment is over.
-        var clipEnds = _clipTiming is { } authored ? _clipStartMs + authored.TotalMs : _clipStartMs + ClipMs / _clipSpeed + SettleMs;
+        var clipEnds = _clipStartMs + (_clipTiming?.TotalMs ?? ClipMs / _clipSpeed + SettleMs);
         if (_clipName is not null && (_playheadMs >= clipEnds || _playheadMs < _clipStartMs))
         {
             if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
@@ -5932,46 +5932,22 @@ public sealed class HuntScreen : IFocusActors, IActionStage
             _clipTiming = null;
             _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
         }
-        // A RECOVERY GIVES WAY TO A PERFORMED WIND-UP (ADR-011). At a fast TEMPO every committed clip plays on
-        // to ~100 ms before the next beat, so a performed cast committed only when the figure came free: it
-        // started AT its release, skipped the whole wind-up and crossed the arena in ~100 ms (the fast-TEMPO
-        // film, 2026-09-24). A plain clip whose blow has LANDED is only recovering: it yields the figure on the
-        // last frame the cast can still start with its minimum wind-up. The timing model is unchanged.
-        if (_clipName is not null && _clipTiming is null && _playheadMs > _clipBeatMs && PerformedCastNeedsTheFigure())
+        if (_clipName is not null)
         {
-            if (PresentTrace.Enabled) PresentTrace.Log("clip-cut", $"{_clipName}\tbeat={_clipBeatMs}");
-            _clipName = null;
-            _idleFrom = _anim;
+            // committed — plays through, and once its blow has landed it plans how it hands the figure over
+            PlanHandoff();
+            return;
         }
-        if (_clipName is not null) return;   // committed — plays through
         if (_replay is null) return;
 
-        float? beatMs = null;
-        string? clip = null;
-        BattleEvent? skillEvent = null;
         // EACH FORM THROWS ITS OWN SHAPE. The clip is named after the Form, and Character.StripKeys
         // falls back to the old attack/cast pair for any character whose strip is not generated yet —
         // so a Strike is still a swing and a Mark is still a cast until the art lands.
-        //
-        // A Trap is still excluded HERE because it fires on being bitten rather than on the beat, so it
-        // has no beat to be aimed at. It gets its own commitment below.
         var reactionSlots = ReactionSlots();
-        if (_replay.NextSkillEventAfter(_playheadMs, reactionSlots) is { } nextSkill
-            && nextSkill.Slot >= 0 && nextSkill.Slot < _waveSkills.Count)
-        {
-            beatMs = nextSkill.AtMs;
-            clip = _waveSkills[nextSkill.Slot].Def.ClipKey;
-            skillEvent = nextSkill;
-        }
-        // The basic attack's swing. It is a real action now (MIGHT's hit, at TEMPO's cadence) and the
-        // sim holds one lock for swings and casts alike, so this clip can never start inside a cast nor
-        // a cast inside it — the sword-draw between two Projectiles is a swing the fight actually made.
-        if (_nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
-        {
-            beatMs = _nextChampStrikeMs;
-            clip = "attack";
-            skillEvent = null;
-        }
+        var next = NextAnimatedAction(reactionSlots);
+        float? beatMs = next?.BeatMs;
+        var clip = next?.Clip;
+        var skillEvent = next?.Cast;
         // THE TRAP, WHICH IS NOT AN ACTION. It answers the enemy's bite, off the beat, so it can never
         // be aimed at one — and for the whole life of the fight it therefore had no champion animation
         // at all: the trap bit, the enemy took damage, and the figure stood still through it.
@@ -5986,10 +5962,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         if (beatMs is null && lastTrap is { } trapMs
             && _playheadMs - trapMs < TrapClipGraceMs)
         {
-            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat));
-            _clipStartMs = trapMs;
-            _clipName = "trap";
-            _clipBeatMs = (int)trapMs;
+            CommitPlainClip("trap", trapMs, Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat)), (int)trapMs);
             if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"trap\tbeat={trapMs:0}\tspeed={_clipSpeed:0.000}");
             return;
         }
@@ -6027,11 +6000,150 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
 
-        _clipSpeed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
-        _clipStartMs = _playheadMs;
-        _clipName = clip;
-        _clipBeatMs = (int)beatMs.Value;
+        CommitPlainClip(clip!, _playheadMs,
+                        Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed)),
+                        (int)beatMs.Value);
         if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"{clip}\tbeat={beatMs.Value:0}\tspeed={_clipSpeed:0.000}\tcontactMs={contactMs:0}\tframeMs={1000f / ChampionFps / _clipSpeed:0}");
+    }
+
+    /// <summary>
+    /// Commit a PLAIN clip (a strip without a timing file): its eight equal frames at <paramref name="speed"/>, and its
+    /// settle, as a timing whose phases a handoff can read (<see cref="ActionClipTiming.Plain"/>).
+    /// </summary>
+    private void CommitPlainClip(string clip, float startMs, float speed, int beatMs)
+    {
+        _clipSpeed = speed;
+        _clipStartMs = startMs;
+        _clipName = clip;
+        _clipBeatMs = beatMs;
+        _clipTiming = ActionClipTiming.Plain(ClipMs / 8f / speed, SettleMs);
+        _handoffPlanned = false;
+    }
+
+    /// <summary>
+    /// The next beat the figure plays and the clip it plays there: the earlier of the next skill cast (a Reaction
+    /// excepted: it fires on a bite, not on a beat, and gets its own commitment) and the next basic swing.
+    /// </summary>
+    /// <remarks>
+    /// The ONE pick both the commitment and the handoff read, so the action a recovery makes room for is the
+    /// action that then takes the figure. The swing is a real action (MIGHT's hit, at TEMPO's cadence) and the sim
+    /// holds one lock for swings and casts alike, so a swing clip never starts inside a cast nor a cast inside it.
+    /// </remarks>
+    private (float BeatMs, string Clip, BattleEvent? Cast)? NextFigureBeat(HashSet<int> reactionSlots, float? afterMs = null)
+    {
+        if (_replay is null) return null;
+        var from = afterMs ?? _playheadMs;
+        (float BeatMs, string Clip, BattleEvent? Cast)? next = null;
+        if (_replay.NextSkillEventAfter(from, reactionSlots) is { } nextSkill
+            && nextSkill.Slot >= 0 && nextSkill.Slot < _waveSkills.Count)
+            next = (nextSkill.AtMs, _waveSkills[nextSkill.Slot].Def.ClipKey, nextSkill);
+        // the cached next swing is refreshed when a Strike is crossed, AFTER this runs on that frame: on it, ask
+        // the replay, or the swing just landing would hide the one after it
+        var swing = afterMs is null && _nextChampStrikeMs > from ? _nextChampStrikeMs : _replay.NextChampionStrikeAfter(from);
+        if (swing > from && swing != int.MaxValue && (next is null || swing < next.Value.BeatMs))
+            next = (swing, "attack", null);
+        return next;
+    }
+
+    /// <summary>
+    /// The next action the FIGURE will play: <see cref="NextFigureBeat"/>, unless that is a plain clip that could not
+    /// reach its exit pose before the PERFORMED action right after it needs the figure — then that performed action.
+    /// </summary>
+    /// <remarks>
+    /// THE RESERVATION (ADR-011). A performed action's wind-up is part of the action: it starts from its first pose.
+    /// On the fastest builds (TEMPO trained to its cap, swings 400 ms apart) the swing before a SPRAY had not even
+    /// landed when SPRAY had to start, so SPRAY entered on its third frame, every cast. The plain beat that cannot fit
+    /// is not animated, as every beat that falls while the figure is busy already is: its hit, number, flash and
+    /// sound still fire, because they are the fight. Traced as a `yield`, never silent.
+    /// </remarks>
+    private (float BeatMs, string Clip, BattleEvent? Cast)? NextAnimatedAction(HashSet<int> reactionSlots)
+    {
+        if (NextFigureBeat(reactionSlots) is not { } next) return null;
+        if (next.Cast is not null && TryAuthored(next.Clip, out _, out _)) return next;       // performed: it is the reservation
+        if (NextFigureBeat(reactionSlots, next.BeatMs) is not { } after || after.Cast is null
+            || !TryAuthored(after.Clip, out _, out _)) return next;                           // no performed action behind it
+        var (_, latest) = Reservation(after);
+        if (PlainEarliestExit(next) <= latest) return next;
+        if (PresentTrace.Enabled && _yieldLoggedFor != (int)next.BeatMs)
+        {
+            _yieldLoggedFor = (int)next.BeatMs;
+            PresentTrace.Log("yield", $"{next.Clip}\tbeat={next.BeatMs:0}\texit={PlainEarliestExit(next):0}\tfor={after.Clip}\tforBeat={after.BeatMs:0}\tlatest={latest:0}");
+        }
+        return after;
+    }
+
+    private int _yieldLoggedFor = int.MinValue;
+
+    /// <summary>
+    /// The earliest a plain clip for <paramref name="next"/> could reach its exit pose if it began now (or at its own
+    /// start, if that is later): the same speed the commitment below would give it, its protected frames whole, its
+    /// recovery at the readable floor.
+    /// </summary>
+    private float PlainEarliestExit((float BeatMs, string Clip, BattleEvent? Cast) next)
+    {
+        var cast = next.Clip != "attack";
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * (cast ? SkillClipShareOfBeat : ClipShareOfBeat)));
+        var contactMs = ContactMs(cast);
+        var start = Math.Max(_playheadMs, next.BeatMs - contactMs);
+        var speed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, next.BeatMs - start), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
+        return ActionHandoff.EarliestExit(start, ActionClipTiming.Plain(ClipMs / 8f / speed, 0f), MinRecoveryPoseMs, MaxRecoveryCompression);
+    }
+
+    /// <summary>
+    /// When the next action wants the figure: its IDEAL start (its whole wind-up) and its LATEST (the tightest its
+    /// own timing allows: an authored clip's elastic floor, a plain clip at <see cref="MaxClipSpeed"/>).
+    /// </summary>
+    private (float Ideal, float Latest) Reservation((float BeatMs, string Clip, BattleEvent? Cast) next)
+    {
+        if (next.Cast is not null && TryAuthored(next.Clip, out var recipe, out var timing))
+            return (next.BeatMs - recipe.TravelMs - timing.MarkerMs(recipe.ReleaseMarker),
+                    next.BeatMs - ActionPerformance.MinLeadMs(recipe, timing));
+        var cast = next.Clip != "attack";
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * (cast ? SkillClipShareOfBeat : ClipShareOfBeat)));
+        return (next.BeatMs - ContactMs(cast), next.BeatMs - ClipMs * ContactFraction / Math.Max(baseSpeed, MaxClipSpeed));
+    }
+
+    /// <summary>True once the committed clip's handoff has been planned (once per clip, after its blow lands).</summary>
+    private bool _handoffPlanned;
+
+    /// <summary>The shortest a recovery pose may stay on screen in a handoff: two display frames. One reads as a pop.</summary>
+    private const float MinRecoveryPoseMs = 2000f / 60f;
+
+    /// <summary>The fastest a recovery may play in a handoff, relative to its own pace (see <see cref="ActionHandoff"/>).</summary>
+    private const float MaxRecoveryCompression = 3f;
+
+    /// <summary>
+    /// THE HANDOFF (ADR-011, <see cref="ActionHandoff"/>): once the committed clip's blow has landed, fit its recovery
+    /// so it ARRIVES at its exit pose when the next action wants the figure, instead of being cut mid-pose.
+    /// </summary>
+    /// <remarks>
+    /// Before, at a fast TEMPO, a performed cast took the figure at its latest start whatever the outgoing clip was
+    /// showing: the swing was still in its low lunge (its follow-through) and the Seeker jumped in one frame to
+    /// SPRAY's ready pose. Every clip now carries its phases (a plain one through <see cref="ActionClipTiming.Plain"/>),
+    /// only the recovery and its settle are retimed, and the next action starts from its own first frame.
+    /// </remarks>
+    private void PlanHandoff()
+    {
+        if (_handoffPlanned || _clipTiming is not { } t || _clipBeatMs is not { } beat || _playheadMs <= beat) return;
+        _handoffPlanned = true;
+        if (!t.HasMarker("recovery") || NextAnimatedAction(ReactionSlots()) is not { } next) return;
+        if (ReplayHeld && HeldEventAtMs is { } heldAt && next.BeatMs >= heldAt) return;
+        var (ideal, latest) = Reservation(next);
+        var recoveryStart = _clipStartMs + t.MarkerMs("recovery");
+        var naturalEnd = _clipStartMs + t.TotalMs;
+        if (ActionHandoff.Plan(_playheadMs, recoveryStart, t.RecoveryMotionMs,
+                               t.MinRecoveryMs(MinRecoveryPoseMs, MaxRecoveryCompression), naturalEnd, ideal, latest) is not { } plan)
+            return;
+        _clipTiming = t.FitRecovery(plan.AvailableMs, MinRecoveryPoseMs, out var compression);
+        if (PresentTrace.Enabled)
+        {
+            // a plain clip's contact is its contact frame; a performed action's is the beat itself (ADR-011)
+            var contact = t.HasMarker("contact") ? _clipStartMs + t.MarkerMs("contact") : beat;
+            PresentTrace.Log("handoff", $"{_clipName}\tbeat={beat}\tcontact={contact:0}\trecovery={recoveryStart:0}"
+                                        + $"\tmotion={t.RecoveryMotionMs:0}\thold={t.HoldMs:0}\tnatural={naturalEnd:0}\tavailable={plan.AvailableMs:0}"
+                                        + $"\tratio={compression:0.00}\texit={plan.ExitMs:0}\tfit={plan.Fit}\tnext={next.Clip}\tnextBeat={next.BeatMs:0}"
+                                        + $"\tideal={ideal:0}\tlatest={latest:0}\tprotected={t.MarkerMs("recovery"):0}");
+        }
     }
 
     private enum PerformCommit { NoRecipe, NotYet, Committed }
@@ -6052,6 +6164,7 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         _clipSpeed = 1f;
         _clipName = clip;
         _clipBeatMs = cast.AtMs;
+        _handoffPlanned = false;
         if (PresentTrace.Enabled)
             PresentTrace.Log("clip-start", $"{clip}\tauthored\tbeat={cast.AtMs}\tstart={plan.StartMs:0}\trelease={_performance.ReleaseMs:0}"
                              + $"\ttargets={string.Join(",", _performance.Targets)}\trecipe={recipe.Id}");
@@ -6071,29 +6184,19 @@ public sealed class HuntScreen : IFocusActors, IActionStage
         return true;
     }
 
-    /// <summary>The slots whose skill REACTS (a Trap): they fire on a bite, not on a beat, so no clip is aimed at them.</summary>
+    /// <summary>
+    /// The slots whose skill REACTS (a Trap): they fire on a bite, not on a beat, so no clip is aimed at them. One
+    /// set, refilled: the clip picker asks every frame.
+    /// </summary>
     private HashSet<int> ReactionSlots()
     {
-        var slots = new HashSet<int>();
+        _reactionSlots.Clear();
         for (var ri = 0; ri < _waveSkills.Count; ri++)
-            if (_waveSkills[ri].Def.Kind == SkillKind.Reaction) slots.Add(ri);
-        return slots;
+            if (_waveSkills[ri].Def.Kind == SkillKind.Reaction) _reactionSlots.Add(ri);
+        return _reactionSlots;
     }
 
-    /// <summary>
-    /// True when the next beat the figure will play is a PERFORMED cast (the same pick
-    /// <see cref="UpdateChampionClip"/> makes: a swing due first wins) and this frame is the last one on which
-    /// it can still start with its minimum wind-up (<see cref="ActionPerformance.MinLeadMs"/>).
-    /// </summary>
-    private bool PerformedCastNeedsTheFigure()
-    {
-        if (_replay?.NextSkillEventAfter(_playheadMs, ReactionSlots()) is not { } cast
-            || cast.Slot < 0 || cast.Slot >= _waveSkills.Count) return false;
-        if (_nextChampStrikeMs > _playheadMs && _nextChampStrikeMs < cast.AtMs) return false;
-        if (ReplayHeld && HeldEventAtMs is { } heldAt && cast.AtMs >= heldAt) return false;
-        if (!TryAuthored(_waveSkills[cast.Slot].Def.ClipKey, out var recipe, out var timing)) return false;
-        return cast.AtMs - _playheadMs <= ActionPerformance.MinLeadMs(recipe, timing) + 1000f / 60f;
-    }
+    private readonly HashSet<int> _reactionSlots = new();
 
     /// <summary>
     /// Rig only (RH_SHOT_SEQ `@N`): the next PERFORMED cast whose beat is within <paramref name="withinMs"/> of the

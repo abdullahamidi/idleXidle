@@ -55,13 +55,31 @@ public sealed class ActionClipTiming
     /// <summary>How many frames the clip has.</summary>
     public int Frames => FrameMs.Count;
 
+    /// <summary>
+    /// How much of the last frame's duration is a SETTLE HOLD, in ms: the exit pose held still after its motion,
+    /// before idle. Nothing moves in it, so a handoff trims it before it compresses any motion.
+    /// </summary>
+    public float HoldMs { get; }
+
     /// <summary>A timing from its parts. Every frame must last at least 1 ms.</summary>
     public ActionClipTiming(IReadOnlyList<float> frameMs, IReadOnlyList<bool>? elastic = null,
                             IReadOnlyDictionary<string, int>? markers = null,
-                            IReadOnlyDictionary<(int Frame, string Name), ActionSocket>? sockets = null)
+                            IReadOnlyDictionary<(int Frame, string Name), ActionSocket>? sockets = null,
+                            float holdMs = 0f)
+        : this(frameMs, elastic, markers, sockets, holdMs, allowSkipped: false)
+    {
+    }
+
+    // allowSkipped: a handoff (FitRecovery) may give an intermediate recovery pose 0 ms, which FrameAt never shows
+    private ActionClipTiming(IReadOnlyList<float> frameMs, IReadOnlyList<bool>? elastic,
+                             IReadOnlyDictionary<string, int>? markers,
+                             IReadOnlyDictionary<(int Frame, string Name), ActionSocket>? sockets,
+                             float holdMs, bool allowSkipped)
     {
         if (frameMs is null || frameMs.Count == 0) throw new ArgumentException("A clip needs at least one frame.", nameof(frameMs));
-        if (frameMs.Any(ms => !(ms >= 1f))) throw new ArgumentException("Every frame must last at least 1 ms.", nameof(frameMs));
+        if (frameMs.Any(ms => !(ms >= (allowSkipped ? 0f : 1f)))) throw new ArgumentException("Every frame must last at least 1 ms.", nameof(frameMs));
+        if (!(holdMs >= 0f) || holdMs > frameMs[^1]) throw new ArgumentException("The settle hold is part of the last frame.", nameof(holdMs));
+        HoldMs = holdMs;
         FrameMs = frameMs.ToArray();
         Elastic = elastic is { } e && e.Count == frameMs.Count ? e.ToArray() : new bool[frameMs.Count];
         Markers = new Dictionary<string, int>(markers ?? new Dictionary<string, int>(), StringComparer.OrdinalIgnoreCase);
@@ -76,6 +94,112 @@ public sealed class ActionClipTiming
     /// <summary>The old model: <paramref name="frames"/> equal frames, contact on frame 5 of 8.</summary>
     public static ActionClipTiming Uniform(int frames, float frameMs, int contactFrame)
         => new(Enumerable.Repeat(frameMs, frames).ToArray(), markers: new Dictionary<string, int> { ["contact"] = contactFrame });
+
+    /// <summary>
+    /// A PLAIN clip (a strip with no timing file) as the champion plays it: eight equal frames of
+    /// <paramref name="frameMs"/>, contact on frame 5, the follow-through on 6, the RECOVERY and exit pose on 7,
+    /// and <paramref name="settleMs"/> of settle held on that exit pose.
+    /// </summary>
+    /// <remarks>
+    /// The same pictures the old continuous clock drew. What it adds is the phases, so a handoff knows what it
+    /// may borrow: nothing up to the follow-through, the recovery's pace, and the settle's stillness.
+    /// </remarks>
+    public static ActionClipTiming Plain(float frameMs, float settleMs)
+    {
+        var ms = Enumerable.Repeat(frameMs, 8).ToArray();
+        ms[^1] += Math.Max(0f, settleMs);
+        return new ActionClipTiming(ms, markers: new Dictionary<string, int> { ["contact"] = 5, ["recovery"] = 7 },
+                                    holdMs: Math.Max(0f, settleMs));
+    }
+
+    /// <summary>
+    /// The recovery's MOTION at normal pace, in ms: the frames from the <c>recovery</c> marker to the end, less the
+    /// settle hold. Zero when the clip names no recovery.
+    /// </summary>
+    public float RecoveryMotionMs => HasMarker("recovery") ? TotalMs - MarkerMs("recovery") - HoldMs : 0f;
+
+    /// <summary>
+    /// The shortest the recovery may become and still be read: each of its poses on screen for at least
+    /// <paramref name="minPoseMs"/>, and none played more than <paramref name="maxCompression"/> times faster.
+    /// </summary>
+    public float MinRecoveryMs(float minPoseMs, float maxCompression)
+    {
+        if (!HasMarker("recovery")) return 0f;
+        var from = Markers["recovery"];
+        var sum = 0f;
+        for (var i = from; i < Frames; i++)
+        {
+            var motion = i == Frames - 1 ? FrameMs[i] - HoldMs : FrameMs[i];
+            sum += Math.Max(minPoseMs, motion / Math.Max(1f, maxCompression));
+        }
+        return sum;
+    }
+
+    /// <summary>
+    /// THE HANDOFF (ADR-011): this timing with its recovery, from the <c>recovery</c> marker to the end, fitted into
+    /// <paramref name="availableMs"/>. Every frame before the marker keeps its length.
+    /// </summary>
+    /// <param name="availableMs">From the recovery's start to the moment the next action takes the figure.</param>
+    /// <param name="minPoseMs">The shortest a recovery pose may be on screen and still be read.</param>
+    /// <param name="compression">How much faster than authored the recovery's motion plays (1 = not at all).</param>
+    /// <remarks>
+    /// <para>
+    /// Borrowed in the order of what it costs the eye: first the settle hold (the exit pose standing still),
+    /// then the recovery's pace. The exit pose, the last frame, is always shown, so the next action begins
+    /// from the pose the recovery was travelling to.
+    /// </para>
+    /// <para>
+    /// When the poses cannot all get <paramref name="minPoseMs"/>, the exit pose is kept first, then the first
+    /// recovery pose, then the intermediates evenly: a pose flashed for one display frame reads as a pop, and a
+    /// skipped intermediate reads as a faster recovery.
+    /// </para>
+    /// </remarks>
+    public ActionClipTiming FitRecovery(float availableMs, float minPoseMs, out float compression)
+    {
+        compression = 1f;
+        if (!HasMarker("recovery")) return this;
+        var from = Markers["recovery"];
+        var n = Frames - from;
+        var available = Math.Max(0f, availableMs);
+        var motion = new float[n];
+        for (var i = 0; i < n; i++) motion[i] = FrameMs[from + i] - (i == n - 1 ? HoldMs : 0f);
+        var motionMs = motion.Sum();
+        var ms = FrameMs.ToArray();
+        if (available >= motionMs + HoldMs) return this;               // nothing to borrow
+        if (available >= motionMs)
+        {
+            // only the settle hold gives way: the recovery plays at its own pace and the exit pose holds less
+            ms[^1] = motion[n - 1] + (available - motionMs);
+            return new ActionClipTiming(ms, Elastic, Markers, _sockets, ms[^1] - motion[n - 1], allowSkipped: false);
+        }
+        compression = motionMs / Math.Max(1e-3f, available);
+
+        // which poses fit at the readable minimum: the exit first, then the first recovery pose, then intermediates
+        var fit = Math.Clamp((int)(available / Math.Max(1f, minPoseMs)), 1, n);
+        var keep = new bool[n];
+        keep[n - 1] = true;
+        if (fit >= 2) keep[0] = true;
+        for (var k = 1; k <= fit - 2; k++) keep[(int)MathF.Round(k * (n - 1) / (float)(fit - 1))] = true;
+
+        // share the time among the kept poses by their authored motion, none under the minimum (water-filling)
+        var share = new float[n];
+        var free = Enumerable.Range(0, n).Where(i => keep[i]).ToList();
+        var left = available;
+        while (free.Count > 0)
+        {
+            var weight = free.Sum(i => motion[i]);
+            var floorHit = free.Where(i => weight > 0f && left * motion[i] / weight < minPoseMs).ToList();
+            if (floorHit.Count == 0 || floorHit.Count == free.Count)
+            {
+                foreach (var i in free) share[i] = weight > 0f ? left * motion[i] / weight : left / free.Count;
+                break;
+            }
+            foreach (var i in floorHit) { share[i] = Math.Min(minPoseMs, left); left -= share[i]; free.Remove(i); }
+        }
+        for (var i = 0; i < n; i++) ms[from + i] = keep[i] ? Math.Max(0f, share[i]) : 0f;
+        if (ms[^1] < 1f) ms[^1] = 1f;                                   // the exit pose is always drawn
+        return new ActionClipTiming(ms, Elastic, Markers, _sockets, 0f, allowSkipped: true);
+    }
 
     /// <summary>When <paramref name="frame"/> begins, in ms from the clip's start.</summary>
     public float StartOf(int frame) => _starts[Math.Clamp(frame, 0, Frames)];
@@ -122,7 +246,7 @@ public sealed class ActionClipTiming
         var ms = FrameMs.ToArray();
         for (var i = 0; i < m; i++)
             if (Elastic[i]) ms[i] = Math.Max(1f, ms[i] * k);
-        return new ActionClipTiming(ms, Elastic, Markers, _sockets);
+        return new ActionClipTiming(ms, Elastic, Markers, _sockets, HoldMs);
     }
 
     /// <summary>

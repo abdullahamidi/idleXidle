@@ -311,6 +311,10 @@ The rule is one coherent action: intention, preparation, release, motion, contac
   - The follow-through outlasts the flight (release frame + follow-through = `TravelMs` + one or two frames). The hand still reaches toward the targets on the frame they are hit, and the recovery starts just after. If the recovery starts on the contact frame, the arm drops at the hit.
   - A hand may be corrected with a PixelLab edit (`edit_image_pixen` of the accepted key pose). Take ONLY the hand's box from it: the edits also redraw part of the body, paint props and redraw the other arm. Match the champion's own materials: the Seeker is gloved in every frame, so the whole edited hand takes his glove ramp. An edit that draws bare skin changes his costume for a quarter-second.
   - After two failed edits, correct the hand by hand. Do not keep generating.
+- **An action ends on an EXIT POSE** (the action handoff, ADR-011, 2026-09-25). Its last frame is where the next action starts from, so it must be compatible with idle and with any action's first pose: standing, weapon away or at rest.
+  - When the next action needs the figure early, the outgoing recovery is played faster to ARRIVE at that pose, never cut mid-pose. So a crouched or lunging last frame pops however it is timed.
+  - HARD HANDS (`seeker_strike`) ends in a low crouch and pops into idle and into SPRAY. The basic swing ends in a half-rise with its blade out: its blade disappears at the join.
+  - No bespoke `a_to_b` transition clips and no whole-sprite crossfades: the exit pose + recovery compression + the next action's authored first pose are the bridge.
 - **A smear is an accent, not a path.** It shows the last part of the hand's travel only, starts on the release frame (never before it, because the hand is not there yet), and never crosses the head or face. A full-length streak from the coil read as a beam from the eye.
 - **Sound is one phrase** (`design/audio/seeker-spray-audio-brief.md`).
   - The release is the action's own cue. The flight is silent of the action's sounds.

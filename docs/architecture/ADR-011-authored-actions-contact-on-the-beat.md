@@ -2,11 +2,11 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed. The Seeker SPRAY slice is built (2026-09-24), and its art, animation and audio polish pass is filmed (`production/qa/evidence/action-presentation-slice/polish/`). It stays Proposed until the owner has watched the polish films and the three SPRAY cues have passed a listening test (`design/audio/seeker-spray-audio-brief.md`). No other action uses it until then. |
+| **Status** | Proposed. The Seeker SPRAY slice is built (2026-09-24) and polished (`production/qa/evidence/action-presentation-slice/polish/`). The action handoff replaced the recovery cut (2026-09-25, `…/handoff/`). SPRAY's own frames and timing have no known defect. One join still pops: HARD HANDS → SPRAY, because HARD HANDS' strip ends in a crouch (its art, out of scope). The owner rules on whether that blocks **SPRAY VISUAL / TIMING REFERENCE: APPROVED**. The complete audiovisual gold standard stays pending a human listening test of the three SPRAY cues (`design/audio/seeker-spray-audio-brief.md`). No other action uses it until then. |
 | **Date** | 2026-09-24 |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
-| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs` |
+| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs` |
 | **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form (SPRAY). |
 
 ## Summary
@@ -36,9 +36,13 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 1. **Contact is the beat.** For a damaging projectile, the fight's event timestamp is the moment the object lands.
    - `ActionPerformance.Schedule` starts the clip at `beat − travel − time-to-release`, so the release lands `TravelMs` before the beat.
    - A late start compresses only the clip's **elastic** frames before the release. The release is never slowed.
-   - **A recovery gives way to a performed wind-up** (polish pass). A plain clip whose blow has already landed is only recovering. It yields the figure on the last frame the performed cast can still start with its minimum wind-up (`ActionPerformance.MinLeadMs`: the flight, the rigid frames, and the elastic frames at their 35 % floor).
-     - Without this, a fast TEMPO build's clips ran on to ~100 ms before the next beat. SPRAY committed at its release: no wind-up, and a ~100 ms flight.
-     - The timing model is unchanged. Only which clip holds the figure changes. A clip that has not landed its blow is never cut, and an authored clip is never cut.
+   - **The action handoff** (2026-09-25, `ActionHandoff`, `ActionClipTiming.FitRecovery`). An action whose blow has landed hands the figure over by ARRIVING at its exit pose. It is never cut mid-pose.
+     - **Phases.** Every committed clip carries its phases. A plain strip is built by `ActionClipTiming.Plain`: contact 5, follow-through 6, recovery and exit 7, then the settle held on 7. Anticipation, commit/release, contact and the immediate follow-through are protected. Only the recovery and the settle may be borrowed from.
+     - **The reservation.** The replay knows the next action. Its IDEAL start is its whole wind-up. Its LATEST start is its tightest fit: an authored clip's elastic floor (`ActionPerformance.MinLeadMs`), or a plain clip at `MaxClipSpeed`.
+     - **The fit.** Once the outgoing blow lands, its recovery is fitted to end at the ideal start. The settle gives way first. Then the recovery plays faster, down to a readable floor: two display frames per pose, at most 3× its pace. Past the floor, the next action starts later, inside its own elastic range (the approved late start). If the time is short, the exit pose and the first recovery pose are kept and intermediates are skipped.
+     - **Not begun.** A plain clip that could not reach its exit pose before the next PERFORMED action's latest start is not begun (`yield` in the trace). Its hit, number, flash and sound still fire, as they already do for any beat that falls while the figure is busy. This only happens on the fastest builds.
+     - **What it replaced.** The recovery cut handed SPRAY the figure at its latest start whatever the swing was showing. At a fast TEMPO the swing was still in its low lunge, so the Seeker jumped in one frame to SPRAY's ready pose. Before that cut existed, SPRAY committed at its release: no wind-up, and a ~100 ms flight.
+     - **The timing model is unchanged.** The beat, the release (beat − 250 ms), the flight and every piece of gameplay feedback stay where the fight put them.
    - Melee actions (future recipes) put their contact frame on the beat. Non-damaging actions may name another semantic marker.
    - There is **no** deferred-health or deferred-death buffer. Because contact is on the beat, the fight's feedback is already at the right time.
 
@@ -116,6 +120,11 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
   heads) would bring that down to about +6; nothing does that yet, and 39 is well inside the "low hundreds" budget.
   Its per-frame path is loops over fixed arrays (the blades, their trail rings and particles are allocated once, at the
   release); its allocations were not separately measured.
+- **Handoff** (measured, `…/handoff/`; `handoff` / `yield` lines in `RH_PRESENT_TRACE`):
+  - normal TEMPO: no handoff happens, and the champion's frames are identical;
+  - the fast fixture (RHYTHM + VOLLEY), 33 s: 25 handoffs (15 settle-only, 9 at the readable floor, 1 compressed to the ideal start), no squeeze, worst recovery compression 2.60× (a HARD HANDS recovery frame, 87 ms in 33 ms);
+  - the fastest build (TEMPO trained to 60 as well), 33 s: the plain action just before a SPRAY yields (11 swings, and 6 of the 11 HARD HANDS casts), and SPRAY's own recovery compresses up to 1.74× into the next action;
+  - every SPRAY on both builds began on its first pose, released at −250 ms (−233 on the frame grid) and landed on the beat.
 - **Switches:**
   - `RH_ACTION_RECIPES=0` plays every action the old way, for old-versus-new films.
   - `RH_SHOT_NOVFX=1` and `RH_SHOT_NOCHAMP=1` are the review views.
@@ -139,7 +148,8 @@ None directly: this is presentation, and the fight's rules and numbers do not ch
 
 - **Audio is unverified by ear.** The three SPRAY cues are synthesized candidates: measured, wired, and rendered into the review films from the trace (`tools/asset-pipeline/film_audio.py`). The capture rig is silent, and no one has listened to them on real hardware. `design/audio/seeker-spray-audio-brief.md` is the contract a replacement must meet.
 - **The hand is an edit.** The release and follow-through hands are PixelLab `edit_image_pixen` results, taken only inside a hand box (the edits also redrew part of the body, painted three knives and redrew the other arm). The edit drew bare skin. The whole hand is recoloured to his glove, as he is gloved in every other frame, idle included. A first build gloved only the back of the hand, so for 250 ms he wore a fingerless glove. At combat size it reads as an open, flicked hand. At 3× the seam between the edit and the pose is visible.
-- **Fast TEMPO snaps once.** The recovery cut happens on the last frame SPRAY can still wind up. On the RHYTHM + VOLLEY build, that frame falls between the swing's frames 6 and 7, and the figure snaps from the swing's low lunge to the upright ready pose in one frame. It is one frame, and it replaces a SPRAY with no wind-up and a 100 ms flight. Shortening the ready frame's floor would move the cut, but that is a timing-model change the owner ruled out for this pass.
+- **HARD HANDS → SPRAY pops (HARD HANDS' art, out of scope).** HARD HANDS' strip (`seeker_strike`) ends in a low fighting crouch. Its exit pose is not compatible with idle or with SPRAY's ready pose, so after its handoff the head rises ~40 px in one frame. The same pop ends every HARD HANDS cast into idle. The fix is HARD HANDS' exit frame (the exit pose contract), not timing. The basic swing's exit pose is a half-rise with the blade still out: its blade disappears at the join, as it does into idle after every swing.
+- **The fastest builds do not animate the action just before a SPRAY.** With TEMPO trained to its cap (swings 400 ms apart), that action cannot land AND leave SPRAY its wind-up, so it yields (above). Its hit still lands, during SPRAY's wind-up. Measured in 33 s: 17 yields (11 swings, 6 of 11 HARD HANDS casts), and every SPRAY from its first pose. The other choice is to animate that action and let SPRAY enter at its third frame, every cast. The fight's cadence leaves less time than both animations need, so this is the owner's call.
 - **Other actions.** HARD HANDS, the other Seeker clips and every other champion are untouched. The old strips still disagree about the Seeker's weapon.
 - **The held field (fixed in the polish pass).** The pink rectangle was `fx_press`: a white weight slab that the field aura tinted and held behind him. It is now line art (`tools/asset-pipeline/v2/press_field.py`), awaiting the owner's look.
 

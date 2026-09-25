@@ -8,10 +8,12 @@ fight event crossed, every number, flash and sound asked for. This lines them up
 fight's BEAT (the contact), so "is the contact on the beat, is the release one flight before it, does the
 number appear with the knife" is a table, not an impression.
 
-Rows: clip start, anticipation, extreme hold, release pose, release sound, projectile creation, first
-visible blade, contact, health (the hits crossed), flash, number, impact (a generic puff, if any leaked),
-contact audio, ticks, follow-through end, recovery end, idle restart. Plus the other sounds that played
-inside the phrase and at what duck.
+Rows: the HANDOFF that gave the action the figure (the previous action's contact, recovery start, exit pose,
+and the recovery's compression), any plain beat that yielded its animation to this action, then clip start,
+anticipation, extreme hold, release pose, release sound, projectile creation, first visible blade, contact,
+health (the hits crossed), flash, number, impact (a generic puff, if any leaked), contact audio, ticks,
+follow-through end, recovery end, idle restart. Plus the other sounds that played inside the phrase and at
+what duck.
 """
 from __future__ import annotations
 
@@ -33,14 +35,14 @@ def casts(rows):
     starts = [i for i, r in enumerate(rows) if r[2] == "clip-start" and len(r[3]) > 1 and r[3][1] == "authored"]
     for k, i in enumerate(starts):
         end = starts[k + 1] if k + 1 < len(starts) else len(rows)
-        yield rows[i], rows[i:end]
+        yield rows[i], rows[i:end], rows[max(0, i - 400):i]
 
 
 def kv(fields):
     return dict(x.split("=", 1) for x in fields if "=" in x)
 
 
-def timeline(start, rows):
+def timeline(start, rows, before=()):
     info = kv(start[3])
     beat = float(info["beat"])
     clip = start[3][0]
@@ -50,6 +52,21 @@ def timeline(start, rows):
 
     def add(label, ph, detail=""):
         out.append((label, ph, ph - beat, detail))
+
+    # THE HANDOFF that gave this action the figure (ADR-011): the outgoing clip's contact, its recovery, what it
+    # was allowed, and where it exited; and any plain beat that yielded its animation to this action's reservation
+    handoff = next((r for r in reversed(before) if r[2] == "handoff" and abs(float(kv(r[3]).get("exit", -9e9)) - start[1]) < 20), None)
+    if handoff:
+        h = kv(handoff[3])
+        prev = handoff[3][0]
+        add(f"previous action ({prev}) contact", float(h["contact"]), f"its beat {h['beat']}")
+        add(f"previous recovery start", float(h["recovery"]), f"protected frames end here ({h['protected']} ms into its clip)")
+        add(f"previous exit pose reached", float(h["exit"]),
+            f"recovery {h['motion']} ms nominal (+{h['hold']} ms settle) in {h['available']} ms: x{h['ratio']} ({h['fit']})")
+    for r in before:
+        if r[2] == "yield" and abs(float(kv(r[3]).get("forBeat", -1)) - beat) < 1:
+            y = kv(r[3])
+            add(f"{r[3][0]} beat not animated (yield)", float(y["beat"]), f"its exit {y['exit']} > this action's latest start {y['latest']}")
 
     first = {}
     for clock, ph, kind, f in rows:
@@ -105,6 +122,7 @@ def timeline(start, rows):
     if ends: add("clip end", ends[0][0])
     if "idle" in first: add("idle restart", first["idle"])
     others = [(ph, f) for ph, f in snd if "spray" not in f[0] and (rel is None or ph >= rel[0]) and ph <= beat + 200]
+    out.sort(key=lambda r: (r[1] != r[1], r[1]))   # in time order (stable: one frame's rows keep theirs); NaN last
     return beat, out, others
 
 
@@ -115,10 +133,10 @@ def main() -> int:
     ap.add_argument("--markdown", action="store_true")
     a = ap.parse_args()
     rows = parse(a.log)
-    for n, (start, span) in enumerate(casts(rows)):
+    for n, (start, span, before) in enumerate(casts(rows)):
         if a.cast is not None and n != a.cast:
             continue
-        beat, out, others = timeline(start, span)
+        beat, out, others = timeline(start, span, before)
         targets = kv(start[3]).get("targets", "?")
         print(f"\n## cast {n}: beat {beat:.0f} ms, targets {targets}\n")
         if a.markdown:

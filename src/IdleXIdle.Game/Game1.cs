@@ -2927,6 +2927,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                                 throw new InvalidOperationException($"RH_SHOT_TAKE: '{id}' is not a mastery node.");
                         _mastery.RestoreTaken(_mastery.Taken.Concat(ids).Distinct().ToList(), repair: false);
                     }
+                    // RH_SHOT_TRAIN=<Stat>:<ranks>[,...] trains the hunter to those ranks THE PLAYER'S WAY (Gleam paid,
+                    // Train called), up to the rank cap — so the fastest real build can be filmed (Engineering:60 is
+                    // TEMPO maxed). An unknown stat is refused loudly.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_TRAIN")?.Trim() is { Length: > 0 } shotTrain)
+                        foreach (var pair in shotTrain.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            var parts = pair.Split(':', StringSplitOptions.TrimEntries);
+                            if (parts.Length != 2 || !Enum.TryParse<HunterStat>(parts[0], ignoreCase: true, out var stat)
+                                || !int.TryParse(parts[1], out var ranks))
+                                throw new InvalidOperationException($"RH_SHOT_TRAIN='{pair}' needs <HunterStat>:<ranks>.");
+                            while (_hunter.RankOf(stat) < Math.Min(ranks, _hunter.StatRankCap))
+                            {
+                                _hunter.AddGleam(_hunter.NextRankCost(stat));
+                                if (!_hunter.Train(stat)) break;
+                            }
+                        }
                     // THE CREATURE POSES. Which family the arena draws is the REGION's (EnemyPresentation),
                     // and which body of it, and how big its box is, is the wave's ARCHETYPE, a seeded roll.
                     // RH_SHOT_SOURCE picks the family of the region whose theme that Source is (Spirit
