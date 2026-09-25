@@ -279,7 +279,7 @@ is drawn by `ProjectileVisual`, from parts:
   tumble is an optional field on the look. Nothing in the shared path spins the head.
 - Projectiles that are not yet listed still follow the two-layer strip rule above.
 
-### 3.8 An important action is PERFORMED from key poses (ADR-011, 2026-09-24 — Seeker SPRAY slice, awaiting approval)
+### 3.8 An important action is PERFORMED from key poses (ADR-011, Accepted 2026-09-25 — the Seeker's SPRAY is the reference)
 
 The rule is one coherent action: intention, preparation, release, motion, contact, consequence, recovery. The player should not be noticing the separate systems (clip, effect, number, sound) that make it.
 
@@ -313,7 +313,7 @@ The rule is one coherent action: intention, preparation, release, motion, contac
   - After two failed edits, correct the hand by hand. Do not keep generating.
 - **An action ends on an EXIT POSE** (the action handoff, ADR-011, 2026-09-25). Its last frame is where the next action starts from, so it must be compatible with idle and with any action's first pose: standing, weapon away or at rest.
   - When the next action needs the figure early, the outgoing recovery is played faster to ARRIVE at that pose, never cut mid-pose. So a crouched or lunging last frame pops however it is timed.
-  - HARD HANDS (`seeker_strike`) ends in a low crouch and pops into idle and into SPRAY. The basic swing ends in a half-rise with its blade out: its blade disappears at the join.
+  - HARD HANDS (`seeker_strike`) ends in a low crouch and pops into idle and into SPRAY: a HARD HANDS defect, being rebuilt. The basic swing ends in a half-rise with its blade out: its blade disappears at the join.
   - No bespoke `a_to_b` transition clips and no whole-sprite crossfades: the exit pose + recovery compression + the next action's authored first pose are the bridge.
 - **A smear is an accent, not a path.** It shows the last part of the hand's travel only, starts on the release frame (never before it, because the hand is not there yet), and never crosses the head or face. A full-length streak from the coil read as a beam from the eye.
 - **Sound is one phrase** (`design/audio/seeker-spray-audio-brief.md`).

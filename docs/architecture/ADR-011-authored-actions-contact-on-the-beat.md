@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed. The Seeker SPRAY slice is built (2026-09-24) and polished (`production/qa/evidence/action-presentation-slice/polish/`). The action handoff replaced the recovery cut (2026-09-25, `…/handoff/`). SPRAY's own frames and timing have no known defect. One join still pops: HARD HANDS → SPRAY, because HARD HANDS' strip ends in a crouch (its art, out of scope). The owner rules on whether that blocks **SPRAY VISUAL / TIMING REFERENCE: APPROVED**. The complete audiovisual gold standard stays pending a human listening test of the three SPRAY cues (`design/audio/seeker-spray-audio-brief.md`). No other action uses it until then. |
-| **Date** | 2026-09-24 |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). |
+| **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
 | **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs` |
-| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form (SPRAY). |
+| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form (SPRAY). The action handoff applies to every committed champion clip. |
 
 ## Summary
 
@@ -17,6 +17,26 @@ The fight still resolves every hit at its beat, and nothing about that changes. 
 - **Authored frame timing.** The clip plays by its own timing file: per-frame durations, named markers, and hand sockets.
 - **Sockets.** A socket is a point on a frame, turned into an arena point with the same transform that draws the sprite.
 - **The same object in the hand and in the air.** The held prop and the flying object are one texture, drawn at one scale.
+
+## The reference implementation: SPRAY
+
+Every future authored combat action is judged against the Seeker's SPRAY. It is the reference for:
+
+| Concern | Where SPRAY does it |
+|---|---|
+| Anticipation before the deterministic combat beat | `ActionPerformance.Schedule`: the clip starts `travel + time-to-release` before the beat; elastic frames absorb TEMPO |
+| Release markers | `<strip>.clip.json` `markers` (`anticipation`, `commit`, `release`, `recovery`, `settle`) |
+| Per-frame authored timing | `ActionClipTiming` (90 110 150 50 230 90 90 110 ms) |
+| Release sockets | `ActionSocket` / `ActorSocketMap` (`ThrowHand` on frames 1–3) |
+| Projectile fan presentation | one knife per struck enemy, fanned from the held bundle, bowed apart (`FanBulge`) |
+| Contact on the beat | `ActionPerformance`: release = beat − 250 ms, contact = the beat, same frame as the fight's events |
+| Synchronized target feedback | health, flash (per-recipe envelope), number, death and contact sound on the contact frame |
+| Material vs Source colour | steel untinted (AlphaBlend); edge, trail, glint and contact are Source light (`VfxBlend.Light`) |
+| Impact priority | the performed hit replaces the generic puff and thud; the flash and number stay |
+| Semantic audio timing | release cue at the release, ONE contact cue + ≤2 outer ticks, others ducked (`SoundBank.Duck`, `lead`) |
+| Action handoff / recovery compression | `ActionHandoff` + `ActionClipTiming.FitRecovery`: arrive at the exit pose, never cut |
+
+Its three sounds are HUMAN-APPROVED (2026-09-25): `sfx_seeker_spray_release`, `sfx_seeker_spray_hit`, `sfx_seeker_spray_tick`.
 
 ## Context
 
@@ -146,12 +166,11 @@ None directly: this is presentation, and the fight's rules and numbers do not ch
 
 ## Known limits (reported, not solved)
 
-- **Audio is unverified by ear.** The three SPRAY cues are synthesized candidates: measured, wired, and rendered into the review films from the trace (`tools/asset-pipeline/film_audio.py`). The capture rig is silent, and no one has listened to them on real hardware. `design/audio/seeker-spray-audio-brief.md` is the contract a replacement must meet.
 - **The hand is an edit.** The release and follow-through hands are PixelLab `edit_image_pixen` results, taken only inside a hand box (the edits also redrew part of the body, painted three knives and redrew the other arm). The edit drew bare skin. The whole hand is recoloured to his glove, as he is gloved in every other frame, idle included. A first build gloved only the back of the hand, so for 250 ms he wore a fingerless glove. At combat size it reads as an open, flicked hand. At 3× the seam between the edit and the pose is visible.
-- **HARD HANDS → SPRAY pops (HARD HANDS' art, out of scope).** HARD HANDS' strip (`seeker_strike`) ends in a low fighting crouch. Its exit pose is not compatible with idle or with SPRAY's ready pose, so after its handoff the head rises ~40 px in one frame. The same pop ends every HARD HANDS cast into idle. The fix is HARD HANDS' exit frame (the exit pose contract), not timing. The basic swing's exit pose is a half-rise with the blade still out: its blade disappears at the join, as it does into idle after every swing.
-- **The fastest builds do not animate the action just before a SPRAY.** With TEMPO trained to its cap (swings 400 ms apart), that action cannot land AND leave SPRAY its wind-up, so it yields (above). Its hit still lands, during SPRAY's wind-up. Measured in 33 s: 17 yields (11 swings, 6 of 11 HARD HANDS casts), and every SPRAY from its first pose. The other choice is to animate that action and let SPRAY enter at its third frame, every cast. The fight's cadence leaves less time than both animations need, so this is the owner's call.
-- **Other actions.** HARD HANDS, the other Seeker clips and every other champion are untouched. The old strips still disagree about the Seeker's weapon.
-- **The held field (fixed in the polish pass).** The pink rectangle was `fx_press`: a white weight slab that the field aura tinted and held behind him. It is now line art (`tools/asset-pipeline/v2/press_field.py`), awaiting the owner's look.
+- **A neighbouring action's defect, not SPRAY's: HARD HANDS' exit pose.** HARD HANDS' strip (`seeker_strike`) ends in a low fighting crouch. Its exit pose is not compatible with idle or with SPRAY's ready pose, so after its (correct) handoff the head rises ~40 px in one frame, into SPRAY or into idle. It is HARD HANDS' art (the exit pose contract), and it is the next task. The basic swing's exit pose is a half-rise with the blade still out: its blade disappears at the join, as it does into idle after every swing.
+- **THE FAST-TEMPO PRESENTATION POLICY (owner, 2026-09-25).** The incoming authored action keeps its minimum readable anticipation: SPRAY never begins at its third frame, because its first frames are part of the approved action. If the outgoing action cannot complete its presentation in the time left, its presentation may YIELD, and only after its gameplay event has resolved (its hit, number, flash and sound still play). Yielding is a FALLBACK, not the presentation model: an action that yields often is an action whose protected phase is too long or whose recovery does not compress. Measured on the fastest build (TEMPO trained to 60), 33 s: 17 yields (11 swings, 6 of 11 HARD HANDS casts). HARD HANDS' rebuild must reduce its share.
+- **Other actions.** Besides SPRAY, the Seeker's clips and every other champion are still plain strips (the old uniform model), handed off by the same rule. The old strips still disagree about the Seeker's weapon.
+- **The held field.** The pink rectangle (`fx_press`, a weight slab the aura tinted) is line art now (`tools/asset-pipeline/v2/press_field.py`). Its once-per-second brightness pulse belongs to the FIELD/AURA gold-standard task.
 
 ## Alternatives rejected
 

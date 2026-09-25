@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Branch** | `fix/vfx-fade` (not merged) |
-| **Decision record** | `docs/architecture/ADR-011-authored-actions-contact-on-the-beat.md` (Proposed; see its Status) |
+| **Decision record** | `docs/architecture/ADR-011-authored-actions-contact-on-the-beat.md` (Accepted 2026-09-25: SPRAY is the reference) |
 | **Films** | `build/shots/slice/films_handoff.sh` (AFTER); the BEFORE films are the polish pass's (`build/shots/slice/handoff/before/`) |
 | **Evidence builder** | this folder was assembled from those films and their `RH_PRESENT_TRACE` logs |
 

@@ -5,7 +5,7 @@
 | **Branch** | `fix/vfx-fade` (not merged) |
 | **Decision record** | `docs/architecture/ADR-011-authored-actions-contact-on-the-beat.md`: still **Proposed** |
 | **Scope** | the Seeker's SPRAY only. HARD HANDS, the other Seeker actions, other projectiles, the VFX backlog and Forge/items were not touched. One crash outside the scope was fixed (below). |
-| **Audio status** | **not yet heard by a person.** The cues are measured and rendered into the films below from the game's own trace. Nobody has listened to them on real speakers. |
+| **Audio status** | **HUMAN-APPROVED** (the owner listened, 2026-09-25). SPRAY is the first gold-standard audiovisual combat action (ADR-011 Accepted). |
 | **Films** | `build/shots/slice/films_final.sh` (re-films every view) |
 | **Review page** | https://claude.ai/artifact/1nteFcv9TaNyLq4tEwTywN |
 

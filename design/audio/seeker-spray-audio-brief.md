@@ -1,13 +1,10 @@
 # Audio brief: the Seeker's SPRAY (the authored action's three cues)
 
-> **Status (2026-09-24): CANDIDATES IN, NOT APPROVED BY EAR.** The three cues below exist
-> (`tools/asset-pipeline/make_action_sfx.py`, synthesized from the same layered kit as the fight's
-> shipped cues), and are measured and wired. **Nobody has listened to them yet.** The capture rig is
-> silent, and the model that built them cannot hear. Only a listening test on real speakers or headphones
-> decides whether they are right. This brief is the contract any replacement must meet: from a sound
-> designer, a licensed library, or a new synthesis pass. Evidence lives in
-> `production/qa/evidence/action-presentation-slice/polish/`. It includes audio-on films rendered from
-> the game's own trace (`tools/asset-pipeline/film_audio.py`).
+> **Status (2026-09-25): HUMAN-APPROVED.** The owner listened to the three cues below and approved them:
+> SPRAY is the project's first gold-standard audiovisual combat action. They are built by
+> `tools/asset-pipeline/make_action_sfx.py` (the same layered kit as the fight's shipped cues). This brief
+> stays as the contract any later revision must keep: if a cue is ever reported as cheap, bright, heavy or
+> repetitive, the SOUND is revised against this brief and the action's timing architecture stays.
 
 ## What the player hears (the phrase)
 
@@ -46,7 +43,7 @@ What it depicts: a flick of the wrist and a fan of small knives leaving the fing
   contact (it must be over well before the knives land, or the flight stops being silent). No magic
   shimmer or reverse-cymbal riser: the Source colour is in the picture, not the sound. No sword-draw
   "schwing" either: nothing is drawn, the knives are already in the hand.
-- Current candidate: 200 ms file, peak −11.7 dBFS, centroid 3932 Hz, −20 dB at 121 ms.
+- Approved (2026-09-25): 200 ms file, peak −11.7 dBFS, centroid 3932 Hz, −20 dB at 121 ms.
 
 ### `sfx_seeker_spray_hit`: blades going into BODIES
 
@@ -60,7 +57,7 @@ What it depicts: several thin blades punching into creatures at once. It is hear
   candidate rang at 2.25 kHz for 250 ms: from 80 ms on, 90 %+ of it was one pure tone, which says
   "a blade hit metal". It must not be five hits flammed together (that is what the ticks are for, quietly).
   No gore squelch: the creatures are shadow/beast, the tone is a hunt, not a slasher. No bass boom.
-- Current candidate: 280 ms file (sound ends ~160 ms), peak −8.4 dBFS, centroid 1530 Hz, −20 dB at 75 ms.
+- Approved (2026-09-25): 280 ms file (sound ends ~160 ms), peak −8.4 dBFS, centroid 1530 Hz, −20 dB at 75 ms.
 
 ### `sfx_seeker_spray_tick`: the fan's width
 
@@ -69,7 +66,7 @@ What it depicts: the outermost blades landing a hair later than the centre.
 - **Must:** a tiny, bright version of the contact's tip: ~50–100 ms, −20 dB by ~70 ms, centroid ~3–4 kHz.
   At 0.20 volume against the contact's 0.50 it must read as detail, not as a second hit.
 - **Must not:** carry its own body or weight (two ticks plus the contact must never sound like three hits).
-- Current candidate: 100 ms, peak −10.5 dBFS, centroid 3284 Hz, −20 dB at 68 ms.
+- Approved (2026-09-25): 100 ms, peak −10.5 dBFS, centroid 3284 Hz, −20 dB at 68 ms.
 
 ## Delivery format (same as every cue in the game)
 

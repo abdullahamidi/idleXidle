@@ -17,8 +17,9 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
     sfx_seeker_spray_tick     ~0.1 s   the quiet secondary: one or two of these, a few ms after the hit and panned
                                        to the outer targets, give the fan its width without five equal impacts.
 
-These are CANDIDATES until someone has listened to them in the game: a measurement says a cue is bright,
-short and quiet enough; only an ear says it sounds like a knife.
+The SPRAY cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
+quiet enough; only an ear says it sounds like a knife, so every new cue here is a candidate until it is
+listened to (design/audio/seeker-spray-audio-brief.md is the contract the approved ones keep).
 """
 from __future__ import annotations
 
