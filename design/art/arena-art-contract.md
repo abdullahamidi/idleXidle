@@ -351,33 +351,73 @@ The rule is one coherent action: intention, preparation, release, motion, contac
 
   Technical pass is not artistic pass.
 
-### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture approved; the polish awaits review)
+### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture and timing approved; the identity pass awaits review)
 
 A REACTION (JAWS) takes no beat: the enemy's bite is its cause. It is drawn on its own layer, over both figures, and
 never takes the champion's figure: no cast, no lunge, no post-bite "lay a trap" clip (that clip is REPAY's cast).
 
-- **World art is the icon's mechanism seen from the ARENA, never the icon enlarged.** The UI icon is symbolic and
-  face-on (a toothed ring, a central spring, a chain). In the world JAWS is a compact steel TRAP HEAD in side view: a
-  chain eye, a spring, a hub with its pivot bolt, and TWO SEPARATE serrated jaws whose teeth interlock on a seam. Shut,
-  it must still read as two jaws: never a ring (the first world art shut into a toothed circle and read as a portal).
-- **Rigid parts on one canvas, drawn.** `prop_seeker_jaws_base` (the hub, drawn over the jaws' roots),
-  `prop_seeker_jaws_upper`, `prop_seeker_jaws_lower` (each drawn CLOSED) and each jaw's teeth mask, all on one
-  132 x 96 canvas so one pivot, one eye and one bite point serve them (`tools/asset-pipeline/v2/seeker_jaws.py`, on the
-  Seeker's pixel grid). PixelLab was asked twice for a side-view head and both were rejected on sight (a robot crocodile
-  with an eye; a flat vise): a rigid part needs an exact pivot, which is arithmetic.
-- **The metal is never scaled.** The jaws ROTATE about the bolt (open 30 degrees each, a hard stop 3 degrees apart on
-  what they bite, a 5 degree recoil); the head moves along its chain; nothing pumps, rises from the floor or swaps.
-- **The chain is a dark metal body with a few links.** A cross-section (`prop_seeker_chain_body`) stretched along the
-  live curve between the belt and the head's eye, and 11 link accents (`prop_seeker_chain_link`), dense at the two ends
-  and sparse across the middle. Never one long chain image, never sixty-four equal stamps, never a rope, never a laser.
-- **Size and place.** The head is ~0.53 of the caught creature's height long (56 to 104 px), chosen at play size; it
-  closes on the creature's FRONT-LOWER silhouette facing the Seeker, read off the frame it bites in, and lies along its
-  tether's line.
-- **Material vs Source**, as SPRAY: the iron is untinted; the Source is light only (the tether's streak as it fires,
-  the teeth's glint at the stop, three small sparks from the mouth). Never tint the object, never a generic flash.
-- **Review gate:** true speed and slow motion, a close crop of belt, chain, jaws and target, effects only, champion
-  only, during SPRAY, during HARD HANDS, during a basic swing, repeats, the dock's ready at true speed, a killing
-  answer, a fatal bite, the REPAY isolation, the anchor overlay on two bodies, a size comparison, and the sound heard.
+- **JAWS is a SPRING-LOADED HUNTING CLAMP, a mantrap mechanism: never a face.** "JAWS" names the mechanism's two
+  opposing clamp arms. It is never an animal head, a monster mouth, a mechanical dinosaur, a skull or a biting robot.
+  REJECT any source that looks like a creature's head BEFORE it is animated. That means:
+  - no eye-like bolt or bright round point at the middle height;
+  - no brow;
+  - no snout, and no two pieces tapering to one "nose";
+  - no upper and lower jaw with an animal's proportions;
+  - no mirrored, biological row of teeth;
+  - no clean horizontal mouth seam, and no lens-shaped closed head.
+
+  The polish pass's head did most of these: a round hub (the eye) behind two long toothed plates (the snout). At true
+  speed it read as a metal crocodile.
+- **The shape language.** The world clamp is:
+  - **a HOUSING that reads first:** the chain's rectangular shackle, a riveted spring box with its coil spring OUTSIDE
+    along its top, a tall reinforced front plate, and a hinge flange at each corner (each pin one small dark rivet);
+  - **two short, forged CRESCENT arms** with one thickness, each hinged on its OWN pin at a corner of the plate (as a
+    bear trap's jaws hinge at the two ends of its base). Teeth sit on the inner edge only: three spikes per arm, the
+    lower row one pixel along from the upper, interleaved and never mirrored.
+
+  Shut, it reads upper arm, then the caught limb, then lower arm, with a real gap that the creature fills.
+- **Nothing on the housing may form a face.** Never:
+  - two dots over a line;
+  - a window of vertical bars (that read as a robot's visor);
+  - a dark square pin in a lit square (that read as an eye socket).
+- **World art is the icon's MECHANISM seen from the ARENA, never the icon enlarged.** The UI icon is a face-on bear trap:
+  opposing serrated arcs, a mechanical centre and a chain. The world clamp keeps its construction, not its perspective.
+- **Chosen by silhouette first.** Three monochrome silhouettes were compared at play size (`jaws-identity/20`):
+  - A, a bear-trap clamp: chosen, read blind as "bear trap jaws";
+  - B, a crossed-lever spring clamp: "a throwing star";
+  - C, a round drum with crescents on one pivot: "a crab claw".
+
+  The final art was checked blind in colour (`jaws-identity/24`).
+- **Rigid parts on one canvas, drawn.** Every part sits on one 99 x 102 canvas, so the two pins, the shackle and the
+  clamp point serve them all (`tools/asset-pipeline/v2/seeker_jaws.py`, on the Seeker's pixel grid). The parts are:
+  - `prop_seeker_jaws_base`: the housing, drawn over the arms' roots;
+  - `prop_seeker_jaws_upper` and `prop_seeker_jaws_lower`: each drawn at its stop;
+  - each arm's teeth mask.
+
+  PixelLab is for CONCEPTS only (three were made; none has exact pins).
+- **The metal is never scaled.** Each arm ROTATES about its own pin: open 30 degrees, a hard stop 3 degrees open on what
+  it grips, a 5 degree recoil. The housing moves only along its chain. Nothing pumps, rises from the floor or swaps.
+- **The chain is a dark metal body with a few links.** A cross-section (`prop_seeker_chain_body`) is stretched along the
+  live curve between the belt and the shackle, with 11 link accents (`prop_seeker_chain_link`), dense at the two ends and
+  sparse across the middle. Never one long chain image, never sixty-four equal stamps, never a rope, never a laser.
+- **Size and place.**
+  - The clamp is ~0.42 of the caught creature's height long (48 to 88 px). It is about as tall as it is long, and was
+    chosen at play size.
+  - Its clamp point goes on the creature's FRONT-LOWER silhouette facing the Seeker, read off the frame it bites in.
+  - It lies along its tether's line.
+- **Material vs Source**, as SPRAY: the iron is untinted. The Source is light only: the tether's streak as it fires and
+  one brief tooth-edge glint at the stop (never white teeth, never an outline of light round the clamp). No sparks: at
+  play size a hinge spark is invisible. The silhouette must survive with the Source off.
+- **Review gate:**
+  - true speed and slow motion;
+  - a close crop of belt, chain, clamp and target;
+  - effects only and champion only;
+  - during SPRAY, during HARD HANDS and during a basic swing;
+  - repeats, and the dock's ready at true speed;
+  - a killing answer, a fatal bite, and the REPAY isolation;
+  - the anchor overlay on two bodies and a size comparison;
+  - the blind "what object is this?" check;
+  - the sound heard.
 
 ## 4. Naming (unchanged where the code already asks)
 
