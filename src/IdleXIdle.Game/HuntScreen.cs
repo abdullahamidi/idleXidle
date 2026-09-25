@@ -3365,14 +3365,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_isBossWave) LayoutBoss();
         else LayoutComposition(comp.Count);   // one or many: the same row, the same archetype scale
 
-        // A CAUGHT CREATURE RECOILS (JAWS, ADR-011): pushed a few pixels away from the champion and eased back, where it
-        // is DRAWN only. Before anything is published, so its body, its jaws and its effects all see the same place;
-        // never on a creature that fell (its fall owns it).
+        // A CAUGHT CREATURE IS JERKED (JAWS, ADR-011): the tether catches it and pulls it a few pixels TOWARD the
+        // champion, then it settles, where it is DRAWN only. Before anything is published, so its body, its jaws and its
+        // effects all see the same place; never on a creature that fell (its fall owns it).
         _recoilPx.Clear();
         foreach (var r in _reactions)
             foreach (var slot in r.Targets)
                 if (_creatureBoxes.TryGetValue(slot, out var box)
-                    && r.RecoilOffsetX(slot, _playheadMs, box.Width, _diedAt.ContainsKey(slot)) is var recoil and not 0f)
+                    && r.YankOffsetX(slot, _playheadMs, box.Width, _diedAt.ContainsKey(slot)) is var recoil and not 0f)
                 {
                     var px = (int)MathF.Round(recoil);
                     box.Offset(px, 0);
@@ -5771,7 +5771,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (UiMotion.Pulse(SkillReadyKey(i)) is var pp && pp > 0f && !UiMotion.Reduced)
         {
             var k = 1f - UiMotion.Smooth(pp);              // 0 at the crossing, 1 when the pop is spent
-            var swell = MathF.Sin(k * MathF.PI) * 0.17f;   // out and back, peaking a sixth over
+            // out and back, peaking a sixth over; a Reaction (ready every few seconds, a passive tile) only nods
+            var swell = MathF.Sin(k * MathF.PI) * (def.Kind == SkillKind.Reaction && !ReactionReadyRing ? 0.06f : 0.17f);
             var grow = (int)MathF.Round(box.Width * swell);
             box = new Rectangle(box.X - grow / 2, box.Y - grow / 2, box.Width + grow, box.Height + grow);
         }
@@ -5869,8 +5870,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (!UiMotion.Reduced && UiMotion.Pulse(SkillBurstKey(i)) is var burst && burst > 0f)
         {
             var age = 1f - burst;                       // 0 at the crossing, 1 when spent
-            SkillBurstRing(b, ringCentre, ringR, age, Gold);
-            // a Reaction comes up every few seconds: its ready is the gold front alone, not the Source wake behind it
+            // A REACTION comes up every few seconds on a passive tile: a thin gold pulse just leaving its rim, not the
+            // Active's wide ring (which opens at 1.6x the medallion). RH_REACTION_READY=ring restores the wide one.
+            if (def.Kind == SkillKind.Reaction && !ReactionReadyRing) ReactionReadyPulse(b, ringCentre, ringR, age);
+            else SkillBurstRing(b, ringCentre, ringR, age, Gold);
             if (age > 0.18f && def.Kind != SkillKind.Reaction) SkillBurstRing(b, ringCentre, ringR, age - 0.18f, sc);
         }
 
@@ -5997,6 +6000,26 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// Twenty-four segments, which is smooth at the medallion's radius and is twenty-four draws — this
     /// runs at most four times a wave, once per Active, and only on the frames a skill comes up.
     /// </remarks>
+    /// <summary>A Reaction's ready: one thin gold line leaving the rim (to 1.14x) and fading, over the burst's own clock.</summary>
+    private void ReactionReadyPulse(SpriteBatch b, Vector2 centre, float radius, float age)
+    {
+        age = Math.Clamp(age, 0f, 1f);
+        var r = radius * (1f + 0.14f * UiMotion.Smooth(age));
+        var thick = MathF.Max(1.5f, radius * 0.06f * (1f - age));
+        var alpha = 0.85f * (1f - age) * (1f - age);
+        const int seg = 24;
+        for (var k = 0; k < seg; k++)
+        {
+            var a0 = k / (float)seg * MathF.Tau;
+            var a1 = (k + 1) / (float)seg * MathF.Tau;
+            _ui.LineSeg(b, centre + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * r,
+                        centre + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * r, thick, Gold * alpha);
+        }
+    }
+
+    /// <summary>RH_REACTION_READY=ring: a Reaction comes up with the Active's wide ring (the dock comparison film).</summary>
+    private static readonly bool ReactionReadyRing = Environment.GetEnvironmentVariable("RH_REACTION_READY") == "ring";
+
     private void SkillBurstRing(SpriteBatch b, Vector2 centre, float radius, float age, Color tint)
     {
         age = Math.Clamp(age, 0f, 1f);
@@ -6440,7 +6463,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
-    /// <summary>How far each caught creature is drawn off its own place this frame (the recoil), so actions can ignore it.</summary>
+    /// <summary>How far each caught creature is drawn off its own place this frame (the yank), so actions can ignore it.</summary>
     private readonly Dictionary<int, int> _recoilPx = new();
 
     /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its jaws, its chain, its snap.</summary>
@@ -6471,7 +6494,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var r = _reactions[i];
             if (_playheadMs < r.TriggerMs - 1f || r.Finished(_playheadMs))
             {
-                if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}");
+                if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}\tslack={r.Slack}");
                 _reactions.RemoveAt(i);
                 continue;
             }
@@ -6480,9 +6503,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (!PresentTrace.Enabled) continue;
             _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // measured before any trace text
             var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
-            if (step.Snapped) PresentTrace.Log("reaction-snap", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
-            if (step.RecoilEnded) PresentTrace.Log("reaction-recoil-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
-            if (step.Released) PresentTrace.Log("reaction-release", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tearly={r.ReleaseFromMs < r.Recipe.ReleaseAtMs}");
+            if (step.Clamped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
+            if (step.YankEnded) PresentTrace.Log("reaction-yank-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
+            if (step.Retracting) PresentTrace.Log("reaction-retract", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tearly={r.RetractFromMs < r.Recipe.RetractAtMs}");
         }
     }
 

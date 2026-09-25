@@ -14,7 +14,8 @@ namespace IdleXIdle.Game.Tests;
 
 /// <summary>
 /// THE REACTION CONTRACT (ADR-011, JAWS, 2026-09-25): a reaction is presented on its own layer, belongs to its SKILL,
-/// never owns the champion's figure, lives about a third of a second from the enemy's contact, and yields to a death.
+/// never owns the champion's figure, is a RIGID mechanism (the jaws rotate, the metal never scales), is fired from and
+/// reeled back to the Seeker within about a quarter of a second, pulls its creature toward him, and yields to a death.
 /// </summary>
 /// <remarks>
 /// The failures these stop were measured in the JAWS discovery: a row-wide rope ring that no one could tie to the bite,
@@ -111,41 +112,82 @@ public class JawsReactionTest
         Assert.Contains(into, k => k.Contains("trap", StringComparison.Ordinal));   // REPAY's own cast clip
     }
 
-    // ── THE LIFECYCLE, on the fight's playhead ──────────────────────────────────────────────────
+    // ── THE MECHANISM, on the fight's playhead (u = ms after the first frame that showed the bite) ─
 
     [Fact]
-    public void test_the_snap_is_the_first_forty_to_seventy_ms_and_the_jaws_are_gone_by_a_third_of_a_second()
+    public void test_the_jaws_are_open_on_the_first_frame_and_shut_by_the_next()
     {
-        Assert.InRange(Jaws.SnapMs, 40f, 70f);
-        Assert.False(ReactionPerformance.Shut(Jaws, 0f, Jaws.ReleaseAtMs));        // open, rising, on the contact frame
-        Assert.True(ReactionPerformance.Shut(Jaws, Jaws.SnapMs, Jaws.ReleaseAtMs)); // shut by the end of the snap
+        // the open head is SEEN once (the tether fired), then the slam: the closed pose is on screen one 60 fps frame later
+        Assert.Equal(Jaws.OpenDeg, ReactionPerformance.JawAngle(Jaws, 0f, Jaws.RetractAtMs));
+        Assert.InRange(Jaws.CloseMs, 1f, 1000f / 60f);
+        Assert.Equal(Jaws.StopDeg, ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs, Jaws.RetractAtMs), 3);
+        // ACCELERATING: most of the travel happens in the second half of the close (a spring's slam, not an ease)
+        var half = ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs / 2f, Jaws.RetractAtMs);
+        Assert.True(Jaws.OpenDeg - half < (Jaws.OpenDeg - Jaws.StopDeg) / 2f, "the jaws close accelerating");
+    }
+
+    [Fact]
+    public void test_the_jaws_stop_hard_recoil_by_a_few_degrees_and_lock_on_the_limb()
+    {
+        var held = (int)(Jaws.RetractAtMs - Jaws.CloseMs);   // from the stop to the moment it starts home
+        var angles = Enumerable.Range(0, held).Select(ms => ReactionPerformance.JawAngle(Jaws, Jaws.CloseMs + ms, Jaws.RetractAtMs)).ToArray();
+        Assert.All(angles, a => Assert.InRange(a, Jaws.StopDeg, Jaws.StopDeg + Jaws.ReboundDeg));   // a recoil, never a re-open
+        Assert.Equal(Jaws.StopDeg, angles[^1], 3);                                                   // locked
+        Assert.True(Jaws.StopDeg > 0f, "a trap stops ON what it bites: the jaws stand a little apart");
+        // and they unlock only as the head is reeled home
+        Assert.Equal(Jaws.UnlockDeg, ReactionPerformance.JawAngle(Jaws, Jaws.RetractAtMs + Jaws.UnlockMs, Jaws.RetractAtMs), 3);
+    }
+
+    [Fact]
+    public void test_the_metal_is_never_scaled_only_rotated()
+    {
+        // the first build pumped the whole sprite from 0.82 to a 1.12 overshoot: the recipe has no scale to pump now,
+        // and the draw passes one scale for every part of the head (the size, from the creature)
+        var props = typeof(ReactionRecipe).GetProperties().Select(p => p.Name).ToArray();
+        Assert.DoesNotContain(props, n => n.Contains("Overshoot", StringComparison.Ordinal) || n.Contains("RiseFrom", StringComparison.Ordinal));
+        var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
+        var draw = src[src.IndexOf("private void DrawPart(", StringComparison.Ordinal)..];
+        draw = draw[..draw.IndexOf("_sprites++;", StringComparison.Ordinal)];
+        Assert.Contains("pose.Scale", draw);
+    }
+
+    [Fact]
+    public void test_the_chain_yanks_the_creature_toward_the_seeker_a_few_pixels()
+    {
+        Assert.Equal(0f, ReactionPerformance.Yank(Jaws, Jaws.CloseMs));
+        Assert.Equal(1f, ReactionPerformance.Yank(Jaws, Jaws.CloseMs + Jaws.YankPeakMs), 3);
+        Assert.Equal(0f, ReactionPerformance.Yank(Jaws, Jaws.CloseMs + Jaws.YankMs));
         var p = Answer();
-        Assert.InRange(p.EndMs, 250f, 350f);
+        p.Update(7000, new Stage());
+        var offsets = Enumerable.Range(0, 300).Select(ms => p.YankOffsetX(0, 7000 + ms, 400f, falling: false)).ToArray();
+        Assert.All(offsets, x => Assert.True(x <= 0f, "the chain pulls the creature TOWARD the champion (to its left)"));
+        Assert.InRange(-offsets.Min(), Jaws.YankMinPx, Jaws.YankMaxPx);   // even a 400 px creature: a few pixels
+        Assert.Equal(0f, p.YankOffsetX(5, 7000 + 40, 160f, falling: false));   // only the creature on the chain moves
+    }
+
+    [Fact]
+    public void test_the_head_is_reeled_home_and_nothing_stays()
+    {
+        var p = Answer();
+        p.Update(7000, new Stage());
+        Assert.InRange(p.EndMs, 220f, 320f);
+        Assert.Equal(0f, ReactionPerformance.Retract(Jaws, Jaws.RetractAtMs, Jaws.RetractAtMs));
+        Assert.Equal(1f, ReactionPerformance.Retract(Jaws, Jaws.RetractAtMs + Jaws.RetractMs, Jaws.RetractAtMs), 3);
+        // ACCELERATING home (a reel takes up the slack, then snaps it in)
+        Assert.True(ReactionPerformance.Retract(Jaws, Jaws.RetractAtMs + Jaws.RetractMs / 2f, Jaws.RetractAtMs) < 0.5f);
+        // it is whole while it travels and fades only over its last stretch into the belt
+        Assert.Equal(1f, ReactionPerformance.Opacity(Jaws, Jaws.RetractAtMs + Jaws.RetractMs * 0.5f, Jaws.RetractAtMs, null));
+        Assert.Equal(0f, ReactionPerformance.Opacity(Jaws, Jaws.RetractAtMs + Jaws.RetractMs, Jaws.RetractAtMs, null), 3);
         Assert.False(p.Finished(7000 + p.EndMs - 1f));
         Assert.True(p.Finished(7000 + p.EndMs));
-        Assert.Equal(1f, ReactionPerformance.Opacity(Jaws, Jaws.ReleaseAtMs - 1f, Jaws.ReleaseAtMs));
-        Assert.Equal(0f, ReactionPerformance.Opacity(Jaws, Jaws.ReleaseAtMs + Jaws.ReleaseMs, Jaws.ReleaseAtMs), 3);
     }
 
     [Fact]
-    public void test_the_chain_starts_slack_goes_taut_and_slackens_as_it_lets_go()
+    public void test_the_chain_goes_from_the_whip_to_taut()
     {
-        Assert.Equal(0f, ReactionPerformance.Tension(Jaws, 0f, Jaws.ReleaseAtMs));
-        Assert.Equal(1f, ReactionPerformance.Tension(Jaws, Jaws.TautMs, Jaws.ReleaseAtMs), 3);
-        Assert.True(ReactionPerformance.Tension(Jaws, Jaws.TautMs * 0.3f, Jaws.ReleaseAtMs) is > 0f and < 1f);
-        Assert.True(ReactionPerformance.Tension(Jaws, Jaws.ReleaseAtMs + Jaws.ReleaseMs * 0.6f, Jaws.ReleaseAtMs) < 0.05f);
-    }
-
-    [Fact]
-    public void test_the_recoil_starts_at_the_snap_peaks_and_returns_and_stays_a_few_pixels()
-    {
-        Assert.Equal(0f, ReactionPerformance.Recoil(Jaws, Jaws.SnapMs));
-        Assert.Equal(1f, ReactionPerformance.Recoil(Jaws, Jaws.SnapMs + Jaws.RecoilMs * Jaws.RecoilPeakAt), 3);
-        Assert.Equal(0f, ReactionPerformance.Recoil(Jaws, Jaws.SnapMs + Jaws.RecoilMs));
-        var p = Answer();
-        var peak = Enumerable.Range(0, 400).Max(ms => p.RecoilOffsetX(0, 7000 + ms, 400f, falling: false));
-        Assert.InRange(peak, Jaws.RecoilMinPx, Jaws.RecoilMaxPx);   // even a 400 px creature: a few pixels
-        Assert.Equal(0f, p.RecoilOffsetX(5, 7000 + 90, 160f, falling: false));   // only the caught creature moves
+        Assert.Equal(0f, ReactionPerformance.Tension(Jaws, 0f));
+        Assert.Equal(1f, ReactionPerformance.Tension(Jaws, Jaws.TautMs), 3);
+        Assert.True(ReactionPerformance.Tension(Jaws, Jaws.TautMs * 0.3f) is > 0f and < 1f);
     }
 
     [Fact]
@@ -154,31 +196,34 @@ public class JawsReactionTest
         var stage = new Stage { Falling = true };
         var p = Answer();
         p.Update(7000 + 10, stage);
-        Assert.Equal(Jaws.SnapMs + Jaws.DeathReleaseAfterSnapMs, p.ReleaseFromMs);   // the snap still plays
-        Assert.Equal(0f, p.RecoilOffsetX(0, 7000 + 90, 160f, falling: true));
-        Assert.Equal(0f, p.RecoilOffsetX(0, 7000 + 90, 160f, falling: false));        // released: no push
-        Assert.True(p.EndMs < Jaws.ReleaseAtMs + Jaws.ReleaseMs);
+        Assert.Equal(Jaws.CloseMs + Jaws.DeathHoldMs, p.RetractFromMs);   // the snap still reads, then it lets go
+        Assert.Equal(0f, p.YankOffsetX(0, 7000 + 40, 160f, falling: true));
+        Assert.Equal(0f, p.YankOffsetX(0, 7000 + 40, 160f, falling: false));   // let go: no pull on a corpse
+        Assert.False(p.Slack);                                                 // and the head still goes home
+        Assert.True(p.EndMs < Jaws.RetractAtMs + Jaws.RetractMs);
     }
 
     [Fact]
-    public void test_a_bite_that_fells_the_champion_is_still_answered_then_let_go()
+    public void test_a_bite_that_fells_the_champion_is_still_answered_then_goes_slack()
     {
         var stage = new Stage { ChampionDown = true };
         var p = Answer();
         p.Update(7000, stage);
-        Assert.Equal(Jaws.SnapMs + Jaws.DeathReleaseAfterSnapMs, p.ReleaseFromMs);
-        Assert.False(p.Finished(7000 + Jaws.SnapMs));   // the answer is not cancelled by the fall
+        Assert.True(p.Slack);                                          // no heroic retract through his fall
+        Assert.False(p.Finished(7000 + Jaws.CloseMs));                 // the answer is not cancelled by the fall
+        Assert.InRange(p.EndMs, Jaws.CloseMs, Jaws.CloseMs + 30f + Jaws.SlackFadeMs);
     }
 
     [Fact]
-    public void test_the_chain_is_bounded_and_never_gapped()
+    public void test_the_chain_is_a_dark_body_with_a_few_link_accents()
     {
-        foreach (var length in new[] { 0f, 40f, 300f, 700f, 1200f, 5000f })
-        {
-            var (count, link) = ReactionPerformance.LinksFor(Jaws, length);
-            Assert.InRange(count, 1, Jaws.MaxLinks);
-            Assert.True(count * link * (1f - Jaws.LinkOverlap) >= length - 0.01f, $"a {length} px chain has a gap");
-        }
+        // artistic economy: a small reaction needs 8-16 readable links, not sixty-four equal stamps
+        Assert.InRange(Jaws.LinkAt.Count, 8, 16);
+        Assert.All(Jaws.LinkAt, f => Assert.InRange(f, 0f, 1f));
+        // denser at both ends (the hardware at the belt and at the head) than across the middle
+        var gaps = Jaws.LinkAt.Zip(Jaws.LinkAt.Skip(1), (a, b) => b - a).ToArray();
+        Assert.True(gaps[0] < gaps[gaps.Length / 2] && gaps[^1] < gaps[gaps.Length / 2]);
+        Assert.True(Jaws.BodySegments >= 8, "the dark body carries the chain between the accents: no gaps");
     }
 
     [Fact]

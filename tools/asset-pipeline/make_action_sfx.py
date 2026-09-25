@@ -24,11 +24,12 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        heavy dull thud with a pitch drop and a small hard room. No ring, no tail.
                                        Heavier than the basic swing's thud, but tighter, so ten in a fight do not tire.
 
-    sfx_seeker_jaws_snap         ~0.18 s THE ANSWER to a bite (a Reaction, off the beat): the spring letting go (a
-                                       dry mechanical click), the iron jaws clamping (a short hard clack with a little
-                                       weight under it, teeth into hide), then a brief chain rattle settling. One cue
-                                       for the whole reaction, heard right after the enemy's bite thud: BITE -> CLACK.
-                                       No ring and no tail, so a trigger every two or three seconds does not tire.
+    sfx_seeker_jaws_snap         ~0.17 s THE ANSWER to a bite (a Reaction, off the beat), timed to the picture: at 0 ms
+                                       the tether fires (a small spring tick and a quiet chain rasp, a lead-in); at 17 ms,
+                                       the frame the rigid jaws hit their stop, the CLAMP (a short hard iron clack with a
+                                       little weight under it, teeth into hide): the cue's strongest transient; after it
+                                       the chain taking the strain (three short link ticks). One cue for the whole
+                                       reaction, right after the enemy's bite thud: BITE -> CLACK. No ring, no tail.
 
 The SPRAY and HARD HANDS cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
 quiet enough; only an ear says it sounds like a knife (or a fist), so every new cue here is a candidate until it is
@@ -108,20 +109,27 @@ def hard_hands_hit(buf):
     S.add(buf, 0.004, S.tail(S.Noise(0x4A2F), 0.256, 520.0, 0.036), 0.16)     # a small hard room, no more
 
 
+JAWS_CLAMP_S = 0.017   # the jaws hit their stop on the frame after the first one (16.7 ms): the clack lives there
+
+
 def jaws_snap(buf):
     rng = S.Noise(0x7A55)
-    # the spring letting go: a dry, bright mechanical click and a tiny inharmonic tick of the release catch
-    S.add(buf, 0.0, S.click(rng, 0.002, 3600.0), 0.34)
-    S.bell(buf, 0.001, 4300.0, 0.05, 0.010, partials=(1.0, 1.73))
-    # the clamp, 12 ms later: two iron jaws meeting. A short hard clack (a tight body, high Q), a metallic knock that
-    # dies inside ~40 ms (inharmonic, never a ring), teeth into hide, and a little weight under it
-    S.add(buf, 0.012, S.click(rng, 0.003, 2400.0), 0.40)
-    S.add(buf, 0.012, S.body(rng, 0.05, 1150.0, 3.4, 0.010), 0.75)
-    S.bell(buf, 0.013, 1650.0, 0.16, 0.022, partials=(1.0, 2.76, 5.40))
-    S.add(buf, 0.013, S.crunch(rng, 0.022, 420.0, 2400.0, 0.006, sat=3.0), 0.30)
-    S.add(buf, 0.012, S.thump(0.168, 150.0, 92.0, 0.012, 0.026, sat=1.8), 0.42)
-    # the chain taking the strain and settling: four small link ticks, falling, a little jitter in time and pitch
-    for at, f, g in ((0.046, 2650.0, 0.20), (0.071, 3050.0, 0.15), (0.098, 2450.0, 0.11), (0.131, 2850.0, 0.07)):
+    # 0 ms, THE TETHER FIRES: the spring's catch letting go (a small dry tick, well under the clack) and the chain
+    # starting to run (a short, quiet, bright rasp). Heard as the lead-in, not as a second hit.
+    S.add(buf, 0.0, S.click(rng, 0.0015, 3900.0), 0.16)
+    S.bell(buf, 0.0005, 4600.0, 0.03, 0.008, partials=(1.0, 1.73))
+    S.add(buf, 0.001, S.envelope(S.biquad(S.noise(rng, 0.02), "bp", 3200.0, 1.6), 0.002, 0.006), 0.12)
+    # 17 ms, THE CLAMP, on the frame the jaws hit their stop: two iron jaws meeting. The strongest transient of the
+    # cue: a hard clack (a tight body, high Q), a metallic knock that dies inside ~40 ms (inharmonic, never a ring),
+    # teeth into hide, and a little weight under it
+    c = JAWS_CLAMP_S
+    S.add(buf, c, S.click(rng, 0.003, 2400.0), 0.46)
+    S.add(buf, c, S.body(rng, 0.05, 1150.0, 3.4, 0.010), 0.80)
+    S.bell(buf, c + 0.001, 1650.0, 0.17, 0.022, partials=(1.0, 2.76, 5.40))
+    S.add(buf, c + 0.001, S.crunch(rng, 0.022, 420.0, 2400.0, 0.006, sat=3.0), 0.30)
+    S.add(buf, c, S.thump(0.15, 150.0, 92.0, 0.012, 0.026, sat=1.8), 0.44)
+    # after: the chain TAKING THE STRAIN as it jerks the creature, three short falling link ticks
+    for at, f, g in ((0.052, 2650.0, 0.17), (0.078, 3050.0, 0.12), (0.108, 2450.0, 0.08)):
         S.add(buf, at, S.click(rng, 0.0015, f), g)
         S.bell(buf, at + 0.0005, f * 1.12, g * 0.5, 0.012, partials=(1.0, 1.61))
 
@@ -132,7 +140,7 @@ def main() -> int:
     S.make("sfx_seeker_spray_tick", S.COMBAT_DIR, 0.10, spray_tick, target_peak=0.30, max_ms=120.0, darken=8000.0)
     S.make("sfx_seeker_hard_hands_commit", S.COMBAT_DIR, 0.20, hard_hands_commit, target_peak=0.24, max_ms=220.0, darken=5000.0)
     S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
-    S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.18, jaws_snap, target_peak=0.34, max_ms=200.0, darken=8000.0)
+    S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.17, jaws_snap, target_peak=0.34, max_ms=190.0, darken=8000.0)
     print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
     for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick",
                  "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_seeker_jaws_snap", "sfx_cast", "sfx_hit"):
