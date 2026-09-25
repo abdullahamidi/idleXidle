@@ -3,6 +3,7 @@
 
     python tools/asset-pipeline/film_audio.py <film.log> <frames prefix> <out.mp4> [--slow 4] [--mute]
                                               [--music music_arena_nature] [--crop x,y,w,h] [--wav out.wav]
+                                              [--cue sfx_key=path/to/old.wav ...]
 
 The capture rig runs the game SILENT (no audio device), so a film has no sound. But with RH_PRESENT_TRACE=1
 the game logs every sound it ASKS for (SoundBank.Play logs before its enabled check: key, volume, pitch,
@@ -20,7 +21,8 @@ WHAT IT REPRODUCES, AND WHAT IT CANNOT:
   the ear test on real hardware is still the only proof that the sound is right.
 
 --slow N plays the frames N times slower and the audio N times slower (pitch down, like tape), so a slow
-view keeps its sync. --mute writes the same video with no audio track.
+view keeps its sync. --mute writes the same video with no audio track. --cue KEY=PATH renders that cue from another
+file (a BEFORE film heard with the sound it had then, after the cue in assets/ was replaced).
 """
 from __future__ import annotations
 
@@ -53,12 +55,15 @@ def ffmpeg() -> str:
         return "ffmpeg"
 
 
+CUE_FILES: dict[str, str] = {}   # --cue overrides: key -> a wav outside assets/
+
+
 def load(key: str, cache: dict) -> np.ndarray | None:
     """A cue as float32 [n, 2] at RATE, or None when no file has that name."""
     if key in cache:
         return cache[key]
-    path = None
-    for root, _, files in os.walk(AUDIO):
+    path = CUE_FILES.get(key)
+    for root, _, files in ([] if path else os.walk(AUDIO)):
         if key + ".wav" in files:
             path = os.path.join(root, key + ".wav")
             break
@@ -164,7 +169,11 @@ def main() -> int:
     ap.add_argument("--music", default=None)
     ap.add_argument("--crop", default="480,20,1090,1040")
     ap.add_argument("--wav", default=None, help="also keep the rendered soundtrack here")
+    ap.add_argument("--cue", action="append", default=[], help="KEY=PATH: render this cue from another wav")
     a = ap.parse_args()
+    for spec in a.cue:
+        key, _, path = spec.partition("=")
+        CUE_FILES[key] = path
     shots, sounds = parse(a.log)
     if not shots:
         sys.exit("no `shot` lines: film with RH_PRESENT_TRACE=1")

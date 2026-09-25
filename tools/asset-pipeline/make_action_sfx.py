@@ -25,16 +25,18 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        Heavier than the basic swing's thud, but tighter, so ten in a fight do not tire.
 
     sfx_seeker_jaws_snap         ~0.17 s THE ANSWER to a bite (a Reaction, off the beat), timed to the picture: at 0 ms
-                                       the tether fires (a small spring tick and a quiet chain rasp, a lead-in); at 17 ms,
-                                       the frame the rigid jaws hit their stop, the CLAMP (a short hard iron clack with a
-                                       little weight under it, teeth into hide): the cue's strongest transient; after it
-                                       the chain taking the strain (three short link ticks). One cue for the whole
-                                       reaction, right after the enemy's bite thud: BITE -> CLACK. No ring, no tail.
+                                       the trap's latch lets go (a tiny dry tick and a quiet chain rasp, a lead-in); at
+                                       17 ms, the frame the two steel clamp arms hit their stops, the CLACK: dry forged
+                                       steel, a short hard metal contact whose partials die inside ~12 ms (never a clang,
+                                       a bell or an anvil), the second arm's stop a few ms behind the first, and far
+                                       beneath it a muted leather contact (the clamp caught something). After it the
+                                       chain taking the strain (three small link ticks). One cue for the whole reaction,
+                                       right after the enemy's bite thud: BITE -> CLACK. No crunch, no bone, no thump.
 
 The SPRAY and HARD HANDS cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
 quiet enough; only an ear says it sounds like a knife (or a fist), so every new cue here is a candidate until it is
 listened to (design/audio/seeker-spray-audio-brief.md is the contract the approved ones keep). The JAWS snap is a
-CANDIDATE until the owner has heard it.
+CANDIDATE until the owner has heard it (design/audio/seeker-jaws-audio-brief.md).
 """
 from __future__ import annotations
 
@@ -109,29 +111,38 @@ def hard_hands_hit(buf):
     S.add(buf, 0.004, S.tail(S.Noise(0x4A2F), 0.256, 520.0, 0.036), 0.16)     # a small hard room, no more
 
 
-JAWS_CLAMP_S = 0.017   # the jaws hit their stop on the frame after the first one (16.7 ms): the clack lives there
+JAWS_CLAMP_S = 0.017   # the arms hit their stops on the frame after the first one (16.7 ms): the clack lives there
+JAWS_SECOND_STOP_S = 0.0035   # the other arm's stop, just behind: two arms, two stops, one CLACK with a mechanical edge
 
 
 def jaws_snap(buf):
-    rng = S.Noise(0x7A55)
-    # 0 ms, THE TETHER FIRES: the spring's catch letting go (a small dry tick, well under the clack) and the chain
-    # starting to run (a short, quiet, bright rasp). Heard as the lead-in, not as a second hit.
-    S.add(buf, 0.0, S.click(rng, 0.0015, 3900.0), 0.16)
-    S.bell(buf, 0.0005, 4600.0, 0.03, 0.008, partials=(1.0, 1.73))
-    S.add(buf, 0.001, S.envelope(S.biquad(S.noise(rng, 0.02), "bp", 3200.0, 1.6), 0.002, 0.006), 0.12)
-    # 17 ms, THE CLAMP, on the frame the jaws hit their stop: two iron jaws meeting. The strongest transient of the
-    # cue: a hard clack (a tight body, high Q), a metallic knock that dies inside ~40 ms (inharmonic, never a ring),
-    # teeth into hide, and a little weight under it
+    """A spring-loaded steel trap, never a bite: the identity pass (2026-09-25) took out the polish cue's crunch (a
+    saturated noise band, heard as teeth or bone) and its pitch-dropping thump (heard as a skull or a body), which made
+    the clamp sound like a mouth closing. What is left is a mechanism: a latch, two steel arms hitting their stops, a
+    chain."""
+    rng = S.Noise(0x7A57)
+    # 0 ms, THE LATCH LETS GO: a tiny dry tick of the pawl and the chain starting to run (a short, quiet, bright
+    # rasp). The lead-in, well under the clack, never a second hit.
+    S.add(buf, 0.0, S.click(rng, 0.0012, 4200.0), 0.12)
+    S.bell(buf, 0.0004, 5200.0, 0.025, 0.004, partials=(1.0, 1.41))
+    S.add(buf, 0.001, S.envelope(S.biquad(S.noise(rng, 0.016), "bp", 3600.0, 1.8), 0.002, 0.005), 0.08)
+    # 17 ms, THE CLACK, on the frame the arms hit their stops: dry forged steel. A hard broadband contact, and the
+    # struck steel's own voice as a few inharmonic partials that die inside ~12 ms (a plate hitting its stop, not a
+    # blade ringing: no partial outlives 20 ms). The second arm lands 3.5 ms behind the first, a touch quieter.
     c = JAWS_CLAMP_S
-    S.add(buf, c, S.click(rng, 0.003, 2400.0), 0.46)
-    S.add(buf, c, S.body(rng, 0.05, 1150.0, 3.4, 0.010), 0.80)
-    S.bell(buf, c + 0.001, 1650.0, 0.17, 0.022, partials=(1.0, 2.76, 5.40))
-    S.add(buf, c + 0.001, S.crunch(rng, 0.022, 420.0, 2400.0, 0.006, sat=3.0), 0.30)
-    S.add(buf, c, S.thump(0.15, 150.0, 92.0, 0.012, 0.026, sat=1.8), 0.44)
-    # after: the chain TAKING THE STRAIN as it jerks the creature, three short falling link ticks
-    for at, f, g in ((0.052, 2650.0, 0.17), (0.078, 3050.0, 0.12), (0.108, 2450.0, 0.08)):
-        S.add(buf, at, S.click(rng, 0.0015, f), g)
-        S.bell(buf, at + 0.0005, f * 1.12, g * 0.5, 0.012, partials=(1.0, 1.61))
+    for at, g in ((c, 1.0), (c + JAWS_SECOND_STOP_S, 0.62)):
+        S.add(buf, at, S.click(rng, 0.0022, 3000.0), 0.55 * g)
+        S.bell(buf, at + 0.0002, 2180.0, 0.34 * g, 0.009, partials=(1.0, 1.47, 2.09, 2.95))
+        S.add(buf, at, S.body(rng, 0.03, 1850.0, 4.5, 0.004), 0.42 * g)
+    # the housing's own heft: a short, damped knock of the spring box (a small steel body, mid-range, gone in ~15 ms)
+    S.bell(buf, c + 0.0006, 610.0, 0.16, 0.007, partials=(1.0, 1.58))
+    # far beneath the steel, the contact that says it CAUGHT something: muted hide under the arms, low-passed, dull,
+    # ~20 dB under the clack. Never saturated (that was the crunch), never a thump.
+    S.add(buf, c + 0.001, S.envelope(S.lp2(S.noise(rng, 0.03), 650.0), 0.002, 0.007), 0.10)
+    # after: the chain TAKING THE STRAIN as it jerks the creature, three small falling link ticks
+    for at, f, g in ((0.050, 3300.0, 0.11), (0.074, 3700.0, 0.08), (0.102, 3050.0, 0.055)):
+        S.add(buf, at, S.click(rng, 0.0012, f), g)
+        S.bell(buf, at + 0.0004, f * 1.08, g * 0.45, 0.006, partials=(1.0, 1.52))
 
 
 def main() -> int:

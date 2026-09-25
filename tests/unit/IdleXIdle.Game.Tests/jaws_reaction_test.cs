@@ -14,8 +14,9 @@ namespace IdleXIdle.Game.Tests;
 
 /// <summary>
 /// THE REACTION CONTRACT (ADR-011, JAWS, 2026-09-25): a reaction is presented on its own layer, belongs to its SKILL,
-/// never owns the champion's figure, is a RIGID mechanism (the jaws rotate, the metal never scales), is fired from and
-/// reeled back to the Seeker within about a quarter of a second, pulls its creature toward him, and yields to a death.
+/// never owns the champion's figure, is a RIGID mechanism (a spring-loaded clamp: each arm turns about its own hinge,
+/// the metal never scales), is fired from and reeled back to the Seeker within about a quarter of a second, pulls its
+/// creature toward him, and yields to a death.
 /// </summary>
 /// <remarks>
 /// The failures these stop were measured in the JAWS discovery: a row-wide rope ring that no one could tie to the bite,
@@ -142,13 +143,74 @@ public class JawsReactionTest
     public void test_the_metal_is_never_scaled_only_rotated()
     {
         // the first build pumped the whole sprite from 0.82 to a 1.12 overshoot: the recipe has no scale to pump now,
-        // and the draw passes one scale for every part of the head (the size, from the creature)
+        // and the draw passes one scale for every part of the clamp (the size, from the creature)
         var props = typeof(ReactionRecipe).GetProperties().Select(p => p.Name).ToArray();
         Assert.DoesNotContain(props, n => n.Contains("Overshoot", StringComparison.Ordinal) || n.Contains("RiseFrom", StringComparison.Ordinal));
         var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
         var draw = src[src.IndexOf("private void DrawPart(", StringComparison.Ordinal)..];
         draw = draw[..draw.IndexOf("_sprites++;", StringComparison.Ordinal)];
         Assert.Contains("pose.Scale", draw);
+    }
+
+    // ── IDENTITY: a mechanical hunting clamp, never an animal's head (the identity pass, 2026-09-25) ──
+
+    [Fact]
+    public void test_each_arm_turns_about_its_own_hinge_and_the_housing_never_turns()
+    {
+        // the polish pass hinged two long jaws on ONE round hub behind them: at true speed a snout, two jaws and an eye.
+        // A trap's arms hinge at the two ends of its base: two pins, one above and one below the clamp's line
+        Assert.NotEqual(Jaws.UpperPivot, Jaws.LowerPivot);
+        Assert.True(Jaws.UpperPivot.Y < Jaws.BitePoint.Y && Jaws.LowerPivot.Y > Jaws.BitePoint.Y, "one hinge above the line, one below");
+        Assert.Equal(Jaws.BitePoint.Y - Jaws.UpperPivot.Y, Jaws.LowerPivot.Y - Jaws.BitePoint.Y, 3);
+        Assert.True(Jaws.UpperPivot.X < Jaws.BitePoint.X && Jaws.Eye.X < Jaws.UpperPivot.X, "shackle, hinges, then the arms' grip");
+        var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
+        var material = src[src.IndexOf("public void DrawMaterial(", StringComparison.Ordinal)..];
+        material = material[..material.IndexOf("private void DrawPart(", StringComparison.Ordinal)];
+        Assert.Contains("DrawPart(b, stage, Recipe.UpperKey, pose.UpperPivot, Recipe.UpperPivot, pose, pose.Angle - pose.Jaw", material);
+        Assert.Contains("DrawPart(b, stage, Recipe.LowerKey, pose.LowerPivot, Recipe.LowerPivot, pose, pose.Angle + pose.Jaw", material);
+        Assert.Contains("DrawPart(b, stage, Recipe.BaseKey, pose.Bite, Recipe.BitePoint, pose, pose.Angle,", material);   // rigid on the line
+    }
+
+    [Fact]
+    public void test_the_recipe_describes_a_clamp_with_no_hub_and_no_head()
+    {
+        // no single shared pivot (the hub read as an eye) and no "head" to size: the object is a clamp
+        var props = typeof(ReactionRecipe).GetProperties().Select(p => p.Name).ToArray();
+        Assert.DoesNotContain("Pivot", props);
+        Assert.DoesNotContain(props, n => n.StartsWith("Head", StringComparison.Ordinal));
+        Assert.Contains("ClampArtLength", props);
+    }
+
+    [Fact]
+    public void test_the_sparks_are_few_and_come_from_the_hinges()
+    {
+        // the mechanism's motion carries the snap: at most a spark per hinge, where steel met steel, never a fan round the target
+        Assert.InRange(Jaws.Sparks, 0, 2);
+        var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
+        var light = src[src.IndexOf("public void DrawLight(", StringComparison.Ordinal)..];
+        light = light[..light.IndexOf("private void DrawChain(", StringComparison.Ordinal)];
+        Assert.Contains("var hinge = s == 0 ? pose.UpperPivot : pose.LowerPivot;", light);
+        Assert.Contains("Math.Min(Recipe.Sparks, 2)", light);
+    }
+
+    [Fact]
+    public void test_the_clamp_parts_share_one_canvas_and_its_points_lie_on_it()
+    {
+        // the housing, both arms and both teeth masks are drawn on ONE canvas, so the pins, the shackle and the clamp
+        // point serve them all. PNG IHDR: width and height are the big-endian ints at bytes 16..24 (no device needed)
+        var sizes = new[] { Jaws.BaseKey, Jaws.UpperKey, Jaws.LowerKey, Jaws.UpperEdgeKey, Jaws.LowerEdgeKey }.Select(key =>
+        {
+            var head = new byte[24];
+            using (var f = File.OpenRead(RepoFile("assets", "art", "Props", key + ".png"))) f.ReadExactly(head);
+            return (W: (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19], H: (head[20] << 24) | (head[21] << 16) | (head[22] << 8) | head[23]);
+        }).Distinct().ToArray();
+        Assert.Single(sizes);
+        foreach (var at in new[] { Jaws.UpperPivot, Jaws.LowerPivot, Jaws.Eye, Jaws.BitePoint })
+        {
+            Assert.InRange(at.X, 0f, sizes[0].W);
+            Assert.InRange(at.Y, 0f, sizes[0].H);
+        }
+        Assert.InRange(Jaws.ClampArtLength, Jaws.BitePoint.X - Jaws.Eye.X, sizes[0].W);
     }
 
     [Fact]
@@ -166,7 +228,7 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_the_head_is_reeled_home_and_nothing_stays()
+    public void test_the_clamp_is_reeled_home_and_nothing_stays()
     {
         var p = Answer();
         p.Update(7000, new Stage());
@@ -199,7 +261,7 @@ public class JawsReactionTest
         Assert.Equal(Jaws.CloseMs + Jaws.DeathHoldMs, p.RetractFromMs);   // the snap still reads, then it lets go
         Assert.Equal(0f, p.YankOffsetX(0, 7000 + 40, 160f, falling: true));
         Assert.Equal(0f, p.YankOffsetX(0, 7000 + 40, 160f, falling: false));   // let go: no pull on a corpse
-        Assert.False(p.Slack);                                                 // and the head still goes home
+        Assert.False(p.Slack);                                                 // and the clamp still goes home
         Assert.True(p.EndMs < Jaws.RetractAtMs + Jaws.RetractMs);
     }
 
@@ -220,7 +282,7 @@ public class JawsReactionTest
         // artistic economy: a small reaction needs 8-16 readable links, not sixty-four equal stamps
         Assert.InRange(Jaws.LinkAt.Count, 8, 16);
         Assert.All(Jaws.LinkAt, f => Assert.InRange(f, 0f, 1f));
-        // denser at both ends (the hardware at the belt and at the head) than across the middle
+        // denser at both ends (the hardware at the belt and at the shackle) than across the middle
         var gaps = Jaws.LinkAt.Zip(Jaws.LinkAt.Skip(1), (a, b) => b - a).ToArray();
         Assert.True(gaps[0] < gaps[gaps.Length / 2] && gaps[^1] < gaps[gaps.Length / 2]);
         Assert.True(Jaws.BodySegments >= 8, "the dark body carries the chain between the accents: no gaps");
