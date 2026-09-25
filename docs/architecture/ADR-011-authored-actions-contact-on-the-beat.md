@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop. It AWAITS the owner's review: `production/qa/evidence/jaws-readable/` (before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25: the literal physical metaphor may be the problem) and stopped JAWS implementation for a CONCEPT STUDY with no production change (literal trap vs a stylised reaction manifestation: three animatics over the real fight, blind reads). It AWAITS the owner's direction: `production/qa/evidence/jaws-concepts/`. The readable clamp stays what the game draws until then. |
 | **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
@@ -65,7 +65,7 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the readable-clamp pass AWAITS THE OWNER'S REVIEW)
+## The reaction reference: JAWS (architecture approved; the readable-clamp bear trap NOT approved; a concept study AWAITS THE OWNER'S DIRECTION)
 
 A REACTION takes no beat: the enemy's bite is its cause, and it must never take the champion's figure. The Seeker's
 JAWS (`snare_jaws`, "every bite returns 50% of it to the enemy that bit you") is presented as BITE FOR BITE: the
@@ -84,6 +84,22 @@ arms read as a MECHANICAL HOOK / GRABBER, and — the primary blocker — its cl
 to the stop in 16 ms is one open frame and one shut frame. The pass rebuilt the world prop so the JAWS dominate and made
 the close a motion the eye sees, keeping every approved system (Core readiness, target resolution, the layer, the
 tether, the retract concept, dock truth, SPRAY, HARD HANDS, REPAY / NET / IRON untouched).
+
+**The concept study (2026-09-25; nothing implemented).** The owner did not approve the bear trap and asked whether JAWS
+wants a literal trap at all. The study's findings (`prototypes/jaws-concepts/README.md`,
+`production/qa/evidence/jaws-concepts/`), in brief:
+- **Deployed traps read because they are placed and armed BEFORE their trigger.** Examples: Dead Cells' Wolf Trap,
+  Caitlyn's Yordle Snap Trap. JAWS has no placement, so a literal trap must explain itself inside the reaction; that
+  is the physical burden.
+- **Three stylised Shadow animatics (A jaws, B tether, C sigil) were blind-read.** None read as a COUNTER.
+  - The control shows why: the enemy's bite reads as "a red burst on the hunter in the same frame".
+  - The fight's own white hit flash erases whatever sits on the creature.
+- **A line from the Seeker gives CAUSE.** Top-and-bottom jaws read as a MOUTH; a sideways "( )" close reads as
+  "snapped shut around".
+- **A 17–50 ms pre-roll is unseen when dim, and makes the Seeker the initiator when bright.**
+- **The recommendation is a direction, not a decision.** A stylised sideways Shadow snap on the contact frame, one
+  ownership line, and the trap's "before" moved into the armed state (`ReactionArmed`). The enemy bite's legibility and
+  the answer's flash hierarchy come first.
 
 | Concern | Where JAWS does it |
 |---|---|
