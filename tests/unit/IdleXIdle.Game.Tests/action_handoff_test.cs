@@ -146,4 +146,36 @@ public class ActionHandoffTest
         Assert.Equal(5208f, plan.ExitMs, 2);
         Assert.Equal(0f, plan.AvailableMs, 2);
     }
+
+    [Fact]
+    public void test_handoff_yields_after_the_contact_so_a_performed_action_keeps_its_wind_up()
+    {
+        // Arrange: the fastest build. HARD HANDS lands at 5200; its protected frames run to 5370; SPRAY lands at 5700
+        // and must start by 5230 to keep its minimum readable anticipation (the fast-TEMPO policy, ADR-011)
+        const float now = 5217f, recovery = 5370f, latest = 5230f;
+
+        // Act
+        var performed = ActionHandoff.Plan(now, recovery, 220f, 73f, 5590f, 5100f, latest, incomingPerformed: true)!.Value;
+        var plain = ActionHandoff.Plan(now, recovery, 220f, 73f, 5590f, 5100f, latest)!.Value;
+
+        // Assert: a performed action behind it takes the figure at its latest start, after the contact...
+        Assert.Equal(HandoffFit.Yielded, performed.Fit);
+        Assert.Equal(latest, performed.ExitMs, 2);
+        Assert.True(performed.ExitMs > 5200f, "never before its gameplay event");
+        // ...a plain one still waits for the protected frames, and starts late inside its own speed range
+        Assert.Equal(HandoffFit.Squeezed, plain.Fit);
+        Assert.Equal(recovery, plain.ExitMs, 2);
+    }
+
+    [Fact]
+    public void test_a_cut_clip_ends_where_it_was_cut_and_never_shows_what_follows()
+    {
+        var t = new ActionClipTiming(new[] { 70f, 100f, 90f, 120f, 80f, 90f, 120f, 100f },
+                                     markers: new Dictionary<string, int> { ["contact"] = 4, ["recovery"] = 6 });
+        var cut = t.CutAt(t.MarkerMs("contact") + 30f);
+        Assert.Equal(t.MarkerMs("contact") + 30f, cut.TotalMs, 2);
+        Assert.Equal(4, cut.FrameAt(cut.TotalMs - 1f));                  // the contact pose is the last one drawn
+        Assert.Equal(t.MarkerMs("contact"), cut.MarkerMs("contact"));    // nothing before the cut moves
+        Assert.Same(t, t.CutAt(t.TotalMs + 5f));
+    }
 }

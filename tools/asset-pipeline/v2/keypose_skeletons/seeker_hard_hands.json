@@ -1,0 +1,933 @@
+{
+ "about": "HARD HANDS key poses (ADR-011, 2026-09-25): a leaping overhand HAMMER-FIST. The Seeker bounds in and drives his closed right (camera-side) fist down onto a low creature's head with his whole weight. Skeletons for PixelLab animate_with_skeleton_v3, south-east, drawn from ONE reference image (the SE idle frame 0). x/y are fractions of the 180 px canvas; the enemies are to the RIGHT (+x). RIGHT ARM = the camera-side arm (z in front). Frame 7 is the idle pose itself (the strip uses the idle's own frame 0 there).",
+ "reference": "https://backblaze.pixellab.ai/file/pixellab-characters/a5e233f5-b48a-4bf3-8ed5-ea649a71f38d/22e6d4d3-a470-462c-a39c-bfb67315e08a/animations/27373220-70eb-4ba3-abc0-29c1ac50c9ad/south-east/0.png",
+ "first_frame_keypoints": [
+  {
+   "label": "NOSE",
+   "x": 0.54,
+   "y": 0.29,
+   "z_index": 8
+  },
+  {
+   "label": "NECK",
+   "x": 0.51,
+   "y": 0.33,
+   "z_index": 6
+  },
+  {
+   "label": "RIGHT SHOULDER",
+   "x": 0.42,
+   "y": 0.37,
+   "z_index": 9
+  },
+  {
+   "label": "RIGHT ELBOW",
+   "x": 0.39,
+   "y": 0.47,
+   "z_index": 11
+  },
+  {
+   "label": "RIGHT ARM",
+   "x": 0.42,
+   "y": 0.57,
+   "z_index": 12
+  },
+  {
+   "label": "LEFT SHOULDER",
+   "x": 0.59,
+   "y": 0.37,
+   "z_index": 3
+  },
+  {
+   "label": "LEFT ELBOW",
+   "x": 0.61,
+   "y": 0.47,
+   "z_index": 2
+  },
+  {
+   "label": "LEFT ARM",
+   "x": 0.64,
+   "y": 0.55,
+   "z_index": 1
+  },
+  {
+   "label": "RIGHT HIP",
+   "x": 0.46,
+   "y": 0.56,
+   "z_index": 7
+  },
+  {
+   "label": "RIGHT KNEE",
+   "x": 0.44,
+   "y": 0.68,
+   "z_index": 8
+  },
+  {
+   "label": "RIGHT LEG",
+   "x": 0.43,
+   "y": 0.81,
+   "z_index": 8
+  },
+  {
+   "label": "LEFT HIP",
+   "x": 0.56,
+   "y": 0.56,
+   "z_index": 4
+  },
+  {
+   "label": "LEFT KNEE",
+   "x": 0.57,
+   "y": 0.68,
+   "z_index": 4
+  },
+  {
+   "label": "LEFT LEG",
+   "x": 0.58,
+   "y": 0.79,
+   "z_index": 4
+  },
+  {
+   "label": "RIGHT EYE",
+   "x": 0.51,
+   "y": 0.27,
+   "z_index": 9
+  },
+  {
+   "label": "LEFT EYE",
+   "x": 0.55,
+   "y": 0.27,
+   "z_index": 8
+  },
+  {
+   "label": "RIGHT EAR",
+   "x": 0.48,
+   "y": 0.27,
+   "z_index": 7
+  },
+  {
+   "label": "LEFT EAR",
+   "x": 0.57,
+   "y": 0.26,
+   "z_index": 5
+  }
+ ],
+ "frames": {
+  "0 ready (guard, idle-compatible)": {
+   "NOSE": [
+    0.54,
+    0.29
+   ],
+   "NECK": [
+    0.51,
+    0.33
+   ],
+   "RIGHT SHOULDER": [
+    0.42,
+    0.37
+   ],
+   "RIGHT ELBOW": [
+    0.4,
+    0.46
+   ],
+   "RIGHT ARM": [
+    0.46,
+    0.5
+   ],
+   "LEFT SHOULDER": [
+    0.59,
+    0.37
+   ],
+   "LEFT ELBOW": [
+    0.63,
+    0.45
+   ],
+   "LEFT ARM": [
+    0.66,
+    0.48
+   ],
+   "RIGHT HIP": [
+    0.46,
+    0.56
+   ],
+   "RIGHT KNEE": [
+    0.44,
+    0.68
+   ],
+   "RIGHT LEG": [
+    0.43,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.56,
+    0.56
+   ],
+   "LEFT KNEE": [
+    0.57,
+    0.68
+   ],
+   "LEFT LEG": [
+    0.58,
+    0.79
+   ],
+   "RIGHT EYE": [
+    0.51,
+    0.27
+   ],
+   "LEFT EYE": [
+    0.55,
+    0.27
+   ],
+   "RIGHT EAR": [
+    0.48,
+    0.27
+   ],
+   "LEFT EAR": [
+    0.57,
+    0.26
+   ]
+  },
+  "1 anticipation (weight back, fist drawn up)": {
+   "NOSE": [
+    0.52,
+    0.3
+   ],
+   "NECK": [
+    0.49,
+    0.34
+   ],
+   "RIGHT SHOULDER": [
+    0.41,
+    0.38
+   ],
+   "RIGHT ELBOW": [
+    0.35,
+    0.36
+   ],
+   "RIGHT ARM": [
+    0.38,
+    0.25
+   ],
+   "LEFT SHOULDER": [
+    0.57,
+    0.38
+   ],
+   "LEFT ELBOW": [
+    0.64,
+    0.42
+   ],
+   "LEFT ARM": [
+    0.7,
+    0.4
+   ],
+   "RIGHT HIP": [
+    0.45,
+    0.58
+   ],
+   "RIGHT KNEE": [
+    0.42,
+    0.69
+   ],
+   "RIGHT LEG": [
+    0.42,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.55,
+    0.58
+   ],
+   "LEFT KNEE": [
+    0.58,
+    0.69
+   ],
+   "LEFT LEG": [
+    0.59,
+    0.79
+   ],
+   "RIGHT EYE": [
+    0.49,
+    0.28
+   ],
+   "LEFT EYE": [
+    0.54,
+    0.28
+   ],
+   "RIGHT EAR": [
+    0.46,
+    0.28
+   ],
+   "LEFT EAR": [
+    0.55,
+    0.27
+   ]
+  },
+  "2 loaded (fist cocked overhead, coiled low)": {
+   "NOSE": [
+    0.51,
+    0.34
+   ],
+   "NECK": [
+    0.48,
+    0.38
+   ],
+   "RIGHT SHOULDER": [
+    0.4,
+    0.41
+   ],
+   "RIGHT ELBOW": [
+    0.36,
+    0.29
+   ],
+   "RIGHT ARM": [
+    0.43,
+    0.18
+   ],
+   "LEFT SHOULDER": [
+    0.56,
+    0.41
+   ],
+   "LEFT ELBOW": [
+    0.63,
+    0.45
+   ],
+   "LEFT ARM": [
+    0.71,
+    0.46
+   ],
+   "RIGHT HIP": [
+    0.44,
+    0.61
+   ],
+   "RIGHT KNEE": [
+    0.4,
+    0.71
+   ],
+   "RIGHT LEG": [
+    0.39,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.54,
+    0.61
+   ],
+   "LEFT KNEE": [
+    0.61,
+    0.7
+   ],
+   "LEFT LEG": [
+    0.63,
+    0.8
+   ],
+   "RIGHT EYE": [
+    0.48,
+    0.32
+   ],
+   "LEFT EYE": [
+    0.53,
+    0.32
+   ],
+   "RIGHT EAR": [
+    0.45,
+    0.32
+   ],
+   "LEFT EAR": [
+    0.54,
+    0.31
+   ]
+  },
+  "3 commit (the leap: body horizontal, fist arcing over)": {
+   "NOSE": [
+    0.64,
+    0.32
+   ],
+   "NECK": [
+    0.6,
+    0.35
+   ],
+   "RIGHT SHOULDER": [
+    0.53,
+    0.38
+   ],
+   "RIGHT ELBOW": [
+    0.61,
+    0.26
+   ],
+   "RIGHT ARM": [
+    0.71,
+    0.22
+   ],
+   "LEFT SHOULDER": [
+    0.63,
+    0.4
+   ],
+   "LEFT ELBOW": [
+    0.56,
+    0.46
+   ],
+   "LEFT ARM": [
+    0.48,
+    0.49
+   ],
+   "RIGHT HIP": [
+    0.51,
+    0.54
+   ],
+   "RIGHT KNEE": [
+    0.42,
+    0.62
+   ],
+   "RIGHT LEG": [
+    0.33,
+    0.69
+   ],
+   "LEFT HIP": [
+    0.6,
+    0.55
+   ],
+   "LEFT KNEE": [
+    0.7,
+    0.63
+   ],
+   "LEFT LEG": [
+    0.69,
+    0.77
+   ],
+   "RIGHT EYE": [
+    0.61,
+    0.3
+   ],
+   "LEFT EYE": [
+    0.66,
+    0.3
+   ],
+   "RIGHT EAR": [
+    0.58,
+    0.3
+   ],
+   "LEFT EAR": [
+    0.67,
+    0.29
+   ]
+  },
+  "4 CONTACT (fist driven low into the target, weight behind it)": {
+   "NOSE": [
+    0.68,
+    0.37
+   ],
+   "NECK": [
+    0.63,
+    0.38
+   ],
+   "RIGHT SHOULDER": [
+    0.58,
+    0.41
+   ],
+   "RIGHT ELBOW": [
+    0.68,
+    0.49
+   ],
+   "RIGHT ARM": [
+    0.76,
+    0.6
+   ],
+   "LEFT SHOULDER": [
+    0.66,
+    0.42
+   ],
+   "LEFT ELBOW": [
+    0.55,
+    0.46
+   ],
+   "LEFT ARM": [
+    0.47,
+    0.42
+   ],
+   "RIGHT HIP": [
+    0.52,
+    0.58
+   ],
+   "RIGHT KNEE": [
+    0.44,
+    0.69
+   ],
+   "RIGHT LEG": [
+    0.36,
+    0.8
+   ],
+   "LEFT HIP": [
+    0.6,
+    0.59
+   ],
+   "LEFT KNEE": [
+    0.7,
+    0.69
+   ],
+   "LEFT LEG": [
+    0.71,
+    0.81
+   ],
+   "RIGHT EYE": [
+    0.65,
+    0.35
+   ],
+   "LEFT EYE": [
+    0.7,
+    0.35
+   ],
+   "RIGHT EAR": [
+    0.62,
+    0.35
+   ],
+   "LEFT EAR": [
+    0.7,
+    0.34
+   ]
+  },
+  "5 follow-through (driven through, lowest)": {
+   "NOSE": [
+    0.69,
+    0.41
+   ],
+   "NECK": [
+    0.64,
+    0.42
+   ],
+   "RIGHT SHOULDER": [
+    0.59,
+    0.45
+   ],
+   "RIGHT ELBOW": [
+    0.7,
+    0.54
+   ],
+   "RIGHT ARM": [
+    0.78,
+    0.66
+   ],
+   "LEFT SHOULDER": [
+    0.67,
+    0.46
+   ],
+   "LEFT ELBOW": [
+    0.56,
+    0.5
+   ],
+   "LEFT ARM": [
+    0.48,
+    0.47
+   ],
+   "RIGHT HIP": [
+    0.53,
+    0.61
+   ],
+   "RIGHT KNEE": [
+    0.45,
+    0.71
+   ],
+   "RIGHT LEG": [
+    0.37,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.61,
+    0.62
+   ],
+   "LEFT KNEE": [
+    0.71,
+    0.71
+   ],
+   "LEFT LEG": [
+    0.72,
+    0.81
+   ],
+   "RIGHT EYE": [
+    0.66,
+    0.39
+   ],
+   "LEFT EYE": [
+    0.71,
+    0.39
+   ],
+   "RIGHT EAR": [
+    0.63,
+    0.39
+   ],
+   "LEFT EAR": [
+    0.71,
+    0.38
+   ]
+  },
+  "6 recovery (rising, stepping back, fist to the chest)": {
+   "NOSE": [
+    0.57,
+    0.3
+   ],
+   "NECK": [
+    0.54,
+    0.34
+   ],
+   "RIGHT SHOULDER": [
+    0.45,
+    0.38
+   ],
+   "RIGHT ELBOW": [
+    0.44,
+    0.48
+   ],
+   "RIGHT ARM": [
+    0.5,
+    0.46
+   ],
+   "LEFT SHOULDER": [
+    0.61,
+    0.38
+   ],
+   "LEFT ELBOW": [
+    0.62,
+    0.47
+   ],
+   "LEFT ARM": [
+    0.64,
+    0.54
+   ],
+   "RIGHT HIP": [
+    0.48,
+    0.57
+   ],
+   "RIGHT KNEE": [
+    0.45,
+    0.69
+   ],
+   "RIGHT LEG": [
+    0.44,
+    0.8
+   ],
+   "LEFT HIP": [
+    0.57,
+    0.57
+   ],
+   "LEFT KNEE": [
+    0.59,
+    0.69
+   ],
+   "LEFT LEG": [
+    0.6,
+    0.79
+   ],
+   "RIGHT EYE": [
+    0.54,
+    0.28
+   ],
+   "LEFT EYE": [
+    0.58,
+    0.28
+   ],
+   "RIGHT EAR": [
+    0.51,
+    0.28
+   ],
+   "LEFT EAR": [
+    0.59,
+    0.27
+   ]
+  },
+  "7 exit (the idle pose itself)": {
+   "NOSE": [
+    0.54,
+    0.29
+   ],
+   "NECK": [
+    0.51,
+    0.33
+   ],
+   "RIGHT SHOULDER": [
+    0.42,
+    0.37
+   ],
+   "RIGHT ELBOW": [
+    0.39,
+    0.47
+   ],
+   "RIGHT ARM": [
+    0.42,
+    0.57
+   ],
+   "LEFT SHOULDER": [
+    0.59,
+    0.37
+   ],
+   "LEFT ELBOW": [
+    0.61,
+    0.47
+   ],
+   "LEFT ARM": [
+    0.64,
+    0.55
+   ],
+   "RIGHT HIP": [
+    0.46,
+    0.56
+   ],
+   "RIGHT KNEE": [
+    0.44,
+    0.68
+   ],
+   "RIGHT LEG": [
+    0.43,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.56,
+    0.56
+   ],
+   "LEFT KNEE": [
+    0.57,
+    0.68
+   ],
+   "LEFT LEG": [
+    0.58,
+    0.79
+   ],
+   "RIGHT EYE": [
+    0.51,
+    0.27
+   ],
+   "LEFT EYE": [
+    0.55,
+    0.27
+   ],
+   "RIGHT EAR": [
+    0.48,
+    0.27
+   ],
+   "LEFT EAR": [
+    0.57,
+    0.26
+   ]
+  }
+ },
+ "halfrise": {
+  "0 low, beginning to rise": {
+   "NOSE": [
+    0.64,
+    0.36
+   ],
+   "NECK": [
+    0.6,
+    0.39
+   ],
+   "RIGHT SHOULDER": [
+    0.53,
+    0.42
+   ],
+   "RIGHT ELBOW": [
+    0.55,
+    0.52
+   ],
+   "RIGHT ARM": [
+    0.62,
+    0.55
+   ],
+   "LEFT SHOULDER": [
+    0.64,
+    0.42
+   ],
+   "LEFT ELBOW": [
+    0.6,
+    0.51
+   ],
+   "LEFT ARM": [
+    0.58,
+    0.57
+   ],
+   "RIGHT HIP": [
+    0.5,
+    0.6
+   ],
+   "RIGHT KNEE": [
+    0.43,
+    0.7
+   ],
+   "RIGHT LEG": [
+    0.39,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.59,
+    0.61
+   ],
+   "LEFT KNEE": [
+    0.66,
+    0.7
+   ],
+   "LEFT LEG": [
+    0.67,
+    0.81
+   ],
+   "RIGHT EYE": [
+    0.61,
+    0.34
+   ],
+   "LEFT EYE": [
+    0.66,
+    0.34
+   ],
+   "RIGHT EAR": [
+    0.58,
+    0.34
+   ],
+   "LEFT EAR": [
+    0.66,
+    0.33
+   ]
+  },
+  "1 half-rise (knees still bent, fist coming to the chest)": {
+   "NOSE": [
+    0.6,
+    0.33
+   ],
+   "NECK": [
+    0.56,
+    0.36
+   ],
+   "RIGHT SHOULDER": [
+    0.48,
+    0.4
+   ],
+   "RIGHT ELBOW": [
+    0.47,
+    0.5
+   ],
+   "RIGHT ARM": [
+    0.53,
+    0.52
+   ],
+   "LEFT SHOULDER": [
+    0.62,
+    0.4
+   ],
+   "LEFT ELBOW": [
+    0.62,
+    0.5
+   ],
+   "LEFT ARM": [
+    0.62,
+    0.57
+   ],
+   "RIGHT HIP": [
+    0.48,
+    0.58
+   ],
+   "RIGHT KNEE": [
+    0.43,
+    0.69
+   ],
+   "RIGHT LEG": [
+    0.41,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.57,
+    0.59
+   ],
+   "LEFT KNEE": [
+    0.62,
+    0.69
+   ],
+   "LEFT LEG": [
+    0.63,
+    0.8
+   ],
+   "RIGHT EYE": [
+    0.57,
+    0.31
+   ],
+   "LEFT EYE": [
+    0.62,
+    0.31
+   ],
+   "RIGHT EAR": [
+    0.54,
+    0.31
+   ],
+   "LEFT EAR": [
+    0.63,
+    0.3
+   ]
+  },
+  "2 nearly upright": {
+   "NOSE": [
+    0.56,
+    0.3
+   ],
+   "NECK": [
+    0.53,
+    0.34
+   ],
+   "RIGHT SHOULDER": [
+    0.44,
+    0.38
+   ],
+   "RIGHT ELBOW": [
+    0.42,
+    0.48
+   ],
+   "RIGHT ARM": [
+    0.46,
+    0.55
+   ],
+   "LEFT SHOULDER": [
+    0.6,
+    0.38
+   ],
+   "LEFT ELBOW": [
+    0.61,
+    0.48
+   ],
+   "LEFT ARM": [
+    0.63,
+    0.55
+   ],
+   "RIGHT HIP": [
+    0.47,
+    0.57
+   ],
+   "RIGHT KNEE": [
+    0.44,
+    0.68
+   ],
+   "RIGHT LEG": [
+    0.42,
+    0.81
+   ],
+   "LEFT HIP": [
+    0.56,
+    0.57
+   ],
+   "LEFT KNEE": [
+    0.59,
+    0.68
+   ],
+   "LEFT LEG": [
+    0.6,
+    0.8
+   ],
+   "RIGHT EYE": [
+    0.53,
+    0.28
+   ],
+   "LEFT EYE": [
+    0.57,
+    0.28
+   ],
+   "RIGHT EAR": [
+    0.5,
+    0.28
+   ],
+   "LEFT EAR": [
+    0.58,
+    0.27
+   ]
+  }
+ },
+ "halfrise_job": "e21c6425-b733-45b5-a699-d140d549c013 (action 'recover from a punch', seed 31, opaque ground)"
+}

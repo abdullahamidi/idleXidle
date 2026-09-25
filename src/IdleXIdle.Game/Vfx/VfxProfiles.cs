@@ -41,9 +41,14 @@ public static class VfxProfiles
     public static readonly VfxProfile ImpactWeak = new(
         "impact.weak", "fx_weakhit", VfxSubjectKind.Creature, VfxAnchor.Center, 0.32f, Fps: 16f);
 
-    /// <summary>The creature's bite landing on the champion. Follows his lunge now, because it is pinned to him.</summary>
+    /// <summary>
+    /// The creature's bite landing on the champion. PINNED to him: this comment said so since the swing lunge, but the
+    /// profile was Detached, invisible at the swing's 40 px and a burst hanging in empty air once a melee action
+    /// carried him 400 px to his target (HARD HANDS, 2026-09-25). Every effect that lands ON his body follows it.
+    /// </summary>
     public static readonly VfxProfile ImpactBite = new(
-        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.36f, Fps: 14f, OffsetY: 0.08f);
+        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.36f, Fps: 14f, OffsetY: 0.08f,
+        Follow: VfxFollow.Pinned);
 
     // ── Heal / death ──────────────────────────────────────────────────────────────────────────────
 
@@ -53,7 +58,7 @@ public static class VfxProfiles
     /// now the enum member rather than a constant that only holds at one size.
     /// </summary>
     public static readonly VfxProfile HealColumn = new(
-        "heal.column", "fx_heal", VfxSubjectKind.Champion, VfxAnchor.Standing, 0.95f, Fps: 10f);
+        "heal.column", "fx_heal", VfxSubjectKind.Champion, VfxAnchor.Standing, 0.95f, Fps: 10f, Follow: VfxFollow.Pinned);
 
     public static readonly VfxProfile DeathChampion = new(
         "death.champion", "fx_death", VfxSubjectKind.Champion, VfxAnchor.Center, 0.80f, Fps: 9f);
@@ -89,13 +94,16 @@ public static class VfxProfiles
         Fps: 8f, OffsetY: -0.02f, Follow: VfxFollow.Pinned, Lifetime: VfxLifetime.Held);
 
     public static readonly VfxProfile ShieldGain = new(
-        "shield.gain", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 12f, OffsetY: -0.02f);
+        "shield.gain", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 12f, OffsetY: -0.02f,
+        Follow: VfxFollow.Pinned);
 
     public static readonly VfxProfile ShieldAbsorb = new(
-        "shield.absorb", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 16f, OffsetY: -0.02f);
+        "shield.absorb", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 16f, OffsetY: -0.02f,
+        Follow: VfxFollow.Pinned);
 
     public static readonly VfxProfile ShieldUndying = new(
-        "shield.undying", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 12f, OffsetY: -0.02f);
+        "shield.undying", "fx_shield", VfxSubjectKind.Champion, VfxAnchor.Center, 1.15f, Fps: 12f, OffsetY: -0.02f,
+        Follow: VfxFollow.Pinned);
 
     /// <summary>
     /// The break bursts 20 px WIDER than the shell it replaces, so it reads as the barrier coming apart
@@ -104,7 +112,7 @@ public static class VfxProfiles
     /// </summary>
     public static readonly VfxProfile ShieldBreak = new(
         "shield.break", "fx_shield_break", VfxSubjectKind.Champion, VfxAnchor.Center, 1.20f,
-        Fps: ShieldBreakFrames / UiMotion.Reward, OffsetY: -0.02f);
+        Fps: ShieldBreakFrames / UiMotion.Reward, OffsetY: -0.02f, Follow: VfxFollow.Pinned);
 
     /// <summary>How many frames the break strip holds — the art is an 8x512 row.</summary>
     public const float ShieldBreakFrames = 8f;

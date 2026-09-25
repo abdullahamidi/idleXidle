@@ -218,4 +218,27 @@ public class actor_crop_test
         Assert.Equal(expectedWidth, resolved.Width);
         Assert.Equal(expectedHeight, resolved.Height);
     }
+
+    [Fact]
+    public void test_an_action_placed_as_the_idle_puts_every_row_where_the_idle_does()
+    {
+        // Arrange: the Seeker's idle (headroom 114, sole 495) and HARD HANDS (a raised fist at 117, a stance to
+        // 498), both keyed pixel-exact in the same 512 frame space (ADR-011)
+        var box = new Rectangle(420, 451, 400, 430);
+        const int idleTop = 114, idleSole = 17, handsTop = 117;
+        var idleScale = UiKit.DrawScale(Frame, idleTop / (float)Frame, box.Height);
+        float ScreenY(Rectangle dest, int cropTop, float scale, int row) => dest.Y + (row - cropTop) * scale;
+
+        // Act: the idle placed by its own measurements, the action by its own crop but PLACED AS the idle
+        var idle = UiKit.PlaceFrame(box, 300, Frame - idleTop, idleScale, idleSole);
+        var hands = UiKit.PlaceFrame(box, 320, Frame - handsTop, idleScale, idleSole);
+
+        // Assert: the feet (row 494) and the head (row 120) land on the same screen lines within a pixel
+        foreach (var row in new[] { 120, 300, 494 })
+            Assert.InRange(ScreenY(hands, handsTop, idleScale, row) - ScreenY(idle, idleTop, idleScale, row), -1f, 1f);
+        // ...where measured on its own extremes (the old draw) the action stood 3 px lower
+        var own = UiKit.PlaceFrame(box, 320, Frame - handsTop, UiKit.DrawScale(Frame, handsTop / (float)Frame, box.Height), 14);
+        Assert.True(MathF.Abs(ScreenY(own, handsTop, UiKit.DrawScale(Frame, handsTop / (float)Frame, box.Height), 494)
+                              - ScreenY(idle, idleTop, idleScale, 494)) >= 2f);
+    }
 }

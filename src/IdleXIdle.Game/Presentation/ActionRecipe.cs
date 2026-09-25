@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using IdleXIdle.Game.Vfx;
 using Microsoft.Xna.Framework;
 
@@ -24,6 +25,74 @@ public enum ActionWeight
 }
 
 /// <summary>
+/// What every authored action's recipe says (ADR-011), whatever it does between its anchor and its contact: the
+/// clip it performs, the marker its schedule is anchored on and how long before the beat that marker falls, its
+/// sounds, its mix, its weight and the enemy's reaction. A projectile (<see cref="ProjectileActionRecipe"/>) and a
+/// melee strike (<see cref="MeleeActionRecipe"/>) are two shapes of it.
+/// </summary>
+public interface IActionRecipe
+{
+    /// <summary>A name for the recipe, for traces and evidence.</summary>
+    string Id { get; }
+
+    /// <summary>The Form clip this recipe performs (the skill's ClipKey).</summary>
+    string ClipKey { get; }
+
+    /// <summary>
+    /// The skill effects (the skill's FxKey) this recipe performs, or null for every skill of its Form. A Form's strip
+    /// is shared: on the Seeker the Strike clip is HARD HANDS', BLOW's and PRESS's, and PRESS is a FIELD whose own
+    /// pulse is its picture, so a lunge must not take it over.
+    /// </summary>
+    IReadOnlyCollection<string>? EffectKeys { get; }
+
+    /// <summary>The clip marker the schedule anchors: it falls <see cref="TravelMs"/> before the beat.</summary>
+    string ReleaseMarker { get; }
+
+    /// <summary>The socket on the clip's frames where the action leaves the body (the throwing hand, the fist).</summary>
+    string HandSocket { get; }
+
+    /// <summary>How long before the beat the anchor marker falls: a projectile's flight, 0 for a melee blow.</summary>
+    float TravelMs { get; }
+
+    /// <summary>The sound at the release (a throw) or the commit (a lunge), most specific first.</summary>
+    IReadOnlyList<string> ReleaseCues { get; }
+    float ReleaseVolume { get; }
+    float ReleasePitch { get; }
+
+    /// <summary>The ONE contact sound, most specific first.</summary>
+    IReadOnlyList<string> ContactCues { get; }
+    float ContactVolume { get; }
+    float ContactPitch { get; }
+
+    /// <summary>The contact's quiet secondary ticks (a wide fan), how many, how loud and how far apart.</summary>
+    IReadOnlyList<string> ContactTickCues { get; }
+    int ContactTicks { get; }
+    float ContactTickVolume { get; }
+    float ContactTickSpacingMs { get; }
+
+    /// <summary>How far a sound pans at the arena's edge.</summary>
+    float PanWidth { get; }
+
+    /// <summary>Every other one-shot's level from the release to <see cref="DuckTailMs"/> after the contact.</summary>
+    float DuckOthers { get; }
+    float DuckTailMs { get; }
+
+    /// <summary>The action's weight on screen.</summary>
+    ActionWeight Weight { get; }
+
+    /// <summary>The struck enemy's flash: strength, life and rise (see <see cref="ProjectileActionRecipe.TargetFlashMs"/>).</summary>
+    float TargetFlash { get; }
+    float TargetFlashMs { get; }
+    float TargetFlashRise { get; }
+
+    /// <summary>The generic hit puff and hit sound give way to this action's own contact.</summary>
+    bool ReplacesGenericHit { get; }
+
+    /// <summary>The skill's name is announced at the release (presentation only), not at the beat.</summary>
+    bool CalloutAtRelease { get; }
+}
+
+/// <summary>
 /// ONE AUTHORED PROJECTILE ACTION (ADR-011): the recipe a performance plays so that anticipation, release,
 /// travel, contact and recovery read as one action — with the CONTACT on the fight's beat.
 /// </summary>
@@ -41,13 +110,16 @@ public enum ActionWeight
 /// SPRAY is one instance; nothing in the performance knows it is the Seeker.
 /// </para>
 /// </remarks>
-public sealed record ProjectileActionRecipe
+public sealed record ProjectileActionRecipe : IActionRecipe
 {
     /// <summary>A name for the recipe, for traces and evidence.</summary>
     public required string Id { get; init; }
 
     /// <summary>The Form clip this recipe performs (the skill's ClipKey).</summary>
     public required string ClipKey { get; init; }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string>? EffectKeys { get; init; }
 
     /// <summary>The clip marker at which the thrown objects leave the hand.</summary>
     public string ReleaseMarker { get; init; } = "release";
@@ -170,6 +242,188 @@ public sealed record ProjectileActionRecipe
     public float SmearLift { get; init; } = 0.5f;
 }
 
+/// <summary>
+/// How a melee contact LOOKS (ADR-011): a compact impact that begins at the point of contact and follows the force.
+/// Every size is a share of the caster's visible height; every light layer takes the cast's Source colour.
+/// </summary>
+public sealed record MeleeImpactLook
+{
+    /// <summary>
+    /// The white-hot flash at the contact point (a part texture), its size across the force and life. It is
+    /// COMPRESSED: <see cref="FlashSquash"/> is its depth along the force against its width across it, so the first
+    /// frame of the hit reads as a blow flattening into what it struck, not as a round glow. The first pass (a round
+    /// 0.2 flash) read as a small pink dot at play size.
+    /// </summary>
+    public string FlashKey { get; init; } = "fxp_flash_soft";
+    public float FlashSize { get; init; } = 0.36f;
+    public float FlashSquash { get; init; } = 0.5f;
+    public float FlashSeconds { get; init; } = 0.09f;
+
+    /// <summary>
+    /// The COMPRESSION RING: a shock front across the force, squashed along it (<see cref="RingSquash"/> is its
+    /// thickness along the force against its width across it), growing from <see cref="RingFrom"/> to
+    /// <see cref="RingTo"/> and gone in <see cref="RingSeconds"/>.
+    /// </summary>
+    public string RingKey { get; init; } = "fxp_ring_soft";
+    public float RingFrom { get; init; } = 0.1f;
+    public float RingTo { get; init; } = 0.5f;
+    public float RingSquash { get; init; } = 0.45f;
+    public float RingSeconds { get; init; } = 0.11f;
+
+    /// <summary>
+    /// DEBRIS thrown mostly along the force: dark fragments of what was struck (material, alpha-blended), light
+    /// chips (the same slivers as light, the Source toward white by <see cref="ChipWhite"/>: SPRAY's impact
+    /// draws its debris as light, and dark matter alone vanished against shadow creatures on a dark floor) and a few
+    /// sparks. Spread is the half-angle about the force, reach how far the fastest one flies; a share of the chips
+    /// (<see cref="Rebound"/>) kicks back off the blow instead.
+    /// </summary>
+    public string ShardKey { get; init; } = "fxp_shard_sliver";
+    public int Shards { get; init; } = 5;
+    public int Chips { get; init; } = 6;
+    public float ChipWhite { get; init; } = 0.55f;
+    public float Rebound { get; init; } = 0.34f;
+    public string SparkKey { get; init; } = "fxp_spark_dot";
+    public int Sparks { get; init; } = 6;
+    public float SpreadDegrees { get; init; } = 62f;
+    public float Reach { get; init; } = 0.34f;
+    public float DebrisSeconds { get; init; } = 0.22f;
+    public float ShardLength { get; init; } = 0.07f;
+    public float Gravity { get; init; } = 2.6f;
+
+    /// <summary>The fragments' own colour: the struck creatures are shadow, so their matter is a near-black violet.</summary>
+    public Color ShardColour { get; init; } = new(46, 34, 58);
+
+    /// <summary>A second target of the same blow (a VOLLEY) gets the ring only, at this share of the size.</summary>
+    public float SecondaryScale { get; init; } = 0.6f;
+}
+
+/// <summary>
+/// ONE AUTHORED MELEE ACTION (ADR-011): anticipation, commit, CONTACT ON THE BEAT, follow-through, recovery; the
+/// body carried to its target and back by presentation root motion; an impact that begins where the blow lands.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A melee blow has no flight: its CONTACT marker is its anchor and falls on the beat itself
+/// (<see cref="TravelMs"/> = 0), so everything that describes the hit — the fist arriving, the impact, the flash, the
+/// health, the number, the sound — converges on one frame.
+/// </para>
+/// <para>
+/// The champion stands hundreds of pixels from the creatures, so the blow cannot happen where he stands. The recipe
+/// LUNGES him there: a small pull-back during the anticipation, the whole distance during the commit (accelerating
+/// into the hit), a small overshoot in the follow-through, and a controlled return during the recovery. The distance
+/// is measured at the start of the clip from the fist's authored socket on the contact frame to the target, so the
+/// fist arrives where the creature actually is. The fight's positions never move: this is presentation only.
+/// </para>
+/// </remarks>
+public sealed record MeleeActionRecipe : IActionRecipe
+{
+    /// <inheritdoc/>
+    public required string Id { get; init; }
+
+    /// <inheritdoc/>
+    public required string ClipKey { get; init; }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string>? EffectKeys { get; init; }
+
+    /// <summary>The frame the blow lands on: the schedule's anchor, on the beat.</summary>
+    public string ContactMarker { get; init; } = "contact";
+
+    /// <summary>The frame the body launches on (the lunge, the commit sound, the callout).</summary>
+    public string CommitMarker { get; init; } = "commit";
+
+    /// <summary>The frame the recovery begins on (the return starts there).</summary>
+    public string RecoveryMarker { get; init; } = "recovery";
+
+    /// <inheritdoc/>
+    string IActionRecipe.ReleaseMarker => ContactMarker;
+
+    /// <inheritdoc/>
+    public string HandSocket { get; init; } = "StrikeHand";
+
+    /// <inheritdoc/>
+    float IActionRecipe.TravelMs => 0f;
+
+    /// <summary>Where on the target body the blow lands: fractions of its visible rectangle.</summary>
+    public Vector2 ContactPoint { get; init; } = new(0.3f, 0.32f);
+
+    /// <summary>The anticipation's pull-back and the follow-through's overshoot, as shares of the caster's height.</summary>
+    public float LungeBack { get; init; } = 0.04f;
+    public float LungeOvershoot { get; init; } = 0.03f;
+
+    /// <summary>How sharply the commit accelerates into the hit (1 = constant speed, higher = later and faster).</summary>
+    public float LungeAccel { get; init; } = 1.35f;
+
+    /// <summary>
+    /// The share of the recovery the return takes, from its start: the body travels home in the recovery's first
+    /// part and SETTLES in place for the rest (1 = the whole recovery).
+    /// </summary>
+    public float ReturnShare { get; init; } = 0.62f;
+
+    /// <summary>
+    /// The shortest the way home may take, in ms, however hard a handoff compresses the recovery: a 500 px return in
+    /// one or two frames is a teleport. Past the clip's end the return is finished by the performance itself, under
+    /// whatever the figure plays next.
+    /// </summary>
+    public float MinReturnMs { get; init; } = 110f;
+
+    /// <summary>
+    /// The return's HOP: the body's highest lift (a share of the caster's height) on the way home. Without it the
+    /// recovery pose slid 400 px backwards with its feet planted, a skate, not a return (HARD HANDS, 2026-09-25).
+    /// </summary>
+    public float HopHeight { get; init; } = 0.06f;
+
+    /// <summary>
+    /// The SPEED LINES behind a lunging body (the commit and the return): how many, their length against the
+    /// distance covered in the last <see cref="SpeedLineMs"/>, and their brightness. Zero lines = none.
+    /// </summary>
+    public int SpeedLines { get; init; } = 3;
+    public float SpeedLineMs { get; init; } = 45f;
+    public float SpeedLineBrightness { get; init; } = 0.3f;
+
+    /// <summary>The contact's look.</summary>
+    public MeleeImpactLook Impact { get; init; } = new();
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> ReleaseCues { get; init; } = Array.Empty<string>();
+    /// <inheritdoc/>
+    public float ReleaseVolume { get; init; } = 0.3f;
+    /// <inheritdoc/>
+    public float ReleasePitch { get; init; }
+    /// <inheritdoc/>
+    public IReadOnlyList<string> ContactCues { get; init; } = Array.Empty<string>();
+    /// <inheritdoc/>
+    public float ContactVolume { get; init; } = 0.45f;
+    /// <inheritdoc/>
+    public float ContactPitch { get; init; }
+    /// <inheritdoc/>
+    public IReadOnlyList<string> ContactTickCues { get; init; } = Array.Empty<string>();
+    /// <inheritdoc/>
+    public int ContactTicks { get; init; }
+    /// <inheritdoc/>
+    public float ContactTickVolume { get; init; }
+    /// <inheritdoc/>
+    public float ContactTickSpacingMs { get; init; } = 18f;
+    /// <inheritdoc/>
+    public float PanWidth { get; init; } = 0.3f;
+    /// <inheritdoc/>
+    public float DuckOthers { get; init; } = 1f;
+    /// <inheritdoc/>
+    public float DuckTailMs { get; init; } = 160f;
+    /// <inheritdoc/>
+    public ActionWeight Weight { get; init; } = ActionWeight.Signature;
+    /// <inheritdoc/>
+    public float TargetFlash { get; init; } = 0.5f;
+    /// <inheritdoc/>
+    public float TargetFlashMs { get; init; } = 130f;
+    /// <inheritdoc/>
+    public float TargetFlashRise { get; init; }
+    /// <inheritdoc/>
+    public bool ReplacesGenericHit { get; init; } = true;
+    /// <inheritdoc/>
+    public bool CalloutAtRelease { get; init; } = true;
+}
+
 /// <summary>Which actions have a recipe, by champion and Form. Everything else plays exactly as it did.</summary>
 public static class ActionRecipes
 {
@@ -204,15 +458,41 @@ public static class ActionRecipes
         Weight = ActionWeight.Skill,
     };
 
-    private static readonly Dictionary<(string Character, string Clip), ProjectileActionRecipe> ByActor = new()
+    /// <summary>
+    /// THE SEEKER's HARD HANDS (the melee gold standard, 2026-09-25): a leaping overhand HAMMER-FIST. He bounds in,
+    /// drives his closed right fist down onto the creature with his whole weight on the beat, and hops back. His
+    /// Strike Form, so BLOW woven on him is the same blow; nothing in the performance knows it is the Seeker.
+    /// </summary>
+    public static readonly MeleeActionRecipe SeekerHardHands = new()
     {
-        [("seeker", "projectile")] = SeekerSpray,
+        Id = "seeker.hard_hands",
+        ClipKey = "strike",
+        EffectKeys = new[] { "strike" },          // HARD HANDS and BLOW; never PRESS (a field: its pulse is its picture)
+        ReleaseCues = new[] { "sfx_seeker_hard_hands_commit", "sfx_fist_commit", "sfx_cast" },
+        ReleaseVolume = 0.34f,
+        ContactCues = new[] { "sfx_seeker_hard_hands_hit", "sfx_fist_hit", "sfx_hit" },
+        ContactVolume = 0.55f,
+        DuckOthers = 0.45f,
+        TargetFlash = 0.55f,
+        TargetFlashMs = 120f,
+        TargetFlashRise = 0f,
+        Weight = ActionWeight.Signature,
     };
 
-    /// <summary>The recipe this champion performs for this Form, or null: that action plays as before.</summary>
-    public static ProjectileActionRecipe? For(string characterId, string clipKey)
-        => Enabled && ByActor.TryGetValue((characterId, clipKey), out var r) ? r : null;
+    private static readonly Dictionary<(string Character, string Clip), IActionRecipe> ByActor = new()
+    {
+        [("seeker", "projectile")] = SeekerSpray,
+        [("seeker", "strike")] = SeekerHardHands,
+    };
+
+    /// <summary>
+    /// The recipe this champion performs for this Form, or null: that action plays as before. With
+    /// <paramref name="effectKey"/> (the skill's FxKey), only a recipe that performs that skill's effect.
+    /// </summary>
+    public static IActionRecipe? For(string characterId, string clipKey, string? effectKey = null)
+        => Enabled && ByActor.TryGetValue((characterId, clipKey), out var r)
+                   && (effectKey is null || r.EffectKeys is null || r.EffectKeys.Contains(effectKey, StringComparer.Ordinal)) ? r : null;
 
     /// <summary>Every recipe, keyed by champion and Form.</summary>
-    public static IReadOnlyDictionary<(string Character, string Clip), ProjectileActionRecipe> All => ByActor;
+    public static IReadOnlyDictionary<(string Character, string Clip), IActionRecipe> All => ByActor;
 }

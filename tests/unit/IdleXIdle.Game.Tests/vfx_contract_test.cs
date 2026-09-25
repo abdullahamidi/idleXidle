@@ -171,6 +171,34 @@ public class VfxContractTests
             Assert.Equal(VfxFollow.Pinned, p.Follow);
     }
 
+    [Fact]
+    public void test_an_effect_that_lands_on_the_champion_follows_his_lunge()
+    {
+        // A melee action carries him 400 px to his target and back (HARD HANDS, ADR-011). A bite, a heal or a
+        // shield that lands on him in that time is ON his body: Detached, it hung in the air where he had stood.
+        foreach (var p in new[] { VfxProfiles.ImpactBite, VfxProfiles.HealColumn, VfxProfiles.ShieldGain,
+                                  VfxProfiles.ShieldAbsorb, VfxProfiles.ShieldUndying, VfxProfiles.ShieldBreak })
+            Assert.Equal(VfxFollow.Pinned, p.Follow);
+    }
+
+    [Fact]
+    public void test_a_pinned_effect_does_not_drift_back_to_where_its_figure_stood()
+    {
+        // Arrange: a bite spawned on the champion at home; he has since lunged 400 px to his target
+        var home = new Microsoft.Xna.Framework.Point(620, 660);
+        var lunged = new Microsoft.Xna.Framework.Point(1020, 660);
+
+        // Act: re-pinned on the moved figure, halfway through its life
+        var (from, to) = VfxPlayer.Repin(home, lunged, VfxTravel.None);
+        var drift = VfxPlayer.DriftOf(from, to, 0.5f, loop: false);
+
+        // Assert: it sits on him, with no pull back toward the spot he left (it trailed him by ~300 px)
+        Assert.Equal(lunged, from);
+        Assert.Equal(Microsoft.Xna.Framework.Point.Zero, drift);
+        // a TRAVELLING pinned effect keeps its own destination
+        Assert.Equal(home, VfxPlayer.Repin(home, lunged, VfxTravel.ToTarget).To);
+    }
+
     // ── Skills reach their art ────────────────────────────────────────────────────────────────────
 
     [Fact]

@@ -740,9 +740,9 @@ public sealed class UiKit
     /// figure stands, which is what <c>actor_crop_test</c> and the envelope tests exist to forbid.
     /// </remarks>
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,
-                           float topCrop, bool flip, out SpriteFrame frame)
+                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null)
     {
-        if (ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip) is not { } f) { frame = default; return false; }
+        if (ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip, placeAs) is not { } f) { frame = default; return false; }
         UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, "UiKit.AnimSprite");
         b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);
         frame = f;
@@ -760,8 +760,19 @@ public sealed class UiKit
     /// the draw above is this plus a ledger note plus one <c>SpriteBatch.Draw</c>. The numbers are the
     /// ones the draw has always produced — truncation where it truncated, rounding where it rounded.
     /// </remarks>
-    public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f, bool flip = false)
+    /// <param name="placeAs">
+    /// PLACED AS ANOTHER STRIP (ADR-011): draw this strip at <paramref name="placeAs"/>'s scale and on its ground
+    /// line. An authored action clip is keyed pixel-exact onto its actor's idle in frame space (keyposes.py), but
+    /// measured on its OWN extremes the draw re-derived a scale and a ground from them: HARD HANDS' raised fist
+    /// (row 117 against the idle's 114) and wide loaded stance (498 against 495) drew the whole action 0.8 % larger
+    /// and 3 px lower than the idle it starts and ends on, a pop at every join. SPRAY's extremes happen to equal the
+    /// idle's, so it never showed. The strip's own crop still decides what of its texture is drawn, so nothing is
+    /// cut; only the scale and the ground come from <paramref name="placeAs"/>.
+    /// </param>
+    public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f,
+                                     bool flip = false, string? placeAs = null)
     {
+        var askedCrop = topCrop;
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return null;
         var fw = tex.Height;
         var frames = Math.Max(1, tex.Width / fw);
@@ -809,19 +820,32 @@ public sealed class UiKit
         // THROUGH DrawScale, which is the one owner of the cap: the actor geometry the effects and the
         // pointer are measured against resolves with the same call, so a figure and the effects on it
         // can never be sized by two different rules again.
-        var sc = DrawScale(fw, topCrop, box.Height);
+        var sc = DrawScale(fw, placeAs is null ? topCrop : ResolveCrop(placeAs, askedCrop), box.Height);
         // TRUNCATE, never round: at the ceiling exactly, rounding up puts the drawn height one
         // pixel PAST the budget and the ledger correctly reports the cap itself as a violation.
-        var drawnH = Math.Max(1, (int)(srcH * sc));
-        var w = Math.Max(1, (int)(srcW * sc));
         // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
-        var drop = (int)MathF.Round(BottomPadFraction(stripKey) * fw * sc);
+        return new SpriteFrame(tex, src, PlaceFrame(box, srcW, srcH, sc, BottomPadFraction(placeAs ?? stripKey) * fw),
+                               flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+    }
+
+    /// <summary>
+    /// Where a frame's drawn part (<paramref name="srcW"/> x <paramref name="srcH"/> texels, cropped from its top and
+    /// symmetrically from its sides) lands in <paramref name="box"/> at scale <paramref name="scale"/>: centred, and
+    /// BOTTOM-ANCHORED so the strip's lowest opaque row (<paramref name="bottomPadTexels"/> above the frame's foot)
+    /// sits on the box's floor. The texel row r of a frame F texels tall therefore lands at
+    /// <c>box.Bottom + (r - (F - bottomPad)) * scale</c> whatever the crop: two strips placed with the same scale and
+    /// pad put the same row on the same screen line.
+    /// </summary>
+    public static Rectangle PlaceFrame(Rectangle box, int srcW, int srcH, float scale, float bottomPadTexels)
+    {
+        var drawnH = Math.Max(1, (int)(srcH * scale));
+        var w = Math.Max(1, (int)(srcW * scale));
+        var drop = (int)MathF.Round(bottomPadTexels * scale);
         // Bottom-anchored: a capped figure keeps its feet where an uncapped one had them, so the cap
         // never lifts a hunter off the floor its slots and shadow were laid out against.
-        return new SpriteFrame(tex, src, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH),
-                               flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+        return new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH);
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)

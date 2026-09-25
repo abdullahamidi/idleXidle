@@ -201,6 +201,22 @@ public sealed class ActionClipTiming
         return new ActionClipTiming(ms, Elastic, Markers, _sockets, 0f, allowSkipped: true);
     }
 
+    /// <summary>
+    /// This timing ending at <paramref name="ms"/> into the clip: the frame showing then is its last, shortened, and
+    /// every frame after it is never shown. A YIELD (<see cref="HandoffFit.Yielded"/>): the outgoing action hands the
+    /// figure over right after its contact, so the next performed action keeps its readable wind-up.
+    /// </summary>
+    public ActionClipTiming CutAt(float ms)
+    {
+        if (ms >= TotalMs) return this;
+        var cut = Math.Max(1f, ms);
+        var frame = FrameAt(cut);
+        var frames = FrameMs.ToArray();
+        frames[frame] = Math.Max(1f, cut - _starts[frame]);
+        for (var i = frame + 1; i < frames.Length; i++) frames[i] = 0f;
+        return new ActionClipTiming(frames, Elastic, Markers, _sockets, 0f, allowSkipped: true);
+    }
+
     /// <summary>When <paramref name="frame"/> begins, in ms from the clip's start.</summary>
     public float StartOf(int frame) => _starts[Math.Clamp(frame, 0, Frames)];
 

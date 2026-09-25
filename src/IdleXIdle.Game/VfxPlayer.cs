@@ -99,16 +99,7 @@ public sealed class VfxPlayer
         /// the last frame does however fast the strip is played. A HELD effect never travels — it is
         /// re-placed by its owner every frame and has no end point to ease toward.
         /// </remarks>
-        public Point Drift
-        {
-            get
-            {
-                if (Loop || (To.X == From.X && To.Y == From.Y)) return Point.Zero;
-                var t = Life;
-                t = 1f - (1f - t) * (1f - t);
-                return new Point((int)((To.X - From.X) * t), (int)((To.Y - From.Y) * t));
-            }
-        }
+        public Point Drift => DriftOf(From, To, Life, Loop);
 
         /// <summary>
         /// 1 for most of the clip, easing to 0 across its final third — so every effect ENDS.
@@ -528,6 +519,26 @@ public sealed class VfxPlayer
     }
 
     /// <summary>
+    /// How far an effect has travelled from <paramref name="from"/> toward <paramref name="to"/> at
+    /// <paramref name="life"/> (0..1), eased out. A loop, or an effect with nowhere to go, does not move.
+    /// </summary>
+    internal static Point DriftOf(Point from, Point to, float life, bool loop)
+    {
+        if (loop || (to.X == from.X && to.Y == from.Y)) return Point.Zero;
+        var t = 1f - (1f - life) * (1f - life);
+        return new Point((int)((to.X - from.X) * t), (int)((to.Y - from.Y) * t));
+    }
+
+    /// <summary>
+    /// A PINNED effect re-placed on its figure's new <paramref name="centre"/>: it starts there, and one that does
+    /// not travel ends there too. Left at the spawn point, its destination made <see cref="DriftOf"/> ease it BACK to
+    /// where the figure had stood: a pinned bite trailed a lunging champion by half his lunge (HARD HANDS,
+    /// 2026-09-25). Every pinned effect before that was a loop, and a loop never drifts.
+    /// </summary>
+    internal static (Point From, Point To) Repin(Point to, Point centre, VfxTravel travel)
+        => (centre, travel == VfxTravel.None ? centre : to);
+
+    /// <summary>
     /// Turn a subject into pixels. Detached effects resolve once; Pinned ones re-resolve every frame.
     /// </summary>
     private bool Resolve(Anim a)
@@ -560,7 +571,7 @@ public sealed class VfxPlayer
         }
         else
         {
-            a.From = centre;   // Pinned: the rectangle moved with the figure
+            (a.From, a.To) = Repin(a.To, centre, a.Profile.Travel);   // Pinned: the rectangle moved with the figure
         }
         return true;
     }

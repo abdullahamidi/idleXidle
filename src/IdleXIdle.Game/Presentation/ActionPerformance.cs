@@ -33,6 +33,95 @@ public interface IActionStage
 public readonly record struct PerformanceStep(bool Released, bool Contacted, Vector2 ReleaseAt, Vector2 ContactAt, Vector2? Tick = null);
 
 /// <summary>
+/// ONE AUTHORED ACTION BEING PERFORMED (ADR-011), as the screen sees it: a projectile
+/// (<see cref="ActionPerformance"/>) or a melee strike (<see cref="MeleePerformance"/>). Both run on the fight's
+/// playhead, both land their contact on the beat, and the screen voices and draws them the same way.
+/// </summary>
+public interface IActionPerformance
+{
+    /// <summary>The recipe being performed.</summary>
+    IActionRecipe Recipe { get; }
+
+    /// <summary>The clip's timing, fitted to the time there was before the beat.</summary>
+    ActionClipTiming Timing { get; }
+
+    /// <summary>The fight's beat: the moment of CONTACT, in playhead ms.</summary>
+    float BeatMs { get; }
+
+    /// <summary>When the clip starts (playhead ms).</summary>
+    float ClipStartMs { get; }
+
+    /// <summary>When the release (a throw) or the commit (a lunge) happens (playhead ms).</summary>
+    float ReleaseMs { get; }
+
+    /// <summary>The skill slot whose cast this is.</summary>
+    int SkillSlot { get; }
+
+    /// <summary>The enemies the cast strikes, in the order the fight resolved them.</summary>
+    IReadOnlyList<int> Targets { get; }
+
+    /// <summary>True once the release (or the commit) has happened.</summary>
+    bool Released { get; }
+
+    /// <summary>The clip frame showing at <paramref name="playheadMs"/>.</summary>
+    int FrameAt(float playheadMs);
+
+    /// <summary>True once the clip has played to its last frame.</summary>
+    bool ClipOver(float playheadMs);
+
+    /// <summary>True when the clip is over and everything the action left has faded.</summary>
+    bool Finished(float playheadMs);
+
+    /// <summary>True when <paramref name="atMs"/> is this performance's beat.</summary>
+    bool IsBeat(int atMs);
+
+    /// <summary>Advance to <paramref name="playheadMs"/>.</summary>
+    PerformanceStep Update(float playheadMs, float dt, IActionStage stage);
+
+    /// <summary>The level every OTHER one-shot plays at on <paramref name="playheadMs"/>.</summary>
+    float DuckAt(float playheadMs);
+
+    /// <summary>What the action holds before it acts (a projectile's bundle), alpha-blended over the figure.</summary>
+    void DrawProp(SpriteBatch b, IActionStage stage, float playheadMs);
+
+    /// <summary>The action's material layer (steel, debris), alpha-blended over the figures.</summary>
+    void DrawMaterial(SpriteBatch b);
+
+    /// <summary>Everything that is LIGHT, into an additive batch.</summary>
+    void DrawLight(SpriteBatch b, float playheadMs, Texture2D? streak);
+
+    /// <summary>The first positions of what the action launched, for the socket overlay.</summary>
+    IEnumerable<Vector2> LaunchPoints { get; }
+
+    /// <summary>How many sprites the action submitted last frame (performance metrics).</summary>
+    int SpriteCount { get; }
+
+    /// <summary>
+    /// PRESENTATION ROOT MOTION: how far the performing figure is carried along x at <paramref name="playheadMs"/>,
+    /// read against the timing its clip actually played (<see cref="Retime"/>: a handoff may have compressed or cut
+    /// it). A throw stands still; a melee lunge carries the body to its target and back, and its way home may run on
+    /// under the next clip, so it is asked even after its own clip has ended.
+    /// </summary>
+    float RootOffsetX(float playheadMs) => 0f;
+
+    /// <summary>
+    /// PRESENTATION ROOT MOTION, vertical: how far the performing figure is lifted off the ground (negative = up) at
+    /// <paramref name="playheadMs"/>. A melee return is a HOP back, not a slide: the body leaves the ground and lands
+    /// home. His shadow stays on the ground.
+    /// </summary>
+    float RootOffsetY(float playheadMs) => 0f;
+
+    /// <summary>
+    /// The handoff retimed the clip this performance plays (<paramref name="played"/>). When it YIELDED
+    /// (<see cref="HandoffFit.Yielded"/>) at <paramref name="yieldAtMs"/>, anything the performance still owes the
+    /// figure (a lunge's way home) is finished by <paramref name="returnByMs"/>, under the next action's wind-up.
+    /// </summary>
+    void Retime(ActionClipTiming played, float? yieldAtMs = null, float returnByMs = 0f)
+    {
+    }
+}
+
+/// <summary>
 /// ONE PROJECTILE ACTION BEING PERFORMED (ADR-011): the champion's authored clip, the bundle in the hand,
 /// the release from the hand's socket, one blade per struck enemy, and the contact ON THE BEAT.
 /// </summary>
@@ -48,7 +137,7 @@ public readonly record struct PerformanceStep(bool Released, bool Contacted, Vec
 /// performance only decides where and when the picture and the sounds of the throw happen around them.
 /// </para>
 /// </remarks>
-public sealed class ActionPerformance
+public sealed class ActionPerformance : IActionPerformance
 {
     private const int KnifePad = 3;   // the canonical props carry one transparent source pixel (x3) of margin
 
@@ -70,6 +159,8 @@ public sealed class ActionPerformance
 
     /// <summary>The recipe being performed.</summary>
     public ProjectileActionRecipe Recipe { get; }
+
+    IActionRecipe IActionPerformance.Recipe => Recipe;
 
     /// <summary>The clip's timing, fitted to the time there was before the beat.</summary>
     public ActionClipTiming Timing { get; }
@@ -119,7 +210,7 @@ public sealed class ActionPerformance
     /// elastic frames before the release (never the release itself).
     /// </summary>
     /// <param name="nowMs">The playhead now.</param>
-    public static (float StartMs, ActionClipTiming Timing)? Schedule(ProjectileActionRecipe recipe, ActionClipTiming timing, float beatMs, float nowMs)
+    public static (float StartMs, ActionClipTiming Timing)? Schedule(IActionRecipe recipe, ActionClipTiming timing, float beatMs, float nowMs)
     {
         var releaseMs = beatMs - recipe.TravelMs;
         var lead = releaseMs - nowMs;                       // time left before the release
@@ -133,7 +224,7 @@ public sealed class ActionPerformance
     /// The least time before its beat the action can start and still play its whole wind-up at the tightest fit
     /// <see cref="Schedule"/> allows: the rigid frames, the elastic ones at their floor, and the flight.
     /// </summary>
-    public static float MinLeadMs(ProjectileActionRecipe recipe, ActionClipTiming timing)
+    public static float MinLeadMs(IActionRecipe recipe, ActionClipTiming timing)
         => recipe.TravelMs + timing.FitBefore(recipe.ReleaseMarker, 0f).MarkerMs(recipe.ReleaseMarker);
 
     /// <summary>The clip frame showing at <paramref name="playheadMs"/>.</summary>

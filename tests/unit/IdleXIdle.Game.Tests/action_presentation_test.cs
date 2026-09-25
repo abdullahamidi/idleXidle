@@ -327,7 +327,8 @@ public class ActionPresentationTest
     {
         if (!ActionRecipes.Enabled) return;                    // RH_ACTION_RECIPES=0 in the environment
         Assert.Same(ActionRecipes.SeekerSpray, ActionRecipes.For("seeker", "projectile"));
-        Assert.Null(ActionRecipes.For("seeker", "strike"));
+        Assert.Same(ActionRecipes.SeekerHardHands, ActionRecipes.For("seeker", "strike"));
+        Assert.Null(ActionRecipes.For("seeker", "attack"));    // the basic swing plays as it always has
         Assert.Null(ActionRecipes.For("anvil", "projectile"));
     }
 }

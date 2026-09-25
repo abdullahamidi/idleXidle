@@ -22,6 +22,15 @@ public enum HandoffFit
     /// Reported, never silent: presentation demand exceeds the time the fight leaves.
     /// </summary>
     Squeezed,
+
+    /// <summary>
+    /// THE FAST-TEMPO FALLBACK (ADR-011): the next action is PERFORMED and its latest start falls inside this
+    /// action's protected frames. The incoming action keeps its minimum readable anticipation, so this one YIELDS the
+    /// figure at that latest start, which is never before its contact: its gameplay event has resolved, the rest of it
+    /// (the follow-through and recovery) is not shown, and a melee body's lunge is carried home under the wind-up.
+    /// Reported, never silent: it is a fallback, not the model.
+    /// </summary>
+    Yielded,
 }
 
 /// <summary>When the outgoing clip reaches its exit pose and hands the figure over, and how.</summary>
@@ -65,6 +74,10 @@ public static class ActionHandoff
     /// <param name="naturalEndMs">When the outgoing clip would end on its own, settle included.</param>
     /// <param name="idealStartMs">When the next action wants the figure for its full wind-up.</param>
     /// <param name="latestStartMs">The last moment the next action can start and keep its release on time.</param>
+    /// <param name="incomingPerformed">
+    /// The next action is PERFORMED (it has a minimum readable anticipation): past its latest start this one yields
+    /// (<see cref="HandoffFit.Yielded"/>) instead of making it start late.
+    /// </param>
     /// <summary>
     /// The earliest a clip that begins at <paramref name="startMs"/> can hand the figure over: every frame before its
     /// recovery whole, then its recovery at the readable floor (or its own pace, if that is shorter).
@@ -80,7 +93,7 @@ public static class ActionHandoff
               + Math.Min(timing.MinRecoveryMs(minPoseMs, maxCompression), timing.RecoveryMotionMs);
 
     public static HandoffPlan? Plan(float nowMs, float recoveryStartMs, float recoveryMotionMs, float recoveryFloorMs,
-                                    float naturalEndMs, float idealStartMs, float latestStartMs)
+                                    float naturalEndMs, float idealStartMs, float latestStartMs, bool incomingPerformed = false)
     {
         if (naturalEndMs <= idealStartMs) return null;
         var start = Math.Max(nowMs, recoveryStartMs);
@@ -91,8 +104,10 @@ public static class ActionHandoff
                 : HandoffFit.Floor;
         if (exit > latestStartMs)
         {
-            exit = Math.Max(latestStartMs, start);
-            fit = HandoffFit.Squeezed;
+            // a performed action behind this one keeps its wind-up: this one yields right after its contact (now),
+            // even inside its protected frames; a plain one behind it starts late instead, as it always did
+            exit = incomingPerformed ? Math.Max(latestStartMs, nowMs) : Math.Max(latestStartMs, start);
+            fit = incomingPerformed && exit < start ? HandoffFit.Yielded : HandoffFit.Squeezed;
         }
         return new HandoffPlan(exit, Math.Max(0f, exit - recoveryStartMs), fit);
     }

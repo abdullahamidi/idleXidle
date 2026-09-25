@@ -1,0 +1,60 @@
+{
+ "frameMs": [
+  70,
+  100,
+  90,
+  120,
+  80,
+  90,
+  120,
+  100
+ ],
+ "elastic": [
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  true,
+  true
+ ],
+ "markers": {
+  "anticipation": 1,
+  "commit": 3,
+  "contact": 4,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "3": {
+   "StrikeHand": [
+    0.764,
+    0.291,
+    -22
+   ]
+  },
+  "4": {
+   "StrikeHand": [
+    0.813,
+    0.711,
+    54
+   ]
+  },
+  "5": {
+   "StrikeHand": [
+    0.824,
+    0.775,
+    56
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/keyposes.py seeker_hard_hands",
+  "jobs": {
+   "09f4ba84-9fac-436c-b3e7-966723ca1f37": "REJECTED (3 gens): pass A, the eight hammer-fist skeletons. Good poses, but the face came out a blank WHITE MASK in every frame (identity drift) and the generator chose a light blue-grey ground.",
+   "8e439cfb-631f-4692-a2a5-64599c70b182": "ACCEPTED with deterministic fixes (3 gens): pass B, same skeletons, 'pure black background' asked. It again drew a light ground (two frames white) and a blank white face: every other colour is the reference's own palette. Fixed here, not regenerated: the ground keyed from the border, the face TRANSPLANTED from the reference idle frame into the head box (placed by the skeleton's nose joint), and white elsewhere (sleeve highlights on the white-ground frames) set to his sleeve's lightest grey. Frames 0-5 used; its upright frame 6 dropped (see the next job).",
+   "e21c6425-b733-45b5-a699-d140d549c013": "USED FOR FRAME 6 (2 gens): three half-rise skeletons between the low follow-through and idle. Pass B went from its lowest pose straight to upright (the head ~20 source px in one frame, the 'crouch -> instant standing' the brief forbids); the half-rise bridges it."
+  }
+ }
+}

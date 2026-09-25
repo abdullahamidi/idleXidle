@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """fxparts -- build the part textures a composite projectile is drawn from (ADR-010).
 
-    python tools/asset-pipeline/v2/fxparts.py
+    python tools/asset-pipeline/v2/fxparts.py              (every part)
+    python tools/asset-pipeline/v2/fxparts.py fxp_ring_soft (only the named parts; the drawn ones re-fetch)
 
 Writes assets/art/VFX/parts/fxp_*.png. Every part is WHITE with honest straight alpha: the Source tint
 colours it at play time and AssetLibrary premultiplies it at load, exactly like an effect strip.
@@ -11,7 +12,7 @@ TWO KINDS OF PART, AND WHO MAKES EACH.
   source pixel -> feather): the knife head (the approved cohort knife, pixen cd704393) and the glint
   (pixen a3b66867).
   Pure gradients are written here, because they are arithmetic, not art: the trail streak, the spark dot,
-  the contact flash and the impact shard. pixen returns one-bit shapes; a soft falloff is what these parts
+  the contact flash, the impact shard and the compression ring. pixen returns one-bit shapes; a soft falloff is what these parts
   exist to be. A pixen shard (566fab7e) was tried and rejected: it scattered opaque dither over its whole canvas.
 """
 from __future__ import annotations
@@ -77,19 +78,15 @@ def drawn(key: str, job: str, size: int, radius: int, band: int) -> None:
     feather(Image.open(out).convert("RGBA"), band).save(out)
 
 
-def main() -> int:
-    os.makedirs(OUT, exist_ok=True)
-    for key, (job, size, radius, band) in DRAWN.items():
-        drawn(key, job, size, radius, band)
-        print(f"  {key:24} from pixen {job[:8]}  {size}x{size}")
-
+def procedural() -> dict:
+    """The arithmetic parts: key -> a function that builds the image."""
     # THE TRAIL STREAK: soft across its height, uniform along its length, so segments laid end to end
     # between the projectile's recorded positions join without seams. The core and the wake share it.
-    white((64, 32), lambda x, y: math.exp(-((y - 15.5) / 6.5) ** 2)).save(os.path.join(OUT, "fxp_trail_soft.png"))
-    # THE SPARK: a soft dot.
-    white((32, 32), lambda x, y: math.exp(-(((x - 15.5) ** 2 + (y - 15.5) ** 2) / 30.0))).save(os.path.join(OUT, "fxp_spark_dot.png"))
-    # THE CONTACT FLASH: a round glow that falls off from a hot centre.
-    white((128, 128), lambda x, y: (1 - min(1.0, math.hypot(x - 63.5, y - 63.5) / 63.5)) ** 2.2).save(os.path.join(OUT, "fxp_flash_soft.png"))
+    parts = {"fxp_trail_soft": lambda: white((64, 32), lambda x, y: math.exp(-((y - 15.5) / 6.5) ** 2)),
+             # THE SPARK: a soft dot.
+             "fxp_spark_dot": lambda: white((32, 32), lambda x, y: math.exp(-(((x - 15.5) ** 2 + (y - 15.5) ** 2) / 30.0))),
+             # THE CONTACT FLASH: a round glow that falls off from a hot centre.
+             "fxp_flash_soft": lambda: white((128, 128), lambda x, y: (1 - min(1.0, math.hypot(x - 63.5, y - 63.5) / 63.5)) ** 2.2)}
     # THE IMPACT SHARD: a sliver pointing +X, blunt at the rear and sharp at the tip, soft-edged.
 
     def sliver(x: float, y: float) -> float:
@@ -97,8 +94,32 @@ def main() -> int:
         half = 6.5 * (1.0 - t) ** 0.8 + 0.4            # the half-thickness narrows toward the tip
         edge = half - abs(y - 7.5)
         return smoothstep(edge / 1.6) * smoothstep(x / 4.0) * smoothstep((63 - x) / 1.5)
-    white((64, 16), sliver).save(os.path.join(OUT, "fxp_shard_sliver.png"))
-    for key in ("fxp_trail_soft", "fxp_spark_dot", "fxp_flash_soft", "fxp_shard_sliver"):
+    parts["fxp_shard_sliver"] = lambda: white((64, 16), sliver)
+
+    # THE COMPRESSION RING (HARD HANDS, 2026-09-25): a soft band, the air a blow shoves out of its way. The
+    # performance squashes it along the force and grows it fast, so it reads as a shock, not a halo. A thin line
+    # (the first cut, 3.6 px) read at play size as a hoop around the wrist; the band is wide and brightest on
+    # its outer edge, with a faint fill inside so its centre never reads as a hole.
+    def ring(x: float, y: float) -> float:
+        r = math.hypot(x - 63.5, y - 63.5)
+        band = math.exp(-((r - 50.0) / 8.5) ** 2) * (0.55 + 0.45 * smoothstep((r - 38.0) / 16.0))
+        return min(1.0, band + 0.14 * smoothstep((50.0 - r) / 30.0) * smoothstep((r - 4.0) / 46.0)) * smoothstep((63.0 - r) / 5.0)
+    parts["fxp_ring_soft"] = lambda: white((128, 128), ring)
+    return parts
+
+
+def main() -> int:
+    os.makedirs(OUT, exist_ok=True)
+    only = set(sys.argv[1:])
+    for key, (job, size, radius, band) in DRAWN.items():
+        if only and key not in only:
+            continue
+        drawn(key, job, size, radius, band)
+        print(f"  {key:24} from pixen {job[:8]}  {size}x{size}")
+    for key, build in procedural().items():
+        if only and key not in only:
+            continue
+        build().save(os.path.join(OUT, f"{key}.png"))
         print(f"  {key:24} procedural")
     return 0
 

@@ -21,6 +21,10 @@ import argparse
 import sys
 
 
+# recipes whose action is a melee blow (MeleeActionRecipe): their release is the COMMIT and their body lunges
+MELEE = {"seeker.hard_hands"}
+
+
 def parse(path: str):
     rows = []
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -46,6 +50,9 @@ def timeline(start, rows, before=()):
     info = kv(start[3])
     beat = float(info["beat"])
     clip = start[3][0]
+    # the recipe's own cue family (sfx_seeker_<family>_*): SPRAY's "spray", HARD HANDS' "hard_hands"
+    fam = info.get("recipe", "seeker.spray").split(".", 1)[-1]
+    melee = info.get("recipe", "") in MELEE
     shot = None
     frame_of = {}
     out = []
@@ -89,19 +96,36 @@ def timeline(start, rows, before=()):
             first.setdefault(kind, []).append((ph, f))
         elif kind == "event" and f[0] == "Strike" and abs(float(kv(f).get("at", -1)) - beat) < 1:
             first.setdefault("strike", []).append((ph, f))
+        elif kind == "root":
+            first.setdefault("root", []).append((ph, int(kv(f)["x"]), int(kv(f)["y"])))
 
     add("clip start (ready, f0)", frame_of.get(0, start[1]))
     if 1 in frame_of: add("anticipation (f1)", frame_of[1])
-    if 2 in frame_of: add("extreme hold (f2)", frame_of[2])
-    if 3 in frame_of: add("release pose (f3)", frame_of[3])
+    if 2 in frame_of: add("loaded hold (f2)" if melee else "extreme hold (f2)", frame_of[2])
+    if 3 in frame_of: add("COMMIT: the leap (f3)" if melee else "release pose (f3)", frame_of[3])
+    if melee and 4 in frame_of: add("contact pose (f4)", frame_of[4])
     rel = first.get("release")
     snd = first.get("sounds", [])
-    rs = next(((ph, f) for ph, f in snd if "release" in f[0]), None)
-    if rs: add("release sound", rs[0], f"{rs[1][0]} {' '.join(rs[1][1:])}")
-    if rel: add("projectile creation", rel[0], " ".join(rel[1][1:4]))
-    if "visible" in first: add("first visible blade", first["visible"][0], f"{first['visible'][1]} sprites")
+    rs = next(((ph, f) for ph, f in snd if fam in f[0] and ("release" in f[0] or "commit" in f[0])), None)
+    if rs: add("commit sound" if melee else "release sound", rs[0], f"{rs[1][0]} {' '.join(rs[1][1:])}")
+    if rel: add("lunge launched" if melee else "projectile creation", rel[0],
+                " ".join(rel[1][1:3] + [x for x in rel[1] if x.startswith("reach=")]) if melee else " ".join(rel[1][1:4]))
+    if "visible" in first: add("first speed line" if melee else "first visible blade", first["visible"][0], f"{first['visible'][1]} sprites")
+    # THE LUNGE (a melee action's presentation root motion), from the per-frame root trace
+    root = first.get("root", [])
+    if melee and root:
+        back = min(root, key=lambda r: r[1])
+        if back[1] < 0: add("body drawn back (deepest)", back[0], f"x {back[1]:+d} px")
+        far = max(root, key=lambda r: r[1])
+        at_target = next((r for r in root if r[1] >= far[1] * 0.9), None)
+        if at_target: add("body reaches the target", at_target[0], f"x {at_target[1]:+d} px")
+        add("body furthest (overshoot)", far[0], f"x {far[1]:+d} px")
+        peak = min(root, key=lambda r: r[2])
+        if peak[2] < 0: add("return hop peak", peak[0], f"y {peak[2]:+d} px, x {peak[1]:+d} px")
+        home = next((r for r in root if r[0] > far[0] and r[1] == 0 and r[2] == 0), None)
+        if home: add("body home (landed)", home[0])
     con = first.get("contact")
-    if con: add("CONTACT (blades land)", con[0], " ".join(con[1][1:4]))
+    if con: add("CONTACT (the fist lands)" if melee else "CONTACT (blades land)", con[0], " ".join(con[1][1:3] if melee else con[1][1:4]))
     # the fight's feedback FOR THIS CAST: what was presented within two frames of the contact (later swings
     # and bites flash and print too, and are not this action's)
     at = con[0] if con else beat
@@ -110,18 +134,19 @@ def timeline(start, rows, before=()):
         if hits:
             add(label, hits[0][0], f"{len(hits)} x, last at {hits[-1][0] - beat:+.0f}")
     puffs = [(ph, f) for ph, f in first.get("vfx-spawn", []) if abs(ph - beat) < 40 and "impact" in " ".join(f)]
-    add("generic impact puff", puffs[0][0] if puffs else float("nan"), "none (replaced by the blades' own contact)" if not puffs else " ".join(puffs[0][1]))
-    cs = next(((ph, f) for ph, f in snd if f[0].endswith("_hit") and "spray" in f[0]), None)
+    add("generic impact puff", puffs[0][0] if puffs else float("nan"),
+        ("none (replaced by the " + ("fist's" if melee else "blades'") + " own contact)") if not puffs else " ".join(puffs[0][1]))
+    cs = next(((ph, f) for ph, f in snd if f[0].endswith("_hit") and fam in f[0]), None)
     if cs: add("contact audio", cs[0], f"{cs[1][0]} {' '.join(cs[1][1:])}")
     for ph, f in first.get("contact-tick", []):
         add("contact tick", ph, " ".join(f))
-    if 5 in frame_of: add("follow-through end (f4 -> f5)", frame_of[5])
+    if 5 in frame_of: add("follow-through (f5)" if melee else "follow-through end (f4 -> f5)", frame_of[5])
     if 6 in frame_of: add("recovery (f6)", frame_of[6])
     if 7 in frame_of: add("recovery end / settle (f7)", frame_of[7])
     ends = first.get("clip-end", [])
     if ends: add("clip end", ends[0][0])
     if "idle" in first: add("idle restart", first["idle"])
-    others = [(ph, f) for ph, f in snd if "spray" not in f[0] and (rel is None or ph >= rel[0]) and ph <= beat + 200]
+    others = [(ph, f) for ph, f in snd if fam not in f[0] and (rel is None or ph >= rel[0]) and ph <= beat + 200]
     out.sort(key=lambda r: (r[1] != r[1], r[1]))   # in time order (stable: one frame's rows keep theirs); NaN last
     return beat, out, others
 

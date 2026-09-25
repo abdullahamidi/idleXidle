@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesise the AUTHORED action cues (ADR-011) into assets/audio/combat — the Seeker's SPRAY first.
+"""Synthesise the AUTHORED action cues (ADR-011) into assets/audio/combat — the Seeker's SPRAY and HARD HANDS.
 
     python tools/asset-pipeline/make_action_sfx.py            # write the cues and print their measurements
 
@@ -16,6 +16,13 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        and shorter than the basic swing's thud, so the skill is not heard as a punch.
     sfx_seeker_spray_tick     ~0.1 s   the quiet secondary: one or two of these, a few ms after the hit and panned
                                        to the outer targets, give the fan its width without five equal impacts.
+
+    sfx_seeker_hard_hands_commit ~0.2 s  THE LEAP, 120 ms before the blow: a scuffed push-off, then the whole body
+                                       and an overhand arm cutting the air, a DARK swell (a body, not a blade) that
+                                       builds into the contact and is cut by it. No steel, nothing bright.
+    sfx_seeker_hard_hands_hit    ~0.26 s THE BLOW: a knuckle slap on hide, a short dry knock (bone under it), a
+                                       heavy dull thud with a pitch drop and a small hard room. No ring, no tail.
+                                       Heavier than the basic swing's thud, but tighter, so ten in a fight do not tire.
 
 The SPRAY cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
 quiet enough; only an ear says it sounds like a knife, so every new cue here is a candidate until it is
@@ -65,14 +72,46 @@ def spray_tick(buf):
     S.bell(buf, 0.002, 2900.0, 0.10, 0.035, partials=(1.0, 2.41))
 
 
+def hard_hands_commit(buf):
+    rng = S.Noise(0x4A2D)
+    # the push-off: a scuff of boot on ground and a little low weight leaving it
+    S.add(buf, 0.0, S.envelope(S.lp2(S.noise(rng, 0.05), 700.0), 0.002, 0.014), 0.45)
+    S.add(buf, 0.0, S.thump(0.08, 95.0, 62.0, 0.015, 0.022, sat=1.6), 0.28)
+    # the cloak/sleeve as the arm goes over: a short dry flap
+    S.add(buf, 0.018, S.envelope(S.biquad(S.noise(rng, 0.05), "bp", 1250.0, 1.1), 0.003, 0.014), 0.30)
+    # the body and the arm through the air: a dark band SWELLING toward the blow (it peaks just before the contact,
+    # 120 ms after the commit, and the hit's own transient cuts it)
+    swing = S.sweep_bp(S.noise(rng, 0.17), 360.0, 980.0, 1.1, 0.07)
+    S.add(buf, 0.02, [v * min(1.0, (i / (0.085 * S.RATE)) ** 1.6) * (1.0 if i < 0.09 * S.RATE else
+                                                                         2.718 ** (-(i - 0.09 * S.RATE) / (0.018 * S.RATE)))
+                      for i, v in enumerate(swing)], 1.0)
+
+
+def hard_hands_hit(buf):
+    rng = S.Noise(0x4A2E)
+    S.add(buf, 0.0, S.click(rng, 0.003, 2600.0), 0.26)                        # the knuckles arriving
+    S.add(buf, 0.0, S.body(rng, 0.03, 1450.0, 0.9, 0.006), 0.55)               # the slap of a fist on hide
+    S.add(buf, 0.001, S.body(rng, 0.06, 620.0, 3.2, 0.013), 0.60)              # the knock: dry, bone under it
+    S.add(buf, 0.0, S.crunch(rng, 0.020, 300.0, 2000.0, 0.005, sat=3.0), 0.30)  # hide / leather texture
+    # the weight: a dull thud with a pitch drop, shorter than the basic swing's so a string of them stays tight
+    # every layer runs to the end of the cue and decays there on its own: cut at 220 ms, the thud stopped at
+    # -42 dBFS, a 22 dB step in 10 ms (the chop the SPRAY hit's first candidate had)
+    S.add(buf, 0.0, S.body(rng, 0.26, 150.0, 1.0, 0.045), 1.00)
+    S.add(buf, 0.0, S.thump(0.26, 124.0, 58.0, 0.022, 0.05, sat=2.2), 0.78)
+    S.add(buf, 0.004, S.tail(S.Noise(0x4A2F), 0.256, 520.0, 0.036), 0.16)     # a small hard room, no more
+
+
 def main() -> int:
     S.make("sfx_seeker_spray_release", S.COMBAT_DIR, 0.20, spray_release, target_peak=0.26, max_ms=220.0, darken=9500.0)
     S.make("sfx_seeker_spray_hit", S.COMBAT_DIR, 0.28, spray_hit, target_peak=0.38, max_ms=300.0, darken=7500.0)
     S.make("sfx_seeker_spray_tick", S.COMBAT_DIR, 0.10, spray_tick, target_peak=0.30, max_ms=120.0, darken=8000.0)
-    print(f"{'cue':28} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
-    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_cast", "sfx_hit"):
+    S.make("sfx_seeker_hard_hands_commit", S.COMBAT_DIR, 0.20, hard_hands_commit, target_peak=0.24, max_ms=220.0, darken=5000.0)
+    S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
+    print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
+    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick",
+                 "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_cast", "sfx_hit"):
         m = S.measure(os.path.join(S.COMBAT_DIR, name + ".wav"))
-        print(f"{name:28} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
+        print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
     return 0
 
 

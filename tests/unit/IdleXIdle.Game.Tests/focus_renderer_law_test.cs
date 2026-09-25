@@ -181,16 +181,19 @@ public class focus_renderer_law_test
         var forward = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)");
         Assert.Contains("=> AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out _);", forward);
 
-        var draw = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,\n                           float topCrop, bool flip, out SpriteFrame frame)");
-        Assert.Contains("ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip)", draw);
+        var draw = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,\n                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null)");
+        Assert.Contains("ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip, placeAs)", draw);
         Assert.Contains("UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, \"UiKit.AnimSprite\");", draw);
         Assert.Contains("b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);", draw);
         foreach (var term in arithmetic) Assert.False(draw.Contains(term, StringComparison.Ordinal), $"AnimSprite computes `{term}` itself — a second owner of where a figure stands");
 
-        var resolve = MemberOf(kit, "public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f, bool flip = false)");
+        var resolve = MemberOf(kit, "public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f,\n                                     bool flip = false, string? placeAs = null)");
         foreach (var term in new[] { "DrawScale(", "ResolveCrop(", "SidePadFraction(", "BottomPadFraction(", "Game1.ReducedMotion" })
             Assert.Contains(term, resolve);
-        Assert.Contains("return new SpriteFrame(tex, src, new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH),", resolve);
+        // the grounding is the resolver's own pure helper (ADR-011: an authored action is PLACED AS its idle)
+        Assert.Contains("return new SpriteFrame(tex, src, PlaceFrame(box, srcW, srcH, sc, BottomPadFraction(placeAs ?? stripKey) * fw),", resolve);
+        var place = MemberOf(kit, "public static Rectangle PlaceFrame(Rectangle box, int srcW, int srcH, float scale, float bottomPadTexels)");
+        Assert.Contains("return new Rectangle(box.Center.X - w / 2, box.Bottom - drawnH + drop, w, drawnH);", place);
         Assert.DoesNotContain("b.Draw(", resolve);
     }
 
