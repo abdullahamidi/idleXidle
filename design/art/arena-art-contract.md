@@ -351,6 +351,32 @@ The rule is one coherent action: intention, preparation, release, motion, contac
 
   Technical pass is not artistic pass.
 
+### 3.9 A reaction is a LAYER, never a clip (ADR-011, JAWS base slice 2026-09-25 — awaiting the owner's review)
+
+A REACTION (JAWS) takes no beat: the enemy's bite is its cause. It is drawn on its own layer, over both figures, and
+never takes the champion's figure: no cast, no lunge, no post-bite "lay a trap" clip (that clip is REPAY's cast).
+
+- **The object, in two states from ONE source.** JAWS is an iron jaw trap (the skill's name and its icon): OPEN
+  (`prop_seeker_jaws_open`, PixelLab pixflux `2126658f`) and SHUT (`prop_seeker_jaws_shut`, a PixelLab EDIT of that
+  very image, `b3c7ee25`), so the hinge, the rings and the framing are the same pixels' descendants. The shut ring's
+  teeth carry an emissive mask (`prop_seeker_jaws_shut_edge`). Built and post-passed by
+  `tools/asset-pipeline/v2/seeker_jaws.py` (the white fill made transparent, the palette drift snapped back, the rust
+  teeth recoloured to steel, the iron lifted one shade so it reads on the floor). A rejected candidate is recorded
+  there with its reason.
+- **PixelLab draws no motion.** The rise, the snap, the overshoot, the chain's tension and shiver, the recoil, the
+  release, the sparks and the fade are the runtime's (`ReactionPerformance`). Never ask for a trap animation or a chain.
+- **The chain is runtime geometry.** One drawn link in two cells (face-on, edge-on: `prop_seeker_chain_link`), placed
+  along a curve between two LIVE anchors: the Seeker's BELT (a share of his drawn body, so it rides a leap) and the
+  jaws' eye. Never one long chain image tied to one arena distance. At most 64 links; a longer chain draws bigger
+  links, never gaps.
+- **Size and place.** The jaws are ~0.48 of the caught creature's height (56 to 130 px) and close on its FRONT-LOWER
+  silhouette facing the Seeker, read off the frame it bites in (never a fixed "foreleg": the anatomy differs).
+- **Material vs Source**, as SPRAY: the iron is untinted; the Source is light only (the teeth's glint, a small
+  flattened snap flash, sparks, a restrained tension accent). Never tint the object.
+- **Review gate:** true speed and slow motion, effects only, champion only, during SPRAY, during HARD HANDS, during a
+  basic swing, sixteen seconds of repeats, the dock's sweep, a killing answer, a fatal bite, the REPAY isolation, the
+  anchor overlay (`RH_SHOT_SOCKETS`), and the sound heard.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's BASE JAWS, the proposed REACTION / TRAP reference, is BUILT (2026-09-25) and AWAITS the owner's review, its snap sound unheard: `production/qa/evidence/jaws-base/`. |
 | **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
-| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs`, `melee_action_test.cs` |
-| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form with its `projectile` effect (SPRAY), and the skill HARD HANDS (`sig_seeker_hard_hands`, its own recipe and strip; BLOW and PRESS are not performed). The action handoff applies to every committed champion clip. |
+| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs`, `melee_action_test.cs`, `jaws_reaction_test.cs`; `tests/unit/IdleXIdle.Core.Tests/Builds/reaction_armed_test.cs` |
+| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form with its `projectile` effect (SPRAY), and the skill HARD HANDS (`sig_seeker_hard_hands`, its own recipe and strip; BLOW and PRESS are not performed). The action handoff applies to every committed champion clip. REACTIONS with a recipe in `ReactionRecipes` (today the Seeker's JAWS, `snare_jaws`) are presented on their own layer and are never a committed clip. |
 
 ## Summary
 
@@ -64,6 +64,42 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | Exit pose | the idle's own frame 0, reached through the retreat: its joins into idle are sub-pixel |
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
+
+## The reaction reference: BASE JAWS (built 2026-09-25, AWAITING THE OWNER'S REVIEW)
+
+A REACTION takes no beat: the enemy's bite is its cause, and it must never take the champion's figure. The Seeker's
+JAWS (`snare_jaws`, "every bite returns 50% of it to the enemy that bit you") is presented as BITE FOR BITE: the
+creature bites the Seeker and the trap immediately bites it back. The owner approved the discovery's lifecycle, the
+IRON JAWS identity (the skill's name, its icon, the bite-back fantasy) and one information-only Core event.
+
+| Concern | Where JAWS does it |
+|---|---|
+| The anchor is the enemy's CONTACT | the row's contact frame IS the `EnemyStrike` ms, on which Core resolves JAWS and its answer: the reaction starts in the pump, on that frame; no clock of its own (`ReactionPerformance` is a function of playhead minus the contact) |
+| A layer, never the figure's owner | `ReactionPerformance` (not an `IActionPerformance`), in `HuntScreen._reactions`; the champion keeps his idle, swing, SPRAY or HARD HANDS; the old post-bite `trap` clip is skipped for a recipe'd reaction and not even loaded (`ActorClips`) |
+| Belongs to its SKILL | `ReactionRecipes.For(character, SkillDef.Id)`: skill tier ONLY. JAWS and REPAY share the Snare Form's `trap` clip and effect, so there is no shared tier for traps; REPAY keeps its legacy presentation (filmed) |
+| The lifecycle | CONTACT → SNAP (open jaws rise and shut, 55 ms, shut drawn from 38 ms, 12 % overshoot) → TENSION (the chain slack to taut in 95 ms, then a 22 Hz shiver decaying over 60 ms) → RECOIL (from the snap, 190 ms, peaking at 30 %: a few pixels, clamped 5 to 16) → RELEASE (at 215 ms: the chain slackens, the jaws loosen, drop and fade over 110 ms) → gone at 325 ms. Nothing stays in the world |
+| Target the actual creature | the reflected `Strike` events after JAWS' `Skill` event at the same ms (`ActionTargets.StruckBy`); the clamp point is read ONCE off the creature's own silhouette (`SilhouetteProbe.FrontLower`: its front-most opaque pixel in the lower body, facing the champion, inset into it) and kept as a share of its body, so the jaws ride its bob, lunge and recoil |
+| The chain belongs to the Seeker | its end is his BELT (`ChampionAnchor`, a share of his DRAWN body: it rides a HARD HANDS leap, filmed 64 → 16 links as he closes); a quadratic curve with arc-length links (face-on and edge-on), bounded to 64 links (a longer chain draws bigger links, never gaps), whipping out from the jaws in 45 ms |
+| Material vs Source | iron jaws and chain untinted (AlphaBlend); the Source is light only: the tooth-edge glint (`prop_seeker_jaws_shut_edge`), a small flattened snap flash, 5 sparks, and a 0.30 tension accent along the chain |
+| Death is the stronger state | a caught creature that falls, or a champion felled by the same bite, makes the jaws let go right after the snap (release at 75 ms, gone at ~200 ms); no recoil on a corpse; the Downed state runs the playhead on for the reaction alone so it never freezes under the fall |
+| One authored sentence | the enemy's bite thud stays (the cause); ONE cue `sfx_seeker_jaws_snap` (click, iron clack, chain rattle, 180 ms) on the contact frame; the cast breath, the reaction thud, the answer's generic thud and puff, the row ring and the "SNARE" callout are gone for JAWS; the target flash is soft (0.18, 90 ms) |
+| Secondary under an action | the snap is not `lead`, so an action's duck plays it at 0.45; its light plays at 0.55 while an action is in its focus (`IReactionStage.ActionInFocus`) |
+| The dock owns ARMED / REARMING | the tile sweeps from the trigger to the moment the fight REPORTED it armed (`ReactionArmed`, below), dims while rearming, and crosses to ready with the gold ring alone; a 0 ms window never shows ready (no frame sees it armed); no sound |
+| Actions ignore the recoil | `IActionStage.TryTargetBody` is the creature's own place; only `IReactionStage.TryCaughtBody` sees the recoil (a HARD HANDS leap planned into a recoiling creature measured the push, 671 → 673 px, before this rule) |
+
+**The Core readiness event (D3).** `BattleEventKind.ReactionArmed`: Slot = the skill slot, Amount = how long the rearm
+ran, AtMs = the moment the fight considers the reaction ready. It is read off `Champion.ReadyAt`, the table the fight
+decides by, so RearmMs, CooldownMultiplier, COILED, the live action rate and a LOOSE AGAIN clear all reach it; nothing
+in the Game rebuilds it. When readiness and the next trigger share a millisecond, ARMED comes first. A ready moment
+after the wave's end is said by the next wave (its start is then before 0); `SoloExpedition.ReactionReadyAfterLastWave`
+gives the wave's last trigger its end meanwhile. It decides nothing: nine build shapes over three waves resolve to
+the identical fight with the report on and off (`reaction_armed_test`), and every report agrees with what the fight
+then does (armed = the next bite is answered; rearming = none is).
+
+**What the report found.** The discovery measured a 0 ms armed window by adding RearmMs to the last trigger, the very
+reconstruction D3 forbids. The fight's own number differs: this Seeker acts at ×1.06, so JAWS rearms in 2830 ms and
+waits ARMED 170 ms before each bite at normal TEMPO (417 ms at fast TEMPO, rearm 1583). A 0 ms window needs a rearm
+that is a whole number of the fight's 100 ms ticks; the Core tests pose one and prove its order.
 
 ## Context
 
@@ -195,7 +231,9 @@ The audit (`production/qa/evidence/action-presentation-audit/`) measured the See
 - **Switches:**
   - `RH_ACTION_RECIPES=0` plays every action the old way, for old-versus-new films.
   - `RH_SHOT_NOVFX=1` and `RH_SHOT_NOCHAMP=1` are the review views.
-  - `RH_PRESENT_TRACE=1` logs release, contact and the performance's cost.
+  - `RH_PRESENT_TRACE=1` logs release, contact and the performance's cost; for a reaction, `reaction-spawn`, `reaction-snap`, `reaction-recoil-end`, `reaction-release`, `reaction-end` and `reaction-draw` (sprites, chain links, draw calls, bytes allocated), read by `tools/asset-pipeline/reaction_timeline.py --report`.
+  - `RH_REACTION_RECIPES=0` presents every reaction the old way while the actions stay performed; with `RH_SHOT_SEED=<n>` (the fight's crit dice, `new Random()` otherwise) one fight is filmed with the layer on and off, and `tools/asset-pipeline/action_regression.py` holds every SPRAY / HARD HANDS moment equal.
+  - `RH_REACTION_CALLOUT=1` restores the reaction's callout (the with/without comparison). `RH_SHOT_ENEMY=<health>,<bite>` pins a fight fixture's enemy baseline (JAWS' killing answer, the fatal bite).
 
 ## ADR Dependencies
 
@@ -222,6 +260,10 @@ None directly: this is presentation, and the fight's rules and numbers do not ch
 - **PRESS never animates the champion.** An earlier revision of this ADR said PRESS played the Strike strip in place: it was wrong. PRESS is a FIELD (passive): it takes no beat, so it never plays a champion clip; its picture is its pulse (the FIELD/AURA task).
 - **THE FAST-TEMPO PRESENTATION POLICY (owner, 2026-09-25).** The incoming authored action keeps its minimum readable anticipation: SPRAY never begins at its third frame, because its first frames are part of the approved action. If the outgoing action cannot complete its presentation in the time left, its presentation may YIELD, and only after its gameplay event has resolved (its hit, number, flash and sound still play). Yielding is a FALLBACK, not the presentation model: an action that yields often is an action whose protected phase is too long or whose recovery does not compress. Measured on the fastest build (TEMPO trained to 60), 33 s, before HARD HANDS was rebuilt: 17 yields (11 swings, 6 of 11 HARD HANDS casts). After: 11 swing yields, no HARD HANDS cast unanimated, and 6 HARD HANDS handoffs that yield after their contact (`HandoffFit.Yielded`).
 - **Other actions.** Besides SPRAY and HARD HANDS, the Seeker's clips and every other champion are still plain strips (the old uniform model), handed off by the same rule. The old strips still disagree about the Seeker's weapon.
+- **JAWS: a 0 ms armed window cannot be filmed on this Seeker.** The fight checks readiness on its 100 ms ticks and his rearm (2830 ms, 1583 ms at fast TEMPO) is not a whole number of ticks, so it always comes due between two bites. The 0 ms case (a rearm that IS a whole number of ticks, as a champion at ×1.0 or ×1.5 would have) is posed and proven by the Core tests and the replay test, not by a film.
+- **JAWS' first trigger happens before a capture starts** (a film begins ~1 s in): the killing answer and the fatal bite are filmed in the SECOND run, after a fall restarts it.
+- **The fight's dice are unseeded.** `Descent.Rng` is `new Random()`, so two captures agree on every beat and differ on every critical; comparisons need `RH_SHOT_SEED`.
+- **JAWS' shut jaws are a PixelLab edit.** The edit filled the ring's inside with opaque white (made transparent), drifted off the palette (snapped back), and drew rust-brown teeth (recoloured to steel); the iron is lifted one shade, filmed first at the palette's own values and lost against the floor (`tools/asset-pipeline/v2/seeker_jaws.py`).
 - **The held field.** The pink rectangle (`fx_press`, a weight slab the aura tinted) is line art now (`tools/asset-pipeline/v2/press_field.py`). Its once-per-second brightness pulse belongs to the FIELD/AURA gold-standard task.
 
 ## Alternatives rejected
