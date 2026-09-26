@@ -47,12 +47,16 @@ public static class VfxProfiles
     /// carried him 400 px to his target (HARD HANDS, 2026-09-25). Every effect that lands ON his body follows it.
     /// </summary>
     /// <remarks>
-    /// ON HIS ENEMY-FACING SIDE (ADR-012): a burst centred on his torso said "status", not "struck from there" (the
-    /// foundation study's readers, 2026-09-26). It sits forward of centre, where the bite lands, a little smaller;
-    /// the body's recoil and the contact accent carry the direction.
+    /// ON HIS ENEMY-FACING EDGE, SMALL AND SHORT (ADR-012). A burst centred on his torso said "status", not "struck
+    /// from there" (the foundation study's readers, 2026-09-26), and at 0.36 of his height over ~570 ms it was the
+    /// loudest thing on him: it hid the body's recoil, which is the hit. Now it is a small mark at the edge the bite
+    /// touched, 0.16 of his height, its eight frames over ~290 ms; the recoil and the directional contact accent
+    /// (HuntScreen.DrawBiteContact) carry the direction and the weight. AT CHEST HEIGHT (OffsetY −0.10), not the
+    /// belt: at belt height his forward edge is his sword hand, and a mark there read as "a burst at his hand, he
+    /// fired" (the polish pass's blind read of concept A).
     /// </remarks>
     public static readonly VfxProfile ImpactBite = new(
-        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.30f, Fps: 14f, OffsetX: 0.20f, OffsetY: 0.06f,
+        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.16f, Fps: 28f, OffsetX: 0.34f, OffsetY: -0.10f,
         Facing: VfxFacing.Forward, Follow: VfxFollow.Pinned);
 
     // ── Heal / death ──────────────────────────────────────────────────────────────────────────────

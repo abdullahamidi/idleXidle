@@ -35,10 +35,26 @@ public class bite_presentation_test
         // five wind-up frames: the phase's fifths are the frames; the first must own most of the wind-up and the
         // last two must fit inside its final ~20 % (the commit), which is the whole point of the spacing
         float FrameAt(float u) => MathF.Floor(BitePresentation.WindupPhase(u) * 5f);
-        Assert.Equal(0f, FrameAt(0.50f));            // half the wind-up in, still the first frame
+        Assert.Equal(0f, FrameAt(0.40f));            // well into the wind-up, still the rest frame
         Assert.True(FrameAt(0.80f) <= 3f);
         Assert.Equal(4f, FrameAt(0.98f));            // the last frame, just before contact
-        Assert.True(FrameAt(0.90f) >= 3f, "the commit frames must play inside the last tenth");
+        // the two commit poses each get a readable stretch: the third frame starts 160-260 ms before contact of 900,
+        // the last 80-140 ms before it (the polish brief: the commit begins 160-220 ms out, 2-3 poses participate)
+        float StartOf(int frame) { for (var u = 0f; u <= 1f; u += 0.001f) if (FrameAt(u) >= frame) return (1f - u) * 900f; return 0f; }
+        Assert.InRange(StartOf(3), 160f, 260f);
+        Assert.InRange(StartOf(4), 80f, 140f);
+    }
+
+    [Fact]
+    public void test_lunge_commit_is_a_lunge_not_a_pop()
+    {
+        // the polish brief's spacing: ~200 ms out the forward motion begins; ~120 ms out 35-50 % of the travel is
+        // done; ~50 ms out 65-85 %; contact 100 %
+        float Share(float msBefore) => BitePresentation.Lunge(1f - msBefore / 900f, -1f, leader: true) / -BitePresentation.LeaderLunge;
+        Assert.True(Share(220f) <= 0f, "still at or behind home 220 ms out");
+        Assert.InRange(Share(120f), 0.30f, 0.50f);
+        Assert.InRange(Share(50f), 0.65f, 0.85f);
+        Assert.Equal(1f, Share(0f), 3);
     }
 
     // ── the pack's lunge ───────────────────────────────────────────────────────────────────────────────────
@@ -110,7 +126,7 @@ public class bite_presentation_test
         var px = BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: +1);
         Assert.True(px < 0f, "a force from the right moves him left");
         Assert.Equal(-BitePresentation.RecoilShare * 300f, px, 3);
-        Assert.True(BitePresentation.RecoilShare >= 0.02f && BitePresentation.RecoilShare <= 0.06f, "2-5 % of the visible width, or slightly more");
+        Assert.True(BitePresentation.RecoilShare >= 0.02f && BitePresentation.RecoilShare <= 0.10f, "small: acknowledgement, never displacement gameplay");
         Assert.True(BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: -1) > 0f);
         // the dip is tiny, downward, on the same curve, and gone with it
         Assert.True(BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f) > 0f);

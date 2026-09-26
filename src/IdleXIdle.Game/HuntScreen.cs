@@ -6911,12 +6911,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var s = BitePresentation.Recoil01(_playheadMs - _recoilFromMs);
         if (s <= 0f || !_actors.TryBounds(VfxSubject.Champion, out var vb)) return;
         var body = vb.Rect;
-        var at = new Vector2(body.Right - body.Width * 0.06f, body.Y + body.Height * 0.46f);
-        var len = body.Width * 0.16f;
-        var thick = MathF.Max(2f, body.Width * 0.022f);
-        var ink = Ember * (0.85f * s);
-        _ui.LineSeg(b, at, at + new Vector2(-len, -len * 0.30f), thick, ink);
-        _ui.LineSeg(b, at + new Vector2(0f, body.Height * 0.05f), at + new Vector2(-len * 0.75f, len * 0.22f), thick * 0.8f, ink * 0.8f);
+        // WHERE it touched: the enemy-facing edge of his measured visible body, at chest height (his belt-height edge is
+        // his sword hand, and a mark there reads as something he fired)
+        var at = new Vector2(body.Right - body.Width * 0.06f, body.Y + body.Height * 0.36f);
+        var len = body.Width * 0.14f;
+        var thick = MathF.Max(2f, body.Width * 0.02f);
+        var ink = Ember * (0.9f * s);
+        // a compression wedge at the edge: three short strokes fanning back along the force, thickest at the touch
+        _ui.LineSeg(b, at, at + new Vector2(-len * 0.55f, 0f), thick * 2.4f * s, ink);
+        _ui.LineSeg(b, at + new Vector2(0f, -body.Height * 0.02f), at + new Vector2(-len, -len * 0.36f), thick, ink);
+        _ui.LineSeg(b, at + new Vector2(0f, body.Height * 0.04f), at + new Vector2(-len * 0.8f, len * 0.30f), thick * 0.8f, ink * 0.8f);
     }
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
@@ -7135,7 +7139,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (CaptureViews.NoRecoil) return (0f, 0f);
         var body = VisualRect(ChampBox, ChampionReferenceStrip);
         var since = _playheadMs - _recoilFromMs;
-        return (BitePresentation.Recoil(since, body.Width, fromDirection: +1), BitePresentation.RecoilDip(since, body.Height));
+        var share = CaptureViews.RecoilOverride ?? BitePresentation.RecoilShare;
+        return (BitePresentation.Recoil(since, body.Width, fromDirection: +1, share), BitePresentation.RecoilDip(since, body.Height));
     }
 
     // ── THE BITE IS PERFORMED (ADR-012, BitePresentation.Lunge) ───────────────────────────────────────────────

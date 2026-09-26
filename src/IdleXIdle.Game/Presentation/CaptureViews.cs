@@ -22,6 +22,7 @@ namespace IdleXIdle.Game.Presentation;
 /// <item><c>RH_SHOT_NOROOT=1</c> — the pack's presentation lunge off (the creatures stay in their row)</item>
 /// <item><c>RH_SHOT_NORECOIL=1</c> — the champion's hit recoil and its contact accent off</item>
 /// <item><c>RH_SHOT_FLASH=off | peak,rise,ms</c> — the generic hit flash off, or overridden for every hit (a recipe's included), e.g. <c>1,0.2,200</c> is the old full-white flash</item>
+/// <item><c>RH_SHOT_RECOIL=&lt;share&gt;</c> — the champion's hit recoil reach as a share of his visible width (a tuning series from one build)</item>
 /// <item><c>RH_SHOT_STRIP_FILES=key=path;...</c> — textures loaded from outside the asset tree under a key (<c>AssetLibrary</c>): a stand-in body, a prototype strip</item>
 /// </list>
 /// </remarks>
@@ -37,6 +38,11 @@ public static class CaptureViews
 
     /// <summary>The flash override: null when not set, (0,0,0) for <c>off</c>, else the given (peak, rise, rate per second).</summary>
     public static readonly (float Peak, float Rise, float Rate)? FlashOverride = ParseFlash(Environment.GetEnvironmentVariable("RH_SHOT_FLASH"));
+
+    /// <summary>The champion's recoil reach override (<c>RH_SHOT_RECOIL=&lt;share of visible width&gt;</c>): a dial the rig
+    /// turns to film a tuning series from one build; null when not set.</summary>
+    public static readonly float? RecoilOverride =
+        float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_RECOIL"), NumberStyles.Float, CultureInfo.InvariantCulture, out var r) ? r : null;
 
     private static bool Flag(string name) => Environment.GetEnvironmentVariable(name) == "1";
 

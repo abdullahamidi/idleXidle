@@ -34,14 +34,16 @@ public static class BitePresentation
     // ── THE WIND-UP'S SPACING ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The exponent that spaces the attack clip's wind-up: the clip phase is the wind-up raised to it, so at 2.4 the
-    /// last two of five wind-up frames play in the final ~150 ms and the first holds for ~500 ms. 1 is the old linear
-    /// slideshow (every frame 180 ms).
+    /// The exponent that spaces the attack clip's wind-up: the clip phase is the wind-up raised to it. At 1.8 the five
+    /// wind-up frames of a 900 ms wind-up change at about −530, −360, −225 and −108 ms: the rest holds, the coil takes
+    /// the middle, and the two commit poses (the maw opening, the pre-contact thrust) each get a readable ~110 ms. At
+    /// 2.4 (the first pass) the commit was crammed into the last ~100 ms and read as "popped forward"; 1 is the old
+    /// linear slideshow (every frame 180 ms).
     /// </summary>
-    public const float WindupEase = 2.4f;
+    public const float WindupEase = 1.8f;
 
-    /// <summary>The share of the wind-up at which the COMMIT is said to start (the trace's `enemy-commit`).</summary>
-    public const float CommitAt = 0.70f;
+    /// <summary>The share of the wind-up at which the COMMIT is said to start (the trace's `enemy-commit`): −220 ms of 900.</summary>
+    public const float CommitAt = 0.755f;
 
     /// <summary>The clip phase (0..1 of the wind-up frames) for a wind-up of <paramref name="windup01"/>.</summary>
     public static float WindupPhase(float windup01)
@@ -58,8 +60,15 @@ public static class BitePresentation
     /// <summary>The anticipation's pull back, as a share of the visible width (positive = away from the champion).</summary>
     public const float AnticipationBack = 0.04f;
 
-    /// <summary>The share of the wind-up spent pulling back; the commit runs from here to the contact.</summary>
-    public const float LungeCommitAt = 0.70f;
+    /// <summary>The share of the wind-up spent pulling back; the commit runs from here to the contact (−220 ms of 900).</summary>
+    public const float LungeCommitAt = 0.755f;
+
+    /// <summary>
+    /// The commit's ease-in exponent. Near-linear on purpose: the first pass's 2.2 put most of the travel in the last
+    /// 50 ms and read as a position pop; at 1.15 the leader has ~33 % of its travel done 120 ms before contact and
+    /// ~71 % at 50 ms, so a lunge is seen crossing the gap over two or three poses.
+    /// </summary>
+    public const float CommitEase = 1.15f;
 
     /// <summary>The overshoot past the contact extension, as a share of the visible width, and when it peaks.</summary>
     public const float Overshoot = 0.03f;
@@ -99,14 +108,16 @@ public static class BitePresentation
             return AnticipationBack * (a * a * (3f - 2f * a)) * share;            // the pull back, smooth
         }
         var v = (u - LungeCommitAt) / (1f - LungeCommitAt);
-        return (AnticipationBack - (AnticipationBack + LeaderLunge) * MathF.Pow(v, 2.2f)) * share;   // the commit: fast at the end
+        return (AnticipationBack - (AnticipationBack + LeaderLunge) * MathF.Pow(v, CommitEase)) * share;   // the commit: a lunge, not a pop
     }
 
     // ── THE CHAMPION'S RECOIL ─────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The recoil's reach, as a share of the champion's visible body width: the brief's 2-5 % "slightly more if
-    /// the footage still reads static", and it did at 4 % and 5 % (blind reads: "his body did nothing").</summary>
-    public const float RecoilShare = 0.06f;
+    /// <summary>The recoil's reach, as a share of the champion's visible body width. 4, 5, 6 and 8 % were not noticed
+    /// by blind readers ("his body did nothing"; "no dip, no flinch"); the polish pass filmed 6, 8 and 10 % and keeps
+    /// 10 (27 px on the Seeker), the smallest of the series that a reader saw. Still acknowledgement, not displacement.
+    /// The capture rig can override it (<c>CaptureViews.RecoilOverride</c>).</summary>
+    public const float RecoilShare = 0.10f;
 
     /// <summary>The recoil's downward dip, as a share of the champion's visible body HEIGHT: a small torso impulse on
     /// the same curve, so the hit lands in the body and not only along the floor.</summary>
@@ -132,8 +143,8 @@ public static class BitePresentation
     /// The recoil in pixels for a champion <paramref name="visibleWidth"/> wide struck by a force coming from
     /// <paramref name="fromDirection"/> (+1 = from screen-right): he moves AWAY from it.
     /// </summary>
-    public static float Recoil(float sinceHitMs, float visibleWidth, int fromDirection)
-        => -fromDirection * RecoilShare * visibleWidth * Recoil01(sinceHitMs);
+    public static float Recoil(float sinceHitMs, float visibleWidth, int fromDirection, float share = RecoilShare)
+        => -fromDirection * share * visibleWidth * Recoil01(sinceHitMs);
 
     /// <summary>The recoil's dip in pixels (positive = down) for a champion <paramref name="visibleHeight"/> tall.</summary>
     public static float RecoilDip(float sinceHitMs, float visibleHeight)

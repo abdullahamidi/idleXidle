@@ -62,4 +62,12 @@ want rep_oldflash  && film rep_oldflash  $N 720 RH_SHOT_TAKE="$TEMPO" RH_SHOT_FL
 want kill          && film kill          $N 918 RH_SHOT_TAKE="$TEMPO"
 want hh            && film hh            60 455 RH_SHOT_TAKE="$TEMPO"
 want hh_bare       && film hh_bare       60 455 RH_SHOT_TAKE="$TEMPO" RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
+# ── THE POLISH PASS (ADR-012 second battery): the receiver alone (effects and flash off, the recoil on), the recoil
+#    series 6 / 8 / 10 % of his visible width (RH_SHOT_RECOIL, a dial the rig turns; 10 % is the build's default) ─────
+want recv_only     && film recv_only     $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
+want recv08        && film recv08        $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_RECOIL=0.08
+want recv06        && film recv06        $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_RECOIL=0.06
+want recv10        && film recv10        $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_RECOIL=0.10
+want rec06         && film rec06         $N $S RH_SHOT_RECOIL=0.06
+want rec10         && film rec10         $N $S RH_SHOT_RECOIL=0.10
 exit 0
