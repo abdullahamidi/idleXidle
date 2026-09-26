@@ -153,6 +153,32 @@ public sealed class AssetLibrary
                 // A single corrupt PNG must not take the whole game down — it just falls back to shapes.
             }
         }
+        LoadFixtureOverrides();
+    }
+
+    /// <summary>
+    /// CAPTURE FIXTURE ONLY (<c>RH_SHOT_STRIP_FILES=key=path;key=path</c>): replace loaded textures with files from
+    /// OUTSIDE the asset tree, so a prototype strip (an enemy-attack key-pose study, a stand-in body) can be filmed
+    /// through the real draw without touching a repo asset. The game never sets it; inert without the variable.
+    /// </summary>
+    private void LoadFixtureOverrides()
+    {
+        if (Environment.GetEnvironmentVariable("RH_SHOT_STRIP_FILES") is not { Length: > 0 } spec) return;
+        foreach (var pair in spec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = pair.IndexOf('=');
+            if (eq <= 0) throw new InvalidOperationException($"RH_SHOT_STRIP_FILES entry '{pair}' is not key=path.");
+            var key = pair[..eq].Trim();
+            var path = pair[(eq + 1)..].Trim();
+            if (!File.Exists(path)) throw new InvalidOperationException($"RH_SHOT_STRIP_FILES: '{path}' does not exist.");
+            using var stream = File.OpenRead(path);
+            var texture = Texture2D.FromStream(_device, stream);
+            Premultiply(texture);
+            if (_textures.TryGetValue(key, out var existing)) existing.Dispose();
+            _textures[key] = texture;
+            _sources[key] = path.Replace('\\', '/');
+            _deferred.Remove(key);
+        }
     }
 
     /// <summary>

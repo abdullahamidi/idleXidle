@@ -101,6 +101,22 @@ wants a literal trap at all. The study's findings (`prototypes/jaws-concepts/REA
   ownership line, and the trap's "before" moved into the armed state (`ReactionArmed`). The enemy bite's legibility and
   the answer's flash hierarchy come first.
 
+**The foundation study (2026-09-26; nothing implemented).** The owner paused JAWS and asked for the two upstream
+defects to be studied first: the enemy bite does not read as an attack, and the full-white hit flash erases what is
+drawn on the struck creature (`prototypes/bite-readability/`, `production/qa/evidence/bite-readability/`). Findings:
+- The Gloom Whelp's attack strip is a crouch in place; its contact frame equals the frame before it; its only fast
+  motion is the recovery after the hit; the row's 40 px lunge starts ON the contact frame (a recoil, not an attack).
+- The Seeker has no hurt reaction: a centred burst, no flinch, no direction. Every blind reader named this.
+- Key poses + a restrained lunge (0.15-0.30 of the creature's width) did not read in blind flipbooks; the receiver's
+  reaction and a distinct contact pose are the missing halves.
+- The low shaped flash (peak 0.45, ~80 ms) keeps the target's body and eyes at the peak and still reads as a hit; the
+  current full-white mask does not.
+- On the improved baseline the JAWS concepts A and C read as automatic reactions (they read as casts before), but
+  no reader saw the creature act, so the cause is still missing. Concept D is not yet justified.
+- Every code change is a capture fixture (`RH_SHOT_NOTINT`, `RH_SHOT_SIL`, `RH_SHOT_NOANSWER`, `RH_SHOT_FLASH`,
+  `RH_SHOT_BITE`, `RH_SHOT_HITSTOP`, `RH_SHOT_STRIP_FILES`), inert without its variable; awaiting the owner's word on
+  keeping them.
+
 | Concern | Where JAWS does it |
 |---|---|
 | The anchor is the enemy's CONTACT | the row's contact frame IS the `EnemyStrike` ms, on which Core resolves JAWS and its answer: the reaction starts in the pump, on that frame; no clock of its own (`ReactionPerformance` is a function of playhead minus the contact) |

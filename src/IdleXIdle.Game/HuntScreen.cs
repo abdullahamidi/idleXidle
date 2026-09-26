@@ -1227,7 +1227,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
         // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
-        _enemySinceHit += dt;
+        if (!HoldingPose) _enemySinceHit += dt;   // the study's pose hold (RH_SHOT_HITSTOP) freezes the creatures' clip
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
@@ -1995,7 +1995,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         const float windupMs = 900f;
         var lead = _nextEnemyStrikeMs - _playheadMs;
         var windupWas = _enemyWindup;
-        _enemyWindup = lead > 0f && lead < windupMs ? 1f - lead / windupMs : 0f;
+        // the study's pose hold (RH_SHOT_HITSTOP) freezes the creatures' clip clock, so their wind-up is not recomputed
+        if (!HoldingPose) _enemyWindup = lead > 0f && lead < windupMs ? 1f - lead / windupMs : 0f;
         // the row's ANTICIPATION, for the reaction timeline (tools/asset-pipeline/reaction_timeline.py): the moment
         // the creatures start winding up toward the next bite, whose contact frame is the bite itself
         if (PresentTrace.Enabled && windupWas <= 0f && _enemyWindup > 0f)
@@ -2059,6 +2060,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // that cast's — the whole pack flashed, four damage numbers printed as skill hits and
                     // four hit sounds fired at once.
                     var auraTick = e.FromSkill && e.AtMs == auraAtMs;
+                    // STUDY (RH_SHOT_NOANSWER): a Reaction's reflected blow at the bite is not shown at all
+                    if (ShotNoAnswer && e.FromSkill && e.AtMs == _lastBiteMs) break;
+                    // the study's pose hold starts on a real blow that lands (not an aura tick)
+                    if (ShotHitStopMs > 0f && !auraTick) _holdFromMs = e.AtMs;
                     // IMPACT PRIORITY (ADR-011): a blow the champion PERFORMED has its own contact — the blade's
                     // directional impact and its contact sound — so the generic puff and thud, which describe
                     // the same physical event, give way. The flash and the number stay: they are the enemy's.
@@ -2148,6 +2153,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     break;
                 }
                 case BattleEventKind.EnemyStrike:
+                    _lastBiteMs = e.AtMs;
                     _enemyLunge = 1f;
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
@@ -2173,6 +2179,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     var released = _releasedAtMs == e.AtMs;
                     var castSk = _waveSkills[e.Slot];
                     var castDef = castSk.Def;
+                    if (ShotNoAnswer && castDef.Kind == SkillKind.Reaction) break;   // STUDY: the answer's cast is not shown
                     // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
                     // its own). Keyed to the event's slot, armed here and nowhere else — a Draw that
                     // re-armed it would be a tile that blinks for as long as you look at it.
@@ -3445,12 +3452,19 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // ONE LAYOUT FOR ONE OR MANY. The lone creature used to have its own method at the unscaled
         // enemy box, which is how a Bruiser — the archetype that always rolls alone — never wore its
         // own size. The row function is the single owner of the box; this only publishes its answer.
-        var row = CreatureRow(WaveArchetype, count, _enemyEnter, _enemyLunge, _anim);
+        // THE STUDY'S LUNGE (RH_SHOT_BITE) replaces the 40 px post-contact shove with its own curve, per creature.
+        var studyRoot = ShotBite is "root" or "rootfront";
+        var row = CreatureRow(WaveArchetype, count, _enemyEnter, studyRoot ? 0f : _enemyLunge, _anim);
         // WHERE THE ROW ACTUALLY IS, published for the labels. Deliberately NOT the lunge-shifted
         // centre: a nameplate that slides 40 px every time the row shoves forward reads as jitter.
         _rowCentreX = row.CentreX;
         _rowTopY = row.TopY;
-        for (var i = 0; i < row.Boxes.Length; i++) _creatureBoxes[i] = row.Boxes[i];
+        for (var i = 0; i < row.Boxes.Length; i++)
+        {
+            var box = row.Boxes[i];
+            if (studyRoot) box.X += StudyBiteOffset(i, box.Width);
+            _creatureBoxes[i] = box;
+        }
     }
 
     /// <summary>The boss: a square figure standing on its own anchor, with the same lunge as any creature.</summary>
@@ -3548,7 +3562,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // The geometry is LayoutComposition's — computed before anything drew, so the effects landed on
         // these exact rectangles rather than on the ones this method used to work out for itself.
         var scale = ArchetypeScale(WaveArchetype);
-        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
+        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, ShotNoTint ? 0f : _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var (w, h) = (ArchetypeBox(WaveArchetype).X, ArchetypeBox(WaveArchetype).Y);
 
         var look = CreatureLook;
@@ -3592,11 +3606,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // a negative topCrop makes AnimSprite trim exactly the empty rows and never the figure.
             const float crop = -1f;
             var compFps = attacking ? 16f : 12f;
+            FlashUnder(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop);
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
                     !attacking, creatureTint, crop, record: VfxSubject.Creature(i)))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
+            SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop);
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
             FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop);
@@ -3649,7 +3665,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         // The geometry is the row's (LayoutComposition, count 1), computed before anything drew: the
         // lone creature's box is its archetype's, bottom-anchored on the plane, bob included.
-        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
+        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, ShotNoTint ? 0f : _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var ab = CreatureBox(0);
         // The resting box — the same rectangle without the bob — for what must not bob: the shade,
         // the fallback fill, the health bar. Its top is the plane minus the box height, which is
@@ -3674,6 +3690,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
         string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
+        FlashUnder(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop);
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
                                                 !attacking, enterTint, crop, record: VfxSubject.Creature(0)))
         {
@@ -3682,6 +3699,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, enterTint, crop))
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
+        SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop);
         FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop);
         DrawBreakBadge(b, 0, ab);
 
@@ -3752,6 +3770,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var fps = attacking ? 10f : 8f;
         var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
+        FlashUnder(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0)))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
@@ -3767,6 +3786,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         }
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
         // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
+        SilhouetteOver(b, key, box, seconds, fps, !attacking, -1f);
         FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         DrawBreakBadge(b, 0, box);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
@@ -6823,7 +6843,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly Dictionary<int, (float Peak, float Rise, float Rate)> _hitFlashLook = new();
 
-    private (float Peak, float Rise, float Rate) FlashLook(int slot) => _hitFlashLook.GetValueOrDefault(slot, UsualFlash);
+    private (float Peak, float Rise, float Rate) FlashLook(int slot) => ShotFlash switch
+    {
+        // THE STUDY'S VARIANTS (RH_SHOT_FLASH) replace every flash look, a recipe's included, so one hit is compared
+        // under one grammar: F1 two strong frames; F2 a low shaped flash; F3 a rim and an accent (FlashUnder).
+        "F1" => (1f, 0f, 1000f / 33f),
+        "F2" => (0.45f, 0.15f, 1000f / 80f),
+        "F3" => (1f, 0f, 1000f / 90f),
+        _ => _hitFlashLook.GetValueOrDefault(slot, UsualFlash),
+    };
 
     /// <summary>
     /// Draw a creature's white silhouette over itself at <paramref name="strength"/>. EVERY enemy path
@@ -6834,7 +6862,41 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)
     {
         if (strength <= 0f || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
+        if (ShotFlash == "F3")
+        {
+            // THE CONTACT ACCENT (study F3): a small streak of light at the contact-facing edge, pointing back along the
+            // blow's direction (the champion stands to the left). Subordinate: a few pixels, gone with the rim.
+            if (_ui.ResolveFrame(stripKey, box, seconds, fps, loop, crop) is { } f)
+            {
+                var at = new Vector2(f.Dest.X + f.Dest.Width * 0.22f, f.Dest.Y + f.Dest.Height * 0.46f);
+                var len = box.Width * 0.22f * strength;
+                var thick = Math.Max(2f, box.Width * 0.03f * strength);
+                _ui.LineSeg(b, at, at + new Vector2(-len, -len * 0.35f), thick, Color.White * strength);
+                _ui.LineSeg(b, at, at + new Vector2(-len * 0.7f, len * 0.25f), thick * 0.7f, Color.White * (0.7f * strength));
+            }
+            return;
+        }
         ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop);
+    }
+
+    /// <summary>
+    /// STUDY F3 (RH_SHOT_FLASH=F3): the white mask drawn UNDER the creature, shifted toward the blow's side, so only a
+    /// rim of light on the contact-facing edge shows and the body stays the body. Nothing outside the study.
+    /// </summary>
+    private void FlashUnder(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)
+    {
+        if (ShotFlash != "F3" || strength <= 0f || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
+        var d = Math.Max(3, (int)MathF.Round(box.Width * 0.05f * strength));
+        var mask = AssetLibrary.MaskKey(stripKey);
+        ActorSprite(b, mask, new Rectangle(box.X - d, box.Y, box.Width, box.Height), seconds, fps, loop, Color.White * strength, crop);
+        ActorSprite(b, mask, new Rectangle(box.X - d / 2, box.Y - d / 2, box.Width, box.Height), seconds, fps, loop, Color.White * (0.6f * strength), crop);
+    }
+
+    /// <summary>STUDY (RH_SHOT_SIL=1): the creature as a flat dark silhouette — its mask, over its body.</summary>
+    private void SilhouetteOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float crop)
+    {
+        if (!ShotSilhouette || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
+        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, new Color(150, 146, 160), crop);   // flat, apart from the stone
     }
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
@@ -7038,12 +7100,86 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private static readonly bool ShotNoChamp = Environment.GetEnvironmentVariable("RH_SHOT_NOCHAMP") == "1";
     private static readonly bool ShotSockets = Environment.GetEnvironmentVariable("RH_SHOT_SOCKETS") == "1";
 
+    // THE ENEMY-ATTACK / HIT-FEEDBACK STUDY VIEWS (2026-09-26; capture only, the game never sets them; every one is
+    // inert without its variable). None of them changes a fight, a Core event or a production draw path:
+    //   RH_SHOT_NOTINT=1      no ember wind-up tint on the creatures (does the body alone say "attack"?)
+    //   RH_SHOT_SIL=1         every creature is a flat dark silhouette (does the SHAPE alone say it?)
+    //   RH_SHOT_NOANSWER=1    a Reaction's answer at the bite (its Strike, cast, number, flash, sounds) is not shown
+    //   RH_SHOT_FLASH=F1|F2|F3  the hit flash variant under study (F0 = the current full white mask):
+    //                         F1 one short strong flash (~2 frames); F2 a lower shaped flash (~80 ms, 0.45 peak);
+    //                         F3 no whitening: a rim of light on the contact-facing side plus a small contact accent
+    //   RH_SHOT_BITE=root|rootfront  a restrained presentation lunge on the creatures' row, scaled to the creature:
+    //                         back a little in anticipation, fast forward to contact, one overshoot, home; `rootfront`
+    //                         gives the front creature the full travel and the rest of the pack 45 % of it
+    //   RH_SHOT_HITSTOP=<ms>  a presentation-only pose hold after a champion blow lands on a creature (a comparison
+    //                         only; never on by default)
+    private static readonly bool ShotNoTint = Environment.GetEnvironmentVariable("RH_SHOT_NOTINT") == "1";
+    private static readonly bool ShotSilhouette = Environment.GetEnvironmentVariable("RH_SHOT_SIL") == "1";
+    private static readonly bool ShotNoAnswer = Environment.GetEnvironmentVariable("RH_SHOT_NOANSWER") == "1";
+    private static readonly string ShotFlash = Environment.GetEnvironmentVariable("RH_SHOT_FLASH")?.Trim().ToUpperInvariant() ?? "";
+    // RH_SHOT_BITE=root[:<scale>] — the optional scale multiplies the travel (a diagnostic: is the amount the problem?)
+    private static readonly string ShotBite = (Environment.GetEnvironmentVariable("RH_SHOT_BITE")?.Trim().ToLowerInvariant() ?? "").Split(':')[0];
+    private static readonly float ShotBiteScale =
+        (Environment.GetEnvironmentVariable("RH_SHOT_BITE") ?? "").Split(':') is { Length: 2 } bp
+        && float.TryParse(bp[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var bs) ? bs : 1f;
+    private static readonly float ShotHitStopMs =
+        float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_HITSTOP"), System.Globalization.NumberStyles.Float,
+                       System.Globalization.CultureInfo.InvariantCulture, out var hs) ? hs : 0f;
+
+    /// <summary>The last enemy bite's ms (study fixture): a Reaction's answer shares it, so it can be hidden.</summary>
+    private int _lastBiteMs = -1;
+
+    /// <summary>The study's pose hold: the playhead the last champion blow landed at (see RH_SHOT_HITSTOP).</summary>
+    private float _holdFromMs = -1e9f;
+
+    /// <summary>Is the study's pose hold on right now?</summary>
+    private bool HoldingPose => ShotHitStopMs > 0f && _playheadMs >= _holdFromMs && _playheadMs < _holdFromMs + ShotHitStopMs;
+
+    /// <summary>
+    /// The study's presentation lunge for creature <paramref name="slot"/> in a row of boxes <paramref name="w"/> wide:
+    /// a horizontal offset in px, negative toward the champion. Anticipation pulls back 3.5 % of the width over the
+    /// first 60 % of the wind-up; the commit runs forward to 14 % at contact, eased in so most of the travel is in the
+    /// last ~150 ms; one overshoot to 16 % right after; home, eased out, by 300 ms. Zero when the fixture is off.
+    /// </summary>
+    private int StudyBiteOffset(int slot, int w)
+    {
+        if (ShotBite is not ("root" or "rootfront")) return 0;
+        var share = ShotBite == "rootfront" && slot > 0 ? 0.45f : 1f;
+        float px;
+        if (_enemySinceHit < EnemyFollowSeconds)
+        {
+            var s = _enemySinceHit / EnemyFollowSeconds;                 // 0 at contact, 1 at the end of the follow-through
+            var over = s < 0.17f ? MathF.Sin(s / 0.17f * MathF.PI / 2f) : 1f;
+            var home = s < 0.17f ? 0f : (s - 0.17f) / 0.83f;
+            var eased = 1f - (1f - home) * (1f - home) * (1f - home);
+            px = (-0.14f - 0.02f * over) * (1f - eased) * w;
+        }
+        else if (_enemyWindup > 0f)
+        {
+            var u = _enemyWindup;
+            if (u < 0.6f)
+            {
+                var a = u / 0.6f;
+                px = 0.035f * (a * a * (3f - 2f * a)) * w;             // the pull back, smooth
+            }
+            else
+            {
+                var v = (u - 0.6f) / 0.4f;
+                px = (0.035f - 0.175f * MathF.Pow(v, 2.2f)) * w;       // the commit: forward, fast at the end
+            }
+        }
+        else px = 0f;
+        return (int)MathF.Round(px * share * ShotBiteScale);
+    }
+
     // RH_PRESENT_TRACE: the champion frame last logged, so a frame is logged when it CHANGES.
     private string? _traceClip;
     private int _traceFrame = -1;
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
-    private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;
+    /// <remarks>Under the study's pose hold (RH_SHOT_HITSTOP) the clip stands on its contact frame for the hold and then
+    /// catches up: a hold, then a jump of the held ms, never a shifted beat.</remarks>
+    private float ClipSeconds => ((HoldingPose ? _holdFromMs : _playheadMs) - _clipStartMs) / 1000f * _clipSpeed;
 
     /// <summary>The world's corruption tier (0..CorruptionScaling.MaxTier), host-fed. It tints every
     /// creature and boss (CorruptionLook.Enemy), names the boss by its epithet and prints on the header.</summary>
