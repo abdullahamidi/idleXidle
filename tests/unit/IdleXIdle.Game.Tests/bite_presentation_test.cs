@@ -1,0 +1,143 @@
+using System;
+using IdleXIdle.Game.Presentation;
+using Xunit;
+
+namespace IdleXIdle.Game.Tests;
+
+/// <summary>
+/// THE BITE IS PERFORMED AND THE HIT IS RECEIVED (ADR-012): the pure curves of <see cref="BitePresentation"/>. They
+/// are presentation arithmetic on the replay's playhead; these pin their shape, their bounds and their timing so a
+/// retune cannot silently turn the attack back into a recoil grammar or let a recoil accumulate.
+/// </summary>
+public class bite_presentation_test
+{
+    // ── the wind-up's spacing ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_windup_phase_is_monotonic_and_reaches_contact()
+    {
+        var last = -1f;
+        for (var u = 0f; u <= 1f; u += 0.01f)
+        {
+            var p = BitePresentation.WindupPhase(u);
+            Assert.True(p >= last, $"phase fell at {u}");
+            last = p;
+        }
+        Assert.Equal(0f, BitePresentation.WindupPhase(0f));
+        Assert.Equal(1f, BitePresentation.WindupPhase(1f), 5);
+        Assert.Equal(0f, BitePresentation.WindupPhase(-1f));
+        Assert.Equal(1f, BitePresentation.WindupPhase(2f), 5);
+    }
+
+    [Fact]
+    public void test_windup_spacing_holds_the_first_frame_and_rushes_the_last()
+    {
+        // five wind-up frames: the phase's fifths are the frames; the first must own most of the wind-up and the
+        // last two must fit inside its final ~20 % (the commit), which is the whole point of the spacing
+        float FrameAt(float u) => MathF.Floor(BitePresentation.WindupPhase(u) * 5f);
+        Assert.Equal(0f, FrameAt(0.50f));            // half the wind-up in, still the first frame
+        Assert.True(FrameAt(0.80f) <= 3f);
+        Assert.Equal(4f, FrameAt(0.98f));            // the last frame, just before contact
+        Assert.True(FrameAt(0.90f) >= 3f, "the commit frames must play inside the last tenth");
+    }
+
+    // ── the pack's lunge ───────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_lunge_pulls_back_then_arrives_extended_on_the_contact()
+    {
+        Assert.Equal(0f, BitePresentation.Lunge(0f, -1f, leader: true));                 // nothing coming: home
+        Assert.True(BitePresentation.Lunge(0.5f, -1f, leader: true) > 0f, "anticipation pulls BACK (away from the champion)");
+        Assert.True(BitePresentation.Lunge(0.5f, -1f, leader: true) <= BitePresentation.AnticipationBack + 1e-4f);
+        Assert.Equal(-BitePresentation.LeaderLunge, BitePresentation.Lunge(1f, -1f, leader: true), 4);   // full extension at contact
+        // the rush is at the end: most of the travel happens in the last 15 % of the wind-up
+        var at85 = BitePresentation.Lunge(0.85f, -1f, leader: true);
+        var at100 = BitePresentation.Lunge(1f, -1f, leader: true);
+        Assert.True(at100 - at85 < -(BitePresentation.LeaderLunge * 0.5f), $"only {at100 - at85} of the travel in the last 15 %");
+    }
+
+    [Fact]
+    public void test_lunge_follow_through_overshoots_once_and_comes_home()
+    {
+        var atContact = BitePresentation.Lunge(1f, 0f, leader: true);
+        var atOvershoot = BitePresentation.Lunge(0f, BitePresentation.OvershootMs, leader: true);
+        Assert.True(atOvershoot < atContact, "one small overshoot past the extension");
+        Assert.Equal(-(BitePresentation.LeaderLunge + BitePresentation.Overshoot), atOvershoot, 4);
+        // home, and never past home, by the end of the follow-through
+        var last = atOvershoot;
+        for (var ms = BitePresentation.OvershootMs; ms < BitePresentation.LungeHomeMs; ms += 5f)
+        {
+            var w = BitePresentation.Lunge(0f, ms, leader: true);
+            Assert.True(w >= last - 1e-5f && w <= 0f, $"the return must ease home monotonically ({w} at {ms})");
+            last = w;
+        }
+        Assert.Equal(0f, BitePresentation.Lunge(0f, BitePresentation.LungeHomeMs, leader: true));
+        Assert.Equal(0f, BitePresentation.Lunge(0f, 1000f, leader: true));
+    }
+
+    [Fact]
+    public void test_lunge_is_front_led_the_pack_moves_a_share()
+    {
+        var leader = BitePresentation.Lunge(1f, -1f, leader: true);
+        var follower = BitePresentation.Lunge(1f, -1f, leader: false);
+        Assert.Equal(leader * BitePresentation.FollowerShare, follower, 4);
+        Assert.True(BitePresentation.FollowerShare > 0f && BitePresentation.FollowerShare < 1f, "the pack still visibly participates");
+    }
+
+    // ── the champion's recoil ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_recoil_is_immediate_peaks_early_and_is_home_in_time()
+    {
+        Assert.Equal(0f, BitePresentation.Recoil01(-1f));                                  // nothing before the bite
+        Assert.True(BitePresentation.Recoil01(8f) > 0.3f, "the impulse begins on the contact");
+        Assert.Equal(1f, BitePresentation.Recoil01(BitePresentation.RecoilPeakMs), 4);
+        Assert.True(BitePresentation.RecoilPeakMs >= 16f && BitePresentation.RecoilPeakMs <= 50f, "peak inside 16-50 ms");
+        Assert.True(BitePresentation.RecoilHomeMs >= 80f && BitePresentation.RecoilHomeMs <= 140f, "settled inside 80-140 ms");
+        Assert.Equal(0f, BitePresentation.Recoil01(BitePresentation.RecoilHomeMs));
+        var last = 1f;
+        for (var ms = BitePresentation.RecoilPeakMs; ms <= BitePresentation.RecoilHomeMs; ms += 2f)
+        {
+            var r = BitePresentation.Recoil01(ms);
+            Assert.True(r <= last + 1e-5f && r >= 0f, "no bounce on the way home");
+            last = r;
+        }
+    }
+
+    [Fact]
+    public void test_recoil_moves_away_from_the_force_and_is_small()
+    {
+        var px = BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: +1);
+        Assert.True(px < 0f, "a force from the right moves him left");
+        Assert.Equal(-BitePresentation.RecoilShare * 300f, px, 3);
+        Assert.True(BitePresentation.RecoilShare >= 0.02f && BitePresentation.RecoilShare <= 0.06f, "2-5 % of the visible width, or slightly more");
+        Assert.True(BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: -1) > 0f);
+        // the dip is tiny, downward, on the same curve, and gone with it
+        Assert.True(BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f) > 0f);
+        Assert.True(BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f) <= 0.02f * 400f);
+        Assert.Equal(0f, BitePresentation.RecoilDip(BitePresentation.RecoilHomeMs, 400f));
+    }
+
+    [Fact]
+    public void test_recoil_is_re_impulsed_never_accumulated()
+    {
+        // the screen keeps ONE `since the last bite` clock; a second bite restarts it. Two bites 60 ms apart thus
+        // read as the shape at 60 ms, then the shape at 0: bounded by the single-bite peak, never the sum.
+        var single = BitePresentation.Recoil01(BitePresentation.RecoilPeakMs);
+        var afterRestart = BitePresentation.Recoil01(0f);
+        Assert.True(afterRestart <= single);
+        for (var ms = 0f; ms < 2000f; ms += 7f)
+            Assert.True(MathF.Abs(BitePresentation.Recoil01(ms)) <= 1f);
+    }
+
+    // ── the usual flash ────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_usual_flash_is_quiet_and_short()
+    {
+        var (peak, rise, rate) = BitePresentation.UsualFlash;
+        Assert.InRange(peak, 0.40f, 0.50f);
+        Assert.InRange(1000f / rate, 70f, 90f);        // ~80 ms of life
+        Assert.InRange(rise, 0.05f, 0.30f);            // a short shaped rise, not a snap
+    }
+}

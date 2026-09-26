@@ -46,9 +46,14 @@ public static class VfxProfiles
     /// profile was Detached, invisible at the swing's 40 px and a burst hanging in empty air once a melee action
     /// carried him 400 px to his target (HARD HANDS, 2026-09-25). Every effect that lands ON his body follows it.
     /// </summary>
+    /// <remarks>
+    /// ON HIS ENEMY-FACING SIDE (ADR-012): a burst centred on his torso said "status", not "struck from there" (the
+    /// foundation study's readers, 2026-09-26). It sits forward of centre, where the bite lands, a little smaller;
+    /// the body's recoil and the contact accent carry the direction.
+    /// </remarks>
     public static readonly VfxProfile ImpactBite = new(
-        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.36f, Fps: 14f, OffsetY: 0.08f,
-        Follow: VfxFollow.Pinned);
+        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.30f, Fps: 14f, OffsetX: 0.20f, OffsetY: 0.06f,
+        Facing: VfxFacing.Forward, Follow: VfxFollow.Pinned);
 
     // ── Heal / death ──────────────────────────────────────────────────────────────────────────────
 

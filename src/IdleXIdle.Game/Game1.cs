@@ -3212,6 +3212,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _expedition.EnemySource = Source.Mind;
                     _expedition.DevForceBoss = true;
                     if (sm == "bossdebug") _expedition.DevBossDebug = true;
+                    // PINNED THROUGH THE HOST like the fight fixtures (see _shotEnemyBaseline below): unpinned, the
+                    // host pushed the region's baseline and the posed "boss" died on the champion's first blow, before
+                    // the rig's first frame — a hit on a living boss could not be filmed (foundation study, 2026-09-26).
+                    _shotEnemyBaseline = ShotEnemyBaseline() ?? (6000f, 6f);
                     _expedition.DevStart(_hunter, 6000f, 6f);
                 }
                 if (sm == "conquered")
