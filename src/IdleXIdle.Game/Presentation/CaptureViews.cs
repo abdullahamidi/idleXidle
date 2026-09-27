@@ -20,7 +20,7 @@ namespace IdleXIdle.Game.Presentation;
 /// <item><c>RH_SHOT_NOTINT=1</c> — no ember wind-up tint on the creatures</item>
 /// <item><c>RH_SHOT_SIL=1</c> — every creature drawn as a flat silhouette (does the SHAPE perform the action?)</item>
 /// <item><c>RH_SHOT_NOROOT=1</c> — the pack's presentation lunge off (the creatures stay in their row)</item>
-/// <item><c>RH_SHOT_NORECOIL=1</c> — the champion's hit recoil and its contact accent off</item>
+/// <item><c>RH_SHOT_NORECOIL=1</c> — the champion's hit recoil off (the bite motif is not the recoil's and stays; <c>RH_SHOT_NOVFX</c> hides it)</item>
 /// <item><c>RH_SHOT_FLASH=off | peak,rise,ms</c> — the generic hit flash off, or overridden for every hit (a recipe's included), e.g. <c>1,0.2,200</c> is the old full-white flash</item>
 /// <item><c>RH_SHOT_RECOIL=&lt;share&gt;</c> — the champion's hit recoil reach as a share of his visible width (a tuning series from one build)</item>
 /// <item><c>RH_SHOT_STRIP_FILES=key=path;...</c> — textures loaded from outside the asset tree under a key (<c>AssetLibrary</c>): a stand-in body, a prototype strip</item>

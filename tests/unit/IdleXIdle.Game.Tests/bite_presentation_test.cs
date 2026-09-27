@@ -121,17 +121,35 @@ public class bite_presentation_test
     }
 
     [Fact]
-    public void test_recoil_moves_away_from_the_force_and_is_small()
+    public void test_recoil_is_off_for_a_routine_hit_and_moves_away_from_the_force_when_dialled()
     {
-        var px = BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: +1);
+        // the routine bite slides nobody (the reset, 2026-09-27); the curve is kept for authored reactions and dials
+        Assert.Equal(0f, BitePresentation.RecoilShare);
+        Assert.Equal(0f, BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: +1));
+        Assert.Equal(0f, BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f));
+        var px = BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: +1, share: 0.05f);
         Assert.True(px < 0f, "a force from the right moves him left");
-        Assert.Equal(-BitePresentation.RecoilShare * 300f, px, 3);
-        Assert.True(BitePresentation.RecoilShare >= 0.02f && BitePresentation.RecoilShare <= 0.10f, "small: acknowledgement, never displacement gameplay");
-        Assert.True(BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: -1) > 0f);
-        // the dip is tiny, downward, on the same curve, and gone with it
-        Assert.True(BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f) > 0f);
-        Assert.True(BitePresentation.RecoilDip(BitePresentation.RecoilPeakMs, 400f) <= 0.02f * 400f);
-        Assert.Equal(0f, BitePresentation.RecoilDip(BitePresentation.RecoilHomeMs, 400f));
+        Assert.Equal(-0.05f * 300f, px, 3);
+        Assert.True(BitePresentation.Recoil(BitePresentation.RecoilPeakMs, 300f, fromDirection: -1, share: 0.05f) > 0f);
+    }
+
+    [Fact]
+    public void test_bite_motif_opens_before_the_contact_snaps_on_it_and_is_gone_in_time()
+    {
+        Assert.Equal(-1f, BitePresentation.MotifOpen(200f, -200f));                     // not yet
+        Assert.True(BitePresentation.MotifOpen(16f, -16f) > 0.5f, "open on the frame before the contact");
+        // the regression: the screen's `since the last bite` clock is stale (a bite 3 s ago) when the next one is about to
+        // land; the open frame must still show, and be faint
+        Assert.True(BitePresentation.MotifOpen(17f, 2966f) > 0.5f, "open on the frame before the NEXT contact, whatever the last one's clock says");
+        Assert.InRange(BitePresentation.MotifStrength(17f, 2966f), 0.3f, 0.8f);
+        Assert.Equal(0f, BitePresentation.MotifOpen(0f, 0f));                            // shut on the beat
+        Assert.Equal(0f, BitePresentation.MotifOpen(-30f, 30f));
+        Assert.Equal(-1f, BitePresentation.MotifOpen(-200f, 200f));                       // gone
+        Assert.True(BitePresentation.MotifStrength(16f, -16f) < 1f, "faint while open");
+        Assert.Equal(1f, BitePresentation.MotifStrength(0f, 0f));
+        Assert.True(BitePresentation.MotifStrength(-40f, 40f) < 1f && BitePresentation.MotifStrength(-40f, 40f) > 0f, "a short residue");
+        Assert.Equal(0f, BitePresentation.MotifStrength(-100f, 100f));
+        Assert.True(BitePresentation.MotifGoneMs <= 100f, "no bite icon floats on the player");
     }
 
     [Fact]

@@ -41,23 +41,9 @@ public static class VfxProfiles
     public static readonly VfxProfile ImpactWeak = new(
         "impact.weak", "fx_weakhit", VfxSubjectKind.Creature, VfxAnchor.Center, 0.32f, Fps: 16f);
 
-    /// <summary>
-    /// The creature's bite landing on the champion. PINNED to him: this comment said so since the swing lunge, but the
-    /// profile was Detached, invisible at the swing's 40 px and a burst hanging in empty air once a melee action
-    /// carried him 400 px to his target (HARD HANDS, 2026-09-25). Every effect that lands ON his body follows it.
-    /// </summary>
-    /// <remarks>
-    /// ON HIS ENEMY-FACING EDGE, SMALL AND SHORT (ADR-012). A burst centred on his torso said "status", not "struck
-    /// from there" (the foundation study's readers, 2026-09-26), and at 0.36 of his height over ~570 ms it was the
-    /// loudest thing on him: it hid the body's recoil, which is the hit. Now it is a small mark at the edge the bite
-    /// touched, 0.16 of his height, its eight frames over ~290 ms; the recoil and the directional contact accent
-    /// (HuntScreen.DrawBiteContact) carry the direction and the weight. AT CHEST HEIGHT (OffsetY −0.10), not the
-    /// belt: at belt height his forward edge is his sword hand, and a mark there read as "a burst at his hand, he
-    /// fired" (the polish pass's blind read of concept A).
-    /// </remarks>
-    public static readonly VfxProfile ImpactBite = new(
-        "impact.bite", "fx_hit", VfxSubjectKind.Champion, VfxAnchor.Center, 0.16f, Fps: 28f, OffsetX: 0.34f, OffsetY: -0.10f,
-        Facing: VfxFacing.Forward, Follow: VfxFollow.Pinned);
+    // THE BITE'S CONTACT IS NOT A BURST (ADR-012 reset, 2026-09-27). `impact.bite` (a small `fx_hit` mark at his chest edge)
+    // was removed with the maw pass: the contact of a bite is the fang motif HuntScreen.DrawBiteContact snaps shut at his
+    // enemy-facing edge, a shape that closes; a profile nothing spawns is a dormant feature, so it is gone rather than kept.
 
     // ── Heal / death ──────────────────────────────────────────────────────────────────────────────
 
@@ -234,7 +220,7 @@ public static class VfxProfiles
 
     public static readonly IReadOnlyList<VfxProfile> All = new[]
     {
-        ImpactWeak, ImpactBite, HealColumn, DeathChampion, DeathBossBurst, DeathCreature,
+        ImpactWeak, HealColumn, DeathChampion, DeathBossBurst, DeathCreature,
         ShieldBarrier, ShieldGain, ShieldAbsorb, ShieldUndying, ShieldBreak,
         CastProjectile, CastAura, CastTrap, CastMark, CastTransformation, CastStrike, CastRain,
         FieldAura,

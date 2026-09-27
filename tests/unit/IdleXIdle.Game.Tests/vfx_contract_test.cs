@@ -176,7 +176,7 @@ public class VfxContractTests
     {
         // A melee action carries him 400 px to his target and back (HARD HANDS, ADR-011). A bite, a heal or a
         // shield that lands on him in that time is ON his body: Detached, it hung in the air where he had stood.
-        foreach (var p in new[] { VfxProfiles.ImpactBite, VfxProfiles.HealColumn, VfxProfiles.ShieldGain,
+        foreach (var p in new[] { VfxProfiles.HealColumn, VfxProfiles.ShieldGain,
                                   VfxProfiles.ShieldAbsorb, VfxProfiles.ShieldUndying, VfxProfiles.ShieldBreak })
             Assert.Equal(VfxFollow.Pinned, p.Follow);
     }

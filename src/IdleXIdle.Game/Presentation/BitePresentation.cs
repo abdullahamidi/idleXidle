@@ -113,15 +113,49 @@ public static class BitePresentation
 
     // ── THE CHAMPION'S RECOIL ─────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The recoil's reach, as a share of the champion's visible body width. 4, 5, 6 and 8 % were not noticed
-    /// by blind readers ("his body did nothing"; "no dip, no flinch"); the polish pass filmed 6, 8 and 10 % and keeps
-    /// 10 (27 px on the Seeker), the smallest of the series that a reader saw. Still acknowledgement, not displacement.
-    /// The capture rig can override it (<c>CaptureViews.RecoilOverride</c>).</summary>
-    public const float RecoilShare = 0.10f;
+    /// <summary>
+    /// The recoil's reach, as a share of the champion's visible body width. ZERO BY DEFAULT for a routine hit (the
+    /// reset, 2026-09-27): 4, 5, 6, 8 and 10 % all read as the sprite being translated, not as a body absorbing
+    /// force, so a normal auto-battle bite is told by the attacker's motion, the contact motif, the short flash, the
+    /// sound and the health change instead. The curve and its layering stay for stronger authored reactions later;
+    /// the capture rig can dial it (<c>CaptureViews.RecoilOverride</c>) to film a micro-impulse or a series.
+    /// </summary>
+    public const float RecoilShare = 0f;
 
-    /// <summary>The recoil's downward dip, as a share of the champion's visible body HEIGHT: a small torso impulse on
-    /// the same curve, so the hit lands in the body and not only along the floor.</summary>
-    public const float RecoilDipShare = 0.015f;
+    /// <summary>The recoil's downward dip, as a share of the champion's visible body HEIGHT per unit of recoil share
+    /// (a 10 % recoil dipped 1.5 %), on the same curve. Zero with the recoil.</summary>
+    public const float RecoilDipPerShare = 0.15f;
+
+    // ── THE BITE CONTACT MOTIF ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>How long before the contact the motif's two fangs appear, open (ms).</summary>
+    public const float MotifOpenMs = 24f;
+
+    /// <summary>After the contact: how long the fangs stay shut at full strength, and when the residue is gone (ms).</summary>
+    public const float MotifHoldMs = 16f;
+    public const float MotifGoneMs = 90f;
+
+    /// <summary>
+    /// The motif's opening, 0 = shut, 1 = fully open: open on the frame before the contact
+    /// (<paramref name="leadMs"/> &gt; 0 within <see cref="MotifOpenMs"/>), shut from the contact on. -1 when not shown.
+    /// </summary>
+    public static float MotifOpen(float leadMs, float sinceMs)
+    {
+        // the NEXT bite's lead is asked first: the screen keeps one `since the last bite` clock, which is stale (large
+        // and positive) by the time the next bite is about to land
+        if (leadMs > 0f && leadMs <= MotifOpenMs) return Math.Clamp(leadMs / MotifOpenMs, 0.35f, 1f);
+        return sinceMs >= 0f && sinceMs < MotifGoneMs ? 0f : -1f;
+    }
+
+    /// <summary>The motif's strength, 0..1: faint while open, full on the snap, a short residue, gone by <see cref="MotifGoneMs"/>.</summary>
+    public static float MotifStrength(float leadMs, float sinceMs)
+    {
+        if (leadMs > 0f && leadMs <= MotifOpenMs) return 0.6f;
+        if (sinceMs < 0f || sinceMs >= MotifGoneMs) return 0f;
+        if (sinceMs < MotifHoldMs) return 1f;
+        var s = (sinceMs - MotifHoldMs) / (MotifGoneMs - MotifHoldMs);
+        return (1f - s) * (1f - s);
+    }
 
     /// <summary>When the recoil peaks after the contact, and when the champion is home again (ms).</summary>
     public const float RecoilPeakMs = 33f;
@@ -147,8 +181,8 @@ public static class BitePresentation
         => -fromDirection * share * visibleWidth * Recoil01(sinceHitMs);
 
     /// <summary>The recoil's dip in pixels (positive = down) for a champion <paramref name="visibleHeight"/> tall.</summary>
-    public static float RecoilDip(float sinceHitMs, float visibleHeight)
-        => RecoilDipShare * visibleHeight * Recoil01(sinceHitMs);
+    public static float RecoilDip(float sinceHitMs, float visibleHeight, float share = RecoilShare)
+        => RecoilDipPerShare * share * visibleHeight * Recoil01(sinceHitMs);
 
     // ── THE USUAL FLASH ───────────────────────────────────────────────────────────────────────────────────────
 

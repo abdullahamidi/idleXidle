@@ -14,7 +14,7 @@ them, and every one is inert without its variable. They change no fight, no Core
 | `RH_SHOT_NOTINT=1` | no ember wind-up tint on the creatures |
 | `RH_SHOT_SIL=1` | every creature drawn as a flat grey silhouette: does the SHAPE perform the action? |
 | `RH_SHOT_NOROOT=1` | the pack's presentation lunge off (the creatures stay in their row; the strip still plays) |
-| `RH_SHOT_NORECOIL=1` | the champion's hit recoil and its contact accent off |
+| `RH_SHOT_NORECOIL=1` | the champion's hit recoil off (the bite motif at his edge is not the recoil's and stays; `RH_SHOT_NOVFX` hides it) |
 | `RH_SHOT_FLASH=off` | the hit flash off for every hit |
 | `RH_SHOT_FLASH=peak,rise,ms` | the hit flash overridden for every hit, a recipe's included, e.g. `1,0.2,200` is the old full-white flash and `0.45,0.15,80` the usual one |
 | `RH_SHOT_STRIP_FILES=key=path;...` | textures loaded from outside the asset tree under a key: a stand-in body (film a light creature in a dark region's fight), a prototype strip |

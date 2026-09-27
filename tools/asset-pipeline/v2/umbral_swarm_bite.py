@@ -1,33 +1,28 @@
 #!/usr/bin/env python3
-"""umbral_swarm_bite.py -- the GLOOM WHELP's attack strip, re-authored as a BITE (ADR-012, 2026-09-26).
+"""umbral_swarm_bite.py -- the GLOOM WHELP's attack strip, re-authored as a PREDATORY LUNGE (ADR-012 reset, 2026-09-27).
 
-    python tools/asset-pipeline/v2/umbral_swarm_bite.py [--source <original strip>] [--contact <png>] [--out <dir>]
+    python tools/asset-pipeline/v2/umbral_swarm_bite.py [--source <original strip>] [--out <dir>]
 
-The strip the enemy matrix generated (spec.json enemy_matrix.umbral_swarm.attack) was a crouch in place: the head sank
-over frames 1-3, the contact frame (5 of 8, HuntScreen.ContactFraction) equalled the frame before it within 2 px, the
-horizontal centroid never moved, and the only fast motion was standing back up after the hit (the foundation study,
-production/qa/evidence/bite-readability/). This re-authors the eight frames from the creature's OWN frames by
-deterministic edits, so its identity, proportions, material and lighting are untouched:
+The strip the enemy matrix generated (spec.json enemy_matrix.umbral_swarm.attack) was a crouch in place. Two passes
+of whole-sprite shears and a painted mouth were rejected (2026-09-26): the poses stayed one crouch, and the mouth read
+as pasted on. This pass keeps the creature EXACTLY as designed (a dark faceless head, two bright eyes, no mouth) and
+authors four genuinely different whole-body poses by COLUMN-WISE WARPS of its own frames: every column of the source
+gets its own horizontal shift, vertical scale and lift, so the head end and the tail end of the body can do different
+things while the feet stay on the ground.
 
     0 REST            the original rest frame
-    1 PREPARE         compress, pull back                  (the body coils)
-    2 PREPARE deep    lower, further back                  (deepest coil)
-    3 COMMIT          the head leads forward               (the coil releases)
-    4 COMMIT fast     forward, a smear trails the body     (acceleration)
-    5 CONTACT         the strongest forward silhouette     (full extension, taller, the head furthest left)
-    6 FOLLOW-THROUGH  compressed on landing, still forward
+    1 COIL            centre of mass low and back: the front gathers toward the body, the tail gathers, the head withdraws
+    2 COIL deep       lower still, the whole body compressed toward its rear
+    3 COMMIT          the torso extends: the head columns lead forward and rise, the tail trails
+    4 COMMIT fast     further; a faint blurred copy behind for the smear
+    5 CONTACT         the longest forward silhouette: the head furthest forward, aimed down into the Seeker, the rear
+                      mass visibly behind and low
+    6 FOLLOW-THROUGH  the front compresses from the impact, the trailing parts catch up
     7 RECOVER         back toward rest
 
-Each pose is the source frame under one affine map about the FEET (the feet do not move: the arena bottom-anchors the
-figure, and the row's presentation lunge carries the travel), a shear whose top moves toward the champion, plus a
-faint blurred copy behind the two commit frames for the smear. --contact substitutes a hand-picked contact frame (a
-PixelLab key-pose edit, checked for identity) for frame 5's transform. The still `umbral_swarm_attack_01.png` (frame 0)
-is written beside the strip. The original strip is kept under keypose_sources/ for the record.
-
-PIXELLAB, tried once and REJECTED (2026-09-26): edit_image_pro_flash job ae930771-a594-4091-8e0e-f4c3d289044f, the rest
-frame at 256 px with a controlled "same creature, lunging bite, mouth open" instruction. The result lunged, but it was
-another creature: a quadruped with a crocodile-like head in profile, one eye, no purple rim light, none of the whelp's
-hunched round-headed shape. Identity drift, so no PixelLab frame is in this strip; every pose is the creature's own.
+The still `umbral_swarm_attack_01.png` (frame 0) is written beside the strip. The crouch original is kept under
+keypose_sources/ for the record. No AI: PixelLab drifted the identity twice (a crocodile-headed quadruped) and is not
+used; if these warps cannot make the poses read, the honest answer is a redrawn strip, not another transform.
 """
 import argparse
 import os
@@ -42,106 +37,91 @@ STRIP = os.path.join(ART, "Animations", "Enemies", "umbral_swarm_attack", "umbra
 STILL = os.path.join(ART, "enemies", "enemies", "umbral_swarm", "umbral_swarm_attack_01.png")
 KEEP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keypose_sources", "umbral_swarm_attack_crouch_strip8_512.png")
 F = 512
-CX, YB = 256.0, 494.0   # the frame's centre column and the feet row (every original frame's alpha bottom is 478-494)
-
-# (source frame, x scale, y scale, shear px at the top toward the champion (negative = left), smear px, maw, label)
-#   maw: how far the Shadow maw is open on this pose (0 = the normal face; 1 = fully open; a small value = shut on the
-#   bite, the teeth meeting). It exists on the commit and contact poses only.
-POSES = [
-    (0, 1.00, 1.00,   0,  0, 0.00, "REST"),
-    (2, 1.04, 0.90, +24,  0, 0.00, "PREPARE: coil, pull back"),
-    (4, 1.06, 0.82, +40,  0, 0.00, "PREPARE: deepest coil"),
-    (3, 0.95, 1.00, -30,  0, 0.45, "COMMIT: the head leads, the maw opens"),
-    (2, 0.90, 1.02, -56, 22, 1.00, "PRE-CONTACT: thrust, maw OPEN, teeth"),
-    (1, 0.84, 1.08, -86, 14, 0.12, "CONTACT: full extension, the maw SHUTS"),
-    (5, 0.93, 0.94, -34,  0, 0.00, "FOLLOW-THROUGH: compressed, the face closes"),
-    (6, 1.00, 0.98,  -8,  0, 0.00, "RECOVER"),
-]
-
-MAW_CAVITY = (88, 60, 126, 255)     # the rim-light violet, lighter than the body: a cavity opening in the shadow
-MAW_TOOTH = (230, 222, 240, 255)    # the pale of the eyes
+YB = 494.0   # the feet row (every original frame's alpha bottom is 478-494)
 
 
-def paint_maw(frame, openness):
-    """THE SHADOW MAW: character animation art, not an effect. On the commit and contact poses the front-lower part of
-    the dark head opens into a short maw: a violet cavity (negative space in the shadow) with three pale teeth hanging
-    from its upper lip and two rising from its lower. It is placed from the creature's own eyes (the two pale glows),
-    scaled by their spacing, and CLIPPED TO THE HEAD'S OWN SILHOUETTE, so it can never grow a snout or leave the head
-    the idle creature has; it opens downward inside the face, and at `openness` near 0 it is a shut slit with the
-    teeth meeting (the bite). The idle strip is untouched: the mouth exists only for the attack."""
-    if openness <= 0:
-        return frame
-    a = np.asarray(frame).astype(int)
-    bright = (a[:, :, 0] > 170) & (a[:, :, 1] > 170) & (a[:, :, 2] > 170) & (a[:, :, 3] > 128)
-    ys, xs = np.nonzero(bright)
-    if len(xs) < 50:
-        return frame
-    ex, ey = xs.mean(), ys.mean()
-    s = (xs.max() - xs.min()) / 74.0            # the eyes' span at rest is 74 px
-    # the eyes sit in the head's lower front; the maw is the band between them and the chin, hinged at the back
-    # the eyes sit at the head's front-bottom; the mouth is the lower arc UNDER and BEHIND them (the chin runs from
-    # just under the front eye back to ~38 px under the back eye), hinged at the back, opening down past the chin
-    front = (ex - 30 * s, ey + 9 * s)
-    hinge = (ex + 40 * s, ey + 24 * s)
-    gap = (8 + 30 * openness) * s               # how far the lower jaw drops (past the chin when open: a jaw, not a snout)
-    lower_front = (front[0] - 4 * s, front[1] + gap)
-    lower_back = (hinge[0] + 2 * s, hinge[1] + gap * 0.45)
-    cavity = [front, hinge, lower_back, lower_front]
-    layer = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    d.polygon(cavity, fill=MAW_CAVITY)
-    # the jaw's own dark rim under the cavity, so the open mouth has a lower lip and not only a hole
-    d.line([lower_front, lower_back], fill=(22, 16, 30, 255), width=max(2, int(4 * s)))
-    # teeth: three from the upper lip pointing down, two from the lower lip pointing up; they meet when the maw shuts
-    for t in (0.15, 0.42, 0.70):
-        x = front[0] + (hinge[0] - front[0]) * t
-        ly = front[1] + (hinge[1] - front[1]) * t
-        h = min(gap * 0.62, 14 * s)
-        d.polygon([(x - 4.5 * s, ly), (x + 4.5 * s, ly), (x, ly + h)], fill=MAW_TOOTH)
-    for t in (0.28, 0.56):
-        x = lower_front[0] + (lower_back[0] - lower_front[0]) * t
-        ly = lower_front[1] + (lower_back[1] - lower_front[1]) * t
-        h = min(gap * 0.5, 10 * s)
-        d.polygon([(x - 4 * s, ly), (x + 4 * s, ly), (x, ly - h)], fill=MAW_TOOTH)
-    # clip to the head: the creature's own body, allowed a drop below the chin for the open jaw (never sideways,
-    # never a snout: the head's proportions stay the idle creature's)
-    body = a[:, :, 3] > 100
-    drop = int(round(26 * s * openness))
-    dilated = body.copy()
-    if drop > 0:
-        dilated[drop:, :] |= body[:-drop, :]
-    mask = Image.fromarray(dilated.astype(np.uint8) * 255, "L")
-    clipped = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-    clipped.paste(layer, (0, 0), mask)
-    out = frame.copy()
-    out.alpha_composite(clipped)
-    return out
+def smooth(v):
+    v = min(1.0, max(0.0, v))
+    return v * v * (3 - 2 * v)
 
 
-def posed(frame, sx, sy, k, smear):
-    """x = cx + sx (x - cx) + k (yb - y) / yb ; y = yb + sy (y - yb): scaled about the feet, sheared so the top moves by k
-    and the feet do not. PIL wants the inverse map."""
-    e = 1.0 / sy
-    f = YB * (1.0 - e)
-    a = 1.0 / sx
-    b = k * e / (sx * YB)
-    c = CX - CX / sx - k * (YB - f) / (sx * YB)
-    out = frame.transform((F, F), Image.AFFINE, (a, b, c, 0.0, e, f), resample=Image.BICUBIC)
+def warp(frame, dx_front, dx_back, sy_front, sy_back, lift_front, lift_back, smear=0, pivot=0.5):
+    """A column-wise warp of one 512 px frame. `u` runs 0 at the body's front (left) column to 1 at its back (right);
+    each quantity is blended from its front value to its back value with a smoothstep about `pivot`. dx shifts the
+    column (negative = toward the champion), sy scales it vertically about the feet, lift moves its torso and head
+    (negative = up) while the legs stay planted.
+    The forward x map is monotonic (the shifts vary slowly across the body), so it is inverted by interpolation and
+    the output is sampled bilinearly."""
+    a = np.asarray(frame).astype(np.float32)
+    alpha = a[:, :, 3]
+    cols = np.nonzero(alpha.max(axis=0) > 16)[0]
+    x0, x1 = float(cols.min()), float(cols.max())
+    xs = np.arange(F, dtype=np.float32)
+    u = np.clip((xs - x0) / max(1.0, x1 - x0), 0, 1)
+    w = np.array([smooth((ui - pivot + 0.5) if False else ui) for ui in u], dtype=np.float32)   # 0 front .. 1 back
+    # blend front -> back
+    dx = dx_front + (dx_back - dx_front) * w
+    sy = sy_front + (sy_back - sy_front) * w
+    lift = lift_front + (lift_back - lift_front) * w
+    fwd = xs + dx                                   # where each source column lands
+    # inverse x map: for each output column, the source column (monotonic, so np.interp works)
+    src_x = np.interp(xs, fwd, xs, left=-1, right=-1)
+    out = np.zeros_like(a)
+    valid = src_x >= 0
+    sx = src_x[valid]
+    # per output column: the source column's vertical map, evaluated at the source column
+    sy_c = np.interp(sx, xs, sy)
+    lift_c = np.interp(sx, xs, lift)
+    ys = np.arange(F, dtype=np.float32)
+    # the vertical map, per column: y' = YB + sy (y - YB) + lift * f(y), where f fades the lift out over the legs so
+    # the feet stay on the floor whatever the torso and head do (f = 0 within 50 px of the floor, 1 from 170 px up).
+    # It is monotonic, so it is inverted by interpolation, one column at a time.
+    feet = np.clip((YB - ys - 50.0) / 120.0, 0.0, 1.0)
+    src_y = np.empty((F, sx.size), dtype=np.float32)
+    for j in range(sx.size):
+        fwd_y = YB + sy_c[j] * (ys - YB) + lift_c[j] * feet
+        src_y[:, j] = np.interp(ys, fwd_y, ys, left=-1, right=-1)
+    # bilinear sample
+    gx = np.broadcast_to(sx[None, :], src_y.shape)
+    gy = src_y
+    ix0 = np.clip(np.floor(gx).astype(int), 0, F - 2)
+    iy0 = np.clip(np.floor(gy).astype(int), 0, F - 2)
+    fx = np.clip(gx - ix0, 0, 1)[..., None]
+    fy = np.clip(gy - iy0, 0, 1)[..., None]
+    inside = (gy >= 0) & (gy <= F - 1)   # -1 marks rows the map does not reach
+    s = (a[iy0, ix0] * (1 - fx) * (1 - fy) + a[iy0, ix0 + 1] * fx * (1 - fy)
+         + a[iy0 + 1, ix0] * (1 - fx) * fy + a[iy0 + 1, ix0 + 1] * fx * fy)
+    s[~inside] = 0
+    out[:, valid] = s
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
     if smear:
-        trail = out.transform((F, F), Image.AFFINE, (1, 0, -smear, 0, 1, 0), resample=Image.BILINEAR).filter(ImageFilter.GaussianBlur(3))
+        trail = img.transform((F, F), Image.AFFINE, (1, 0, -smear, 0, 1, 0), resample=Image.BILINEAR).filter(ImageFilter.GaussianBlur(3))
         r, g, bl, al = trail.split()
         trail = Image.merge("RGBA", (r, g, bl, al.point(lambda v: int(v * 0.40))))
         base = Image.new("RGBA", (F, F), (0, 0, 0, 0))
         base.alpha_composite(trail)
-        base.alpha_composite(out)
-        out = base
-    return out
+        base.alpha_composite(img)
+        img = base
+    return img
+
+
+# (source frame, dx front, dx back, sy front, sy back, lift front, lift back, smear, label)
+#   front = the head end (left), back = the tail end (right); dx negative = toward the champion; lift negative = up
+POSES = [
+    (0,    0,    0, 1.00, 1.00,   0,   0,  0, "REST"),
+    (3,  +40,  -34, 0.88, 0.84, +14, +10,  0, "COIL: the front gathers back and down, the tail gathers in, lower"),
+    (4,  +56,  -50, 0.80, 0.78, +22, +16,  0, "COIL deep: compressed toward its rear, lowest, the head withdrawn"),
+    (0,  -22,  +14, 1.03, 0.94, -16,  +4,  0, "COMMIT: the head leads and rises, the tail trails"),
+    (0,  -32,  +20, 1.04, 0.90, -12,  +8, 20, "COMMIT fast: further, the head starting down, a smear behind"),
+    (0,  -38,  +26, 0.94, 0.80, +16, +20,  8, "CONTACT: the longest silhouette, the head driven DOWN into the Seeker, the rear low and far behind"),
+    (5,  -20,   -6, 0.90, 0.92, +10,  +6,  0, "FOLLOW-THROUGH: the front compresses, the tail catches up"),
+    (6,  -12,   -6, 0.98, 0.98,  +2,  +2,  0, "RECOVER"),
+]
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", default=KEEP if os.path.exists(KEEP) else STRIP, help="the original (crouch) strip")
-    ap.add_argument("--contact", default=None, help="a hand-picked 512x512 RGBA contact frame for frame 5")
     ap.add_argument("--out", default=None, help="write here instead of the asset tree (a preview)")
     a = ap.parse_args()
     src = Image.open(a.source).convert("RGBA")
@@ -152,16 +132,15 @@ def main():
     strip = Image.new("RGBA", (8 * F, F), (0, 0, 0, 0))
     sheet = Image.new("RGB", (8 * 260, 2 * 280 + 40), (40, 36, 48))
     d = ImageDraw.Draw(sheet)
-    for i, (sf, sx, sy, k, smear, maw, label) in enumerate(POSES):
-        fr = Image.open(a.contact).convert("RGBA").resize((F, F), Image.LANCZOS) if (i == 5 and a.contact) else posed(frames[sf], sx, sy, k, smear)
-        fr = paint_maw(fr, maw)
+    for i, (sf, dxf, dxb, syf, syb, lf, lb, smear, label) in enumerate(POSES):
+        fr = frames[sf] if i == 0 else warp(frames[sf], dxf, dxb, syf, syb, lf, lb, smear)
         strip.paste(fr, (i * F, 0))
         for row, im in ((0, frames[i]), (1, fr)):
             bg = Image.new("RGBA", (F, F), (40, 36, 48, 255))
             bg.alpha_composite(im)
             sheet.paste(bg.convert("RGB").resize((260, 260)), (i * 260, 20 + row * 280))
         d.text((i * 260 + 4, 4), f"crouch {i}", fill=(255, 220, 120))
-        d.text((i * 260 + 4, 284), f"bite {i}: {label}", fill=(255, 220, 120))
+        d.text((i * 260 + 4, 284), f"lunge {i}: {label[:34]}", fill=(255, 220, 120))
     out_strip = os.path.join(a.out, "umbral_swarm_attack_strip8_512.png") if a.out else STRIP
     out_still = os.path.join(a.out, "umbral_swarm_attack_01.png") if a.out else STILL
     if a.out:
