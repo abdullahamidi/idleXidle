@@ -33,6 +33,13 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        strain (three small link ticks). One cue for the whole reaction, right after the
                                        enemy's bite thud: BITE -> tiny release -> CLACK. No crunch, no bone, no thump.
 
+    sfx_seeker_jaws_fangs        ~0.13 s  SHADOW FANGS (the final JAWS direction, 2026-09-27): ONE dark, dry, sharp, short
+                                       Shadow bite / thorn impact, its transient exactly on the fangs' SNAP: a dry click and
+                                       a few inharmonic partials dying inside ~7 ms, a short dry organic impact, a damped
+                                       dark body with no pitch drop, and under it an energy COMPRESSION (a dark tone
+                                       squeezed down over ~35 ms). No ticks, no metal, no swarm, no bone crunch. The
+                                       `_snap` (the trap's clack) and `_chomp` (the piranha's) cues are history.
+
 The SPRAY and HARD HANDS cues are HUMAN-APPROVED (the owner, 2026-09-25). A measurement says a cue is bright, short and
 quiet enough; only an ear says it sounds like a knife (or a fist), so every new cue here is a candidate until it is
 listened to (design/audio/seeker-spray-audio-brief.md is the contract the approved ones keep). The JAWS snap is a
@@ -167,6 +174,29 @@ def jaws_chomp(buf):
     # ONE bite: no secondary ticks (the one-piranha direction, 2026-09-27: the visual is one strong Shadow bite)
 
 
+def jaws_fangs(buf):
+    """SHADOW FANGS (the FINAL direction, 2026-09-27): ONE short Shadow bite / thorn impact, dark, dry, sharp, short, its
+    main transient exactly on the SNAP (t 0). Energy compression + a short organic/dry impact, nothing more: at 0 a dry
+    sharp transient (a tiny click and a few inharmonic partials that die inside ~7 ms: points meeting hide, not steel),
+    a short dry organic impact under it (low-passed noise, ~12 ms) and a damped dark body (no pitch drop, so it is
+    never a skull thump); then the COMPRESSION, a dark tone squeezed down (900 -> 130 Hz in ~35 ms, quiet, under the
+    impact) as the fangs close on what they caught, and a whisper of Shadow crackle. No secondary ticks, no metal, no
+    swarm, no bone crunch, no roar. A frequent Reaction: ~130 ms, quiet enough to repeat every few seconds."""
+    rng = S.Noise(0xFA96)
+    # 0 ms, THE SNAP: the dry sharp transient
+    S.add(buf, 0.0, S.click(rng, 0.0016, 2700.0), 0.52)
+    S.bell(buf, 0.0002, 1900.0, 0.22, 0.007, partials=(1.0, 1.47, 2.23))
+    # the dry organic impact beneath it: low-passed, ~12 ms
+    S.add(buf, 0.0006, S.envelope(S.lp2(S.noise(rng, 0.03), 800.0), 0.0012, 0.005), 0.30)
+    S.add(buf, 0.0, S.body(rng, 0.03, 1100.0, 3.0, 0.006), 0.26)
+    # the dark body: damped, no pitch drop (a bite, not a skull)
+    S.bell(buf, 0.0004, 300.0, 0.16, 0.011, partials=(1.0, 1.58))
+    # THE COMPRESSION: a dark tone squeezed down under the impact as the fangs close on what they caught
+    S.sweep(buf, 0.002, 0.045, 900.0, 130.0, 0.13, shape="sine", curve=2.2)
+    # a whisper of Shadow crackle: a narrow bright band, ~20 ms, well under everything
+    S.add(buf, 0.002, S.envelope(S.biquad(S.noise(rng, 0.03), "bp", 4200.0, 1.6), 0.002, 0.007), 0.06)
+
+
 def main() -> int:
     S.make("sfx_seeker_spray_release", S.COMBAT_DIR, 0.20, spray_release, target_peak=0.26, max_ms=220.0, darken=9500.0)
     S.make("sfx_seeker_spray_hit", S.COMBAT_DIR, 0.28, spray_hit, target_peak=0.38, max_ms=300.0, darken=7500.0)
@@ -174,9 +204,10 @@ def main() -> int:
     S.make("sfx_seeker_hard_hands_commit", S.COMBAT_DIR, 0.20, hard_hands_commit, target_peak=0.24, max_ms=220.0, darken=5000.0)
     S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
     S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)   # history: the rejected trap's clack
-    S.make("sfx_seeker_jaws_chomp", S.COMBAT_DIR, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)
+    S.make("sfx_seeker_jaws_chomp", S.COMBAT_DIR, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)   # history: the rejected piranha's chomp
+    S.make("sfx_seeker_jaws_fangs", S.COMBAT_DIR, 0.13, jaws_fangs, target_peak=0.32, max_ms=150.0, darken=6500.0)
     print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
-    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_chomp",
+    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_fangs", "sfx_seeker_jaws_chomp",
                  "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_seeker_jaws_snap", "sfx_cast", "sfx_hit"):
         m = S.measure(os.path.join(S.COMBAT_DIR, name + ".wav"))
         print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")

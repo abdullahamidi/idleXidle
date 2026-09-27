@@ -2030,8 +2030,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // jaws' own sentence, so the generic thud and puff that would describe the same blow give way to its snap.
         var reactionHitAtMs = -1;
         ReactionRecipe? reactionHitRecipe = null;
-        // ...and the presented reaction itself: its answer's number, flash and any kill are PRESENTED on its jaws' stop
-        // (~50 ms on), not on the bite's frame; the fight has already resolved them (see ReactionEcho)
+        // ...and the presented reaction itself: its answer's number and any kill are PRESENTED on its fangs' SNAP
+        // (~55 ms on; the number a few frames after it), not on the bite's frame; the fight has already resolved them
+        // (see ReactionEcho)
         ReactionPerformance? reactionHitPerf = null;
         // ...and WHAT the reaction at that beat is called, so its blow can print its own name instead of
         // the word CRITICAL (§63: a critical is the expected value there; the skill is the news).
@@ -2122,8 +2123,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         }
                         if (!_summed.Contains(bi))
                         {
-                            // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER ON THE JAWS' STOP, where it lands on screen
-                            if (reactionHit && reactionHitPerf is { Clamped: false } answering)
+                            // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER A FEW FRAMES AFTER THE FANGS' SNAP, so the eye
+                            // sees the fangs before it reads the number (ReactionRecipe.NumberDelayMs)
+                            if (reactionHit && reactionHitPerf is { Answered: false } answering)
                                 _reactionEchoes.Add(new ReactionEcho(answering, ReactionEchoKind.Number, e.Slot, total, crit, skill, hits,
                                                                      reaction ? trapName : null));
                             else
@@ -2139,7 +2141,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
                     // together they strobed the pack ("the enemy blinks like a disco ball", playtest
                     // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
-                    if (!auraTick && reactionHit && reactionHitPerf is { Clamped: false } flashing)
+                    if (!auraTick && reactionHit && reactionHitRecipe!.TargetFlash <= 0f)
+                    {
+                        // NO JAWS TARGET FLASH (the final direction, 2026-09-27): the Shadow fangs ARE the reaction's hit
+                        // feedback; a white flash under them competed with the shape. Ordinary blows keep the generic F2.
+                    }
+                    else if (!auraTick && reactionHit && reactionHitPerf is { Snapped: false } flashing)
                         _reactionEchoes.Add(new ReactionEcho(flashing, ReactionEchoKind.Flash, e.Slot));   // ...and its flash
                     else if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
                     {
@@ -2240,10 +2247,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     break;
                 case BattleEventKind.EnemyDown:
                 {
-                    // A CREATURE A PRESENTED REACTION'S ANSWER KILLED falls on the jaws' STOP, not on the bite's frame:
-                    // the fight killed it at the bite, but on screen the trap has not shut yet (JAWS, ADR-011). Until
-                    // then it is drawn standing, in the jaws (_deathDeferred).
-                    if (reactionHitPerf is { Clamped: false } killing && e.AtMs == reactionHitAtMs && killing.Targets.Contains(e.Slot))
+                    // A CREATURE A PRESENTED REACTION'S ANSWER KILLED falls on the fangs' SNAP, not on the bite's frame:
+                    // the fight killed it at the bite, but on screen the fangs have not shut yet (JAWS, ADR-011). Until
+                    // then it is drawn standing, between the fangs (_deathDeferred).
+                    if (reactionHitPerf is { Snapped: false } killing && e.AtMs == reactionHitAtMs && killing.Targets.Contains(e.Slot))
                     {
                         _reactionEchoes.Add(new ReactionEcho(killing, ReactionEchoKind.Death, e.Slot));
                         _deathDeferred.Add(e.Slot);
@@ -6526,35 +6533,37 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         PlayFx(VfxProfiles.DeathCreature, VfxSubject.Creature(slot), Color.White);
     }
 
-    /// <summary>What a presented reaction's answer shows on its jaws' stop instead of on the bite's frame.</summary>
+    /// <summary>What a presented reaction's answer shows on its fangs' snap (or a few frames after it) instead of on the bite's frame.</summary>
     private enum ReactionEchoKind { Number, Flash, Death }
 
     /// <summary>
-    /// ONE PIECE OF A REACTION'S ANSWER, held for its jaws' stop (JAWS, ADR-011 readable-clamp pass). The fight resolved
-    /// the reflected blow on the bite's millisecond; the trap takes ~50 ms to spring shut on screen, and the answer's own
-    /// feedback (its number, the creature's flash, a kill's fall) belongs to the moment steel meets the limb. The enemy's
-    /// bite keeps its own feedback at t 0. Presentation only: nothing here changes what the fight did.
+    /// ONE PIECE OF A REACTION'S ANSWER, held for its fangs' snap (JAWS, ADR-011). The fight resolved the reflected blow
+    /// on the bite's millisecond; the fangs take ~55 ms to snap shut on screen, and the answer's own feedback belongs to
+    /// the moment they do: a kill's fall (and a flash, when a recipe has one) on the snap, the number a few frames after
+    /// it so the fangs are seen first. The enemy's bite keeps its own feedback at t 0. Presentation only: nothing here
+    /// changes what the fight did.
     /// </summary>
     private readonly record struct ReactionEcho(ReactionPerformance Reaction, ReactionEchoKind Kind, int Slot, int Amount = 0,
                                                 bool Crit = false, bool Skill = false, int Hits = 1, string? Word = null);
 
-    /// <summary>The answers waiting for their jaws' stop, oldest first (a few at most: a reaction every few seconds).</summary>
+    /// <summary>The answers waiting for their fangs' snap, oldest first (a few at most: a reaction every few seconds).</summary>
     private readonly List<ReactionEcho> _reactionEchoes = new();
 
-    /// <summary>Creatures the fight has killed whose fall waits for the jaws' stop: drawn standing until then.</summary>
+    /// <summary>Creatures the fight has killed whose fall waits for the fangs' snap: drawn standing until then.</summary>
     private readonly HashSet<int> _deathDeferred = new();
 
     /// <summary>
-    /// Present <paramref name="r"/>'s held answer: on its stop (<paramref name="present"/>), or dropped when a seek rewound
-    /// past its bite (the replay is rebuilt; the kill has not happened there yet).
+    /// Present <paramref name="r"/>'s held answer: on its snap (<paramref name="present"/>), or dropped when a seek rewound
+    /// past its bite (the replay is rebuilt; the kill has not happened there yet). <paramref name="keepNumber"/> leaves
+    /// the number waiting for its own, later frame.
     /// </summary>
-    private void ReleaseEchoes(ReactionPerformance r, bool present, bool keepFlash = false)
+    private void ReleaseEchoes(ReactionPerformance r, bool present, bool keepNumber = false)
     {
         for (var i = 0; i < _reactionEchoes.Count; i++)
         {
             var echo = _reactionEchoes[i];
             if (!ReferenceEquals(echo.Reaction, r)) continue;
-            if (keepFlash && echo.Kind == ReactionEchoKind.Flash) continue;   // the flash has its own frame (a JAWS recipe may delay it past the chomp)
+            if (keepNumber && echo.Kind == ReactionEchoKind.Number) continue;   // the number has its own frame (ReactionRecipe.NumberDelayMs after the snap)
             _reactionEchoes.RemoveAt(i--);
             if (!present)
             {
@@ -6567,7 +6576,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Skill, echo.Hits, echo.Word);
                     if (echo.Crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
                     break;
-                case ReactionEchoKind.Flash when _hitFlash.GetValueOrDefault(echo.Slot) <= 0f:
+                case ReactionEchoKind.Flash when r.Recipe.TargetFlash > 0f && _hitFlash.GetValueOrDefault(echo.Slot) <= 0f:
                     _hitFlash[echo.Slot] = 1f;
                     _hitFlashLook[echo.Slot] = (r.Recipe.TargetFlash, 0f, 1000f / Math.Max(1f, r.Recipe.TargetFlashMs));
                     if (PresentTrace.Enabled) PresentTrace.Log("flash", $"slot={echo.Slot}");
@@ -6585,7 +6594,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
-    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its jaws, its chain, its snap.</summary>
+    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its fangs, their snap.</summary>
     private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
         var targets = CastTargets(cast);
@@ -6599,8 +6608,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var r = new ReactionPerformance(recipe, cast.Slot, cast.AtMs, targets, SourceColor.GetValueOrDefault(source, Bone));
         _reactions.Add(r);
         r.Update(_playheadMs, this);
-        // The cue is NOT played here: the ear hears the bite when the HERO's mouth closes (UpdateReactions, on the
-        // frame the answer lands), so cause and effect stay in order: BITE thud, the jaw arrives, CHOMP.
+        // The cue is NOT played here: the ear hears the bite when the fangs SNAP (UpdateReactions, on that frame), so
+        // cause and effect stay in order: BITE thud, the fangs appear open, SNAP.
         if (PresentTrace.Enabled)
             PresentTrace.Log("reaction-spawn", $"{recipe.Id}\tslot={cast.Slot}\tcontact={cast.AtMs}\ttargets={string.Join(",", targets)}"
                                                + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
@@ -6624,20 +6633,21 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             var step = r.Update(_playheadMs, this);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // the layer's own
-            // THE HERO'S CLOSED FRAME: the answer lands on screen now (its number, its flash, a kill's fall) and in the
-            // ear (ONE authored cue for the whole phrase, its transient on this frame; not lead: under a performing
-            // action the duck keeps it secondary to the action's own voice)
-            if (step.Flashed && !step.Clamped) ReleaseEchoes(r, present: true);   // the delayed flash's own frame
-            if (step.Clamped)
+            // THE SNAP: a kill's fall lands on screen now, and the ear hears ONE authored cue for the whole phrase, its
+            // transient on this frame (not lead: under a performing action the duck keeps it secondary to the action's
+            // own voice). The number waits for its own frame a little after, so the fangs are seen before it is read.
+            if (step.Answered && !step.Snapped) ReleaseEchoes(r, present: true);   // the number's own frame
+            if (step.Snapped)
             {
-                ReleaseEchoes(r, present: true, keepFlash: !step.Flashed);
+                ReleaseEchoes(r, present: true, keepNumber: !step.Answered);
                 var cx = r.Targets.Count > 0 && TryBody(VfxSubject.Creature(r.Targets[0]), out var bitten) ? bitten.Center.X : ArenaRect.Center.X;
                 var cue = Sound?.PlayFirst(r.Recipe.SnapCues, r.Recipe.SnapVolume, 0f, Pan(cx, r.Recipe.PanWidth), 0.04f);
                 if (PresentTrace.Enabled) PresentTrace.Log("reaction-cue", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tcue={cue ?? "-"}");
             }
             if (!PresentTrace.Enabled) continue;
             var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
-            if (step.Clamped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
+            if (step.Snapped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
+            if (step.Answered) PresentTrace.Log("reaction-number", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
         }
     }
 
@@ -6713,6 +6723,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     bool IReactionStage.TryCaughtBody(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
 
     bool IReactionStage.TryTargetFrame(int slot, out SpriteFrame frame) => TryDrawnFrame(VfxSubject.Creature(slot), out frame);
+
 
 
 

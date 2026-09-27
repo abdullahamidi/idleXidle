@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27: JAWS is **SHADOW PIRANHA RETALIATION**, a stylised reactive-damage phrase in the family of thorns-style damage (enemy hits the Seeker → several tiny Shadow jaw-heads appear on the attacker → CHOMP → "−X JAWS" → gone in ~140 ms), NOT a mechanism the player has to understand: no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D. It is built (`ReactionRecipe` / `ReactionPerformance`, one tiny source sprite in two states, `sfx_seeker_jaws_chomp`) and filmed (`production/qa/evidence/jaws-piranha/`); the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, when an enemy bites him, does it look like Shadow piranhas immediately bite it back? It AWAITS the owner's true-speed review; if yes, JAWS is accepted and closed. |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27 (SHADOW PIRANHA retaliation, a stylised reactive-damage phrase; no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D) and, after three piranha passes (three jaws, a hero chomp, one piranha in negative space) still read as coloured motion at true speed, set the FINAL direction the same day: JAWS is **SHADOW FANGS**, a simple reactive-damage effect (enemy hits the Seeker → four LARGE SIMPLE Shadow fang shapes appear OPEN round the attacker → SNAP onto its outer silhouette → HOLD → "−X JAWS" → release, gone in ~200 ms). No creature to identify: the shapes are the effect. It is built (`ReactionRecipe` / `ReactionPerformance`, ONE hand-authored fang drawn four times, `sfx_seeker_jaws_fangs`, no JAWS target flash, the number delayed past the snap) and filmed (`production/qa/evidence/jaws-fangs/`); the piranha and the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, does it read as "something sharp / jaws snapped onto that enemy because it hit me"? It AWAITS the owner's true-speed review; if yes, JAWS is accepted and closed. |
 | **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
@@ -65,46 +65,49 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap NOT approved; the production direction is SHADOW PIRANHA, 2026-09-27, awaiting the owner's true-speed review)
+## The reaction reference: JAWS (architecture approved; the bear trap and the piranha NOT approved; the final direction is SHADOW FANGS, 2026-09-27, awaiting the owner's true-speed review)
 
-**The production direction (the owner, 2026-09-27).** JAWS belongs to the same semantic family as reactive /
-thorns-style damage, and its presentation is intentionally SIMPLE: ENEMY HITS SEEKER → SMALL SHADOW JAWS APPEAR ON THE
-ATTACKER → CHOMP → JAWS DAMAGE → GONE. A 100–160 ms VFX phrase; not a summoned pet, not a persistent creature, not a
-projectile, and nothing the player must understand as a machine. What it is, in the build:
+**The final direction (the owner, 2026-09-27).** JAWS belongs to the same semantic family as reactive / thorns-style
+damage, and its presentation is intentionally SIMPLE: ENEMY HITS SEEKER → LARGE SHADOW FANGS SNAP ONTO THE ATTACKER →
+JAWS DAMAGE → FANGS RELEASE → GONE. No literal creature needs to be identified. The piranha before it (three jaws, then
+a hero chomp, then one piranha staged in negative space) was rejected not for its timing but for its COMPLEXITY: at
+gameplay scale a tiny creature carrying a head silhouette, an eye, a mouth, teeth and body/tail detail is below the
+useful perceptual budget, and at true speed it becomes coloured motion. What survives reduction is four strong
+triangles. What it is, in the build:
 
-- **One tiny source sprite in two states** (`fxp_seeker_jaws_open` / `_shut`, a 64 × 40 canvas, the head ~50 × 31):
-  a dark compact head, one strong OPEN mouth with three pale-violet teeth, one violet eye glint, a short trailing shadow
-  smear; a floating supernatural piranha head, not a fish, not a cartoon (`tools/asset-pipeline/v2/seeker_piranha.py`,
-  from two PixelLab Pro Flash images, the SHUT state an edit of the OPEN one). The runtime owns position, rotation
-  about the mouth, scale, timing and fade.
-- **ONE PIRANHA, in visual silence** (the one-piranha pass, 2026-09-27: three jaws in 140 ms read as "a purple effect
-  happened"; one hero with two small bites, a smear and a glint in 180 ms still read as "purple activity", because
-  too many things occupied the same small area at once). The recipe has ONE head (~35 % of the creature's visible
-  height, 26–60 px), always foreground, and nothing else: no secondary bites, no residue smear, no glint, no
-  particles, no behind-the-target layer. Flavour may return only after the one object is accepted.
-- **Staged in negative space** (`ReactionPerformance`), in ms after the first frame that shows the bite: the OPEN
-  head appears ~0.75 of its own width OUTSIDE the creature's front edge, on the Seeker's side, its whole silhouette
-  against the arena for the first frames; it moves in over the close (still open and approaching at ~25, HALF closed
-  near contact at ~45: a third source state, a deterministic mid-shape of OPEN and SHUT) and arrives SHUT on the
-  creature's OUTER FRONT EDGE at 65 with a one-frame squash, its rear half still outside the body so its silhouette
-  survives the bite; it HOLDS shut ~65 ms (the semantic pose), then recoils ~6 px away and fades, gone by 200. THE
-  PRESENTATION PEAK IS THE CLOSED FRAME (`AnswerAtMs` = 65): the reflected number, a kill's fall and the chomp cue's
-  transient land there (the cue is played on that frame, never at the spawn). The creature's flash is a JAWS-only
-  override so it never erases the head on the frame it closes: reduced to 0.28 (the generic F2 default stays 0.45; the
-  capture rig films the alternatives, `RH_REACTION_FLASH=A` the full F2 one rendered frame after the chomp, `OFF` the
-  control). Core is untouched; this is presentation scheduling. No world-travel path, no Seeker-to-enemy line: the
-  effect is target-local, as if Shadow itself bites the attacker. The creature is not yanked; the Seeker does nothing
-  (SPRAY, HARD HANDS and the basic swing are never interrupted; no receiver recoil; no global or actor pause).
-- **Contrast**: the information-bearing parts only, the violet rim, the eye and the pale teeth, are lifted ~18 % in the
-  source (`seeker_piranha.py`); the body stays dark Shadow; no bloom, no glow, no outline round the target.
+- **One hand-authored fang** (`fxp_seeker_fang`, a 40 × 72 canvas, the point at (22, 71); `tools/asset-pipeline/v2/seeker_fangs.py`,
+  drawn deterministically at 4× and downsampled, no PixelLab): a broad, slightly curved triangle, a near-black violet
+  Shadow body, a strong violet edge, a small pale tip. The runtime draws it FOUR times: two from above with their points
+  down, two from below (the same sprite flipped vertically), each leaning ~12° toward the body's centre. Every fang is
+  the same material; the geometry is controlled. No piranha body, no eyes, no tails, no separate head, no glint, no
+  residue, no secondary bites, no particles, no trails.
+- **Large**: each fang is ~34 % of the creature's visible height (28–72 px); the upper and lower fangs together are
+  ~68 % of it. Large SIMPLE geometry is cheaper to read than small detailed geometry.
+- **The phrase** (`ReactionPerformance`), in ms after the first frame that shows the bite: at 0 the fangs appear OPEN,
+  their points ~12 % of the body's height OUTSIDE its top and bottom edges, so there is visible empty space between the
+  upper fangs, the body and the lower fangs: the first thing the eye sees is something surrounding the creature
+  (nothing begins inside it). The open pose stands to 25, then the fangs close RAPIDLY inward (an ease-in: upper down,
+  lower up) and SNAP at 55 onto the creature's outer silhouette, the points ~16 % inside its edges, the body still
+  visibly between them (they bit its outline, they did not cross through it). They HOLD there 85 ms, the semantic
+  pose: several frames of TARGET BETWEEN SHADOW FANGS, which is where the readability comes from. Then a 6 px outward
+  release and a quick fade, gone by 200. Foreground only: no behind layer, no masks (readability beats physical
+  accuracy).
+- **NO JAWS TARGET FLASH.** The Shadow fangs ARE the reaction's hit feedback; the generic white F2 under them was the
+  largest source of visual competition, so a presented reaction whose recipe has no flash flashes nothing
+  (`ReactionRecipe.TargetFlash` 0). The global F2 for ordinary attacks is unchanged.
+- **The number is delayed**: the reflected "−X JAWS" lands 40 ms AFTER the snap (`NumberDelayMs`; the trace's
+  `reaction-number`), above the creature in the screen's usual number lane, clear of the fangs: SNAP → the player sees
+  the effect → the number. A kill's fall lands on the snap. Core is untouched; this is presentation scheduling.
+- **One cue**, `sfx_seeker_jaws_fangs`: a short, dark, dry, sharp Shadow bite / thorn impact (energy compression + a
+  short organic impact), its transient exactly on the SNAP, played on that frame and never at the spawn. No secondary
+  ticks, no metal trap, no swarm, no bone crunch; `design/audio/seeker-jaws-audio-brief.md`. The dry-steel
+  `sfx_seeker_jaws_snap` and the piranha's `sfx_seeker_jaws_chomp` are history.
 - **The target** is the actual reflected target from Core (the reflected Strikes at the bite's ms), each answered on
-  its own body; never the row's centre, never every enemy.
-- **One cue**, `sfx_seeker_jaws_chomp`: a small supernatural CHOMP, one bite, no ticks (the one-piranha pass removed
-  the two baked secondary ticks: the visual is one strong Shadow bite); `design/audio/seeker-jaws-audio-brief.md`.
-  The dry-steel `sfx_seeker_jaws_snap` is history.
-- **The dock** keeps the Core-driven `ReactionArmed` rearm sweep (WORLD: quick retaliation; DOCK: rearming / ready).
-  REPAY keeps its own legacy presentation (skill-id recipe resolution). The mechanical props, the chain parts and the
-  N2 snap stay on disk as history and are not drawn.
+  its own body, riding it through its lunge, its bob and its fall; never the row's centre, never every enemy. The
+  creature is not yanked; the Seeker does nothing (SPRAY, HARD HANDS and the basic swing are never interrupted).
+- **The dock** keeps the Core-driven `ReactionArmed` rearm sweep. REPAY keeps its own legacy presentation (skill-id
+  recipe resolution). The mechanical props, the chain parts, the N2 snap and the piranha states stay on disk as history
+  and are not drawn.
 
 The sections below record how the trap was reached and why it was rejected; they are history.
 

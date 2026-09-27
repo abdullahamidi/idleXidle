@@ -41,6 +41,48 @@ public static class SilhouetteProbe
         return new Vector2(x + back, frame.Dest.Y + p.Y * sy);
     }
 
+    private static readonly Dictionary<(Texture2D, Rectangle), Rectangle?> KnownBounds = new();
+
+    /// <summary>
+    /// The arena rectangle of the frame's OPAQUE pixels (its drawn silhouette's bounding box), mapped through the same
+    /// Src and Dest the draw used; null when the frame has no opaque pixel. A creature's layout rectangle can hold a
+    /// good deal of empty canvas above a crouching head, and a shape that must sit just outside the silhouette (the
+    /// Shadow fangs, ADR-011) needs the silhouette, not the layout.
+    /// </summary>
+    public static Rectangle? OpaqueBounds(SpriteFrame frame)
+    {
+        if (!KnownBounds.TryGetValue((frame.Texture, frame.Src), out var local))
+            KnownBounds[(frame.Texture, frame.Src)] = local = MeasureBounds(frame.Texture, frame.Src);
+        if (local is not { } b) return null;
+        var sx = frame.Dest.Width / (float)Math.Max(1, frame.Src.Width);
+        var sy = frame.Dest.Height / (float)Math.Max(1, frame.Src.Height);
+        var flipped = frame.Effects.HasFlag(SpriteEffects.FlipHorizontally);
+        var x = flipped ? frame.Dest.Right - (b.Right) * sx : frame.Dest.X + b.X * sx;
+        return new Rectangle((int)MathF.Round(x), (int)MathF.Round(frame.Dest.Y + b.Y * sy),
+                             (int)MathF.Round(b.Width * sx), (int)MathF.Round(b.Height * sy));
+    }
+
+    /// <summary>The bounding box of the opaque pixels, in the source rectangle's own pixels.</summary>
+    private static Rectangle? MeasureBounds(Texture2D tex, Rectangle src)
+    {
+        var n = src.Width * src.Height;
+        if (n <= 0) return null;
+        if (_scratch.Length < n) _scratch = new Color[n];
+        tex.GetData(0, src, _scratch, 0, n);
+        int left = int.MaxValue, top = int.MaxValue, right = -1, bottom = -1;
+        for (var y = 0; y < src.Height; y++)
+            for (var x = 0; x < src.Width; x++)
+                if (_scratch[y * src.Width + x].A > 100)
+                {
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                    if (y < top) top = y;
+                    if (y > bottom) bottom = y;
+                }
+        if (right < 0) return null;
+        return new Rectangle(left, top, right - left + 1, bottom - top + 1);
+    }
+
     /// <summary>The front-most opaque pixel of the rows asked, in the source rectangle's own pixels.</summary>
     private static Vector2? Measure(Texture2D tex, Rectangle src, bool frontIsLeft, float rowFrom, float rowTo)
     {
