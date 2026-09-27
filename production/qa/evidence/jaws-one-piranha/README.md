@@ -1,5 +1,7 @@
 # JAWS, one Shadow piranha: the review package (ADR-011, 2026-09-27)
 
+Review page: https://claude.ai/artifact/AKcWQmmGvayrfLBtQTrWXU
+
 **The decision.** The three-jaw hero chomp was not accepted: too many things (three jaws, the flash, a glint, a smear,
 the number) occupied the same small area at once and read as "purple activity". JAWS now uses ONE SINGLE HERO
 SHADOW PIRANHA and nothing else. No swarm, no residue, no glint, no particles, no behind-the-target layer. Nothing
@@ -23,7 +25,7 @@ may be added back before the one object is accepted.
 | # | File | What |
 |---|---|---|
 | 1 | `01_*` | CURRENT: the three-jaw hero chomp (the previous pass), true speed, sound |
-| 2 | `02_*` | NEW: one piranha, true speed, sound |
+| 2 | `02_*`, `02b` | NEW: one piranha, true speed, sound. Items 2–5 use the bite at 5000, which the answer does NOT kill (at 7000 the front whelp dies of the reflection and its death plume competes with the read); `02b` is the killing bite at 7000 |
 | 3 | `03_*` | the same, muted |
 | 4 | `04_*` | close crop, true speed |
 | 5 | `05_*`, `05b` | OPEN in negative space → approaching → HALF → SHUT → HOLD → exit, off the take at 2×, with the three source states; every frame |

@@ -16,13 +16,13 @@ whoosh). Think **CHOMP**: a small, dry, slightly fleshy bite with a hint of Shad
 ## What the player hears (the phrase)
 
 ```
-BITE (the enemy's thud, t 0) ── the same frame: CHOMP (the main jaw) ── +15, +25 ms: two very quiet ticks (the other jaws)
+BITE (the enemy's thud, t 0) ── +65 ms, the closed frame: CHOMP (one bite)
 ```
 
-One cue for the whole phrase, played on the first frame that shows the bite, right after the enemy's own thud. The two
-secondary ticks are baked into the same file, ~10 dB under the main chomp: three loud identical chomps would read as
-three separate hits, and the bank's repeat rule would drop two of them anyway. The chomp is ~140 ms long and peaks at
-−10 dB: a frequent Reaction, quiet enough to repeat every few seconds without tiring.
+One cue, played on the piranha's closed frame (+65 ms after the enemy's thud, with the reflected number), never on the
+spawn: the sound is the mouth shutting, so it lands where the mouth shuts. Since the one-piranha pass (2026-09-27) there
+is ONE bite in the file: the two secondary ticks of the three-jaw pass are removed, not quietened. The chomp is ~140 ms
+long and peaks at −10 dB: a frequent Reaction, quiet enough to repeat every few seconds without tiring.
 
 ## The layers (`jaws_chomp`)
 
@@ -32,7 +32,6 @@ three separate hits, and the bank's repeat rule would drop two of them anyway. T
 | leathery transient | low-passed noise (900 Hz), 14 ms | the bite took something: hide, not bone |
 | Shadow crackle | a narrow bright band at 4.6 kHz, ~25 ms, well under the snap | the supernatural in it, kept quiet |
 | a little weight | a damped 420 Hz body, gone in ~20 ms, no pitch drop | a bite, not a tick; a pitch-dropping thump read as a skull in the old cue |
-| two secondary ticks | the same snap material at +15 and +25 ms, at 34 % and 24 % | the second and third jaws, a swarm and not a stamp |
 
 Avoided on purpose: bone crack, metal trap, monster roar, long magical whoosh.
 
