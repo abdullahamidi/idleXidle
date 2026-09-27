@@ -1,5 +1,7 @@
 # JAWS as SHADOW PIRANHA: the review package (ADR-011 production direction, 2026-09-27)
 
+Review page: https://claude.ai/artifact/MNMvfWXB9HFGyk2v31RJ5k
+
 **The owner's direction.** JAWS is thorns-family reactive damage, presented intentionally simply: ENEMY HITS SEEKER →
 SMALL SHADOW JAWS APPEAR ON THE ATTACKER → CHOMP → "−X JAWS" → GONE. A 100–160 ms VFX phrase. No trap body, chain,
 housing, tether, bite glyphs, mirrored snaps or Concept D. The whelp attack work is closed (the redrawn 640-canvas
