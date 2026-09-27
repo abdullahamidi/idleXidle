@@ -3646,12 +3646,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // a negative topCrop makes AnimSprite trim exactly the empty rows and never the figure.
             const float crop = -1f;
             var compFps = attacking ? 16f : 12f;
+            // THE ATTACK IS PLACED AS THE IDLE (ADR-012): the idle's bounds are the actor's canonical bounds — its
+            // scale, its ground, its anchor — and an authored attack clip may occupy more art space than them
+            // (a 640 frame around the 512 idle) without the creature being rescaled or its feet moving.
+            var placedAs = attacking ? look.IdleStrip : null;
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i)))
+                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
-            SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop);
+            SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs);
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
             FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop);
@@ -3730,7 +3734,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, enterTint, crop, record: VfxSubject.Creature(0)))
+                                                !attacking, enterTint, crop, record: VfxSubject.Creature(0),
+                                                placeAs: attacking ? look.IdleStrip : null))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
@@ -6899,10 +6904,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     }
 
     /// <summary>CAPTURE VIEW (RH_SHOT_SIL=1): the creature as a flat silhouette — its mask, over its body.</summary>
-    private void SilhouetteOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float crop)
+    private void SilhouetteOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float crop, string? placeAs = null)
     {
         if (!CaptureViews.Silhouette || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
-        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, new Color(150, 146, 160), crop);   // flat, apart from the stone
+        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, new Color(150, 146, 160), crop, placeAs: placeAs);   // flat, apart from the stone
     }
 
     /// <summary>
@@ -6935,55 +6940,58 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // diff of the contact plate): his visible rect's RIGHT edge is his sword tip and belt height is his sword hand,
         // so "Right - a little" put the first motif on the blade, where a reader saw it "near his raised hand/wrist".
         var at = new Vector2(body.X + body.Width * 0.57f, body.Y + body.Height * 0.39f);
-        var s = body.Height * 0.13f * (0.9f + 0.1f * k);     // the jaw span: the contact area, ~40 px at play size
-        // the jaw's half-gap: open before the beat, the fang tips crossed a little while it holds shut, met as it fades
-        var gap = open > 0f ? s * (0.08f + 0.24f * open) : since < BitePresentation.MotifHoldMs ? -s * 0.04f : 0f;
+        var s = body.Height * 0.13f * (0.9f + 0.1f * k);     // the motif's span: the contact area, ~40 px at play size
+        // the gap: open before the beat (the fang lifted, the jaw dropped), driven together on it, met as it fades
+        var gap = open > 0f ? s * (0.12f + 0.43f * open) : since < BitePresentation.MotifHoldMs ? -s * 0.04f : 0f;
         var dark = Shadow * (0.95f * k);
         var ember = Ember * (0.95f * k);
-        var tip = Color.Lerp(Ember, Bone, 0.6f) * (0.95f * k);
-        Jaw(b, at, s, gap, -1f, dark, ember, tip);
-        Jaw(b, at, s, gap, +1f, dark, ember, tip);
+        FangSnap(b, at, s, gap, dark, ember);
     }
 
     /// <summary>
-    /// One half of the bite motif (the hybrid of the three candidates blind-read on 2026-09-27): a broad crescent
-    /// jaw, convex away from the bite line with its horns left open at the sides (two of them meeting must never
-    /// close into a ring), and ONE strong fang point from its middle aimed at the contact centre, pale at the tip.
-    /// <paramref name="side"/> −1 is the upper jaw, +1 the lower; <paramref name="gap"/> is the fang tip's distance
-    /// from the bite line. Drawn with thick line segments in the normal batch (no shader, no texture).
+    /// THE OFFSET FANG SNAP (N2, the third pass, 2026-09-27): two parts of ONE directional action arriving from the
+    /// enemy's side (his right). A large upper fang, a curved wedge driving from the upper right down-left to a point,
+    /// and a short lower jaw, a flat wedge from the lower right, converge on a contact point that is low and LEFT of
+    /// centre, with two short trailing streaks on the enemy side. No bilateral symmetry, no equal masses, no central
+    /// dot, no centred composition: M4's symmetric jaws read as an hourglass / status icon. Blind-read on the target
+    /// alone it was "pinch; clamp, bite", "an event on his body, not an icon", 4/5 for closing from the right.
+    /// <paramref name="gap"/> lifts the fang and drops the jaw while OPEN and drives them together on the snap.
+    /// Drawn with line segments in the normal batch: the fang as stacked strokes narrowing to its tip, the jaw as
+    /// one thick stroke, each on a dark edge.
     /// </summary>
-    private void Jaw(SpriteBatch b, Vector2 at, float s, float gap, float side, Color dark, Color ember, Color tip)
+    private void FangSnap(SpriteBatch b, Vector2 at, float s, float gap, Color dark, Color ember)
     {
-        var c = new Vector2(at.X, at.Y + side * (gap + s * 0.10f));
-        var r = s * 0.53f;                                   // the crescent's centre-line radius
-        var w = MathF.Max(2f, s * 0.26f);                    // its thickness
-        var (a0, a1) = side < 0 ? (222f, 318f) : (42f, 138f);
-        const int n = 12;
-        var prev = c + Polar(r, a0);
-        for (var i = 1; i <= n; i++)
-        {
-            var q = c + Polar(r, a0 + (a1 - a0) * i / n);
-            _ui.LineSeg(b, prev, q, w + 2f, dark);
-            _ui.LineSeg(b, prev, q, w, ember);
-            prev = q;
-        }
-        // the fang: a wedge from the crescent's inner middle to the bite line, drawn as stacked strokes narrowing to the tip
-        var baseY = c.Y - side * s * 0.40f;
-        var tipP = new Vector2(at.X, at.Y + side * gap);
-        const int m = 5;
-        for (var i = 0; i < m; i++)
-        {
-            var t = i / (float)m;
-            var y = baseY + (tipP.Y - baseY) * t;
-            var half = s * 0.16f * (1f - t);
-            _ui.LineSeg(b, new Vector2(at.X - half - 1f, y), new Vector2(at.X + half + 1f, y), MathF.Abs(tipP.Y - baseY) / m + 2f, dark);
-            _ui.LineSeg(b, new Vector2(at.X - half, y), new Vector2(at.X + half, y), MathF.Abs(tipP.Y - baseY) / m + 0.5f, ember);
-        }
-        _ui.LineSeg(b, tipP + new Vector2(-1.5f, 0f), tipP + new Vector2(1.5f, 0f), 3f, tip);
+        // the fang keeps its size; the gap only lifts it (open) or drives it onto the jaw (closed)
+        var oy = -gap * 0.7f;
+        var tip = at + new Vector2(-s * 0.22f, s * 0.12f + oy);
+        var baseL = at + new Vector2(s * 0.14f, -s * 0.66f + oy);
+        var baseR = at + new Vector2(s * 0.72f, -s * 0.44f + oy);
+        const int n = 7;
+        var stroke = (baseL - tip).Length() / n * 1.7f + 1.5f;   // the strokes overlap: one solid wedge, not a ribbed one
+        // every dark stroke FIRST, then every ember stroke: interleaved, each band's dark edge cut a line across the
+        // band before it and the wedge read as a comb
+        for (var pass = 0; pass < 2; pass++)
+            for (var i = 0; i < n; i++)
+            {
+                var t = i / (float)n;
+                var l = Vector2.Lerp(baseL, tip, t);
+                var r = Vector2.Lerp(baseR, tip, t * 1.08f);       // the trailing edge bows: the wedge is curved, not a flat triangle
+                if (pass == 0) _ui.LineSeg(b, l + (l - r) * 0.06f, r + (r - l) * 0.06f, stroke + 2f, dark);
+                else _ui.LineSeg(b, l, r, stroke, ember);
+            }
+        _ui.LineSeg(b, tip + new Vector2(0f, -1.5f), tip + new Vector2(0f, 1.5f), 3f, ember);
+        // the lower jaw: a short flat wedge from the lower right, dropped while open
+        var jy = gap * 0.3f;
+        var j0 = at + new Vector2(-s * 0.14f, s * 0.28f + jy);
+        var j1 = at + new Vector2(s * 0.70f, s * 0.36f + jy);
+        var thick = MathF.Max(2f, s * 0.16f);
+        _ui.LineSeg(b, j0 + new Vector2(-1.5f, 0f), j1 + new Vector2(1.5f, 0f), thick + 2f, dark);
+        _ui.LineSeg(b, j0, j1, thick, ember);
+        // the roots: two short streaks on the enemy side, the direction of arrival
+        var x0 = at.X + s * 0.55f;
+        _ui.LineSeg(b, new Vector2(x0, at.Y - s * 0.50f), new Vector2(x0 + s * 0.30f, at.Y - s * 0.50f), 2f, ember * 0.8f);
+        _ui.LineSeg(b, new Vector2(x0, at.Y + s * 0.42f), new Vector2(x0 + s * 0.28f, at.Y + s * 0.42f), 2f, ember * 0.8f);
     }
-
-    private static Vector2 Polar(float r, float deg)
-        => new(r * MathF.Cos(deg * MathF.PI / 180f), r * MathF.Sin(deg * MathF.PI / 180f));
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;

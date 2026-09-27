@@ -61,14 +61,20 @@ want rep           && film rep           $N 720 RH_SHOT_TAKE="$TEMPO"
 want rep_oldflash  && film rep_oldflash  $N 720 RH_SHOT_TAKE="$TEMPO" RH_SHOT_FLASH="$OLDFLASH"
 want kill          && film kill          $N 918 RH_SHOT_TAKE="$TEMPO"
 want hh            && film hh            60 455 RH_SHOT_TAKE="$TEMPO"
+# silhouette takes of the fast windows: the flat grey silhouettes are easy to segment (the A2 animatic's biter-head anchors)
+want rep_sil       && film rep_sil       $N 720 RH_SHOT_TAKE="$TEMPO" RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_SIL=1
+want hh_sil        && film hh_sil        60 455 RH_SHOT_TAKE="$TEMPO" RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_SIL=1
 want hh_bare       && film hh_bare       60 455 RH_SHOT_TAKE="$TEMPO" RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 # ── THE RESET, SECOND PASS (2026-09-27): the receiver alone (nothing should move), the plate without him (his mask),
 #    and the leader's lunge travel series 20 / 25 / 30 % of its visible width over the authored strip (RH_SHOT_LUNGE) ─
 want recv_only     && film recv_only     $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 want recv_nochamp  && film recv_nochamp  $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_NOCHAMP=1
+want new_l15       && film new_l15       $N $S RH_SHOT_LUNGE=0.15
 want new_l20       && film new_l20       $N $S RH_SHOT_LUNGE=0.20
 want new_l25       && film new_l25       $N $S RH_SHOT_LUNGE=0.25
 want new_l30       && film new_l30       $N $S RH_SHOT_LUNGE=0.30
+want bare_l15      && film bare_l15      $N $S RH_SHOT_LUNGE=0.15 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 want bare_l20      && film bare_l20      $N $S RH_SHOT_LUNGE=0.20 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
+want bare_l25      && film bare_l25      $N $S RH_SHOT_LUNGE=0.25 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 want bare_l30      && film bare_l30      $N $S RH_SHOT_LUNGE=0.30 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 exit 0

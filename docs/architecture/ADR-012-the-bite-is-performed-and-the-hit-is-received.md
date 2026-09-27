@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | **Partly Accepted** (2026-09-26, the owner's review of the first battery: `production/qa/evidence/bite-foundation/`, https://claude.ai/artifact/2kS886KRf84XjHRw2EwmqJ). ACCEPTED: the front-led pack contact grammar (decision 3); the layered receiver-reaction architecture (4: presentation transform added to the action's, no hurt clip, no retiming, re-impulse); the generic flash contract (6: peak 0.45, rise 0.15, ~80 ms; recipe overrides intact; no default rim; no restoring the 200 ms white); the capture-view cleanup (8); no global hit-stop (7). **REJECTED by the owner (2026-09-27)**: the polish pass's painted Shadow maw on the whelp (a violet cavity, three pale teeth, open/shut mouth edits: "do not try another mouth edit; the whelp's dark faceless head and bright eyes stay") and the whole-body receiver recoil as a routine hit's language (4, 5, 6, 8 and 10 % all read as a sprite translated, not a body absorbing force). **THE RESET / PROTOTYPE (2026-09-27, `production/qa/evidence/bite-reset/`)** separates the ATTACK VERB (the whelp's body: coil → head-first lunge → contact extension → follow-through → recovery, no facial feature) from the bite's MATERIAL / CONTACT IDENTITY (a small two-fang motif that closes on the champion at the contact); the recoil is OFF by default (0 %) with its curve and dial kept; the bite burst is gone. JAWS' rough A2 MIRRORED SHADOW SNAP (the incoming motif echoed on the biter in Shadow purple, the ownership trace only after the snap begins) is a concept animatic, not production. **THE SECOND PASS (2026-09-27, the reset direction approved, its art rejected as final; `production/qa/evidence/bite-reset-2/`)**: the column-warped strip is retired and the whelp's COIL / COMMIT / CONTACT / FOLLOW-THROUGH are AUTHORED as joint-puppet poses of its own rest frame (a skeleton of 18 handles, rigid moving-least-squares between them; PixelLab used for two pose concepts as references only); the contact motif is the M4 hybrid of the three blind-read candidates (broad crescent jaws + one fang point each, converging on one contact centre at his TORSO edge, not his blade); the leader's lunge travel is 25 % (20 / 25 / 30 filmed); rough A2 is redrawn in the motif's own shape family in Shadow, with no ownership line and no trap sound. PROPOSED, NOT ACCEPTED: the authored whelp attack as the reference enemy attack (root-motion-OFF acceptance filmed: coil → commit → contact → follow-through read forward-and-down, the contact pose "impact / lunge" in every read); the selected motif (static reads: clamp / pinch / bite, never slash); JAWS A2 as a magical reaction. The owner reviews true-speed footage; JAWS is not accepted; Concept D is not built. |
+| **Status** | **Partly Accepted** (2026-09-26, the owner's review of the first battery: `production/qa/evidence/bite-foundation/`, https://claude.ai/artifact/2kS886KRf84XjHRw2EwmqJ). ACCEPTED: the front-led pack contact grammar (decision 3); the layered receiver-reaction architecture (4: presentation transform added to the action's, no hurt clip, no retiming, re-impulse); the generic flash contract (6: peak 0.45, rise 0.15, ~80 ms; recipe overrides intact; no default rim; no restoring the 200 ms white); the capture-view cleanup (8); no global hit-stop (7). **REJECTED by the owner (2026-09-27)**: the polish pass's painted Shadow maw on the whelp (a violet cavity, three pale teeth, open/shut mouth edits: "do not try another mouth edit; the whelp's dark faceless head and bright eyes stay") and the whole-body receiver recoil as a routine hit's language (4, 5, 6, 8 and 10 % all read as a sprite translated, not a body absorbing force). **THE RESET / PROTOTYPE (2026-09-27, `production/qa/evidence/bite-reset/`)** separates the ATTACK VERB (the whelp's body: coil → head-first lunge → contact extension → follow-through → recovery, no facial feature) from the bite's MATERIAL / CONTACT IDENTITY (a small two-fang motif that closes on the champion at the contact); the recoil is OFF by default (0 %) with its curve and dial kept; the bite burst is gone. JAWS' rough A2 MIRRORED SHADOW SNAP (the incoming motif echoed on the biter in Shadow purple, the ownership trace only after the snap begins) is a concept animatic, not production. **THE SECOND PASS (2026-09-27, the reset direction approved, its art rejected as final; `production/qa/evidence/bite-reset-2/`)**: the column-warped strip is retired and the whelp's COIL / COMMIT / CONTACT / FOLLOW-THROUGH are AUTHORED as joint-puppet poses of its own rest frame (a skeleton of 18 handles, rigid moving-least-squares between them; PixelLab used for two pose concepts as references only); the contact motif is the M4 hybrid of the three blind-read candidates (broad crescent jaws + one fang point each, converging on one contact centre at his TORSO edge, not his blade); the leader's lunge travel is 25 % (20 / 25 / 30 filmed); rough A2 is redrawn in the motif's own shape family in Shadow, with no ownership line and no trap sound. **THE THIRD PASS (2026-09-27, the second pass's strip and M4 rejected as production reference art; `production/qa/evidence/bite-reset-3/`)**: (a) ATTACK ART EXTENT IS SEPARATE FROM CANONICAL ACTOR BOUNDS (decision 9): the whelp's attack strip is 8 frames of 640 × 640 around its 512 idle frame and the renderer places it on the idle's scale, ground and anchor; (b) the four attack poses are genuinely REDRAWN (PixelLab pose edits in the wider art space, repaired deterministically: re-inked from the original's colours, eyes rebuilt), not deformations; (c) the leader's lunge travel is 20 %; (d) the contact motif is N2 OFFSET FANG SNAP, a directional asymmetric shape arriving from the enemy's side (M4's symmetric jaws read as an hourglass / status icon and are withdrawn); (e) **A2 MIRRORED SHADOW SNAP is APPROVED AS THE JAWS DESIGN DIRECTION** (the owner, 2026-09-27); its M4-derived artwork is NOT approved, and the third pass draws it in the N2 family as a rhyme (mirrored, ~1.2×, a longer serrated fang, a dark fill, a shard residue, no ownership line, no trap sound). PROPOSED, NOT ACCEPTED: the redrawn whelp attack as the reference enemy attack (root-motion-OFF gate filmed); N2 as the bite's contact; A2's artwork. The owner reviews true-speed footage; JAWS' art and audio passes wait on that; Concept D is not built. |
 | **Date** | 2026-09-26, reset 2026-09-27 |
 | **Deciders** | owner; lead-programmer, technical-artist (presentation) |
 | **Supersedes** | the row's contact-time shove (`_enemyLunge`, 40 px on the beat), the full-white usual flash (peak 1, ~200 ms) |
@@ -40,33 +40,39 @@ applies; nothing reads or moves a Core position, and no action clip is retimed.
    limbs compressed) → COMMIT (the torso extends, the head leads forward and rises, the rear trails) → CONTACT (the
    longest forward silhouette, the head driven down into the champion, the rear mass low and behind) → FOLLOW-THROUGH
    (the front compresses, the trailing parts catch up) → recover. The creature's identity (a dark faceless head, two
-   bright eyes, no mouth) is intact in every frame. The poses are AUTHORED AS A JOINT PUPPET of the creature's own
-   rest frame (`tools/asset-pipeline/v2/umbral_swarm_lunge.py`): a skeleton of 18 handles (head, crown, neck,
-   shoulder, back, hip, both hands, an elbow, a knee, both feet, six along the tail) is placed per pose and the image
-   deformed between them by rigid moving-least-squares, so the head drives forward and DOWN while the hips trail back
-   and the tail streams, the way a 2D puppet rig poses a cut-out. The column-warp pass before it (a per-column shear)
-   is retired: it could not turn a crouching body toward its target and read coil → rear up → settle. The 512 px
-   canvas still caps the head at x ≈ 70 (every attack frame is drawn in the idle frame's box), so the pose-internal
-   extension is authored by the hips and rear moving BACK and the body flattening toward the target; the row's root
-   motion (3) amplifies it and never replaces it. The acceptance test is the strip with root motion off
-   (`RH_SHOT_NOROOT=1`): the poses alone must read attack-toward-the-target, and the reference is not accepted
-   until they do in the owner's eye. PixelLab (`edit_image_pro_flash`, 256 px) produced two pose concepts used as
-   references only; no generated frame is in the strip.
-   **THE BITE'S CONTACT IS A MOTIF, not a burst**: UPPER and LOWER jaws converging on one contact centre. Each half
-   is a broad ember crescent (convex away from the bite line, its horns left open so two of them never close into a
-   ring) with ONE strong fang point from its middle to the centre, pale at the tip, on a dark edge (`HuntScreen.Jaw`).
-   It was chosen from three rough candidates (opposing crescents / two-fang snap / serrated clamp) and their hybrid
-   by static blind reads on the target alone: every reader said "two things closed on him" and named clamp, pinch
-   or bite, never slash or claw. It appears OPEN on the frame before the contact and SNAPS shut on it, holds with
-   the fang tips crossed for ~16 ms, fades as residue and is gone by ~70 ms (`BitePresentation.MotifOpen` /
-   `MotifStrength`, `DrawBiteContact`; ~0.13 of his height, on his TORSO's enemy-facing edge under the hood, at
-   `body.X + 0.57 w, body.Y + 0.39 h`: measured from a champion-free plate, because his visible rect's right edge is
-   his sword tip and "Right − a little" had put the first motif on the blade). It is not the recoil's accessory
-   (`RH_SHOT_NORECOIL` leaves it; `RH_SHOT_NOVFX` hides it).
+   bright eyes, no mouth) is intact in every frame. The four attack poses are GENUINELY REDRAWN on the extended art
+   canvas (decision 9; `tools/asset-pipeline/v2/umbral_swarm_attack_640.py`): PixelLab (`edit_image_pro_flash`, a
+   256 × 204 canvas standing for the 640 × 512 art space, a strict same-creature prompt) drew COIL, COMMIT, CONTACT
+   and FOLLOW-THROUGH from the rest frame as its reference, and each was upscaled to production scale and repaired
+   deterministically: the silhouette re-thresholded and opened, the fill and the violet rim re-inked from the
+   original's own colours so line weight matches the 512 idle, the eyes rebuilt at the head's front, every pose
+   grounded on the rest frame's sole, COMMIT set 48 texels behind CONTACT so the reach only grows into the contact.
+   REST and RECOVER are the idle pose; nothing generated is used raw and nothing is a deformation of the rest image.
+   The earlier routes are retired for the record: whole-sprite shears and a painted maw (rejected), column warps
+   (read coil → rear up → settle), and a joint puppet inside the 512 frame (its CONTACT read "impact / lunge" but its
+   head could not pass x ≈ 70: the art-space limit decision 9 removes). The acceptance test is the strip with root
+   motion OFF, VFX OFF, tint OFF, flash OFF (`RH_SHOT_NOROOT=1`): the poses alone must read prepare → launch toward
+   the target → impact → recover, and the reference is not accepted until they do in the owner's eye.
+   **THE BITE'S CONTACT IS A MOTIF, not a burst: the OFFSET FANG SNAP** (N2, `HuntScreen.FangSnap`). Two parts of
+   ONE directional action arriving from the enemy's side: a large upper fang, a curved wedge driving from the upper
+   right down-left to a point, and a short lower jaw wedge from the lower right, converging on a contact point that
+   is low and left of centre, with two short root streaks on the enemy side; ember on a dark edge; no bilateral
+   symmetry, no equal masses, no central dot, no centred composition (the second pass's M4, symmetric crescent jaws
+   with a pale meeting point, read as an hourglass / bow-tie / status icon at play size and is withdrawn). N2 was
+   chosen from three rough directional candidates (asymmetric crescents / offset fang / broken serrated arcs) by
+   static reads on the target alone asking what kind of impact the shape suggests: "pinch; clamp, bite", "an event
+   on his body, not an icon", 4 of 5 for closing from the right; none read slash, claw, spark or icon. The timing is
+   M4's, which the owner approved: the fang lifted and the jaw dropped (OPEN) on the frame before the contact, driven
+   together on it (SNAP), held ~16 ms, gone by ~70 (`BitePresentation.MotifOpen` / `MotifStrength`); ~0.13 of his
+   height on his TORSO's enemy-facing edge under the hood (`body.X + 0.57 w, body.Y + 0.39 h`, measured from a
+   champion-free plate: his visible rect's right edge is his sword tip). It is not the recoil's accessory
+   (`RH_SHOT_NORECOIL` leaves it; `RH_SHOT_NOVFX` hides it). A single frozen frame need not say "bite" on its own:
+   at true speed the question is whether two hostile shapes visibly snapped onto him from the enemy's direction,
+   and the lunge and the sound supply the rest.
 3. **The pack lunges, front-led, in lockstep** (`Lunge`, in VISIBLE body widths): back 4 % in anticipation over the
-   first 75 % of the wind-up, then forward from −220 ms to 25 % at contact (the second pass filmed 20 / 25 / 30 %
-   over the authored strip through `RH_SHOT_LUNGE`; the art now carries the approach, so the travel came down from
-   30, and the smallest convincing approach is the rule) on a near-linear ease (1.15: a third of the
+   first 75 % of the wind-up, then forward from −220 ms to 20 % at contact (the third pass filmed 15 / 20 / 25 %
+   over the redrawn strip through `RH_SHOT_LUNGE`; the art carries the verb and the travel supports spacing, so it
+   came down from 30 to 25 to 20; 15 reads as a twitch, 25 begins to float) on a near-linear ease (1.15: a third of the
    travel done at −120 ms, ~70 % at −50; a lunge seen crossing the gap, not a position pop), one 3 % overshoot at
    +30 ms, home by +260 ms. The LEADER, the front living creature (the lowest slot alive; the row lays slot 0 nearest the champion,
    and a death moves the lead to the next living slot), gets the full travel; the rest of the pack 40 % of it. All
@@ -87,6 +93,24 @@ applies; nothing reads or moves a Core position, and no action clip is retimed.
    more. No default rim; a directional light is a recipe's to add later.
 7. **No hit-stop.** The auto-battle cadence is too frequent for repeated world freezes. Authored major actions may
    decide a tiny presentation hold per recipe later; the routine bite has none.
+9. **Attack art extent is separate from canonical actor bounds** (the third pass, 2026-09-27). The IDLE frame's
+   bounds are the actor's canonical bounds: they decide its scale, its grounding, its presentation size and its row
+   place. An authored action clip may occupy MORE art space than them: its frames may be larger squares (the whelp's
+   attack is 8 × 640 × 640 around the 512 idle), with the canonical frame in each frame's bottom-right corner so the
+   extra columns extend toward the side the art faces and the extra rows are headroom. `UiKit.ResolveFrame` places
+   such a strip AS its idle (`placeAs`): the scale from the idle's frame and crop, the sole from the idle's pad, the
+   horizontal anchor from the idle's centred symmetric crop, and texel (x + offX, y + offY) of the action lands where
+   texel (x, y) of the idle lands; no side crop is taken from the action strip. A wider attack frame therefore never
+   shrinks, rescales or moves the actor; the creature's REST frame in the wider strip draws pixel-identically to the
+   idle. The whelp's poses are proof that the rule was needed: inside the 512 frame the rest head sat at x 39 of 512
+   and no pose could extend it; on the 640 canvas the CONTACT head reaches x 8, 159 texels ahead of the rest head.
+   The strip contract's "N square frames" holds; only the frame size may exceed the idle's. This is the actor-scale
+   lesson of HARD HANDS applied to art space.
+   **The row's distance is the next fact.** With the leader's lunge at 20 % of its visible width and the CONTACT pose
+   at full extension, the whelp's front edge at the contact frame is ~330 px from the champion's torso edge (the
+   row's home puts the leader's rest head ~530 px from him). No travel in the 15–30 % family closes that; the bite
+   lands "at range". Whether the pack should stand closer, or the leader alone travel further, is a layout decision
+   for the owner, not a tuning of this dial.
 8. **Capture views are generic and central** (`CaptureViews`): `RH_SHOT_NOVFX`, `RH_SHOT_NOCHAMP`, `RH_SHOT_SOCKETS`,
    `RH_SHOT_NOTINT`, `RH_SHOT_SIL`, `RH_SHOT_NOROOT`, `RH_SHOT_NORECOIL`, `RH_SHOT_FLASH=off|peak,rise,ms`, and
    `RH_SHOT_STRIP_FILES` in `AssetLibrary`. The foundation study's one-off knobs (`RH_SHOT_NOANSWER`,
@@ -101,13 +125,19 @@ applies; nothing reads or moves a Core position, and no action clip is retimed.
   than its followers). The arena scissor handles overshoot as it did for the old shove.
 - The recoil is a presentation offset (zero by default); when dialled, the champion's published bounds move with it,
   so hits and effects aimed at him land where he is drawn.
-- JAWS (ADR-011's REACTION / TRAP reference) is re-read under this grammar as a MAGICAL REACTION, not a physical
-  machine: Concept A2 MIRRORED SHADOW SNAP is the incoming motif's OWN shape family (crescent jaws + fang points)
-  in Shadow purple on the creature that bit, ~1.25× the incoming footprint, beginning 0–16 ms after the contact,
-  snapping at +16–33, rebounding, gone by ~+130; NO ownership line by default (the visual rhyme is the test) and no
-  trap sound (the dry-steel snap belonged to the rejected physical-trap fantasy; audio is a later pass). It exists
-  as an animatic (`prototypes/jaws-concepts/animatic.py A2`) over the second pass's plates; nothing of it is
-  production, and JAWS is not accepted.
+- JAWS (ADR-011's REACTION / TRAP reference) is a MAGICAL REACTION, not a physical machine. **A2 MIRRORED SHADOW
+  SNAP is the approved JAWS design direction (the owner, 2026-09-27)**: enemy attack → hostile snap on the Seeker →
+  Shadow snap back on the resolved attacker; no trap body, housing, chain or physical retract; the mechanical /
+  bear-trap family stays rejected and its assets are history, never played once A2 is promoted. Its artwork RHYMES
+  with the selected incoming motif without copying it: the third pass draws A2 in the N2 family, mirrored (arriving
+  from the Seeker's side), ~1.2× the incoming footprint (never a giant mouth; secondary to SPRAY and HARD HANDS),
+  the fang more elongated with two serrations on its inner edge, a dark internal fill under the violet rim, a
+  residue that breaks into two shards; beginning ~16 ms after the incoming snap, peaking at +16–33, gone by ~+130;
+  NO ownership line (the causal sequence carries ownership; a tiny after-the-answer residue may be added only if
+  true-speed testing still cannot identify it); no trap sound (its audio direction, a SHADOW BITE-BACK: a very
+  short dark snap, dry teeth / energy compression, a low restrained Shadow transient; never bone crack, roar, metal
+  or a long whoosh, is a pass that follows visual approval). It exists as an animatic
+  (`prototypes/jaws-concepts/animatic.py A2`) over the third pass's plates; the artwork is not yet accepted.
 - The audio is unchanged in this pass (a controlled visual comparison); the bite's material identity is a later pass.
 - Tests: `bite_presentation_test` pins the curves' shape, bounds and timing.
 

@@ -140,7 +140,17 @@ public class EnemyPresentationTest
             {
                 var path = Path.Combine(root, "assets", "art", "Animations", "Enemies", $"{look.ArtKey}_{clip}", strip + ".png");
                 Assert.True(File.Exists(path), $"{look.ArtKey}: {strip}.png is not filed");
-                Assert.Equal((512 * 8, 512), PngSize(path));
+                var (w, h) = PngSize(path);
+                if (clip == "attack")
+                {
+                    // ATTACK ART EXTENT IS SEPARATE FROM CANONICAL ACTOR BOUNDS (ADR-012 decision 9): an authored attack
+                    // clip may be 8 square frames LARGER than the 512 idle (the whelp's lunge is 8 x 640 x 640); the
+                    // renderer places it on the idle's scale, ground and anchor. The strip contract (N square frames)
+                    // still holds, and the extension is never smaller than the canonical frame.
+                    Assert.True(h >= 512 && w == h * 8, $"{look.ArtKey}: {strip}.png is {w}x{h}, not 8 square frames of >= 512");
+                }
+                else
+                    Assert.Equal((512 * 8, 512), (w, h));
             }
             foreach (var still in new[] { look.IdleStill, look.AttackStill })
             {

@@ -820,7 +820,32 @@ public sealed class UiKit
         // THROUGH DrawScale, which is the one owner of the cap: the actor geometry the effects and the
         // pointer are measured against resolves with the same call, so a figure and the effects on it
         // can never be sized by two different rules again.
-        var sc = DrawScale(fw, placeAs is null ? topCrop : ResolveCrop(placeAs, askedCrop), box.Height);
+        // THE ACTOR'S CANONICAL FRAME is the strip it is placed as: its scale, its ground and (below) its anchor
+        // all come from that strip's frame, never from this one's. A strip placed as another may have a LARGER
+        // frame (ADR-012, the whelp's lunge): see the extended-canvas branch.
+        var fwRef = placeAs is not null && Assets.Get(placeAs) is { Height: > 0 } refTex ? refTex.Height : fw;
+        var sc = DrawScale(fwRef, placeAs is null ? topCrop : ResolveCrop(placeAs, askedCrop), box.Height);
+        if (placeAs is not null && fw != fwRef)
+        {
+            // EXTENDED ART CANVAS (ADR-012, 2026-09-27): an authored action clip whose frame is BIGGER than its actor's
+            // canonical (idle) frame. The idle's bounds still decide the actor's scale, its ground and its row place;
+            // the action only occupies more art space around them. The canonical frame sits in the action frame's
+            // BOTTOM-RIGHT corner — its last fwRef columns and rows — so the extra columns extend toward the side the
+            // art faces (the champion, for a creature) and the extra rows are headroom. Texel (x + offX, y + offY) of
+            // the action lands exactly where texel (x, y) of the idle lands: no side crop is applied (the idle's
+            // symmetric crop and centring decide the anchor), the top crop is this strip's own (it only trims sky),
+            // and the sole is the idle's. A flipped draw mirrors the frame, extension and all.
+            var offX = fw - fwRef;
+            var padRef = BottomPadFraction(placeAs) * fwRef;
+            var cropXRef = (int)(fwRef * Math.Clamp(SidePadFraction(placeAs), 0f, 0.4f));
+            var srcWRef = fwRef - 2 * cropXRef;
+            var xRef = box.Center.X - Math.Max(1, (int)(srcWRef * sc)) / 2;           // where the idle's cropped span starts
+            var wide = new Rectangle(i * fw, cropY, fw, srcH);
+            var dest = new Rectangle(xRef - (int)MathF.Round((offX + cropXRef) * sc),
+                                     box.Bottom - Math.Max(1, (int)(srcH * sc)) + (int)MathF.Round(padRef * sc),
+                                     Math.Max(1, (int)(fw * sc)), Math.Max(1, (int)(srcH * sc)));
+            return new SpriteFrame(tex, wide, dest, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None);
+        }
         // TRUNCATE, never round: at the ceiling exactly, rounding up puts the drawn height one
         // pixel PAST the budget and the ledger correctly reports the cap itself as a violation.
         // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than

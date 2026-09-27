@@ -52,7 +52,9 @@ public class bite_presentation_test
         // done; ~50 ms out 65-85 %; contact 100 %
         float Share(float msBefore) => BitePresentation.Lunge(1f - msBefore / 900f, -1f, leader: true) / -BitePresentation.LeaderLunge;
         Assert.True(Share(220f) <= 0f, "still at or behind home 220 ms out");
-        Assert.InRange(Share(120f), 0.30f, 0.50f);
+        // 0.25 rather than 0.30 since the travel came down to 20 % (the third pass): the 4 % anticipation is a fixed
+        // share of the width, so it is a larger fraction of a shorter travel and the share at -120 ms sits at ~0.29
+        Assert.InRange(Share(120f), 0.25f, 0.50f);
         Assert.InRange(Share(50f), 0.65f, 0.85f);
         Assert.Equal(1f, Share(0f), 3);
     }

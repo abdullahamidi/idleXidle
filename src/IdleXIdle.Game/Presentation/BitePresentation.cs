@@ -54,7 +54,7 @@ public static class BitePresentation
     /// <summary>The leader's travel at contact, as a share of its visible body width. The second pass (2026-09-27) films
     /// 20 / 25 / 30 % over the authored strip (<c>RH_SHOT_LUNGE</c>): root motion amplifies the pose, so the smallest
     /// travel that makes a convincing approach wins.</summary>
-    public const float LeaderLunge = 0.25f;
+    public const float LeaderLunge = 0.20f;
 
     /// <summary>The rest of the pack's travel, as a share of the leader's.</summary>
     public const float FollowerShare = 0.40f;

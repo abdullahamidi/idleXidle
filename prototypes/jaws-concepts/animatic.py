@@ -337,43 +337,60 @@ def draw_c(L: Layers, t, anchor, size, belt, seed):
 # Nothing is drawn before the bite lands (t < 0). 0..16 the answer begins (the fangs appear, open); 16..33 they close
 # and peak; 33..80 rebound and residue; gone by 160. ONE extremely short ownership trace, from the fangs' root back
 # toward the Seeker, and only AFTER the snap has begun: the line never precedes the reaction.
-def jaw_polys(at, s, gap, side, n=12):
-    """One half of the bite motif's SHAPE FAMILY (HuntScreen.Jaw, the M4 hybrid selected 2026-09-27): a broad crescent
-    jaw convex away from the bite line with open horns, and one strong fang point from its middle to the bite line.
-    Returns (crescent polygon, fang polygon, tip point). `side` -1 the upper jaw, +1 the lower."""
-    c = (at[0], at[1] + side * (gap + s * 0.10))
-    a0, a1 = (222.0, 318.0) if side < 0 else (42.0, 138.0)
-    r_out, r_in = s * 0.66, s * 0.40
-    outer = [(c[0] + r_out * math.cos(math.radians(a0 + (a1 - a0) * i / n)), c[1] + r_out * math.sin(math.radians(a0 + (a1 - a0) * i / n))) for i in range(n + 1)]
-    inner = [(c[0] + r_in * math.cos(math.radians(a1 - (a1 - a0) * i / n)), c[1] + r_in * math.sin(math.radians(a1 - (a1 - a0) * i / n))) for i in range(n + 1)]
-    by = c[1] - side * s * 0.40
-    tip = (at[0], at[1] + side * gap)
-    fang = [(at[0] - s * 0.16, by), (at[0] + s * 0.16, by), tip]
-    return outer + inner, fang, tip
+def fang_polys(at, s, gap, dirx=1.0, elongate=1.0, serrate=0):
+    """The OFFSET FANG SNAP shape family (HuntScreen.FangSnap, N2, selected 2026-09-27): a large upper fang, a curved
+    wedge driving from the upper `dirx` side down toward a point, a short lower jaw wedge from the same side, and two
+    short root streaks on that side. `dirx` +1 = arriving from the right (the enemy's bite on the Seeker), -1 = from
+    the left (the Seeker's answer on the biter). `elongate` stretches the fang; `serrate` adds notches on its inner
+    edge. Returns (fang polygon, jaw polygon, streaks as point pairs, tip)."""
+    oy = -gap * 0.7
+    tip = (at[0] - dirx * s * 0.22, at[1] + s * 0.12 + oy)
+    base_l = (at[0] + dirx * s * 0.14, at[1] - s * 0.66 * elongate + oy)
+    base_r = (at[0] + dirx * s * 0.72, at[1] - s * 0.44 * elongate + oy)
+    inner = [(at[0] + dirx * s * 0.02, at[1] - s * 0.22 * elongate + oy)]
+    if serrate:
+        inner = []
+        for k in range(serrate):
+            u = (k + 0.5) / serrate
+            px, py = lerp(base_l[0], tip[0], u), lerp(base_l[1], tip[1], u)
+            inner.append((px - dirx * s * 0.08, py + s * 0.02))
+            inner.append((px + dirx * s * 0.02, py + s * 0.08))
+    fang = [base_l, base_r, (at[0] + dirx * s * 0.30, at[1] - s * 0.18 * elongate + oy), tip] + inner[::-1]
+    jy = gap * 0.3
+    jaw = [(at[0] - dirx * s * 0.14, at[1] + s * 0.20 + jy), (at[0] + dirx * s * 0.70, at[1] + s * 0.26 + jy),
+           (at[0] + dirx * s * 0.62, at[1] + s * 0.48 + jy), (at[0] + dirx * s * 0.06, at[1] + s * 0.36 + jy)]
+    x0 = at[0] + dirx * s * 0.55
+    streaks = [((x0, at[1] - s * 0.50), (x0 + dirx * s * 0.30, at[1] - s * 0.50)),
+               ((x0, at[1] + s * 0.42), (x0 + dirx * s * 0.28, at[1] + s * 0.42))]
+    return fang, jaw, streaks, tip
 
 
 def draw_a2(L: Layers, t, anchor, size, belt, seed):
-    """A2 MIRRORED SHADOW SNAP, second pass: the SAME shape family as the incoming motif (crescent jaws + fang points),
-    Shadow-purple, ~1.25x the incoming footprint, on the creature that bit. t = 0 is the incoming motif's snap on
-    the Seeker. 0..16 the answer begins (jaws appear open); 16..33 they SNAP; a short rebound; gone by ~120.
-    NO ownership trace by default: the visual rhyme (red on him -> purple on the biter) is the test."""
+    """A2 MIRRORED SHADOW SNAP, third pass: the incoming motif's OWN shape family (the offset fang snap), answered in
+    the Seeker's Shadow language on the creature that bit: mirrored (it arrives from the Seeker's side, the left), a
+    little larger (~1.2x the incoming footprint), the fang more elongated with two serrations on its inner edge, a
+    dark internal fill under a violet rim, and a residue that breaks into two shards instead of fading in place.
+    t = 0 is the incoming snap on the Seeker: 0..16 the answer begins (open), 16..33 it SNAPS, a short rebound, gone
+    by ~120. NO ownership line: the causal sequence carries ownership."""
     if t < 0 or t > 130:
         return
     c = (anchor[0], anchor[1])                                        # the biter's head: the part that bit
-    s = 50.0                                                          # ~1.25x the incoming motif's ~40 px span
-    alpha = key(t, [(0, 0.0), (8, 0.7), (16, 0.95), (60, 0.95), (90, 0.5), (130, 0.0)])
-    gap = key(t, [(0, 0.34), (16, 0.30), (24, -0.05), (33, -0.05), (48, 0.03), (80, 0.0)]) * s      # open, SNAP, rebound
+    s = 48.0                                                          # ~1.2x the incoming motif's ~40 px span
+    alpha = key(t, [(0, 0.0), (8, 0.75), (16, 0.95), (56, 0.95), (90, 0.45), (130, 0.0)])
+    gap = key(t, [(0, 0.55), (16, 0.50), (24, -0.05), (33, -0.05), (48, 0.04), (80, 0.0)]) * s      # open, SNAP, rebound
     glow = key(t, [(0, 0.0), (16, 0.45), (24, 1.3), (33, 1.0), (80, 0.4), (130, 0.0)])
-    for side in (-1, 1):
-        cres, fang, tip = jaw_polys(c, s, gap, side)
-        L.poly_dark(cres, alpha)
-        L.poly_light(cres, glow * 0.55, width=2)
-        L.poly_dark(fang, alpha)
-        L.poly_light(fang, glow * 0.55, width=1)
-        L.poly_light(circle(tip, max(1.5, 0.05 * size), 8), glow * 0.9, CORE)
-    if 23 <= t <= 50:                                                 # the snap: a short hot seam along the bite line
+    brk = smooth((t - 80) / 50) if t > 80 else 0.0                    # the residue: two shards drifting apart
+    fang, jaw, streaks, tip = fang_polys(c, s, gap, dirx=-1.0, elongate=1.25, serrate=2)
+    fang = [(x - brk * 0.25 * s, y - brk * 0.30 * s) for x, y in fang]
+    jaw = [(x + brk * 0.15 * s, y + brk * 0.25 * s) for x, y in jaw]
+    for poly in (fang, jaw):
+        L.poly_dark(poly, alpha * (1 - brk))                          # the dark internal fill
+        L.poly_light(poly, glow * 0.6 * (1 - brk), width=2)            # the violet rim
+    for (p0, p1) in streaks:
+        L.line_light([p0, p1], glow * 0.5 * (1 - brk), 2)
+    if 23 <= t <= 50:                                                 # the snap: a short hot seam at the closure
         k = key(t, [(23, 0.0), (24, 1.2), (36, 0.5), (50, 0.0)])
-        L.line_light([(c[0] - 0.36 * s, c[1]), (c[0] + 0.36 * s, c[1])], k, max(2, int(0.05 * size)), CORE)
+        L.line_light([(tip[0] - 0.20 * s, tip[1] + 0.08 * s), (tip[0] + 0.30 * s, tip[1] + 0.16 * s)], k, max(2, int(0.05 * size)), CORE)
 
 
 DRAW = {"A": draw_a, "A2": draw_a2, "B": draw_b, "C": draw_c}
