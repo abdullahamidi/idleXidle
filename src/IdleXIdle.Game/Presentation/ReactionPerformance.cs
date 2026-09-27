@@ -33,15 +33,20 @@ public readonly record struct ReactionStep(bool Snapped, bool Answered, Vector2 
 /// creature's own lunge and follow-through. It moves nothing.
 /// </para>
 /// <para>
-/// THE PHRASE, in ms after the first frame that showed the contact. FOUR fangs (one hand-authored shape, drawn four
-/// times: two from above with their points down, two from below with their points up, each leaning a little toward
-/// the body's centre) appear OPEN at 0: the points clearly OUTSIDE the creature's top and bottom edges, with empty
-/// space between the upper fangs, the body and the lower fangs. The open pose stands to ~25, then the fangs close
-/// RAPIDLY inward (upper down, lower up) and SNAP at 55 onto the creature's outer silhouette, the points a little
-/// inside its edges and the body still between them (<see cref="Snapped"/>: the cue's transient, a kill's fall).
-/// They HOLD there ~85 ms, the semantic pose, TARGET BETWEEN SHADOW FANGS; the number lands 40 ms into the hold
-/// (<see cref="Answered"/>). Then they retract a few px outward and fade, gone by 200. Nothing else is drawn: no
-/// particles, no glint, no trail, no residue, no flash under them.
+/// THE PHRASE, in ms after the first frame that showed the contact. TWO LAYERS. A soft SHADOW MIST (two wisps, one
+/// pocket per target, centred on the creature's drawn silhouette, in the normal alpha pass UNDER the figures: a pool
+/// the creature stands in, never a veil over it) MATERIALISES from a breath (the layer ~0.28 at 15, ~0.47 at 30, 0.70
+/// at the snap) while it CONTRACTS onto the creature; FOUR fangs (one hand-authored shape, drawn four times: two from above with their points down,
+/// two from below with their points up, each leaning a little toward the body's centre) EMERGE from it OPEN at 0, at
+/// ~0.3 opacity, the points clearly OUTSIDE the creature's top and bottom edges, with empty space between the upper
+/// fangs, the body and the lower fangs. The open pose stands to ~25 (the fangs ~0.7), then the fangs close RAPIDLY
+/// inward (upper down, lower up) and SNAP at 55, whole and crisp, onto the creature's outer silhouette, the points a
+/// little inside its edges and the body still between them (<see cref="Snapped"/>: the cue's transient, a kill's
+/// fall), the mist at its densest. They HOLD there ~85 ms, the semantic pose, TARGET BETWEEN SHADOW FANGS; the
+/// number lands 40 ms into the hold (<see cref="Answered"/>); the mist stays compressed ~35 ms (the pressure), then
+/// loosens outward. At the release the fangs retract a few px and fade over ~45 ms while the mist keeps expanding and
+/// evaporates evenly behind them, gone by 200: fangs disappearing, faint mist remaining, mist gone. Nothing else is drawn: no
+/// particles, no glint, no trail, no residue, no flash, no additive light.
 /// </para>
 /// <para>
 /// ON THE FIGHT'S PLAYHEAD. Its time is the playhead minus the first frame that showed the contact (the pump's frame).
@@ -55,7 +60,7 @@ public sealed class ReactionPerformance
     private readonly Vector4?[] _silhouette;   // per target: the drawn silhouette's box as shares of the layout body (read once); null = the body itself
     private float? _origin;                    // the playhead of the first frame that showed the contact
     private bool _snapped, _answered;
-    private int _sprites;
+    private int _sprites, _mistSprites;
 
     /// <summary>The recipe being presented.</summary>
     public ReactionRecipe Recipe { get; }
@@ -134,13 +139,54 @@ public sealed class ReactionPerformance
         return r.ReleasePx * EaseOut(since / Math.Max(1f, r.ReleaseMs));
     }
 
-    /// <summary>The fangs' opacity: whole through the snap AND the hold, a quick fade after, gone by <see cref="ReactionRecipe.GoneMs"/>.</summary>
-    public static float Opacity(ReactionRecipe r, float u)
+    /// <summary>
+    /// The fangs' opacity: they EMERGE (<see cref="ReactionRecipe.FangOpacityAtSpawn"/> on the first frame,
+    /// <see cref="ReactionRecipe.FangOpacityAtOpen"/> when the open pose ends), are whole from the snap through the
+    /// hold, and fade over <see cref="ReactionRecipe.FangFadeMs"/> from the release, before the mist is gone.
+    /// </summary>
+    public static float FangOpacity(ReactionRecipe r, float u)
     {
         if (u < 0f || u >= r.GoneMs) return 0f;
-        var fadeFrom = r.SnapAtMs + r.HoldMs;
-        if (u < fadeFrom) return 1f;
-        return 1f - Smooth((u - fadeFrom) / Math.Max(1f, r.GoneMs - fadeFrom));
+        if (u < r.OpenMs) return MathHelper.Lerp(r.FangOpacityAtSpawn, r.FangOpacityAtOpen, u / Math.Max(1f, r.OpenMs));
+        if (u < r.SnapAtMs) return MathHelper.Lerp(r.FangOpacityAtOpen, 1f, (u - r.OpenMs) / Math.Max(1f, r.SnapAtMs - r.OpenMs));
+        if (u < r.ReleaseAtMs) return 1f;
+        return 1f - Smooth((u - r.ReleaseAtMs) / Math.Max(1f, Math.Min(r.FangFadeMs, r.GoneMs - r.ReleaseAtMs)));
+    }
+
+    /// <summary>
+    /// The mist layer's opacity (a multiplier on the wisps' own feathered alpha): it MATERIALISES from a breath
+    /// (<see cref="ReactionRecipe.MistAtSpawn"/>) to <see cref="ReactionRecipe.MistPeak"/> at the snap (an ease-out), stays
+    /// dense <see cref="ReactionRecipe.MistDenseMs"/>, thins by <see cref="ReactionRecipe.MistHoldThinning"/> as it loosens
+    /// through the rest of the hold, then evaporates linearly to 0 at <see cref="ReactionRecipe.GoneMs"/>, outlasting the fangs.
+    /// </summary>
+    public static float MistOpacity(ReactionRecipe r, float u)
+    {
+        if (u < 0f || u >= r.GoneMs) return 0f;
+        if (u < r.SnapAtMs)
+            return r.MistAtSpawn + (r.MistPeak - r.MistAtSpawn) * (1f - MathF.Pow(1f - u / r.SnapAtMs, r.MistRisePower));
+        var loosenAt = LoosenAt(r);
+        if (u < loosenAt) return r.MistPeak;
+        if (u < r.ReleaseAtMs)
+            return r.MistPeak * (1f - r.MistHoldThinning * Smooth((u - loosenAt) / Math.Max(1f, r.ReleaseAtMs - loosenAt)));
+        return r.MistPeak * (1f - r.MistHoldThinning) * Math.Clamp(1f - (u - r.ReleaseAtMs) / Math.Max(1f, r.GoneMs - r.ReleaseAtMs), 0f, 1f);
+    }
+
+    /// <summary>When the mist begins to loosen: the dense part of the hold, never past the release (a short hold cannot make the curve jump).</summary>
+    private static float LoosenAt(ReactionRecipe r) => Math.Min(r.SnapAtMs + r.MistDenseMs, r.ReleaseAtMs);
+
+    /// <summary>
+    /// The mist's scale against its size at the snap: OPEN it is <see cref="ReactionRecipe.MistOpenSpread"/> wider and
+    /// looser and it CONTRACTS onto the creature as the fangs close (1 at the snap); compressed through the dense part
+    /// of the hold; then it loosens outward along one smooth curve, <see cref="ReactionRecipe.MistLoosenGrow"/> larger by
+    /// the time it is gone (never a pulse, never a jump into a puff at the release).
+    /// </summary>
+    public static Vector2 MistScale(ReactionRecipe r, float u)
+    {
+        var open = r.MistOpenSpread * (1f - Smooth(u / Math.Max(1f, r.SnapAtMs)));
+        var loosenAt = LoosenAt(r);
+        var grow = u <= loosenAt ? 0f : r.MistLoosenGrow * Smooth((u - loosenAt) / Math.Max(1f, r.GoneMs - loosenAt));
+        var scale = 1f + open + grow;
+        return new Vector2(scale, scale);
     }
 
     /// <summary>
@@ -197,18 +243,14 @@ public sealed class ReactionPerformance
     /// </summary>
     private bool Pose(IReactionStage stage, int k, float u, Span<FangPose> fangs)
     {
-        if (u < 0f || u >= Recipe.GoneMs || !stage.TryCaughtBody(Targets[k], out var layout) || layout.Height <= 0) return false;
-        // the DRAWN silhouette's box this frame: the pinned shares of the layout body
-        var sh = _silhouette[k] ?? new Vector4(0f, 0f, 1f, 1f);
-        var body = new Rectangle((int)(layout.X + sh.X * layout.Width), (int)(layout.Y + sh.Y * layout.Height),
-                                 Math.Max(1, (int)((sh.Z - sh.X) * layout.Width)), Math.Max(1, (int)((sh.W - sh.Y) * layout.Height)));
+        if (u < 0f || u >= Recipe.GoneMs || !TrySilhouette(stage, k, out var body)) return false;
         var centre = new Vector2(body.X + body.Width * 0.5f, body.Y + body.Height * 0.5f);
         _snapAt[k] = centre;
         var height = Math.Clamp(Recipe.FangHeightShare * body.Height, Recipe.FangMinPx, Recipe.FangMaxPx) * ReactionRecipes.SizeDial;
         var scale = height / Recipe.ArtHeight;
         var spread = Recipe.PairSpreadShare * height;
         var release = Release(Recipe, u);
-        var alpha = Opacity(Recipe, u);
+        var alpha = FangOpacity(Recipe, u);
         // the points: outside the top/bottom edges when OPEN, a little inside them when SNAPPED, retracting on the release
         var inside = PointShare(Recipe, u) * body.Height - release;
         var upperY = body.Y + inside;
@@ -223,16 +265,82 @@ public sealed class ReactionPerformance
         return true;
     }
 
+    /// <summary>
+    /// The creature's DRAWN silhouette box this frame (the pinned shares of its layout body; the body itself when unread),
+    /// and its canonical layout body.
+    /// </summary>
+    private bool TrySilhouette(IReactionStage stage, int k, out Rectangle body, out Rectangle layout)
+    {
+        body = default;
+        if (!stage.TryCaughtBody(Targets[k], out layout) || layout.Height <= 0) return false;
+        var sh = _silhouette[k] ?? new Vector4(0f, 0f, 1f, 1f);
+        body = new Rectangle((int)(layout.X + sh.X * layout.Width), (int)(layout.Y + sh.Y * layout.Height),
+                             Math.Max(1, (int)((sh.Z - sh.X) * layout.Width)), Math.Max(1, (int)((sh.W - sh.Y) * layout.Height)));
+        return true;
+    }
+
+    /// <inheritdoc cref="TrySilhouette(IReactionStage, int, out Rectangle, out Rectangle)"/>
+    private bool TrySilhouette(IReactionStage stage, int k, out Rectangle body) => TrySilhouette(stage, k, out body, out _);
+
+    /// <summary>
+    /// One wisp of the mist pocket on target <paramref name="k"/> (<paramref name="second"/>: the looser wisp), centred a
+    /// little above its drawn silhouette's centre, sized to one creature, drifting a few px.
+    /// </summary>
+    private void DrawMist(SpriteBatch b, IReactionStage stage, int k, float u, Texture2D tex, bool second)
+    {
+        var alpha = MistOpacity(Recipe, u) * (second ? Recipe.WispOpacity : 1f);
+        if (alpha <= 0.004f || !TrySilhouette(stage, k, out var body, out var layout)) return;
+        // the body's own height (the fangs sit on its edges); across, one creature (never a lunge's canvas)
+        var height = body.Height * ReactionRecipes.SizeDial;
+        var width = Math.Min(body.Width, layout.Width) * ReactionRecipes.SizeDial;
+        var centre = new Vector2(body.X + body.Width * 0.5f, body.Y + body.Height * (0.5f - Recipe.MistRaiseShare));
+        var s = MistScale(Recipe, u);
+        var along = Math.Clamp(u / Math.Max(1f, Recipe.GoneMs), 0f, 1f);
+        var turn = MathHelper.ToRadians(Recipe.MistTurnDegrees);
+        var size = new Vector2(width * Recipe.MistWidthShare * s.X, height * Recipe.MistHeightShare * s.Y);
+        if (second)
+        {
+            size *= Recipe.WispScale;
+            centre += new Vector2(Recipe.WispOffsetShare.X * width + Recipe.MistDriftPx * along, Recipe.WispOffsetShare.Y * height);
+        }
+        else centre.X -= Recipe.MistDriftPx * along;
+        b.Draw(tex, centre, null, Color.White * alpha, second ? turn * (1f - along) : turn * along,
+               new Vector2(tex.Width * 0.5f, tex.Height * 0.5f), new Vector2(size.X / tex.Width, size.Y / tex.Height),
+               second ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+        _mistSprites++;
+    }
+
     // ── DRAWING ──────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The fangs, in the normal alpha batch after the figures: always foreground, four sprites per target.</summary>
+    /// <summary>
+    /// The MIST, in the normal alpha batch BEFORE any creature is drawn: every target's pocket (two wisps), a Shadow pool
+    /// the bitten creature stands in, so the fog never veils it and its eyes and rim stay exactly as they were. Never
+    /// additive.
+    /// </summary>
+    public void DrawUnder(SpriteBatch b, IReactionStage stage, float playheadMs)
+    {
+        _mistSprites = 0;
+        var u = playheadMs - OriginMs;
+        if (u < 0f || u >= EndMs || stage.Texture(Recipe.MistKey) is not { } mist) return;
+        // every target's main pocket, then every target's second wisp: two texture switches however many targets
+        for (var k = 0; k < Targets.Count; k++) DrawMist(b, stage, k, u, mist, second: false);
+        if (stage.Texture(Recipe.WispKey) is not { } wisp) return;
+        for (var k = 0; k < Targets.Count; k++) DrawMist(b, stage, k, u, wisp, second: true);
+    }
+
+    /// <summary>
+    /// The FANGS, in the normal alpha batch after the figures (and so over the mist): four sprites per target while
+    /// they are visible, none once they have faded (the last frames are the mist alone). Never additive.
+    /// </summary>
     public void DrawMaterial(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
-        _sprites = 0;
+        _sprites = _mistSprites;
+        _mistSprites = 0;
         var u = playheadMs - OriginMs;
         if (u < 0f || u >= EndMs) return;
         if (stage.TryChampionBody(out var champ))
             BeltAt = new Vector2(champ.X + Recipe.ChampionAnchor.X * champ.Width, champ.Y + Recipe.ChampionAnchor.Y * champ.Height);
+        if (FangOpacity(Recipe, u) < ReactionRecipe.FangVisibleFloor) return;
         if (stage.Texture(Recipe.FangKey) is not { } tex) return;
         Span<FangPose> fangs = stackalloc FangPose[4];
         for (var k = 0; k < Targets.Count; k++)

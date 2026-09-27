@@ -92,6 +92,34 @@ triangles. What it is, in the build:
   pose: several frames of TARGET BETWEEN SHADOW FANGS, which is where the readability comes from. Then a 6 px outward
   release and a quick fade, gone by 200. Foreground only: no behind layer, no masks (readability beats physical
   accuracy).
+- **The Shadow Mist (the polish pass, 2026-09-27; the direction approved, "do NOT redesign the effect").** ONE
+  restrained supportive layer so the phrase reads as "Shadow gathers around the creature, jaws snap onto it, then the
+  darkness evaporates" instead of four sprites moving inward. Exactly two layers, mist and fangs; still no particles,
+  glints, trails, flash or bloom. Two procedural wisps (`fxp_seeker_mist_a` / `_b`, `tools/asset-pipeline/v2/seeker_mist.py`,
+  no PixelLab): near-black (darker than the creatures' own black) with a very restrained violet fringe, a compact core
+  and a long feathered fringe, zero alpha on every canvas edge; the art script records what it measured
+  (`keypose_sources/seeker_mist_spans.json`) and the tests pin the recipe against that. The pocket is centred on the
+  bitten creature's drawn silhouette and drawn in the normal alpha pass **UNDER the figures** (`ReactionPerformance.DrawUnder`,
+  called before any creature or boss is drawn): a Shadow pool the creature stands in, never a veil over it. Chosen by
+  measurement and a three-judge panel: drawn OVER the creatures the same fog greyed the bitten whelp's white eyes by
+  ~40 %, a thin veil over them by ~11 %; UNDER, its eyes and rim are exactly as without the mist, and a second round
+  (the readability refuter's measure) had it cut further: the stacked density capped near 0.6, the pocket raised onto
+  the torso and back (off the floor between the feet) and sized to ONE creature (the narrower of the drawn silhouette
+  and the canonical body: a lunge is drawn on a canvas twice the creature's width; the height is the body's own, since
+  the fangs sit on its edges); a third round lightened the release by a third (the frames where the darkened floor beside
+  the pack's black art cost the most) and made the mist's evaporation linear (no stall at the release, then collapse),
+  with a darker, less violet colour. The bitten whelp keeps ~90 % of its silhouette separation from the floor at the snap
+  and 95-98 % through the release. The curves (the layer's opacity; the main
+  pocket's densest texel is x0.72 of it on screen): a breath (0.06) on the first frame so the fangs never appear on bare
+  floor, ~0.28 at 15 ms, ~0.47 at 30, 0.70 at the snap (~0.50 on screen, ~0.59 where the wisps overlap); it CONTRACTS
+  onto the creature as the fangs close (open ~1.16 of its snap size); dense and compressed 35 ms after the snap, then it
+  loosens outward along ONE smooth curve (25 % by the end, ~11 % of it from the release to the last frame that shows it),
+  thins to 0.42 through the hold and evaporates linearly to nothing at 200. The fangs now EMERGE: 0.30 on the first frame, 0.70 when the open pose ends, whole and crisp
+  at the snap, whole through the hold, then 1 -> 0 over 45 ms, faster than the mist, and not drawn at all below
+  `FangVisibleFloor`; the phrase stays 200 ms, and the frame after the fangs (+183) still shows a faint fog (~0.08).
+  Four fang sprites + two mist sprites per target (all main pockets, then all second wisps); alloc 0 over both passes. Evidence: `production/qa/evidence/jaws-mist/`. Known and unchanged: on the review
+  layout the lower fang pair's OPEN pose sits under the skill-dock band at the bottom of the arena (it rises into view
+  at ~50 ms), in the approved fangs-only take as well.
 - **NO JAWS TARGET FLASH.** The Shadow fangs ARE the reaction's hit feedback; the generic white F2 under them was the
   largest source of visual competition, so a presented reaction whose recipe has no flash flashes nothing
   (`ReactionRecipe.TargetFlash` 0). The global F2 for ordinary attacks is unchanged.

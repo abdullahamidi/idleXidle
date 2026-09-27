@@ -1,0 +1,44 @@
+{
+  "fxp_seeker_mist_a": {
+    "peak_alpha": 0.718,
+    "size": [
+      176,
+      120
+    ],
+    "core_span": [
+      0.466,
+      0.375
+    ],
+    "visible_span": [
+      0.784,
+      0.7
+    ],
+    "edge_alpha_max": 0.0,
+    "core_mean_rgb": [
+      7.1,
+      5.0,
+      11.1
+    ]
+  },
+  "fxp_seeker_mist_b": {
+    "peak_alpha": 0.718,
+    "size": [
+      144,
+      104
+    ],
+    "core_span": [
+      0.41,
+      0.375
+    ],
+    "visible_span": [
+      0.771,
+      0.644
+    ],
+    "edge_alpha_max": 0.0,
+    "core_mean_rgb": [
+      7.1,
+      5.0,
+      11.1
+    ]
+  }
+}
