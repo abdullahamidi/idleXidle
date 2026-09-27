@@ -1,5 +1,7 @@
 # The bite RESET / PROTOTYPE: review battery (ADR-012, 2026-09-27)
 
+Review page: https://claude.ai/artifact/7ywJd6T4KVXkEJhj7YNMs5
+
 **The owner's brief.** Stop polishing the maw: the painted mouth and the whole-body receiver recoil are REJECTED. Keep
 the front-led synchronized pack contact, the authored root-motion capability, the capture tooling, the short generic
 flash (0.45 / 80 ms) with recipe overrides, no hit-stop, SPRAY and HARD HANDS. New principle: the ATTACK VERB is the
