@@ -13,10 +13,7 @@ public interface IReactionStage : IActionStage
     /// <summary>The champion's visible body this frame, WITH any presentation root motion (a HARD HANDS leap).</summary>
     bool TryChampionBody(out Rectangle body);
 
-    /// <summary>
-    /// The caught creature's body as DRAWN this frame, the yank included (the clamp rides it). An action's
-    /// <see cref="IActionStage.TryTargetBody"/> is the creature's own place, which a reaction never moves.
-    /// </summary>
+    /// <summary>The bitten creature's body as DRAWN this frame (the jaws ride it: its lunge, its bob).</summary>
     bool TryCaughtBody(int slot, out Rectangle body);
 
     /// <summary>The frame the creature in <paramref name="slot"/> was drawn from this frame (its silhouette).</summary>
@@ -25,7 +22,7 @@ public interface IReactionStage : IActionStage
     /// <summary>Whether the creature in <paramref name="slot"/> has fallen (its death has begun).</summary>
     bool TargetFalling(int slot);
 
-    /// <summary>Whether the champion has fallen: the chain's own end is going down, so the clamp slackens and fades.</summary>
+    /// <summary>Whether the champion has fallen on this bite.</summary>
     bool ChampionFalling { get; }
 
     /// <summary>Whether an authored action is in its focus (release to contact): the reaction's light then plays secondary.</summary>
@@ -33,51 +30,41 @@ public interface IReactionStage : IActionStage
 }
 
 /// <summary>What one <see cref="ReactionPerformance.Update"/> crossed, for the trace.</summary>
-public readonly record struct ReactionStep(bool Clamped, bool YankEnded, bool Retracting, Vector2 ClampAt);
+public readonly record struct ReactionStep(bool Clamped, Vector2 ClampAt);
 
 /// <summary>
-/// ONE REACTION BEING PRESENTED (ADR-011, REACTION / TRAP): the Seeker's JAWS answering the creature whose bite set it off.
+/// ONE REACTION BEING PRESENTED (ADR-011, the REACTION archetype): the Seeker's JAWS answering the creature whose bite
+/// set it off, as SHADOW PIRANHA (the production direction, 2026-09-27).
 /// </summary>
 /// <remarks>
 /// <para>
 /// A LAYER, NOT A FIGURE OWNER. It never touches the champion's clip, his root motion or his timing: he goes on doing
-/// whatever he was doing. It reads where his body IS each frame, so the tether's end rides his belt through a leap; and
-/// where the caught creature is, so the clamp stays on it through the yank.
+/// whatever he was doing. It reads where the bitten creature is each frame, so the jaws stay on its body through its
+/// own lunge and follow-through. It moves nothing: no yank, no chain, no reel.
 /// </para>
 /// <para>
-/// A MECHANISM: a spring-loaded bear trap, never a head, never a hook. The bite FIRES the tether from his belt: on the
-/// first frame the OPEN trap is at the creature (a wide toothed cup) with the chain whipping out behind it and a Source
-/// streak along it. The two jaws are rigid and each turns about its OWN pin on the base: slow for a frame, then violently,
-/// to a hard stop at ~50 ms, "( )" around the limb (a few degrees open: they stopped on it), one small rebound, locked.
-/// On that stop the answer lands: the screen shows the reflected number and flash there (the fight resolved them at
-/// the bite; <c>HuntScreen</c> holds their presentation for this stop). The chain takes the strain and JERKS the creature
-/// toward the Seeker. Then the jaws unlock and the trap is REELED BACK along its chain into his belt, which is why
-/// nothing stays in the world and why the dock now reads REARMING. A creature that falls is let go and not dragged; a
-/// champion who falls lets his chain go slack.
+/// THE PHRASE, in ms after the first frame that showed the contact. Each of three jaws (one tiny source sprite, OPEN
+/// and SHUT) starts at its own offset (0 / 15 / 25): it appears a short way off its bite point on the creature's body
+/// and DARTS in with its mouth open (16 ms), CHOMPS (the SHUT state, a one-frame squash) at 20, recoils outward a few
+/// px, and dissolves from 55, gone by 100. The answer (the reflected number, the creature's flash, a kill's fall) lands
+/// on the MAIN chomp at 25 (<see cref="Clamped"/>). A dark Shadow smear stays at each bite point a moment longer (gone by
+/// 120). Nothing travels between the Seeker and the creature: the effect is target-local, as if Shadow itself bites
+/// the attacker. One jaw is drawn BEHIND the creature (<see cref="DrawBehind"/>), so the swarm has depth.
 /// </para>
 /// <para>
-/// LAYERED ROUND THE LIMB. The NEAR jaw is drawn BEHIND the caught creature (<see cref="DrawBehind"/>, called by the
-/// screen just before it draws that creature), the far jaw and the base in front: the limb is between the jaws. The near
-/// jaw lies mostly OUTSIDE the creature, so behind it loses only the part the limb crosses; the far jaw lies over the
-/// body, and drawn behind a dark creature it vanished and the close read as ONE jaw swinging up (blind check).
-/// </para>
-/// <para>
-/// ON THE FIGHT'S PLAYHEAD. Its time is the playhead minus the first frame that showed the contact (the pump's frame,
-/// so the open jaws are always seen once before they slam). No clock of its own: a slowed or scrubbed capture shows the
-/// same pose for the same moment. It changes no outcome: its targets are the creatures the reflected Strikes hit.
+/// ON THE FIGHT'S PLAYHEAD. Its time is the playhead minus the first frame that showed the contact (the pump's frame).
+/// No clock of its own: a slowed or scrubbed capture shows the same pose for the same moment. It changes no outcome:
+/// its targets are the creatures the reflected Strikes hit, each answered on its own body.
 /// </para>
 /// </remarks>
 public sealed class ReactionPerformance
 {
-    private readonly Vector2?[] _clampShare;   // per target: the clamp point, as a share of its body (read once)
-    private readonly Vector2[] _clampAt;       // per target: where it was drawn last frame (the overlay)
-    private readonly Vector2[] _chainPts;      // the chain's sampled curve, reused every frame (the streak follows it)
-    private readonly bool[] _nearBehind;       // per target: its near jaw was drawn behind the creature this frame
+    private readonly Vector2?[] _biteShare;    // per target: the front-most point's x share (read once), null = the recipe's
+    private readonly Vector2[] _clampAt;       // per target: the first jaw's bite point last frame (the overlay)
+    private readonly bool[] _behindDrawn;      // per target: its behind jaw was drawn this frame
     private float? _origin;                    // the playhead of the first frame that showed the contact
-    private float? _retractFrom;               // a creature that fell: the clamp lets go and retracts early
-    private float? _slackFrom;                 // the champion fell: the chain slackens and the clamp fades in place
-    private bool _clamped, _yankEnded, _retracting;
-    private int _sprites, _links, _chainCount;
+    private bool _clamped;
+    private int _sprites;
 
     /// <summary>The recipe being presented.</summary>
     public ReactionRecipe Recipe { get; }
@@ -94,10 +81,10 @@ public sealed class ReactionPerformance
     /// <summary>The reaction's Source colour: its light.</summary>
     public Color Tint { get; }
 
-    /// <summary>Where the belt anchor and each clamp point were drawn last frame (the anchor overlay reads these).</summary>
+    /// <summary>The Seeker's belt anchor last frame (the anchor overlay names his side of the exchange).</summary>
     public Vector2 BeltAt { get; private set; }
 
-    /// <inheritdoc cref="BeltAt"/>
+    /// <summary>Where each target's first jaw bit last frame (the overlay).</summary>
     public IReadOnlyList<Vector2> ClampAt => _clampAt;
 
     /// <summary>A presentation of <paramref name="recipe"/> answering the bite at <paramref name="triggerMs"/>.</summary>
@@ -108,377 +95,228 @@ public sealed class ReactionPerformance
         TriggerMs = triggerMs;
         Targets = targets?.ToArray() ?? Array.Empty<int>();
         Tint = tint;
-        _clampShare = new Vector2?[Targets.Count];
+        _biteShare = new Vector2?[Targets.Count];
         _clampAt = new Vector2[Targets.Count];
-        _chainPts = new Vector2[Math.Max(2, recipe.BodySegments + 1)];   // allocated once per trigger, never per frame
-        _nearBehind = new bool[Targets.Count];
+        _behindDrawn = new bool[Targets.Count];
     }
 
     /// <summary>The playhead of the first frame (the contact), once seen; the trigger until then.</summary>
     public float OriginMs => _origin ?? TriggerMs;
 
-    /// <summary>Whether the jaws have hit their stop: the moment the screen presents the answer (its number, its flash).</summary>
+    /// <summary>Whether the main chomp has landed: the moment the screen presents the answer (its number, its flash).</summary>
     public bool Clamped => _clamped;
 
-    /// <summary>When the trap starts back to the belt, in ms after the first frame (earlier when its creature fell).</summary>
-    public float RetractFromMs => _retractFrom ?? Recipe.RetractAtMs;
-
-    /// <summary>Whether the champion fell on this bite (the chain slackens, nothing is reeled in).</summary>
-    public bool Slack => _slackFrom is not null;
-
     /// <summary>How long the reaction is in the world, in ms after the first frame.</summary>
-    public float EndMs => _slackFrom is { } s ? s + Recipe.SlackFadeMs : RetractFromMs + Recipe.RetractMs;
+    public float EndMs => Recipe.EndMs;
 
     /// <summary>Nothing of it is left to draw.</summary>
     public bool Finished(float playheadMs) => playheadMs - OriginMs >= EndMs;
 
-    /// <summary>Sprites and chain link accents drawn last frame (the trace's cost line).</summary>
+    /// <summary>Sprites drawn last frame (the trace's cost line).</summary>
     public int SpriteCount => _sprites;
 
-    /// <inheritdoc cref="SpriteCount"/>
-    public int ChainLinks => _links;
-
-    // ── THE CURVES (pure, so they are tested directly; u = ms after the first frame) ─────────────
+    // ── THE CURVES (pure, so they are tested directly; v = ms after the JAW's own start) ────────
 
     private static float Smooth(float v) { v = Math.Clamp(v, 0f, 1f); return v * v * (3f - 2f * v); }
     private static float EaseOut(float v) { v = Math.Clamp(v, 0f, 1f); return 1f - (1f - v) * (1f - v); }
 
+    /// <summary>Whether a jaw's mouth is SHUT at <paramref name="v"/> ms after its start: open on the dart, shut from the chomp.</summary>
+    public static bool Shut(ReactionRecipe r, float v) => v >= r.ChompAtMs;
+
     /// <summary>
-    /// Each jaw's angle off its drawn shut pose (degrees, about its own pin): open on the first frame; closing with the
-    /// travel as the SQUARE of the time (slow for a frame, violent at the end: most of the travel near contact) to the
-    /// hard stop at <see cref="ReactionRecipe.CloseMs"/>; ONE small rebound (up in the first third of
-    /// <see cref="ReactionRecipe.ReboundMs"/>, settled by its end); locked; unlocking when it retracts. Rotation only.
+    /// How far along its approach a jaw is at <paramref name="v"/>: 0 at its spawn point, 1 at the bite point (the dart,
+    /// eased out), then a little PAST 1 is never allowed: from the chomp it recoils back outward by
+    /// <see cref="ReactionRecipe.RecoilPx"/> (returned separately by <see cref="Recoil"/>).
     /// </summary>
-    public static float JawAngle(ReactionRecipe r, float u, float retractFrom)
+    public static float Approach(ReactionRecipe r, float v) => v <= 0f ? 0f : EaseOut(v / Math.Max(1f, r.DartMs));
+
+    /// <summary>The recoil outward after the chomp, in px: 0 until the chomp, easing out to <see cref="ReactionRecipe.RecoilPx"/>, plus a slow drift through the dissolve.</summary>
+    public static float Recoil(ReactionRecipe r, float v)
     {
-        if (u <= 0f) return r.OpenDeg;
-        if (u < r.CloseMs)
-        {
-            var v = u / r.CloseMs;
-            return r.StopDeg + (r.OpenDeg - r.StopDeg) * (1f - v * v);
-        }
-        var angle = r.StopDeg;
-        var since = u - r.CloseMs;
-        if (since < r.ReboundMs)
-        {
-            var v = since / r.ReboundMs;
-            angle += r.ReboundDeg * (v < 1f / 3f ? EaseOut(v * 3f) : 1f - Smooth((v - 1f / 3f) * 1.5f));
-        }
-        if (u >= retractFrom) angle += (r.UnlockDeg - r.StopDeg) * Smooth((u - retractFrom) / Math.Max(1f, r.UnlockMs));
-        return angle;
+        var since = v - r.ChompAtMs;
+        if (since <= 0f) return 0f;
+        var px = r.RecoilPx * EaseOut(since / Math.Max(1f, r.RecoilMs));
+        if (v > r.DissolveFromMs) px += r.RecoilPx * 0.75f * Smooth((v - r.DissolveFromMs) / Math.Max(1f, r.GoneMs - r.DissolveFromMs));
+        return px;
     }
 
-    /// <summary>The yank, 0 → 1 → 0: from the clamp the chain jerks the creature toward the Seeker, then it settles.</summary>
-    public static float Yank(ReactionRecipe r, float u)
+    /// <summary>A jaw's opacity: whole through the chomp, dissolving from <see cref="ReactionRecipe.DissolveFromMs"/>, gone by <see cref="ReactionRecipe.GoneMs"/>.</summary>
+    public static float Opacity(ReactionRecipe r, float v)
     {
-        var v = u - r.CloseMs;
-        if (v <= 0f || v >= r.YankMs) return 0f;
-        return v < r.YankPeakMs ? EaseOut(v / r.YankPeakMs) : 1f - Smooth((v - r.YankPeakMs) / (r.YankMs - r.YankPeakMs));
+        if (v < 0f || v >= r.GoneMs) return 0f;
+        if (v < r.DissolveFromMs) return 1f;
+        return 1f - Smooth((v - r.DissolveFromMs) / Math.Max(1f, r.GoneMs - r.DissolveFromMs));
     }
 
-    /// <summary>How far the clamp has been reeled back to the belt, 0 → 1, accelerating (a reel takes up slack, then snaps it home).</summary>
-    public static float Retract(ReactionRecipe r, float u, float retractFrom)
+    /// <summary>The chomp's squash (x, y scale factors) for the frame after the mouth shuts, then 1.</summary>
+    public static Vector2 Squash(ReactionRecipe r, float v)
     {
-        var e = Math.Clamp((u - retractFrom) / Math.Max(1f, r.RetractMs), 0f, 1f);
-        return e * e;
+        var since = v - r.ChompAtMs;
+        if (since < 0f || since >= r.SquashMs) return Vector2.One;
+        var k = 1f - since / r.SquashMs;
+        return new Vector2(1f + 0.12f * k, 1f - 0.10f * k);
     }
 
-    /// <summary>The chain's tension, 0 (the whip's curve) to 1 (taut); reeling in keeps it taut.</summary>
-    public static float Tension(ReactionRecipe r, float u) => EaseOut(u / Math.Max(1f, r.TautMs));
-
-    /// <summary>The clamp's and chain's opacity: whole until the last of the retract (or the slack), then gone.</summary>
-    public static float Opacity(ReactionRecipe r, float u, float retractFrom, float? slackFrom)
+    /// <summary>The residue's strength at each bite point, u ms after the first frame: from the chomp, fading to nothing by <see cref="ReactionRecipe.ResidueGoneMs"/>.</summary>
+    public static float Residue(ReactionRecipe r, float u, float delayMs)
     {
-        if (slackFrom is { } s) return 1f - Smooth((u - s) / Math.Max(1f, r.SlackFadeMs));
-        var e = Math.Clamp((u - retractFrom) / Math.Max(1f, r.RetractMs), 0f, 1f);
-        var fadeFrom = 1f - r.RetractFadeShare;
-        return e <= fadeFrom ? 1f : 1f - Smooth((e - fadeFrom) / Math.Max(0.01f, r.RetractFadeShare));
+        var from = delayMs + r.ChompAtMs;
+        if (u < from || u >= r.ResidueGoneMs) return 0f;
+        return r.ResiduePeak * (1f - Smooth((u - from) / Math.Max(1f, r.ResidueGoneMs - from)));
     }
 
     // ── EACH FRAME ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Advance on the fight's playhead: pin the clamp points, and notice a creature (or the champion) falling.</summary>
+    /// <summary>Advance on the fight's playhead: pin each target's front edge once, and notice the main chomp.</summary>
     public ReactionStep Update(float playheadMs, IReactionStage stage)
     {
         _origin ??= Math.Max(TriggerMs, playheadMs);
         var u = playheadMs - OriginMs;
         for (var k = 0; k < Targets.Count; k++)
         {
-            // THE CLAMP POINT IS READ ONCE, off the pose the creature bites in, and then kept as a share of its body,
-            // so the clamp rides the body (its lunge, its bob, the yank) instead of re-sampling a moving silhouette.
-            if (_clampShare[k] is null && stage.TryCaughtBody(Targets[k], out var body) && body.Width > 0 && body.Height > 0)
+            // THE FRONT EDGE IS READ ONCE, off the pose the creature bites in, and kept as a share of its body, so the
+            // front jaws ride the body instead of re-sampling a moving silhouette. The recipe's shares stand when the
+            // silhouette cannot be read.
+            if (_biteShare[k] is null && stage.TryCaughtBody(Targets[k], out var body) && body.Width > 0 && body.Height > 0)
             {
-                var share = Recipe.ClampFallback;
+                var share = Vector2.Zero;   // (0, 0) = the recipe's own shares
                 if (stage.TryTargetFrame(Targets[k], out var frame)
                     && SilhouetteProbe.FrontLower(frame, facesLeft: true, Recipe.ProbeFrom, Recipe.ProbeTo, Recipe.ProbeInset) is { } p)
-                    share = new Vector2(Math.Clamp((p.X - body.X) / body.Width, 0.04f, 0.6f),
-                                        Math.Clamp((p.Y - body.Y) / body.Height, 0.45f, 0.94f));
-                _clampShare[k] = share;
+                    share = new Vector2(Math.Clamp((p.X - body.X) / body.Width, 0.04f, 0.6f), 0f);
+                _biteShare[k] = share;
             }
-            // DEATH IS THE STRONGER STATE: the snap still reads, then the clamp lets go and goes home; no corpse is pulled
-            if (_retractFrom is null && _slackFrom is null && stage.TargetFalling(Targets[k]))
-                _retractFrom = Math.Max(Recipe.CloseMs + Recipe.DeathHoldMs, u);
         }
-        // the bite felled the champion: after the snap his end of the chain goes down, so it slackens and fades in place
-        if (_slackFrom is null && stage.ChampionFalling)
-            _slackFrom = Math.Max(Recipe.CloseMs + 30f, u);
-        // the playhead runs in thirds of a millisecond: the frame drawn AT the stop reads 49.99 ms, so a half-millisecond
-        // of slack keeps the stop (and the answer the screen presents on it) on the frame that shows the jaws shut
-        var clamped = !_clamped && u >= Recipe.CloseMs - 0.5f;
+        // the playhead runs in thirds of a millisecond: the frame drawn AT the chomp reads 24.99 ms, so a half-millisecond
+        // of slack keeps the answer on the frame that shows the mouth shut
+        var clamped = !_clamped && u >= Recipe.AnswerAtMs - 0.5f;
         if (clamped) _clamped = true;
-        var yankEnded = !_yankEnded && u >= Recipe.CloseMs + Recipe.YankMs;
-        if (yankEnded) _yankEnded = true;
-        var retracting = !_retracting && _slackFrom is null && u >= RetractFromMs;
-        if (retracting) _retracting = true;
-        return new ReactionStep(clamped, yankEnded, retracting, _clampAt.Length > 0 ? _clampAt[0] : default);
-    }
-
-    /// <summary>
-    /// The YANK on the creature in <paramref name="slot"/> right now (px, NEGATIVE: toward the champion, who stands to
-    /// its left): the chain catches it and pulls. Never on a creature that fell, never once the trap has let go.
-    /// </summary>
-    public float YankOffsetX(int slot, float playheadMs, float bodyWidth, bool falling)
-    {
-        if (falling || _retractFrom is not null || _slackFrom is not null) return 0f;
-        var k = IndexOf(slot);
-        if (k != 0) return 0f;   // the chain holds the first creature; a second is only bitten
-        var px = Math.Clamp(Recipe.YankShare * bodyWidth, Recipe.YankMinPx, Recipe.YankMaxPx);
-        return -px * Yank(Recipe, playheadMs - OriginMs);
-    }
-
-    private int IndexOf(int slot)
-    {
-        for (var k = 0; k < Targets.Count; k++) if (Targets[k] == slot) return k;
-        return -1;
+        return new ReactionStep(clamped, _clampAt.Length > 0 ? _clampAt[0] : default);
     }
 
     // ── THE POSE ─────────────────────────────────────────────────────────────────────────────────
 
-    private readonly record struct ClampPose(Vector2 Bite, Vector2 NearPivot, Vector2 FarPivot, Vector2 Eye, float Angle, float Scale, float Jaw);
+    private readonly record struct JawPose(Vector2 At, Vector2 Bite, float Rotation, Vector2 Scale, float Alpha, bool Shut, bool Flip, float Height);
 
-    private bool Belt(IReactionStage stage, out Vector2 at)
-    {
-        at = default;
-        if (!stage.TryChampionBody(out var champ)) return false;
-        at = new Vector2(champ.X + Recipe.ChampionAnchor.X * champ.Width, champ.Y + Recipe.ChampionAnchor.Y * champ.Height);
-        return true;
-    }
-
-    /// <summary>Target <paramref name="k"/>'s trap this frame: where its clamp point is, its lean, its size and its jaws.</summary>
-    private bool Pose(IReactionStage stage, int k, Vector2 belt, float u, out ClampPose pose)
+    /// <summary>Jaw <paramref name="j"/> on target <paramref name="k"/> this frame, or false when it is not in the world.</summary>
+    private bool Pose(IReactionStage stage, int k, int j, float u, out JawPose pose)
     {
         pose = default;
-        if (_clampShare[k] is not { } share || !stage.TryCaughtBody(Targets[k], out var body)) return false;
-        var clamp = new Vector2(body.X + share.X * body.Width, body.Y + share.Y * body.Height);
-        _clampAt[k] = clamp;
-        var height = Math.Clamp(Recipe.ClampBodyShare * body.Height, Recipe.ClampMinPx, Recipe.ClampMaxPx)
-                     * ReactionRecipes.SizeDial * (k == 0 ? 1f : 0.8f);
-        var scale = height / Recipe.ClampArtHeight;
-        // the trap stands upright on the limb and leans a little toward its tether, never past MaxTilt
-        var toClamp = clamp - belt;
-        var max = MathHelper.ToRadians(Recipe.MaxTiltDeg);
-        var angle = Math.Clamp(Recipe.TiltShare * MathF.Atan2(toClamp.Y, Math.Max(1f, toClamp.X)), -max, max);
-        var bite = clamp;
-        // THE RETRACT: reeled back along its chain until its eye reaches the belt (the first target only; a second trap
-        // has no chain of its own and simply fades with the first)
-        if (_slackFrom is null && k == 0)
-        {
-            var reel = Retract(Recipe, u, RetractFromMs);
-            if (reel > 0f)
-            {
-                var docked = belt - Rotate((Recipe.Eye - Recipe.BitePoint) * scale, angle);
-                bite = Vector2.Lerp(clamp, docked, reel);
-            }
-        }
-        var near = bite + Rotate((Recipe.NearPivot - Recipe.BitePoint) * scale, angle);
-        var far = bite + Rotate((Recipe.FarPivot - Recipe.BitePoint) * scale, angle);
-        var eye = bite + Rotate((Recipe.Eye - Recipe.BitePoint) * scale, angle);
-        pose = new ClampPose(bite, near, far, eye, angle, scale, MathHelper.ToRadians(JawAngle(Recipe, u, RetractFromMs)));
+        var jaw = Recipe.Jaws[j];
+        var v = u - jaw.DelayMs;
+        if (v < 0f || v >= Recipe.GoneMs || !stage.TryCaughtBody(Targets[k], out var body)) return false;
+        var share = jaw.BiteShare;
+        if (_biteShare[k] is { X: > 0f } probed && !jaw.Behind) share = new Vector2(probed.X + (jaw.BiteShare.X - Recipe.Jaws[0].BiteShare.X), share.Y);
+        var bite = new Vector2(body.X + share.X * body.Width, body.Y + share.Y * body.Height);
+        if (j == 0) _clampAt[k] = bite;
+        var height = Math.Clamp(Recipe.JawBodyShare * body.Height, Recipe.JawMinPx, Recipe.JawMaxPx) * ReactionRecipes.SizeDial * jaw.Scale;
+        var dist = Recipe.SpawnDistShare * height + Recipe.SpawnDistPx;
+        var along = Approach(Recipe, v) * dist - Recoil(Recipe, v);
+        var at = bite - jaw.From * (dist - along);
+        // the art faces LEFT (its mouth at the left edge): a jaw arriving from the left is mirrored to face right, and
+        // both turn about the mouth so it points along the approach
+        var flip = jaw.From.X > 0f;
+        var rotation = flip ? MathF.Atan2(jaw.From.Y, jaw.From.X) : MathF.Atan2(-jaw.From.Y, -jaw.From.X);
+        var scale = Squash(Recipe, v) * (height / Recipe.ArtHeight);
+        pose = new JawPose(at, bite, rotation, scale, Opacity(Recipe, v), Shut(Recipe, v), flip, height);
         return true;
     }
 
     // ── DRAWING ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The NEAR jaw, BEHIND the creature in <paramref name="slot"/>: the screen calls this just before it draws that
-    /// creature, in the same alpha batch, so the limb is drawn over the near jaw and under the far one.
+    /// The BEHIND jaw of the creature in <paramref name="slot"/>: the screen calls this just before it draws that
+    /// creature, in the same alpha batch, so the body is drawn over it and the swarm has depth.
     /// </summary>
     public void DrawBehind(SpriteBatch b, IReactionStage stage, float playheadMs, int slot)
     {
         var u = playheadMs - OriginMs;
-        if (u < 0f || u >= EndMs || !Belt(stage, out var belt)) return;
-        var alpha = Opacity(Recipe, u, RetractFromMs, _slackFrom);
+        if (u < 0f || u >= EndMs) return;
         for (var k = 0; k < Targets.Count; k++)
         {
-            if (Targets[k] != slot || !Pose(stage, k, belt, u, out var pose)) continue;
-            DrawPart(b, stage, Recipe.NearKey, pose.NearPivot, Recipe.NearPivot, pose, pose.Angle - pose.Jaw, Color.White * alpha);
-            _nearBehind[k] = true;
+            if (Targets[k] != slot) continue;
+            for (var j = 0; j < Recipe.Jaws.Count; j++)
+                if (Recipe.Jaws[j].Behind && Pose(stage, k, j, u, out var pose))
+                {
+                    DrawJaw(b, stage, pose);
+                    _behindDrawn[k] = true;
+                }
         }
     }
 
-    /// <summary>
-    /// The MATERIAL, in the normal alpha batch after the figures: the chain, the near jaw (unless it was drawn behind its
-    /// creature), the far jaw, then the base over their roots. Iron, untinted.
-    /// </summary>
+    /// <summary>The MATERIAL, in the normal alpha batch after the figures: the front jaws, and each bite's Shadow smear.</summary>
     public void DrawMaterial(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
         _sprites = 0;
-        _links = 0;
-        _chainCount = 0;
         var u = playheadMs - OriginMs;
-        if (u < 0f || u >= EndMs || !Belt(stage, out var belt))
+        if (u < 0f || u >= EndMs)
         {
-            Array.Clear(_nearBehind);
+            Array.Clear(_behindDrawn);
             return;
         }
-        BeltAt = belt;
-        var alpha = Opacity(Recipe, u, RetractFromMs, _slackFrom);
+        if (stage.TryChampionBody(out var champ))
+            BeltAt = new Vector2(champ.X + Recipe.ChampionAnchor.X * champ.Width, champ.Y + Recipe.ChampionAnchor.Y * champ.Height);
+        var smear = stage.Texture(Recipe.SmearKey);
         for (var k = 0; k < Targets.Count; k++)
         {
-            if (!Pose(stage, k, belt, u, out var pose)) continue;
-            if (k == 0) DrawChain(b, stage, belt, pose.Eye, u, alpha);
-            if (_nearBehind[k]) _sprites++;   // drawn behind its creature this frame: counted, not drawn twice
-            else DrawPart(b, stage, Recipe.NearKey, pose.NearPivot, Recipe.NearPivot, pose, pose.Angle - pose.Jaw, Color.White * alpha);
-            DrawPart(b, stage, Recipe.FarKey, pose.FarPivot, Recipe.FarPivot, pose, pose.Angle + pose.Jaw, Color.White * alpha);
-            DrawPart(b, stage, Recipe.BaseKey, pose.Bite, Recipe.BitePoint, pose, pose.Angle, Color.White * alpha);
+            for (var j = 0; j < Recipe.Jaws.Count; j++)
+            {
+                var jaw = Recipe.Jaws[j];
+                if (jaw.Behind)
+                {
+                    if (_behindDrawn[k]) _sprites++;   // drawn behind its creature this frame: counted, not drawn twice
+                    else if (Pose(stage, k, j, u, out var behind)) DrawJaw(b, stage, behind);   // no body to go behind (a fallen one): in front
+                    continue;
+                }
+                if (Pose(stage, k, j, u, out var pose)) DrawJaw(b, stage, pose);
+            }
+            // the residue: a dark Shadow smear at each bite point, along the approach, for a moment after the chomp
+            if (smear is null) continue;
+            for (var j = 0; j < Recipe.Jaws.Count; j++)
+            {
+                var jaw = Recipe.Jaws[j];
+                var strength = Residue(Recipe, u, jaw.DelayMs);
+                if (strength <= 0f || !stage.TryCaughtBody(Targets[k], out var body)) continue;
+                var bite = new Vector2(body.X + jaw.BiteShare.X * body.Width, body.Y + jaw.BiteShare.Y * body.Height);
+                var height = Math.Clamp(Recipe.JawBodyShare * body.Height, Recipe.JawMinPx, Recipe.JawMaxPx) * ReactionRecipes.SizeDial * jaw.Scale;
+                var len = Recipe.ResidueLengthShare * height;
+                var dark = Color.Lerp(new Color(12, 8, 18), Tint, 0.25f) * strength;
+                b.Draw(smear, bite, null, dark, MathF.Atan2(-jaw.From.Y, -jaw.From.X), new Vector2(0f, smear.Height / 2f),
+                       new Vector2(len / smear.Width, height * 0.35f / smear.Height), SpriteEffects.None, 0f);
+                _sprites++;
+            }
         }
     }
 
-    /// <summary>One rigid part at <paramref name="at"/> (where its canvas point <paramref name="origin"/> lies this frame), turned, at the clamp's one scale.</summary>
-    private void DrawPart(SpriteBatch b, IReactionStage stage, string key, Vector2 at, Vector2 origin, ClampPose pose, float rotation, Color colour)
+    /// <summary>One jaw-head: the OPEN or SHUT state, at its place, turned about its mouth, at its size, fading.</summary>
+    private void DrawJaw(SpriteBatch b, IReactionStage stage, JawPose pose)
     {
-        if (stage.Texture(key) is not { } tex) return;
-        b.Draw(tex, at, null, colour, rotation, origin, pose.Scale, SpriteEffects.None, 0f);
+        if (stage.Texture(pose.Shut ? Recipe.ShutKey : Recipe.OpenKey) is not { } tex) return;
+        b.Draw(tex, pose.At, null, Color.White * pose.Alpha, pose.Rotation, Recipe.MouthPoint, pose.Scale,
+               pose.Flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         _sprites++;
     }
 
-    /// <summary>The LIGHT, in the additive pass: the teeth's glint at the stop, the tether's streak as it fires.</summary>
+    /// <summary>The LIGHT, in the additive pass: a small Shadow glint at each bite point as its jaw chomps.</summary>
     public void DrawLight(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
         var u = playheadMs - OriginMs;
-        if (u < 0f || u >= EndMs || !Belt(stage, out var belt))
+        if (u < 0f || u >= EndMs || stage.Texture(Recipe.GlintKey) is not { } glint)
         {
-            Array.Clear(_nearBehind);
+            Array.Clear(_behindDrawn);
             return;
         }
         var weight = stage.ActionInFocus ? Recipe.LightUnderAction : 1f;
-        // THE TETHER FIRES: a Source streak along the chain, brightest at the trap (it came FROM the belt), gone in ~60 ms
-        if (u < Recipe.WhipMs && _chainCount > 1 && stage.Texture(Recipe.StreakKey) is { } streak)
-        {
-            var fade = 1f - u / Recipe.WhipMs;
-            for (var i = 0; i + 1 < _chainCount; i++)
-            {
-                var a = _chainPts[i];
-                var d = _chainPts[i + 1] - a;
-                var len = d.Length();
-                if (len < 0.5f) continue;
-                var along = (i + 1f) / (_chainCount - 1f);   // 0 at the belt, 1 at the trap
-                b.Draw(streak, a, null, VfxBlend.Light(Color.Lerp(Tint, Color.White, 0.3f) * (Recipe.StreakPeak * fade * along * along * weight)),
-                       MathF.Atan2(d.Y, d.X), new Vector2(0f, streak.Height / 2f),
-                       new Vector2(len / streak.Width, Recipe.StreakPx / streak.Height), SpriteEffects.None, 0f);
-                _sprites++;
-            }
-        }
-        var since = u - Recipe.CloseMs;
-        if (since < 0f)
-        {
-            Array.Clear(_nearBehind);
-            return;
-        }
         for (var k = 0; k < Targets.Count; k++)
-        {
-            if (!Pose(stage, k, belt, u, out var pose)) continue;
-            // the teeth catch the Source on the stop, then iron again. The near jaw's only when it is not behind its
-            // creature: light is additive and would draw its teeth THROUGH the limb that hides them
-            if (since < Recipe.GlintMs)
+            for (var j = 0; j < Recipe.Jaws.Count; j++)
             {
-                var g = VfxBlend.Light(Color.Lerp(Tint, Color.White, 0.45f) * (Recipe.GlintPeak * (1f - since / Recipe.GlintMs) * weight));
-                if (!_nearBehind[k]) DrawPart(b, stage, Recipe.NearEdgeKey, pose.NearPivot, Recipe.NearPivot, pose, pose.Angle - pose.Jaw, g);
-                DrawPart(b, stage, Recipe.FarEdgeKey, pose.FarPivot, Recipe.FarPivot, pose, pose.Angle + pose.Jaw, g);
-            }
-            // a spark squeezed out of each PIN as its jaw hits the stop: steel met steel at the pins, not on the hide.
-            // Thrown up and outward, off the jaw it came from (never a fan round the target)
-            if (k == 0 && since < Recipe.SparkMs && stage.Texture(Recipe.SparkKey) is { } spark)
-            {
-                var v = since / Recipe.SparkMs;
-                var length = Recipe.ClampArtHeight * pose.Scale;
-                for (var s = 0; s < Math.Min(Recipe.Sparks, 2); s++)
-                {
-                    var side = s == 0 ? -1f : 1f;   // the near pin throws up and back, the far pin up and forward
-                    var hinge = s == 0 ? pose.NearPivot : pose.FarPivot;
-                    var a = pose.Angle + side * (0.75f + (ProjectileMotion.Hash01(TriggerMs, s) - 0.5f) * 0.3f);
-                    var speed = 0.75f + 0.25f * ProjectileMotion.Hash01(TriggerMs, s + 40);
-                    var at = hinge + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (Recipe.SparkReach * length * speed * EaseOut(v))
-                             + new Vector2(0f, 0.08f * length * v * v);
-                    b.Draw(spark, at, null, VfxBlend.Light(Color.Lerp(Color.White, Tint, 0.35f) * ((1f - v) * weight)), 0f,
-                           new Vector2(spark.Width, spark.Height) / 2f, 0.05f * length / spark.Width, SpriteEffects.None, 0f);
-                    _sprites++;
-                }
-            }
-        }
-        Array.Clear(_nearBehind);   // the light is the frame's last pass: next frame's creatures draw their near jaws afresh
-    }
-
-    /// <summary>
-    /// The chain: a dark metal body along a curve from the belt to the clamp's shackle (the whip's curve going taut, a small
-    /// shiver, slack if the champion fell), with a few link accents, dense at its two ends. No gaps, no 64 equal stamps.
-    /// </summary>
-    private void DrawChain(SpriteBatch b, IReactionStage stage, Vector2 belt, Vector2 eye, float u, float alpha)
-    {
-        var span = eye - belt;
-        var spanLen = span.Length();
-        if (spanLen < 4f) return;
-        var normal = new Vector2(-span.Y, span.X) / spanLen;
-        if (normal.Y < 0f) normal = -normal;   // the curve hangs toward the ground
-        var sag = Math.Min(Recipe.WhipSag * spanLen, Recipe.WhipSagMaxPx) * (1f - Tension(Recipe, u));
-        if (_slackFrom is { } s) sag += Math.Min(0.18f * spanLen, 60f) * Smooth((u - s) / Math.Max(1f, Recipe.SlackFadeMs));
-        var shiver = u > Recipe.TautMs && _slackFrom is null && u < RetractFromMs
-            ? Recipe.ShiverPx * MathF.Exp(-(u - Recipe.TautMs) / Recipe.ShiverDecayMs) * MathF.Sin(MathF.Tau * Recipe.ShiverHz * (u - Recipe.TautMs) / 1000f)
-            : 0f;
-        var control = (belt + eye) / 2f + normal * (sag * 2f + shiver);
-        var n = _chainPts.Length;
-        for (var i = 0; i < n; i++) _chainPts[i] = Bezier(belt, control, eye, i / (n - 1f));
-        _chainCount = n;
-        if (stage.Texture(Recipe.ChainBodyKey) is { } body)
-            for (var i = 0; i + 1 < n; i++)
-            {
-                var a = _chainPts[i];
-                var d = _chainPts[i + 1] - a;
-                var len = d.Length();
-                if (len < 0.5f) continue;
-                b.Draw(body, a, null, Color.White * alpha, MathF.Atan2(d.Y, d.X), new Vector2(0f, body.Height / 2f),
-                       new Vector2((len + 0.6f) / body.Width, Recipe.BodyPx / body.Height), SpriteEffects.None, 0f);
+                var jaw = Recipe.Jaws[j];
+                var since = u - jaw.DelayMs - Recipe.ChompAtMs;
+                if (since < 0f || since >= Recipe.GlintMs || !Pose(stage, k, j, u, out var pose)) continue;
+                var g = VfxBlend.Light(Color.Lerp(Tint, Color.White, 0.35f) * (Recipe.GlintPeak * (1f - since / Recipe.GlintMs) * weight));
+                var size = Recipe.GlintShare * pose.Height;
+                b.Draw(glint, pose.Bite, null, g, 0f, new Vector2(glint.Width, glint.Height) / 2f, size / glint.Width, SpriteEffects.None, 0f);
                 _sprites++;
             }
-        if (stage.Texture(Recipe.ChainLinkKey) is not { } link) return;
-        var cellW = link.Width / 2;
-        var cellScale = Recipe.LinkPx / cellW;
-        // a reeled-in chain is short: it keeps only the accents it has room for, from both ends inward
-        var room = (int)(spanLen / (Recipe.LinkPx * 0.9f));
-        for (var i = 0; i < Recipe.LinkAt.Count; i++)
-        {
-            if (room < Recipe.LinkAt.Count && i % 2 == 1 && i > 1 && i < Recipe.LinkAt.Count - 2) continue;
-            var f = Recipe.LinkAt[i];
-            var at = Bezier(belt, control, eye, f);
-            var tangent = BezierTangent(belt, control, eye, f);
-            var cell = new Rectangle((i & 1) * cellW, 0, cellW, link.Height);
-            b.Draw(link, at, cell, Color.White * alpha, MathF.Atan2(tangent.Y, tangent.X), new Vector2(cellW / 2f, link.Height / 2f),
-                   cellScale, SpriteEffects.None, 0f);
-            _sprites++;
-            _links++;
-        }
-    }
-
-    private static Vector2 Bezier(Vector2 a, Vector2 c, Vector2 b, float u)
-        => (1f - u) * (1f - u) * a + 2f * (1f - u) * u * c + u * u * b;
-
-    private static Vector2 BezierTangent(Vector2 a, Vector2 c, Vector2 b, float u)
-        => 2f * (1f - u) * (c - a) + 2f * u * (b - c);
-
-    private static Vector2 Rotate(Vector2 v, float radians)
-    {
-        if (radians == 0f) return v;
-        var (s, c) = MathF.SinCos(radians);
-        return new Vector2(v.X * c - v.Y * s, v.X * s + v.Y * c);
+        Array.Clear(_behindDrawn);   // the light is the frame's last pass: next frame's creatures draw their behind jaws afresh
     }
 }

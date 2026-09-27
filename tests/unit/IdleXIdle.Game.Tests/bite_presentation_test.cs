@@ -136,25 +136,6 @@ public class bite_presentation_test
     }
 
     [Fact]
-    public void test_bite_motif_opens_before_the_contact_snaps_on_it_and_is_gone_in_time()
-    {
-        Assert.Equal(-1f, BitePresentation.MotifOpen(200f, -200f));                     // not yet
-        Assert.True(BitePresentation.MotifOpen(16f, -16f) > 0.5f, "open on the frame before the contact");
-        // the regression: the screen's `since the last bite` clock is stale (a bite 3 s ago) when the next one is about to
-        // land; the open frame must still show, and be faint
-        Assert.True(BitePresentation.MotifOpen(17f, 2966f) > 0.5f, "open on the frame before the NEXT contact, whatever the last one's clock says");
-        Assert.InRange(BitePresentation.MotifStrength(17f, 2966f), 0.3f, 0.8f);
-        Assert.Equal(0f, BitePresentation.MotifOpen(0f, 0f));                            // shut on the beat
-        Assert.Equal(0f, BitePresentation.MotifOpen(-30f, 30f));
-        Assert.Equal(-1f, BitePresentation.MotifOpen(-200f, 200f));                       // gone
-        Assert.True(BitePresentation.MotifStrength(16f, -16f) < 1f, "faint while open");
-        Assert.Equal(1f, BitePresentation.MotifStrength(0f, 0f));
-        Assert.True(BitePresentation.MotifStrength(-40f, 40f) < 1f && BitePresentation.MotifStrength(-40f, 40f) > 0f, "a short residue");
-        Assert.Equal(0f, BitePresentation.MotifStrength(-100f, 100f));
-        Assert.True(BitePresentation.MotifGoneMs <= 100f, "no bite icon floats on the player");
-    }
-
-    [Fact]
     public void test_recoil_is_re_impulsed_never_accumulated()
     {
         // the screen keeps ONE `since the last bite` clock; a second bite restarts it. Two bites 60 ms apart thus

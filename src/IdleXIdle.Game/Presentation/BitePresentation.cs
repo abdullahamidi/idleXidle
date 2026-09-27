@@ -128,37 +128,6 @@ public static class BitePresentation
     /// (a 10 % recoil dipped 1.5 %), on the same curve. Zero with the recoil.</summary>
     public const float RecoilDipPerShare = 0.15f;
 
-    // ── THE BITE CONTACT MOTIF ────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>How long before the contact the motif's two fangs appear, open (ms).</summary>
-    public const float MotifOpenMs = 24f;
-
-    /// <summary>After the contact: how long the fangs stay shut at full strength, and when the residue is gone (ms).</summary>
-    public const float MotifHoldMs = 16f;
-    public const float MotifGoneMs = 70f;
-
-    /// <summary>
-    /// The motif's opening, 0 = shut, 1 = fully open: open on the frame before the contact
-    /// (<paramref name="leadMs"/> &gt; 0 within <see cref="MotifOpenMs"/>), shut from the contact on. -1 when not shown.
-    /// </summary>
-    public static float MotifOpen(float leadMs, float sinceMs)
-    {
-        // the NEXT bite's lead is asked first: the screen keeps one `since the last bite` clock, which is stale (large
-        // and positive) by the time the next bite is about to land
-        if (leadMs > 0f && leadMs <= MotifOpenMs) return Math.Clamp(leadMs / MotifOpenMs, 0.35f, 1f);
-        return sinceMs >= 0f && sinceMs < MotifGoneMs ? 0f : -1f;
-    }
-
-    /// <summary>The motif's strength, 0..1: faint while open, full on the snap, a short residue, gone by <see cref="MotifGoneMs"/>.</summary>
-    public static float MotifStrength(float leadMs, float sinceMs)
-    {
-        if (leadMs > 0f && leadMs <= MotifOpenMs) return 0.6f;
-        if (sinceMs < 0f || sinceMs >= MotifGoneMs) return 0f;
-        if (sinceMs < MotifHoldMs) return 1f;
-        var s = (sinceMs - MotifHoldMs) / (MotifGoneMs - MotifHoldMs);
-        return (1f - s) * (1f - s);
-    }
-
     /// <summary>When the recoil peaks after the contact, and when the champion is home again (ms).</summary>
     public const float RecoilPeakMs = 33f;
     public const float RecoilHomeMs = 130f;

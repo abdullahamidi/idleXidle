@@ -5,29 +5,28 @@ using Microsoft.Xna.Framework;
 namespace IdleXIdle.Game.Presentation;
 
 /// <summary>
-/// HOW A REACTION IS PRESENTED (ADR-011, the REACTION / TRAP archetype): the world's answer to an enemy's bite, drawn
-/// on its own layer and never on the champion's figure. JAWS is the reference: a spring-loaded BEAR TRAP on a chain that
-/// belongs to the Seeker. The bite fires it, its two big jaws spring shut "( )" around the creature that bit, the chain
-/// takes the strain and jerks the creature, and the trap is reeled back to his belt. "JAWS" names the trap's two
-/// opposing jaws: the object is a trap, never a creature's head or mouth, and never a hook.
+/// HOW A REACTION IS PRESENTED (ADR-011, the REACTION archetype; the production direction of 2026-09-27): the world's
+/// answer to an enemy's bite, drawn on its own layer and never on the champion's figure. JAWS is the reference and it
+/// is SHADOW PIRANHA: when the fight resolves the reflected blow, several tiny Shadow jaw-heads appear ON the creature
+/// that bit, dart in, CHOMP, and are gone. A stylised reactive-damage phrase of ~140 ms, in the family of thorns-style
+/// retaliation: not a summoned pet, not a persistent creature, not a projectile, and not a mechanism the player has to
+/// understand. The sentence is ENEMY HITS SEEKER → SMALL SHADOW JAWS APPEAR ON ATTACKER → CHOMP → "−X JAWS" → GONE.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A Reaction takes no beat, so it owns no clip and is never an <see cref="IActionPerformance"/> (that interface is the
 /// figure's owner). Everything is measured from the first frame that shows the enemy's contact (the bite's millisecond,
-/// on which Core also resolves the reaction and its answer). The sentence, in ms after that frame: the TETHER FIRES and
-/// the OPEN trap is at the creature (0); the JAWS SPRING SHUT, each about its own pin, slow for a frame, then violently,
-/// to a hard stop at ~50 ms (the eye sees open, moving, shut: 16 ms was one open frame and one shut frame); on that
-/// stop the answer lands (the number, the flash, the clack); the CHAIN TAKES THE STRAIN and the target is JERKED toward
-/// the Seeker; and the TRAP RETRACTS along its chain to his belt. Nothing stays in the world. The fight resolved the
-/// answer at the bite (t 0); only its PRESENTATION completes on the jaws' stop, 50 ms later.
+/// on which Core also resolves the reaction and its answer). Three jaws share ONE tiny source sprite in two states
+/// (OPEN and SHUT); the runtime owns their position, rotation, scale, timing and fade, staggered a few ms apart so it
+/// feels like a brief swarm bite, never three identical stamps on one frame. The answer (the reflected number, the
+/// creature's flash, a kill's fall) lands on the MAIN CHOMP, ~25 ms in; the fight resolved it at the bite (t 0).
 /// </para>
 /// <para>
-/// RIGID. The trap is three parts on one canvas (the small base and the two jaws); each jaw only ROTATES about its own
-/// authored pin; the metal is never scaled to fake a snap (the first build pumped the whole sprite from 0.82 to a 1.12
-/// overshoot). The NEAR jaw is drawn BEHIND the caught creature and the far jaw in front, so the limb is between them.
-/// MATERIAL vs SOURCE, as SPRAY and HARD HANDS: the iron is untinted; the Source is light only (a tooth-edge glint at the
-/// stop, the tether's streak as it fires).
+/// WHAT IS GONE FOR GOOD (the owner, 2026-09-27): the spring-loaded bear trap, its chain, its housing, the tether, the
+/// yank, the reel-in, the bite glyphs on the champion and the mirrored incoming/outgoing snap. Their art stays on disk
+/// as history and is never played. The champion does nothing: no full-body reaction animation, no receiver recoil, and
+/// SPRAY, HARD HANDS and the basic swing are never interrupted. REPAY keeps its own legacy presentation (the lookup is
+/// by SKILL id). The dock's REARMING / READY state is Core's <c>ReactionArmed</c> report and is untouched.
 /// </para>
 /// </remarks>
 public sealed class ReactionRecipe
@@ -35,265 +34,166 @@ public sealed class ReactionRecipe
     /// <summary>A stable name for traces and tests.</summary>
     public required string Id { get; init; }
 
-    // ── ART (tools/asset-pipeline/v2/seeker_jaws.py: every part on one 120 x 120 canvas) ────────
+    // ── ART: one tiny source sprite in two states (tools/asset-pipeline/v2/seeker_piranha.py) ────
+
+    /// <summary>The jaw-head with its mouth OPEN, facing LEFT (the mouth at the left edge), on a small canvas.</summary>
+    public string OpenKey { get; init; } = "fxp_seeker_jaws_open";
+
+    /// <summary>The same head with its mouth SHUT (the teeth met), the same canvas and facing.</summary>
+    public string ShutKey { get; init; } = "fxp_seeker_jaws_shut";
+
+    /// <summary>A soft streak (shared part): the target-local Shadow residue each bite leaves for a moment.</summary>
+    public string SmearKey { get; init; } = "fxp_trail_soft";
+
+    /// <summary>A soft dot (shared part): the chomp's small Shadow glint, in the light pass.</summary>
+    public string GlintKey { get; init; } = "fxp_spark_dot";
+
+    /// <summary>In the canvas (texture px, a 64 x 40 canvas): the mouth's bite point, the sprite's origin; the head rotates about it.</summary>
+    public Vector2 MouthPoint { get; init; } = new(7f, 24f);
+
+    /// <summary>The canvas HEIGHT (the head fills ~31 of its 40 rows): its on-screen size is a height.</summary>
+    public float ArtHeight { get; init; } = 40f;
+
+    // ── SIZE ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The HOUSING, small: the base bar carrying the two pins, the trigger spring under it, the chain eye at its rear end
-    /// (drawn over the jaws' roots). It never moves against the trap; the jaws are the silhouette.
+    /// One jaw's height as a share of the bitten creature's visible height, clamped: small, a bite on part of the body,
+    /// never a mouth around it. <see cref="ReactionRecipes.SizeDial"/> scales it for a comparison film.
     /// </summary>
-    public string BaseKey { get; init; } = "prop_seeker_jaws_base";
+    public float JawBodyShare { get; init; } = 0.28f;
 
-    /// <summary>The NEAR jaw "(" (the Seeker's side), drawn shut; it turns about <see cref="NearPivot"/> and is drawn BEHIND the caught creature.</summary>
-    public string NearKey { get; init; } = "prop_seeker_jaws_near";
+    /// <inheritdoc cref="JawBodyShare"/>
+    public float JawMinPx { get; init; } = 22f;
 
-    /// <summary>The FAR jaw ")" (the creature's side), drawn shut; it turns about <see cref="FarPivot"/>, in front of the creature.</summary>
-    public string FarKey { get; init; } = "prop_seeker_jaws_far";
+    /// <inheritdoc cref="JawBodyShare"/>
+    public float JawMaxPx { get; init; } = 48f;
 
-    /// <summary>Each jaw's teeth, white: the glint drawn through them at the stop.</summary>
-    public string NearEdgeKey { get; init; } = "prop_seeker_jaws_near_edge";
-
-    /// <inheritdoc cref="NearEdgeKey"/>
-    public string FarEdgeKey { get; init; } = "prop_seeker_jaws_far_edge";
-
-    /// <summary>The chain's dark metal body: a cross-section stretched along the tether.</summary>
-    public string ChainBodyKey { get; init; } = "prop_seeker_chain_body";
-
-    /// <summary>One chain link in two cells (face-on, edge-on): the link accents.</summary>
-    public string ChainLinkKey { get; init; } = "prop_seeker_chain_link";
-
-    /// <summary>The pin sparks (none for JAWS) and the tether's streak (shared parts, white).</summary>
-    public string SparkKey { get; init; } = "fxp_spark_dot";
-
-    /// <inheritdoc cref="SparkKey"/>
-    public string StreakKey { get; init; } = "fxp_trail_soft";
+    // ── THE SWARM: three jaws, art-directed, never random ───────────────────────────────────────
 
     /// <summary>
-    /// In the canvas (texture px): the near jaw's pin, on the base. Each jaw has its OWN pin, a compact pair 15 px apart at
-    /// the base's middle (the identity pass's pins stood 57 px apart at a plate's two corners: a tall bracket).
+    /// One jaw of the phrase: WHERE it bites (a share of the creature's visible body, x from the edge that faces the
+    /// champion, y from the top), FROM which direction it arrives (a unit vector toward the bite point), its start
+    /// offset (ms after the first frame), its size against the first jaw's, and whether it is drawn BEHIND the creature.
     /// </summary>
-    public Vector2 NearPivot { get; init; } = new(52.5f, 94.5f);
-
-    /// <summary>In the canvas: the far jaw's pin, on the base.</summary>
-    public Vector2 FarPivot { get; init; } = new(67.5f, 94.5f);
-
-    /// <summary>In the canvas: where the chain hooks on, the eye at the base's rear end.</summary>
-    public Vector2 Eye { get; init; } = new(19.5f, 97.5f);
-
-    /// <summary>In the canvas: the jaws' common centre when shut, the point placed ON the caught limb.</summary>
-    public Vector2 BitePoint { get; init; } = new(60f, 63f);
-
-    /// <summary>The trap's HEIGHT in the canvas, from the jaws' top to the spring's foot: its on-screen size is a height.</summary>
-    public float ClampArtHeight { get; init; } = 87f;
-
-    // ── SIZE AND PLACE ───────────────────────────────────────────────────────────────────────────
+    public readonly record struct Jaw(Vector2 BiteShare, Vector2 From, float DelayMs, float Scale, bool Behind);
 
     /// <summary>
-    /// The trap's height (jaws' top to spring) as a share of the caught creature's visible height, clamped. It grips PART
-    /// of the creature (a limb, the lower front), never a collar around half of it; chosen from the size film at play
-    /// size. <see cref="ReactionRecipes.SizeDial"/> scales it for such a comparison.
+    /// The three: one arrives upper/front, one lower/front, one slightly behind and above (drawn behind the body, so
+    /// the swarm has depth). Offsets 0 / 15 / 25 ms: their chomps overlap, a brief swarm bite, not three icons.
     /// </summary>
-    public float ClampBodyShare { get; init; } = 0.40f;
+    public IReadOnlyList<Jaw> Jaws { get; init; } = new[]
+    {
+        new Jaw(new Vector2(0.22f, 0.38f), Vector2.Normalize(new Vector2(0.80f, 0.60f)), 0f, 1.00f, false),
+        new Jaw(new Vector2(0.20f, 0.70f), Vector2.Normalize(new Vector2(0.85f, -0.50f)), 15f, 0.85f, false),
+        new Jaw(new Vector2(0.62f, 0.44f), Vector2.Normalize(new Vector2(-0.55f, 0.85f)), 25f, 0.90f, true),
+    };
 
-    /// <inheritdoc cref="ClampBodyShare"/>
-    public float ClampMinPx { get; init; } = 52f;
-
-    /// <inheritdoc cref="ClampBodyShare"/>
-    public float ClampMaxPx { get; init; } = 96f;
-
-    /// <summary>
-    /// The clamp point when the silhouette cannot be read, as a share of the creature's visible body: x from the edge
-    /// that faces the champion, y from its top. The front-lower part of the body, where a lunge plants itself.
-    /// </summary>
-    public Vector2 ClampFallback { get; init; } = new(0.20f, 0.72f);
-
-    /// <summary>The rows of the silhouette searched for its front-most point (shares of the opaque height).</summary>
-    public float ProbeFrom { get; init; } = 0.62f;
+    /// <summary>The rows of the silhouette searched for the body's front-most point, which places the front jaws' x.</summary>
+    public float ProbeFrom { get; init; } = 0.30f;
 
     /// <inheritdoc cref="ProbeFrom"/>
-    public float ProbeTo { get; init; } = 0.90f;
+    public float ProbeTo { get; init; } = 0.80f;
 
-    /// <summary>How far inside the silhouette's front edge the jaws close (share of the body's width): on a limb, not beside it.</summary>
-    public float ProbeInset { get; init; } = 0.07f;
+    /// <summary>How far inside the silhouette's front edge the front jaws bite (share of the body's width).</summary>
+    public float ProbeInset { get; init; } = 0.08f;
 
-    /// <summary>The Seeker's trap anchor, his BELT: a share of his visible body (x from his back, he faces right).</summary>
-    public Vector2 ChampionAnchor { get; init; } = new(0.60f, 0.56f);
+    // ── TIMING (ms after a jaw's own start; the phrase is fast in, readable hit, fast out) ──────
 
-    /// <summary>
-    /// The trap stands upright and leans toward its tether by <see cref="TiltShare"/> of the chain's angle, never past
-    /// this many degrees (a trap on a limb, not a projectile along a line).
-    /// </summary>
-    public float MaxTiltDeg { get; init; } = 12f;
+    /// <summary>The jaw spawns this far from its bite point (a share of its own height, plus a few px) and darts in.</summary>
+    public float SpawnDistShare { get; init; } = 0.45f;
 
-    /// <inheritdoc cref="MaxTiltDeg"/>
-    public float TiltShare { get; init; } = 0.5f;
+    /// <inheritdoc cref="SpawnDistShare"/>
+    public float SpawnDistPx { get; init; } = 8f;
 
-    // ── THE JAWS (degrees each jaw stands off its drawn shut pose, about its own pin) ──────────────
+    /// <summary>The dart: from the spawn to the bite point, mouth open.</summary>
+    public float DartMs { get; init; } = 16f;
 
-    /// <summary>
-    /// OPEN, as the trap arrives at the creature: 34 degrees each, a wide toothed cup (the space something is about to
-    /// be caught in). The identity pass opened 30 degrees on a jaw a third this size and nobody could see it open.
-    /// </summary>
-    public float OpenDeg { get; init; } = 34f;
+    /// <summary>The CHOMP: the mouth shuts (the SHUT state), with a one-frame squash.</summary>
+    public float ChompAtMs { get; init; } = 20f;
 
-    /// <summary>The HARD STOP: shut on a limb, the jaws stand this far open (a trap stops on what it bites).</summary>
-    public float StopDeg { get; init; } = 3f;
+    /// <inheritdoc cref="ChompAtMs"/>
+    public float SquashMs { get; init; } = 16f;
 
-    /// <summary>
-    /// OPEN to the stop. A spring trap does not close at an even speed: the travel goes as the SQUARE of the time, slow
-    /// for the first frame and violent at the end, so most of it happens near contact. At 60 fps the eye gets open,
-    /// still open (+17), half shut (+33), SHUT (+50): the 16 ms of the polish pass was one open frame and one shut frame.
-    /// </summary>
-    public float CloseMs { get; init; } = 50f;
+    /// <summary>After the chomp the head recoils outward this far (px) over this long, then dissolves.</summary>
+    public float RecoilPx { get; init; } = 4f;
 
-    /// <summary>The stop's recoil, ONE small bounce (metal hitting resistance): up this far, settled over this long.</summary>
-    public float ReboundDeg { get; init; } = 4f;
+    /// <inheritdoc cref="RecoilPx"/>
+    public float RecoilMs { get; init; } = 24f;
 
-    /// <inheritdoc cref="ReboundDeg"/>
-    public float ReboundMs { get; init; } = 30f;
+    /// <summary>The dissolve: from here the head fades (drifting a little further out), gone by <see cref="GoneMs"/>.</summary>
+    public float DissolveFromMs { get; init; } = 55f;
 
-    /// <summary>At the retract the jaws unlock to this angle over <see cref="UnlockMs"/>.</summary>
-    public float UnlockDeg { get; init; } = 16f;
+    /// <inheritdoc cref="DissolveFromMs"/>
+    public float GoneMs { get; init; } = 100f;
 
-    /// <inheritdoc cref="UnlockDeg"/>
-    public float UnlockMs { get; init; } = 40f;
+    /// <summary>The answer lands on the MAIN chomp (the first jaw's): the number, the flash, a kill's fall.</summary>
+    public float AnswerAtMs { get; init; } = 25f;
 
-    // ── THE TETHER AND THE FORCE (ms after the first frame) ──────────────────────────────────────
+    /// <summary>The target-local Shadow residue at each bite point: fading from the chomp, gone by then (ms after the first frame).</summary>
+    public float ResidueGoneMs { get; init; } = 120f;
 
-    /// <summary>The tether fires: its streak from his belt to the trap lives this long.</summary>
-    public float WhipMs { get; init; } = 60f;
+    /// <summary>The residue's strength and its length as a share of the jaw's height.</summary>
+    public float ResiduePeak { get; init; } = 0.55f;
 
-    /// <summary>The chain from its whip's curve to taut; then a small shiver.</summary>
-    public float TautMs { get; init; } = 60f;
+    /// <inheritdoc cref="ResiduePeak"/>
+    public float ResidueLengthShare { get; init; } = 0.9f;
 
-    /// <summary>The whip's curve at its middle, as a share of the chain's span (clamped).</summary>
-    public float WhipSag { get; init; } = 0.10f;
-
-    /// <inheritdoc cref="WhipSag"/>
-    public float WhipSagMaxPx { get; init; } = 40f;
-
-    /// <summary>The taut chain's shiver: amplitude (px), frequency (Hz) and decay (ms).</summary>
-    public float ShiverPx { get; init; } = 3f;
-
-    /// <inheritdoc cref="ShiverPx"/>
-    public float ShiverHz { get; init; } = 24f;
-
-    /// <inheritdoc cref="ShiverPx"/>
-    public float ShiverDecayMs { get; init; } = 45f;
-
-    /// <summary>
-    /// THE YANK: from the clamp, the chain jerks the caught creature TOWARD the Seeker (the bite brought it in; the
-    /// tether catches and pulls), peaking <see cref="YankPeakMs"/> after the clamp, settled by <see cref="YankMs"/>.
-    /// A few pixels: a share of its width, clamped.
-    /// </summary>
-    public float YankShare { get; init; } = 0.06f;
-
-    /// <inheritdoc cref="YankShare"/>
-    public float YankMinPx { get; init; } = 4f;
-
-    /// <inheritdoc cref="YankShare"/>
-    public float YankMaxPx { get; init; } = 12f;
-
-    /// <inheritdoc cref="YankShare"/>
-    public float YankPeakMs { get; init; } = 30f;
-
-    /// <inheritdoc cref="YankShare"/>
-    public float YankMs { get; init; } = 150f;
-
-    /// <summary>
-    /// THE RETRACT: the jaws unlock and the trap is reeled back along its chain to the belt. At 185 ms: the jaws hold
-    /// ~135 ms after their stop, as they did after the polish pass's 16 ms stop.
-    /// </summary>
-    public float RetractAtMs { get; init; } = 185f;
-
-    /// <inheritdoc cref="RetractAtMs"/>
-    public float RetractMs { get; init; } = 100f;
-
-    /// <summary>The last share of the retract fades the trap and its chain into the belt.</summary>
-    public float RetractFadeShare { get; init; } = 0.35f;
-
-    /// <summary>A caught creature that FALLS (on the stop, when the answer killed it): the jaws hold this long, then let go and retract.</summary>
-    public float DeathHoldMs { get; init; } = 50f;
-
-    /// <summary>The champion falls on the same bite: after the snap the chain slackens and the trap fades where it is.</summary>
-    public float SlackFadeMs { get; init; } = 90f;
+    /// <summary>The whole phrase's life: the last jaw's delay plus its gone, and the residue, whichever is later.</summary>
+    public float EndMs
+    {
+        get
+        {
+            var last = 0f;
+            for (var i = 0; i < Jaws.Count; i++) last = Math.Max(last, Jaws[i].DelayMs + GoneMs);   // indexed: a foreach over the interface boxed an enumerator every frame
+            return Math.Max(last, ResidueGoneMs);
+        }
+    }
 
     // ── LIGHT (the Source) ───────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// The teeth's glint at the stop: its peak and its life (ms). One brief tooth-edge light (the near jaw's only when it is
-    /// not behind the creature), never the whole trap outlined, never white teeth.
-    /// </summary>
-    public float GlintPeak { get; init; } = 0.6f;
+    /// <summary>The chomp's glint: a small Shadow flare at the bite point, its peak and its life (ms).</summary>
+    public float GlintPeak { get; init; } = 0.55f;
 
     /// <inheritdoc cref="GlintPeak"/>
-    public float GlintMs { get; init; } = 60f;
+    public float GlintMs { get; init; } = 45f;
 
-    /// <summary>
-    /// Sparks squeezed out of the PINS as the jaws hit their stop (steel meets steel at the pins, not on the hide):
-    /// one per pin, the first <see cref="Sparks"/> of the two; how far (share of the trap's height) and how long.
-    /// NONE for JAWS: reviewed at play size with two (the identity pass), a pin spark is a 3-4 px speck that nobody
-    /// sees; the jaws' motion, the glint and the clack carry the snap.
-    /// </summary>
-    public int Sparks { get; init; }
-
-    /// <inheritdoc cref="Sparks"/>
-    public float SparkReach { get; init; } = 0.16f;
-
-    /// <inheritdoc cref="Sparks"/>
-    public float SparkMs { get; init; } = 70f;
-
-    /// <summary>The tether's Source streak as it fires (brightest at the trap), and its width.</summary>
-    public float StreakPeak { get; init; } = 0.45f;
-
-    /// <inheritdoc cref="StreakPeak"/>
-    public float StreakPx { get; init; } = 3f;
+    /// <summary>The glint's size as a share of the jaw's height.</summary>
+    public float GlintShare { get; init; } = 0.5f;
 
     /// <summary>While the champion performs an action, the reaction's light plays at this share: it stays secondary.</summary>
     public float LightUnderAction { get; init; } = 0.55f;
 
-    // ── THE CHAIN ────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>The chain's body: how thick it is drawn (px) and in how many segments its curve is drawn.</summary>
-    public float BodyPx { get; init; } = 5f;
-
-    /// <inheritdoc cref="BodyPx"/>
-    public int BodySegments { get; init; } = 14;
+    // ── SOUND, FLASH AND THE SCREEN'S GENERIC CUES ───────────────────────────────────────────────
 
     /// <summary>
-    /// The link ACCENTS, as shares of the chain from the belt (0) to the trap (1): dense at both ends (the hardware at
-    /// the belt and at the trap's eye), sparse across the middle. The dark body carries the rest: no gap, and never sixty-four
-    /// equally loud stamps.
+    /// The reaction's ONE cue for the whole three-bite phrase, most specific first: a small supernatural CHOMP with two
+    /// very quiet secondary ticks baked in behind it (never three loud identical chomps). Played on the first frame.
     /// </summary>
-    public IReadOnlyList<float> LinkAt { get; init; } = new[] { 0.03f, 0.08f, 0.14f, 0.24f, 0.38f, 0.52f, 0.66f, 0.78f, 0.87f, 0.93f, 0.97f };
-
-    /// <summary>One link's drawn length (px).</summary>
-    public float LinkPx { get; init; } = 15f;
-
-    // ── SOUND AND THE SCREEN'S GENERIC CUES ──────────────────────────────────────────────────────
-
-    /// <summary>
-    /// The reaction's ONE cue, most specific first. Played on the first frame: a small latch and tether release at 0, and
-    /// its strongest transient, the dry steel CLACK of the jaws hitting their stop, ~50 ms in, on the frame they shut.
-    /// </summary>
-    public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_snap", "sfx_hit" };
+    public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_chomp", "sfx_hit" };
 
     /// <inheritdoc cref="SnapCues"/>
-    public float SnapVolume { get; init; } = 0.46f;
+    public float SnapVolume { get; init; } = 0.40f;
 
-    /// <summary>How wide the snap is panned toward its target (± at the arena's edges).</summary>
+    /// <summary>How wide the cue is panned toward its target (± at the arena's edges).</summary>
     public float PanWidth { get; init; } = 0.35f;
 
     /// <summary>
-    /// The per-trigger callout ("SNARE"). Off: a reaction fires every few seconds, and the trap, the number ("−4 JAWS")
-    /// and the dock already say what happened (RH_REACTION_CALLOUT=1 restores it, for the comparison film).
+    /// The per-trigger callout ("SNARE"). Off: a reaction fires every few seconds, and the jaws, the number ("−4 JAWS")
+    /// and the dock already say what happened (RH_REACTION_CALLOUT=1 restores it, for a comparison film).
     /// </summary>
     public bool Callout { get; init; }
 
-    /// <summary>The caught creature's hit flash for the reflected blow (on the stop): soft, so the silhouette the jaws grip stays readable.</summary>
-    public float TargetFlash { get; init; } = 0.18f;
+    /// <summary>
+    /// The bitten creature's flash for the reflected blow (on the main chomp): the generic F2 scale, ~0.45 for ~80 ms,
+    /// never a white-out. The jaws stay visible over it.
+    /// </summary>
+    public float TargetFlash { get; init; } = 0.45f;
 
     /// <inheritdoc cref="TargetFlash"/>
-    public float TargetFlashMs { get; init; } = 90f;
+    public float TargetFlashMs { get; init; } = 80f;
+
+    /// <summary>The Seeker's anchor for the overlay that names his side of the exchange, his BELT (a share of his visible body).</summary>
+    public Vector2 ChampionAnchor { get; init; } = new(0.60f, 0.56f);
 }
 
 /// <summary>The reaction recipes, looked up by the SKILL (never by its Form's shared clip or effect).</summary>
@@ -303,17 +203,17 @@ public static class ReactionRecipes
     public static readonly bool CalloutOverride =
         Environment.GetEnvironmentVariable("RH_REACTION_CALLOUT") is "1" or "true";
 
-    /// <summary>RH_REACTION_SIZE=&lt;share&gt;: the trap's size against the recipe's (the size comparison film). 1 otherwise.</summary>
+    /// <summary>RH_REACTION_SIZE=&lt;share&gt;: the jaws' size against the recipe's (a size comparison film). 1 otherwise.</summary>
     public static readonly float SizeDial =
         float.TryParse(Environment.GetEnvironmentVariable("RH_REACTION_SIZE"), System.Globalization.NumberStyles.Float,
                        System.Globalization.CultureInfo.InvariantCulture, out var s) && s > 0f ? s : 1f;
 
-    /// <summary>THE SEEKER's JAWS (the REACTION / TRAP reference): bite for bite.</summary>
+    /// <summary>THE SEEKER's JAWS (the REACTION reference): Shadow piranha, bite for bite.</summary>
     public static readonly ReactionRecipe SeekerJaws = new() { Id = "seeker.jaws" };
 
     // THE LOOKUP (the accepted contract: skill-specific → deliberately shared → legacy). A reaction's presentation
     // belongs to its SKILL: JAWS and REPAY share the Snare Form's "trap" clip and effect, and REPAY (an Active) must
-    // keep its own. So there is no shared tier for traps: a skill with no entry here keeps its legacy presentation.
+    // keep its own. So there is no shared tier for reactions: a skill with no entry here keeps its legacy presentation.
     private static readonly Dictionary<(string Character, string Skill), ReactionRecipe> BySkill = new()
     {
         [("seeker", "snare_jaws")] = SeekerJaws,

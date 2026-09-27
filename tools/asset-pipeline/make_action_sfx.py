@@ -146,15 +146,41 @@ def jaws_snap(buf):
         S.bell(buf, at + 0.0004, f * 1.08, g * 0.45, 0.006, partials=(1.0, 1.52))
 
 
+def jaws_chomp(buf):
+    """SHADOW PIRANHA (the production direction, 2026-09-27): the dry-steel trap CLACK belonged to the rejected mechanical
+    fantasy. This is a SMALL SUPERNATURAL CHOMP for the whole three-bite phrase: at 0 ms a dry short bite/snap (a tiny
+    click and a few inharmonic partials that die inside ~8 ms: teeth meeting, not steel), under it a subtle leathery
+    transient (low-passed noise, a dozen ms) and a very short Shadow energy crackle (a bright narrow band, 25 ms, quiet);
+    then TWO VERY QUIET secondary ticks at +15 and +25 ms (the second and third jaws), never three loud chomps. No bone
+    crack, no metal, no roar, no long whoosh. A frequent Reaction: short, and quiet enough to repeat."""
+    rng = S.Noise(0x9A75)
+    # 0 ms, THE MAIN CHOMP: the bite's snap
+    S.add(buf, 0.0, S.click(rng, 0.0018, 3100.0), 0.50)
+    S.bell(buf, 0.0003, 2350.0, 0.26, 0.008, partials=(1.0, 1.39, 2.11))
+    S.add(buf, 0.0, S.body(rng, 0.03, 1400.0, 3.5, 0.005), 0.30)
+    # the leathery contact beneath it: dull, low-passed, ~14 ms
+    S.add(buf, 0.0008, S.envelope(S.lp2(S.noise(rng, 0.03), 900.0), 0.0015, 0.006), 0.22)
+    # the Shadow's crackle: a narrow bright band that fizzes for ~25 ms, well under the snap
+    S.add(buf, 0.002, S.envelope(S.biquad(S.noise(rng, 0.04), "bp", 4600.0, 1.4), 0.002, 0.009), 0.09)
+    # a little weight so it is a bite and not a tick: a short damped body, gone in ~20 ms, never a thump with a pitch drop
+    S.bell(buf, 0.0006, 420.0, 0.14, 0.009, partials=(1.0, 1.62))
+    # +15 and +25 ms, THE SECOND AND THIRD JAWS: very quiet ticks of the same material
+    for at, g in ((0.015, 0.34), (0.025, 0.24)):
+        S.add(buf, at, S.click(rng, 0.0014, 3300.0), 0.50 * g)
+        S.bell(buf, at + 0.0003, 2500.0, 0.26 * g, 0.006, partials=(1.0, 1.39, 2.11))
+        S.add(buf, at + 0.0008, S.envelope(S.lp2(S.noise(rng, 0.02), 900.0), 0.0015, 0.005), 0.16 * g)
+
+
 def main() -> int:
     S.make("sfx_seeker_spray_release", S.COMBAT_DIR, 0.20, spray_release, target_peak=0.26, max_ms=220.0, darken=9500.0)
     S.make("sfx_seeker_spray_hit", S.COMBAT_DIR, 0.28, spray_hit, target_peak=0.38, max_ms=300.0, darken=7500.0)
     S.make("sfx_seeker_spray_tick", S.COMBAT_DIR, 0.10, spray_tick, target_peak=0.30, max_ms=120.0, darken=8000.0)
     S.make("sfx_seeker_hard_hands_commit", S.COMBAT_DIR, 0.20, hard_hands_commit, target_peak=0.24, max_ms=220.0, darken=5000.0)
     S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
-    S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)
+    S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)   # history: the rejected trap's clack
+    S.make("sfx_seeker_jaws_chomp", S.COMBAT_DIR, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)
     print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
-    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick",
+    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_chomp",
                  "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_seeker_jaws_snap", "sfx_cast", "sfx_hit"):
         m = S.measure(os.path.join(S.COMBAT_DIR, name + ".wav"))
         print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")

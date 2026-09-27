@@ -2009,16 +2009,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (PresentTrace.Enabled && !_tracedCommit && _enemyWindup >= BitePresentation.CommitAt)
         {
             _tracedCommit = true;
-            _tracedMotifOpen = false;
             PresentTrace.Log("enemy-commit", $"bite={_nextEnemyStrikeMs:0}");
         }
-        // ...and the frame the bite motif shows its fangs OPEN at the champion's edge, just before they shut on him
-        if (PresentTrace.Enabled && _tracedCommit && !_tracedMotifOpen && lead > 0f && lead <= BitePresentation.MotifOpenMs)
-        {
-            _tracedMotifOpen = true;
-            PresentTrace.Log("bite-motif-open", $"bite={_nextEnemyStrikeMs:0}\tlead={lead:0}");
-        }
-
         // The champion's clip: one committed swing at a time, aimed at the next beat.
         UpdateChampionClip();
 
@@ -2176,10 +2168,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f, vary: 0.06f);   // same thud pitched down: taking, not giving
-                    // THE CONTACT IS THE MOTIF (the reset, 2026-09-27): no burst is spawned on him. The bite's material
-                    // identity is the two fangs DrawBiteContact snaps shut at his edge on this frame; the rest of the
-                    // hit is the sound, the number and (when dialled) the recoil.
-                    if (PresentTrace.Enabled) PresentTrace.Log("bite-motif-snap", $"bite={e.AtMs:0}");
+                    // THE HIT IS THE ATTACKER'S OWN ACTION (the production direction, 2026-09-27): no burst and no bite
+                    // glyph on him. The lunge, the pitched-down thud, the usual flash on the biter and the number are the
+                    // whole of a routine bite.
                     HunterHit(e);   // the Health the hunter lost, as a number — nothing for a shielded or prevented bite
                     break;
                 case BattleEventKind.Skill:
@@ -2797,7 +2788,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);
             // THE BUNDLE IN THE HAND (ADR-011): the same knives that will fly, drawn at his hand socket.
             _performance?.DrawProp(b, this, _playheadMs);
-            DrawBiteContact(b);
         }
         // The flying blades' STEEL, over every figure, in the normal batch: material, not light.
         var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
@@ -2832,7 +2822,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 PresentTrace.Log("perf-draw", $"sprites={traced.SpriteCount}\tdraws={b.GraphicsDevice.Metrics.DrawCount - perfDraws}\treleased={traced.Released}");
             if (PresentTrace.Enabled && _reactions.Count > 0)
                 PresentTrace.Log("reaction-draw", $"alive={_reactions.Count}\tsprites={_reactions.Sum(r => r.SpriteCount)}"
-                                                  + $"\tlinks={_reactions.Sum(r => r.ChainLinks)}\tdraws={b.GraphicsDevice.Metrics.DrawCount - reactionDraws}"
+                                                  + $"\tdraws={b.GraphicsDevice.Metrics.DrawCount - reactionDraws}"
                                                   + $"\talloc={_reactionAllocBytes}\taction={(((IReactionStage)this).ActionInFocus ? 1 : 0)}");
         }
         if (ShotSockets) DrawSocketOverlay(b);
@@ -3411,21 +3401,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         RequireArchetypeReached();
         if (_isBossWave) LayoutBoss();
         else LayoutComposition(comp.Count);   // one or many: the same row, the same archetype scale
-
-        // A CAUGHT CREATURE IS JERKED (JAWS, ADR-011): the tether catches it and pulls it a few pixels TOWARD the
-        // champion, then it settles, where it is DRAWN only. Before anything is published, so its body, its jaws and its
-        // effects all see the same place; never on a creature that fell (its fall owns it).
-        _recoilPx.Clear();
-        foreach (var r in _reactions)
-            foreach (var slot in r.Targets)
-                if (_creatureBoxes.TryGetValue(slot, out var box)
-                    && r.YankOffsetX(slot, _playheadMs, box.Width, _diedAt.ContainsKey(slot)) is var recoil and not 0f)
-                {
-                    var px = (int)MathF.Round(recoil);
-                    box.Offset(px, 0);
-                    _creatureBoxes[slot] = box;
-                    _recoilPx[slot] = _recoilPx.GetValueOrDefault(slot) + px;
-                }
 
         // The row: the union of the bodies standing in it. A trap ring is a statement about the PACK,
         // and the pack is nine hundred pixels wide and one creature tall — which is why it is the one
@@ -6613,9 +6588,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
-    /// <summary>How far each caught creature is drawn off its own place this frame (the yank), so actions can ignore it.</summary>
-    private readonly Dictionary<int, int> _recoilPx = new();
-
     /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its jaws, its chain, its snap.</summary>
     private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
@@ -6649,7 +6621,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var r = _reactions[i];
             if (_playheadMs < r.TriggerMs - 1f || r.Finished(_playheadMs))
             {
-                if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}\tslack={r.Slack}");
+                if (PresentTrace.Enabled) PresentTrace.Log("reaction-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tlived={_playheadMs - r.TriggerMs:0}");
                 ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);   // a rewind drops them; an end presents them
                 _reactions.RemoveAt(i);
                 continue;
@@ -6657,13 +6629,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             var step = r.Update(_playheadMs, this);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // the layer's own
-            // THE JAWS HIT THEIR STOP: the answer lands on screen now (its number, its flash, a kill's fall)
+            // THE MAIN CHOMP: the answer lands on screen now (its number, its flash, a kill's fall)
             if (step.Clamped) ReleaseEchoes(r, present: true);
             if (!PresentTrace.Enabled) continue;
             var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
             if (step.Clamped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
-            if (step.YankEnded) PresentTrace.Log("reaction-yank-end", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
-            if (step.Retracting) PresentTrace.Log("reaction-retract", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tearly={r.RetractFromMs < r.Recipe.RetractAtMs}");
         }
     }
 
@@ -6727,7 +6697,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     bool IActionStage.TryTargetBody(int slot, out Rectangle body)
     {
         if (!TryBody(VfxSubject.Creature(slot), out body)) return false;
-        if (_recoilPx.TryGetValue(slot, out var push)) body.Offset(-push, 0);
         return true;
     }
 
@@ -6916,83 +6885,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// and dies with his recoil (<see cref="BitePresentation.Recoil01"/>), sits on his measured visible body rather
     /// than a screen coordinate, and is subordinate to the body's own motion: a few pixels, gone in 130 ms.
     /// </summary>
-    /// <summary>
-    /// THE BITE CONTACT MOTIF (ADR-012 reset, 2026-09-27): two opposing fangs, an upper and a lower crescent rooted
-    /// on the enemy's side and hooked into the champion, that appear faintly OPEN on the frame before the contact and
-    /// SNAP SHUT on it at his enemy-facing edge, hold a moment with the tips crossed (compression), fade as residue
-    /// and are gone within ~90 ms. Local to the contact area, never the torso: the sentence is "something closed on
-    /// him", not "he exploded". Ember on a dark body, pale short tips; abstract serrated crescents, not cartoon teeth.
-    /// The attacker's body carries the VERB (the lunge); this carries the MATERIAL of the bite. It is not the recoil's
-    /// accessory and does not depend on it.
-    /// </summary>
-    private void DrawBiteContact(SpriteBatch b)
-    {
-        if (ShotNoVfx || !_vfx.Enabled) return;
-        var lead = _nextEnemyStrikeMs - _playheadMs;          // > 0 before the next bite
-        var since = _playheadMs - _recoilFromMs;             // >= 0 after the last one
-        var open = BitePresentation.MotifOpen(lead, since);
-        if (open < 0f) return;
-        var k = BitePresentation.MotifStrength(lead, since);
-        if (k <= 0f || !_actors.TryBounds(VfxSubject.Champion, out var vb)) return;
-        if (PresentTrace.Enabled) PresentTrace.Log("bite-motif", $"lead={lead:0}	since={since:0}	open={open:0.00}	k={k:0.00}");
-        var body = vb.Rect;
-        // WHERE: his TORSO's enemy-facing edge just under the hood, at chest height. Measured from footage (a NOCHAMP
-        // diff of the contact plate): his visible rect's RIGHT edge is his sword tip and belt height is his sword hand,
-        // so "Right - a little" put the first motif on the blade, where a reader saw it "near his raised hand/wrist".
-        var at = new Vector2(body.X + body.Width * 0.57f, body.Y + body.Height * 0.39f);
-        var s = body.Height * 0.13f * (0.9f + 0.1f * k);     // the motif's span: the contact area, ~40 px at play size
-        // the gap: open before the beat (the fang lifted, the jaw dropped), driven together on it, met as it fades
-        var gap = open > 0f ? s * (0.12f + 0.43f * open) : since < BitePresentation.MotifHoldMs ? -s * 0.04f : 0f;
-        var dark = Shadow * (0.95f * k);
-        var ember = Ember * (0.95f * k);
-        FangSnap(b, at, s, gap, dark, ember);
-    }
-
-    /// <summary>
-    /// THE OFFSET FANG SNAP (N2, the third pass, 2026-09-27): two parts of ONE directional action arriving from the
-    /// enemy's side (his right). A large upper fang, a curved wedge driving from the upper right down-left to a point,
-    /// and a short lower jaw, a flat wedge from the lower right, converge on a contact point that is low and LEFT of
-    /// centre, with two short trailing streaks on the enemy side. No bilateral symmetry, no equal masses, no central
-    /// dot, no centred composition: M4's symmetric jaws read as an hourglass / status icon. Blind-read on the target
-    /// alone it was "pinch; clamp, bite", "an event on his body, not an icon", 4/5 for closing from the right.
-    /// <paramref name="gap"/> lifts the fang and drops the jaw while OPEN and drives them together on the snap.
-    /// Drawn with line segments in the normal batch: the fang as stacked strokes narrowing to its tip, the jaw as
-    /// one thick stroke, each on a dark edge.
-    /// </summary>
-    private void FangSnap(SpriteBatch b, Vector2 at, float s, float gap, Color dark, Color ember)
-    {
-        // the fang keeps its size; the gap only lifts it (open) or drives it onto the jaw (closed)
-        var oy = -gap * 0.7f;
-        var tip = at + new Vector2(-s * 0.22f, s * 0.12f + oy);
-        var baseL = at + new Vector2(s * 0.14f, -s * 0.66f + oy);
-        var baseR = at + new Vector2(s * 0.72f, -s * 0.44f + oy);
-        const int n = 7;
-        var stroke = (baseL - tip).Length() / n * 1.7f + 1.5f;   // the strokes overlap: one solid wedge, not a ribbed one
-        // every dark stroke FIRST, then every ember stroke: interleaved, each band's dark edge cut a line across the
-        // band before it and the wedge read as a comb
-        for (var pass = 0; pass < 2; pass++)
-            for (var i = 0; i < n; i++)
-            {
-                var t = i / (float)n;
-                var l = Vector2.Lerp(baseL, tip, t);
-                var r = Vector2.Lerp(baseR, tip, t * 1.08f);       // the trailing edge bows: the wedge is curved, not a flat triangle
-                if (pass == 0) _ui.LineSeg(b, l + (l - r) * 0.06f, r + (r - l) * 0.06f, stroke + 2f, dark);
-                else _ui.LineSeg(b, l, r, stroke, ember);
-            }
-        _ui.LineSeg(b, tip + new Vector2(0f, -1.5f), tip + new Vector2(0f, 1.5f), 3f, ember);
-        // the lower jaw: a short flat wedge from the lower right, dropped while open
-        var jy = gap * 0.3f;
-        var j0 = at + new Vector2(-s * 0.14f, s * 0.28f + jy);
-        var j1 = at + new Vector2(s * 0.70f, s * 0.36f + jy);
-        var thick = MathF.Max(2f, s * 0.16f);
-        _ui.LineSeg(b, j0 + new Vector2(-1.5f, 0f), j1 + new Vector2(1.5f, 0f), thick + 2f, dark);
-        _ui.LineSeg(b, j0, j1, thick, ember);
-        // the roots: two short streaks on the enemy side, the direction of arrival
-        var x0 = at.X + s * 0.55f;
-        _ui.LineSeg(b, new Vector2(x0, at.Y - s * 0.50f), new Vector2(x0 + s * 0.30f, at.Y - s * 0.50f), 2f, ember * 0.8f);
-        _ui.LineSeg(b, new Vector2(x0, at.Y + s * 0.42f), new Vector2(x0 + s * 0.28f, at.Y + s * 0.42f), 2f, ember * 0.8f);
-    }
-
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
 
@@ -7214,9 +7106,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     }
 
     // ── THE BITE IS PERFORMED (ADR-012, BitePresentation.Lunge) ───────────────────────────────────────────────
-    /// <summary>Whether the trace has logged this bite's commit (once per wind-up), and its motif's open frame.</summary>
+    /// <summary>Whether the trace has logged this bite's commit (once per wind-up).</summary>
     private bool _tracedCommit;
-    private bool _tracedMotifOpen;
 
     /// <summary>The leader's last traced lunge in px, so the trace logs it once per change.</summary>
     private int _tracedLunge;
