@@ -13,17 +13,17 @@ using Xunit;
 namespace IdleXIdle.Game.Tests;
 
 /// <summary>
-/// THE REACTION CONTRACT (ADR-011, JAWS; the production direction of 2026-09-27, SHADOW PIRANHA): a reaction is
-/// presented on its own layer, belongs to its SKILL, never owns the champion's figure and moves nothing; it is a short
-/// target-local phrase (three tiny Shadow jaws that appear on the creature that bit, dart in, CHOMP and are gone within
-/// ~140 ms), staggered so it is a brief swarm bite and not three stamps, with ONE cue and a small F2-scale flash; its
-/// answer lands on the main chomp; nothing travels from the Seeker to the creature and nothing stays in the world.
+/// THE REACTION CONTRACT (ADR-011, JAWS; the production direction of 2026-09-27, ONE SHADOW PIRANHA): a reaction is
+/// presented on its own layer, belongs to its SKILL, never owns the champion's figure and moves nothing; it is ONE
+/// object in visual silence (no second bite, no smear, no glint, no behind layer): a small Shadow jaw-head staged in
+/// the empty space in front of the creature that bit, moving in open, closing on its outer front edge, holding shut so
+/// the eye registers the bite, fading; ~200 ms; ONE cue on the closed frame; a reduced flash that never erases it.
 /// </summary>
 /// <remarks>
-/// The failures these stop were measured across the JAWS work: a row-wide rope ring that no one could tie to the bite,
-/// five generic sounds on one frame, a post-bite "lay a trap" clip that never played in 70 triggers, a dock tile that
-/// looked the same armed and rearming, and then a spring-loaded bear trap with a chain and a reel-in that the owner
-/// rejected as a mechanism nobody should have to understand.
+/// The failures these stop were measured across the JAWS work: a row-wide rope ring no one could tie to the bite, five
+/// generic sounds on one frame, a post-bite "lay a trap" clip that never played, a dock tile that looked the same armed
+/// and rearming, a spring-loaded bear trap with a chain the owner rejected as a mechanism, and then three near-equal
+/// piranhas whose states changed a display frame apart and read as "purple activity".
 /// </remarks>
 public class JawsReactionTest
 {
@@ -42,7 +42,6 @@ public class JawsReactionTest
     {
         public Rectangle Champion = new(420, 451, 180, 400);
         public Rectangle Target = new(1050, 640, 160, 170);
-        public bool Falling, ChampionDown, Focus;
 
         public bool TryActorFrame(string clipKey, int frame, out SpriteFrame drawn, out int frameSize)
         {
@@ -77,10 +76,6 @@ public class JawsReactionTest
             frame = default;
             return false;
         }
-
-        public bool TargetFalling(int slot) => Falling;
-        public bool ChampionFalling => ChampionDown;
-        public bool ActionInFocus => Focus;
     }
 
     private static ReactionPerformance Answer(params int[] targets) => new(Jaws, 3, 7000, targets.Length == 0 ? new[] { 0 } : targets, Color.MediumPurple);
@@ -115,116 +110,107 @@ public class JawsReactionTest
         Assert.Contains(into, k => k.Contains("trap", StringComparison.Ordinal));   // REPAY's own cast clip
     }
 
-    // ── THE PHRASE, on the fight's playhead (v = ms after a jaw's own start; u = after the first frame) ─
+    // ── ONE OBJECT IN VISUAL SILENCE ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_one_hero_and_two_small_secondaries_staggered_chomp_tick_tick()
+    public void test_the_reaction_is_one_piranha_and_nothing_else()
     {
-        var jaws = Jaws.Jaws;
-        Assert.Equal(3, jaws.Count);   // one hero, two secondaries; never ten particles
-        var hero = jaws[0];
-        Assert.Equal(0f, hero.DelayMs);
-        Assert.Equal(1f, hero.Scale);
-        Assert.False(hero.Behind, "the hero is always foreground");
-        Assert.InRange(hero.BiteShare.X, 0.1f, 0.35f);          // an obvious visible edge: the front of the body...
-        Assert.InRange(hero.BiteShare.Y, 0.25f, 0.5f);          // ...above its middle, never the torso's dark centre
-        // the secondaries are clearly subordinate, and they FOLLOW the hero: chomp, tick, tick
-        foreach (var j in jaws.Skip(1))
+        // no swarm, no residue, no glint, no behind layer: the recipe has no such dials and the layer has no such passes
+        var props = typeof(ReactionRecipe).GetProperties().Select(pr => pr.Name).ToArray();
+        foreach (var banned in new[] { "Jaws", "Residue", "Glint", "Behind", "Smear", "Spark", "Yank", "Chain", "Retract", "Tether", "Whip", "Pivot" })
+            Assert.DoesNotContain(props, n => n.Contains(banned, StringComparison.Ordinal));
+        var methods = typeof(ReactionPerformance).GetMethods().Select(m => m.Name).ToArray();
+        Assert.DoesNotContain("DrawBehind", methods);
+        Assert.DoesNotContain("DrawLight", methods);
+        Assert.Contains("DrawMaterial", methods);
+        Assert.InRange(Jaws.JawBodyShare, 0.30f, 0.42f);          // ~35 % of the target: it bites PART of the body
+        Assert.True(Jaws.JawMaxPx <= 64f);
+        Assert.False(Jaws.Callout);
+    }
+
+    [Fact]
+    public void test_the_open_head_is_staged_in_negative_space_and_moves_in_to_the_front_edge()
+    {
+        var r = Jaws;
+        // it comes from the Seeker's side (the left), and bites just inside the creature's front edge, upper-front
+        Assert.True(r.From.X > 0.9f);
+        Assert.InRange(r.BiteShare.X, 0.02f, 0.12f);
+        Assert.InRange(r.BiteShare.Y, 0.3f, 0.5f);
+        // the spawn is a good share of its OWN width outside the bite point: the whole open head against the arena
+        Assert.InRange(r.SpawnWidthShare, 0.6f, 0.9f);
+        var height = Math.Clamp(r.JawBodyShare * 170f, r.JawMinPx, r.JawMaxPx);
+        var headWidth = r.ArtHeadWidth * (height / r.ArtHeight);
+        Assert.InRange(r.SpawnWidthShare * headWidth, 40f, 70f);    // far enough to establish the silhouette, never across the arena
+        // held at the spawn on the first frame, still short of the target at 25, on the bite point exactly at the chomp
+        Assert.Equal(0f, ReactionPerformance.Approach(r, 0f));
+        Assert.True(ReactionPerformance.Approach(r, 25f) is > 0.1f and < 0.6f, "at ~25 ms: open and approaching");
+        Assert.True(ReactionPerformance.Approach(r, 45f) is > 0.6f and < 0.98f, "at ~45 ms: half closed, near contact");
+        Assert.Equal(1f, ReactionPerformance.Approach(r, r.ChompAtMs));
+        var last = 0f;
+        for (var u = 0f; u <= r.ChompAtMs; u += 4f)
         {
-            Assert.InRange(j.Scale, 0.55f, 0.78f);
-            Assert.True(j.DelayMs + j.ChompAtMs > hero.ChompAtMs + 15f, "a secondary chomps after the hero's, never on its frame");
-            Assert.True(j.GoneMs <= hero.GoneMs);
+            var a = ReactionPerformance.Approach(r, u);
+            Assert.True(a >= last, "it only ever moves TOWARD the target");
+            last = a;
         }
-        Assert.True(jaws[1].Scale > jaws[2].Scale);
-        Assert.True(jaws[2].DelayMs > jaws[1].DelayMs);
-        Assert.Equal(1, jaws.Count(j => j.Behind));            // exactly one drawn behind the creature: depth
-        Assert.True(jaws.Select(j => j.BiteShare).Distinct().Count() == 3, "one upper/front, one lower/front, one behind/side");
-        foreach (var j in jaws) Assert.InRange(j.From.Length(), 0.99f, 1.01f);
     }
 
     [Fact]
-    public void test_the_hero_closes_over_three_display_states_and_holds_shut()
+    public void test_the_mouth_closes_over_three_display_states_and_holds_shut_on_the_creature()
     {
         var r = Jaws;
-        var hero = r.Jaws[0];
-        Assert.Equal(0, ReactionPerformance.Mouth(r, hero, 0f));                   // OPEN on arrival
-        Assert.Equal(0, ReactionPerformance.Mouth(r, hero, 20f));                  // still clearly OPEN at ~20 (a whole display frame)
-        Assert.Equal(1, ReactionPerformance.Mouth(r, hero, 33f));                  // HALF at ~32
-        Assert.Equal(2, ReactionPerformance.Mouth(r, hero, hero.ChompAtMs));      // SHUT at the chomp
-        Assert.InRange(hero.ChompAtMs, 45f, 52f);                                  // ~48: the main chomp lands on a 60 fps frame boundary
-        Assert.InRange(hero.HoldMs, 40f, 50f);                                     // the readability pause: shut for 40-50 ms
-        Assert.Equal(1f, ReactionPerformance.Opacity(r, hero, hero.ChompAtMs + hero.HoldMs - 1f));   // whole through the hold
-        Assert.Equal(0f, ReactionPerformance.Recoil(r, hero, hero.ChompAtMs + hero.HoldMs - 1f));    // and not moving off the body
-        Assert.True(ReactionPerformance.Opacity(r, hero, hero.ChompAtMs + hero.HoldMs + 20f) < 1f, "dissolving after the hold");
-        Assert.Equal(0f, ReactionPerformance.Opacity(r, hero, hero.GoneMs));
-        Assert.True(ReactionPerformance.Recoil(r, hero, hero.GoneMs - 1f) is > 0f and < 12f);
-        // the dart lands before the mouth begins to close
-        Assert.Equal(1f, ReactionPerformance.Approach(r, r.DartMs), 4);
-        Assert.True(r.DartMs < hero.ChompAtMs * r.HalfAtShare);
-        Assert.NotEqual(Vector2.One, ReactionPerformance.Squash(r, hero, hero.ChompAtMs));
-        Assert.Equal(Vector2.One, ReactionPerformance.Squash(r, hero, hero.ChompAtMs + r.SquashMs));
+        Assert.InRange(r.ChompAtMs, 55f, 70f);                                  // the main close: slower than 48, still fast
+        Assert.Equal(0, ReactionPerformance.Mouth(r, 0f));                      // OPEN, staged
+        Assert.Equal(0, ReactionPerformance.Mouth(r, 25f));                     // OPEN, approaching
+        Assert.Equal(1, ReactionPerformance.Mouth(r, 46f));                     // HALF, near contact
+        Assert.Equal(2, ReactionPerformance.Mouth(r, r.ChompAtMs));            // SHUT: the chomp
+        Assert.InRange(r.HoldMs, 55f, 70f);                                     // the semantic pose, held
+        var holdEnd = r.ChompAtMs + r.HoldMs;
+        Assert.Equal(1f, ReactionPerformance.Opacity(r, holdEnd - 1f));         // whole through the hold
+        Assert.Equal(0f, ReactionPerformance.Recoil(r, holdEnd - 1f));          // and not moving off the creature
+        Assert.True(ReactionPerformance.Recoil(r, holdEnd + r.RecoilMs) is >= 4f and <= 8f, "a small 4-8 px recoil on the exit");
+        Assert.True(ReactionPerformance.Opacity(r, holdEnd + 20f) < 1f, "then a quick fade");
+        Assert.Equal(0f, ReactionPerformance.Opacity(r, r.GoneMs));
+        Assert.InRange(r.EndMs, 180f, 220f);                                    // ~200: still a short reaction, never the trap's 300+
+        Assert.NotEqual(Vector2.One, ReactionPerformance.Squash(r, r.ChompAtMs));
+        Assert.Equal(Vector2.One, ReactionPerformance.Squash(r, r.ChompAtMs + r.SquashMs));
     }
 
     [Fact]
-    public void test_the_whole_phrase_is_short_and_the_answer_lands_on_the_heros_closed_frame()
+    public void test_the_answer_lands_on_the_closed_frame_and_the_flash_never_erases_the_head()
     {
         var r = Jaws;
-        Assert.Equal(r.Jaws[0].ChompAtMs, r.AnswerAtMs);         // the presentation peak IS the hero's closed frame
-        Assert.InRange(r.AnswerAtMs, 45f, 52f);
-        Assert.InRange(r.EndMs, 160f, 200f);                     // ~180: modestly longer than the first piranha, never the 300 ms trap
-        Assert.True(r.ResidueGoneMs <= r.EndMs);
-        Assert.Equal(0f, ReactionPerformance.Residue(r, r.Jaws[0], r.AnswerAtMs - 1f));
-        Assert.True(ReactionPerformance.Residue(r, r.Jaws[0], r.AnswerAtMs + 10f) > 0f);
-        Assert.True(r.ResiduePeak <= 0.4f, "the residue is secondary to the mouth");
+        Assert.Equal(r.ChompAtMs, r.AnswerAtMs);
+        // the JAWS flash is its own override, never the generic F2 on the chomp's frame: reduced, or the full F2 a frame later
+        Assert.True(r.TargetFlash <= 0.30f || r.TargetFlashDelayMs >= 16f, $"flash {r.TargetFlash} on the chomp's frame would erase the head");
+        Assert.InRange(BitePresentation.UsualFlash.Peak, 0.40f, 0.50f);          // the global default is untouched
         var p = Answer();
         var stage = new Stage();
-        Assert.False(p.Finished(7000 + r.EndMs - 1f));
-        Assert.True(p.Finished(7000 + r.EndMs));
         p.Update(7000, stage);
         Assert.False(p.Clamped);
-        p.Update(7000 + r.AnswerAtMs - 10f, stage);
+        p.Update(7000 + r.ChompAtMs - 10f, stage);
         Assert.False(p.Clamped, "not on the open or half frames");
-        p.Update(7000 + r.AnswerAtMs, stage);
-        Assert.True(p.Clamped, "the answer (number, flash, glint, the cue) is presented on the hero's closed frame");
+        var step = p.Update(7000 + r.ChompAtMs, stage);
+        Assert.True(step.Clamped && p.Clamped, "the answer (number, the cue) is presented on the closed frame");
+        Assert.Equal(r.TargetFlashDelayMs <= 0f, step.Flashed);                 // the flash on the same frame, or its own later one
+        if (r.TargetFlashDelayMs > 0f)
+            Assert.True(p.Update(7000 + r.ChompAtMs + r.TargetFlashDelayMs, stage).Flashed);
+        Assert.False(p.Finished(7000 + r.EndMs - 1f));
+        Assert.True(p.Finished(7000 + r.EndMs));
     }
 
     [Fact]
-    public void test_the_jaws_are_small_target_local_and_spawn_a_short_way_off_the_body()
-    {
-        var r = Jaws;
-        Assert.InRange(r.JawBodyShare, 0.25f, 0.40f);            // the hero bites PART of the body, never a mouth around it
-        Assert.True(r.JawMaxPx <= 64f);
-        var height = Math.Clamp(r.JawBodyShare * 170f, r.JawMinPx, r.JawMaxPx);
-        var spawn = r.SpawnDistShare * height + r.SpawnDistPx;
-        Assert.InRange(spawn, 10f, 30f);                          // ~10-25 px off the target surface, no world travel
-        foreach (var j in r.Jaws)
-        {
-            Assert.InRange(j.BiteShare.X, 0f, 0.8f);
-            Assert.InRange(j.BiteShare.Y, 0.2f, 0.85f);
-        }
-    }
-
-    [Fact]
-    public void test_the_reaction_moves_nothing_and_stays_secondary()
-    {
-        var r = Jaws;
-        // the creature is not yanked, the champion does nothing, no chain, no reel: the recipe has no such dials
-        foreach (var name in new[] { "Yank", "Chain", "Retract", "Tether", "Whip", "Pivot", "Hinge" })
-            Assert.DoesNotContain(typeof(ReactionRecipe).GetProperties(), pr => pr.Name.Contains(name, StringComparison.Ordinal));
-        Assert.InRange(r.TargetFlash, 0.40f, 0.60f);              // the F2 scale, never a white-out
-        Assert.InRange(r.TargetFlashMs, 60f, 100f);
-        Assert.InRange(r.LightUnderAction, 0.3f, 0.7f);           // secondary under SPRAY / HARD HANDS
-        Assert.True(r.GlintPeak <= 0.7f && r.GlintMs <= 60f);
-        Assert.False(r.Callout);
-    }
-
-    [Fact]
-    public void test_one_cue_for_the_whole_phrase_and_it_is_not_the_trap()
+    public void test_one_cue_for_the_bite_and_it_is_not_the_trap()
     {
         Assert.Equal("sfx_seeker_jaws_chomp", Jaws.SnapCues[0]);
         Assert.DoesNotContain("sfx_seeker_jaws_snap", Jaws.SnapCues);   // the dry-steel clack belonged to the rejected trap
         Assert.InRange(Jaws.SnapVolume, 0.25f, 0.5f);                   // quiet enough to repeat
         Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_chomp.wav")));
+        // one bite in the ear: the generator has no secondary ticks any more
+        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "make_action_sfx.py"));
+        var chomp = gen[gen.IndexOf("def jaws_chomp(", StringComparison.Ordinal)..];
+        chomp = chomp[..chomp.IndexOf("\ndef ", StringComparison.Ordinal)];
+        Assert.DoesNotContain("for at, g in", chomp);
     }
 
     [Fact]
@@ -233,8 +219,7 @@ public class JawsReactionTest
         foreach (var key in new[] { Jaws.OpenKey, Jaws.HalfKey, Jaws.ShutKey })
             Assert.True(File.Exists(RepoFile("assets", "art", "VFX", "parts", key + ".png")), $"{key}.png is not filed");
         Assert.DoesNotContain("trap", Jaws.OpenKey);
-        Assert.DoesNotContain("trap", Jaws.ShutKey);
-        Assert.True(Jaws.ArtHeight <= 64f);
+        Assert.True(Jaws.ArtHeight <= 64f && Jaws.ArtHeadWidth <= 64f);
     }
 
     [Fact]
@@ -242,9 +227,9 @@ public class JawsReactionTest
     {
         var stage = new Stage();
         var p = Answer(0, 1);
-        p.Update(7000, stage);   // the first frame pins the bite shares (a probe may allocate once)
+        p.Update(7000, stage);   // the first frame pins the front edge (a probe may allocate once)
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var ms = 17; ms < 200; ms += 17) p.Update(7000 + ms, stage);
+        for (var ms = 17; ms < 220; ms += 17) p.Update(7000 + ms, stage);
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
@@ -262,10 +247,10 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_the_answer_lands_on_the_main_chomp_and_the_bite_keeps_its_own_moment()
+    public void test_the_answer_lands_on_the_chomp_and_the_bite_keeps_its_own_moment()
     {
         // PRESENTATION SCHEDULING ONLY. The fight resolved the reflected blow at the bite; on screen the answer's number,
-        // the creature's flash and a kill's fall wait for the main chomp (~25 ms), and the enemy's bite keeps t 0
+        // the cue, a kill's fall and the creature's flash wait for the piranha's closed frame; the enemy's bite keeps t 0
         var src = Hunt();
         var strike = src[src.IndexOf("case BattleEventKind.Strike:", StringComparison.Ordinal)..];
         strike = strike[..strike.IndexOf("case BattleEventKind.EnemyStrike:", StringComparison.Ordinal)];
@@ -276,24 +261,27 @@ public class JawsReactionTest
         down = down[..down.IndexOf("case BattleEventKind.Charge:", StringComparison.Ordinal)];
         Assert.Contains("ReactionEchoKind.Death", down);
         Assert.Contains("_deathDeferred.Add(e.Slot)", down);
-        // released on the chomp, dropped on a rewind; a deferred-dead creature is drawn standing until then
+        // released on the chomp (the flash on its own frame), dropped on a rewind; a deferred-dead creature is drawn standing until then
         var update = src[src.IndexOf("private void UpdateReactions()", StringComparison.Ordinal)..];
         update = update[..update.IndexOf("private long _reactionAllocBytes", StringComparison.Ordinal)];
-        Assert.Contains("ReleaseEchoes(r, present: true);", update);
-        Assert.Contains("Sound?.PlayFirst(r.Recipe.SnapCues", update);              // the cue's transient on the hero's closed frame
+        Assert.Contains("ReleaseEchoes(r, present: true, keepFlash: !step.Flashed);", update);
+        Assert.Contains("if (step.Flashed && !step.Clamped) ReleaseEchoes(r, present: true);", update);
+        Assert.Contains("Sound?.PlayFirst(r.Recipe.SnapCues", update);              // the cue's transient on the closed frame
+        Assert.Contains("ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);", update);
+        Assert.Contains("!_replay.CreatureAlive(i) && !_deathDeferred.Contains(i)", src);
         var spawn = src[src.IndexOf("private ReactionPerformance? SpawnReaction(", StringComparison.Ordinal)..];
         spawn = spawn[..spawn.IndexOf("private void UpdateReactions()", StringComparison.Ordinal)];
         Assert.DoesNotContain("PlayFirst", spawn);                                  // never at the spawn
-        Assert.Contains("ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);", update);
-        Assert.Contains("!_replay.CreatureAlive(i) && !_deathDeferred.Contains(i)", src);
         // the enemy's own bite is untouched: its thud stays on its own frame, and no glyph is drawn on the champion
         var bite = src[src.IndexOf("case BattleEventKind.EnemyStrike:", StringComparison.Ordinal)..];
         bite = bite[..bite.IndexOf("break;", StringComparison.Ordinal)];
         Assert.DoesNotContain("Echo", bite);
         Assert.DoesNotContain("DrawBiteContact", src);
-        // the reaction moves nothing: no yank on the creature's box, no recoil on the champion
+        // the reaction moves nothing and draws nothing behind or in the light pass
         Assert.DoesNotContain("YankOffsetX", src);
         Assert.DoesNotContain("_recoilPx", src);
+        Assert.DoesNotContain("in _reactions) r.DrawBehind(", src);
+        Assert.DoesNotContain("in _reactions) r.DrawLight(", src);
     }
 
     [Fact]

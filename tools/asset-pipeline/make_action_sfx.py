@@ -151,7 +151,7 @@ def jaws_chomp(buf):
     fantasy. This is a SMALL SUPERNATURAL CHOMP for the whole three-bite phrase: at 0 ms a dry short bite/snap (a tiny
     click and a few inharmonic partials that die inside ~8 ms: teeth meeting, not steel), under it a subtle leathery
     transient (low-passed noise, a dozen ms) and a very short Shadow energy crackle (a bright narrow band, 25 ms, quiet);
-    then TWO VERY QUIET secondary ticks at +22 and +42 ms (the secondary bites' chomps), never three loud chomps. No bone
+    and nothing after it: ONE bite (the one-piranha direction: no tick-tick swarm). No bone
     crack, no metal, no roar, no long whoosh. A frequent Reaction: short, and quiet enough to repeat."""
     rng = S.Noise(0x9A75)
     # 0 ms, THE MAIN CHOMP: the bite's snap
@@ -164,11 +164,7 @@ def jaws_chomp(buf):
     S.add(buf, 0.002, S.envelope(S.biquad(S.noise(rng, 0.04), "bp", 4600.0, 1.4), 0.002, 0.009), 0.09)
     # a little weight so it is a bite and not a tick: a short damped body, gone in ~20 ms, never a thump with a pitch drop
     S.bell(buf, 0.0006, 420.0, 0.14, 0.009, partials=(1.0, 1.62))
-    # +22 and +42 ms, THE SECONDARY BITES: very quiet ticks of the same material
-    for at, g in ((0.022, 0.34), (0.042, 0.24)):
-        S.add(buf, at, S.click(rng, 0.0014, 3300.0), 0.50 * g)
-        S.bell(buf, at + 0.0003, 2500.0, 0.26 * g, 0.006, partials=(1.0, 1.39, 2.11))
-        S.add(buf, at + 0.0008, S.envelope(S.lp2(S.noise(rng, 0.02), 900.0), 0.0015, 0.005), 0.16 * g)
+    # ONE bite: no secondary ticks (the one-piranha direction, 2026-09-27: the visual is one strong Shadow bite)
 
 
 def main() -> int:

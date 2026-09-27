@@ -2813,7 +2813,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
             }
             var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-            foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
@@ -2823,7 +2822,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (PresentTrace.Enabled && _reactions.Count > 0)
                 PresentTrace.Log("reaction-draw", $"alive={_reactions.Count}\tsprites={_reactions.Sum(r => r.SpriteCount)}"
                                                   + $"\tdraws={b.GraphicsDevice.Metrics.DrawCount - reactionDraws}"
-                                                  + $"\talloc={_reactionAllocBytes}\taction={(((IReactionStage)this).ActionInFocus ? 1 : 0)}");
+                                                  + $"\talloc={_reactionAllocBytes}");
         }
         if (ShotSockets) DrawSocketOverlay(b);
         DrawCallouts(b);
@@ -3594,7 +3593,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var hitFl = FlashAt(i);
             var creatureTint = enterTint;
             // THE NEAR JAW OF A TRAP ON THIS CREATURE goes behind it (JAWS): the limb is drawn between the two jaws
-            if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, i);
             if (_replay is not null && !_replay.CreatureAlive(i) && !_deathDeferred.Contains(i))
             {
                 DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
@@ -3693,7 +3691,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = _rowTopY;
-        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, 0);   // a trap's near jaw, behind it
         if (_replay is not null && !_replay.CreatureAlive(0) && !_deathDeferred.Contains(0))
         {
             DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey);
@@ -3772,7 +3769,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         var box = CreatureBox(0);   // LayoutBoss's, so the effects and the figure share one rectangle
         ActorShadow(b, box.Center.X, BossAnchor.Y, (int)(box.Width * 0.62f), 44, 0.6f);
-        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawBehind(b, this, _playheadMs, 0);   // a trap's near jaw, behind it
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
@@ -6552,12 +6548,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// Present <paramref name="r"/>'s held answer: on its stop (<paramref name="present"/>), or dropped when a seek rewound
     /// past its bite (the replay is rebuilt; the kill has not happened there yet).
     /// </summary>
-    private void ReleaseEchoes(ReactionPerformance r, bool present)
+    private void ReleaseEchoes(ReactionPerformance r, bool present, bool keepFlash = false)
     {
         for (var i = 0; i < _reactionEchoes.Count; i++)
         {
             var echo = _reactionEchoes[i];
             if (!ReferenceEquals(echo.Reaction, r)) continue;
+            if (keepFlash && echo.Kind == ReactionEchoKind.Flash) continue;   // the flash has its own frame (a JAWS recipe may delay it past the chomp)
             _reactionEchoes.RemoveAt(i--);
             if (!present)
             {
@@ -6630,9 +6627,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // THE HERO'S CLOSED FRAME: the answer lands on screen now (its number, its flash, a kill's fall) and in the
             // ear (ONE authored cue for the whole phrase, its transient on this frame; not lead: under a performing
             // action the duck keeps it secondary to the action's own voice)
+            if (step.Flashed && !step.Clamped) ReleaseEchoes(r, present: true);   // the delayed flash's own frame
             if (step.Clamped)
             {
-                ReleaseEchoes(r, present: true);
+                ReleaseEchoes(r, present: true, keepFlash: !step.Flashed);
                 var cx = r.Targets.Count > 0 && TryBody(VfxSubject.Creature(r.Targets[0]), out var bitten) ? bitten.Center.X : ArenaRect.Center.X;
                 var cue = Sound?.PlayFirst(r.Recipe.SnapCues, r.Recipe.SnapVolume, 0f, Pan(cx, r.Recipe.PanWidth), 0.04f);
                 if (PresentTrace.Enabled) PresentTrace.Log("reaction-cue", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tcue={cue ?? "-"}");
@@ -6716,13 +6714,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
     bool IReactionStage.TryTargetFrame(int slot, out SpriteFrame frame) => TryDrawnFrame(VfxSubject.Creature(slot), out frame);
 
-    bool IReactionStage.TargetFalling(int slot) => _diedAt.ContainsKey(slot);
 
-    bool IReactionStage.ChampionFalling => _mode == Mode.Downed;
-
-    // the action's FOCUS is exactly the window its duck covers (release to the contact's ring)
-    bool IReactionStage.ActionInFocus => _performance is { } p && p.DuckAt(_playheadMs) < 1f
-                                         || _outgoing is { } o && o.DuckAt(_playheadMs) < 1f;
 
     /// <summary>How long a clip runs from its first frame to its contact frame, at this wave's beat.</summary>
     /// <remarks>

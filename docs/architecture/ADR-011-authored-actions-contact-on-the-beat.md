@@ -77,30 +77,31 @@ projectile, and nothing the player must understand as a machine. What it is, in 
   smear; a floating supernatural piranha head, not a fish, not a cartoon (`tools/asset-pipeline/v2/seeker_piranha.py`,
   from two PixelLab Pro Flash images, the SHUT state an edit of the OPEN one). The runtime owns position, rotation
   about the mouth, scale, timing and fade.
-- **ONE HERO and two small secondary bites, art-directed, never random** (`ReactionRecipe.Jaws`; the hero-chomp
-  readability pass, 2026-09-27: at true speed three near-equal jaws in 140 ms read as "a purple effect happened", not
-  as creatures biting, because every state change fell one display frame apart). The HERO (~35 % of the creature's
-  visible height, 26–60 px) arrives upper/front on an obvious visible edge, always foreground; secondary A (0.70 of
-  it) lower/front at +30 ms; secondary B (0.62) behind-and-above at +50, drawn BEHIND the creature for depth. The
-  viewer first sees ONE bite, then notices the swarm: CHOMP, tick, tick.
-- **The motion** (`ReactionPerformance`), in ms after the first frame that shows the bite: the hero spawns ~10–30 px
-  off its bite point and darts in OPEN (16 ms), is still clearly open at 20, HALF closed at ~32 (a third source state,
-  a deterministic mid-shape of OPEN and SHUT), SHUT at 48 with a one-frame squash, then HOLDS shut ~45 ms (the
-  readability pause: several frames of "that mouth is shut on the creature"), recoils a few px and dissolves, gone by
-  150. Secondary A chomps at 70 and B at 90 (each holds 25–30 ms), gone by 110 / 105 after their starts. A faint
-  Shadow smear at each bite (0.35, secondary to the mouth) fades by 170; the phrase is over by ~180. THE
-  PRESENTATION PEAK IS THE HERO'S CLOSED FRAME (`AnswerAtMs` = 48, +50 on a 60 fps boundary): the reflected number,
-  the creature's F2-scale flash (0.45 / 80 ms), the main Shadow glint, a kill's fall, and the chomp cue's transient
-  all land there (the cue is played on that frame, not at the spawn: the ear hears the bite when the mouth closes).
-  Core is untouched; this is presentation scheduling. No world-travel path, no Seeker-to-enemy line: the effect is
-  target-local, as if Shadow itself bites the attacker. The creature is not yanked; the Seeker does nothing (SPRAY,
-  HARD HANDS and the basic swing are never interrupted; no receiver recoil; no global or actor pause).
+- **ONE PIRANHA, in visual silence** (the one-piranha pass, 2026-09-27: three jaws in 140 ms read as "a purple effect
+  happened"; one hero with two small bites, a smear and a glint in 180 ms still read as "purple activity", because
+  too many things occupied the same small area at once). The recipe has ONE head (~35 % of the creature's visible
+  height, 26–60 px), always foreground, and nothing else: no secondary bites, no residue smear, no glint, no
+  particles, no behind-the-target layer. Flavour may return only after the one object is accepted.
+- **Staged in negative space** (`ReactionPerformance`), in ms after the first frame that shows the bite: the OPEN
+  head appears ~0.75 of its own width OUTSIDE the creature's front edge, on the Seeker's side, its whole silhouette
+  against the arena for the first frames; it moves in over the close (still open and approaching at ~25, HALF closed
+  near contact at ~45: a third source state, a deterministic mid-shape of OPEN and SHUT) and arrives SHUT on the
+  creature's OUTER FRONT EDGE at 65 with a one-frame squash, its rear half still outside the body so its silhouette
+  survives the bite; it HOLDS shut ~65 ms (the semantic pose), then recoils ~6 px away and fades, gone by 200. THE
+  PRESENTATION PEAK IS THE CLOSED FRAME (`AnswerAtMs` = 65): the reflected number, a kill's fall and the chomp cue's
+  transient land there (the cue is played on that frame, never at the spawn). The creature's flash is a JAWS-only
+  override so it never erases the head on the frame it closes: reduced to 0.28 (the generic F2 default stays 0.45; the
+  capture rig films the alternatives, `RH_REACTION_FLASH=A` the full F2 one rendered frame after the chomp, `OFF` the
+  control). Core is untouched; this is presentation scheduling. No world-travel path, no Seeker-to-enemy line: the
+  effect is target-local, as if Shadow itself bites the attacker. The creature is not yanked; the Seeker does nothing
+  (SPRAY, HARD HANDS and the basic swing are never interrupted; no receiver recoil; no global or actor pause).
 - **Contrast**: the information-bearing parts only, the violet rim, the eye and the pale teeth, are lifted ~18 % in the
   source (`seeker_piranha.py`); the body stays dark Shadow; no bloom, no glow, no outline round the target.
 - **The target** is the actual reflected target from Core (the reflected Strikes at the bite's ms), each answered on
   its own body; never the row's centre, never every enemy.
-- **One cue** for the whole phrase, `sfx_seeker_jaws_chomp`: a small supernatural CHOMP with two very quiet secondary
-  ticks baked in (`design/audio/seeker-jaws-audio-brief.md`). The dry-steel `sfx_seeker_jaws_snap` is history.
+- **One cue**, `sfx_seeker_jaws_chomp`: a small supernatural CHOMP, one bite, no ticks (the one-piranha pass removed
+  the two baked secondary ticks: the visual is one strong Shadow bite); `design/audio/seeker-jaws-audio-brief.md`.
+  The dry-steel `sfx_seeker_jaws_snap` is history.
 - **The dock** keeps the Core-driven `ReactionArmed` rearm sweep (WORLD: quick retaliation; DOCK: rearming / ready).
   REPAY keeps its own legacy presentation (skill-id recipe resolution). The mechanical props, the chain parts and the
   N2 snap stay on disk as history and are not drawn.
