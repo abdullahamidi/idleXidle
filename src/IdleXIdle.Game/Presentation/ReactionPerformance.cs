@@ -43,13 +43,16 @@ public readonly record struct ReactionStep(bool Clamped, Vector2 ClampAt);
 /// own lunge and follow-through. It moves nothing: no yank, no chain, no reel.
 /// </para>
 /// <para>
-/// THE PHRASE, in ms after the first frame that showed the contact. Each of three jaws (one tiny source sprite, OPEN
-/// and SHUT) starts at its own offset (0 / 15 / 25): it appears a short way off its bite point on the creature's body
-/// and DARTS in with its mouth open (16 ms), CHOMPS (the SHUT state, a one-frame squash) at 20, recoils outward a few
-/// px, and dissolves from 55, gone by 100. The answer (the reflected number, the creature's flash, a kill's fall) lands
-/// on the MAIN chomp at 25 (<see cref="Clamped"/>). A dark Shadow smear stays at each bite point a moment longer (gone by
-/// 120). Nothing travels between the Seeker and the creature: the effect is target-local, as if Shadow itself bites
-/// the attacker. One jaw is drawn BEHIND the creature (<see cref="DrawBehind"/>), so the swarm has depth.
+/// THE PHRASE, in ms after the first frame that showed the contact (the hero-chomp readability pass, 2026-09-27). ONE
+/// HERO jaw (one tiny source sprite in three states, OPEN / HALF / SHUT) appears a short way off its bite point on the
+/// front of the creature's body, DARTS in with its mouth open (16 ms), stays clearly open for the first display
+/// frames, is HALF closed at ~32 and SHUT at 48 (a one-frame squash), then HOLDS shut ~45 ms, the readability pause
+/// the eye needs to register "that mouth is shut on the creature", before it recoils a few px and dissolves, gone by
+/// 150. The answer (the reflected number, the creature's flash, the main glint, the chomp cue's transient) lands on the
+/// hero's CLOSED frame (<see cref="Clamped"/>, 48). Two SMALL secondary bites follow it (0.70 at 30, chomp 70; 0.62 at
+/// 50, chomp 90, drawn BEHIND the creature for depth): CHOMP, tick, tick. A faint Shadow smear at each bite point
+/// fades by 170; the whole phrase is over by ~180. Nothing travels between the Seeker and the creature: the effect is
+/// target-local, as if Shadow itself bites the attacker.
 /// </para>
 /// <para>
 /// ON THE FIGHT'S PLAYHEAD. Its time is the playhead minus the first frame that showed the contact (the pump's frame).
@@ -120,47 +123,52 @@ public sealed class ReactionPerformance
     private static float Smooth(float v) { v = Math.Clamp(v, 0f, 1f); return v * v * (3f - 2f * v); }
     private static float EaseOut(float v) { v = Math.Clamp(v, 0f, 1f); return 1f - (1f - v) * (1f - v); }
 
-    /// <summary>Whether a jaw's mouth is SHUT at <paramref name="v"/> ms after its start: open on the dart, shut from the chomp.</summary>
-    public static bool Shut(ReactionRecipe r, float v) => v >= r.ChompAtMs;
+    /// <summary>A jaw's mouth state at <paramref name="v"/> ms after its start: 0 OPEN (the dart and the first display frames), 1 HALF (from <see cref="ReactionRecipe.HalfAtShare"/> of its close), 2 SHUT (from its chomp on).</summary>
+    public static int Mouth(ReactionRecipe r, ReactionRecipe.Jaw jaw, float v)
+        => v >= jaw.ChompAtMs ? 2 : v >= jaw.ChompAtMs * r.HalfAtShare ? 1 : 0;
 
-    /// <summary>
-    /// How far along its approach a jaw is at <paramref name="v"/>: 0 at its spawn point, 1 at the bite point (the dart,
-    /// eased out), then a little PAST 1 is never allowed: from the chomp it recoils back outward by
-    /// <see cref="ReactionRecipe.RecoilPx"/> (returned separately by <see cref="Recoil"/>).
-    /// </summary>
+    /// <summary>Whether a jaw's mouth is SHUT at <paramref name="v"/> ms after its start.</summary>
+    public static bool Shut(ReactionRecipe r, ReactionRecipe.Jaw jaw, float v) => Mouth(r, jaw, v) == 2;
+
+    /// <summary>How far along its approach a jaw is at <paramref name="v"/>: 0 at its spawn point, 1 at the bite point (the dart, eased out).</summary>
     public static float Approach(ReactionRecipe r, float v) => v <= 0f ? 0f : EaseOut(v / Math.Max(1f, r.DartMs));
 
-    /// <summary>The recoil outward after the chomp, in px: 0 until the chomp, easing out to <see cref="ReactionRecipe.RecoilPx"/>, plus a slow drift through the dissolve.</summary>
-    public static float Recoil(ReactionRecipe r, float v)
+    /// <summary>
+    /// The recoil outward after the jaw's HOLD, in px: 0 through the chomp and the hold (the mouth stays shut on the
+    /// creature, the readability pause), then easing out to <see cref="ReactionRecipe.RecoilPx"/> and drifting a
+    /// little further through the dissolve.
+    /// </summary>
+    public static float Recoil(ReactionRecipe r, ReactionRecipe.Jaw jaw, float v)
     {
-        var since = v - r.ChompAtMs;
+        var since = v - (jaw.ChompAtMs + jaw.HoldMs);
         if (since <= 0f) return 0f;
         var px = r.RecoilPx * EaseOut(since / Math.Max(1f, r.RecoilMs));
-        if (v > r.DissolveFromMs) px += r.RecoilPx * 0.75f * Smooth((v - r.DissolveFromMs) / Math.Max(1f, r.GoneMs - r.DissolveFromMs));
+        px += r.RecoilPx * 0.75f * Smooth(since / Math.Max(1f, jaw.GoneMs - jaw.ChompAtMs - jaw.HoldMs));
         return px;
     }
 
-    /// <summary>A jaw's opacity: whole through the chomp, dissolving from <see cref="ReactionRecipe.DissolveFromMs"/>, gone by <see cref="ReactionRecipe.GoneMs"/>.</summary>
-    public static float Opacity(ReactionRecipe r, float v)
+    /// <summary>A jaw's opacity: whole through the chomp AND its hold, dissolving after, gone by its <see cref="ReactionRecipe.Jaw.GoneMs"/>.</summary>
+    public static float Opacity(ReactionRecipe r, ReactionRecipe.Jaw jaw, float v)
     {
-        if (v < 0f || v >= r.GoneMs) return 0f;
-        if (v < r.DissolveFromMs) return 1f;
-        return 1f - Smooth((v - r.DissolveFromMs) / Math.Max(1f, r.GoneMs - r.DissolveFromMs));
+        if (v < 0f || v >= jaw.GoneMs) return 0f;
+        var dissolveFrom = jaw.ChompAtMs + jaw.HoldMs;
+        if (v < dissolveFrom) return 1f;
+        return 1f - Smooth((v - dissolveFrom) / Math.Max(1f, jaw.GoneMs - dissolveFrom));
     }
 
     /// <summary>The chomp's squash (x, y scale factors) for the frame after the mouth shuts, then 1.</summary>
-    public static Vector2 Squash(ReactionRecipe r, float v)
+    public static Vector2 Squash(ReactionRecipe r, ReactionRecipe.Jaw jaw, float v)
     {
-        var since = v - r.ChompAtMs;
+        var since = v - jaw.ChompAtMs;
         if (since < 0f || since >= r.SquashMs) return Vector2.One;
         var k = 1f - since / r.SquashMs;
         return new Vector2(1f + 0.12f * k, 1f - 0.10f * k);
     }
 
-    /// <summary>The residue's strength at each bite point, u ms after the first frame: from the chomp, fading to nothing by <see cref="ReactionRecipe.ResidueGoneMs"/>.</summary>
-    public static float Residue(ReactionRecipe r, float u, float delayMs)
+    /// <summary>The residue's strength at a bite point, u ms after the first frame: from that jaw's chomp, fading to nothing by <see cref="ReactionRecipe.ResidueGoneMs"/>.</summary>
+    public static float Residue(ReactionRecipe r, ReactionRecipe.Jaw jaw, float u)
     {
-        var from = delayMs + r.ChompAtMs;
+        var from = jaw.DelayMs + jaw.ChompAtMs;
         if (u < from || u >= r.ResidueGoneMs) return 0f;
         return r.ResiduePeak * (1f - Smooth((u - from) / Math.Max(1f, r.ResidueGoneMs - from)));
     }
@@ -195,7 +203,7 @@ public sealed class ReactionPerformance
 
     // ── THE POSE ─────────────────────────────────────────────────────────────────────────────────
 
-    private readonly record struct JawPose(Vector2 At, Vector2 Bite, float Rotation, Vector2 Scale, float Alpha, bool Shut, bool Flip, float Height);
+    private readonly record struct JawPose(Vector2 At, Vector2 Bite, float Rotation, Vector2 Scale, float Alpha, int Mouth, bool Flip, float Height);
 
     /// <summary>Jaw <paramref name="j"/> on target <paramref name="k"/> this frame, or false when it is not in the world.</summary>
     private bool Pose(IReactionStage stage, int k, int j, float u, out JawPose pose)
@@ -203,21 +211,21 @@ public sealed class ReactionPerformance
         pose = default;
         var jaw = Recipe.Jaws[j];
         var v = u - jaw.DelayMs;
-        if (v < 0f || v >= Recipe.GoneMs || !stage.TryCaughtBody(Targets[k], out var body)) return false;
+        if (v < 0f || v >= jaw.GoneMs || !stage.TryCaughtBody(Targets[k], out var body)) return false;
         var share = jaw.BiteShare;
         if (_biteShare[k] is { X: > 0f } probed && !jaw.Behind) share = new Vector2(probed.X + (jaw.BiteShare.X - Recipe.Jaws[0].BiteShare.X), share.Y);
         var bite = new Vector2(body.X + share.X * body.Width, body.Y + share.Y * body.Height);
         if (j == 0) _clampAt[k] = bite;
         var height = Math.Clamp(Recipe.JawBodyShare * body.Height, Recipe.JawMinPx, Recipe.JawMaxPx) * ReactionRecipes.SizeDial * jaw.Scale;
         var dist = Recipe.SpawnDistShare * height + Recipe.SpawnDistPx;
-        var along = Approach(Recipe, v) * dist - Recoil(Recipe, v);
+        var along = Approach(Recipe, v) * dist - Recoil(Recipe, jaw, v);
         var at = bite - jaw.From * (dist - along);
         // the art faces LEFT (its mouth at the left edge): a jaw arriving from the left is mirrored to face right, and
         // both turn about the mouth so it points along the approach
         var flip = jaw.From.X > 0f;
         var rotation = flip ? MathF.Atan2(jaw.From.Y, jaw.From.X) : MathF.Atan2(-jaw.From.Y, -jaw.From.X);
-        var scale = Squash(Recipe, v) * (height / Recipe.ArtHeight);
-        pose = new JawPose(at, bite, rotation, scale, Opacity(Recipe, v), Shut(Recipe, v), flip, height);
+        var scale = Squash(Recipe, jaw, v) * (height / Recipe.ArtHeight);
+        pose = new JawPose(at, bite, rotation, scale, Opacity(Recipe, jaw, v), Mouth(Recipe, jaw, v), flip, height);
         return true;
     }
 
@@ -274,7 +282,7 @@ public sealed class ReactionPerformance
             for (var j = 0; j < Recipe.Jaws.Count; j++)
             {
                 var jaw = Recipe.Jaws[j];
-                var strength = Residue(Recipe, u, jaw.DelayMs);
+                var strength = Residue(Recipe, jaw, u);
                 if (strength <= 0f || !stage.TryCaughtBody(Targets[k], out var body)) continue;
                 var bite = new Vector2(body.X + jaw.BiteShare.X * body.Width, body.Y + jaw.BiteShare.Y * body.Height);
                 var height = Math.Clamp(Recipe.JawBodyShare * body.Height, Recipe.JawMinPx, Recipe.JawMaxPx) * ReactionRecipes.SizeDial * jaw.Scale;
@@ -290,7 +298,7 @@ public sealed class ReactionPerformance
     /// <summary>One jaw-head: the OPEN or SHUT state, at its place, turned about its mouth, at its size, fading.</summary>
     private void DrawJaw(SpriteBatch b, IReactionStage stage, JawPose pose)
     {
-        if (stage.Texture(pose.Shut ? Recipe.ShutKey : Recipe.OpenKey) is not { } tex) return;
+        if (stage.Texture(pose.Mouth == 2 ? Recipe.ShutKey : pose.Mouth == 1 ? Recipe.HalfKey : Recipe.OpenKey) is not { } tex) return;
         b.Draw(tex, pose.At, null, Color.White * pose.Alpha, pose.Rotation, Recipe.MouthPoint, pose.Scale,
                pose.Flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         _sprites++;
@@ -310,9 +318,10 @@ public sealed class ReactionPerformance
             for (var j = 0; j < Recipe.Jaws.Count; j++)
             {
                 var jaw = Recipe.Jaws[j];
-                var since = u - jaw.DelayMs - Recipe.ChompAtMs;
+                var since = u - jaw.DelayMs - jaw.ChompAtMs;
                 if (since < 0f || since >= Recipe.GlintMs || !Pose(stage, k, j, u, out var pose)) continue;
-                var g = VfxBlend.Light(Color.Lerp(Tint, Color.White, 0.35f) * (Recipe.GlintPeak * (1f - since / Recipe.GlintMs) * weight));
+                var main = j == 0 ? 1f : 0.35f;   // the HERO's chomp carries the main glint; a secondary's is a third of it
+                var g = VfxBlend.Light(Color.Lerp(Tint, Color.White, 0.35f) * (Recipe.GlintPeak * main * (1f - since / Recipe.GlintMs) * weight));
                 var size = Recipe.GlintShare * pose.Height;
                 b.Draw(glint, pose.Bite, null, g, 0f, new Vector2(glint.Width, glint.Height) / 2f, size / glint.Width, SpriteEffects.None, 0f);
                 _sprites++;

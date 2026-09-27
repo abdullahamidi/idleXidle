@@ -6602,13 +6602,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var r = new ReactionPerformance(recipe, cast.Slot, cast.AtMs, targets, SourceColor.GetValueOrDefault(source, Bone));
         _reactions.Add(r);
         r.Update(_playheadMs, this);
-        // ONE authored cue for the whole answer, right after the enemy's bite thud: BITE -> CLACK. Not lead: under a
-        // performing action the duck keeps it secondary to the action's own voice.
-        var x = TryBody(VfxSubject.Creature(targets[0]), out var body) ? body.Center.X : ArenaRect.Center.X;
-        var cue = Sound?.PlayFirst(recipe.SnapCues, recipe.SnapVolume, 0f, Pan(x, recipe.PanWidth), 0.04f);
+        // The cue is NOT played here: the ear hears the bite when the HERO's mouth closes (UpdateReactions, on the
+        // frame the answer lands), so cause and effect stay in order: BITE thud, the jaw arrives, CHOMP.
         if (PresentTrace.Enabled)
             PresentTrace.Log("reaction-spawn", $"{recipe.Id}\tslot={cast.Slot}\tcontact={cast.AtMs}\ttargets={string.Join(",", targets)}"
-                                               + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}\tcue={cue ?? "-"}");
+                                               + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
         return r;
     }
 
@@ -6629,8 +6627,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             var step = r.Update(_playheadMs, this);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // the layer's own
-            // THE MAIN CHOMP: the answer lands on screen now (its number, its flash, a kill's fall)
-            if (step.Clamped) ReleaseEchoes(r, present: true);
+            // THE HERO'S CLOSED FRAME: the answer lands on screen now (its number, its flash, a kill's fall) and in the
+            // ear (ONE authored cue for the whole phrase, its transient on this frame; not lead: under a performing
+            // action the duck keeps it secondary to the action's own voice)
+            if (step.Clamped)
+            {
+                ReleaseEchoes(r, present: true);
+                var cx = r.Targets.Count > 0 && TryBody(VfxSubject.Creature(r.Targets[0]), out var bitten) ? bitten.Center.X : ArenaRect.Center.X;
+                var cue = Sound?.PlayFirst(r.Recipe.SnapCues, r.Recipe.SnapVolume, 0f, Pan(cx, r.Recipe.PanWidth), 0.04f);
+                if (PresentTrace.Enabled) PresentTrace.Log("reaction-cue", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tcue={cue ?? "-"}");
+            }
             if (!PresentTrace.Enabled) continue;
             var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
             if (step.Clamped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");

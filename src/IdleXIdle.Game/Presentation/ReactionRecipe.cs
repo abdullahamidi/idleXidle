@@ -39,6 +39,9 @@ public sealed class ReactionRecipe
     /// <summary>The jaw-head with its mouth OPEN, facing LEFT (the mouth at the left edge), on a small canvas.</summary>
     public string OpenKey { get; init; } = "fxp_seeker_jaws_open";
 
+    /// <summary>The same head with its mouth HALF closed (a deterministic mid-shape of the two), the same canvas and facing.</summary>
+    public string HalfKey { get; init; } = "fxp_seeker_jaws_half";
+
     /// <summary>The same head with its mouth SHUT (the teeth met), the same canvas and facing.</summary>
     public string ShutKey { get; init; } = "fxp_seeker_jaws_shut";
 
@@ -57,35 +60,41 @@ public sealed class ReactionRecipe
     // ── SIZE ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// One jaw's height as a share of the bitten creature's visible height, clamped: small, a bite on part of the body,
-    /// never a mouth around it. <see cref="ReactionRecipes.SizeDial"/> scales it for a comparison film.
+    /// The HERO jaw's height as a share of the bitten creature's visible height, clamped: it bites PART of the body,
+    /// never a mouth around it. The two secondaries are a share of the hero's (their <see cref="Jaw.Scale"/>).
+    /// <see cref="ReactionRecipes.SizeDial"/> scales it for a comparison film.
     /// </summary>
-    public float JawBodyShare { get; init; } = 0.28f;
+    public float JawBodyShare { get; init; } = 0.35f;
 
     /// <inheritdoc cref="JawBodyShare"/>
-    public float JawMinPx { get; init; } = 22f;
+    public float JawMinPx { get; init; } = 26f;
 
     /// <inheritdoc cref="JawBodyShare"/>
-    public float JawMaxPx { get; init; } = 48f;
+    public float JawMaxPx { get; init; } = 60f;
 
-    // ── THE SWARM: three jaws, art-directed, never random ───────────────────────────────────────
+    // ── THE SWARM: ONE HERO and two small secondary bites, art-directed, never random ─────────────
 
     /// <summary>
     /// One jaw of the phrase: WHERE it bites (a share of the creature's visible body, x from the edge that faces the
     /// champion, y from the top), FROM which direction it arrives (a unit vector toward the bite point), its start
-    /// offset (ms after the first frame), its size against the first jaw's, and whether it is drawn BEHIND the creature.
+    /// offset (ms after the first frame), its size against the hero's, when it CHOMPS (ms after its own start), how
+    /// long it holds SHUT before dissolving, when it is gone, and whether it is drawn BEHIND the creature.
     /// </summary>
-    public readonly record struct Jaw(Vector2 BiteShare, Vector2 From, float DelayMs, float Scale, bool Behind);
+    public readonly record struct Jaw(Vector2 BiteShare, Vector2 From, float DelayMs, float Scale, float ChompAtMs, float HoldMs, float GoneMs, bool Behind);
 
     /// <summary>
-    /// The three: one arrives upper/front, one lower/front, one slightly behind and above (drawn behind the body, so
-    /// the swarm has depth). Offsets 0 / 15 / 25 ms: their chomps overlap, a brief swarm bite, not three icons.
+    /// THE HIERARCHY (the hero-chomp pass, 2026-09-27): the viewer first sees ONE bite, then notices the swarm. The HERO
+    /// arrives upper/front at 0, closes over three display states (open at 0-20, half at ~32, SHUT at 48) and HOLDS shut
+    /// ~45 ms before dissolving, gone by 150; it is always foreground and bites an obvious visible edge (the front of
+    /// the body, above its middle: never the torso's dark centre). Secondary A (0.70) arrives lower/front at 30 and
+    /// chomps at 70; secondary B (0.62) behind-and-above at 50, chomps at 90, drawn BEHIND the body for depth.
+    /// CHOMP, tick, tick: never three simultaneous stamps.
     /// </summary>
     public IReadOnlyList<Jaw> Jaws { get; init; } = new[]
     {
-        new Jaw(new Vector2(0.22f, 0.38f), Vector2.Normalize(new Vector2(0.80f, 0.60f)), 0f, 1.00f, false),
-        new Jaw(new Vector2(0.20f, 0.70f), Vector2.Normalize(new Vector2(0.85f, -0.50f)), 15f, 0.85f, false),
-        new Jaw(new Vector2(0.62f, 0.44f), Vector2.Normalize(new Vector2(-0.55f, 0.85f)), 25f, 0.90f, true),
+        new Jaw(new Vector2(0.20f, 0.34f), Vector2.Normalize(new Vector2(0.80f, 0.60f)), 0f, 1.00f, 48f, 45f, 150f, false),
+        new Jaw(new Vector2(0.18f, 0.72f), Vector2.Normalize(new Vector2(0.85f, -0.50f)), 30f, 0.70f, 40f, 30f, 110f, false),
+        new Jaw(new Vector2(0.60f, 0.42f), Vector2.Normalize(new Vector2(-0.55f, 0.85f)), 50f, 0.62f, 40f, 25f, 105f, true),
     };
 
     /// <summary>The rows of the silhouette searched for the body's front-most point, which places the front jaws' x.</summary>
@@ -97,10 +106,10 @@ public sealed class ReactionRecipe
     /// <summary>How far inside the silhouette's front edge the front jaws bite (share of the body's width).</summary>
     public float ProbeInset { get; init; } = 0.08f;
 
-    // ── TIMING (ms after a jaw's own start; the phrase is fast in, readable hit, fast out) ──────
+    // ── TIMING (ms after a jaw's own start; fast in, a readable close, a HOLD the eye can register, fast out) ──
 
     /// <summary>The jaw spawns this far from its bite point (a share of its own height, plus a few px) and darts in.</summary>
-    public float SpawnDistShare { get; init; } = 0.45f;
+    public float SpawnDistShare { get; init; } = 0.35f;
 
     /// <inheritdoc cref="SpawnDistShare"/>
     public float SpawnDistPx { get; init; } = 8f;
@@ -108,57 +117,51 @@ public sealed class ReactionRecipe
     /// <summary>The dart: from the spawn to the bite point, mouth open.</summary>
     public float DartMs { get; init; } = 16f;
 
-    /// <summary>The CHOMP: the mouth shuts (the SHUT state), with a one-frame squash.</summary>
-    public float ChompAtMs { get; init; } = 20f;
+    /// <summary>The mouth's HALF state begins at this share of the jaw's close (OPEN, HALF, SHUT: three display states).</summary>
+    public float HalfAtShare { get; init; } = 0.66f;
 
-    /// <inheritdoc cref="ChompAtMs"/>
+    /// <summary>The CHOMP's one-frame squash.</summary>
     public float SquashMs { get; init; } = 16f;
 
-    /// <summary>After the chomp the head recoils outward this far (px) over this long, then dissolves.</summary>
+    /// <summary>After its hold the head recoils outward this far (px) over this long, dissolving as it goes.</summary>
     public float RecoilPx { get; init; } = 4f;
 
     /// <inheritdoc cref="RecoilPx"/>
     public float RecoilMs { get; init; } = 24f;
 
-    /// <summary>The dissolve: from here the head fades (drifting a little further out), gone by <see cref="GoneMs"/>.</summary>
-    public float DissolveFromMs { get; init; } = 55f;
+    /// <summary>The answer lands on the HERO's closed frame: the number, the flash, the main glint, the chomp cue's transient.</summary>
+    public float AnswerAtMs => Jaws[0].DelayMs + Jaws[0].ChompAtMs;
 
-    /// <inheritdoc cref="DissolveFromMs"/>
-    public float GoneMs { get; init; } = 100f;
-
-    /// <summary>The answer lands on the MAIN chomp (the first jaw's): the number, the flash, a kill's fall.</summary>
-    public float AnswerAtMs { get; init; } = 25f;
-
-    /// <summary>The target-local Shadow residue at each bite point: fading from the chomp, gone by then (ms after the first frame).</summary>
-    public float ResidueGoneMs { get; init; } = 120f;
+    /// <summary>The target-local Shadow residue at each bite point: from its chomp, gone by then (ms after the first frame). Secondary to the mouth.</summary>
+    public float ResidueGoneMs { get; init; } = 170f;
 
     /// <summary>The residue's strength and its length as a share of the jaw's height.</summary>
-    public float ResiduePeak { get; init; } = 0.55f;
+    public float ResiduePeak { get; init; } = 0.35f;
 
     /// <inheritdoc cref="ResiduePeak"/>
-    public float ResidueLengthShare { get; init; } = 0.9f;
+    public float ResidueLengthShare { get; init; } = 0.8f;
 
-    /// <summary>The whole phrase's life: the last jaw's delay plus its gone, and the residue, whichever is later.</summary>
+    /// <summary>The whole phrase's life: the last jaw's delay plus its gone, and the residue, whichever is later (~180 ms).</summary>
     public float EndMs
     {
         get
         {
             var last = 0f;
-            for (var i = 0; i < Jaws.Count; i++) last = Math.Max(last, Jaws[i].DelayMs + GoneMs);   // indexed: a foreach over the interface boxed an enumerator every frame
+            for (var i = 0; i < Jaws.Count; i++) last = Math.Max(last, Jaws[i].DelayMs + Jaws[i].GoneMs);   // indexed: a foreach over the interface boxed an enumerator every frame
             return Math.Max(last, ResidueGoneMs);
         }
     }
 
     // ── LIGHT (the Source) ───────────────────────────────────────────────────────────────────────
 
-    /// <summary>The chomp's glint: a small Shadow flare at the bite point, its peak and its life (ms).</summary>
-    public float GlintPeak { get; init; } = 0.55f;
+    /// <summary>The chomp's glint: a small Shadow flare at the bite point, its peak and its life (ms); the hero's is the MAIN glint, a secondary's is a third of it.</summary>
+    public float GlintPeak { get; init; } = 0.6f;
 
     /// <inheritdoc cref="GlintPeak"/>
-    public float GlintMs { get; init; } = 45f;
+    public float GlintMs { get; init; } = 50f;
 
     /// <summary>The glint's size as a share of the jaw's height.</summary>
-    public float GlintShare { get; init; } = 0.5f;
+    public float GlintShare { get; init; } = 0.55f;
 
     /// <summary>While the champion performs an action, the reaction's light plays at this share: it stays secondary.</summary>
     public float LightUnderAction { get; init; } = 0.55f;
@@ -167,7 +170,8 @@ public sealed class ReactionRecipe
 
     /// <summary>
     /// The reaction's ONE cue for the whole three-bite phrase, most specific first: a small supernatural CHOMP with two
-    /// very quiet secondary ticks baked in behind it (never three loud identical chomps). Played on the first frame.
+    /// very quiet secondary ticks baked in behind it (never three loud identical chomps). Played on the HERO's closed
+    /// frame (<see cref="AnswerAtMs"/>), so the ear hears the bite when the mouth closes, not at the spawn.
     /// </summary>
     public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_chomp", "sfx_hit" };
 

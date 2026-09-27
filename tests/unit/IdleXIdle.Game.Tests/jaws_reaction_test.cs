@@ -118,78 +118,82 @@ public class JawsReactionTest
     // ── THE PHRASE, on the fight's playhead (v = ms after a jaw's own start; u = after the first frame) ─
 
     [Fact]
-    public void test_three_jaws_share_one_source_sprite_and_are_staggered_a_few_ms_apart()
+    public void test_one_hero_and_two_small_secondaries_staggered_chomp_tick_tick()
     {
-        Assert.Equal(3, Jaws.Jaws.Count);   // start with three; never ten particles
-        var delays = Jaws.Jaws.Select(j => j.DelayMs).ToArray();
-        Assert.Equal(0f, delays[0]);
-        for (var i = 1; i < delays.Length; i++)
+        var jaws = Jaws.Jaws;
+        Assert.Equal(3, jaws.Count);   // one hero, two secondaries; never ten particles
+        var hero = jaws[0];
+        Assert.Equal(0f, hero.DelayMs);
+        Assert.Equal(1f, hero.Scale);
+        Assert.False(hero.Behind, "the hero is always foreground");
+        Assert.InRange(hero.BiteShare.X, 0.1f, 0.35f);          // an obvious visible edge: the front of the body...
+        Assert.InRange(hero.BiteShare.Y, 0.25f, 0.5f);          // ...above its middle, never the torso's dark centre
+        // the secondaries are clearly subordinate, and they FOLLOW the hero: chomp, tick, tick
+        foreach (var j in jaws.Skip(1))
         {
-            Assert.True(delays[i] > delays[i - 1], "each jaw starts after the one before: a brief swarm, not three stamps on one frame");
-            Assert.True(delays[i] - delays[i - 1] <= 20f, "...but only a few ms after: their chomps overlap");
+            Assert.InRange(j.Scale, 0.55f, 0.78f);
+            Assert.True(j.DelayMs + j.ChompAtMs > hero.ChompAtMs + 15f, "a secondary chomps after the hero's, never on its frame");
+            Assert.True(j.GoneMs <= hero.GoneMs);
         }
-        Assert.True(delays[^1] <= 30f);
-        // one sprite, varied at runtime: scale and place differ, the art keys do not
-        Assert.True(Jaws.Jaws.Select(j => j.Scale).Distinct().Count() > 1);
-        Assert.True(Jaws.Jaws.Select(j => j.BiteShare).Distinct().Count() == 3, "one arrives upper/front, one lower/front, one behind/side");
-        Assert.Equal(1, Jaws.Jaws.Count(j => j.Behind));   // exactly one drawn behind the creature: depth
-        foreach (var j in Jaws.Jaws) Assert.InRange(j.From.Length(), 0.99f, 1.01f);
+        Assert.True(jaws[1].Scale > jaws[2].Scale);
+        Assert.True(jaws[2].DelayMs > jaws[1].DelayMs);
+        Assert.Equal(1, jaws.Count(j => j.Behind));            // exactly one drawn behind the creature: depth
+        Assert.True(jaws.Select(j => j.BiteShare).Distinct().Count() == 3, "one upper/front, one lower/front, one behind/side");
+        foreach (var j in jaws) Assert.InRange(j.From.Length(), 0.99f, 1.01f);
     }
 
     [Fact]
-    public void test_each_jaw_darts_in_open_chomps_shut_recoils_and_dissolves_fast()
+    public void test_the_hero_closes_over_three_display_states_and_holds_shut()
     {
         var r = Jaws;
-        Assert.False(ReactionPerformance.Shut(r, 0f));
-        Assert.False(ReactionPerformance.Shut(r, r.ChompAtMs - 1f));
-        Assert.True(ReactionPerformance.Shut(r, r.ChompAtMs), "the mouth shuts at the chomp and stays shut");
-        Assert.True(ReactionPerformance.Shut(r, r.GoneMs - 1f));
-        // the dart: from its spawn point (0) to the bite point (1) by DartMs, before the chomp
-        Assert.Equal(0f, ReactionPerformance.Approach(r, 0f));
-        Assert.True(ReactionPerformance.Approach(r, r.DartMs * 0.5f) is > 0.3f and < 1f);
+        var hero = r.Jaws[0];
+        Assert.Equal(0, ReactionPerformance.Mouth(r, hero, 0f));                   // OPEN on arrival
+        Assert.Equal(0, ReactionPerformance.Mouth(r, hero, 20f));                  // still clearly OPEN at ~20 (a whole display frame)
+        Assert.Equal(1, ReactionPerformance.Mouth(r, hero, 33f));                  // HALF at ~32
+        Assert.Equal(2, ReactionPerformance.Mouth(r, hero, hero.ChompAtMs));      // SHUT at the chomp
+        Assert.InRange(hero.ChompAtMs, 45f, 52f);                                  // ~48: the main chomp lands on a 60 fps frame boundary
+        Assert.InRange(hero.HoldMs, 40f, 50f);                                     // the readability pause: shut for 40-50 ms
+        Assert.Equal(1f, ReactionPerformance.Opacity(r, hero, hero.ChompAtMs + hero.HoldMs - 1f));   // whole through the hold
+        Assert.Equal(0f, ReactionPerformance.Recoil(r, hero, hero.ChompAtMs + hero.HoldMs - 1f));    // and not moving off the body
+        Assert.True(ReactionPerformance.Opacity(r, hero, hero.ChompAtMs + hero.HoldMs + 20f) < 1f, "dissolving after the hold");
+        Assert.Equal(0f, ReactionPerformance.Opacity(r, hero, hero.GoneMs));
+        Assert.True(ReactionPerformance.Recoil(r, hero, hero.GoneMs - 1f) is > 0f and < 12f);
+        // the dart lands before the mouth begins to close
         Assert.Equal(1f, ReactionPerformance.Approach(r, r.DartMs), 4);
-        Assert.True(r.DartMs <= r.ChompAtMs, "it arrives before it bites");
-        // the recoil: nothing until the chomp, a few px outward after, never a world path
-        Assert.Equal(0f, ReactionPerformance.Recoil(r, r.ChompAtMs));
-        Assert.InRange(ReactionPerformance.Recoil(r, r.ChompAtMs + r.RecoilMs), r.RecoilPx * 0.95f, r.RecoilPx * 1.05f);
-        Assert.True(ReactionPerformance.Recoil(r, r.GoneMs - 1f) < 12f);
-        // the squash on the chomp frame, then none
-        Assert.NotEqual(Vector2.One, ReactionPerformance.Squash(r, r.ChompAtMs));
-        Assert.Equal(Vector2.One, ReactionPerformance.Squash(r, r.ChompAtMs + r.SquashMs));
-        // whole through the chomp, dissolving after, gone by GoneMs
-        Assert.Equal(1f, ReactionPerformance.Opacity(r, r.ChompAtMs + 5f));
-        Assert.True(ReactionPerformance.Opacity(r, (r.DissolveFromMs + r.GoneMs) / 2f) is > 0f and < 1f);
-        Assert.Equal(0f, ReactionPerformance.Opacity(r, r.GoneMs));
+        Assert.True(r.DartMs < hero.ChompAtMs * r.HalfAtShare);
+        Assert.NotEqual(Vector2.One, ReactionPerformance.Squash(r, hero, hero.ChompAtMs));
+        Assert.Equal(Vector2.One, ReactionPerformance.Squash(r, hero, hero.ChompAtMs + r.SquashMs));
     }
 
     [Fact]
-    public void test_the_whole_phrase_is_fast_in_readable_hit_fast_out()
+    public void test_the_whole_phrase_is_short_and_the_answer_lands_on_the_heros_closed_frame()
     {
         var r = Jaws;
-        Assert.InRange(r.ChompAtMs, 16f, 35f);                  // the main CHOMP
-        Assert.InRange(r.AnswerAtMs, 16f, 35f);                  // the answer lands on it
-        Assert.True(r.AnswerAtMs >= r.ChompAtMs);
-        Assert.InRange(r.EndMs, 100f, 160f);                     // fully gone by 120-160 ms; never a 300 ms lifecycle
-        Assert.True(r.ResidueGoneMs <= r.EndMs && r.ResidueGoneMs >= 60f, "a target-local residue, then nothing");
-        Assert.Equal(0f, ReactionPerformance.Residue(r, r.ChompAtMs - 1f, 0f));
-        Assert.True(ReactionPerformance.Residue(r, r.ChompAtMs + 10f, 0f) > 0f);
-        Assert.Equal(0f, ReactionPerformance.Residue(r, r.ResidueGoneMs, 0f));
+        Assert.Equal(r.Jaws[0].ChompAtMs, r.AnswerAtMs);         // the presentation peak IS the hero's closed frame
+        Assert.InRange(r.AnswerAtMs, 45f, 52f);
+        Assert.InRange(r.EndMs, 160f, 200f);                     // ~180: modestly longer than the first piranha, never the 300 ms trap
+        Assert.True(r.ResidueGoneMs <= r.EndMs);
+        Assert.Equal(0f, ReactionPerformance.Residue(r, r.Jaws[0], r.AnswerAtMs - 1f));
+        Assert.True(ReactionPerformance.Residue(r, r.Jaws[0], r.AnswerAtMs + 10f) > 0f);
+        Assert.True(r.ResiduePeak <= 0.4f, "the residue is secondary to the mouth");
         var p = Answer();
         var stage = new Stage();
         Assert.False(p.Finished(7000 + r.EndMs - 1f));
         Assert.True(p.Finished(7000 + r.EndMs));
         p.Update(7000, stage);
         Assert.False(p.Clamped);
+        p.Update(7000 + r.AnswerAtMs - 10f, stage);
+        Assert.False(p.Clamped, "not on the open or half frames");
         p.Update(7000 + r.AnswerAtMs, stage);
-        Assert.True(p.Clamped, "the answer (number, flash, a kill's fall) is presented on the main chomp");
+        Assert.True(p.Clamped, "the answer (number, flash, glint, the cue) is presented on the hero's closed frame");
     }
 
     [Fact]
     public void test_the_jaws_are_small_target_local_and_spawn_a_short_way_off_the_body()
     {
         var r = Jaws;
-        Assert.InRange(r.JawBodyShare, 0.15f, 0.35f);            // a bite on part of the body, never a mouth around it
-        Assert.True(r.JawMaxPx <= 48f);
+        Assert.InRange(r.JawBodyShare, 0.25f, 0.40f);            // the hero bites PART of the body, never a mouth around it
+        Assert.True(r.JawMaxPx <= 64f);
         var height = Math.Clamp(r.JawBodyShare * 170f, r.JawMinPx, r.JawMaxPx);
         var spawn = r.SpawnDistShare * height + r.SpawnDistPx;
         Assert.InRange(spawn, 10f, 30f);                          // ~10-25 px off the target surface, no world travel
@@ -224,9 +228,9 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_the_source_art_is_one_tiny_head_in_two_states()
+    public void test_the_source_art_is_one_tiny_head_in_three_states()
     {
-        foreach (var key in new[] { Jaws.OpenKey, Jaws.ShutKey })
+        foreach (var key in new[] { Jaws.OpenKey, Jaws.HalfKey, Jaws.ShutKey })
             Assert.True(File.Exists(RepoFile("assets", "art", "VFX", "parts", key + ".png")), $"{key}.png is not filed");
         Assert.DoesNotContain("trap", Jaws.OpenKey);
         Assert.DoesNotContain("trap", Jaws.ShutKey);
@@ -240,7 +244,7 @@ public class JawsReactionTest
         var p = Answer(0, 1);
         p.Update(7000, stage);   // the first frame pins the bite shares (a probe may allocate once)
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var ms = 17; ms < 160; ms += 17) p.Update(7000 + ms, stage);
+        for (var ms = 17; ms < 200; ms += 17) p.Update(7000 + ms, stage);
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
@@ -275,7 +279,11 @@ public class JawsReactionTest
         // released on the chomp, dropped on a rewind; a deferred-dead creature is drawn standing until then
         var update = src[src.IndexOf("private void UpdateReactions()", StringComparison.Ordinal)..];
         update = update[..update.IndexOf("private long _reactionAllocBytes", StringComparison.Ordinal)];
-        Assert.Contains("if (step.Clamped) ReleaseEchoes(r, present: true);", update);
+        Assert.Contains("ReleaseEchoes(r, present: true);", update);
+        Assert.Contains("Sound?.PlayFirst(r.Recipe.SnapCues", update);              // the cue's transient on the hero's closed frame
+        var spawn = src[src.IndexOf("private ReactionPerformance? SpawnReaction(", StringComparison.Ordinal)..];
+        spawn = spawn[..spawn.IndexOf("private void UpdateReactions()", StringComparison.Ordinal)];
+        Assert.DoesNotContain("PlayFirst", spawn);                                  // never at the spawn
         Assert.Contains("ReleaseEchoes(r, present: _playheadMs >= r.TriggerMs - 1f);", update);
         Assert.Contains("!_replay.CreatureAlive(i) && !_deathDeferred.Contains(i)", src);
         // the enemy's own bite is untouched: its thud stays on its own frame, and no glyph is drawn on the champion
