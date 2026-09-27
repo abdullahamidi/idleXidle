@@ -51,8 +51,10 @@ public static class BitePresentation
 
     // ── THE PACK'S LUNGE, in visible body widths (negative = toward the champion) ─────────────────────────────
 
-    /// <summary>The leader's travel at contact, as a share of its visible body width.</summary>
-    public const float LeaderLunge = 0.30f;
+    /// <summary>The leader's travel at contact, as a share of its visible body width. The second pass (2026-09-27) films
+    /// 20 / 25 / 30 % over the authored strip (<c>RH_SHOT_LUNGE</c>): root motion amplifies the pose, so the smallest
+    /// travel that makes a convincing approach wins.</summary>
+    public const float LeaderLunge = 0.25f;
 
     /// <summary>The rest of the pack's travel, as a share of the leader's.</summary>
     public const float FollowerShare = 0.40f;
@@ -83,9 +85,9 @@ public static class BitePresentation
     /// (negative or larger than <see cref="LungeHomeMs"/> when the follow-through is over), <paramref name="leader"/>
     /// whether this creature leads the pack.
     /// </summary>
-    public static float Lunge(float windup01, float sinceHitMs, bool leader)
+    public static float Lunge(float windup01, float sinceHitMs, bool leader, float travel = LeaderLunge)
     {
-        var share = leader ? 1f : FollowerShare;
+        var share = (leader ? 1f : FollowerShare) * (travel / LeaderLunge);
         if (sinceHitMs >= 0f && sinceHitMs < LungeHomeMs)
         {
             // the follow-through: from full extension through one small overshoot, then eased home
@@ -133,7 +135,7 @@ public static class BitePresentation
 
     /// <summary>After the contact: how long the fangs stay shut at full strength, and when the residue is gone (ms).</summary>
     public const float MotifHoldMs = 16f;
-    public const float MotifGoneMs = 90f;
+    public const float MotifGoneMs = 70f;
 
     /// <summary>
     /// The motif's opening, 0 = shut, 1 = fully open: open on the frame before the contact

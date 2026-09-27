@@ -337,51 +337,43 @@ def draw_c(L: Layers, t, anchor, size, belt, seed):
 # Nothing is drawn before the bite lands (t < 0). 0..16 the answer begins (the fangs appear, open); 16..33 they close
 # and peak; 33..80 rebound and residue; gone by 160. ONE extremely short ownership trace, from the fangs' root back
 # toward the Seeker, and only AFTER the snap has begun: the line never precedes the reaction.
-def fang_poly(at, s, gap, side, dirx, n=10):
-    """A tapering crescent polygon: thick at its root on the -dirx side of `at`, thin at its tip hooked `dirx`-ward,
-    `side` -1 the upper jaw / +1 the lower, its tip `gap` from the bite line. The mirror of HuntScreen.Fang."""
-    root = (at[0] - dirx * s * 0.62, at[1] + side * (gap + s * 0.50))
-    ctrl = (at[0] + dirx * s * 0.12, at[1] + side * (gap + s * 0.58))
-    end = (at[0] + dirx * s * 0.34, at[1] + side * gap)
-    centre = []
-    for i in range(n + 1):
-        u = i / n
-        centre.append((lerp(lerp(root[0], ctrl[0], u), lerp(ctrl[0], end[0], u), u),
-                       lerp(lerp(root[1], ctrl[1], u), lerp(ctrl[1], end[1], u), u)))
-    left, right = [], []
-    for i, (x, y) in enumerate(centre):
-        a = centre[max(0, i - 1)]
-        b = centre[min(n, i + 1)]
-        dx, dy = b[0] - a[0], b[1] - a[1]
-        ln = math.hypot(dx, dy) or 1.0
-        nx, ny = -dy / ln, dx / ln
-        w = max(0.8, s * 0.20 * (1 - 0.9 * i / n)) / 2
-        left.append((x + nx * w, y + ny * w))
-        right.append((x - nx * w, y - ny * w))
-    return left + right[::-1], end
+def jaw_polys(at, s, gap, side, n=12):
+    """One half of the bite motif's SHAPE FAMILY (HuntScreen.Jaw, the M4 hybrid selected 2026-09-27): a broad crescent
+    jaw convex away from the bite line with open horns, and one strong fang point from its middle to the bite line.
+    Returns (crescent polygon, fang polygon, tip point). `side` -1 the upper jaw, +1 the lower."""
+    c = (at[0], at[1] + side * (gap + s * 0.10))
+    a0, a1 = (222.0, 318.0) if side < 0 else (42.0, 138.0)
+    r_out, r_in = s * 0.66, s * 0.40
+    outer = [(c[0] + r_out * math.cos(math.radians(a0 + (a1 - a0) * i / n)), c[1] + r_out * math.sin(math.radians(a0 + (a1 - a0) * i / n))) for i in range(n + 1)]
+    inner = [(c[0] + r_in * math.cos(math.radians(a1 - (a1 - a0) * i / n)), c[1] + r_in * math.sin(math.radians(a1 - (a1 - a0) * i / n))) for i in range(n + 1)]
+    by = c[1] - side * s * 0.40
+    tip = (at[0], at[1] + side * gap)
+    fang = [(at[0] - s * 0.16, by), (at[0] + s * 0.16, by), tip]
+    return outer + inner, fang, tip
 
 
 def draw_a2(L: Layers, t, anchor, size, belt, seed):
-    if t < 0 or t > 160:
+    """A2 MIRRORED SHADOW SNAP, second pass: the SAME shape family as the incoming motif (crescent jaws + fang points),
+    Shadow-purple, ~1.25x the incoming footprint, on the creature that bit. t = 0 is the incoming motif's snap on
+    the Seeker. 0..16 the answer begins (jaws appear open); 16..33 they SNAP; a short rebound; gone by ~120.
+    NO ownership trace by default: the visual rhyme (red on him -> purple on the biter) is the test."""
+    if t < 0 or t > 130:
         return
-    c = (anchor[0] + 0.06 * size, anchor[1] - 0.34 * size)          # the attacker's front: the part that bit
-    s = 0.62 * size                                                   # ~1.3x the incoming motif on the Seeker
-    alpha = key(t, [(0, 0.0), (8, 0.6), (16, 0.95), (80, 0.95), (100, 0.55), (160, 0.0)])
-    gap = key(t, [(0, 0.95), (16, 0.85), (24, -0.08), (33, -0.08), (48, 0.06), (80, 0.0)]) * s   # open, CLOSE, rebound
-    glow = key(t, [(0, 0.0), (16, 0.45), (24, 1.3), (33, 1.0), (80, 0.4), (160, 0.0)])
+    c = (anchor[0], anchor[1])                                        # the biter's head: the part that bit
+    s = 50.0                                                          # ~1.25x the incoming motif's ~40 px span
+    alpha = key(t, [(0, 0.0), (8, 0.7), (16, 0.95), (60, 0.95), (90, 0.5), (130, 0.0)])
+    gap = key(t, [(0, 0.34), (16, 0.30), (24, -0.05), (33, -0.05), (48, 0.03), (80, 0.0)]) * s      # open, SNAP, rebound
+    glow = key(t, [(0, 0.0), (16, 0.45), (24, 1.3), (33, 1.0), (80, 0.4), (130, 0.0)])
     for side in (-1, 1):
-        poly, tip = fang_poly(c, s, gap, side, +1)
-        L.poly_dark(poly, alpha)
-        L.poly_light(poly, glow * 0.6, width=2)
-        L.poly_light(circle(tip, max(1.5, 0.04 * size), 8), glow * 0.9, CORE)
-    if 23 <= t <= 60:                                                 # the peak: a hot seam along the bite line
-        k = key(t, [(23, 0.0), (24, 1.2), (36, 0.6), (60, 0.0)])
-        L.line_light([(c[0] - 0.30 * s, c[1]), (c[0] + 0.40 * s, c[1])], k, max(2, int(0.05 * size)), CORE)
-    if 10 <= t <= 60:                                                 # ownership: a short trace back toward the Seeker, AFTER the snap began
-        k = key(t, [(10, 0.0), (18, 0.8), (40, 0.5), (60, 0.0)])
-        root = (c[0] - 0.62 * s, c[1])
-        back = (lerp(root[0], belt[0], 0.30), lerp(root[1], belt[1], 0.30))
-        L.line_light([root, back], k, 2)
+        cres, fang, tip = jaw_polys(c, s, gap, side)
+        L.poly_dark(cres, alpha)
+        L.poly_light(cres, glow * 0.55, width=2)
+        L.poly_dark(fang, alpha)
+        L.poly_light(fang, glow * 0.55, width=1)
+        L.poly_light(circle(tip, max(1.5, 0.05 * size), 8), glow * 0.9, CORE)
+    if 23 <= t <= 50:                                                 # the snap: a short hot seam along the bite line
+        k = key(t, [(23, 0.0), (24, 1.2), (36, 0.5), (50, 0.0)])
+        L.line_light([(c[0] - 0.36 * s, c[1]), (c[0] + 0.36 * s, c[1])], k, max(2, int(0.05 * size)), CORE)
 
 
 DRAW = {"A": draw_a, "A2": draw_a2, "B": draw_b, "C": draw_c}
@@ -422,8 +414,11 @@ def main():
             if p[4] in LEGACY_DROP or (p[4] == "sfx_hit" and kv.get("pitch") == "0.25") or (p[4] == "sfx_hit" and kv.get("vol") == "0.22"):
                 continue
         out.append(raw)
-    for ms, (wall, ph) in t0.items():
-        out.append(f"present\t{wall - CLACK_MS:.0f}\t{ph - CLACK_MS:.0f}\tsound\t{TEMP_CUE}\tvol=0.46\tpitch=0.00\tpan=0.09\n")
+    # A2 is a magical reaction, not a machine: the dry-steel trap cue belongs to the rejected physical-trap fantasy and
+    # is NOT added for it (the brief, 2026-09-27: temporary audio or a muted comparison; its sound is a later pass)
+    if concept != "A2":
+        for ms, (wall, ph) in t0.items():
+            out.append(f"present\t{wall - CLACK_MS:.0f}\t{ph - CLACK_MS:.0f}\tsound\t{TEMP_CUE}\tvol=0.46\tpitch=0.00\tpan=0.09\n")
     open(os.path.join(out_dir, base + ".log"), "w", encoding="utf-8").writelines(out)
     print(f"{concept} {base}: {len(shots)} frames, triggers {sorted(t0)}")
 

@@ -6931,49 +6931,59 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (k <= 0f || !_actors.TryBounds(VfxSubject.Champion, out var vb)) return;
         if (PresentTrace.Enabled) PresentTrace.Log("bite-motif", $"lead={lead:0}	since={since:0}	open={open:0.00}	k={k:0.00}");
         var body = vb.Rect;
-        // WHERE: his enemy-facing edge at chest height (his belt-height edge is his sword hand), the tips biting a
-        // little INTO his silhouette so the shape is on him, not beside him
-        var at = new Vector2(body.Right - body.Width * 0.10f, body.Y + body.Height * 0.36f);
-        var s = body.Height * 0.13f * (0.88f + 0.12f * k);   // the fang span: the contact area
-        // the jaw's half-gap: open before the beat, tips crossed a little while it holds shut, met as it fades
-        var gap = open > 0f ? s * (0.12f + 0.38f * open) : since < BitePresentation.MotifHoldMs ? -s * 0.10f : 0f;
+        // WHERE: his TORSO's enemy-facing edge just under the hood, at chest height. Measured from footage (a NOCHAMP
+        // diff of the contact plate): his visible rect's RIGHT edge is his sword tip and belt height is his sword hand,
+        // so "Right - a little" put the first motif on the blade, where a reader saw it "near his raised hand/wrist".
+        var at = new Vector2(body.X + body.Width * 0.57f, body.Y + body.Height * 0.39f);
+        var s = body.Height * 0.13f * (0.9f + 0.1f * k);     // the jaw span: the contact area, ~40 px at play size
+        // the jaw's half-gap: open before the beat, the fang tips crossed a little while it holds shut, met as it fades
+        var gap = open > 0f ? s * (0.08f + 0.24f * open) : since < BitePresentation.MotifHoldMs ? -s * 0.04f : 0f;
         var dark = Shadow * (0.95f * k);
         var ember = Ember * (0.95f * k);
         var tip = Color.Lerp(Ember, Bone, 0.6f) * (0.95f * k);
-        Fang(b, at, s, gap, -1f, dark, ember, tip);
-        Fang(b, at, s, gap, +1f, dark, ember, tip);
-        // the snap's streak: on the shut frames only, a short trace of the force from the enemy's side into the jaw
-        if (open == 0f && since < BitePresentation.MotifHoldMs)
-            _ui.LineSeg(b, at + new Vector2(s * 1.30f, 0f), at + new Vector2(s * 0.60f, 0f), MathF.Max(1.5f, s * 0.05f), ember * 0.8f);
+        Jaw(b, at, s, gap, -1f, dark, ember, tip);
+        Jaw(b, at, s, gap, +1f, dark, ember, tip);
     }
 
     /// <summary>
-    /// One fang of the motif: a short serrated crescent, its root a thick dark wedge on the enemy's side (right) and
-    /// its tip a pale point hooked forward and inward into the champion (left), <paramref name="side"/> −1 the upper
-    /// jaw and +1 the lower, the tip <paramref name="gap"/> from the bite line. The two roots stay apart (a jaw, not
-    /// one ring), and each fang bows OUTWARD so its concave edge faces the bite: a claw, not a bracket. A quadratic
-    /// curve flattened into short segments of falling thickness.
+    /// One half of the bite motif (the hybrid of the three candidates blind-read on 2026-09-27): a broad crescent
+    /// jaw, convex away from the bite line with its horns left open at the sides (two of them meeting must never
+    /// close into a ring), and ONE strong fang point from its middle aimed at the contact centre, pale at the tip.
+    /// <paramref name="side"/> −1 is the upper jaw, +1 the lower; <paramref name="gap"/> is the fang tip's distance
+    /// from the bite line. Drawn with thick line segments in the normal batch (no shader, no texture).
     /// </summary>
-    private void Fang(SpriteBatch b, Vector2 at, float s, float gap, float side, Color dark, Color ember, Color tip)
+    private void Jaw(SpriteBatch b, Vector2 at, float s, float gap, float side, Color dark, Color ember, Color tip)
     {
-        var root = at + new Vector2(s * 0.42f, side * (gap + s * 0.62f));
-        var ctrl = at + new Vector2(-s * 0.36f, side * (gap + s * 0.50f));
-        var end = at + new Vector2(-s * 0.30f, side * gap);
-        const int n = 7;
-        var prev = root;
+        var c = new Vector2(at.X, at.Y + side * (gap + s * 0.10f));
+        var r = s * 0.53f;                                   // the crescent's centre-line radius
+        var w = MathF.Max(2f, s * 0.26f);                    // its thickness
+        var (a0, a1) = side < 0 ? (222f, 318f) : (42f, 138f);
+        const int n = 12;
+        var prev = c + Polar(r, a0);
         for (var i = 1; i <= n; i++)
         {
-            var t = i / (float)n;
-            var q = (1f - t) * (1f - t) * root + 2f * (1f - t) * t * ctrl + t * t * end;
-            var w = MathF.Max(1.2f, s * 0.26f * (1f - t * 0.92f));
-            _ui.LineSeg(b, prev, q, w + 1.8f, dark);           // the body, a dark edge around the ember
-            _ui.LineSeg(b, prev, q, w, i < n - 1 ? ember : tip);   // the ember core; the last two segments are the pale tip
+            var q = c + Polar(r, a0 + (a1 - a0) * i / n);
+            _ui.LineSeg(b, prev, q, w + 2f, dark);
+            _ui.LineSeg(b, prev, q, w, ember);
             prev = q;
         }
-        // one serration on the inner (biting) edge of each fang
-        var mid = 0.25f * root + 0.5f * ctrl + 0.25f * end;
-        _ui.LineSeg(b, mid, mid + new Vector2(s * 0.04f, -side * s * 0.14f), MathF.Max(1.2f, s * 0.05f), ember);
+        // the fang: a wedge from the crescent's inner middle to the bite line, drawn as stacked strokes narrowing to the tip
+        var baseY = c.Y - side * s * 0.40f;
+        var tipP = new Vector2(at.X, at.Y + side * gap);
+        const int m = 5;
+        for (var i = 0; i < m; i++)
+        {
+            var t = i / (float)m;
+            var y = baseY + (tipP.Y - baseY) * t;
+            var half = s * 0.16f * (1f - t);
+            _ui.LineSeg(b, new Vector2(at.X - half - 1f, y), new Vector2(at.X + half + 1f, y), MathF.Abs(tipP.Y - baseY) / m + 2f, dark);
+            _ui.LineSeg(b, new Vector2(at.X - half, y), new Vector2(at.X + half, y), MathF.Abs(tipP.Y - baseY) / m + 0.5f, ember);
+        }
+        _ui.LineSeg(b, tipP + new Vector2(-1.5f, 0f), tipP + new Vector2(1.5f, 0f), 3f, tip);
     }
+
+    private static Vector2 Polar(float r, float deg)
+        => new(r * MathF.Cos(deg * MathF.PI / 180f), r * MathF.Sin(deg * MathF.PI / 180f));
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
@@ -7225,7 +7235,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (CaptureViews.NoRootMotion || leader < 0) return 0;
         var width = _actors.TryBounds(VfxSubject.Creature(slot), out var vb) ? vb.Rect.Width : (int)(box.Width * 0.75f);
         var since = _enemySinceHit < EnemyFollowSeconds ? _enemySinceHit * 1000f : -1f;
-        return (int)MathF.Round(BitePresentation.Lunge(_enemyWindup, since, slot == leader) * width);
+        var travel = CaptureViews.LungeOverride ?? BitePresentation.LeaderLunge;
+        return (int)MathF.Round(BitePresentation.Lunge(_enemyWindup, since, slot == leader, travel) * width);
     }
 
     // RH_PRESENT_TRACE: the champion frame last logged, so a frame is logged when it CHANGES.

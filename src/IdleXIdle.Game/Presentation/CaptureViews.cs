@@ -20,6 +20,7 @@ namespace IdleXIdle.Game.Presentation;
 /// <item><c>RH_SHOT_NOTINT=1</c> — no ember wind-up tint on the creatures</item>
 /// <item><c>RH_SHOT_SIL=1</c> — every creature drawn as a flat silhouette (does the SHAPE perform the action?)</item>
 /// <item><c>RH_SHOT_NOROOT=1</c> — the pack's presentation lunge off (the creatures stay in their row)</item>
+/// <item><c>RH_SHOT_LUNGE=&lt;share&gt;</c> — the leader's lunge travel as a share of its visible width (a tuning dial)</item>
 /// <item><c>RH_SHOT_NORECOIL=1</c> — the champion's hit recoil off (the bite motif is not the recoil's and stays; <c>RH_SHOT_NOVFX</c> hides it)</item>
 /// <item><c>RH_SHOT_FLASH=off | peak,rise,ms</c> — the generic hit flash off, or overridden for every hit (a recipe's included), e.g. <c>1,0.2,200</c> is the old full-white flash</item>
 /// <item><c>RH_SHOT_RECOIL=&lt;share&gt;</c> — the champion's hit recoil reach as a share of his visible width (a tuning series from one build)</item>
@@ -43,6 +44,11 @@ public static class CaptureViews
     /// turns to film a tuning series from one build; null when not set.</summary>
     public static readonly float? RecoilOverride =
         float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_RECOIL"), NumberStyles.Float, CultureInfo.InvariantCulture, out var r) ? r : null;
+
+    /// <summary>The leader's lunge travel override (<c>RH_SHOT_LUNGE=&lt;share of visible width&gt;</c>): a dial the rig
+    /// turns to film 20 / 25 / 30 % from one build; null when not set.</summary>
+    public static readonly float? LungeOverride =
+        float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_LUNGE"), NumberStyles.Float, CultureInfo.InvariantCulture, out var l) ? l : null;
 
     private static bool Flag(string name) => Environment.GetEnvironmentVariable(name) == "1";
 

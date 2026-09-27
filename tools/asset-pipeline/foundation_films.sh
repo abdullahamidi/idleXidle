@@ -62,9 +62,13 @@ want rep_oldflash  && film rep_oldflash  $N 720 RH_SHOT_TAKE="$TEMPO" RH_SHOT_FL
 want kill          && film kill          $N 918 RH_SHOT_TAKE="$TEMPO"
 want hh            && film hh            60 455 RH_SHOT_TAKE="$TEMPO"
 want hh_bare       && film hh_bare       60 455 RH_SHOT_TAKE="$TEMPO" RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
-# ── THE RESET (2026-09-27): the recoil is OFF by default; the receiver alone (effects and flash off: nothing should
-#    move), a micro-impulse pair (1 and 2 % of his visible width, RH_SHOT_RECOIL) for the optional comparison ──────
+# ── THE RESET, SECOND PASS (2026-09-27): the receiver alone (nothing should move), the plate without him (his mask),
+#    and the leader's lunge travel series 20 / 25 / 30 % of its visible width over the authored strip (RH_SHOT_LUNGE) ─
 want recv_only     && film recv_only     $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
-want rec01         && film rec01         $N $S RH_SHOT_RECOIL=0.01
-want rec02         && film rec02         $N $S RH_SHOT_RECOIL=0.02
+want recv_nochamp  && film recv_nochamp  $N $S RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off RH_SHOT_NOCHAMP=1
+want new_l20       && film new_l20       $N $S RH_SHOT_LUNGE=0.20
+want new_l25       && film new_l25       $N $S RH_SHOT_LUNGE=0.25
+want new_l30       && film new_l30       $N $S RH_SHOT_LUNGE=0.30
+want bare_l20      && film bare_l20      $N $S RH_SHOT_LUNGE=0.20 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
+want bare_l30      && film bare_l30      $N $S RH_SHOT_LUNGE=0.30 RH_SHOT_NOTINT=1 RH_SHOT_NOVFX=1 RH_SHOT_FLASH=off
 exit 0
