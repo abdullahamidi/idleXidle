@@ -1,5 +1,7 @@
 # JAWS hero chomp: the readability pass (ADR-011, 2026-09-27)
 
+Review page: https://claude.ai/artifact/BKJLHRTob95gkw5wnUr6Rj
+
 **The problem.** The Shadow-piranha concept is approved. At true speed the first build read as "a purple effect
 happened": three near-equal jaws whose state changes fell one display frame apart, with the flash, the number and the
 sound landing at once. At 4× it read. A temporal readability / visual hierarchy problem, nothing else.
