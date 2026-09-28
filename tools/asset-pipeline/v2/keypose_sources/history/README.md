@@ -1,0 +1,13 @@
+# JAWS art history (never played)
+
+Rejected JAWS presentations, kept on disk as history at the owner's request ("do not delete historical assets; just
+remove them from production playback"). They live here, outside `assets/`, so the game does not load them at boot and
+the asset-consumer gate (`tools/check_asset_consumers.py`) does not count them as orphans.
+
+- `prop_seeker_jaws_far_edge.png`, `prop_seeker_jaws_near_edge.png`: the spring-loaded bear trap (rejected 2026-09-25).
+- `fxp_seeker_jaws_open.png`, `_half.png`, `_shut.png`: the Shadow piranha (rejected 2026-09-27).
+- `fxp_seeker_fang.png`: the hard Shadow Fang sprite (replaced 2026-09-28 by the misty fang strip `fxp_seeker_mistfang`).
+- `fxp_seeker_mist_a.png`, `fxp_seeker_mist_b.png`: the floor mist under the creature (removed 2026-09-28: the teeth themselves are the mist now).
+
+Their generators still write into `assets/art/VFX/parts/` if re-run (`seeker_piranha.py`, `seeker_fangs.py`,
+`seeker_mist.py`, `seeker_jaws.py`); move the output back here if you do.

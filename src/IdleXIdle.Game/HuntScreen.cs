@@ -2030,8 +2030,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // jaws' own sentence, so the generic thud and puff that would describe the same blow give way to its snap.
         var reactionHitAtMs = -1;
         ReactionRecipe? reactionHitRecipe = null;
-        // ...and the presented reaction itself: its answer's number and any kill are PRESENTED on its fangs' SNAP
-        // (~55 ms on; the number a few frames after it), not on the bite's frame; the fight has already resolved them
+        // ...and the presented reaction itself: its answer's number and any kill are PRESENTED on its jaws' SNAP
+        // (ReactionRecipe.SnapAtMs; the number a few frames after it), not on the bite's frame; the fight has already resolved them
         // (see ReactionEcho)
         ReactionPerformance? reactionHitPerf = null;
         // ...and WHAT the reaction at that beat is called, so its blow can print its own name instead of
@@ -2785,11 +2785,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // tier did not exist before — one flat effects pass ran after both figures, so §68's layer
         // vocabulary had nowhere to land and a field could only ever haze the champion it wrapped.
         if (!ShotNoVfx) _vfx.DrawUnder(b);
-        // ...and a reaction's Shadow mist, under the figures (JAWS: the pool the bitten creature stands in, never a veil
-        // over it); its bytes count toward the reaction layer's own (the trace's alloc=0 covers both of its passes)
-        var underAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawUnder(b, this, _playheadMs);
-        if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - underAlloc;
 
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
@@ -2805,7 +2800,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
         if (!ShotNoVfx) _outgoing?.DrawMaterial(b);
         if (!ShotNoVfx) _performance?.DrawMaterial(b);
-        // THE REACTION LAYER (JAWS): the Shadow fangs on the creature that bit — over both figures (its mist lay under them)
+        // THE REACTION LAYER (JAWS): the Shadow jaws, made of mist, on the creature that bit — over both figures
         var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
         var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
         if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
@@ -6542,8 +6537,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private enum ReactionEchoKind { Number, Flash, Death }
 
     /// <summary>
-    /// ONE PIECE OF A REACTION'S ANSWER, held for its fangs' snap (JAWS, ADR-011). The fight resolved the reflected blow
-    /// on the bite's millisecond; the fangs take ~55 ms to snap shut on screen, and the answer's own feedback belongs to
+    /// ONE PIECE OF A REACTION'S ANSWER, held for its jaws' snap (JAWS, ADR-011). The fight resolved the reflected blow
+    /// on the bite's millisecond; the jaws take ReactionRecipe.SnapAtMs to gather and shut on screen, and the answer's own feedback belongs to
     /// the moment they do: a kill's fall (and a flash, when a recipe has one) on the snap, the number a few frames after
     /// it so the fangs are seen first. The enemy's bite keeps its own feedback at t 0. Presentation only: nothing here
     /// changes what the fight did.
