@@ -33,6 +33,15 @@ public sealed class FieldPerformance
     private readonly Vector4?[] _crush;
     // ...and the arcs' width in px, from the silhouette pinned at launch (their size never follows a pose)
     private readonly float[] _arcWidth;
+    // ...and whether its fold has been drawn (the first frame after the contact folds, even a slow one), and the frame the
+    // material pass folded on (the light pass holds the arcs' heat back on it)
+    private readonly bool[] _folded;
+    // (by a frame count, never by the playhead: on the frozen playhead that ends a wave every frame matched it, and the
+    // fold's lit edge was drawn again and again without its body)
+    private int _frame, _foldedFrame = -1;
+    // ...and the arcs' horizontal centre, latched on contact: forward motion dies there (followed, the arcs drifted on with
+    // the creature through the hold and onto the next one's head)
+    private readonly float[] _arcX;
     private int _sprites;
 
     /// <summary>
@@ -51,6 +60,9 @@ public sealed class FieldPerformance
         _shape = new Vector4?[ticks.Count];
         _crush = new Vector4?[ticks.Count];
         _arcWidth = new float[ticks.Count];
+        _folded = new bool[ticks.Count];
+        _arcX = new float[ticks.Count];
+        Array.Fill(_arcX, float.NaN);
         for (var k = 0; k < ticks.Count; k++) (_tickAt[k], _tickTarget[k], _tickYields[k], _tickQuiet[k]) = ticks[k];
     }
 
@@ -186,9 +198,15 @@ public sealed class FieldPerformance
             squash = 1f - Smooth(Math.Min(1f, k / 0.5f));
         }
         else return default;
-        var heat = 1f - Smooth(u / 90f);
+        var heat = 1f - Smooth(Math.Max(0f, u - r.FoldMs) / 90f);    // hot as the arcs take over from the fold
         return new CrushPose(close, alpha, squash, heat);
     }
+
+    /// <summary>
+    /// The fold's moment: the FIRST frame drawn after the contact inside it folds, once (a frame phase never shows it twice
+    /// or skips it: at 60 fps a fold window longer than a frame showed it twice on an early phase).
+    /// </summary>
+    public static bool CanFold(FieldRecipe r, float u) => u > 0f && u <= r.FoldMs + r.CrushInMs;
 
     /// <summary>The clamp's cell at u: whole through the press and the hold, then the three dissolve states over the release.</summary>
     public static int ClampCellAt(FieldRecipe r, float u)
@@ -278,11 +296,12 @@ public sealed class FieldPerformance
     }
 
     /// <summary>
-    /// Over the creatures, UNDER the champion: the pressure front (its softened afterimage behind it) on its way, and the
-    /// two crush arcs on the target (material: translucent violet).
+    /// Over the creatures, UNDER the champion: the pressure front on its way, the fold it becomes, and the two crush arcs on
+    /// the target (material: translucent violet).
     /// </summary>
     public void DrawMaterial(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
+        _frame++;                                                                 // one material pass a frame
         if (!TryPhrase(playheadMs, out var u, out var tick) || u < Recipe.LaunchMs) return;
         var target = TargetOf(tick);
         // THE TARGET'S DRAWN SHAPE (called after the creatures drew, so their frames are this frame's): pinned at launch for
@@ -295,25 +314,34 @@ public sealed class FieldPerformance
         if (_arcWidth[tick] <= 0f) _arcWidth[tick] = foe.Width * Recipe.ClampWidthShare;
         var body = PressedShape(stage, tick, target, u);
         LastShape = u >= 0f ? body : foe;
+        // WHERE THE FRONT STOPPED, latched on the first frame after the contact: the fold and the arcs form there, and nothing
+        // moves forward after it
+        if (u > 0f && float.IsNaN(_arcX[tick])) _arcX[tick] = ClampPlace(Recipe, champ, foe, 1f, _arcWidth[tick]).Centre.X;
         var quiet = QuietShareOf(stage, tick);
         if (stage.Texture(Recipe.WaveKey) is { } wave)
         {
             var w = Wave(Recipe, u);
             if (w.Alpha >= ReactionRecipe.VisibleFloor)
             {
-                if (u <= 0f)
-                {
-                    // one broken darker echo trails it (never a soft ghost)
-                    var lag = Wave(Recipe, Math.Max(Recipe.LaunchMs, u - Recipe.EchoLagMs));
-                    DrawWaveCell(b, wave, FieldRecipe.WaveEchoCell, champ, foe, lag.Progress, w.Grow, Recipe.WaveColor * (w.Alpha * Recipe.EchoAlpha * quiet));
-                }
-                // arrived, it loses cohesion in pixel chunks as it collapses into the crush
-                DrawWaveCell(b, wave, u <= 0f ? FieldRecipe.WaveBodyCell : FieldRecipe.WaveDissolveCell, champ, foe, w.Progress, w.Grow,
-                             Recipe.WaveColor * (w.Alpha * quiet));
+                // arrived, it STOPS: on a tick that gives way it loses cohesion against the creature's face; otherwise it
+                // does not linger or fade out -- it folds into the crush (below)
+                if (u <= 0f || Yields(tick))
+                    DrawWaveCell(b, wave, u <= 0f ? FieldRecipe.WaveBodyCell : FieldRecipe.WaveDissolveCell, champ, foe, w.Progress, w.Grow,
+                                 Recipe.WaveColor * (w.Alpha * quiet));
             }
         }
         var c = Crush(Recipe, u);
         if (c.Alpha < ReactionRecipe.VisibleFloor) return;
+        if (!Yields(tick) && !_folded[tick] && CanFold(Recipe, u))
+        {
+            _folded[tick] = true;
+            _foldedFrame = _frame;
+            // THE FRONT BECOMES THE CRUSH: in its own violet and weight, over the arcs' own span (forward motion dead), its
+            // wall collapsing at the creature's middle, its ends bent over and under it -- the arcs take over next frame
+            if (stage.Texture(Recipe.FoldKey) is { } fold)
+                DrawFold(b, fold, FieldRecipe.FoldBodyCell, stage, tick, target, champ, foe, Recipe.WaveColor * (Recipe.WaveArriveAlpha * quiet));
+            return;
+        }
         if (Yields(tick))
         {
             // giving way to a reaction on this creature: the front flattens against its facing side in its own violet
@@ -322,7 +350,7 @@ public sealed class FieldPerformance
                 DrawFlattened(b, flat, FieldRecipe.WaveDissolveCell, champ, foe, Recipe.WaveColor * (c.Alpha * quiet * FlattenFade(Recipe, u)));
         }
         else if (stage.Texture(Recipe.ClampKey) is { } clamp)
-            DrawClamps(b, clamp, ClampCellAt(Recipe, u), champ, body, _arcWidth[tick], c, ClampTint(Recipe, u) * (c.Alpha * quiet));
+            DrawClamps(b, clamp, ClampCellAt(Recipe, u), champ, body, ArcX(tick, champ, foe), _arcWidth[tick], c, ClampTint(Recipe, u) * (c.Alpha * quiet));
     }
 
     /// <summary>
@@ -359,10 +387,24 @@ public sealed class FieldPerformance
                 DrawFlattened(b, flat, FieldRecipe.WaveEdgeCell, champ, foe, Recipe.RimColor * (flare * Recipe.WaveGlowShare * FlattenFade(Recipe, u)));
             return;
         }
-        // the heat lights the pressing EDGE only: a dim line and a short pale accent at the contact (the body stays violet)
+        // the fold is lit like the front it is (its inner edge at the arrival rim's light: never brighter, no flash)
+        if (_foldedFrame == _frame)
+        {
+            if (stage.Texture(Recipe.FoldKey) is { } fold)
+                DrawFold(b, fold, FieldRecipe.FoldEdgeCell, stage, tick, TargetOf(tick), champ, foe,
+                         Recipe.RimColor * (Recipe.WaveArriveAlpha * Recipe.WaveGlowShare * Recipe.FoldGlowShare * quiet));
+            return;
+        }
+        // the heat lights the pressing EDGE only: a dim line and a short pale accent at the contact (the body stays violet),
+        // once the arcs have taken over from the fold
         if (flare * Recipe.ClampGlowShare >= ReactionRecipe.VisibleFloor && stage.Texture(Recipe.ClampKey) is { } clamp)
-            DrawClamps(b, clamp, FieldRecipe.ClampEdgeCell, champ, body, _arcWidth[tick], c, Recipe.ClampHotColor * (flare * Recipe.ClampGlowShare));
+            DrawClamps(b, clamp, FieldRecipe.ClampEdgeCell, champ, body, ArcX(tick, champ, foe), _arcWidth[tick], c,
+                       Recipe.ClampHotColor * (flare * Recipe.ClampGlowShare));
     }
+
+    /// <summary>The fold's and the arcs' horizontal centre: where the front stopped, latched on contact.</summary>
+    private float ArcX(int tick, Rectangle champ, Rectangle foe)
+        => float.IsNaN(_arcX[tick]) ? ClampPlace(Recipe, champ, foe, 1f, _arcWidth[tick]).Centre.X : _arcX[tick];
 
     /// <summary>
     /// Where the arcs press: the target's drawn body as it is pressed (the silhouette re-pinned one frame into the crush),
@@ -403,13 +445,20 @@ public sealed class FieldPerformance
 
     /// <summary>
     /// Where the front leaves from (the FIELD's leading edge, in front of the Seeker's enemy-facing side: the wave visibly
-    /// leaves the field) and where it lands (the target's front).
+    /// leaves the field) and where it lands (the target's front). LEVEL: the front propagates along the arena's horizontal
+    /// combat axis, between the field's height and the target's (<see cref="FieldRecipe.WaveAxisShare"/>) -- it never
+    /// climbs or dips toward the target's centre (steered at it, the wall read as a projectile homing on a target); the
+    /// target is crushed because the wall reaches where it stands.
     /// </summary>
     public static (Vector2 From, Vector2 To) Path(FieldRecipe r, Rectangle champ, Rectangle foe)
     {
         var fieldWidth = champ.Height * r.FieldHeightShare * r.FieldCell.X / r.FieldCell.Y;
-        return (new Vector2(champ.X + r.FieldCentre.X * champ.Width + r.FieldEdgeShare * fieldWidth, champ.Y + r.FieldCentre.Y * champ.Height),
-                new Vector2(foe.X + 0.12f * foe.Width, foe.Y + 0.5f * foe.Height));
+        var axis = MathHelper.Lerp(champ.Y + r.FieldCentre.Y * champ.Height, foe.Y + 0.5f * foe.Height, r.WaveAxisShare);
+        // ...never so high or low that the arriving wall leaves its target's head or feet outside it (a short creature)
+        var half = 0.5f * WaveHeight(r, 1f, champ.Height, foe.Height);
+        axis = Math.Clamp(axis, foe.Bottom - half, Math.Max(foe.Bottom - half, foe.Y + half));
+        return (new Vector2(champ.X + r.FieldCentre.X * champ.Width + r.FieldEdgeShare * fieldWidth, axis),
+                new Vector2(foe.X + 0.12f * foe.Width, axis));
     }
 
     private void DrawWaveCell(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, float progress,
@@ -427,15 +476,35 @@ public sealed class FieldPerformance
     }
 
     /// <summary>
-    /// The crush arcs' centre and the distance of their pressing edges from it, for a crush <paramref name="close"/> (0 the
-    /// arriving crescent's tips at the target's front, 1 folded over and under the target's body, biting into it).
+    /// The crush arcs' centre and the distance of their pressing edges from it, for a crush <paramref name="close"/> (0 at
+    /// the arriving crescent's tips, 1 over and under the target's body, biting into it), for arcs <paramref name="width"/>
+    /// wide. The centre is where the FRONT STOPPED (<see cref="FieldRecipe.FoldBackShare"/> of the width behind its stop) and
+    /// never moves: forward motion dies on contact and the energy turns VERTICAL (the upper arc presses down, the lower one
+    /// up; sliding on from the front's arrival, the arcs carried the travel on through the crush).
     /// </summary>
-    public static (Vector2 Centre, float Edge) ClampPlace(FieldRecipe r, Rectangle champ, Rectangle foe, float close)
+    public static (Vector2 Centre, float Edge) ClampPlace(FieldRecipe r, Rectangle champ, Rectangle foe, float close, float width)
     {
-        var (_, arrive) = Path(r, champ, foe);
-        var shut = new Vector2(foe.X + r.ClampCentreShare * foe.Width, foe.Y + 0.5f * foe.Height);
+        var shut = new Vector2(Path(r, champ, foe).To.X + (0.5f - r.FoldBackShare) * width, foe.Y + 0.5f * foe.Height);
         var tips = Math.Min(0.5f * WaveHeight(r, 1f, champ.Height, foe.Height), r.ClampStartCap * foe.Height);
-        return (Vector2.Lerp(arrive, shut, close), MathHelper.Lerp(tips, r.ClampShutShare * foe.Height, close));
+        return (shut, MathHelper.Lerp(tips, r.ClampShutShare * foe.Height, close));
+    }
+
+    /// <summary>
+    /// The fold: over the arcs' own span (their width and latched centre: it becomes them in place), around the creature's
+    /// UPRIGHT middle (anchored to the buckle it slid down with it, the lower end moving away from the body); at the arcs'
+    /// scale (their pixel), whole pixels, the lower piece flipped.
+    /// </summary>
+    private void DrawFold(SpriteBatch b, Texture2D tex, int cell, IReactionStage stage, int tick, int target, Rectangle champ, Rectangle foe, Color tint)
+    {
+        TryTargetShape(stage, tick, target, true, out var upright);
+        var w = Math.Max(1, (int)MathF.Round(_arcWidth[tick]));
+        var h = Math.Max(1, (int)MathF.Round(Recipe.FoldCell.Y * (w / (float)Recipe.FoldCell.X)));
+        var x = (int)MathF.Round(ArcX(tick, champ, foe) - 0.5f * w);
+        var mid = (int)MathF.Round(upright.Y + 0.5f * upright.Height);
+        var src = new Rectangle(cell * Recipe.FoldCell.X, 0, Recipe.FoldCell.X, Recipe.FoldCell.Y);
+        b.Draw(tex, new Rectangle(x, mid - h, w, h), src, tint);
+        b.Draw(tex, new Rectangle(x, mid, w, h), src, tint, 0f, Vector2.Zero, SpriteEffects.FlipVertically, 0f);
+        _sprites += 2;
     }
 
     private void DrawFlattened(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, Color tint)
@@ -450,13 +519,13 @@ public sealed class FieldPerformance
         _sprites++;
     }
 
-    private void DrawClamps(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, float width, CrushPose c, Color tint)
+    private void DrawClamps(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, float centreX, float width, CrushPose c, Color tint)
     {
-        var (centre, edge) = ClampPlace(Recipe, champ, foe, c.Close);
+        var (centre, edge) = ClampPlace(Recipe, champ, foe, c.Close, width);
         var w = Math.Max(1, (int)MathF.Round(width));
         var scale = w / (float)Recipe.ClampCell.X;
         var h = Math.Max(1, (int)MathF.Round(Recipe.ClampCell.Y * scale));
-        var x = (int)MathF.Round(centre.X - 0.5f * w);
+        var x = (int)MathF.Round(centreX - 0.5f * w);
         var src = new Rectangle(cell * Recipe.ClampCell.X, 0, Recipe.ClampCell.X, Recipe.ClampCell.Y);
         // above, pressing down; below, flipped, pressing up (the pressing edges face the body); on whole pixels
         b.Draw(tex, new Rectangle(x, (int)MathF.Round(centre.Y - edge - Recipe.ClampPressY * scale), w, h), src, tint);

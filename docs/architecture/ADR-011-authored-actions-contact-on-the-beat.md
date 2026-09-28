@@ -471,7 +471,7 @@ reconstruction D3 forbids. The fight's own number differs: this Seeker acts at Ã
 waits ARMED 170 ms before each bite at normal TEMPO (417 ms at fast TEMPO, rearm 1583). A 0 ms window needs a rearm
 that is a whole number of the fight's 100 ms ticks; the Core tests pose one and prove its order.
 
-## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED by the owner; PIXEL-HARD pass 2026-09-28, awaiting the owner's review)
+## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED; PIXEL-HARD pass 2026-09-28, APPROVED; FIELD-vs-PROJECTILE polish 2026-09-28, awaiting the owner's review)
 
 **The brief** (the owner, Concept A, after JAWS closed): PRESS is the gold-standard candidate for the PERSISTENT FIELD /
 AURA family. "A persistent pressure field around the Seeker periodically sends a force pulse outward. When the pulse
@@ -498,7 +498,7 @@ two must-fixes, both fixed) and two adversarial re-checks (RESOLVED WITH NOTES).
 lunge in this seed (every PRESS tick lands on the pack's own bite beat); no sound yet; the arcs may still read as
 brackets; the owner's review. (The owner approved the direction and asked for the pixel-hard pass below.)
 
-### The pixel-hard pass (2026-09-28, awaiting the owner's review)
+### The pixel-hard pass (2026-09-28, APPROVED by the owner)
 
 **The brief** (the owner approved Concept A's direction; the craft was too smooth, too soft and too vector-like and the
 tick lacked hardness): bring PRESS into the game's pixel language and make the tick substantially harder, from timing
@@ -535,6 +535,35 @@ HARD HANDS / JAWS YES at every peak (summed over the phrase the travelling front
 hit), the push NO. Open: no cap on the arcs' size for a much larger creature; the bottom arc rests on the floor under a
 lunging creature; the arcs placed once float over a creature whose lunge ends mid-hold; the buckle on a standing creature
 is unseen in this seed; the front leaves at nearly full size; the field haze stays smooth; no sound yet (the pass stops).
+
+### The field-vs-projectile polish (2026-09-28, awaiting the owner's review)
+
+**The brief** (the owner): the pixel-hard PRESS is APPROVED; do not redesign it (keep the material, the palette, the
+persistent field, the ~30 ms crush, the ~60 ms hold, the squash, no push, the brightness hierarchy, the yield rules). One
+question remained: does the travelling front read too much like a PROJECTILE? PRESS must read as a FIELD DISTURBANCE
+PROPAGATING THROUGH SPACE, not a magic projectile fired at a target. No added weight.
+
+| Concern | The field-propagation PRESS |
+|---|---|
+| Never aimed | the front travels LEVEL along the combat axis, halfway between the field's height and the target's (`WaveAxisShare` 0.5), clamped so the arriving wall always holds its target: it never climbs or dips toward the target (the pixel-hard front came down ~12-16 degrees from the Seeker's chest, homing); first tried at the target's own height, it was born under the Seeker's belt, below the field |
+| A wall, not a body | no pale accent at the middle of its edge (a glowing centre is a head) and no one-frame echo behind it (a trailing copy is a tail): the front is only the wall |
+| The field discharging | launch contours were tried (two thin broken lines of the front's curve ringing at the field's boundary as the front departs, ~70 ms) and REMOVED: three of four judges measured them invisible at play speed and, on a still, speed dashes behind a moving body -- the trail the brief rules out. The link to the field is its contraction and snap, and the front leaving its edge at its height |
+| The front becomes the crush | on contact the front stops; the first frame drawn after it shows the FOLD, exactly once (a new part, `fxp_seeker_press_fold`: its wall, keeping the front's mass, collapsing at the creature's middle and curving round into ends bent over and under it), in the front's violet with its edge lit at 0.72 of the arrival rim's light (at the full light its longer edge made it the brightest frame; at 0.55 the darkest), over the arcs' OWN span around the creature's upright middle; the arcs take over the frame after. The light pass knows the fold frame by a frame count (by the playhead, a frozen end-of-wave clock redrew its lit edge every frame) |
+| Forward motion dies | the crush forms WHERE THE FRONT STOPPED (`FoldBackShare` 0.35 of its width behind the stop, the rest over the creature), latched on the first frame after the contact whatever the frame phase, and the arcs only close VERTICALLY (the upper presses down, the lower up); the pixel-hard arcs slid on from the arrival point and drifted with the creature through the hold. Placed from the creature's silhouette, an early first frame used its launch pose and the next its pressed one: a forward lurch, then a snap back (and a double fold) on most 60 fps phases -- the capture's on-tick takes hid it, the fast take showed it |
+| Unchanged | the material, the palette, the field, the crush (30 ms in, 60 hold, x0.81 / x1.09), no push, the brightness (peak 746 px above luma 170, as the approved version), the quiet and yield rules |
+
+Parts regenerated by `seeker_press.py` (front: body, edge, dissolve; fold: body, edge); the approved pixel-hard front
+kept in `tools/asset-pipeline/v2/keypose_sources/history/` (`fxp_seeker_press_wave_pixelhard.png`). Evidence
+`production/qa/evidence/press-propagation/` (`tools/asset-pipeline/press_propagation_evidence.py`); review page https://claude.ai/artifact/2zZPnjMVQqSTtunKw8RxQw.
+Checked over three iterations: four lenses on the first (two REJECT: the fold's reach and snap back, the dim fold, the
+arcs' drift, the front born below the field; the contours: remove), four re-checks on the second (all resolved but a
+phase-dependent lurch, which all four rejected) and two final checks on the pass (ACCEPT WITH NOTES, no must-fix; the
+phase fix resolved at every contact; a frozen-playhead fault they found is fixed). The owner's four questions, answered on
+the page: still a projectile NO, mostly (the approved travel -- one crescent speeding into the hit -- is what remains);
+propagation from the field PARTLY (released by it more than rippling through it); the horizontal -> vertical transition
+YES; as readable as the approved version YES (the lunging creature's snout 60-80 px ahead of the arcs for ~50 ms is the
+cost). Open: that trade (`FoldBackShare`), the lower arc's weaker press (feet planted), the approved speed-up, the fold's
+one-frame bracket-like flip on a still; no sound yet (the pass stops).
 
 ## Context
 

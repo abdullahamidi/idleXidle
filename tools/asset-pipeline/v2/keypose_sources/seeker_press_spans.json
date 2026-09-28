@@ -9,12 +9,18 @@
     192,
     512
   ],
-  "wave_cells": 4,
+  "wave_cells": 3,
   "clamp_cell": [
     512,
     160
   ],
   "clamp_cells": 5,
+  "fold_cell": [
+    512,
+    320
+  ],
+  "fold_cells": 2,
+  "fold_press_y": 96,
   "wave_lead_x": 153.6,
   "clamp_press_y": 127.2
 }

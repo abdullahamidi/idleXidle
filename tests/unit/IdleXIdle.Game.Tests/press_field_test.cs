@@ -59,7 +59,8 @@ public class press_field_test
     public void test_four_pixel_hard_parts_composed_at_runtime_their_cells_pinned()
     {
         Assert.Equal((Press.FieldCell.X, Press.FieldCell.Y), PngSize(Press.FieldKey));
-        Assert.Equal((4 * Press.WaveCell.X, Press.WaveCell.Y), PngSize(Press.WaveKey));        // body, edge, echo, dissolve
+        Assert.Equal((3 * Press.WaveCell.X, Press.WaveCell.Y), PngSize(Press.WaveKey));        // body, edge, dissolve
+        Assert.Equal((2 * Press.FoldCell.X, Press.FoldCell.Y), PngSize(Press.FoldKey));        // the front folding: body, edge
         Assert.Equal((Press.ClampCells * Press.ClampCell.X, Press.ClampCell.Y), PngSize(Press.ClampKey));   // whole + 3 dissolving + edge
         // the chevron accent ("> TARGET <") was removed: read as arrowheads / a lock-on reticle (the brief bans arrows)
         Assert.False(File.Exists(RepoFile("assets", "art", "VFX", "parts", "fxp_seeker_press_crease.png")));
@@ -68,7 +69,9 @@ public class press_field_test
         var spans = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_press_spans.json"))).RootElement;
         Assert.Equal(Press.WaveLeadX, spans.GetProperty("wave_lead_x").GetSingle(), 1);
         Assert.Equal(Press.ClampPressY, spans.GetProperty("clamp_press_y").GetSingle(), 1);
-        Assert.Equal(4, spans.GetProperty("wave_cells").GetInt32());
+        Assert.Equal(3, spans.GetProperty("wave_cells").GetInt32());
+        Assert.Equal(2, spans.GetProperty("fold_cells").GetInt32());
+        Assert.Equal(Press.FoldCell.X, spans.GetProperty("fold_cell")[0].GetInt32());
         Assert.Equal(Press.ClampCells, spans.GetProperty("clamp_cells").GetInt32());
         // PIXEL-HARD (the owner: "too smooth, too soft and too vector-like"): authored at a LOW logical resolution chosen
         // so the drawn pixel lands near the world's (~3 px): the wave at 1/5, the clamp at 1/8; upscaled NEAREST, one source
@@ -83,10 +86,12 @@ public class press_field_test
         Assert.Contains("def erode(", gen);
         Assert.DoesNotContain("def chunks(", gen);
         Assert.Contains("light=EDGE_LIGHT", gen);                          // the clamp's edge cell: a lit line, not a slab
-        // no soft afterimage: one SOLID darker echo a frame behind, and no body glow flattening the value bands
+        // THE FRONT HAS NO HEAD: no pale accent at the middle of its edge (a glowing centre read as a projectile's head)
+        Assert.DoesNotContain("# PEAK accent", gen);
+        Assert.Contains("def fold_bands(", gen);
+        // no soft afterimage, no echo (a trailing copy is a projectile's tail), no body glow flattening the value bands
         Assert.DoesNotContain(typeof(FieldRecipe).GetProperties(), pr => pr.Name.Contains("Afterimage") || pr.Name.Contains("BodyGlow"));
-        Assert.InRange(Press.EchoAlpha, 0.2f, 0.45f);
-        Assert.InRange(Press.EchoLagMs, 10f, 20f);
+        Assert.DoesNotContain(typeof(FieldRecipe).GetProperties(), pr => pr.Name.StartsWith("Echo") || pr.Name.StartsWith("Contour"));
         // one travelling shape, never particles, debris or bullets
         foreach (var banned in new[] { "particle", "debris", "bullet" })
             Assert.DoesNotContain(banned, typeof(FieldRecipe).GetProperties().Select(p => p.Name.ToLowerInvariant()));
@@ -237,15 +242,23 @@ public class press_field_test
         var r = Press;
         var champ = new Rectangle(420, 450, 200, 430);
         var foe = new Rectangle(1060, 690, 220, 190);
-        var (_, arrive) = FieldPerformance.Path(r, champ, foe);
-        // the arcs START where the arriving crescent's tips are (at the target's front, half its arrival height out)...
-        var open = FieldPerformance.ClampPlace(r, champ, foe, 0f);
-        Assert.Equal(arrive, open.Centre);
+        // the arcs START at the arriving crescent's tips' height (half its arrival height out)...
+        var width = r.ClampWidthShare * foe.Width;
+        var open = FieldPerformance.ClampPlace(r, champ, foe, 0f, width);
         Assert.Equal(Math.Min(0.5f * FieldPerformance.WaveHeight(r, 1f, champ.Height, foe.Height), r.ClampStartCap * foe.Height), open.Edge, 1);
         Assert.True(open.Edge <= 0.7f * foe.Height, "the arcs start over the health bars and the dock");
-        // ...and fold over and under its BODY (not its tail, not the next creature), their edges biting into it
-        var shut = FieldPerformance.ClampPlace(r, champ, foe, 1f);
-        Assert.InRange(shut.Centre.X, foe.X + 0.3f * foe.Width, foe.X + 0.55f * foe.Width);
+        // ...and close over and under its BODY (not its tail, not the next creature), their edges biting into it
+        var shut = FieldPerformance.ClampPlace(r, champ, foe, 1f, width);
+        // FORWARD MOTION DIES ON CONTACT: the arcs only close VERTICALLY (sliding on from the arrival, they carried the travel)
+        Assert.Equal(shut.Centre, open.Centre);
+        Assert.True(open.Edge > shut.Edge + 10f, "the arcs do not press");
+        Assert.InRange(shut.Centre.X, foe.X + 0.15f * foe.Width, foe.X + 0.5f * foe.Width);   // its head and shoulders
+        // THE CRUSH FORMS WHERE THE FRONT STOPPED: the arcs' back lies behind the stop (where the front's body was), their far
+        // end over the creature -- whatever the frame phase (placed from the creature's silhouette, an early first frame used
+        // its launch pose, the next its pressed one: a forward lurch and a snap back)
+        var (_, stop) = FieldPerformance.Path(r, champ, foe);
+        Assert.InRange(shut.Centre.X - 0.5f * width, stop.X - 0.5f * width, stop.X - 10f);
+        Assert.True(shut.Centre.X + 0.5f * width > stop.X + 0.3f * width, "the arcs do not reach over the creature");
         Assert.True(shut.Edge < 0.5f * foe.Height, "the shut arcs float off the body");
         Assert.InRange(r.ClampWidthShare, 0.6f, 1.0f);
         // the front leaves from the FIELD's leading edge, in front of the Seeker (the wave visibly leaves the field)
@@ -303,12 +316,13 @@ public class press_field_test
         Assert.DoesNotContain("DrawFlattened(b, flat, FieldRecipe.WaveDissolveCell, champ, foe, Recipe.RimColor", perf);
         // the heat lights the clamp's EDGE cell only, and the front is drawn axis-aligned on whole pixels (turned along its
         // path, the NEAREST grid tilted off the stage's and its rim read as a serrated blade)
-        Assert.Contains("DrawClamps(b, clamp, FieldRecipe.ClampEdgeCell, champ, body, _arcWidth[tick], c, Recipe.ClampHotColor * (flare * Recipe.ClampGlowShare))", perf);
+        Assert.Contains("DrawClamps(b, clamp, FieldRecipe.ClampEdgeCell, champ, body, ArcX(tick, champ, foe), _arcWidth[tick], c,", perf);
+        Assert.Contains("Recipe.ClampHotColor * (flare * Recipe.ClampGlowShare));", perf);
         Assert.DoesNotContain("MathF.Atan2(to.Y - from.Y, to.X - from.X)", perf);
         // the crush re-pins the target's drawn body one frame in (a creature caught in its own lunge is pressed where it is),
         // once: followed frame by frame, the arcs jumped with every lunge frame mid-hold
         Assert.Contains("if (target >= 0 && u >= 0.5f * Recipe.CrushInMs && _crush[tick] is null && TryProbeShares(stage, target, out var now)) _crush[tick] = now;", perf);
-        Assert.Contains("DrawClamps(b, clamp, ClampCellAt(Recipe, u), champ, body, _arcWidth[tick], c, ClampTint(Recipe, u) * (c.Alpha * quiet))", perf);
+        Assert.Contains("DrawClamps(b, clamp, ClampCellAt(Recipe, u), champ, body, ArcX(tick, champ, foe), _arcWidth[tick], c, ClampTint(Recipe, u) * (c.Alpha * quiet))", perf);
         // the arcs' SIZE comes from the silhouette pinned at launch (sized from a lunge's long silhouette, their art pixel
         // grew coarser than the world's); the crush pose only places them, BUCKLED, so they press the body down and touch it
         Assert.Contains("if (_arcWidth[tick] <= 0f) _arcWidth[tick] = foe.Width * Recipe.ClampWidthShare;", perf);
@@ -327,5 +341,59 @@ public class press_field_test
         Assert.Equal(280, buckled.Bottom);                                          // the feet stay on the floor
         Assert.Equal(125, buckled.Center.X);
         Assert.True(buckled.Height < 80 && buckled.Width > 50);
+    }
+
+    [Fact]
+    public void test_the_front_propagates_level_from_the_field_and_folds_into_the_crush()
+    {
+        var r = Press;
+        var champ = new Rectangle(420, 450, 200, 430);
+        var foe = new Rectangle(1060, 690, 220, 190);
+        // A FIELD DISTURBANCE, NOT A PROJECTILE: the front travels LEVEL along the combat axis (never climbing or dipping toward
+        // the target's centre; the target is crushed because the wall reaches where it stands), halfway between the field's
+        // height and the target's: it grows out of the field (at the target's height it was born under the Seeker's belt)
+        var (from, to) = FieldPerformance.Path(r, champ, foe);
+        Assert.Equal(from.Y, to.Y, 3);
+        var fieldY = champ.Y + r.FieldCentre.Y * champ.Height;
+        var targetY = foe.Y + 0.5f * foe.Height;
+        Assert.InRange(to.Y, Math.Min(fieldY, targetY) + 10f, Math.Max(fieldY, targetY) - 10f);
+        // ...and the wall still spans the target it reaches, top to feet
+        var half = 0.5f * FieldPerformance.WaveHeight(r, 1f, champ.Height, foe.Height);
+        Assert.True(to.Y - half <= foe.Y && to.Y + half >= foe.Bottom, "the front passes over or under its target");
+        // NO TAIL, NO CONTOURS: the echo (a trailing copy) and the launch contours (speed dashes on a still, invisible at play
+        // speed) are gone; the front is the only object
+        Assert.DoesNotContain(typeof(FieldRecipe).GetProperties(), pr => pr.Name.StartsWith("Echo") || pr.Name.StartsWith("Contour"));
+        var perf = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "FieldPerformance.cs"));
+        Assert.DoesNotContain("DrawContours(", perf);
+        // THE FRONT BECOMES THE CRUSH: it folds for a frame, the arcs take over after it -- inside the ~30 ms hard crush
+        Assert.False(FieldPerformance.CanFold(r, 0f));                               // the arrival frame: the whole front
+        Assert.True(FieldPerformance.CanFold(r, 1f));                                // an early phase folds too...
+        Assert.True(FieldPerformance.CanFold(r, 1000f / 60f));
+        Assert.False(FieldPerformance.CanFold(r, r.FoldMs + r.CrushInMs + 1f));
+        Assert.True(r.FoldMs < r.CrushInMs, "the fold outlasts the crush's close");
+        Assert.Equal(1f, FieldPerformance.Crush(r, r.FoldMs).Heat, 3);               // the contact accent is hot as the arcs take over
+        Assert.Contains("if (u <= 0f || Yields(tick))", perf);                      // arrived, it does not linger or fade out
+        // ...and a slow frame never skips the fold: the first frame drawn after the contact folds while the crush closes
+        Assert.Contains("if (!Yields(tick) && !_folded[tick] && CanFold(Recipe, u))", perf);      // ...exactly once
+        // the light pass knows the fold frame by a frame count, never by the playhead (frozen at the end of a wave, every
+        // frame matched it and the fold's lit edge was drawn again and again without its body)
+        Assert.Contains("if (_foldedFrame == _frame)", perf);
+        Assert.DoesNotContain("_foldedAt", perf);
+        // the fold is the FRONT (its violet, its weight, its lit edge at the arrival rim's light: never brighter), over the
+        // arcs' OWN span around the creature's upright middle (reaching past them it surged forward and the arcs snapped
+        // back; anchored to the buckle it slid down with it)
+        Assert.Contains("DrawFold(b, fold, FieldRecipe.FoldBodyCell, stage, tick, target, champ, foe, Recipe.WaveColor * (Recipe.WaveArriveAlpha * quiet));", perf);
+        Assert.Contains("Recipe.RimColor * (Recipe.WaveArriveAlpha * Recipe.WaveGlowShare * Recipe.FoldGlowShare * quiet));", perf);
+        Assert.InRange(r.FoldGlowShare, 0.3f, 0.8f);                               // lit like the front, never brighter
+        Assert.Contains("var x = (int)MathF.Round(ArcX(tick, champ, foe) - 0.5f * w);", perf);
+        Assert.Contains("var mid = (int)MathF.Round(upright.Y + 0.5f * upright.Height);", perf);
+        // FORWARD MOTION DIES ON CONTACT: the arcs' centre is latched once the creature is pinned as it is pressed
+        Assert.Contains("if (u > 0f && float.IsNaN(_arcX[tick])) _arcX[tick] = ClampPlace(Recipe, champ, foe, 1f, _arcWidth[tick]).Centre.X;", perf);
+        // the level axis never leaves a short creature's head or feet outside the arriving wall
+        var shortFoe = new Rectangle(1060, 800, 120, 80);
+        var (low, lowTo) = FieldPerformance.Path(r, champ, shortFoe);
+        var lowHalf = 0.5f * FieldPerformance.WaveHeight(r, 1f, champ.Height, shortFoe.Height);
+        Assert.True(lowTo.Y - lowHalf <= shortFoe.Y && lowTo.Y + lowHalf >= shortFoe.Bottom, "the wall passes over a short creature");
+        Assert.Equal(low.Y, lowTo.Y, 3);
     }
 }

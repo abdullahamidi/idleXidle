@@ -14,9 +14,14 @@ edges inward, keeps a few large fragments and lets them fall a pixel a step. Onl
 quiet on purpose, and the tick is the hard beat.
 
     fxp_seeker_press_field   the quiet field around the Seeker (soft): a haze leaning toward the enemy side
-    fxp_seeker_press_wave    the pressure FRONT, four cells: BODY (every band), EDGE (the edge and the accent only, for the
-                             light pass), ECHO (one solid darker copy of the shape, no mask), DISSOLVE (eroded into a few
-                             fragments as it collapses into the crush)
+    fxp_seeker_press_wave    the pressure FRONT, three cells: BODY (every band), EDGE (the lit edge only, for the light
+                             pass), DISSOLVE (eroded into a few fragments, when it gives way to a reaction). No glowing
+                             centre, no echo: a head, a core or a trailing copy reads as a projectile (the
+                             field-vs-projectile polish; the launch contours tried then read as speed dashes and went too)
+    fxp_seeker_press_fold    the front FOLDING into the crush (one frame), two cells: BODY and EDGE (its lit inner edge, for
+                             the light pass: the fold is lit like the front it is). Its wall collapsing at the target's
+                             face, its ends bent over the target (drawn flipped below it too), over the arcs' own span --
+                             the wavefront visibly becomes the arcs, in place
     fxp_seeker_press_clamp   the CRUSH arc pressing down (flipped below the target), five cells: whole, three erosion
                              states for its release, and EDGE (the pressing edge and the contact accent only, for the
                              light pass: the tick's heat lights a line, never the arc's body -- the whole arc lit pale
@@ -41,6 +46,8 @@ SRC = os.path.join(HERE, "keypose_sources")
 WAVE_LOW = 5             # the wave's logical pixel: 1/5 of its runtime cell
 CLAMP_LOW = 8            # the clamp's logical pixel: 1/8 of its runtime cell
 FW, FH = 320, 448        # the field (soft)
+GW, GH = 512, 320        # the fold, per cell (runtime), at the clamp's logical resolution (drawn at the clamp's scale)
+GSPINE, GPRESS = 11, 12  # the fold's wall: its inner edge's x at the middle, and the arm's pressing edge (logical px)
 WW, WH = 192, 512        # the wave, per cell (runtime)
 CW, CH = 512, 160        # the clamp, per cell (runtime)
 
@@ -133,8 +140,9 @@ def field():
 def wave_bands():
     """The pressure front at its logical resolution, facing RIGHT: an arc of a circle centred far to its left; its
     leading edge UNDER STRESS (five segments stepped a pixel apart, two notches); behind it the bands: a 1-2 px lavender
-    edge, the violet mass, the dark body (solid, its back edge cut by two deliberate notches, never a random grain);
-    the pale-hot accent a few pixels at the middle of the edge."""
+    edge, the violet mass, the dark body (solid, its back edge cut by two deliberate notches, never a random grain).
+    NO pale accent at the middle of the edge: a glowing centre gives the wall a head (a projectile's), and the contact
+    accent lives on the crush's pressing edge."""
     low = WAVE_LOW
     w, h = lw(WW, low), lw(WH, low)
     s = 4.0 / low                                                   # a 1/4-design pixel in logical pixels
@@ -157,16 +165,60 @@ def wave_bands():
     bands = np.where(inside & (depth >= 0.5 * thick), 1, bands)                        # DARK body (solid)
     bands = np.where(inside & (depth >= 1.2 * s) & (depth < 0.5 * thick), 2, bands)     # MID violet mass
     bands = np.where(inside & (depth < 1.2 * s), 3, bands)                             # LIGHT edge
-    bands = np.where(inside & (depth < 0.9 * s) & (np.abs(q) < 0.12), 4, bands)         # PEAK accent
     return bands
 
 
 def wave_cells():
     bands = wave_bands()
     edge = np.where(bands >= 3, bands, 0)
-    echo = np.where(bands > 0, 1, 0)                                # ONE solid darker copy of the shape, no mask
     dis = dissolve(bands, steps=1, salt=13, holes=0.10, fall=1)
-    return [to_image(x, WAVE_LOW, (WW, WH)) for x in (bands, edge, echo, dis)]
+    return [to_image(x, WAVE_LOW, (WW, WH)) for x in (bands, edge, dis)]
+
+
+def fold_bands():
+    """THE FOLD, the upper piece (drawn flipped for the lower one): the FRONT ITSELF bending over the target -- its wall,
+    still bowed toward the Seeker like the crescent, curves all the way round (a quarter ellipse, never a square
+    bracket: a straight spine with a corner read as a "[" selection mark) into an ARM pressing down over the target (its
+    lavender edge underneath, the violet mass, the dark wake outside, bowed a little toward the body like the crush
+    arcs). At the target's middle the wall is COLLAPSING (eroded, a few holes): it is becoming the arcs. It spans the arcs'
+    own width (its back at their left end, its ends at their right end: reaching past them, the fold surged forward and
+    the arcs snapped back), and its wall keeps the front's mass (a thin line read as the front vanishing). Logical grid:
+    the clamp's (1/CLAMP_LOW)."""
+    low = CLAMP_LOW
+    w, h = lw(GW, low), lw(GH, low)
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32) + 0.5
+    xsp, ye0 = float(GSPINE), float(GPRESS)
+    R, Ry = 20.0, h - ye0                                          # the wall's curve: from the middle round to the arm
+    cx, cy = xsp + R, float(h)
+    dx, dy = (xs - cx) / R, (ys - cy) / Ry
+    e = np.hypot(dx, dy)
+    grad = np.hypot(dx / R, dy / Ry) / np.maximum(e, 1e-6)
+    s = np.clip((np.arctan2(dy, dx) + np.pi) / (np.pi / 2), 0, 1)  # 0 at the middle (the wall), 1 at the top (the arm)
+    u = np.clip((xs - cx) / (w - cx), 0, 1)                        # along the arm
+    ye = ye0 + 2.0 * np.sin(np.pi * u)                            # the arm bows toward the body
+    arm = xs >= cx
+    depth = np.where(arm, ye - ys, (e - 1) / np.maximum(grad, 1e-6))
+    thick = np.where(arm, 6.0 * np.clip(1 - u ** 3, 0.15, 1) + 1, 10.0 - 3.0 * s)   # the wall keeps the front's mass
+    inside = (depth >= 0) & (depth < thick) & (xs < w - 1)
+    bands = np.zeros((h, w), np.int32)
+    bands = np.where(inside & (depth >= 0.55 * thick), 1, bands)
+    bands = np.where(inside & (depth >= 1.0) & (depth < 0.55 * thick), 2, bands)
+    bands = np.where(inside & (depth < 1.0), 3, bands)
+    # the wall collapses at the target's middle: a few large holes, its last rows already gone
+    wall = ~arm & (s < 0.4)
+    rng = np.random.default_rng(20260929)
+    holes = np.zeros((h, w), bool)
+    for _ in range(7):
+        y0, x0 = rng.integers(int(cy - 0.4 * Ry), h), rng.integers(int(xsp - 9), int(xsp + 1))
+        holes[max(0, y0 - 1):y0 + 2, max(0, x0 - 1):x0 + 2] = True
+    bands = np.where(wall & holes, 0, bands)
+    bands = np.where(~arm & (ys > h - 2), 0, bands)
+    return bands
+
+
+def fold_cells():
+    bands = fold_bands()
+    return [to_image(x, CLAMP_LOW, (GW, GH)) for x in (bands, np.where(bands >= 3, bands, 0))]
 
 
 def clamp_bands():
@@ -216,24 +268,27 @@ def main():
     f = field()
     w = strip(wave_cells())
     c = strip(clamp_cells())
-    assert w.size == (WW * 4, WH) and c.size == (CW * 5, CH), (w.size, c.size)
+    g = strip(fold_cells())
+    assert w.size == (WW * 3, WH) and c.size == (CW * 5, CH) and g.size == (GW * 2, GH), (w.size, c.size, g.size)
     out = sys.argv[1] if len(sys.argv) > 1 else OUT
     os.makedirs(out, exist_ok=True)
     f.save(os.path.join(out, "fxp_seeker_press_field.png"))
     w.save(os.path.join(out, "fxp_seeker_press_wave.png"))
     c.save(os.path.join(out, "fxp_seeker_press_clamp.png"))
+    g.save(os.path.join(out, "fxp_seeker_press_fold.png"))
     if out != OUT:
         print("wrote the PRESS parts (preview) to", out)
         return
     spans = {
         "wave_logical_resolution": WAVE_LOW, "clamp_logical_resolution": CLAMP_LOW,
-        "field_cell": [FW, FH], "wave_cell": [WW, WH], "wave_cells": 4, "clamp_cell": [CW, CH], "clamp_cells": 5,
+        "field_cell": [FW, FH], "wave_cell": [WW, WH], "wave_cells": 3, "clamp_cell": [CW, CH], "clamp_cells": 5,
+        "fold_cell": [GW, GH], "fold_cells": 2, "fold_press_y": GPRESS * CLAMP_LOW,
         "wave_lead_x": round(WW * 0.80, 1),                      # the leading edge's x at the middle of a wave cell
         "clamp_press_y": round(CH * 0.52 + CLAMP_BOW * 4.0, 1),  # the pressing edge's y at the middle of the clamp
     }
     with open(os.path.join(SRC, "seeker_press_spans.json"), "w", encoding="utf-8") as fh:
         json.dump(spans, fh, indent=2)
-    sheet([("field", f), ("wave", w), ("clamp", c)], os.path.join(SRC, "seeker_press_sheet.png"))
+    sheet([("field", f), ("wave", w), ("clamp", c), ("fold", g)], os.path.join(SRC, "seeker_press_sheet.png"))
     print("wrote the PRESS parts and", os.path.join(SRC, "seeker_press_spans.json"), spans)
 
 

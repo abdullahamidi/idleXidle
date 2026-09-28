@@ -23,8 +23,8 @@ namespace IdleXIdle.Game.Presentation;
 /// the field is quiet again).
 /// </para>
 /// <para>
-/// THREE PARTS, composed at runtime (tools/asset-pipeline/v2/seeker_press.py): the field haze, the pressure front
-/// (crisp and softened: the softened cell trails it as its afterimage) and the clamp arc. All white or grey and tinted
+/// FOUR PARTS, composed at runtime (tools/asset-pipeline/v2/seeker_press.py): the field haze, the pressure front, the fold
+/// (the front becoming the crush) and the clamp arc. All white or grey and tinted
 /// here along the Seeker's Shadow palette (lavender, violet, a pale hot edge), after the material discipline of JAWS.
 /// </para>
 /// <para>
@@ -46,15 +46,53 @@ public sealed class FieldRecipe
     public Point FieldCell { get; init; } = new(320, 448);
 
     /// <summary>
-    /// The pressure FRONT, facing the enemy side, in four cells (PIXEL-HARD, authored at a fifth of its cell's resolution
-    /// and upscaled NEAREST, in value bands; drawn axis-aligned on whole pixels, a rotated grid read as a serrated blade): <see cref="WaveBodyCell"/>, <see cref="WaveEdgeCell"/> (the light pass: the edge and its
-    /// accent only), <see cref="WaveEchoCell"/> (a broken darker echo; the soft afterimage read as a motion-blurred ghost)
-    /// and <see cref="WaveDissolveCell"/> (losing cohesion as it collapses into the crush).
+    /// The pressure FRONT, a broad wall facing the enemy side, in three cells (PIXEL-HARD, authored at a fifth of its cell's
+    /// resolution and upscaled NEAREST, in value bands; drawn axis-aligned on whole pixels, a rotated grid read as a
+    /// serrated blade): <see cref="WaveBodyCell"/>, <see cref="WaveEdgeCell"/> (the light pass: the lit edge only) and
+    /// <see cref="WaveDissolveCell"/> (losing cohesion as it gives way to a reaction). It has NO head, core, glowing centre
+    /// or trailing copy (a pale accent at the middle of its edge gave the wall a projectile's head; the one-frame echo was a
+    /// projectile's tail; launch contours tried behind it read as speed dashes).
     /// </summary>
     public string WaveKey { get; init; } = "fxp_seeker_press_wave";
 
     /// <inheritdoc cref="WaveKey"/>
-    public const int WaveBodyCell = 0, WaveEdgeCell = 1, WaveEchoCell = 2, WaveDissolveCell = 3;
+    public const int WaveBodyCell = 0, WaveEdgeCell = 1, WaveDissolveCell = 2;
+
+    /// <summary>
+    /// THE FOLD: the front becoming the crush -- its wall, collapsing at the target's middle, curving round into ends bent
+    /// over the target (drawn flipped below it too), over the arcs' OWN span (its back at their left end, its ends at their
+    /// right end: reaching past them, the fold surged forward and the arcs snapped back). Two cells, body and
+    /// <see cref="FoldEdgeCell"/> (its lit edge, in the light pass: lit like the front it is; unlit it was the phrase's
+    /// dimmest frame); at the clamp's logical resolution and drawn at the clamp's scale.
+    /// </summary>
+    public string FoldKey { get; init; } = "fxp_seeker_press_fold";
+
+    /// <inheritdoc cref="FoldKey"/>
+    public Point FoldCell { get; init; } = new(512, 320);
+
+    /// <inheritdoc cref="FoldKey"/>
+    public const int FoldBodyCell = 0, FoldEdgeCell = 1;
+
+    /// <summary>
+    /// The fold's lit edge, a share of the arrival rim's light: its edge runs the whole C (wall and both ends), longer than
+    /// the front's rim, and at the rim's own light the fold was the phrase's brightest frame (a flash by another name).
+    /// </summary>
+    public float FoldGlowShare { get; init; } = 0.72f;
+
+    /// <summary>
+    /// THE LEVEL AXIS the front propagates along: this share of the way from the FIELD's middle height (0) to the target's
+    /// middle height (1). Level, never steered at the target; halfway, so the wall grows out of the field (at the target's
+    /// height it was born under the Seeker's belt, below the field) and still spans the target it reaches.
+    /// </summary>
+    public float WaveAxisShare { get; init; } = 0.5f;
+
+    /// <summary>
+    /// The fold shows from the tick to this ms (one frame at 60 fps): the wavefront -> the contact -> the compression is ONE
+    /// continuous transformation, not a wave that vanishes while a crush pops in; the arcs take over after it. A slow frame
+    /// never skips it: the first frame drawn after the contact folds while the crush is still closing (a capture that
+    /// dropped the +17 ms frame showed the front simply replaced by the arcs).
+    /// </summary>
+    public float FoldMs { get; init; } = 24f;
 
     /// <inheritdoc cref="WaveKey"/>
     public Point WaveCell { get; init; } = new(192, 512);
@@ -160,15 +198,6 @@ public sealed class FieldRecipe
     /// </summary>
     public float TravelEasePower { get; init; } = 1.8f;
 
-    /// <summary>
-    /// The ECHO: one solid darker copy of the front a frame behind it (the pixel-art smear; a masked, broken echo read as
-    /// grain), how far behind (ms of travel) and how strong.
-    /// </summary>
-    public float EchoLagMs { get; init; } = 17f;
-
-    /// <inheritdoc cref="EchoLagMs"/>
-    public float EchoAlpha { get; init; } = 0.25f;
-
     /// <summary>The front collapses into the crush over this long after arriving, losing cohesion in pixel chunks.</summary>
     public float WaveCollapseMs { get; init; } = 34f;
 
@@ -187,7 +216,7 @@ public sealed class FieldRecipe
     // ── D · THE CRUSH (ms after the tick) ──
 
     /// <summary>
-    /// THE CRUSH IS MADE OF THE FRONT: the arcs start where the arriving crescent's tips are (half its arrival height from
+    /// THE CRUSH IS MADE OF THE FRONT (through <see cref="FoldKey"/>): the arcs start where the arriving crescent's tips are (half its arrival height from
     /// the target's middle, at the target's front) and fold over and under the target, pressing in until their edges
     /// bite into its drawn silhouette (<see cref="ClampShutShare"/>) as it BUCKLES (placed on the buckled body, they press it
     /// down with it and touch it; placed on the upright one, they hovered 35-40 px off a crouched creature). A wave that
@@ -204,15 +233,17 @@ public sealed class FieldRecipe
     /// <summary>
     /// The arcs' width as a share of the target's drawn width AT LAUNCH (its pose then, before any lunge of its own): the arcs'
     /// size and art pixel never follow the pose (sized from a lunge's long silhouette they grew coarser than the world's
-    /// pixel); where they press follows it (<see cref="ClampCentreShare"/>).
+    /// pixel); where they press is where the front stopped (<see cref="FoldBackShare"/>).
     /// </summary>
     public float ClampWidthShare { get; init; } = 0.85f;
 
     /// <summary>
-    /// Where the shut arcs are centred, from the target's front, as a share of its drawn width as it is pressed (its head and
-    /// shoulders, never its tail: further back, their tip lay on the next creature's head in the row).
+    /// THE CRUSH FORMS WHERE THE FRONT STOPPED: this share of the fold's and the arcs' width lies BEHIND the front's stop (their
+    /// back where the front's body was), the rest over the creature's head and shoulders -- latched on the first frame after
+    /// the contact, whatever the frame phase and whatever the creature does next. Placed from the creature's silhouette, an
+    /// early first frame used its launch pose and the next its pressed one: a forward lurch, then a snap back.
     /// </summary>
-    public float ClampCentreShare { get; init; } = 0.33f;
+    public float FoldBackShare { get; init; } = 0.35f;
 
     /// <summary>The arcs press in over this long, hold, and let go (then fade by <see cref="EndMs"/>).</summary>
     public float CrushInMs { get; init; } = 30f;
