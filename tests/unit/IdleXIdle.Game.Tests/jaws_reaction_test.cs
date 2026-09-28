@@ -612,20 +612,30 @@ public class JawsReactionTest
         Assert.DoesNotContain("sfx_seeker_jaws_snap", Jaws.SnapCues);    // the dry-steel clack belonged to the rejected trap
         Assert.DoesNotContain("sfx_seeker_jaws_chomp", Jaws.SnapCues);   // the chomp belonged to the rejected piranha
         Assert.InRange(Jaws.SnapVolume, 0.25f, 0.5f);                    // quiet enough to repeat
-        Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_bite.wav")));
-        // a BITE in the ear, in a mouth's order: the teeth meet (two clacks), sink in (the crunch grains, the wet give),
-        // the jaw's weight; and ONE bite: every layer starts inside the first ~50 ms (nothing after it but decays)
-        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "make_action_sfx.py"));
-        var bite = gen[gen.IndexOf("def _bite(", StringComparison.Ordinal)..];
-        bite = bite[..bite.IndexOf("\ndef ", StringComparison.Ordinal)];
-        Assert.Contains("THE TEETH MEET", bite);
-        Assert.Contains("crunch(", bite);
-        Assert.Contains("sweep_bp(", bite);
-        Assert.Contains("thump(", bite);
-        var a = gen[gen.IndexOf("def jaws_bite(", StringComparison.Ordinal)..];
-        a = a[..a.IndexOf("\ndef ", StringComparison.Ordinal)];
-        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(a, @"\((0\.\d+), 0\.\d+\)"))
-            Assert.True(float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) <= 0.05f, $"a second bite at {m.Value}");
+        var wav = RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_bite.wav");
+        Assert.True(File.Exists(wav));
+        // a REAL bite (the owner: "like Trundle's Q"): built from recorded foley, one dense block of ~0.5 s (the
+        // synthesised bites were ~180 ms thuds), its onset on the snap
+        var bytes = File.ReadAllBytes(wav);
+        var rate = BitConverter.ToInt32(bytes, 24);
+        var dataAt = 12;
+        while (System.Text.Encoding.ASCII.GetString(bytes, dataAt, 4) != "data") dataAt += 8 + BitConverter.ToInt32(bytes, dataAt + 4);
+        var samples = BitConverter.ToInt32(bytes, dataAt + 4) / 2;
+        Assert.InRange(samples / (float)rate, 0.45f, 0.65f);
+        var onset = Enumerable.Range(0, samples).First(i => Math.Abs(BitConverter.ToInt16(bytes, dataAt + 8 + 2 * i)) > 32768 * 0.03);
+        Assert.True(onset < rate / 100, $"the bite starts {onset * 1000f / rate:0} ms after the snap");
+        // the sources are REAL recordings, every one CC0, each excerpt on disk; the builder never reads the reference
+        var foley = RepoFile("tools", "asset-pipeline", "foley", "jaws_bite");
+        var sources = File.ReadAllText(Path.Combine(foley, "SOURCES.md"));
+        Assert.Contains("CC0 1.0", sources);
+        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "make_jaws_bite.py"));
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(gen, @"^    \(""(\w+)"", ""(freesound|other)/", System.Text.RegularExpressions.RegexOptions.Multiline))
+        {
+            Assert.True(File.Exists(Path.Combine(foley, m.Groups[1].Value + ".wav")), $"the excerpt {m.Groups[1].Value} is missing");
+            Assert.Contains($"`{m.Groups[1].Value}.wav`", sources);
+        }
+        Assert.DoesNotContain("bite_ref", gen);
+        Assert.DoesNotContain("Trundle_", gen);
     }
 
     [Fact]

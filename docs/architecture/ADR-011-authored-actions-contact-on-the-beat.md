@@ -65,7 +65,19 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", its smoke-teeth picture APPROVED by the owner 2026-09-28; the cue made a BITE, awaiting the owner's ear)
+## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", its smoke-teeth picture APPROVED by the owner 2026-09-28; the cue a REAL bite from recorded foley, awaiting the owner's ear)
+
+**The cue is a REAL bite (the owner, 2026-09-28).** The owner rejected the three synthesised bites: "all similar; I
+meant a real bite, like the sound when Trundle bites with his Q in League of Legends." That reference was measured
+locally (analysis only; Riot's audio is never sampled, shipped or committed): one dense ~500 ms block, a chewing tear
+first (4-5 bursts), a pitch-dropping sub second (the loudest band), wet resonances, cartilage ticks; 47 % of the energy
+below 150 Hz and ~32 % above 2 kHz (the synthesised bites: 77 % and 1.6 %, a thud). `sfx_seeker_jaws_bite` is now built
+by `tools/asset-pipeline/make_jaws_bite.py` from 14 CC0 recordings (`tools/asset-pipeline/foley/jaws_bite/SOURCES.md`);
+only the sub and the wet resonances are synthesised; A matches the reference within ±5 dB per band and 50 ms almost
+everywhere. Candidates A CHOMP (in the game), B BONE, C JUICY. A two-lens measurement QA found and the build fixed
+aliasing, true-peak overshoot, dead-cut subs, splice clicks, a thrice-played transient, an "808" sine, empty mids, ticks
+on silence and a late onset. The rejected cues moved to `tools/asset-pipeline/audio_history/`. Evidence
+`production/qa/evidence/jaws-real-bite/`; review page https://claude.ai/artifact/6tP43HjDMCtfKGWeHzHCRu. Awaiting the owner's ear.
 
 **The picture APPROVED; the cue made a BITE (the owner, 2026-09-28).** The owner on the smoke teeth: "This version is
 very nice, I approve it. Finally, if you make the sound effect more of a bite / being-bitten sound, we approve this

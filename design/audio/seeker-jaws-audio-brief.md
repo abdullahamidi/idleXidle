@@ -1,23 +1,26 @@
 # Audio brief: the Seeker's JAWS (the reaction's one cue)
 
-> **Status (2026-09-28): the picture is APPROVED by the owner; the cue is `sfx_seeker_jaws_bite`, a BITE** (the owner:
-> "make the sound effect more of a bite / being-bitten sound, and we approve this skill completely"). Candidate A
-> (CHOMP) is in the game; B (CRUNCH) and C (HEAVY) wait in `production/qa/evidence/jaws-bite-sound/candidates/` for the
-> owner's ear (review page https://claude.ai/artifact/UyNseCpfkpYrHioX4P5ucX). The thorn impact `sfx_seeker_jaws_fangs`, the trap's clack and the piranha's
-> chomp are history and no longer played.
+> **Status (2026-09-28): the picture is APPROVED; the cue is a REAL BITE built from recorded foley.** The owner rejected
+> the three synthesised bites ("all similar; I want a real bite, like Trundle's Q (Chomp) in League of Legends").
+> `sfx_seeker_jaws_bite` is now built by `tools/asset-pipeline/make_jaws_bite.py` from CC0 recordings
+> (`tools/asset-pipeline/foley/jaws_bite/SOURCES.md`), shaped to the measured structure of that reference (analysed
+> locally only; never sampled or shipped). Candidate A (CHOMP) is in the game; B (BONE) and C (JUICY) wait in
+> `production/qa/evidence/jaws-real-bite/candidates/` for the owner's ear (review page https://claude.ai/artifact/6tP43HjDMCtfKGWeHzHCRu). The rejected cues
+> (the trap's clack, the piranha's chomp, the thorn impact) are in `tools/asset-pipeline/audio_history/`; the
+> synthesised bites in `production/qa/evidence/jaws-bite-sound/candidates/`.
 
-## The bite (`_bite`, `jaws_bite`), in a mouth's order
+## The real bite (`make_jaws_bite.py`, candidate A), in a mouth's order
 
-| Layer | What | Why |
+| Phase | ms | What (real = a CC0 recording) |
 |---|---|---|
-| the teeth MEET | two enamel clacks 4 ms apart (a 1.4 ms click at 3 kHz, a resonance at 2.6 kHz ×1, 1.52, 2.31 dying inside ~4 ms, a small 1.3 kHz body) | the upper row, then the lower: two hard small contacts, never steel |
-| they SINK IN | five saturated crunch grains over ~40 ms (380–2400 Hz), each quieter than the last | teeth going through hide |
-| the wet give | a band falling 1500 → 420 Hz, ~25 ms | flesh, not wood |
-| the JAW'S WEIGHT | a short thud 165 → 88 Hz, ~30 ms | the force of a jaw, not a skull |
-| the Shadow | a dark tone squeezed 700 → 120 Hz, far under everything | the supernatural, a whisper |
+| teeth + TEAR | 0-200 | a real enamel snap; real cabbage and flesh crunch in five chewing bursts (un-gridded), a crescendo into the weight |
+| WEIGHT | ~150-400 | a sub 170 -> 60 -> 35 Hz, alive (jitter, shimmer, one re-strike of the same oscillator); a real meat thud; a real gore and heart low body |
+| grind | 150-430 | real pepper and cabbage crunch still grinding under the weight in sparser bursts |
+| WET | 35, 140, 235 | noise-excited resonances at 1000, 950, 840 Hz, each falling ~7 %; a real heart squelch |
+| TAIL | 300-560 | a real crunch bed (2-16 kHz) decaying under four cartilage ticks |
 
-One bite: every layer starts inside the first ~50 ms. 180 ms, peak −9.4 dB, RMS −23.3 dB, centroid 1476 Hz, decay20
-74 ms: fuller than the thorn impact (−30.3 dB RMS), lighter than the HARD HANDS blow (−21.1 dB).
+~580 ms; 47 % of the energy below 150 Hz, 31 % above 2 kHz, peak-to-RMS over the loudest 300 ms 8.8 dB (the reference:
+47 %, ~32 %, 8-9.3 dB). Volume 0.42: about the loudness of the HARD HANDS blow.
 
 ## What JAWS is, to the ear
 
@@ -65,5 +68,6 @@ gameplay event, a small sound.
 - 2026-09-27: the mechanical fantasy rejected; the cue became a small supernatural chomp (three bites with two baked
   ticks, then one bite).
 - 2026-09-27: the piranha rejected; the cue is one Shadow bite / thorn impact on the fangs' snap.
-- 2026-09-28: the frontal smoke-teeth picture APPROVED; the owner asked for "more of a bite sound": the cue is
-  `sfx_seeker_jaws_bite` (teeth meet, sink in, the jaw's weight), three candidates.
+- 2026-09-28: the frontal smoke-teeth picture APPROVED; the owner asked for "more of a bite sound": three
+  synthesised bites (teeth meet, sink in, the jaw's weight), all rejected ("all similar; a real bite, like Trundle's Q").
+- 2026-09-28: the cue is a REAL bite from CC0 foley, shaped to the measured reference; candidates A CHOMP, B BONE, C JUICY.

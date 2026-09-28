@@ -33,11 +33,10 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        strain (three small link ticks). One cue for the whole reaction, right after the
                                        enemy's bite thud: BITE -> tiny release -> CLACK. No crunch, no bone, no thump.
 
-    sfx_seeker_jaws_bite         ~0.18 s  THE BITE (2026-09-28, the owner approved the smoke-teeth picture: "make the sound
-                                       more of a bite"): the teeth MEET (two enamel clacks, 4 ms apart), SINK IN (a
-                                       granular crunch and a short wet squish), and the JAW'S WEIGHT (a short low thud),
-                                       a whisper of Shadow under it. ONE bite, on the snap. Candidates B (CRUNCH) and C
-                                       (HEAVY) are written to production/qa/evidence/jaws-bite-sound/candidates/.
+    sfx_seeker_jaws_bite_synth   ~0.18 s  history: the SYNTHESISED bite (2026-09-28): two enamel clacks, a granular crunch,
+                                       a wet squish, a short jaw thud. The owner rejected it and its two siblings ("all
+                                       similar; I want a REAL bite, like Trundle's Q"): the live `sfx_seeker_jaws_bite` is
+                                       built from REAL foley by make_jaws_bite.py. Written to the candidates folder only.
 
     sfx_seeker_jaws_fangs        ~0.13 s  history: SHADOW FANGS (2026-09-27): ONE dark, dry, sharp, short
                                        Shadow bite / thorn impact, its transient exactly on the fangs' SNAP: a dry click and
@@ -204,6 +203,7 @@ def jaws_fangs(buf):
 
 
 BITE_CANDIDATES = os.path.join(S.REPO, "production", "qa", "evidence", "jaws-bite-sound", "candidates")
+AUDIO_HISTORY = os.path.join(HERE, "audio_history")   # JAWS cues the owner rejected: kept, never played, not game assets
 
 
 def _bite(buf, seed, clack_hz, clack_gain, grains, crunch_hi, squish, weight, whisper=0.05):
@@ -262,19 +262,21 @@ def main() -> int:
     S.make("sfx_seeker_spray_tick", S.COMBAT_DIR, 0.10, spray_tick, target_peak=0.30, max_ms=120.0, darken=8000.0)
     S.make("sfx_seeker_hard_hands_commit", S.COMBAT_DIR, 0.20, hard_hands_commit, target_peak=0.24, max_ms=220.0, darken=5000.0)
     S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
-    S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)   # history: the rejected trap's clack
-    S.make("sfx_seeker_jaws_chomp", S.COMBAT_DIR, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)   # history: the rejected piranha's chomp
-    S.make("sfx_seeker_jaws_fangs", S.COMBAT_DIR, 0.13, jaws_fangs, target_peak=0.32, max_ms=150.0, darken=6500.0)   # history: the thorn impact
-    S.make("sfx_seeker_jaws_bite", S.COMBAT_DIR, 0.18, jaws_bite, target_peak=0.34, max_ms=200.0, darken=7000.0)
+    S.make("sfx_seeker_jaws_snap", AUDIO_HISTORY, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)   # history: the rejected trap's clack
+    S.make("sfx_seeker_jaws_chomp", AUDIO_HISTORY, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)   # history: the rejected piranha's chomp
+    S.make("sfx_seeker_jaws_fangs", AUDIO_HISTORY, 0.13, jaws_fangs, target_peak=0.32, max_ms=150.0, darken=6500.0)   # history: the thorn impact
+    S.make("sfx_seeker_jaws_bite_synth", BITE_CANDIDATES, 0.18, jaws_bite, target_peak=0.34, max_ms=200.0, darken=7000.0)   # history
     S.make("sfx_seeker_jaws_bite_crunch", BITE_CANDIDATES, 0.18, jaws_bite_crunch, target_peak=0.34, max_ms=200.0, darken=8000.0)
     S.make("sfx_seeker_jaws_bite_heavy", BITE_CANDIDATES, 0.20, jaws_bite_heavy, target_peak=0.34, max_ms=220.0, darken=6000.0)
     print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
-    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_bite", "sfx_seeker_jaws_fangs", "sfx_seeker_jaws_chomp",
-                 "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_seeker_jaws_snap", "sfx_cast", "sfx_hit"):
+    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick",
+                 "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_cast", "sfx_hit"):
         m = S.measure(os.path.join(S.COMBAT_DIR, name + ".wav"))
         print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
-    for name in ("sfx_seeker_jaws_bite_crunch", "sfx_seeker_jaws_bite_heavy"):
-        m = S.measure(os.path.join(BITE_CANDIDATES, name + ".wav"))
+    history = [(AUDIO_HISTORY, k) for k in ("sfx_seeker_jaws_fangs", "sfx_seeker_jaws_chomp", "sfx_seeker_jaws_snap")]
+    rejected = [(BITE_CANDIDATES, k) for k in ("sfx_seeker_jaws_bite_synth", "sfx_seeker_jaws_bite_crunch", "sfx_seeker_jaws_bite_heavy")]
+    for d, name in history + rejected:
+        m = S.measure(os.path.join(d, name + ".wav"))
         print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
     return 0
 

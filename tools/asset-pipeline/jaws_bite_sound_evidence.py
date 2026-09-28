@@ -30,7 +30,9 @@ def main() -> int:
     n = lambda k: os.path.join(NEW, k)      # noqa: E731
     crunch = os.path.join(cands, "sfx_seeker_jaws_bite_crunch.wav")
     heavy = os.path.join(cands, "sfx_seeker_jaws_bite_heavy.wav")
-    film(b("normal"), f"{out}/01_before_thorn_impact_sound.mp4", "BEFORE: the old cue, a dark thorn impact")
+    fangs = os.path.join(REPO, "tools", "asset-pipeline", "audio_history", "sfx_seeker_jaws_fangs.wav")
+    film(b("normal"), f"{out}/01_before_thorn_impact_sound.mp4", "BEFORE: the old cue, a dark thorn impact",
+         "--cue", f"sfx_seeker_jaws_fangs={fangs}")
     film(n("normal"), f"{out}/02_A_chomp_sound.mp4", "A CHOMP (in the game): teeth meet, sink in, the jaw's weight")
     film(n("normal"), f"{out}/03_B_crunch_sound.mp4", "B CRUNCH: biting through, crunchier, a lighter jaw", "--cue", f"{CUE}={crunch}")
     film(n("normal"), f"{out}/04_C_heavy_sound.mp4", "C HEAVY: a beast's jaws, deeper, fewer crunch grains", "--cue", f"{CUE}={heavy}")
@@ -38,8 +40,9 @@ def main() -> int:
     film(n("during_hh"), f"{out}/06_A_during_hard_hands_sound.mp4", "A during HARD HANDS")
     film(n("fast_rearm"), f"{out}/07_A_repeated_fast_tempo_sound.mp4", "A repeated at fast TEMPO (one picture per 3 frames)")
     # the cues on their own, for listening without the fight
-    for name in ("sfx_seeker_jaws_bite", "sfx_seeker_jaws_fangs"):
-        shutil.copy(os.path.join(COMBAT, name + ".wav"), os.path.join(out, name + ".wav"))
+    shutil.copy(os.path.join(cands, "sfx_seeker_jaws_bite_synth.wav"), os.path.join(out, "sfx_seeker_jaws_bite.wav"))
+    shutil.copy(os.path.join(REPO, "tools", "asset-pipeline", "audio_history", "sfx_seeker_jaws_fangs.wav"),
+                os.path.join(out, "sfx_seeker_jaws_fangs.wav"))
     print("done ->", out)
     return 0
 
