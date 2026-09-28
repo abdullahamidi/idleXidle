@@ -471,7 +471,7 @@ reconstruction D3 forbids. The fight's own number differs: this Seeker acts at Ã
 waits ARMED 170 ms before each bite at normal TEMPO (417 ms at fast TEMPO, rearm 1583). A 0 ms window needs a rearm
 that is a whole number of the fight's 100 ms ticks; the Core tests pose one and prove its order.
 
-## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED; PIXEL-HARD pass 2026-09-28, APPROVED; FIELD-vs-PROJECTILE polish 2026-09-28, awaiting the owner's review)
+## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED; PIXEL-HARD pass 2026-09-28, APPROVED; FIELD-vs-PROJECTILE polish 2026-09-28, APPROVED as the visual direction at `fab25919`; FINAL AUDIO 2026-09-29, three candidates, awaiting the owner's ear)
 
 **The brief** (the owner, Concept A, after JAWS closed): PRESS is the gold-standard candidate for the PERSISTENT FIELD /
 AURA family. "A persistent pressure field around the Seeker periodically sends a force pulse outward. When the pulse
@@ -536,7 +536,7 @@ hit), the push NO. Open: no cap on the arcs' size for a much larger creature; th
 lunging creature; the arcs placed once float over a creature whose lunge ends mid-hold; the buckle on a standing creature
 is unseen in this seed; the front leaves at nearly full size; the field haze stays smooth; no sound yet (the pass stops).
 
-### The field-vs-projectile polish (2026-09-28, awaiting the owner's review)
+### The field-vs-projectile polish (2026-09-28, APPROVED by the owner: the accepted FIELD / AURA visual direction, commit `fab25919`)
 
 **The brief** (the owner): the pixel-hard PRESS is APPROVED; do not redesign it (keep the material, the palette, the
 persistent field, the ~30 ms crush, the ~60 ms hold, the squash, no push, the brightness hierarchy, the yield rules). One
@@ -564,6 +564,49 @@ propagation from the field PARTLY (released by it more than rippling through it)
 YES; as readable as the approved version YES (the lunging creature's snout 60-80 px ahead of the arcs for ~50 ms is the
 cost). Open: that trade (`FoldBackShare`), the lower arc's weaker press (feet planted), the approved speed-up, the fold's
 one-frame bracket-like flip on a still; no sound yet (the pass stops).
+
+### The final audio (2026-09-29, three candidates; awaiting the owner's ear)
+
+**The brief** (the owner): the PRESS picture is APPROVED (commit `fab25919`, the field-propagation version) and is not
+reopened. Complete PRESS with its final audio. Its meaning is PRESSURE ARRIVES -> TARGET COMPRESSED -> DEFENCE BREAKS; it
+must not sound like a projectile impact, a sword strike, an explosion, JAWS' bite or HARD HANDS' heavy melee hit. ONE
+composite cue of three layers, on the crush and never on the launch, no travel audio, under SPRAY / HARD HANDS / JAWS, not
+fatiguing on repeated ticks. Up to three candidates; the owner approves one by ear. No future variation is implemented.
+
+| Concern | The PRESS tick cue |
+|---|---|
+| One event, three layers | `sfx_seeker_press_tick` (~190 ms file, ~120-135 ms audible): a PRESSURE RELEASE (0-35 ms, noise-like air, not a tone: the air a canvas snap, a pillow and a paper stack push out, and a small synthesised sub), the compression THUMP at 40 ms (the strongest layer: padded cushion hits, a book slammed flat, a flour sack), a brittle, material-neutral defence CRACK +6..+13 ms after it (a ceramic tile, a walnut shell with its 11 kHz ring notched, a stone break, an ice-tray tick), then a very short fragment decay and no reverb. Built by `tools/asset-pipeline/make_press_tick.py` from recorded CC0 foley (the licence checked on each sound's own page; `tools/asset-pipeline/foley/press_tick/SOURCES.md`); two buses (low, crack), light 4x-oversampled saturation, band 28 Hz-15 kHz, the loudest 50 ms at -18.5 dBFS, true peak about -9.6 dBFS; byte-reproducible |
+| On the crush, never the launch | `FieldRecipe.TickCues`, asked once per tick by `FieldPerformance.CueDue` (a rewind re-arms it; a seek more than `CueLateMs` 30 past it skips it), started `CueStartMs` -20 before the tick so the file's thump (`CueThumpMs` 40) lands IN the crush: at the game's 60 Hz step the ask fires at -16.7 ms, the thump at +23.3 (between the fold frame, +16.7, and the arcs shut, +33.3) and A's crack at +31.3 (on the shut frame), on every tick on the trace clock. Nothing sounds as the front leaves the field or travels |
+| Under the other three | `TickVolume` 0.28 and never lead: an authored action's duck applies. K-weighted loudest 50 ms as played, A -31.3 dB: 3.8 / 7.8 / 5.2 dB under SPRAY's contact (-27.5) / HARD HANDS' impact (-23.5) / JAWS' bite (-26.0). x0.6 (`CueQuietShare`) on a quiet tick, the picture's own rule: an action's contact close by, or the champion performing one; a quiet tick already under the duck takes the duck alone (the product buried the crack under SPRAY); x0.5 (`CueYieldShare`) on a tick that gives way to JAWS |
+| Repeated ticks | the game's small pitch variation (+-0.03 octave, `CueVary`) and a pan from the pressed creature (`CuePanWidth` 0.35); the crack's body and tail kept short, its initial transient kept |
+| The wave-end tick | a tick that ends the wave now plays its crush out on the break's clock (`FieldPerformance.Crushing` holds `ActionStillPlaying`); it froze on its arrival pose while its cue sounded |
+
+| Candidate | pressure (vs the loudest 50 ms) | crack after the thump | crack (vs the loudest 50 ms) | character |
+|---|---|---|---|---|
+| **A balanced** (in the game, recommended) | -14.3 dB | +8.0 ms | -7.2 dB | pressure, thump and tile crack in proportion; the thump leads |
+| B heavier pressure | -11.0 dB | +13.0 ms | -6.9 dB | an earlier, heavier air push and a squeezed sack; the crack later, a shell giving way |
+| C clearer defence break | -13.7 dB | +5.9 ms | -4.9 dB | the clearest break: a brittle tick on a stone fracture and a tile |
+
+**The recommendation is A.** All five QA lenses over two rounds chose it: its pressure is the least tonal (air, not an
+808), its thump leads the crack by the widest margin, and its crack is the most focused (most of the crack window at
+2-6 kHz). That crack is what tells PRESS apart from the pack's bite, which lands on every tick in this seed (enemies
+strike every 1000 ms, the Aura ticks every 2000) and fuses with the thump; A's thump keeps the best margin over it
+(+10.7 / +6.2 / +4.6 dB on a full / quiet / yield tick). B's pressure keeps a faint ~86 Hz periodicity; C's crack comes
+close to taking the lead from its thump.
+
+The review films are timed on the trace clock: `film_audio.py` lays every captured frame for its real duration (an ffmpeg
+concat listing with a millisecond timebase; the default 1/25 s rounded the durations and dropped half the frames, the
+fold and shut among them), resampled to 60 fps; before, a constant rate drifted the picture up to ~60 ms against the sound.
+Evidence `production/qa/evidence/press-audio/` (`tools/asset-pipeline/press_audio_evidence.py`); review page https://claude.ai/artifact/13QvWjjw4rQvxSMgyjh2c1.
+Checked by a first QA round (design, mix, sync: all A; it found the cue 1.6 dB under SPRAY, the wave-end freeze, the
+film's drift, quiet x duck, a late window of 80 ms, B's tone, C's crumble, the walnut's 11 kHz ring, all fixed) and a
+re-check (design-mix, sync: A; it found the film's 1/25 s timebase and the cue ignoring the picture's quiet rule while
+the champion performs, both fixed). Open: the pack-bite fusion (an option: duck the enemy strike's thud when it shares
+the tick's millisecond); a quieter cue at an upgraded 0.7 s cadence; a yield tick under a duck stacks the two (x0.063, a
+deliberate give-way); device and display latency are not modelled. The CRUSHING / PIN / SEIZE variations are NOT built;
+the three layers are the semantic foundation they would vary, keyed by skill id like the picture. Once the owner
+approves a cue: PRESS is ACCEPTED as the FIELD / AURA gold-standard presentation, the approved cue recorded as
+human-approved and its bytes pinned by SHA-256 in `press_field_test.cs`, the visual contract of `fab25919` kept.
 
 ## Context
 

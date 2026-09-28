@@ -315,6 +315,52 @@ public sealed class FieldRecipe
     /// </summary>
     public float QuietShare { get; init; } = 0.6f;
 
+    /// <summary>
+    /// THE TICK'S VOICE (the defence breaking): ONE composite cue -- a short low pressure release, the compression THUMP
+    /// (its strongest layer) and a brittle, material-neutral defence CRACK a few ms after it -- never three sounds, never a
+    /// travel whoosh (the picture already shows the propagation). The first key that exists plays.
+    /// </summary>
+    public IReadOnlyList<string> TickCues { get; init; } = new[] { "sfx_seeker_press_tick" };
+
+    /// <summary>
+    /// The cue's volume: under SPRAY's contact (0.50), HARD HANDS' (0.55) and JAWS' bite (0.42) with its own file's
+    /// loudness taken into account -- at least 3 dB under SPRAY's contact K-weighted (at 0.34 it was 1.6 dB: a cue heard
+    /// every two seconds at the level of an authored contact) -- and never lead: an authored action's duck keeps it
+    /// secondary.
+    /// </summary>
+    public float TickVolume { get; init; } = 0.28f;
+
+    /// <summary>
+    /// The cue starts this long after the tick (negative: before it) so its THUMP, <see cref="CueThumpMs"/> into the file,
+    /// lands on the decisive crush beat (the fold and the arcs shutting, ~+20 ms) -- never on the wave's launch.
+    /// </summary>
+    public float CueStartMs { get; init; } = -20f;
+
+    /// <summary>Where the THUMP sits inside the cue file (ms): the file is authored to it.</summary>
+    public float CueThumpMs { get; init; } = 40f;
+
+    /// <summary>
+    /// A cue whose moment the playhead passed by more than this (a seek) is skipped, not played late: its thump stays in the
+    /// crush's hold (80 ms let a seek put it past the hold, into the release).
+    /// </summary>
+    public float CueLateMs { get; init; } = 30f;
+
+    /// <summary>
+    /// The cue's share on a QUIET tick (an action's contact lands close to it, or the champion is performing one: the
+    /// picture's own quiet rule) and on one that gives way to JAWS. A quiet tick already under an action's duck takes the
+    /// duck alone, never both (together they buried the crack under SPRAY).
+    /// </summary>
+    public float CueQuietShare { get; init; } = 0.6f;
+
+    /// <inheritdoc cref="CueQuietShare"/>
+    public float CueYieldShare { get; init; } = 0.5f;
+
+    /// <summary>Per-play pitch variation (octaves): a cue heard every two seconds must never repeat itself exactly.</summary>
+    public float CueVary { get; init; } = 0.03f;
+
+    /// <summary>How far the cue pans with the crushed creature's position (the reactions' width).</summary>
+    public float CuePanWidth { get; init; } = 0.35f;
+
     /// <inheritdoc cref="QuietShare"/>
     public float QuietBeforeMs { get; init; } = 200f;
 

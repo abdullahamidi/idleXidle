@@ -182,7 +182,18 @@ def main() -> int:
     frame_ms = float(np.mean(gaps))
     fps = 1000.0 / frame_ms / a.slow
     x, y, w, h = (int(v) for v in a.crop.split(","))
-    cmd = [ffmpeg(), "-y", "-loglevel", "error", "-framerate", f"{fps:.4f}", "-i", a.prefix + "_%02d.png"]
+    # EVERY FRAME ON THE TRACE CLOCK: a capture's shots are not evenly spaced (16-50 ms), and a constant input rate (their
+    # mean) drifted the picture up to ~60 ms against the sound, which IS on the trace clock -- each shot lasts until the
+    # next one's clock (concat durations), resampled to an even 60 fps
+    listing = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")
+    for j, i in enumerate(steps):
+        dur = (shots[steps[j + 1]] - shots[i] if j + 1 < len(steps) else frame_ms) / 1000.0 * a.slow
+        # 'option framerate 1000': the image demuxer's default 1/25 s timebase rounds every duration to 40 ms and
+        # drops half the shots (the fold and shut frames among them); a millisecond timebase keeps each on its clock
+        listing.write(f"file '{os.path.abspath(a.prefix + f'_{i:02d}.png').replace(chr(92), '/')}'\noption framerate 1000\nduration {dur:.6f}\n")
+    listing.write(f"file '{os.path.abspath(a.prefix + f'_{steps[-1]:02d}.png').replace(chr(92), '/')}'\noption framerate 1000\n")
+    listing.close()
+    cmd = [ffmpeg(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing.name]
     tmp = None
     if not a.mute:
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
@@ -191,12 +202,13 @@ def main() -> int:
         if a.wav:
             write_wav(a.wav, track)
         cmd += ["-i", tmp, "-c:a", "aac", "-b:a", "192k", "-shortest"]
-    cmd += ["-vf", f"crop={w}:{h}:{x}:{y}", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out]
+    cmd += ["-vf", f"fps=60,crop={w}:{h}:{x}:{y}", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out]
     subprocess.run(cmd, check=True)
+    os.unlink(listing.name)
     if tmp:
         os.unlink(tmp)
     heard = sum(1 for c, *_ in sounds if shots[steps[0]] <= c <= shots[steps[-1]])
-    print(f"{a.out}: {len(steps)} frames at {fps:.2f} fps ({frame_ms:.1f} ms of game each), "
+    print(f"{a.out}: {len(steps)} frames on the trace clock (their mean {frame_ms:.1f} ms of game each), at 60 fps, "
           f"{'no audio' if a.mute else f'{heard} sound asks in the window'}")
     return 0
 

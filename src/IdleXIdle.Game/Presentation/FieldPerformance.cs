@@ -39,6 +39,8 @@ public sealed class FieldPerformance
     // (by a frame count, never by the playhead: on the frozen playhead that ends a wave every frame matched it, and the
     // fold's lit edge was drawn again and again without its body)
     private int _frame, _foldedFrame = -1;
+    // each tick's cue: asked once as the playhead crosses its moment (a rewind before it re-arms it)
+    private readonly bool[] _cued;
     // ...and the arcs' horizontal centre, latched on contact: forward motion dies there (followed, the arcs drifted on with
     // the creature through the hold and onto the next one's head)
     private readonly float[] _arcX;
@@ -62,6 +64,7 @@ public sealed class FieldPerformance
         _arcWidth = new float[ticks.Count];
         _folded = new bool[ticks.Count];
         _arcX = new float[ticks.Count];
+        _cued = new bool[ticks.Count];
         Array.Fill(_arcX, float.NaN);
         for (var k = 0; k < ticks.Count; k++) (_tickAt[k], _tickTarget[k], _tickYields[k], _tickQuiet[k]) = ticks[k];
     }
@@ -236,6 +239,39 @@ public sealed class FieldPerformance
         var cool = Math.Clamp((u - r.CrushInMs - r.CrushHoldMs) / Math.Max(1f, r.CrushOutMs), 0f, 1f);
         return Color.Lerp(r.ClampColor, r.ClampCoolColor, cool);
     }
+
+    // ── THE VOICE ──────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The tick whose cue starts now (its moment, <see cref="FieldRecipe.CueStartMs"/> from the tick, has just been
+    /// crossed), or -1. Each tick's cue is asked once; a rewind before its moment re-arms it; a moment passed by more than
+    /// <see cref="FieldRecipe.CueLateMs"/> (a seek, a long hitch) is skipped rather than played late.
+    /// </summary>
+    public int CueDue(float playheadMs)
+    {
+        var due = -1;
+        for (var k = 0; k < _tickAt.Length; k++)
+        {
+            var at = _tickAt[k] + Recipe.CueStartMs;
+            if (playheadMs < at - 1f) { _cued[k] = false; continue; }
+            if (_cued[k]) continue;
+            _cued[k] = true;
+            if (playheadMs <= at + Recipe.CueLateMs && due < 0) due = k;
+        }
+        return due;
+    }
+
+    /// <summary>
+    /// The k-th tick cue's volume: quieter on a quiet tick, while the champion is <paramref name="performing"/> an action
+    /// (the picture's own quiet rule) and on one that gives way to a reaction (JAWS). A quiet tick already
+    /// <paramref name="ducked"/> by an authored action takes the duck alone (the product buried its crack).
+    /// </summary>
+    public float CueVolume(int tick, bool ducked = false, bool performing = false)
+        => Recipe.TickVolume * (Yields(tick) ? Recipe.CueYieldShare
+            : (Quiet(tick) || performing) && !ducked ? Recipe.CueQuietShare : 1f);
+
+    /// <summary>Is the k-th tick's crush still playing at the playhead (from the tick to the phrase's end)?</summary>
+    public bool Crushing(float playheadMs) => TryPhrase(playheadMs, out var u, out _) && u >= 0f && u < Recipe.EndMs;
 
     // ── WHICH TICK, WHICH CREATURE ─────────────────────────────────────────────────────────────────────
 

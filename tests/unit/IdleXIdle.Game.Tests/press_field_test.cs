@@ -396,4 +396,53 @@ public class press_field_test
         Assert.True(lowTo.Y - lowHalf <= shortFoe.Y && lowTo.Y + lowHalf >= shortFoe.Bottom, "the wall passes over a short creature");
         Assert.Equal(low.Y, lowTo.Y, 3);
     }
+
+    [Fact]
+    public void test_the_tick_voices_the_defence_break_once_on_the_crush()
+    {
+        var r = Press;
+        // ONE composite cue for the tick, never a travel sound: it STARTS just before the contact so its thump lands on the
+        // decisive crush (the fold and the shut arcs, ~+20 ms) -- never on the wave's launch
+        Assert.Equal("sfx_seeker_press_tick", r.TickCues[0]);
+        var thumpAt = r.CueStartMs + r.CueThumpMs;
+        Assert.InRange(thumpAt, 5f, r.CrushInMs);
+        Assert.True(r.CueStartMs > r.LaunchMs + 200f, "the cue starts with the wave's launch");
+        // a passive field is never the loudest voice: under SPRAY's contact, HARD HANDS' and JAWS' bite (the builder's QA
+        // checks it K-weighted as played: >= 3 dB under SPRAY's contact)
+        Assert.True(r.TickVolume < 0.34f);
+        // frame-quantised: the cue fires on the first 60 Hz frame past its moment, so the thump lands up to a frame late, and
+        // a late (seek) cue at most CueLateMs later -- both inside the crush's hold, never in the release
+        Assert.True(r.CueStartMs + 1000f / 60f + r.CueThumpMs <= r.CrushInMs + r.CrushHoldMs);
+        Assert.True(r.CueStartMs + r.CueLateMs + r.CueThumpMs <= r.CrushInMs + r.CrushHoldMs);
+        Assert.True(r.CueQuietShare < 1f && r.CueYieldShare < 1f);
+        // asked ONCE per tick as the playhead crosses its moment; a rewind re-arms it; a seek far past it skips it
+        var p = new FieldPerformance(r, 2, new List<(float, int, bool, bool)> { (2000f, 0, false, false), (4000f, 0, false, true), (6000f, 1, true, false) });
+        var at = 2000f + r.CueStartMs;
+        Assert.Equal(-1, p.CueDue(at - 17f));
+        Assert.Equal(0, p.CueDue(at + 5f));
+        Assert.Equal(-1, p.CueDue(at + 21f));                                        // once
+        Assert.Equal(-1, p.CueDue(at - 40f));                                        // a rewind re-arms it...
+        Assert.Equal(0, p.CueDue(at + 2f));                                          // ...and it plays again
+        Assert.Equal(-1, p.CueDue(4000f + r.CueStartMs + r.CueLateMs + 50f));        // passed far beyond: skipped, not late
+        Assert.Equal(-1, p.CueDue(4000f + r.CueStartMs + 10f));
+        // quieter on a quiet tick (an action's contact close by: the action's duck applies too) and on one giving way to JAWS
+        Assert.Equal(r.TickVolume, p.CueVolume(0), 3);
+        Assert.Equal(r.TickVolume * r.CueQuietShare, p.CueVolume(1), 3);
+        Assert.Equal(r.TickVolume, p.CueVolume(1, ducked: true), 3);              // the duck alone, never duck x quiet
+        Assert.Equal(r.TickVolume * r.CueYieldShare, p.CueVolume(2), 3);
+        // the picture's quiet rule (the champion performing an action) quiets the cue too, the duck alone if it applies
+        Assert.Equal(r.TickVolume * r.CueQuietShare, p.CueVolume(0, performing: true), 3);
+        Assert.Equal(r.TickVolume, p.CueVolume(0, ducked: true, performing: true), 3);
+        Assert.Equal(r.TickVolume * r.CueYieldShare, p.CueVolume(2, performing: true), 3);
+        // the screen voices it after the frame's duck is set, never as lead
+        var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
+        Assert.Equal(2, hunt.Split("VoiceField();").Length - 1);                   // both update paths, after the duck
+        Assert.Contains("var volume = f.CueVolume(tick, ducked: (Sound?.Duck ?? 1f) < 1f, performing: _performance is not null);", hunt);
+        Assert.Contains("Sound?.PlayFirst(f.Recipe.TickCues, volume, 0f, Pan(cx, f.Recipe.CuePanWidth), f.Recipe.CueVary);", hunt);
+        // a tick that ends the wave plays its crush out on the break's clock (it froze on its arrival while its cue sounded)
+        Assert.Contains("|| _field is { } f && f.Crushing(_playheadMs);", hunt);
+        Assert.True(p.Crushing(2000f + 20f) && !p.Crushing(2000f - 20f) && !p.Crushing(2000f + r.EndMs + 1f));
+        // the approved visual contract is untouched: the cue changes no picture
+        Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_press_tick.wav")), "the tick cue is missing");
+    }
 }

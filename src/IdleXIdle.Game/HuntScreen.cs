@@ -1870,6 +1870,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 PresentTrace.PlayheadMs = _playheadMs;
                 UpdatePerformance(dt);
                 UpdateReactions();
+                VoiceField();
                 if (_clipName is not null && _clipTiming is { } playing && _playheadMs >= _clipStartMs + playing.TotalMs)
                 {
                     if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
@@ -2061,6 +2062,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         UpdatePerformance(dt);
         UpdateReactions();
+        VoiceField();
         var batch = _replay.Advance(_playheadMs);
         // Which blows in THIS batch have already been folded into another's number. A field, not a
         // local: this runs every frame and §93 forbids a per-frame allocation.
@@ -6550,7 +6552,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private bool ActionStillPlaying()
         => _performance is { } p && !p.Finished(_playheadMs)
            || _outgoing is { } o && !o.Finished(_playheadMs)
-           || ReactionStillPlaying();
+           || ReactionStillPlaying()
+           || _field is { } f && f.Crushing(_playheadMs);   // a field tick that ends the wave plays its crush out (it froze on its arrival)
 
     /// <summary>A reaction still in the world: the wave's last bite may have set one off, and it plays out too.</summary>
     private bool ReactionStillPlaying()
@@ -6786,6 +6789,24 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (PresentTrace.Enabled) PresentTrace.Log("contact-tick", $"x={tick.X:0}\ty={tick.Y:0}");
             Sound.Play(tickKey, p.Recipe.ContactTickVolume, 0f, Pan(tick.X, p.Recipe.PanWidth), throttle: false, vary: 0.08f, lead: true);
         }
+    }
+
+    /// <summary>
+    /// A performed field's TICK VOICE (PRESS: pressure, the compression thump, the defence crack), started so its thump
+    /// lands on the crush. Not lead: after <see cref="UpdatePerformance"/> set the frame's duck, so an authored action's
+    /// voice keeps it secondary; quieter still on a quiet tick and on one that gives way to JAWS.
+    /// </summary>
+    private void VoiceField()
+    {
+        if (_field is not { } f || _mode == Mode.Downed) return;
+        var tick = f.CueDue(_playheadMs);
+        if (tick < 0) return;
+        var target = f.TargetOf(tick);
+        var cx = target >= 0 && TryBody(VfxSubject.Creature(target), out var pressed) ? pressed.Center.X : ArenaRect.Center.X;
+        var volume = f.CueVolume(tick, ducked: (Sound?.Duck ?? 1f) < 1f, performing: _performance is not null);
+        var cue = Sound?.PlayFirst(f.Recipe.TickCues, volume, 0f, Pan(cx, f.Recipe.CuePanWidth), f.Recipe.CueVary);
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("field-cue", $"{f.Recipe.Id}\ttick={f.TickAt(tick):0}\tat={_playheadMs - f.TickAt(tick):0}\tcue={cue ?? "-"}\tvol={volume:0.00}");
     }
 
     /// <summary>A gentle stereo position for an arena x: ±<paramref name="width"/> at the arena's edges.</summary>
