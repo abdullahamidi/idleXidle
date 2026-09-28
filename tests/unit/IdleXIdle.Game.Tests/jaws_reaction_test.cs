@@ -605,20 +605,27 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_one_cue_on_the_snap_and_it_is_neither_the_trap_nor_the_piranha()
+    public void test_one_cue_on_the_snap_and_it_is_a_bite()
     {
-        Assert.Equal("sfx_seeker_jaws_fangs", Jaws.SnapCues[0]);
+        Assert.Equal("sfx_seeker_jaws_bite", Jaws.SnapCues[0]);
+        Assert.DoesNotContain("sfx_seeker_jaws_fangs", Jaws.SnapCues);   // the thorn impact read as a hit, not a mouth
         Assert.DoesNotContain("sfx_seeker_jaws_snap", Jaws.SnapCues);    // the dry-steel clack belonged to the rejected trap
         Assert.DoesNotContain("sfx_seeker_jaws_chomp", Jaws.SnapCues);   // the chomp belonged to the rejected piranha
         Assert.InRange(Jaws.SnapVolume, 0.25f, 0.5f);                    // quiet enough to repeat
-        Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_fangs.wav")));
-        // one bite in the ear: the generator has no secondary ticks
+        Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_bite.wav")));
+        // a BITE in the ear, in a mouth's order: the teeth meet (two clacks), sink in (the crunch grains, the wet give),
+        // the jaw's weight; and ONE bite: every layer starts inside the first ~50 ms (nothing after it but decays)
         var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "make_action_sfx.py"));
-        var fangs = gen[gen.IndexOf("def jaws_fangs(", StringComparison.Ordinal)..];
-        fangs = fangs[..fangs.IndexOf("\ndef ", StringComparison.Ordinal)];
-        Assert.DoesNotContain("for at, g in", fangs);
-        Assert.DoesNotContain("thump(", fangs);                          // no pitch-dropping skull, no bone crunch
-        Assert.DoesNotContain("crunch(", fangs);
+        var bite = gen[gen.IndexOf("def _bite(", StringComparison.Ordinal)..];
+        bite = bite[..bite.IndexOf("\ndef ", StringComparison.Ordinal)];
+        Assert.Contains("THE TEETH MEET", bite);
+        Assert.Contains("crunch(", bite);
+        Assert.Contains("sweep_bp(", bite);
+        Assert.Contains("thump(", bite);
+        var a = gen[gen.IndexOf("def jaws_bite(", StringComparison.Ordinal)..];
+        a = a[..a.IndexOf("\ndef ", StringComparison.Ordinal)];
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(a, @"\((0\.\d+), 0\.\d+\)"))
+            Assert.True(float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) <= 0.05f, $"a second bite at {m.Value}");
     }
 
     [Fact]

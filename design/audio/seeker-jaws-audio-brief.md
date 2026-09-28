@@ -1,12 +1,23 @@
 # Audio brief: the Seeker's JAWS (the reaction's one cue)
 
-> **Status (2026-09-27, the SHADOW FANGS final direction): the cue is `sfx_seeker_jaws_fangs`, ONE short Shadow bite /
-> thorn impact, its main transient exactly on the fangs' SNAP. The dry-steel trap CLACK (`sfx_seeker_jaws_snap`) and the
-> piranha's CHOMP (`sfx_seeker_jaws_chomp`) are history and no longer played. It is a candidate until the owner has
-> listened to it.**
-> - Built by `tools/asset-pipeline/make_action_sfx.py` (`jaws_fangs`), with the same layered kit as the approved SPRAY
->   and HARD HANDS cues; measured; rendered into the review films from the trace (`film_audio.py`).
-> - The old wavs stay on disk as history until final approval; nothing plays them.
+> **Status (2026-09-28): the picture is APPROVED by the owner; the cue is `sfx_seeker_jaws_bite`, a BITE** (the owner:
+> "make the sound effect more of a bite / being-bitten sound, and we approve this skill completely"). Candidate A
+> (CHOMP) is in the game; B (CRUNCH) and C (HEAVY) wait in `production/qa/evidence/jaws-bite-sound/candidates/` for the
+> owner's ear (review page https://claude.ai/artifact/UyNseCpfkpYrHioX4P5ucX). The thorn impact `sfx_seeker_jaws_fangs`, the trap's clack and the piranha's
+> chomp are history and no longer played.
+
+## The bite (`_bite`, `jaws_bite`), in a mouth's order
+
+| Layer | What | Why |
+|---|---|---|
+| the teeth MEET | two enamel clacks 4 ms apart (a 1.4 ms click at 3 kHz, a resonance at 2.6 kHz ×1, 1.52, 2.31 dying inside ~4 ms, a small 1.3 kHz body) | the upper row, then the lower: two hard small contacts, never steel |
+| they SINK IN | five saturated crunch grains over ~40 ms (380–2400 Hz), each quieter than the last | teeth going through hide |
+| the wet give | a band falling 1500 → 420 Hz, ~25 ms | flesh, not wood |
+| the JAW'S WEIGHT | a short thud 165 → 88 Hz, ~30 ms | the force of a jaw, not a skull |
+| the Shadow | a dark tone squeezed 700 → 120 Hz, far under everything | the supernatural, a whisper |
+
+One bite: every layer starts inside the first ~50 ms. 180 ms, peak −9.4 dB, RMS −23.3 dB, centroid 1476 Hz, decay20
+74 ms: fuller than the thorn impact (−30.3 dB RMS), lighter than the HARD HANDS blow (−21.1 dB).
 
 ## What JAWS is, to the ear
 
@@ -54,3 +65,5 @@ gameplay event, a small sound.
 - 2026-09-27: the mechanical fantasy rejected; the cue became a small supernatural chomp (three bites with two baked
   ticks, then one bite).
 - 2026-09-27: the piranha rejected; the cue is one Shadow bite / thorn impact on the fangs' snap.
+- 2026-09-28: the frontal smoke-teeth picture APPROVED; the owner asked for "more of a bite sound": the cue is
+  `sfx_seeker_jaws_bite` (teeth meet, sink in, the jaw's weight), three candidates.

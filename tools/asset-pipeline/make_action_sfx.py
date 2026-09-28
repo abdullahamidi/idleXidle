@@ -33,7 +33,13 @@ cues sit in the family the shipped ones do: deterministic noise, measured, bound
                                        strain (three small link ticks). One cue for the whole reaction, right after the
                                        enemy's bite thud: BITE -> tiny release -> CLACK. No crunch, no bone, no thump.
 
-    sfx_seeker_jaws_fangs        ~0.13 s  SHADOW FANGS (the final JAWS direction, 2026-09-27): ONE dark, dry, sharp, short
+    sfx_seeker_jaws_bite         ~0.18 s  THE BITE (2026-09-28, the owner approved the smoke-teeth picture: "make the sound
+                                       more of a bite"): the teeth MEET (two enamel clacks, 4 ms apart), SINK IN (a
+                                       granular crunch and a short wet squish), and the JAW'S WEIGHT (a short low thud),
+                                       a whisper of Shadow under it. ONE bite, on the snap. Candidates B (CRUNCH) and C
+                                       (HEAVY) are written to production/qa/evidence/jaws-bite-sound/candidates/.
+
+    sfx_seeker_jaws_fangs        ~0.13 s  history: SHADOW FANGS (2026-09-27): ONE dark, dry, sharp, short
                                        Shadow bite / thorn impact, its transient exactly on the fangs' SNAP: a dry click and
                                        a few inharmonic partials dying inside ~7 ms, a short dry organic impact, a damped
                                        dark body with no pitch drop, and under it an energy COMPRESSION (a dark tone
@@ -197,6 +203,59 @@ def jaws_fangs(buf):
     S.add(buf, 0.002, S.envelope(S.biquad(S.noise(rng, 0.03), "bp", 4200.0, 1.6), 0.002, 0.007), 0.06)
 
 
+BITE_CANDIDATES = os.path.join(S.REPO, "production", "qa", "evidence", "jaws-bite-sound", "candidates")
+
+
+def _bite(buf, seed, clack_hz, clack_gain, grains, crunch_hi, squish, weight, whisper=0.05):
+    """A BITE, in the order a mouth makes one, its first transient exactly on the SNAP (t 0), after the owner approved
+    the smoke-teeth picture (2026-09-28): "make the sound more of a bite / being-bitten sound". The thorn impact before
+    it (`jaws_fangs`) was dark and dry but read as a hit, not a mouth: it had no teeth meeting, no give, no jaw.
+      1. THE TEETH MEET: two short enamel clacks, the upper row and, 4 ms behind it, the lower (a hard small contact whose
+         resonance dies inside ~4 ms: enamel, never steel);
+      2. THEY SINK IN: a granular crunch, a few saturated micro-bursts over ~40 ms, each quieter than the last (the teeth
+         going through hide), and a short WET squish (a band falling through the noise);
+      3. THE JAW'S WEIGHT: a short low thud with a small pitch drop (the force of the bite, not a skull);
+      4. a whisper of the Shadow (a dark tone squeezed down, far under everything).
+    ONE bite: nothing after ~60 ms but the decays. No metal, no roar, no swarm, no whoosh."""
+    rng = S.Noise(seed)
+    # 1. THE TEETH MEET
+    for at, g in ((0.0, 1.0), (0.004, 0.72)):
+        S.add(buf, at, S.click(rng, 0.0014, clack_hz), 0.55 * clack_gain * g)
+        S.bell(buf, at + 0.0002, clack_hz * 0.86, 0.17 * clack_gain * g, 0.0035, partials=(1.0, 1.52, 2.31))
+        S.add(buf, at, S.body(rng, 0.02, clack_hz * 0.42, 4.0, 0.003), 0.30 * clack_gain * g)
+    # 2. THEY SINK IN: the crunch grains, and the wet give
+    for at, g in grains:
+        S.add(buf, at, S.crunch(rng, 0.03, 380.0, crunch_hi, 0.006, sat=4.0), g)
+    wet = S.sweep_bp(S.noise(rng, 0.09), 1500.0, 420.0, 2.2, 0.025)
+    S.add(buf, 0.003, S.envelope(wet, 0.003, 0.022), squish)
+    # 3. THE JAW'S WEIGHT
+    f_hi, f_lo, amp_tau, g = weight
+    S.add(buf, 0.0, S.thump(0.16, f_hi, f_lo, 0.014, amp_tau, sat=2.0), g)
+    # 4. the Shadow, a whisper
+    S.sweep(buf, 0.002, 0.05, 700.0, 120.0, whisper, shape="sine", curve=2.0)
+
+
+def jaws_bite(buf):
+    """Candidate A, CHOMP (the default): the teeth, the give and the weight in balance."""
+    _bite(buf, 0xB17E, 3000.0, 1.0,
+          grains=((0.002, 0.42), (0.009, 0.30), (0.016, 0.22), (0.026, 0.14), (0.038, 0.08)),
+          crunch_hi=2400.0, squish=0.34, weight=(165.0, 88.0, 0.032, 0.55))
+
+
+def jaws_bite_crunch(buf):
+    """Candidate B, CRUNCH: biting THROUGH something: more and brighter crunch grains, a lighter jaw."""
+    _bite(buf, 0xB17F, 3300.0, 1.0,
+          grains=((0.002, 0.50), (0.007, 0.40), (0.012, 0.34), (0.019, 0.28), (0.027, 0.20), (0.036, 0.13), (0.047, 0.07)),
+          crunch_hi=3200.0, squish=0.24, weight=(170.0, 95.0, 0.026, 0.36))
+
+
+def jaws_bite_heavy(buf):
+    """Candidate C, HEAVY: a beast's jaws: a lower clack, fewer grains, a deeper and longer jaw weight."""
+    _bite(buf, 0xB180, 2300.0, 0.9,
+          grains=((0.002, 0.34), (0.011, 0.22), (0.022, 0.12)),
+          crunch_hi=1900.0, squish=0.38, weight=(150.0, 68.0, 0.046, 0.85), whisper=0.07)
+
+
 def main() -> int:
     S.make("sfx_seeker_spray_release", S.COMBAT_DIR, 0.20, spray_release, target_peak=0.26, max_ms=220.0, darken=9500.0)
     S.make("sfx_seeker_spray_hit", S.COMBAT_DIR, 0.28, spray_hit, target_peak=0.38, max_ms=300.0, darken=7500.0)
@@ -205,11 +264,17 @@ def main() -> int:
     S.make("sfx_seeker_hard_hands_hit", S.COMBAT_DIR, 0.26, hard_hands_hit, target_peak=0.39, max_ms=280.0, darken=6500.0)
     S.make("sfx_seeker_jaws_snap", S.COMBAT_DIR, 0.20, jaws_snap, target_peak=0.34, max_ms=220.0, darken=8000.0)   # history: the rejected trap's clack
     S.make("sfx_seeker_jaws_chomp", S.COMBAT_DIR, 0.14, jaws_chomp, target_peak=0.30, max_ms=160.0, darken=7000.0)   # history: the rejected piranha's chomp
-    S.make("sfx_seeker_jaws_fangs", S.COMBAT_DIR, 0.13, jaws_fangs, target_peak=0.32, max_ms=150.0, darken=6500.0)
+    S.make("sfx_seeker_jaws_fangs", S.COMBAT_DIR, 0.13, jaws_fangs, target_peak=0.32, max_ms=150.0, darken=6500.0)   # history: the thorn impact
+    S.make("sfx_seeker_jaws_bite", S.COMBAT_DIR, 0.18, jaws_bite, target_peak=0.34, max_ms=200.0, darken=7000.0)
+    S.make("sfx_seeker_jaws_bite_crunch", BITE_CANDIDATES, 0.18, jaws_bite_crunch, target_peak=0.34, max_ms=200.0, darken=8000.0)
+    S.make("sfx_seeker_jaws_bite_heavy", BITE_CANDIDATES, 0.20, jaws_bite_heavy, target_peak=0.34, max_ms=220.0, darken=6000.0)
     print(f"{'cue':30} {'ms':>5} {'peak dB':>8} {'rms dB':>7} {'centroid':>9} {'decay20':>8}")
-    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_fangs", "sfx_seeker_jaws_chomp",
+    for name in ("sfx_seeker_spray_release", "sfx_seeker_spray_hit", "sfx_seeker_spray_tick", "sfx_seeker_jaws_bite", "sfx_seeker_jaws_fangs", "sfx_seeker_jaws_chomp",
                  "sfx_seeker_hard_hands_commit", "sfx_seeker_hard_hands_hit", "sfx_seeker_jaws_snap", "sfx_cast", "sfx_hit"):
         m = S.measure(os.path.join(S.COMBAT_DIR, name + ".wav"))
+        print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
+    for name in ("sfx_seeker_jaws_bite_crunch", "sfx_seeker_jaws_bite_heavy"):
+        m = S.measure(os.path.join(BITE_CANDIDATES, name + ".wav"))
         print(f"{name:30} {m['ms']:5.0f} {m['peak_db']:8.1f} {m['rms_db']:7.1f} {m['centroid']:9.0f} {m['decay20_ms']:8.0f}")
     return 0
 

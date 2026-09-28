@@ -65,7 +65,17 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", APPROVED as a concept and polished into one Shadow phenomenon, its teeth made of smoke at the owner's word; awaiting the owner's true-speed review)
+## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", its smoke-teeth picture APPROVED by the owner 2026-09-28; the cue made a BITE, awaiting the owner's ear)
+
+**The picture APPROVED; the cue made a BITE (the owner, 2026-09-28).** The owner on the smoke teeth: "This version is
+very nice, I approve it. Finally, if you make the sound effect more of a bite / being-bitten sound, we approve this
+skill completely." The picture is APPROVED. The one cue on the snap is now `sfx_seeker_jaws_bite`
+(`make_action_sfx.py` `_bite`): the teeth MEET (two enamel clacks 4 ms apart), SINK IN (granular crunch grains and a
+short wet squish), the JAW'S WEIGHT (a short low thud), a whisper of Shadow; one bite, every layer inside the first
+~50 ms. Three candidates: A CHOMP (in the game), B CRUNCH, C HEAVY, rendered into the same film from the trace. The
+thorn impact `sfx_seeker_jaws_fangs` is history. Traced on the snap (+316 ms) in all four takes, ducked 0.45 under an
+action. Evidence `production/qa/evidence/jaws-bite-sound/`; review page https://claude.ai/artifact/UyNseCpfkpYrHioX4P5ucX. Awaiting the owner's ear:
+the chosen candidate → JAWS ACCEPTED.
 
 **Smoke teeth (the owner, 2026-09-28, on the shadow-mist polish): the build.** The owner: "The effect is very good; I
 just want it a little more like smoke, more like mist, with a little lower opacity."

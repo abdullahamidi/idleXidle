@@ -402,10 +402,12 @@ public sealed class ReactionRecipe
     // ── SOUND, FLASH AND THE SCREEN'S GENERIC CUES ───────────────────────────────────────────────
 
     /// <summary>
-    /// The reaction's ONE cue: a short dark, dry, sharp Shadow bite / thorn impact, its transient exactly on the SNAP
-    /// (<see cref="SnapAtMs"/>, the rows meet). No secondary ticks, no metal trap, no swarm, no bone crunch.
+    /// The reaction's ONE cue: a BITE, its first transient exactly on the SNAP (<see cref="SnapAtMs"/>, the rows meet):
+    /// the teeth meet (two enamel clacks), sink in (a granular crunch, a short wet squish), and the jaw's weight (a short
+    /// low thud), a whisper of Shadow under it (the owner, 2026-09-28: "make the sound more of a bite"; the thorn impact
+    /// `sfx_seeker_jaws_fangs` before it read as a hit, not a mouth). No secondary ticks, no metal, no roar, no whoosh.
     /// </summary>
-    public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_fangs", "sfx_hit" };
+    public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_bite", "sfx_hit" };
 
     /// <inheritdoc cref="SnapCues"/>
     public float SnapVolume { get; init; } = 0.42f;
