@@ -134,17 +134,22 @@ public sealed class ReactionPerformance
     public static int StateAt(ReactionRecipe r, float u)
         => Math.Clamp((int)MathF.Round(Math.Clamp(u / Math.Max(1f, r.AppearMs), 0f, 1f) * (r.FangStates - 1), MidpointRounding.AwayFromZero), 0, r.FangStates - 1);
 
+    /// <summary>The strip cell drawn at <paramref name="u"/>: the smoke's condensation state, or on the snap frame (the first frame drawn at the snap) the <see cref="ReactionRecipe.SnapCell"/>, the smoke condensed hard into solid teeth.</summary>
+    public static int CellAt(ReactionRecipe r, float u, bool snapFrame) => snapFrame ? r.SnapCell : StateAt(r, u);
+
     /// <summary>
     /// The teeth's opacity at <paramref name="u"/>: growing out of nothing through the appear (an ease-in-out from
     /// <see cref="ReactionRecipe.OpacityAtSpawn"/> to <see cref="ReactionRecipe.FormedOpacity"/>), strengthening with the
-    /// charge to whole on the snap frame, then breaking into the impact (half on the next frame, gone on the one after).
+    /// charge to <see cref="ReactionRecipe.SnapOpacity"/> on the snap frame (where <see cref="CellAt"/> draws the solid
+    /// <see cref="ReactionRecipe.SnapCell"/>: the smoke condensed hard), then breaking back into smoke with the impact
+    /// (half on the next frame, gone on the one after).
     /// </summary>
     public static float TeethOpacity(ReactionRecipe r, float u)
     {
         if (u < 0f) return 0f;
         if (u < r.AppearMs) return MathHelper.Lerp(r.OpacityAtSpawn, r.FormedOpacity, Smooth(u / r.AppearMs));
-        if (u < r.SnapAtMs) return MathHelper.Lerp(r.FormedOpacity, 1f, Charge(r, u));
-        return 1f - Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.TeethBreakMs), 0f, 1f);
+        if (u < r.SnapAtMs) return MathHelper.Lerp(r.FormedOpacity, r.SnapOpacity, Charge(r, u));
+        return r.SnapOpacity * (1f - Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.TeethBreakMs), 0f, 1f));
     }
 
     /// <summary>How far the teeth have CHARGED at <paramref name="u"/>: 0 (pale lavender) at the end of the appear, 1 (magenta) at the snap; slow at first.</summary>
@@ -459,7 +464,7 @@ public sealed class ReactionPerformance
         var quiet = stage.ChampionPerforming;
         var burst = Burst(Recipe, u);
         var teethAlpha = TeethOpacity(Recipe, u);
-        var state = StateAt(Recipe, u);
+        var state = CellAt(Recipe, u, hotFrame);        // the snap frame: the smoke condensed hard
         var upperSrc = new Rectangle(state * Recipe.UpperCell.X, 0, Recipe.UpperCell.X, Recipe.UpperCell.Y);
         var lowerSrc = new Rectangle(state * Recipe.LowerCell.X, 0, Recipe.LowerCell.X, Recipe.LowerCell.Y);
         var glowShare = Recipe.GlowShare * (u >= Recipe.SnapAtMs - 0.5f ? 1f : MathHelper.Lerp(Recipe.GlowAtFormed, 1f, Charge(Recipe, u)));

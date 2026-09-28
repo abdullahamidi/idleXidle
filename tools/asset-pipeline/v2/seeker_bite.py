@@ -147,8 +147,65 @@ def mask(poly, w, h):
     return np.asarray(im.resize((w, h), Image.BOX)).astype(np.float32) / 255.0
 
 
+def aniso_noise(w, h, cx, cy, salt):
+    """Value noise with its own cell size per axis (cy > cx: features stretched along the teeth, as smoke flows)."""
+    r = np.random.default_rng(SEED + salt)
+    ch, cw = max(2, int(h / cy)), max(2, int(w / cx))
+    lattice = (r.random((ch + 1, cw + 1)) * 255).astype(np.uint8)
+    return np.asarray(Image.fromarray(lattice, "L").resize((w, h), Image.BICUBIC)).astype(np.float32) / 255.0
+
+
+def warp(a, dx, dy):
+    """`a` sampled at each pixel plus (dx, dy): a displacement field bends it."""
+    h, w = a.shape
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    return a[np.clip(ys + dy, 0, h - 1).astype(int), np.clip(xs + dx, 0, w - 1).astype(int)]
+
+
+def smoky_row(teeth, w, h, salt, rise):
+    """The formed row: each tooth is SMOKE held in a tooth's shape (the owner, 2026-09-28: "more like smoke, more like
+    mist"; the solid leaves are in history as fxp_seeker_bite_*_solid.png). Density billows inside each tooth along a
+    swirl-warped noise stretched along the teeth; the outline wavers and is soft, but hardens toward the point, so the
+    points stay points and the bite still reads; the roots dissolve into the smoke the row condenses from; soft wisps
+    drift off the roots' side (`rise`: +1 up in the cell, -1 down); a faint haze; no glass rim; overlapping teeth are
+    told apart by a faint seam only."""
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    union = np.zeros((h, w), np.float32)
+    tipness = np.zeros((h, w), np.float32)
+    seam = np.zeros((h, w), np.float32)
+    for poly, tip, root, _ in teeth:
+        m = mask(poly, w, h)
+        rx, ry = root
+        tx, ty = tip
+        vx, vy = tx - rx, ty - ry
+        t = np.clip(((xs - rx) * vx + (ys - ry) * vy) / (vx * vx + vy * vy), 0.0, 1.0)
+        seam = np.maximum(seam, np.clip(blur(m, 1.4) * 1.6 - m, 0.0, 1.0) * union)
+        tipness = tipness * (1.0 - m) + t * m
+        union = np.maximum(union, m)
+    billow = aniso_noise(w, h, 12, 15, salt) * 0.6 + aniso_noise(w, h, 5.5, 7, salt + 7) * 0.4    # round billows
+    sx = (aniso_noise(w, h, 16, 16, salt + 11) - 0.5) * 14.0
+    sy = (aniso_noise(w, h, 16, 16, salt + 12) - 0.5) * 10.0
+    billow = warp(billow, sx, sy)                  # the billows CURL (tall vertical licks read as purple flame)
+    ex = (aniso_noise(w, h, 10, 16, salt + 21) - 0.5) * 6.0
+    ey = (aniso_noise(w, h, 10, 16, salt + 22) - 0.5) * 3.0
+    held = warp(union, ex * (1.0 - 0.8 * tipness), ey * (1.0 - 0.8 * tipness))   # the outline wavers, less at the point
+    soft = blur(held, 3.2) * (1.0 - tipness ** 2) + blur(held, 0.9) * tipness ** 2
+    dens = 0.35 + 0.65 * smoothstep(0.2, 0.8, billow)
+    dens = dens + (1.0 - dens) * 0.6 * tipness ** 1.6                      # the points denser
+    body = smoothstep(0.08, 0.75, soft) * dens
+    body = body * (0.55 + 0.45 * smoothstep(0.0, 0.45, tipness))            # the roots dissolve into the smoke
+    drift = warp(blur(union, 8.0), 0.0, rise * 5.0)
+    wisps = blur(smoothstep(0.6, 0.92, warp(aniso_noise(w, h, 13, 13, salt + 31), sx * 1.5, sy * 1.5)) * drift * (1.0 - union), 2.0) * 0.30
+    haze = blur(union, 10.0) * 0.16 * (0.5 + 0.5 * billow)
+    a = np.clip(np.maximum(body, np.maximum(wisps, haze)), 0.0, 1.0)
+    lum = (0.62 + 0.38 * billow) * (0.86 + 0.14 * tipness ** 0.8) * (1.0 - 0.12 * seam)
+    lum = np.where(body >= np.maximum(wisps, haze), lum, 0.82)
+    return np.clip(lum, 0.0, 1.0), a, union
+
+
 def crisp_row(teeth, w, h):
-    """The crisp row: each tooth a flat glow brightening toward its point, a thin dark seam where it overlaps the teeth
+    """The SNAP cell's row (the frame the jaw is shut): the smoke condensed HARD into solid teeth, the one frame the bite
+    is a real bite (drawn white-hot there), then released back into smoke. The crisp row: each tooth a flat glow brightening toward its point, a thin dark seam where it overlaps the teeth
     already drawn, feathered edges, a soft halo; the roots dissolve into a faint gum haze."""
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     lum = np.zeros((h, w), np.float32)
@@ -178,8 +235,16 @@ def crisp_row(teeth, w, h):
     return np.clip(l, 0.0, 1.0), a, union
 
 
-def row_states(teeth, w, h, salt):
-    lum, alpha, union = crisp_row(teeth, w, h)
+def snap_cell(teeth, w, h):
+    """The SNAP cell, after the condensation states: the crisp row, the smoke condensed hard."""
+    lum, alpha, _ = crisp_row(teeth, w, h)
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    edge_fade = smoothstep(0.0, 12.0, np.minimum(np.minimum(ys, h - 1 - ys), np.minimum(xs, w - 1 - xs)))
+    return Image.fromarray((np.dstack([lum, lum, lum, alpha * edge_fade]) * 255).astype(np.uint8), "RGBA")
+
+
+def row_states(teeth, w, h, salt, rise):
+    lum, alpha, union = smoky_row(teeth, w, h, salt, rise)
     wisp = value_noise(w, h, 9, salt) * 0.6 + value_noise(w, h, 4, salt + 1) * 0.4
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     edge_fade = smoothstep(0.0, 12.0, np.minimum(np.minimum(ys, h - 1 - ys), np.minimum(xs, w - 1 - xs)))
@@ -360,8 +425,9 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     up = upper_teeth()
     lo = lower_teeth()
-    upper_states = row_states(up, UW, UH, 101)
-    lower_states = row_states(lo, LW, LH, 202)
+    # the condensation states (smoke), then the SNAP cell (the smoke condensed hard: drawn on the snap frame only)
+    upper_states = row_states(up, UW, UH, 101, 1) + [snap_cell(up, UW, UH)]   # the crown's wisps drift up, the row's down
+    lower_states = row_states(lo, LW, LH, 202, -1) + [snap_cell(lo, LW, LH)]
     strip(upper_states, UW, UH).save(os.path.join(OUT, "fxp_seeker_bite_upper.png"))
     strip(lower_states, LW, LH).save(os.path.join(OUT, "fxp_seeker_bite_lower.png"))
     parts = {"star": star(), "ring": ring(), "streaks": streaks(n=STREAK_COUNT), "shards": shards(), "smoke": smoke()}
@@ -381,6 +447,7 @@ def main():
 
     spans = {
         "states": STATES,
+        "snap_cell": STATES,                                              # the cell after the states: solid, the snap frame
         "upper_cell": [UW, UH], "lower_cell": [LW, LH],
         "upper_centre_x": CX, "lower_centre_x": LCX,
         "upper_inner_tip_y": round(max(t[1] for t in inner), 1),     # the inner points' line: the crown's bite line

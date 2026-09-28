@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""jaws_smoke_teeth_evidence.py -- JAWS after the owner's word on the shadow-mist polish (2026-09-28): "The effect is
+very good; I just want it a little more like smoke, more like mist, with a little lower opacity." The teeth are now SMOKE
+held in a tooth's shape (seeker_bite.py smoky_row) at a lower opacity (formed 0.62, snap 0.88). From
+build/shots/jaws/smoke3/ (films_jaws.sh smoke3 normal fast_rearm during_spray during_hh) and build/shots/jaws/mist4/ (the
+polish the owner watched, for the comparison).
+
+    PYTHONUTF8=1 python tools/asset-pipeline/jaws_smoke_teeth_evidence.py <out dir>
+"""
+import os
+import sys
+
+from PIL import Image, ImageDraw
+
+from foundation_evidence import REPO, film, grid, read, run, TL, SMALL
+
+CURRENT = os.path.join(REPO, "build", "shots", "jaws", "mist4")
+NEW = os.path.join(REPO, "build", "shots", "jaws", "smoke3")
+CLOSE = "940,540,480,420"       # the bitten whelp and the maw closing on it, close
+T0 = 7017                        # the first frame that shows the bite at 7000 (the filmable JAWS trigger)
+
+STAGES = [(-17, "before"), (0, "FORM"), (33, "FORM"), (67, "CONDENSE"), (100, "CONDENSE"),
+          (150, "CHARGE"), (200, "CHARGE"), (233, "WIND-UP"), (267, "SLAM"), (300, "SLAM"),
+          (317, "SNAP"), (333, "PRESSURE RELEASE"), (350, "PRESSURE RELEASE"), (383, "PRESSURE RELEASE"), (433, "PRESSURE RELEASE"),
+          (500, "DISSOLVE"), (550, "DISSOLVE"), (600, "DISSOLVE"), (650, "DISSOLVE"), (700, "gone")]
+
+
+def stage_sheet(rows, out, box=(960, 540, 1400, 960), scale=1.25):
+    """The phrase's phases, one row per take, labelled: FORM, CONDENSE, CHARGE, WIND-UP, SLAM, SNAP, PRESSURE RELEASE, DISSOLVE."""
+    bw, bh = int((box[2] - box[0]) * scale), int((box[3] - box[1]) * scale)
+    per_row = 10
+    lines = (len(STAGES) + per_row - 1) // per_row
+    img = Image.new("RGB", (per_row * (bw + 4) + 4, len(rows) * lines * (bh + 22) + len(rows) * 24 + 8), (20, 17, 14))
+    d = ImageDraw.Draw(img)
+    y0 = 4
+    for pre, label in rows:
+        shots = read(pre + ".log")
+        d.text((6, y0), label, fill=(245, 220, 150), font=SMALL)
+        y0 += 22
+        for k, (dt, name) in enumerate(STAGES):
+            i = min(shots, key=lambda q: abs(shots[q][1] - (T0 + dt)))
+            r, c = divmod(k, per_row)
+            x, y = 4 + c * (bw + 4), y0 + r * (bh + 22)
+            im = Image.open(f"{pre}_{i:02d}.png").convert("RGB").crop(box).resize((bw, bh), Image.LANCZOS)
+            d.text((x + 2, y), f"{shots[i][1] - T0:+.0f} ms  {name}", fill=(235, 200, 120), font=SMALL)
+            img.paste(im, (x, y + 20))
+        y0 += lines * (bh + 22) + 2
+    img.save(out)
+    print(os.path.basename(out), img.size)
+
+
+def main():
+    out = os.path.abspath(sys.argv[1])
+    os.makedirs(out, exist_ok=True)
+    for f in os.listdir(out):
+        if f.endswith((".mp4", ".png", ".md")) and f[0].isdigit():
+            os.remove(os.path.join(out, f))
+    c = lambda k: os.path.join(CURRENT, k)   # noqa: E731
+    n = lambda k: os.path.join(NEW, k)       # noqa: E731
+    # the bite at 7000 in both: the whelp bites, JAWS answers, the answer kills the front whelp (its fall follows the snap)
+    film(c("normal"), f"{out}/01_before_solid_teeth_true_speed_sound.mp4", "BEFORE: the shadow-mist polish, solid teeth")
+    film(n("normal"), f"{out}/02_smoke_teeth_true_speed_sound.mp4", "NOW: the teeth are smoke, a little more transparent")
+    film(n("normal"), f"{out}/03_smoke_teeth_MUTED.mp4", "NOW: muted", "--mute")
+    grid([n("normal")], ["smoke teeth, close, true speed"], f"{out}/04_close_crop_true_speed_MUTED.mp4", CLOSE, shrink=1.0, lo=6900, hi=7750)
+    stage_sheet([(n("normal"), "NOW: smoke teeth"), (c("normal"), "BEFORE: solid teeth")],
+                f"{out}/05_phase_sheet_FORM_CONDENSE_CHARGE_WINDUP_SNAP_PRESSURE_RELEASE_DISSOLVE.png")
+    film(n("fast_rearm"), f"{out}/06_repeated_fast_tempo_sound.mp4", "repeated JAWS at fast TEMPO (one picture per 3 frames)")
+    film(n("during_spray"), f"{out}/07_during_spray_sound.mp4", "JAWS answers at 1000 in SPRAY's wind-up, the knives out at 1150")
+    film(n("during_hh"), f"{out}/08_during_hard_hands_sound.mp4", "JAWS answers at 13000 as HARD HANDS leaps at 13083")
+    lines = [l.rstrip("\n") for l in open(n("normal") + ".log", encoding="utf-8", errors="replace")
+             if "\treaction-" in l and ("contact=7000" in l or "reaction-draw" in l)]
+    draws = [l for l in lines if "reaction-draw" in l]
+    own = [l for l in lines if "reaction-draw" not in l]
+    open(f"{out}/09_trace.md", "w", encoding="utf-8").write(
+        "# The bite and the answer on the playhead (bite_timeline.py), the bite at 7000\n\n" + run(TL, n("normal") + ".log", "--bite", "7017") + "\n"
+        + "\n## The reaction layer (RH_PRESENT_TRACE): `at=` is ms after the bite's ms; the first frame that shows the bite is +17\n\n```\n"
+        + "\n".join(own) + "\n```\n\n" + f"reaction-draw lines: {len(draws)}; distinct cost fields: "
+        + ", ".join(sorted({l.split(chr(9))[-1] for l in draws})) + "; sprites per frame (both passes: the rows, their glow and the impact's parts): "
+        + ", ".join(sorted({l.split(chr(9))[5] for l in draws})) + "\n")
+    print("done ->", out)
+
+
+if __name__ == "__main__":
+    main()

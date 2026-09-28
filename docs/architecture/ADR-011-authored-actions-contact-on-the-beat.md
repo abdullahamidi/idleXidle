@@ -65,7 +65,23 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", APPROVED as a concept and polished into one Shadow phenomenon; awaiting the owner's true-speed review of the polish)
+## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", APPROVED as a concept and polished into one Shadow phenomenon, its teeth made of smoke at the owner's word; awaiting the owner's true-speed review)
+
+**Smoke teeth (the owner, 2026-09-28, on the shadow-mist polish): the build.** The owner: "The effect is very good; I
+just want it a little more like smoke, more like mist, with a little lower opacity."
+- **The teeth are SMOKE held in a tooth's shape** (`seeker_bite.py` `smoky_row`): round, curling billows of density
+  inside each tooth (tall vertical licks read as purple flame and were rounded), a soft wavering outline that hardens
+  toward the point (the points stay points), roots dissolving into smoke, short soft wisps off the gum, no glass rim.
+  The six condensation states derive from it. The solid rows are in `keypose_sources/history/*_solid.png`.
+- **The SNAP cell** (`ReactionRecipe.SnapCell`, a seventh cell; `ReactionPerformance.CellAt`): on the first frame drawn
+  at the snap only, the smoke condenses HARD into the solid teeth (white-hot unless the champion performs), then breaks
+  back as smoke. Drawn as smoke, the snap was a star over a haze and the jaw was never seen to shut (a judge rejected
+  it); now the snap frame is pixel-identical to the approved one.
+- **Opacity:** formed 0.75 → 0.62, snap 1.0 → `SnapOpacity` 0.88; the smoke's own density thins it further (a first
+  try at 0.55 / 0.85 made the pale early phase too faint).
+- **Checked:** two judges, then two adversarial re-checks: ACCEPT WITH NOTES, no defect. Geometry (the spans file),
+  timing, colours, the burst, the mist, quiet mode, the one cue and the number are unchanged; alloc 0; 808 game and
+  1888 Core tests. Evidence `production/qa/evidence/jaws-smoke-teeth/`; review page https://claude.ai/artifact/PGbMWLcVTPtJzxaeDj2Jr1.
 
 **The shadow-mist polish (the owner's brief "JAWS Frontal Bite Final Shadow-Mist Polish", 2026-09-28): the build.**
 The frontal bite is APPROVED ("Do NOT redesign JAWS again"); the brief asked for visual polish only, so that the bite

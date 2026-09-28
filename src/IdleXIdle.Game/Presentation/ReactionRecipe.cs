@@ -69,6 +69,14 @@ public sealed class ReactionRecipe
     /// <inheritdoc cref="UpperKey"/>
     public int FangStates { get; init; } = 6;
 
+    /// <summary>
+    /// The SNAP cell, after the <see cref="FangStates"/> condensation states: the teeth are SMOKE held in a tooth's shape
+    /// (the owner, 2026-09-28: "more like smoke, more like mist"), and on the snap frame only the smoke condenses HARD
+    /// into solid teeth, white-hot (the one frame the jaw is visibly shut: drawn as smoke, it was a star over a haze and
+    /// the bite never closed), then releases back into smoke as it breaks.
+    /// </summary>
+    public int SnapCell => FangStates;
+
     /// <inheritdoc cref="UpperKey"/>
     public Point UpperCell { get; init; } = new(256, 200);
 
@@ -252,7 +260,15 @@ public sealed class ReactionRecipe
     public float OpacityAtSpawn { get; init; } = 0.10f;
 
     /// <inheritdoc cref="AppearMs"/>
-    public float FormedOpacity { get; init; } = 0.75f;
+    public float FormedOpacity { get; init; } = 0.62f;
+
+    /// <summary>
+    /// The teeth's opacity on the snap, where the charge has brought them: less than whole (the owner, 2026-09-28: "more
+    /// like smoke, more like mist, a little lower opacity"), so through the charge the smoke shows the creature through
+    /// it; on the snap frame itself the solid <see cref="SnapCell"/> at this opacity, white-hot, with the glow, is still
+    /// the brightest moment.
+    /// </summary>
+    public float SnapOpacity { get; init; } = 0.88f;
 
     /// <inheritdoc cref="AppearMs"/>
     public float ArriveScale { get; init; } = 1.12f;

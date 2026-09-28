@@ -186,9 +186,11 @@ public class JawsReactionTest
         Assert.Equal(new[] { "FlashKey", "LowerKey", "MistKey", "RingKey", "ShardsKey", "StreaksKey", "UpperKey" }, keys);
         foreach (var key in new[] { r.UpperKey, r.LowerKey, r.FlashKey, r.RingKey, r.StreaksKey, r.ShardsKey, r.MistKey })
             Assert.True(File.Exists(RepoFile("assets", "art", "VFX", "parts", key + ".png")), key);
-        // the rows: FangStates states side by side, mist to crisp; the ring and the splinters in two cells, crisp and softened
-        Assert.Equal((r.FangStates * r.UpperCell.X, r.UpperCell.Y), PngSize(r.UpperKey));
-        Assert.Equal((r.FangStates * r.LowerCell.X, r.LowerCell.Y), PngSize(r.LowerKey));
+        // the rows: FangStates states side by side (smoke, loose to formed), then the SNAP cell (the smoke condensed hard);
+        // the ring and the splinters in two cells, crisp and softened
+        Assert.Equal(r.FangStates, r.SnapCell);
+        Assert.Equal(((r.FangStates + 1) * r.UpperCell.X, r.UpperCell.Y), PngSize(r.UpperKey));
+        Assert.Equal(((r.FangStates + 1) * r.LowerCell.X, r.LowerCell.Y), PngSize(r.LowerKey));
         Assert.Equal(PngSize(r.RingKey).H * 2, PngSize(r.RingKey).W);
         Assert.Equal(PngSize(r.ShardsKey).H * 2, PngSize(r.ShardsKey).W);
         // the speed lines are an accent: a dozen meaningful streaks, not a pattern to count (the count drawn IS the count written)
@@ -198,6 +200,7 @@ public class JawsReactionTest
         // the recipe describes the art the script wrote
         var art = BiteArt();
         Assert.Equal(r.FangStates, art.GetProperty("states").GetInt32());
+        Assert.Equal(r.SnapCell, art.GetProperty("snap_cell").GetInt32());
         Assert.Equal(r.UpperCell.X, art.GetProperty("upper_cell")[0].GetInt32());
         Assert.Equal(r.UpperCell.Y, art.GetProperty("upper_cell")[1].GetInt32());
         Assert.Equal(r.LowerCell.X, art.GetProperty("lower_cell")[0].GetInt32());
@@ -287,6 +290,11 @@ public class JawsReactionTest
         var states = Frames(r).Select(u => ReactionPerformance.StateAt(r, u)).ToArray();
         Assert.True(states.Zip(states.Skip(1), (a, b) => Math.Abs(b - a)).Max() <= 1, $"the condensation jumps: {string.Join(",", states)}");
         Assert.Equal(Enumerable.Range(0, r.FangStates), states.Distinct().OrderBy(x => x));   // every state is shown, none skipped
+        // the teeth are SMOKE; on the snap frame only, the smoke condenses hard into the solid SNAP cell (the one frame the
+        // jaw is visibly shut), and releases back into smoke as it breaks
+        Assert.Equal(r.SnapCell, ReactionPerformance.CellAt(r, r.SnapAtMs, snapFrame: true));
+        Assert.Equal(r.FangStates - 1, ReactionPerformance.CellAt(r, r.SnapAtMs + 1000f / 60f, snapFrame: false));
+        Assert.All(Frames(r), u => Assert.Equal(ReactionPerformance.StateAt(r, u), ReactionPerformance.CellAt(r, u, snapFrame: false)));
         Assert.InRange(ReactionPerformance.TeethOpacity(r, 0f), 0.1f, 0.25f);
         var ramp = Frames(r).Where(u => u <= r.AppearMs + 17f).Select(u => ReactionPerformance.TeethOpacity(r, u)).ToArray();
         Assert.True(ramp.Zip(ramp.Skip(1), (a, b) => b - a).Max() <= 0.5f, "the teeth pop in");
@@ -297,8 +305,12 @@ public class JawsReactionTest
         Assert.True(cold.R > 190 && cold.G > 180 && cold.B > 220 && cold.G < 225, $"the teeth do not start a pale lavender-grey: {cold}");
         // ...and not at full strength: the fangs appearing must not outshine the bite (they reach whole on the snap frame)
         Assert.InRange(ReactionPerformance.TeethOpacity(r, r.AppearMs), r.FormedOpacity - 0.02f, r.FormedOpacity + 0.02f);
-        Assert.InRange(r.FormedOpacity, 0.6f, 0.9f);
-        Assert.Equal(1f, ReactionPerformance.TeethOpacity(r, r.SnapAtMs), 3);
+        // SMOKE, never quite solid (the owner: "more like mist, a little lower opacity"): formed about half, strongest on
+        // the snap, still below whole
+        Assert.InRange(r.FormedOpacity, 0.45f, 0.7f);
+        Assert.InRange(r.SnapOpacity, 0.75f, 0.9f);
+        Assert.True(r.SnapOpacity > r.FormedOpacity + 0.2f, "the charge does not strengthen the teeth");
+        Assert.Equal(r.SnapOpacity, ReactionPerformance.TeethOpacity(r, r.SnapAtMs), 3);
         Assert.True(Frames(r).Count(u => u > 0f && u < r.AppearMs) >= 5, "the teeth condense in too few frames (a pop)");
         Assert.True(hot.G < 120 && hot.R > 180 && hot.B > 200, $"the teeth do not end magenta: {hot}");
         var charge = Frames(r).Select(u => ReactionPerformance.Charge(r, u)).ToArray();
@@ -337,9 +349,9 @@ public class JawsReactionTest
         const float Frame = 1000f / 60f;
         // nothing of the impact before the snap
         Assert.Equal(default, ReactionPerformance.Burst(r, r.SnapAtMs - Frame));
-        // the teeth: whole on the snap frame, half the next, gone after
-        Assert.Equal(1f, ReactionPerformance.TeethOpacity(r, r.SnapAtMs), 3);
-        Assert.InRange(ReactionPerformance.TeethOpacity(r, r.SnapAtMs + Frame), 0.3f, 0.7f);
+        // the teeth: strongest on the snap frame, half the next, gone after
+        Assert.Equal(r.SnapOpacity, ReactionPerformance.TeethOpacity(r, r.SnapAtMs), 3);
+        Assert.InRange(ReactionPerformance.TeethOpacity(r, r.SnapAtMs + Frame), 0.25f * r.SnapOpacity, 0.75f * r.SnapOpacity);
         Assert.True(ReactionPerformance.TeethOpacity(r, r.SnapAtMs + 2f * Frame) < ReactionRecipe.VisibleFloor + 0.05f);
         // the FLASH arrives on the snap frame and peaks on the next; the RING, the SPEED LINES and the PUFF grow; the
         // SPLINTERS fly out from a frame after, turning
@@ -546,6 +558,7 @@ public class JawsReactionTest
         Assert.Contains("FlashTint(Recipe, u, hotFrame && !hushed)", light);
         Assert.Contains("!secondary && !quiet && streaks is not null", light);
         Assert.Contains("var quiet = stage.ChampionPerforming;", material);
+        Assert.Contains("var state = CellAt(Recipe, u, hotFrame);", material);
         Assert.Contains("_hotU ??=", src.Replace("if (_hotU is null && u >= Recipe.SnapAtMs - 0.5f) _hotU = u;", "_hotU ??="));
         Assert.Contains("Recipe.ShardsKey", material);
         Assert.Contains("Recipe.FlashKey", light);
