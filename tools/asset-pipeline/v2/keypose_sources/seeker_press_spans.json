@@ -1,0 +1,17 @@
+{
+  "field_cell": [
+    320,
+    448
+  ],
+  "wave_cell": [
+    192,
+    512
+  ],
+  "wave_cells": 2,
+  "clamp_cell": [
+    512,
+    160
+  ],
+  "wave_lead_x": 153.6,
+  "clamp_press_y": 113.2
+}

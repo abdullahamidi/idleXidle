@@ -1506,6 +1506,45 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var fieldSk = _waveSkills.FirstOrDefault(k => k.Def.Kind == SkillKind.Field);
         _auraFxKey = fieldSk?.Def.FxKey;
         _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
+        // THE FIELD PERFORMED (ADR-011, the FIELD / AURA reference): a field with its own recipe (PRESS) is presented tick
+        // by tick from this wave's own Aura events, each with the creature its Break names; it replaces the generic held
+        // aura. A field without one keeps that aura.
+        _field = null;
+        if (fieldSk is not null && FieldRecipes.For(Character.Id, fieldSk.Def.Id) is { } fieldRecipe)
+        {
+            var fieldSlot = -1;
+            for (var si = 0; si < _waveSkills.Count; si++)
+                if (ReferenceEquals(_waveSkills[si], fieldSk)) { fieldSlot = si; break; }
+            var ticks = new List<(float AtMs, int Target, bool Yields)>();
+            var events = _run.LastWaveEvents;
+            for (var ei = 0; ei < events.Count; ei++)
+            {
+                if (events[ei].Kind != BattleEventKind.Aura || events[ei].Slot != fieldSlot) continue;
+                var at = events[ei].AtMs;
+                var target = -1;
+                var yields = false;
+                for (var ej = 0; ej < events.Count; ej++)
+                {
+                    var o = events[ej];
+                    if (target < 0 && o.Kind == BattleEventKind.Break && o.AtMs == at) target = o.Slot;
+                    // A PRESENTED REACTION (JAWS) around this tick: the crush gives way (no arcs above and below the creature)
+                    if (o.Kind == BattleEventKind.Skill && o.Slot >= 0 && o.Slot < _waveSkills.Count
+                        && _waveSkills[o.Slot].Def.Kind == SkillKind.Reaction
+                        && ReactionRecipes.For(Character.Id, _waveSkills[o.Slot].Def.Id) is not null
+                        && o.AtMs >= at - fieldRecipe.YieldBeforeMs && o.AtMs <= at + fieldRecipe.YieldAfterMs)
+                        yields = true;
+                }
+                ticks.Add((at, target, yields));
+            }
+            _isStanding ??= s => _replay?.CreatureAlive(s) ?? true;
+            _field = new FieldPerformance(fieldRecipe, fieldSlot, ticks)
+            {
+                IsStanding = _isStanding,
+                CreatureSlots = _run.LastWaveCreatures.Count,
+            };
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("field-wave", $"{fieldRecipe.Id}\tslot={fieldSlot}\tticks={string.Join(",", ticks.Select(t => $"{t.AtMs:0}>{t.Target}{(t.Yields ? "y" : "")}"))}");
+        }
 
         WavesBegun++;
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
@@ -2790,6 +2829,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
         if (!ShotNoVfx) foreach (var r in _reactions) r.DrawUnder(b, this, _playheadMs);
         if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
+        // THE FIELD (PRESS): the quiet pressure haze around the Seeker, BEHIND him, gathering before each tick
+        var fieldAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        if (!ShotNoVfx && _field is not null && _mode != Mode.Downed) _field.DrawUnder(b, this, _playheadMs, _anim);
+        if (PresentTrace.Enabled) _fieldAllocBytes = GC.GetAllocatedBytesForCurrentThread() - fieldAlloc;
 
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
@@ -2801,6 +2844,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
         if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
         if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
+        // THE FIELD'S PULSE (PRESS): the pressure front on its way (over the creatures, under the Seeker it leaves) and the
+        // two crush arcs on the target
+        fieldAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        var fieldSprites = 0;
+        if (!ShotNoVfx && _field is not null)
+        {
+            fieldSprites = _field.SpriteCount;
+            _field.DrawMaterial(b, this, _playheadMs);
+        }
+        if (PresentTrace.Enabled) _fieldAllocBytes += GC.GetAllocatedBytesForCurrentThread() - fieldAlloc;
 
         // Champion (arena left). Name/HP live in the top-left HUD.
         if (!ShotNoChamp)
@@ -2816,7 +2869,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         if (!ShotNoVfx) _vfx.DrawOver(b);
         // ...and everything about them that IS light, in one additive pass of its own.
-        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0))
+        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0 || _field is not null))
         {
             _vfx.BeginLight(b);
             if (_performance is { } performer)
@@ -2831,6 +2884,17 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             if (!ShotNoVfx) foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
+            // THE FIELD'S LIGHT (PRESS): the front's rim, and the arcs' pressing edges flaring on the tick
+            lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+            if (_mode != Mode.Downed) _field?.DrawLight(b, this, _playheadMs, _anim);
+            if (PresentTrace.Enabled)
+            {
+                _fieldAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
+                if (_field is { } field && field.TryPhrase(_playheadMs, out var fu, out var ft))
+                    PresentTrace.Log("field-draw", $"u={fu:0}\ttarget={field.TargetOf(ft)}\tsprites={fieldSprites + field.SpriteCount}"
+                                                   + $"\tsquash={field.Squash(field.TargetOf(ft), _playheadMs).Y:0.000}\tshape={field.LastShape.X},{field.LastShape.Y},{field.LastShape.Width},{field.LastShape.Height}"
+                                                   + $"\tbody={(TryBody(VfxSubject.Creature(Math.Max(0, field.TargetOf(ft))), out var fb) ? $"{fb.X},{fb.Y},{fb.Width},{fb.Height}" : "-")}\talloc={_fieldAllocBytes}");
+            }
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
             // (the effects pass between them is counted too, so this is an upper bound)
@@ -3208,9 +3272,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </param>
     private bool ActorSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps,
                              bool loop, Color tint, float topCrop = 0f, bool flip = false, VfxSubject? record = null,
-                             string? placeAs = null)
+                             string? placeAs = null, Vector2 squash = default)
     {
-        if (DevNoStrips || !_ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out var frame, placeAs)) return false;
+        if (DevNoStrips || !_ui.AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out var frame, placeAs, squash)) return false;
         if (record is { } subject) _drawnFrames[subject] = frame;
         return true;
     }
@@ -3642,15 +3706,17 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // scale, its ground, its anchor — and an authored attack clip may occupy more art space than them
             // (a 640 frame around the 512 idle) without the creature being rescaled or its feet moving.
             var placedAs = attacking ? look.IdleStrip : null;
+            // A FIELD'S CRUSH (PRESS): the creature under the pressing arcs buckles for a moment, feet on the floor
+            var squash = _field?.Squash(i, _playheadMs) ?? Vector2.One;
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs))
+                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs, squash: squash))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
-            SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs);
+            SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs, squash);
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
-            FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop);
+            FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop, squash);
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
             if (_replay is null) continue;
@@ -3724,17 +3790,18 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         string? stripKey = attacking ? look.AttackStrip : look.IdleStrip;
         string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
+        var squash = _field?.Squash(0, _playheadMs) ?? Vector2.One;   // a field's crush (PRESS)
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
                                                 !attacking, enterTint, crop, record: VfxSubject.Creature(0),
-                                                placeAs: attacking ? look.IdleStrip : null))
+                                                placeAs: attacking ? look.IdleStrip : null, squash: squash))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
             if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, enterTint, crop))
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
-        SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop);
-        FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop);
+        SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop, squash: squash);
+        FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop, squash);
         DrawBreakBadge(b, 0, ab);
 
         // The wind-up telegraph is the attack CLIP itself plus the ember tint blended into the sprite above
@@ -3803,7 +3870,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var fps = attacking ? 10f : 8f;
         var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
-        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0)))
+        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0),
+                                        squash: _field?.Squash(0, _playheadMs) ?? Vector2.One))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
             // while LayoutActors published the full box as this boss's body and envelope — 2.45x wider
@@ -6606,6 +6674,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
+    /// <summary>The wave's performed FIELD (PRESS), or null: the field keeps the generic held aura (ADR-011, the FIELD reference).</summary>
+    private FieldPerformance? _field;
+
+    /// <summary>The field's fallback target rule, cached once so the draw allocates nothing: is this creature still standing?</summary>
+    private Func<int, bool>? _isStanding;
+
+    /// <summary>What the field's draw allocated this frame (the trace; must stay 0).</summary>
+    private long _fieldAllocBytes;
+
     /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its fangs, their snap, the impact.</summary>
     private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
@@ -6896,17 +6973,19 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// composition drew is a flash the player sees on swarms and nowhere else (playtest 2026-08-29:
     /// "it only works on the small multi-creatures").
     /// </summary>
-    private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)
+    private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop,
+                           Vector2 squash = default)
     {
         if (strength <= 0f || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
-        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop);
+        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop, squash: squash);
     }
 
     /// <summary>CAPTURE VIEW (RH_SHOT_SIL=1): the creature as a flat silhouette — its mask, over its body.</summary>
-    private void SilhouetteOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float crop, string? placeAs = null)
+    private void SilhouetteOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float crop, string? placeAs = null,
+                                Vector2 squash = default)
     {
         if (!CaptureViews.Silhouette || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
-        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, new Color(150, 146, 160), crop, placeAs: placeAs);   // flat, apart from the stone
+        ActorSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, new Color(150, 146, 160), crop, placeAs: placeAs, squash: squash);   // flat, apart from the stone
     }
 
     /// <summary>
@@ -6990,7 +7069,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // NOT gated on Mode.Fighting. The pulse learned this the hard way: waves run ~2 s and the
         // transition ~2 s, so a field raised only while fighting is off screen for half the cycle and
         // reads as absent. It stops only when the champion is down.
-        if (_auraColour is not { } colour || _mode == Mode.Downed) return;
+        if (_auraColour is not { } colour || _mode == Mode.Downed || _field is not null) return;   // a performed field draws itself
         var spike = 1f - Math.Clamp(_auraSincePulse / AuraSpikeSeconds, 0f, 1f);
         var level = AuraRest + (AuraPeak - AuraRest) * spike * spike * spike;
         // IT STANDS ON THE GROUND. The old placement worked the drawn height out for itself and

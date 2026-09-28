@@ -181,7 +181,11 @@ public class focus_renderer_law_test
         var forward = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)");
         Assert.Contains("=> AnimSprite(b, stripKey, box, seconds, fps, loop, tint, topCrop, flip, out _);", forward);
 
-        var draw = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,\n                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null)");
+        var draw = MemberOf(kit, "public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,\n                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null, Vector2 squash = default)");
+        // a field's crush buckles the placed frame through the resolver's own pure helper (feet on the floor), never here
+        Assert.Contains("f = f with { Dest = Buckle(f.Dest, squash) };", draw);
+        var buckle = MemberOf(kit, "public static Rectangle Buckle(Rectangle dest, Vector2 squash)");
+        Assert.Contains("return new Rectangle(dest.Center.X - w / 2, dest.Bottom - h, w, h);", buckle);
         Assert.Contains("ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip, placeAs)", draw);
         Assert.Contains("UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, \"UiKit.AnimSprite\");", draw);
         Assert.Contains("b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);", draw);
@@ -217,7 +221,7 @@ public class focus_renderer_law_test
                                      "private void DrawBoss(SpriteBatch b, bool attacking)",
                                      "private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey)" })
             Assert.Contains("record: VfxSubject.", MemberOf(hunt, draw));
-        var flash = MemberOf(hunt, "private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)");
+        var flash = MemberOf(hunt, "private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop,\n                           Vector2 squash = default)");
         Assert.DoesNotContain("record:", flash);
         Assert.DoesNotContain("VfxSubject", flash);
 

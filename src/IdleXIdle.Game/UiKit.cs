@@ -740,9 +740,11 @@ public sealed class UiKit
     /// figure stands, which is what <c>actor_crop_test</c> and the envelope tests exist to forbid.
     /// </remarks>
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint,
-                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null)
+                           float topCrop, bool flip, out SpriteFrame frame, string? placeAs = null, Vector2 squash = default)
     {
         if (ResolveFrame(stripKey, box, seconds, fps, loop, topCrop, flip, placeAs) is not { } f) { frame = default; return false; }
+        // A BODY BUCKLING (a field's crush, ADR-011): the resolver's own pure helper, never arithmetic here
+        f = f with { Dest = Buckle(f.Dest, squash) };
         UiRasterLedger.Note(stripKey, f.Src.Width, f.Src.Height, f.Dest.Width, f.Dest.Height, "UiKit.AnimSprite");
         b.Draw(f.Texture, f.Dest, f.Src, tint, 0f, Vector2.Zero, f.Effects, 0f);
         frame = f;
@@ -769,6 +771,18 @@ public sealed class UiKit
     /// idle's, so it never showed. The strip's own crop still decides what of its texture is drawn, so nothing is
     /// cut; only the scale and the ground come from <paramref name="placeAs"/>.
     /// </param>
+    /// <summary>
+    /// A BODY BUCKLING (a field's crush, ADR-011): the placed rectangle scaled (width, height) about its FEET, which stay
+    /// on the floor; unchanged for no squash (default or one). Presentation only: the placement itself is untouched.
+    /// </summary>
+    public static Rectangle Buckle(Rectangle dest, Vector2 squash)
+    {
+        if (squash == default || squash == Vector2.One) return dest;
+        var w = (int)MathF.Round(dest.Width * squash.X);
+        var h = (int)MathF.Round(dest.Height * squash.Y);
+        return new Rectangle(dest.Center.X - w / 2, dest.Bottom - h, w, h);
+    }
+
     public SpriteFrame? ResolveFrame(string stripKey, Rectangle box, float seconds, float fps, bool loop, float topCrop = 0f,
                                      bool flip = false, string? placeAs = null)
     {
