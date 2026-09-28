@@ -2143,7 +2143,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
                     if (!auraTick && reactionHit && reactionHitRecipe!.TargetFlash <= 0f)
                     {
-                        // NO JAWS TARGET FLASH (the final direction, 2026-09-27): the Shadow maw IS the reaction's hit
+                        // NO JAWS TARGET FLASH (the final direction, 2026-09-27): the Shadow bite IS the reaction's hit
                         // feedback; a white flash under them competed with the shape. Ordinary blows keep the generic F2.
                     }
                     else if (!auraTick && reactionHit && reactionHitPerf is { Snapped: false } flashing)
@@ -2789,7 +2789,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
-        // THE REACTION LAYER (JAWS): the Shadow jaws, made of mist, on the creature that bit: over the creatures, UNDER the
+        // THE REACTION LAYER (JAWS): the frontal Shadow bite's material on the creature that bit: over the creatures, UNDER the
         // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
         // over her, its shut band lay across her fists like a weapon)
         var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
@@ -2822,6 +2822,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 if (performer is MeleePerformance lunge && _ui.Assets.Get("fxp_trail_soft") is { } streak)
                     lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
             }
+            // THE REACTION'S LIGHT (JAWS): the impact's ring, speed lines, slash and flash (the teeth's glow is in the material)
+            var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+            if (!ShotNoVfx) foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);
+            if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
             // (the effects pass between them is counted too, so this is an upper bound)
@@ -6597,7 +6601,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
-    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its maw, the snap.</summary>
+    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its fangs, their snap, the impact.</summary>
     private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
         var targets = CastTargets(cast);

@@ -1,0 +1,82 @@
+{
+  "states": 6,
+  "upper_cell": [
+    256,
+    200
+  ],
+  "lower_cell": [
+    224,
+    120
+  ],
+  "upper_centre_x": 128.0,
+  "lower_centre_x": 112.0,
+  "upper_inner_tip_y": 116.0,
+  "upper_inner_tip_y_all": [
+    116.0,
+    116.0,
+    116.0,
+    116.0,
+    116.0
+  ],
+  "upper_canine_tip_y": 172.0,
+  "upper_inner_tip_x": [
+    82.9,
+    105.4,
+    128.0,
+    150.6,
+    173.1
+  ],
+  "upper_canine_tip_x": [
+    48.0,
+    208.0
+  ],
+  "lower_tip_y": 40.0,
+  "lower_tip_y_all": [
+    40.0,
+    40.0,
+    40.0,
+    40.0
+  ],
+  "lower_tip_x": [
+    74.6,
+    99.5,
+    124.5,
+    149.4
+  ],
+  "lower_end_tip_x": [
+    54.0,
+    170.0
+  ],
+  "lower_end_tip_y": [
+    34.0,
+    34.0
+  ],
+  "upper_width": 209.9,
+  "lower_width": 142.0,
+  "part_sizes": {
+    "star": [
+      256,
+      256
+    ],
+    "slash": [
+      512,
+      96
+    ],
+    "ring": [
+      256,
+      256
+    ],
+    "streaks": [
+      512,
+      512
+    ],
+    "shards": [
+      256,
+      256
+    ],
+    "smoke": [
+      256,
+      256
+    ]
+  }
+}

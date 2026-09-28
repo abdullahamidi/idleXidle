@@ -12,3 +12,4 @@ the asset-consumer gate (`tools/check_asset_consumers.py`) does not count them a
 Their generators still write into `assets/art/VFX/parts/` if re-run (`seeker_piranha.py`, `seeker_fangs.py`,
 `seeker_mist.py`, `seeker_jaws.py`); move the output back here if you do.
 - `fxp_seeker_mistfang.png`: the four misty teeth that closed like triangles (replaced 2026-09-28 by the misty maw `fxp_seeker_maw`, `seeker_maw.py`).
+- `fxp_seeker_maw.png`: the side-view Shadow maw made of mist (two jaw pieces, 16 states); the owner rejected it the same day ("a bad jaw biting from the side"; replaced 2026-09-28 by the FRONTAL bite, `fxp_seeker_bite_*`, `seeker_bite.py`). Its generator `seeker_maw.py` now writes here.

@@ -36,7 +36,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-OUT = os.path.join(REPO, "assets", "art", "VFX", "parts")
+OUT = os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "history")   # RETIRED (2026-09-28): the side-view maw was rejected for a FRONTAL bite (seeker_bite.py); this strip is history and never played
 SRC = os.path.join(HERE, "keypose_sources")
 
 STATES = 16
