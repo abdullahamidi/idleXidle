@@ -614,6 +614,10 @@ public class JawsReactionTest
         Assert.InRange(Jaws.SnapVolume, 0.25f, 0.5f);                    // quiet enough to repeat
         var wav = RepoFile("assets", "audio", "combat", "sfx_seeker_jaws_bite.wav");
         Assert.True(File.Exists(wav));
+        // HUMAN-APPROVED (the owner, 2026-09-28: "A is perfect ... a gold standard"): these are the bytes the owner
+        // listened to. A different file is a new approval, never a regeneration.
+        Assert.Equal("bc361939d29c149e34bdd7dbca6ae536a5176cdff90524a9d8f6aa8b67e326d8",
+                     Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(wav))).ToLowerInvariant());
         // a REAL bite (the owner: "like Trundle's Q"): built from recorded foley, one dense block of ~0.5 s (the
         // synthesised bites were ~180 ms thuds), its onset on the snap
         var bytes = File.ReadAllBytes(wav);

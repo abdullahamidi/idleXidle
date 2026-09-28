@@ -407,7 +407,8 @@ public sealed class ReactionRecipe
     /// meet): real teeth and a real cabbage-and-flesh crunch tearing in chewing bursts, the weight landing ~150 ms later
     /// (a pitch-dropping sub and a real meat thud) with the crunch still grinding under it, wet squelches, cartilage ticks;
     /// ~580 ms, dense (the owner, 2026-09-28: "a real bite, like Trundle's Q in League of Legends"; the synthesised bites
-    /// before it read as a thud). No metal, no roar, no whoosh.
+    /// before it read as a thud). No metal, no roar, no whoosh. HUMAN-APPROVED (2026-09-28): JAWS is the gold-standard
+    /// REACTION reference; the cue's bytes are pinned, so a change is a new approval.
     /// </summary>
     public IReadOnlyList<string> SnapCues { get; init; } = new[] { "sfx_seeker_jaws_bite", "sfx_hit" };
 

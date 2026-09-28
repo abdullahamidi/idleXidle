@@ -1,13 +1,12 @@
 # Audio brief: the Seeker's JAWS (the reaction's one cue)
 
-> **Status (2026-09-28): the picture is APPROVED; the cue is a REAL BITE built from recorded foley.** The owner rejected
-> the three synthesised bites ("all similar; I want a real bite, like Trundle's Q (Chomp) in League of Legends").
-> `sfx_seeker_jaws_bite` is now built by `tools/asset-pipeline/make_jaws_bite.py` from CC0 recordings
-> (`tools/asset-pipeline/foley/jaws_bite/SOURCES.md`), shaped to the measured structure of that reference (analysed
-> locally only; never sampled or shipped). Candidate A (CHOMP) is in the game; B (BONE) and C (JUICY) wait in
-> `production/qa/evidence/jaws-real-bite/candidates/` for the owner's ear (review page https://claude.ai/artifact/6tP43HjDMCtfKGWeHzHCRu). The rejected cues
-> (the trap's clack, the piranha's chomp, the thorn impact) are in `tools/asset-pipeline/audio_history/`; the
-> synthesised bites in `production/qa/evidence/jaws-bite-sound/candidates/`.
+> **Status (2026-09-28): APPROVED, the GOLD STANDARD.** The owner: "A is perfect, exactly what I wanted. We can close JAWS with this sound effect and mark it as a gold standard." The cue is
+> `sfx_seeker_jaws_bite`, candidate A (CHOMP), built by `tools/asset-pipeline/make_jaws_bite.py` from CC0 recordings
+> (`tools/asset-pipeline/foley/jaws_bite/SOURCES.md`), shaped to the measured structure of the owner's reference
+> (Trundle's Q in League of Legends; analysed locally only, never sampled or shipped). HUMAN-APPROVED: its bytes are
+> pinned by SHA-256 in `jaws_reaction_test.cs`; a change is a new approval. B (BONE) and C (JUICY) were not chosen and
+> stay in `production/qa/evidence/jaws-real-bite/candidates/` as history; the rejected cues are in
+> `tools/asset-pipeline/audio_history/` and `production/qa/evidence/jaws-bite-sound/candidates/`. Review page https://claude.ai/artifact/6tP43HjDMCtfKGWeHzHCRu.
 
 ## The real bite (`make_jaws_bite.py`, candidate A), in a mouth's order
 
@@ -71,3 +70,4 @@ gameplay event, a small sound.
 - 2026-09-28: the frontal smoke-teeth picture APPROVED; the owner asked for "more of a bite sound": three
   synthesised bites (teeth meet, sink in, the jaw's weight), all rejected ("all similar; a real bite, like Trundle's Q").
 - 2026-09-28: the cue is a REAL bite from CC0 foley, shaped to the measured reference; candidates A CHOMP, B BONE, C JUICY.
+- 2026-09-28: the owner chose A ("perfect, exactly what I wanted"): APPROVED, the gold-standard reaction sound; JAWS closed.

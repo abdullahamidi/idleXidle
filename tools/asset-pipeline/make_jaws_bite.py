@@ -17,6 +17,10 @@ foley/jaws_bite/SOURCES.md); only the sub drop and the resonant blips are synthe
 STRUCTURE, not just pitch: A CHOMP (the reference's shape), B BONE (tight: crunch peaks early, weight at ~65 ms),
 C JUICY (a soft ~90 ms ramp, the wettest).
 
+A IS HUMAN-APPROVED (the owner, 2026-09-28: "A is perfect, exactly what I wanted ... a gold standard"): the approved
+bytes of assets/audio/combat/sfx_seeker_jaws_bite.wav are pinned by SHA-256 in jaws_reaction_test.cs. Do not change
+chomp(), its sources or the shared DSP without the owner's ear: a different file is a new approval, not a regeneration.
+
     PYTHONUTF8=1 python tools/asset-pipeline/make_jaws_bite.py --extract <dir of the downloaded sources>   # once
     PYTHONUTF8=1 python tools/asset-pipeline/make_jaws_bite.py                                            # build
 """
