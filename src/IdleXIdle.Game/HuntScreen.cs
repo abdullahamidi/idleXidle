@@ -1277,7 +1277,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             case Mode.Downed:
                 // THE ANSWER PLAYS OUT UNDER THE FALL (JAWS, ADR-011): the fight answers the bite that fells him
                 // BEFORE he falls, and the replay ends on that same millisecond. Its reaction runs on for its
-                // ~0.3 s on the fall's clock (the jaws let go as he falls), rather than freezing on its first frame.
+                // ~0.6 s on the fall's clock (the jaws let go as he falls), rather than freezing on its first frame.
                 if (ReactionStillPlaying())
                 {
                     _playheadMs += dt * 1000f * _speedMul;
@@ -2123,8 +2123,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         }
                         if (!_summed.Contains(bi))
                         {
-                            // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER A FEW FRAMES AFTER THE FANGS' SNAP, so the eye
-                            // sees the fangs before it reads the number (ReactionRecipe.NumberDelayMs)
+                            // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER A FEW FRAMES AFTER THE JAWS' SNAP, so the eye
+                            // sees the jaws bite before it reads the number (ReactionRecipe.NumberDelayMs)
                             if (reactionHit && reactionHitPerf is { Answered: false } answering)
                                 _reactionEchoes.Add(new ReactionEcho(answering, ReactionEchoKind.Number, e.Slot, total, crit, skill, hits,
                                                                      reaction ? trapName : null));
@@ -2143,7 +2143,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
                     if (!auraTick && reactionHit && reactionHitRecipe!.TargetFlash <= 0f)
                     {
-                        // NO JAWS TARGET FLASH (the final direction, 2026-09-27): the Shadow fangs ARE the reaction's hit
+                        // NO JAWS TARGET FLASH (the final direction, 2026-09-27): the Shadow maw IS the reaction's hit
                         // feedback; a white flash under them competed with the shape. Ordinary blows keep the generic F2.
                     }
                     else if (!auraTick && reactionHit && reactionHitPerf is { Snapped: false } flashing)
@@ -2247,9 +2247,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     break;
                 case BattleEventKind.EnemyDown:
                 {
-                    // A CREATURE A PRESENTED REACTION'S ANSWER KILLED falls on the fangs' SNAP, not on the bite's frame:
-                    // the fight killed it at the bite, but on screen the fangs have not shut yet (JAWS, ADR-011). Until
-                    // then it is drawn standing, between the fangs (_deathDeferred).
+                    // A CREATURE A PRESENTED REACTION'S ANSWER KILLED falls on the jaws' SNAP, not on the bite's frame:
+                    // the fight killed it at the bite, but on screen the jaws have not shut yet (JAWS, ADR-011). Until
+                    // then it is drawn standing, between the jaws (_deathDeferred).
                     if (reactionHitPerf is { Snapped: false } killing && e.AtMs == reactionHitAtMs && killing.Targets.Contains(e.Slot))
                     {
                         _reactionEchoes.Add(new ReactionEcho(killing, ReactionEchoKind.Death, e.Slot));
@@ -2789,6 +2789,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
+        // THE REACTION LAYER (JAWS): the Shadow jaws, made of mist, on the creature that bit: over the creatures, UNDER the
+        // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
+        // over her, its shut band lay across her fists like a weapon)
+        var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
+        var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
+        if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
+
         // Champion (arena left). Name/HP live in the top-left HUD.
         if (!ShotNoChamp)
         {
@@ -2800,11 +2808,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
         if (!ShotNoVfx) _outgoing?.DrawMaterial(b);
         if (!ShotNoVfx) _performance?.DrawMaterial(b);
-        // THE REACTION LAYER (JAWS): the Shadow jaws, made of mist, on the creature that bit — over both figures
-        var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
-        var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
-        if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
 
         if (!ShotNoVfx) _vfx.DrawOver(b);
         // ...and everything about them that IS light, in one additive pass of its own.
@@ -2819,13 +2822,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 if (performer is MeleePerformance lunge && _ui.Assets.Get("fxp_trail_soft") is { } streak)
                     lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
             }
-            var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-            if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
             // (the effects pass between them is counted too, so this is an upper bound)
             if (PresentTrace.Enabled && _performance is { } traced)
                 PresentTrace.Log("perf-draw", $"sprites={traced.SpriteCount}\tdraws={b.GraphicsDevice.Metrics.DrawCount - perfDraws}\treleased={traced.Released}");
+            // `draws` is the batch's draw calls from the reaction layer to the end of the light pass (the champion, the
+            // action's material and the effects between them are counted too): an upper bound; `sprites` is the layer's own
             if (PresentTrace.Enabled && _reactions.Count > 0)
                 PresentTrace.Log("reaction-draw", $"alive={_reactions.Count}\tsprites={_reactions.Sum(r => r.SpriteCount)}"
                                                   + $"\tdraws={b.GraphicsDevice.Metrics.DrawCount - reactionDraws}"
@@ -6533,23 +6536,23 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         PlayFx(VfxProfiles.DeathCreature, VfxSubject.Creature(slot), Color.White);
     }
 
-    /// <summary>What a presented reaction's answer shows on its fangs' snap (or a few frames after it) instead of on the bite's frame.</summary>
+    /// <summary>What a presented reaction's answer shows on its jaws' snap (or a few frames after it) instead of on the bite's frame.</summary>
     private enum ReactionEchoKind { Number, Flash, Death }
 
     /// <summary>
     /// ONE PIECE OF A REACTION'S ANSWER, held for its jaws' snap (JAWS, ADR-011). The fight resolved the reflected blow
     /// on the bite's millisecond; the jaws take ReactionRecipe.SnapAtMs to gather and shut on screen, and the answer's own feedback belongs to
     /// the moment they do: a kill's fall (and a flash, when a recipe has one) on the snap, the number a few frames after
-    /// it so the fangs are seen first. The enemy's bite keeps its own feedback at t 0. Presentation only: nothing here
+    /// it so the jaws are seen first. The enemy's bite keeps its own feedback at t 0. Presentation only: nothing here
     /// changes what the fight did.
     /// </summary>
     private readonly record struct ReactionEcho(ReactionPerformance Reaction, ReactionEchoKind Kind, int Slot, int Amount = 0,
                                                 bool Crit = false, bool Skill = false, int Hits = 1, string? Word = null);
 
-    /// <summary>The answers waiting for their fangs' snap, oldest first (a few at most: a reaction every few seconds).</summary>
+    /// <summary>The answers waiting for their jaws' snap, oldest first (a few at most: a reaction every few seconds).</summary>
     private readonly List<ReactionEcho> _reactionEchoes = new();
 
-    /// <summary>Creatures the fight has killed whose fall waits for the fangs' snap: drawn standing until then.</summary>
+    /// <summary>Creatures the fight has killed whose fall waits for the jaws' snap: drawn standing until then.</summary>
     private readonly HashSet<int> _deathDeferred = new();
 
     /// <summary>
@@ -6594,12 +6597,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </summary>
     private readonly List<ReactionPerformance> _reactions = new();
 
-    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its fangs, their snap.</summary>
+    /// <summary>A presented reaction's answer to the bite in <paramref name="cast"/>: its maw, the snap.</summary>
     private ReactionPerformance? SpawnReaction(ReactionRecipe recipe, BattleEvent cast, Source source)
     {
         var targets = CastTargets(cast);
         if (targets.Count == 0) return null;   // nothing standing to bite back at
-        // bounded: a reaction lives ~0.3 s and rearms in seconds, so more than a few alive is a scrub or a seek
+        // bounded: a reaction lives ~0.6 s and rearms in seconds, so more than a few alive is a scrub or a seek
         if (_reactions.Count >= 4)
         {
             ReleaseEchoes(_reactions[0], present: true);
@@ -6608,8 +6611,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var r = new ReactionPerformance(recipe, cast.Slot, cast.AtMs, targets, SourceColor.GetValueOrDefault(source, Bone));
         _reactions.Add(r);
         r.Update(_playheadMs, this);
-        // The cue is NOT played here: the ear hears the bite when the fangs SNAP (UpdateReactions, on that frame), so
-        // cause and effect stay in order: BITE thud, the fangs appear open, SNAP.
+        // The cue is NOT played here: the ear hears the bite when the jaws SNAP (UpdateReactions, on that frame), so
+        // cause and effect stay in order: BITE thud, the jaws open, SNAP.
         if (PresentTrace.Enabled)
             PresentTrace.Log("reaction-spawn", $"{recipe.Id}\tslot={cast.Slot}\tcontact={cast.AtMs}\ttargets={string.Join(",", targets)}"
                                                + $"\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
@@ -6635,18 +6638,25 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;   // the layer's own
             // THE SNAP: a kill's fall lands on screen now, and the ear hears ONE authored cue for the whole phrase, its
             // transient on this frame (not lead: under a performing action the duck keeps it secondary to the action's
-            // own voice). The number waits for its own frame a little after, so the fangs are seen before it is read.
+            // own voice). The number waits for its own frame a little after, so the bite is seen before it is read.
             if (step.Answered && !step.Snapped) ReleaseEchoes(r, present: true);   // the number's own frame
             if (step.Snapped)
             {
                 ReleaseEchoes(r, present: true, keepNumber: !step.Answered);
-                var cx = r.Targets.Count > 0 && TryBody(VfxSubject.Creature(r.Targets[0]), out var bitten) ? bitten.Center.X : ArenaRect.Center.X;
+                var front = ReactionPerformance.FrontTarget(this, r.Targets);
+                var cx = front >= 0 && TryBody(VfxSubject.Creature(r.Targets[front]), out var bitten) ? bitten.Center.X : ArenaRect.Center.X;
                 var cue = Sound?.PlayFirst(r.Recipe.SnapCues, r.Recipe.SnapVolume, 0f, Pan(cx, r.Recipe.PanWidth), 0.04f);
                 if (PresentTrace.Enabled) PresentTrace.Log("reaction-cue", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tcue={cue ?? "-"}");
             }
             if (!PresentTrace.Enabled) continue;
-            var clamp = r.ClampAt.Count > 0 ? r.ClampAt[0] : default;
-            if (step.Snapped) PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}");
+            var lead = ReactionPerformance.FrontTarget(this, r.Targets);
+            var clamp = lead >= 0 && lead < r.ClampAt.Count ? r.ClampAt[lead] : default;
+            if (step.Snapped)
+            {
+                var laid = lead >= 0 && TryBody(VfxSubject.Creature(r.Targets[lead]), out var lb) ? lb : Rectangle.Empty;
+                PresentTrace.Log("reaction-clamp", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}\tclamp={clamp.X:0},{clamp.Y:0}\tbelt={r.BeltAt.X:0},{r.BeltAt.Y:0}"
+                                                   + $"\tbody={laid.X},{laid.Y},{laid.Width},{laid.Height}");
+            }
             if (step.Answered) PresentTrace.Log("reaction-number", $"{r.Recipe.Id}\tcontact={r.TriggerMs}\tat={_playheadMs - r.TriggerMs:0}");
         }
     }

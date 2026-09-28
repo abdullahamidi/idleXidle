@@ -13,19 +13,19 @@ using Xunit;
 namespace IdleXIdle.Game.Tests;
 
 /// <summary>
-/// THE REACTION CONTRACT (ADR-011, JAWS; SHADOW FANGS MADE OF MIST, the owner, 2026-09-28): a reaction is presented on
-/// its own layer, belongs to its SKILL, never owns the champion's figure and moves nothing; it is FOUR TEETH MADE OF MIST
-/// and nothing else (no separate fog, no creature, no eye, no glint, no residue, no particles, no additive light, no
-/// flash): drifts of Shadow mist come in and condense into teeth, the jaws CLOSE on the creature (the upper points pass
-/// the lower ones across its middle, the rows interlocking), hold the bite, then let go and dissolve back into mist;
-/// ONE cue on the snap; the number a few frames after the snap.
+/// THE REACTION CONTRACT (ADR-011, JAWS; a SHADOW MAW MADE OF MIST, the owner, 2026-09-28): a reaction is presented on
+/// its own layer, belongs to its SKILL, never owns the champion's figure and moves nothing; it is ONE MISTY MAW and
+/// nothing else (no separate fog, no loose teeth, no creature body, no eye, no glint, no residue, no particles, no
+/// additive light, no flash): loose Shadow smoke gathers in front of the creature that bit and forms an upper and a
+/// lower jaw that open wide, snap shut past closed on its front (the rows of teeth interlocking), clench (a jolt and a
+/// swell), hold the bite, then let go and dissolve back into rising smoke; ONE cue on the snap; the number after it.
 /// </summary>
 /// <remarks>
 /// The failures these stop were measured across the JAWS work: a row-wide rope ring no one could tie to the bite, five
 /// generic sounds on one frame, a post-bite "lay a trap" clip that never played, a dock tile that looked the same armed
-/// and rearming, a spring-loaded bear trap with a chain the owner rejected as a mechanism, piranhas too small to read at
-/// true speed, and then four teeth that stopped on the creature's outline and never met (the owner: "the teeth don't
-/// close"), popping in as hard sprites where the owner wanted them to come like mist.
+/// and rearming, a spring-loaded bear trap the owner rejected as a mechanism, a whole piranha too small and detailed to
+/// read at true speed, four teeth that stopped on the creature's outline and never met, and four misty teeth that did
+/// close but read as "four triangles coming to the middle" rather than a jaw that opens and bites.
 /// </remarks>
 public class JawsReactionTest
 {
@@ -80,6 +80,36 @@ public class JawsReactionTest
         }
     }
 
+    /// <summary>A pack: each slot its own canonical body (a slot with none has no body).</summary>
+    private sealed class PackStage : IReactionStage
+    {
+        public readonly Dictionary<int, Rectangle> Bodies = new();
+
+        public bool TryActorFrame(string clipKey, int frame, out SpriteFrame drawn, out int frameSize)
+        {
+            drawn = default;
+            frameSize = 0;
+            return false;
+        }
+
+        public bool TryTargetBody(int slot, out Rectangle body) => Bodies.TryGetValue(slot, out body);
+        public bool TryCaughtBody(int slot, out Rectangle body) => Bodies.TryGetValue(slot, out body);
+        public Texture2D? Texture(string key) => null;
+        public float CasterHeight => 400f;
+
+        public bool TryChampionBody(out Rectangle body)
+        {
+            body = new Rectangle(420, 451, 180, 400);
+            return true;
+        }
+
+        public bool TryTargetFrame(int slot, out SpriteFrame frame)
+        {
+            frame = default;
+            return false;
+        }
+    }
+
     private static ReactionPerformance Answer(params int[] targets) => new(Jaws, 3, 7000, targets.Length == 0 ? new[] { 0 } : targets, Color.MediumPurple);
 
     // ── IDENTITY: the skill's own, never its Form's ─────────────────────────────────────────────
@@ -113,7 +143,7 @@ public class JawsReactionTest
         Assert.Contains(into, k => k.Contains("trap", StringComparison.Ordinal));   // REPAY's own cast clip
     }
 
-    // ── FOUR TEETH MADE OF MIST, AND NOTHING ELSE ────────────────────────────────────────────────
+    // ── ONE MISTY MAW, AND NOTHING ELSE ──────────────────────────────────────────────────────────
 
     /// <summary>The frames a 60 fps screen draws of one reaction (its origin is the first frame, so u = 0, 16.7, 33.3, ...).</summary>
     private static IEnumerable<float> Frames(ReactionRecipe r)
@@ -121,16 +151,18 @@ public class JawsReactionTest
         for (var n = 0; n * (1000f / 60f) < r.GoneMs; n++) yield return n * (1000f / 60f);
     }
 
+    private static readonly Rectangle Whelp = new(1077, 697, 250, 187);   // a bitten whelp's drawn silhouette, as filmed
+
     [Fact]
-    public void test_the_reaction_is_four_misty_teeth_and_nothing_else()
+    public void test_the_reaction_is_one_misty_maw_and_nothing_else()
     {
-        // no separate fog, no creature, no swarm, no residue, no glint, no particles, no behind or light pass: the recipe
-        // has no such dials and the layer has no such passes; its only art is the one misty fang strip
+        // no loose teeth, no separate fog, no creature body, no residue, no glint, no particles, no behind or light pass:
+        // the recipe has no such dials and the layer has no such passes; its only art is the one maw strip
         var props = typeof(ReactionRecipe).GetProperties().Select(pr => pr.Name).ToArray();
-        foreach (var banned in new[] { "Jaw", "Piranha", "Head", "Mouth", "Eye", "Tail", "Residue", "Glint", "Behind", "Smear", "Spark", "Particle",
-                                       "Trail", "Yank", "Chain", "Tether", "Whip", "Pivot", "Half", "Shut", "Mist", "Wisp", "Pocket" })
+        foreach (var banned in new[] { "Fang", "Tooth", "Teeth", "Piranha", "Head", "Eye", "Tail", "Residue", "Glint", "Behind", "Smear",
+                                       "Spark", "Particle", "Trail", "Yank", "Chain", "Tether", "Whip", "Pivot", "Half", "Mist", "Wisp", "Pocket" })
             Assert.DoesNotContain(props, n => n.StartsWith(banned, StringComparison.Ordinal));
-        Assert.Equal(new[] { "FangKey" }, props.Where(n => n.EndsWith("Key", StringComparison.Ordinal)).ToArray());
+        Assert.Equal(new[] { "MawKey" }, props.Where(n => n.EndsWith("Key", StringComparison.Ordinal)).ToArray());
         var methods = typeof(ReactionPerformance).GetMethods().Select(m => m.Name).ToArray();
         foreach (var pass in new[] { "DrawUnder", "DrawBehind", "DrawLight" })
             Assert.DoesNotContain(pass, methods);
@@ -138,66 +170,209 @@ public class JawsReactionTest
         Assert.False(Jaws.Callout);
     }
 
+    /// <summary>What seeker_maw.py wrote about the art (keypose_sources/seeker_maw_spans.json).</summary>
+    private static System.Text.Json.JsonElement MawArt()
+        => System.Text.Json.JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_maw_spans.json"))).RootElement;
+
     [Fact]
-    public void test_the_teeth_are_one_misty_fang_in_condensation_states()
+    public void test_the_maw_is_two_misty_jaw_pieces_whose_teeth_interlock()
     {
         var r = Jaws;
-        // the strip: FangStates states side by side (read off the PNG's own header, no decoder needed)
-        var png = File.ReadAllBytes(RepoFile("assets", "art", "VFX", "parts", r.FangKey + ".png"));
+        // the strip: MawStates states side by side, the upper jaw above the lower (read off the PNG's own header)
+        var png = File.ReadAllBytes(RepoFile("assets", "art", "VFX", "parts", r.MawKey + ".png"));
         int Be(int at) => (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
-        Assert.Equal(r.FangStates * r.StateWidth, Be(16));
-        Assert.Equal(r.StateHeight, Be(20));
-        Assert.InRange(r.FangStates, 12, 24);                    // enough states that ONE per frame reads as a smooth condensing
-        Assert.InRange(r.TipPoint.X, 0f, r.StateWidth);
-        Assert.InRange(r.TipPoint.Y, r.StateHeight * 0.7f, r.StateHeight);
-        Assert.True(r.ToothArtHeight < r.StateHeight, "the loose mist is wider and taller than the tooth it becomes");
-        // authored procedurally from the approved fang's outline, on ONE fixed noise field (so the states condense, never boil)
-        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_mist_fangs.py"));
-        Assert.Contains("import seeker_fangs as F", gen);
+        Assert.Equal(r.MawStates * r.PieceWidth, Be(16));
+        Assert.Equal(2 * r.PieceHeight, Be(20));
+        // the recipe describes the art the script wrote: its states, cell, hinge and jaw length
+        var art = MawArt();
+        Assert.Equal(r.MawStates, art.GetProperty("states").GetInt32());
+        Assert.Equal(r.PieceWidth, art.GetProperty("cell")[0].GetInt32());
+        Assert.Equal(r.PieceHeight, art.GetProperty("cell")[1].GetInt32());
+        Assert.Equal(r.Hinge.X, art.GetProperty("hinge")[0].GetSingle());
+        Assert.Equal(r.Hinge.Y, art.GetProperty("hinge")[1].GetSingle());
+        Assert.Equal(r.JawArtLength, art.GetProperty("jaw_length").GetSingle());
+        // the rows INTERLOCK: five teeth each, every lower tooth half a tooth along from the upper ones
+        var up = art.GetProperty("upper_tip_x").EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        var lo = art.GetProperty("lower_tip_x").EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        Assert.Equal(5, up.Length);
+        Assert.Equal(5, lo.Length);
+        var pitch = up[1] - up[0];
+        for (var i = 0; i < 5; i++)
+            Assert.InRange(lo[i] - up[i], 0.4f * pitch, 0.6f * pitch);
+        // GRADED, so the shut rows never read as a zipper: the front fang at least 1.6x the back tooth (heights off the gum)
+        var uy = art.GetProperty("upper_tip_y").EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        var hook = art.GetProperty("gum_hook")[0].GetSingle();
+        float Height(int i) => uy[i] - r.Hinge.Y - hook * MathF.Pow((up[i] - r.Hinge.X) / r.JawArtLength, 3f);
+        Assert.True(Height(4) >= 1.6f * Height(0), $"the teeth are not graded: back {Height(0):0.0} px, front {Height(4):0.0} px");
+        // the SEAM (where the teeth close, a share of the jaw from the hinge) lies on the art's own tooth rows
+        Assert.InRange(r.BiteSeamShare, (up.Average() - r.Hinge.X) / r.JawArtLength - 0.05f, (lo.Average() - r.Hinge.X) / r.JawArtLength + 0.05f);
+        // authored procedurally, one fixed noise field per piece
+        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_maw.py"));
+        Assert.Contains($"STATES = {r.MawStates}", gen);
         Assert.Equal(1, gen.Split("default_rng(").Length - 1);
-        Assert.Contains($"STATES = {r.FangStates}", gen);
-        // the lower tooth is the state flipped vertically: its origin is the same point measured from the state's bottom
-        Assert.Equal(r.TipPoint, ReactionPerformance.ToothOrigin(r, lower: false));
-        Assert.Equal(new Vector2(r.TipPoint.X, r.StateHeight - 1f - r.TipPoint.Y), ReactionPerformance.ToothOrigin(r, lower: true));
     }
 
-    private static readonly Rectangle Whelp = new(1045, 700, 250, 187);   // a bitten whelp's drawn silhouette, as filmed
-
     [Fact]
-    public void test_the_jaws_close_the_upper_teeth_pass_the_lower_ones_and_the_rows_interlock()
+    public void test_the_jaw_opens_wide_holds_it_then_bites_past_its_rest_across_the_creatures_head()
     {
         var r = Jaws;
-        Span<ReactionPerformance.ToothPose> t = stackalloc ReactionPerformance.ToothPose[4];
-        ReactionPerformance.ToothPoses(r, Whelp, r.SnapAtMs, t);
-        // SHUT, on screen: both upper points are BELOW both lower points (the teeth passed each other), by a visible margin
-        var upperPointY = Math.Min(t[0].At.Y, t[1].At.Y);
-        var lowerPointY = Math.Max(t[2].At.Y, t[3].At.Y);
-        Assert.True(upperPointY - lowerPointY >= 0.08f * Whelp.Height, $"the teeth do not close: {upperPointY - lowerPointY:0} px");
-        // ...across the creature's lower middle (off its face and eyes)
-        Assert.InRange((upperPointY + lowerPointY) * 0.5f, Whelp.Y + 0.5f * Whelp.Height, Whelp.Y + 0.7f * Whelp.Height);
-        // they INTERLOCK like a shut mouth: upper-left, lower-left, lower-right, upper-right, left to right...
-        Assert.True(t[0].At.X < t[2].At.X && t[2].At.X < t[3].At.X && t[3].At.X < t[1].At.X, "the rows do not interlock");
-        // ...each upper point close beside its lower neighbour (the teeth meet, they do not slide past with air between)...
-        var upperTooth = r.UpperToothShare * Whelp.Height;
-        Assert.True(t[2].At.X - t[0].At.X <= 0.35f * upperTooth, "the rows slide past each other with a gap");
-        // ...and the lower pair far enough apart that it never merges into one shape (the tooth is ~0.46 of its height wide)
-        Assert.True(t[3].At.X - t[2].At.X >= 0.45f * upperTooth * r.LowerToothScale, "the lower pair overlaps itself");
-        // each point leans IN: the left teeth turn so their points swing toward the centre (the lower row mirrored)
-        Assert.True(t[0].Rotation < 0f && t[1].Rotation > 0f && t[2].Rotation > 0f && t[3].Rotation < 0f);
-        // the jaw forms on the body: the open points are inside the creature's top and bottom (clear of its health bar
-        // above and the skill dock below), and it stays shut through the bite
-        Assert.InRange(r.UpperOpenShare, 0.05f, 0.35f);
-        Assert.InRange(r.LowerOpenShare, 0.15f, 0.40f);
-        Span<ReactionPerformance.ToothPose> h = stackalloc ReactionPerformance.ToothPose[4];
-        ReactionPerformance.ToothPoses(r, Whelp, r.ReleaseAtMs - 1f, h);
-        Assert.Equal(t[0].At.Y, h[0].At.Y, 3);
+        // the mist condenses into a nearly SHUT jaw, which WAITS, nearly shut, until the biting creature's own lunge drawing
+        // is gone (~120-150 ms after its contact: opened over it, violet on violet, the jaw faded in already wide), then
+        // visibly OPENS WIDE as its own motion and HOLDS it
+        var early = ReactionPerformance.Gape(r, r.GatherMs - 1f);
+        var wide = ReactionPerformance.Gape(r, r.OpenedAtMs);
+        Assert.True(early.Y - early.X <= 20f, $"the jaw is not nearly shut when it forms: {early}");
+        Assert.Equal(r.GatherGape, ReactionPerformance.Gape(r, r.OpenFromMs - 1f));
+        Assert.InRange(r.OpenFromMs, 120f, 160f);
+        Assert.True(wide.Y - wide.X >= 50f, $"the mouth never opens wide: {wide}");
+        var opening = Frames(r).Count(u => u > r.OpenFromMs && u < r.OpenedAtMs);
+        Assert.True(opening >= 3, $"the opening is seen in only {opening} frame(s)");
+        Assert.Equal(wide, ReactionPerformance.Gape(r, r.CloseFromMs - 1f));
+        Assert.True(Frames(r).Count(u => u >= r.OpenedAtMs && u < r.CloseFromMs) >= 2, "the wide mouth is not held");
+        // REST: a slightly open mouth, so the jaws stay two wedges with the creature between them while the teeth interlock
+        Assert.InRange(r.RestGape.Y - r.RestGape.X, 16f, 24f);
+        // SNAP: past the rest, ON a frame, and held there at least two frames (a bite the eye can catch)
+        Assert.Contains(Frames(r), u => Math.Abs(u - r.SnapAtMs) < 0.5f);
+        var snap = ReactionPerformance.Gape(r, r.SnapAtMs);
+        Assert.True(snap.Y - snap.X < r.RestGape.Y - r.RestGape.X - 3f, $"the jaws do not bite past their rest: {snap}");
+        Assert.True(Frames(r).Count(u => u >= r.SnapAtMs - 0.5f && u < r.SnapAtMs + r.OvershootHoldMs) >= 2, "the bite past the rest is not held two frames");
+        // then the rest, tightening slowly through the bite (never frozen), and opening as it lets go
+        var rest = ReactionPerformance.Gape(r, r.SnapAtMs + r.OvershootHoldMs + r.SettleMs);
+        Assert.Equal(r.RestGape.X, rest.X, 3);
+        var tight = ReactionPerformance.Gape(r, r.ReleaseAtMs - 1f);
+        Assert.True(tight.Y - tight.X < rest.Y - rest.X, "the hold is frozen");
+        var release = ReactionPerformance.Gape(r, r.GoneMs - 1f);
+        Assert.True(release.Y - release.X > tight.Y - tight.X && release.Y - release.X < wide.Y - wide.X, $"the release: {release}");
+        // AIM: anchored to the creature's CANONICAL body horizontally (not a lunge's wider art), the shut seam crossing its
+        // DRAWN silhouette on the bite line where the teeth close (the throat, below the eyes), most of the jaw over it.
+        // The drawn lunge differs from the layout body in both axes, so each axis is seen to come from its own rectangle.
+        var lunge = new Rectangle(Whelp.X - 80, Whelp.Y + 60, Whelp.Width + 80, Whelp.Height - 40);
+        var m = ReactionPerformance.Maw(r, lunge, Whelp, r.ReleaseAtMs - 1f);
+        var length = r.MawLengthShare * Whelp.Width;
+        var tilt = MathHelper.ToRadians(r.MawTiltDegrees);
+        var seam = m.HingeAt + r.BiteSeamShare * length * new Vector2(MathF.Cos(tilt), MathF.Sin(tilt));
+        var biteY = lunge.Y + r.BiteLineShare * lunge.Height;
+        Assert.InRange(seam.Y, biteY - 2f, biteY + 2f);
+        Assert.True(Math.Abs(seam.Y - (Whelp.Y + r.BiteLineShare * Whelp.Height)) > 10f, "the bite line is read off the layout, not the drawn silhouette");
+        Assert.InRange(r.BiteLineShare, 0.52f, 0.66f);
+        Assert.True(m.HingeAt.X < Whelp.X && m.HingeAt.X + length > Whelp.X + 0.25f * Whelp.Width, "the jaw does not lie over the creature");
+        Assert.True(m.HingeAt.X > lunge.X, "the maw is anchored to the lunge's art, not the creature");
+        Assert.True(length <= Whelp.Width, "the maw is longer than the creature it bites");
+        Assert.InRange(r.MawTiltDegrees, 0f, 8f);
+    }
+
+    [Fact]
+    public void test_the_snap_stops_where_the_teeth_reach_the_gums_and_the_rows_never_invert()
+    {
+        // the art's tooth tips and gum lines (seeker_maw.py), each jaw turned by its gape about the shared hinge: from the
+        // snap on, no tooth tip ever passes through the other jaw's gum (shut to a line, the rows looked inside-out), and
+        // at the rest the rows still INTERLOCK across the creature (the upper tips below the lower tips)
+        var r = Jaws;
+        var art = MawArt();
+        float[] Row(string name) => art.GetProperty(name).EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        var (ux, uy, lx, ly) = (Row("upper_tip_x"), Row("upper_tip_y"), Row("lower_tip_x"), Row("lower_tip_y"));
+        var hook = Row("gum_hook");
+        var lowerLength = art.GetProperty("lower_jaw_length").GetSingle();
+        var h = r.Hinge;
+        float GumUp(float x) => h.Y + hook[0] * MathF.Pow(Math.Clamp((x - h.X) / r.JawArtLength, 0f, 1f), 3f);
+        float GumLo(float x) => h.Y - hook[1] * MathF.Pow(Math.Clamp((x - h.X) / lowerLength, 0f, 1f), 3f);
+        Vector2 Turn(Vector2 p, float degrees)
+        {
+            var a = MathHelper.ToRadians(degrees);
+            var d = p - h;
+            return h + new Vector2(d.X * MathF.Cos(a) - d.Y * MathF.Sin(a), d.X * MathF.Sin(a) + d.Y * MathF.Cos(a));
+        }
+        float Clearance(Vector2 g)
+        {
+            var worst = float.MaxValue;
+            for (var i = 0; i < ux.Length; i++)
+            {
+                var q = Turn(Turn(new Vector2(ux[i], uy[i]), g.X), -g.Y);   // an upper tip, in the lower jaw's own frame
+                worst = Math.Min(worst, GumLo(q.X) - q.Y);
+            }
+            for (var i = 0; i < lx.Length; i++)
+            {
+                var q = Turn(Turn(new Vector2(lx[i], ly[i]), g.Y), -g.X);   // a lower tip, in the upper jaw's own frame
+                worst = Math.Min(worst, q.Y - GumUp(q.X));
+            }
+            return worst;
+        }
+        foreach (var u in Frames(r).Where(u => u >= r.GatherMs))
+            Assert.True(Clearance(ReactionPerformance.Gape(r, u)) >= -1.5f, $"a tooth passes through the other jaw's gum at {u:0} ms: {ReactionPerformance.Gape(r, u)}");
+        // the snap is as tight as the jaw goes: a little tighter and the teeth would pass through the gums
+        Assert.InRange(Clearance(r.Overshoot), -1.5f, 3f);
+        // at rest the rows interlock across the creature by a good part of a tooth
+        float Interlock(Vector2 g)
+            => Enumerable.Range(0, ux.Length).Max(i => Turn(new Vector2(ux[i], uy[i]), g.X).Y)
+               - Enumerable.Range(0, lx.Length).Min(i => Turn(new Vector2(lx[i], ly[i]), g.Y).Y);
+        Assert.True(Interlock(r.RestGape) >= 12f, $"the teeth do not interlock at rest: {Interlock(r.RestGape):0.0} px");
+    }
+
+    [Fact]
+    public void test_when_one_answer_bites_two_creatures_each_maw_bites_its_own()
+    {
+        // two whelps of a pack as filmed (layout bodies 136 px apart, overlapping): the front one gets the full maw, the
+        // one behind it a smaller maw hinged at its own front edge; the two maws never overlap while they hold the bite,
+        // so neither reaches over the other creature's head
+        var r = Jaws;
+        var front = new Rectangle(1112, 630, 268, 245);
+        var rear = new Rectangle(1248, 630, 268, 245);
+        var reach = MawArt().GetProperty("lower_jaw_length").GetSingle() / r.JawArtLength;   // the longer (lower) jaw, in jaw lengths
+        var firstTooth = (MawArt().GetProperty("upper_tip_x")[0].GetSingle() - r.Hinge.X) / r.JawArtLength;
+        foreach (var u in Frames(r))
+        {
+            var a = ReactionPerformance.Maw(r, front, front, u);
+            var b = ReactionPerformance.Maw(r, rear, rear, u, secondary: true);
+            var aEnd = a.HingeAt.X + reach * r.JawArtLength * a.Scale;
+            // the rear maw forms IN PLACE, hinged at its own creature's front edge: never over the creature in front of it
+            Assert.True(b.HingeAt.X >= rear.X - 1f, $"the rear maw reaches over the creature in front of it at {u:0} ms");
+            // the front maw's snout never reaches the rear maw's teeth (at most its smoky hinge, on the swell)
+            Assert.True(aEnd < b.HingeAt.X + firstTooth * r.JawArtLength * b.Scale, $"the two maws' teeth overlap at {u:0} ms: {aEnd:0}");
+            Assert.True(b.Scale < a.Scale || u >= r.GoneMs, "the rear maw is not the smaller one");
+        }
+    }
+
+    [Fact]
+    public void test_the_front_creature_is_the_one_nearest_the_seeker_whatever_the_fight_order()
+    {
+        // the answer's targets come in the fight's event order, not front to back: the full maw goes to the creature whose
+        // canonical body stands nearest the Seeker; a creature with no body is skipped; on a tie the first one wins
+        var pack = new PackStage();
+        pack.Bodies[0] = new Rectangle(1112, 630, 268, 245);
+        pack.Bodies[2] = new Rectangle(1248, 630, 268, 245);
+        Assert.Equal(1, ReactionPerformance.FrontTarget(pack, new[] { 2, 0 }));
+        Assert.Equal(0, ReactionPerformance.FrontTarget(pack, new[] { 0, 2 }));
+        Assert.Equal(1, ReactionPerformance.FrontTarget(pack, new[] { 5, 0, 2 }));   // slot 5 has no body
+        Assert.Equal(-1, ReactionPerformance.FrontTarget(pack, new[] { 5 }));
+        pack.Bodies[3] = new Rectangle(1112, 630, 268, 245);
+        Assert.Equal(0, ReactionPerformance.FrontTarget(pack, new[] { 0, 3 }));
+    }
+
+    [Theory]
+    [InlineData(100f)]
+    [InlineData(80f)]
+    [InlineData(133f)]
+    [InlineData(200f)]
+    public void test_after_the_snap_nothing_jumps_whatever_the_hold(float holdMs)
+    {
+        // every segment after the snap is clamped to the release, so a retuned hold never makes the gape, the swell or the
+        // condensation jump on a drawn frame (the snap frame itself is the one deliberate jump)
+        var r = new ReactionRecipe { Id = "seeker.jaws", HoldMs = holdMs };
+        var drawn = Frames(r).Where(u => u >= r.SnapAtMs + 1f).ToArray();
+        for (var i = 1; i < drawn.Length; i++)
+        {
+            var (a, b) = (ReactionPerformance.Gape(r, drawn[i - 1]), ReactionPerformance.Gape(r, drawn[i]));
+            Assert.True(Math.Abs(b.X - a.X) + Math.Abs(b.Y - a.Y) <= 12f, $"hold {holdMs}: the gape jumps at {drawn[i]:0} ms: {a} -> {b}");
+            Assert.True(Math.Abs(ReactionPerformance.MawScale(r, drawn[i]) - ReactionPerformance.MawScale(r, drawn[i - 1])) <= 0.06f, $"hold {holdMs}: the scale jumps at {drawn[i]:0} ms");
+            Assert.True(Math.Abs(ReactionPerformance.StateAt(r, drawn[i]) - ReactionPerformance.StateAt(r, drawn[i - 1])) <= 2, $"hold {holdMs}: the condensation jumps at {drawn[i]:0} ms");
+            Assert.True(ReactionPerformance.Jolt(r, drawn[i]) == 0f || drawn[i] < r.ReleaseAtMs, $"hold {holdMs}: the jolt runs into the dissolve");
+        }
     }
 
     [Fact]
     public void test_the_closing_is_seen_and_accelerates_into_the_snap()
     {
         var r = Jaws;
-        // the rows only ever close until the snap
         var last = -1f;
         for (var u = 0f; u <= r.SnapAtMs; u += 2f)
         {
@@ -205,97 +380,106 @@ public class JawsReactionTest
             Assert.True(c >= last - 1e-5f, "the jaws only ever close until the snap");
             last = c;
         }
-        Assert.Equal(0f, ReactionPerformance.Close(r, r.GatherMs));
-        Assert.Equal(1f, ReactionPerformance.Close(r, r.SnapAtMs));
-        // at 60 fps at least three frames show the jaws PART-WAY (visibly moved, not yet shut): the closing is SEEN
         var closing = Frames(r).Where(u => ReactionPerformance.Close(r, u) is > 0.05f and < 0.95f).ToArray();
-        Assert.True(closing.Length >= 3, $"only {closing.Length} frame(s) show the jaws part-way closed");
-        // no single frame step carries more than half the travel (the snap does not teleport), and each step is larger
-        // than the one before (it accelerates into the bite)
-        var positions = Frames(r).Where(u => u >= r.GatherMs && u < r.SnapAtMs - 0.5f).Append(r.SnapAtMs)
-                                 .Select(u => ReactionPerformance.Close(r, u)).ToArray();
+        Assert.True(closing.Length >= 2, $"only {closing.Length} frame(s) show the jaws part-way closed");
+        // on the frames actually drawn: each step is larger than the one before, the LARGEST on the snap frame itself (the
+        // bite lands with the sound), yet no single frame carries more than 60 % of the travel (the close is seen)
+        var positions = Frames(r).Where(u => u >= r.CloseFromMs && u <= r.SnapAtMs + 0.5f).Select(u => ReactionPerformance.Close(r, u)).ToArray();
         var steps = positions.Zip(positions.Skip(1), (x, y) => y - x).ToArray();
-        Assert.True(steps.Max() <= 0.5f, "one frame carries most of the close");
-        for (var i = 1; i < steps.Length - 1; i++)
+        Assert.True(steps.Max() <= 0.6f, "one frame carries most of the close");
+        Assert.Equal(steps.Max(), steps[^1]);
+        for (var i = 1; i < steps.Length; i++)
             Assert.True(steps[i] >= steps[i - 1] - 1e-4f, $"the close does not accelerate: steps {string.Join(", ", steps.Select(x => x.ToString("0.00")))}");
     }
 
     [Fact]
-    public void test_the_teeth_come_as_mist_condense_bite_and_dissolve_back_into_mist()
+    public void test_the_first_bite_is_pronounced_a_jolt_into_the_creature_and_a_swell()
     {
         var r = Jaws;
-        // they grow out of nothing as LOOSE mist, far apart and larger, and the loose states are what is seen for most of
-        // the gathering (the condensation eases in); wholly condensed when the jaws shut
-        Assert.Equal(0, ReactionPerformance.StateAt(r, 0f));
-        Assert.InRange(ReactionPerformance.Opacity(r, 0f), 0.05f, 0.25f);
-        // it GROWS in over several frames: no 60 fps step of the fade-in adds more than 0.4 (the mist never pops in)
-        var ramp = Frames(r).Where(u => u <= r.OpacityRampMs + 17f).Select(u => ReactionPerformance.Opacity(r, u)).ToArray();
-        Assert.True(ramp.Zip(ramp.Skip(1), (x, y) => y - x).Max() <= 0.4f, $"the mist pops in: {string.Join(", ", ramp.Select(x => x.ToString("0.00")))}");
-        Assert.True(ReactionPerformance.StateAt(r, 0.6f * r.GatherMs) <= (r.FangStates - 1) / 3, "the smoke condenses too early to be seen");
-        var (scale0, spread0) = ReactionPerformance.MistSpread(r, 0f);
-        Assert.True(scale0 >= 1.2f && spread0 >= 1.5f, "the mist does not come in");
-        var (scaleG, spreadG) = ReactionPerformance.MistSpread(r, r.GatherMs);
-        Assert.Equal(1f, scaleG, 3);
-        Assert.Equal(1f, spreadG, 3);
-        Assert.Equal(r.FangStates - 1, ReactionPerformance.StateAt(r, r.SnapAtMs));
-        Assert.Equal(r.FangStates - 1, ReactionPerformance.StateAt(r, r.ReleaseAtMs - 1f));
-        Assert.Equal(1f, ReactionPerformance.Opacity(r, r.ReleaseAtMs - 1f));
-        var prev = 0f;
-        for (var u = 0f; u <= r.SnapAtMs; u += 2f)
-        {
-            var c = ReactionPerformance.Condense(r, u);
-            Assert.True(c >= prev - 1e-5f, "they only ever condense until the snap");
-            prev = c;
-        }
-        // they LOOSEN into smoke over several frames and fade evenly: at least three 60 fps frames show teeth coming apart,
-        // halfway through the dissolve they are smoke yet still more than half there, and the last frame is faint
-        var loosening = Frames(r).Count(u => u > r.ReleaseAtMs && ReactionPerformance.Condense(r, u) is > 0.05f and < 0.95f);
-        Assert.True(loosening >= 3, $"the teeth come apart in only {loosening} frame(s)");
-        var mid = (r.ReleaseAtMs + r.GoneMs) * 0.5f;
-        Assert.True(ReactionPerformance.Condense(r, mid) <= 0.3f, "halfway through, the teeth are still teeth");
-        Assert.True(ReactionPerformance.Opacity(r, mid) >= 0.5f, "halfway through, the smoke is already gone");
-        Assert.True(ReactionPerformance.Opacity(r, Frames(r).Last()) <= 0.25f, "the last frame cuts off a dense smoke");
-        prev = 1f;
-        for (var u = r.ReleaseAtMs; u < r.GoneMs; u += 2f)
-        {
-            var c = ReactionPerformance.Condense(r, u);
-            Assert.True(c <= prev + 1e-5f, "they only ever dissolve after the release");
-            prev = c;
-        }
-        // the jaws open, and the smoke rises off the creature and spreads as it goes, then nothing is left
-        Assert.Equal(0f, ReactionPerformance.ReleaseDrift(r, r.ReleaseAtMs));
-        Assert.Equal(0f, ReactionPerformance.ReleaseRise(r, r.ReleaseAtMs));
-        Assert.InRange(r.ReleaseDriftPx, 6f, 40f);
-        Assert.InRange(r.ReleaseRisePx, 15f, 40f);
-        Assert.InRange(ReactionPerformance.MistSpread(r, r.GoneMs - 0.5f).Scale, 1.25f, 1.6f);
-        Assert.Equal(0f, ReactionPerformance.Opacity(r, r.GoneMs));
-        var o = 1f;
-        for (var u = r.ReleaseAtMs; u < r.GoneMs; u += 1f)
-        {
-            var a = ReactionPerformance.Opacity(r, u);
-            Assert.True(a <= o + 1e-5f && o - a < 0.04f, $"a smooth fade at {u} ms");
-            o = a;
-        }
-        // the bite holds long enough to be read, and the phrase stays a short reaction
-        Assert.InRange(r.HoldMs, 50f, 90f);
-        Assert.InRange(r.EndMs, 250f, 320f);
+        // the JOLT, along the jaw: ONE push into the creature, part-way on the snap frame and whole on the next (the bite
+        // is SEEN to drive in after the cue: at its peak on the snap frame and backing off at once, it read as a bounce),
+        // then easing back frame by frame to nothing (never a rebound: an in-out-in jolt read as a 30 Hz buzz)
+        // (sampled on the frames the screen draws, from the snap frame on)
+        var drawn = Frames(r).Where(u => u >= r.SnapAtMs - 0.5f).ToArray();
+        Assert.Equal(0f, ReactionPerformance.Jolt(r, r.SnapAtMs - 17f));
+        var jolt = drawn.Take(7).Select(u => ReactionPerformance.Jolt(r, u)).ToArray();
+        Assert.InRange(jolt[1], 12f, 24f);
+        Assert.True(jolt[0] > 0f && jolt[0] < jolt[1], $"the push does not drive in after the snap: {string.Join(", ", jolt)}");
+        for (var n = 2; n < jolt.Length; n++)
+            Assert.True(jolt[n] <= jolt[n - 1] && jolt[n] >= 0f, $"the jolt is not one push easing back: {string.Join(", ", jolt)}");
+        Assert.True(jolt.Count(j => j > 0f) >= 4, "the push backs off too fast to be seen");
+        Assert.Equal(0f, jolt[^1]);
+        // ...and it goes INTO the creature: at the push's peak the maw sits further toward it than once the jolt is over
+        var pushed = ReactionPerformance.Maw(r, Whelp, Whelp, drawn[1]).HingeAt;
+        var still = ReactionPerformance.Maw(r, Whelp, Whelp, r.SnapAtMs + r.ClenchMs).HingeAt;
+        Assert.True(pushed.X - still.X >= 0.9f * jolt[1] && Whelp.Center.X > pushed.X, $"the jolt does not drive into the creature: {pushed} vs {still}");
+        // the SWELL: 12-20 %, held on the snap frame and the next, then easing back to 1 in EVEN steps
+        var swell = drawn.Take(6).Select(u => ReactionPerformance.MawScale(r, u)).ToArray();
+        Assert.InRange(swell[0], 1.12f, 1.20f);
+        Assert.Equal(swell[0], swell[1], 2);
+        Assert.Equal(1f, swell[^1], 3);
+        var easing = swell.Zip(swell.Skip(1), (x, y) => x - y).Where(d => d > 1e-3f).ToArray();
+        Assert.True(easing.Length >= 2 && easing.Max() <= 1.6f * easing.Min(), $"the swell does not ease evenly: {string.Join(", ", swell.Select(x => x.ToString("0.000")))}");
+        // the bite is HELD long enough to be read, and the whole phrase is longer (the owner allowed it)
+        Assert.InRange(r.HoldMs, 90f, 160f);
+        Assert.InRange(r.EndMs, 450f, 650f);
     }
 
     [Fact]
-    public void test_the_jaws_draw_over_everything_four_sprites_a_target()
+    public void test_the_maw_comes_as_mist_condenses_bites_and_dissolves_back_into_mist()
+    {
+        var r = Jaws;
+        // it grows out of nothing as LOOSE smoke, larger, coming in from the Seeker's side, and the loose states are what
+        // is seen for most of the gathering; it stays smoky while it opens, HARDENS only as it closes (the crisp jaw is the
+        // bite), and never jumps: at most two strip states from one frame to the next
+        Assert.Equal(0, ReactionPerformance.StateAt(r, 0f));
+        Assert.InRange(ReactionPerformance.Opacity(r, 0f), 0.05f, 0.25f);
+        var ramp = Frames(r).Where(u => u <= r.OpacityRampMs + 17f).Select(u => ReactionPerformance.Opacity(r, u)).ToArray();
+        Assert.True(ramp.Zip(ramp.Skip(1), (x, y) => y - x).Max() <= 0.4f, $"the mist pops in: {string.Join(", ", ramp.Select(x => x.ToString("0.00")))}");
+        Assert.True(ReactionPerformance.StateAt(r, 0.6f * r.GatherMs) <= (r.MawStates - 1) / 3, "the smoke condenses too early to be seen");
+        Assert.True(ReactionPerformance.MawScale(r, 0f) >= 1.1f, "the mist does not tighten as it comes");
+        var start = ReactionPerformance.Maw(r, Whelp, Whelp, 0f).HingeAt.X;
+        var formed = ReactionPerformance.Maw(r, Whelp, Whelp, r.GatherMs).HingeAt.X;
+        Assert.True(formed - start >= 20f, "the maw does not come in");
+        Assert.Equal(r.MawStates - 1, ReactionPerformance.StateAt(r, r.SnapAtMs));
+        Assert.Equal(r.MawStates - 1, ReactionPerformance.StateAt(r, r.SnapAtMs + 1000f / 60f));
+        Assert.True(ReactionPerformance.StateAt(r, r.CloseFromMs) <= r.MawStates - 3, "the jaw is already hard before it closes");
+        Assert.True(ReactionPerformance.StateAt(r, r.OpenedAtMs) >= (r.MawStates - 1) * 3 / 4, "the open jaw is too loose a smoke to be read");
+        Assert.InRange(ReactionPerformance.StateAt(r, r.ReleaseAtMs - 1f), r.MawStates - 4, r.MawStates - 2);
+        var states = Frames(r).Select(u => ReactionPerformance.StateAt(r, u)).ToArray();
+        var jump = states.Zip(states.Skip(1), (x, y) => Math.Abs(y - x)).Max();
+        Assert.True(jump <= 2, $"the condensation jumps {jump} states in one frame: {string.Join(",", states)}");
+        Assert.Equal(1f, ReactionPerformance.Opacity(r, r.ReleaseAtMs - 1f));
+        // it LOOSENS into smoke over several frames and fades evenly: at least six frames of the jaw coming apart,
+        // halfway through the dissolve it is smoke yet still more than half there, the last frame is faint, and it rises
+        var loosening = Frames(r).Count(u => u > r.ReleaseAtMs && ReactionPerformance.Condense(r, u) is > 0.05f and < 0.95f);
+        Assert.True(loosening >= 6, $"the jaw comes apart in only {loosening} frame(s)");
+        var mid = (r.ReleaseAtMs + r.GoneMs) * 0.5f;
+        Assert.True(ReactionPerformance.Condense(r, mid) <= 0.55f, "halfway through, the jaw is still a jaw");
+        Assert.True(ReactionPerformance.Opacity(r, mid) >= 0.5f, "halfway through, the smoke is already gone");
+        Assert.True(ReactionPerformance.Opacity(r, Frames(r).Last()) <= 0.25f, "the last frame cuts off a dense smoke");
+        var held = ReactionPerformance.Maw(r, Whelp, Whelp, r.ReleaseAtMs).HingeAt.Y;
+        Assert.True(ReactionPerformance.Maw(r, Whelp, Whelp, r.GoneMs - 1f).HingeAt.Y < held - 10f, "the smoke does not rise");
+        Assert.Equal(0f, ReactionPerformance.Opacity(r, r.GoneMs));
+    }
+
+    [Fact]
+    public void test_the_maw_draws_over_the_creatures_under_the_champion_two_sprites_a_target()
     {
         var src = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "ReactionPerformance.cs"));
         var draw = src[src.IndexOf("public void DrawMaterial(", StringComparison.Ordinal)..];
         draw = draw[..draw.IndexOf("\n    }", StringComparison.Ordinal)];   // CRLF-safe: no trailing newline in the key
-        Assert.Contains("for (var f = 0; f < 4; f++)", draw);                   // four teeth...
-        Assert.Equal(1, draw.Split("b.Draw(").Length - 1);                      // ...one state each (no thinning cross-fade)
-        Assert.Contains("ToothPoses(Recipe, body, u, teeth);", draw);           // the pose the tests pin is the pose drawn
-        Assert.Contains("ToothOrigin(Recipe, p.Lower)", draw);
-        Assert.Contains("ReactionRecipe.FangVisibleFloor", draw);
-        // the screen draws the jaws AFTER the creatures (over the creature they bite) and has no pass under them
+        Assert.Equal(2, draw.Split("b.Draw(").Length - 1);                      // the upper and the lower jaw, one state each
+        Assert.Contains("var m = Maw(Recipe, body, layout, u, secondary: k != front);", draw);   // the pose the tests pin is the pose drawn
+        Assert.Contains("var front = FrontTarget(stage, Targets);", draw);                          // the front creature, as tested
+        Assert.Equal(2, draw.Split("Recipe.Hinge,").Length - 1);                // both turn about the hinge
+        Assert.Contains("ReactionRecipe.VisibleFloor", draw);
+        // the screen draws the maw AFTER the creatures (over the creature it bites) and BEFORE the champion (when she stands
+        // in front of that creature, as HARD HANDS does, she is in front of its jaw), and has no pass under the creatures
         var hunt = Hunt();
         var jaws = hunt.IndexOf("foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);", StringComparison.Ordinal);
-        Assert.True(jaws > hunt.IndexOf("else DrawNormalEnemy(b, attacking);", StringComparison.Ordinal), "the jaws are drawn before the creatures");
+        Assert.True(jaws > hunt.IndexOf("else DrawNormalEnemy(b, attacking);", StringComparison.Ordinal), "the maw is drawn before the creatures");
+        Assert.True(jaws < hunt.IndexOf("DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);", StringComparison.Ordinal), "the maw is drawn over the champion");
         Assert.DoesNotContain("r.DrawUnder(", hunt);
     }
 
@@ -303,7 +487,7 @@ public class JawsReactionTest
     public void test_no_jaws_flash_and_the_number_comes_a_few_frames_after_the_snap()
     {
         var r = Jaws;
-        Assert.Equal(0f, r.TargetFlash);                                        // the fangs ARE the hit feedback
+        Assert.Equal(0f, r.TargetFlash);                                        // the maw IS the hit feedback
         Assert.InRange(BitePresentation.UsualFlash.Peak, 0.40f, 0.50f);          // the global F2 is untouched
         Assert.InRange(r.NumberDelayMs, 30f, 50f);
         Assert.Equal(r.SnapAtMs + r.NumberDelayMs, r.AnswerAtMs);
@@ -318,9 +502,9 @@ public class JawsReactionTest
         Assert.False(step.Answered, "the number is NOT on the snap frame");
         Assert.False(p.Update(7000 + r.SnapAtMs + 17f, stage).Answered);
         var later = p.Update(7000 + r.AnswerAtMs, stage);
-        Assert.True(later.Answered && !later.Snapped && p.Answered, "the number on its own frame, after the fangs were seen");
+        Assert.True(later.Answered && !later.Snapped && p.Answered, "the number on its own frame, after the bite was seen");
         Assert.False(p.Finished(7000 + r.EndMs - 1f));
-        Assert.True(p.Finished(7000 + r.EndMs));
+        Assert.True(p.Finished(7000 + r.EndMs + 0.01f));   // (a hundredth of a ms: 7000 + 592.9 is not exact in float)
     }
 
     [Fact]

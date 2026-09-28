@@ -353,6 +353,8 @@ The rule is one coherent action: intention, preparation, release, motion, contac
 
 ### 3.9 A reaction is a LAYER and a MECHANISM, never a clip (ADR-011, JAWS — architecture approved; the readable-clamp pass awaits review)
 
+> **SUPERSEDED FOR JAWS' LOOK (the owner, 2026-09-25 → 2026-09-28).** The owner rejected the bear trap below (2026-09-25), then the whole piranha, the hard Shadow fangs and the misty teeth, and asked for "a jaw that really opens and closes, a piranha jaw", made of mist. JAWS is now A SHADOW MAW MADE OF MIST (`fxp_seeker_maw`, `tools/asset-pipeline/v2/seeker_maw.py`; ADR-011, `production/qa/evidence/jaws-maw/`): a sideways toothed jaw hinged at the back IS the intent now, so the "never a mouth" and bear-trap rules below are history for JAWS. What still holds: a reaction is a LAYER (never a clip, never the champion's figure), the close must be SEEN, and it is drawn over the creatures and UNDER the champion.
+
 A REACTION (JAWS) takes no beat: the enemy's bite is its cause. It is drawn on its own layer, over both figures, and
 never takes the champion's figure: no cast, no lunge, no post-bite "lay a trap" clip (that clip is REPAY's cast).
 

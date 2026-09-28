@@ -24,7 +24,7 @@ public readonly record struct ReactionStep(bool Snapped, bool Answered, Vector2 
 
 /// <summary>
 /// ONE REACTION BEING PRESENTED (ADR-011, the REACTION archetype): the Seeker's JAWS answering the creature whose bite
-/// set it off, as SHADOW FANGS MADE OF MIST (the owner, 2026-09-28).
+/// set it off, as a SHADOW MAW MADE OF MIST (the owner, 2026-09-28).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,17 +33,25 @@ public readonly record struct ReactionStep(bool Snapped, bool Answered, Vector2 
 /// creature's own lunge and follow-through. It moves nothing.
 /// </para>
 /// <para>
-/// THE PHRASE, in ms after the first frame that showed the contact. FOUR teeth, each ONE state of a strip of a fang in
-/// sixteen condensation states (loose mist to condensed tooth), two above the creature's middle with their points down
-/// and two below with their points up, the rows interlocking like a shut mouth (the upper pair a little wider apart
-/// than the lower, each point leaning in). GATHER (0-65): the mist grows out of nothing, comes IN from the sides (the
-/// teeth start far wider apart and larger) and condenses slowly (an ease-in), so the loose smoke is what is seen; the
-/// open jaw forms on the creature's body, below its health bar and above the skill dock. CLOSE (65-130): the jaws shut,
-/// accelerating, three frames showing them move; at the SNAP (130) the upper points have passed the lower ones across
-/// the creature's lower middle: the teeth are CLOSED on it (<see cref="Snapped"/>: the cue, a kill's fall). BITE (130-190):
-/// the shut jaws hold, the number lands 40 ms in (<see cref="Answered"/>). DISSOLVE (190-300): the jaws let go and
-/// open, the teeth LOOSEN back into smoke over several frames (the strip backward) while the smoke rises and spreads,
-/// fading evenly to nothing. Nothing else is drawn: no separate fog, no particles, no glint, no trail, no flash, no additive light.
+/// THE PHRASE, in ms after the first frame that showed the contact. A MAW of two jaw pieces (an upper and a lower
+/// tapering jaw with a blunt snout, each lined with graded teeth, turning about the hinge at the back corner of the
+/// mouth), each piece ONE state of a sixteen-state mist-to-jaw strip, the whole maw leaning a little snout-down,
+/// anchored to the creature's canonical body and its bite line (the throat, under the head). GATHER (0-83): the maw
+/// grows out of nothing as loose violet smoke in front of the creature on the Seeker's side, a nearly shut jaw; it comes
+/// in (40 px) and tightens, and waits, nearly shut, to 133 (the biting creature's own lunge drawing is up until then).
+/// OPEN (133-200): the jaw visibly opens WIDE around the creature's head (the upper jaw clear of its eyes), condensing
+/// until its teeth are clearly seen, and holds it to 233 (the wind-up before the bite). CLOSE (233-300): the jaws snap
+/// shut, accelerating (the largest step on the snap frame). SNAP (300, on a frame): the jaws meet PAST their rest across
+/// the creature's throat and stay there two
+/// frames, the rows of teeth interlocking (<see cref="Snapped"/>: the cue, a kill's fall), the jaw HARDENING only now,
+/// its teeth catching the light (it is smoke before and after). CLENCH: the pronounced first bite: the maw drives into
+/// the creature along the jaw (part-way on the snap frame, whole on the next, then easing back: one push) and swells
+/// (two frames, then easing back evenly), then settles to its rest (a slightly open mouth: two wedges, the creature
+/// showing between them, the teeth interlocked). BITE (to 433): held, tightening slowly; the number lands 40 ms after
+/// the snap (<see cref="Answered"/>). A second creature bitten by the same answer gets its own, smaller maw over its own
+/// body. DISSOLVE (433-593): the jaw lets go, opening, and comes apart back into smoke one or two strip states a frame,
+/// rising away and fading in even steps to nothing. Nothing else is drawn: no separate fog, no particles, no glint, no
+/// trail, no flash, no light.
 /// </para>
 /// <para>
 /// ON THE FIGHT'S PLAYHEAD. Its time is the playhead minus the first frame that showed the contact (the pump's frame).
@@ -54,6 +62,7 @@ public readonly record struct ReactionStep(bool Snapped, bool Answered, Vector2 
 public sealed class ReactionPerformance
 {
     private readonly Vector2[] _snapAt;        // per target: the body's centre last frame (the overlay)
+    private int _front;                        // the index (into Targets) of the front creature, as last drawn
     private readonly Vector4?[] _silhouette;   // per target: the drawn silhouette's box as shares of the layout body (read once); null = the body itself
     private float? _origin;                    // the playhead of the first frame that showed the contact
     private bool _snapped, _answered;
@@ -68,7 +77,7 @@ public sealed class ReactionPerformance
     /// <summary>The contact: the bite's millisecond, on which the fight resolved the reaction and its answer.</summary>
     public int TriggerMs { get; }
 
-    /// <summary>The creatures the answer landed on (the reflected Strikes), front to back.</summary>
+    /// <summary>The creatures the answer landed on (the reflected Strikes), in the fight's event order (NOT front to back: <see cref="FrontTarget"/> finds the front one).</summary>
     public IReadOnlyList<int> Targets { get; }
 
     /// <summary>The reaction's Source colour (the overlay's).</summary>
@@ -115,127 +124,147 @@ public sealed class ReactionPerformance
     private static float Smooth(float v) { v = Math.Clamp(v, 0f, 1f); return v * v * (3f - 2f * v); }
     private static float EaseOut(float v) { v = Math.Clamp(v, 0f, 1f); return 1f - (1f - v) * (1f - v); }
 
+    /// <summary>
+    /// The bite's segments after the snap, clamped to the release (a retune never runs one past it): the jaws stay past
+    /// their rest until <c>SettleFrom</c>, reach their rest at <c>Settled</c>, and let go at the release.
+    /// </summary>
+    private static (float SettleFrom, float Settled) BiteSpans(ReactionRecipe r)
+    {
+        var settleFrom = Math.Min(r.SnapAtMs + r.OvershootHoldMs, r.ReleaseAtMs);
+        return (settleFrom, Math.Min(settleFrom + r.SettleMs, r.ReleaseAtMs));
+    }
+
     /// <summary>How far through the release (the dissolve) <paramref name="u"/> is: 0 until the release, 1 at the end.</summary>
     public static float Dissolve(ReactionRecipe r, float u)
         => Math.Clamp((u - r.ReleaseAtMs) / Math.Max(1f, r.GoneMs - r.ReleaseAtMs), 0f, 1f);
 
     /// <summary>
-    /// How CONDENSED the teeth are at <paramref name="u"/>, 0 (a loose drift of mist) to 1 (the condensed tooth). It
-    /// EASES IN while the mist gathers (to <see cref="ReactionRecipe.CondenseAtGather"/>), so the loose smoke is what the
-    /// eye sees for most of the gathering; it reaches 1 as the jaws shut, holds through the bite, and as the teeth let go
-    /// it falls back to 0 over the first <see cref="ReactionRecipe.LoosenShare"/> of the dissolve (an ease-in-out: the
-    /// teeth come apart into smoke over several frames), the smoke then fading on its own.
+    /// How CONDENSED the maw is at <paramref name="u"/>, 0 (a loose drift of mist) to 1 (the hardened jaw), along ONE smooth
+    /// climb (never more than ~2 strip states a frame): loose smoke while it gathers (to <see cref="ReactionRecipe.CondenseAtGather"/>),
+    /// still smoky while it opens and holds wide, HARDENING only as it closes (the crisp jaw is the bite: the snap and the
+    /// two frames past its rest), easing back to a smoky jaw while it holds, and coming apart into smoke evenly through
+    /// the dissolve.
     /// </summary>
     public static float Condense(ReactionRecipe r, float u)
     {
         if (u <= 0f) return 0f;
-        if (u < r.GatherMs) { var g = u / r.GatherMs; return r.CondenseAtGather * g * g; }
-        if (u < r.SnapAtMs) return MathHelper.Lerp(r.CondenseAtGather, 1f, (u - r.GatherMs) / Math.Max(1f, r.SnapAtMs - r.GatherMs));
-        if (u < r.ReleaseAtMs) return 1f;
-        return 1f - Smooth(Dissolve(r, u) / Math.Max(0.05f, r.LoosenShare));
+        if (u < r.GatherMs) return r.CondenseAtGather * Smooth(u / r.GatherMs);
+        if (u < r.OpenFromMs) return MathHelper.Lerp(r.CondenseAtGather, r.CondenseFormed, (u - r.GatherMs) / Math.Max(1f, r.OpenFromMs - r.GatherMs));
+        if (u < r.OpenedAtMs) return MathHelper.Lerp(r.CondenseFormed, r.CondenseOpened, (u - r.OpenFromMs) / Math.Max(1f, r.OpenedAtMs - r.OpenFromMs));
+        if (u < r.CloseFromMs) return MathHelper.Lerp(r.CondenseOpened, r.CondenseHeld, (u - r.OpenedAtMs) / Math.Max(1f, r.CloseFromMs - r.OpenedAtMs));
+        if (u < r.SnapAtMs) return MathHelper.Lerp(r.CondenseHeld, 1f, Close(r, u));
+        var (settleFrom, _) = BiteSpans(r);
+        if (u < settleFrom) return 1f;
+        if (u < r.ReleaseAtMs) return MathHelper.Lerp(1f, r.CondenseHolding, Smooth((u - settleFrom) / Math.Max(1f, r.ReleaseAtMs - settleFrom)));
+        return (settleFrom < r.ReleaseAtMs ? r.CondenseHolding : 1f) * (1f - Dissolve(r, u));
     }
 
-    /// <summary>The strip state drawn at <paramref name="u"/> (0 = loose mist, last = the condensed tooth): one state per frame.</summary>
+    /// <summary>The strip state drawn at <paramref name="u"/> (0 = loose mist, last = the condensed jaw): one state per frame.</summary>
     public static int StateAt(ReactionRecipe r, float u)
-        => Math.Clamp((int)MathF.Round(Condense(r, u) * (r.FangStates - 1)), 0, r.FangStates - 1);
+        => Math.Clamp((int)MathF.Round(Condense(r, u) * (r.MawStates - 1)), 0, r.MawStates - 1);
 
-    /// <summary>
-    /// How far the jaws have CLOSED at <paramref name="u"/>: 0 open (through the gathering), 1 shut (from the snap on).
-    /// The close ACCELERATES (an ease-in of <see cref="ReactionRecipe.CloseEasePower"/>), so it reads as a snap, yet
-    /// three 60 fps frames show it moving, each step larger than the last.
-    /// </summary>
+    /// <summary>How far the jaws have CLOSED at <paramref name="u"/>: 0 wide open (through the held gape), 1 at the snap. An ease-in: it accelerates into the bite.</summary>
     public static float Close(ReactionRecipe r, float u)
     {
-        if (u <= r.GatherMs) return 0f;
+        if (u <= r.CloseFromMs) return 0f;
         if (u >= r.SnapAtMs) return 1f;
-        return MathF.Pow((u - r.GatherMs) / Math.Max(1f, r.SnapAtMs - r.GatherMs), r.CloseEasePower);
+        return MathF.Pow((u - r.CloseFromMs) / Math.Max(1f, r.SnapAtMs - r.CloseFromMs), r.CloseEasePower);
     }
 
     /// <summary>
-    /// Where a row's points are at <paramref name="u"/>, as a share of the silhouette's height measured inward from that
-    /// row's own edge (the upper row from the top, the lower row from the bottom): its open share while the mist
-    /// gathers, closing to <see cref="ReactionRecipe.MeetShare"/> + <see cref="ReactionRecipe.OverlapShare"/> at the
-    /// snap, past the middle, so the upper points end BELOW the lower ones and the teeth are closed.
+    /// The GAPE at <paramref name="u"/>, in degrees (X the upper jaw, Y the lower; screen: + is clockwise, so an open
+    /// upper jaw is negative and an open lower jaw positive; before the maw's own tilt). The mist condenses into a nearly
+    /// shut jaw, which visibly OPENS WIDE (an ease-in-out) and holds it; the jaws snap shut PAST their rest
+    /// (<see cref="ReactionRecipe.Overshoot"/>) and stay there two frames; they settle to their REST gape (two wedges,
+    /// the teeth interlocked across the creature), tighten slowly through the bite, and open (<see cref="ReactionRecipe.ReleaseGape"/>)
+    /// as the jaw lets go and dissolves.
     /// </summary>
-    public static float PointShare(ReactionRecipe r, float u, bool lower)
+    public static Vector2 Gape(ReactionRecipe r, float u)
     {
-        var open = lower ? r.LowerOpenShare : r.UpperOpenShare;
-        return open + (r.MeetShare + r.OverlapShare - open) * Close(r, u);
+        if (u < r.OpenFromMs) return r.GatherGape;
+        if (u < r.OpenedAtMs) return Vector2.Lerp(r.GatherGape, r.WideGape, Smooth((u - r.OpenFromMs) / Math.Max(1f, r.OpenedAtMs - r.OpenFromMs)));
+        if (u < r.CloseFromMs) return r.WideGape;
+        if (u < r.SnapAtMs) return Vector2.Lerp(r.WideGape, r.Overshoot, Close(r, u));
+        var (settleFrom, settled) = BiteSpans(r);
+        if (u < settleFrom) return r.Overshoot;
+        if (u < settled) return Vector2.Lerp(r.Overshoot, r.RestGape, EaseOut((u - settleFrom) / Math.Max(1f, settled - settleFrom)));
+        if (u < r.ReleaseAtMs) return Vector2.Lerp(r.RestGape, r.TightGape, Smooth((u - settled) / Math.Max(1f, r.ReleaseAtMs - settled)));
+        // the release starts from where the hold ended (the tight gape, or the rest when a short hold never tightened)
+        var held = settled < r.ReleaseAtMs ? r.TightGape : settleFrom < r.ReleaseAtMs ? r.RestGape : r.Overshoot;
+        return Vector2.Lerp(held, r.ReleaseGape, EaseOut(Dissolve(r, u)));
     }
 
-    /// <summary>How far (px) each row of teeth has pulled back from the bite: 0 until the release, then easing out to <see cref="ReactionRecipe.ReleaseDriftPx"/>.</summary>
-    public static float ReleaseDrift(ReactionRecipe r, float u) => r.ReleaseDriftPx * EaseOut(Dissolve(r, u));
-
-    /// <summary>How far (px) the dissolving smoke has risen off the creature: 0 until the release, then easing in-out to <see cref="ReactionRecipe.ReleaseRisePx"/>.</summary>
-    public static float ReleaseRise(ReactionRecipe r, float u) => r.ReleaseRisePx * Smooth(Dissolve(r, u));
-
     /// <summary>
-    /// The teeth's scale against their condensed size, and the spread of the pairs against the jaw's: the gathering mist
-    /// is larger and much wider apart and draws together into the jaw across the whole gathering (an ease-in-out, 1 at
-    /// its end); through the close and the bite both are 1; as the teeth dissolve the smoke spreads out again.
+    /// THE CLENCH's jolt at <paramref name="u"/>, in px ALONG the jaw (positive: into the creature): nothing before the
+    /// snap; the maw drives in part-way on the snap frame, its whole <see cref="ReactionRecipe.ShakePx"/> on the next (the
+    /// bite is SEEN to drive in, after the cue), then eases back over three frames: ONE push, never an in-out buzz, and
+    /// never a bounce off the creature (at its peak on the snap frame and backing off at once, it read as a retreat).
     /// </summary>
-    public static (float Scale, float Spread) MistSpread(ReactionRecipe r, float u)
+    public static float Jolt(ReactionRecipe r, float u)
     {
-        if (u < r.GatherMs)
-        {
-            var k = 1f - Smooth(Math.Max(0f, u) / r.GatherMs);
-            return (1f + (r.ArriveScale - 1f) * k, 1f + (r.ArriveSpread - 1f) * k);
-        }
-        var grow = r.ReleaseGrow * Smooth(Dissolve(r, u));
-        return (1f + grow, 1f + 0.6f * grow);
+        const float Frame = 1000f / 60f;
+        var end = Math.Min(r.SnapAtMs + r.ClenchMs, r.ReleaseAtMs);            // never into the dissolve
+        if (u < r.SnapAtMs - 0.5f || u >= end) return 0f;
+        var frame = (int)MathF.Floor((u - r.SnapAtMs + 0.5f) / Frame);
+        if (frame == 0) return 0.7f * r.ShakePx;                               // in part-way on the snap frame...
+        var t = frame * Frame;                                                // ...whole on the next, then back in a straight line
+        return r.ShakePx * Math.Clamp(1f - (t - Frame) / Math.Max(1f, end - r.SnapAtMs - Frame), 0f, 1f);
     }
 
     /// <summary>
-    /// The teeth's opacity (over the strip's own alpha, which is already thin while the teeth are mist): it grows out of
-    /// nothing along an ease-in-out (<see cref="ReactionRecipe.OpacityAtSpawn"/>, whole after
-    /// <see cref="ReactionRecipe.OpacityRampMs"/>), stays whole through the close and the bite, and fades EVENLY through
-    /// the dissolve (a gentle curve, so the last visible frame is faint and nothing cuts off).
+    /// The maw's scale against its size at the bite: larger while the mist arrives (<see cref="ReactionRecipe.ArriveScale"/>,
+    /// tightening to 1 by the end of the gathering), SWELLING on the snap (<see cref="ReactionRecipe.ClenchPulse"/>, held
+    /// two frames, then easing back as the jaws settle), spreading as it dissolves.
+    /// </summary>
+    public static float MawScale(ReactionRecipe r, float u)
+    {
+        if (u < r.GatherMs) return 1f + (r.ArriveScale - 1f) * (1f - Smooth(Math.Max(0f, u) / r.GatherMs));
+        if (u < r.SnapAtMs - 0.5f) return 1f;
+        var easeFrom = Math.Min(r.SnapAtMs + r.SwellHoldMs, r.ReleaseAtMs);
+        var easeEnd = Math.Min(easeFrom + r.SwellEaseMs, r.ReleaseAtMs);          // the swell is gone by the release, whatever the hold
+        if (u < easeFrom) return 1f + r.ClenchPulse;
+        if (u < r.ReleaseAtMs) return 1f + r.ClenchPulse * (1f - Math.Clamp((u - easeFrom) / Math.Max(1f, easeEnd - easeFrom), 0f, 1f));
+        return 1f + r.ReleaseGrow * Smooth(Dissolve(r, u));
+    }
+
+    /// <summary>
+    /// The maw's opacity (over the strip's own alpha, which is thinner while the jaw is mist): it grows out of nothing
+    /// along an ease-in-out (<see cref="ReactionRecipe.OpacityAtSpawn"/>, whole after <see cref="ReactionRecipe.OpacityRampMs"/>),
+    /// stays whole through the open, the close and the bite, and fades in even steps through the dissolve.
     /// </summary>
     public static float Opacity(ReactionRecipe r, float u)
     {
         if (u < 0f || u >= r.GoneMs) return 0f;
         if (u < r.OpacityRampMs) return MathHelper.Lerp(r.OpacityAtSpawn, 1f, Smooth(u / r.OpacityRampMs));
-        return 1f - MathF.Pow(Dissolve(r, u), 1.25f);
+        return 1f - MathF.Pow(Dissolve(r, u), 1.1f);
     }
 
-    /// <summary>One tooth this frame: its POINT on screen, its turn about the point, its scale, whether it is a lower (flipped) tooth.</summary>
-    public readonly record struct ToothPose(Vector2 At, float Rotation, float Scale, bool Lower);
+    /// <summary>The maw this frame: its HINGE on screen, each jaw's turn about it (radians), and its scale.</summary>
+    public readonly record struct MawPose(Vector2 HingeAt, float UpperRotation, float LowerRotation, float Scale);
 
     /// <summary>
-    /// The four teeth for a creature whose drawn silhouette is <paramref name="body"/>, at <paramref name="u"/>, into
-    /// <paramref name="teeth"/>: upper-left, upper-right, lower-left, lower-right. Pure, so the jaw's geometry is tested
-    /// directly (the points meet and pass, the rows interlock, the lower pair never overlaps itself).
+    /// The maw for a creature whose drawn silhouette (as pinned off the pose it bit in) is <paramref name="body"/> and whose
+    /// canonical body this frame is <paramref name="layout"/>, at <paramref name="u"/>. HORIZONTALLY it is anchored to the
+    /// canonical body (it follows the creature home: a lunge's art reaches far ahead of the creature, and a maw anchored to
+    /// it shut on the empty floor in front of the creature once it stood back up); VERTICALLY the shut seam crosses the
+    /// drawn silhouette on its bite line where the teeth close (the hinge is set higher by the tilt's drop along the jaw).
+    /// Pure, so the jaw's geometry is tested directly.
     /// </summary>
-    public static void ToothPoses(ReactionRecipe r, Rectangle body, float u, Span<ToothPose> teeth)
+    public static MawPose Maw(ReactionRecipe r, Rectangle body, Rectangle layout, float u, bool secondary = false)
     {
-        var centreX = body.X + body.Width * 0.5f;
-        var upper = Math.Clamp(r.UpperToothShare * body.Height, r.FangMinPx, r.FangMaxPx) * ReactionRecipes.SizeDial;
-        var lower = upper * r.LowerToothScale;
-        var (grow, spreadK) = MistSpread(r, u);
-        var drift = ReleaseDrift(r, u);
-        var rise = ReleaseRise(r, u);
-        var upperY = body.Y + PointShare(r, u, lower: false) * body.Height - drift - rise;
-        var lowerY = body.Y + body.Height - PointShare(r, u, lower: true) * body.Height + drift - rise;
-        var upperX = r.UpperSpreadShare * upper * spreadK;
-        var lowerX = r.LowerSpreadShare * lower * spreadK;
-        var tilt = MathHelper.ToRadians(r.TiltDegrees);
-        // each point leans toward the centre line: the art's upper tooth points down, so turning it anticlockwise (a
-        // negative angle on screen) swings its root out and its point in for the LEFT tooth; the right tooth mirrors it;
-        // a lower tooth is the same sprite flipped vertically, so its turn is mirrored too
-        var us = upper / r.ToothArtHeight * grow;
-        var ls = lower / r.ToothArtHeight * grow;
-        teeth[0] = new ToothPose(new Vector2(centreX - upperX, upperY), -tilt, us, Lower: false);
-        teeth[1] = new ToothPose(new Vector2(centreX + upperX, upperY), +tilt, us, Lower: false);
-        teeth[2] = new ToothPose(new Vector2(centreX - lowerX, lowerY), +tilt, ls, Lower: true);
-        teeth[3] = new ToothPose(new Vector2(centreX + lowerX, lowerY), -tilt, ls, Lower: true);
+        var anchor = layout.Width > 0 ? layout : body;
+        var length = Math.Clamp(r.MawLengthShare * anchor.Width, r.MawMinPx, r.MawMaxPx) * ReactionRecipes.SizeDial
+                     * (secondary ? r.SecondaryScale : 1f);
+        var lead = secondary ? r.SecondaryLeadShare : r.HingeLeadShare;
+        var tilt = MathHelper.ToRadians(r.MawTiltDegrees);
+        var arrive = !secondary && u < r.GatherMs ? r.ArrivePx * (1f - Smooth(Math.Max(0f, u) / r.GatherMs)) : 0f;   // a rear maw forms in place
+        var rise = r.ReleaseRisePx * EaseOut(Dissolve(r, u));
+        var biteY = body.Y + r.BiteLineShare * body.Height;
+        var hinge = new Vector2(anchor.X - lead * length - arrive, biteY - r.BiteSeamShare * length * MathF.Sin(tilt) - rise);
+        hinge += Jolt(r, u) * new Vector2(MathF.Cos(tilt), MathF.Sin(tilt));   // the clench drives along the jaw, into the creature
+        var gape = Gape(r, u) + new Vector2(r.MawTiltDegrees, r.MawTiltDegrees);
+        return new MawPose(hinge, MathHelper.ToRadians(gape.X), MathHelper.ToRadians(gape.Y), length / r.JawArtLength * MawScale(r, u));
     }
-
-    /// <summary>
-    /// The sprite origin that puts a tooth's POINT at its pose: the state's own point, or, for a lower tooth (the state
-    /// flipped vertically), the same point measured from the state's bottom.
-    /// </summary>
-    public static Vector2 ToothOrigin(ReactionRecipe r, bool lower)
-        => lower ? new Vector2(r.TipPoint.X, r.StateHeight - 1f - r.TipPoint.Y) : r.TipPoint;
 
     // ── EACH FRAME ───────────────────────────────────────────────────────────────────────────────
 
@@ -267,16 +296,19 @@ public sealed class ReactionPerformance
         if (snapped) _snapped = true;
         var answered = !_answered && u >= Recipe.AnswerAtMs - 0.5f;
         if (answered) _answered = true;
-        return new ReactionStep(snapped, answered, _snapAt.Length > 0 ? _snapAt[0] : default);
+        return new ReactionStep(snapped, answered, _snapAt.Length > 0 ? _snapAt[Math.Max(0, _front)] : default);
     }
 
     // ── THE POSE ─────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The creature's DRAWN silhouette box this frame (the pinned shares of its layout body; the body itself when unread).</summary>
-    private bool TrySilhouette(IReactionStage stage, int k, out Rectangle body)
+    /// <summary>
+    /// The creature's DRAWN silhouette box this frame (the pinned shares of its layout body; the body itself when unread),
+    /// and its canonical layout body.
+    /// </summary>
+    private bool TrySilhouette(IReactionStage stage, int k, out Rectangle body, out Rectangle layout)
     {
         body = default;
-        if (!stage.TryCaughtBody(Targets[k], out var layout) || layout.Height <= 0) return false;
+        if (!stage.TryCaughtBody(Targets[k], out layout) || layout.Height <= 0) return false;
         var sh = _silhouette[k] ?? new Vector4(0f, 0f, 1f, 1f);
         body = new Rectangle((int)(layout.X + sh.X * layout.Width), (int)(layout.Y + sh.Y * layout.Height),
                              Math.Max(1, (int)((sh.Z - sh.X) * layout.Width)), Math.Max(1, (int)((sh.W - sh.Y) * layout.Height)));
@@ -286,8 +318,22 @@ public sealed class ReactionPerformance
     // ── DRAWING ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The teeth, in the normal alpha batch after the figures (always foreground, over the creature they bite): each tooth
-    /// is ONE condensation state off the strip, four sprites per target. Never additive.
+    /// The FRONT creature among <paramref name="targets"/>: the index of the one whose canonical body stands nearest the
+    /// Seeker (the smallest X; the first on a tie; a creature with no body is skipped), or -1 when none has a body.
+    /// </summary>
+    public static int FrontTarget(IReactionStage stage, IReadOnlyList<int> targets)
+    {
+        var front = -1;
+        var frontX = int.MaxValue;
+        for (var k = 0; k < targets.Count; k++)
+            if (stage.TryCaughtBody(targets[k], out var at) && at.Height > 0 && at.X < frontX) { front = k; frontX = at.X; }
+        return front;
+    }
+
+    /// <summary>
+    /// The maw, in the normal alpha batch after the creatures and BEFORE the champion (over the creature it bites; when the
+    /// Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw): the upper and the lower
+    /// jaw, each ONE condensation state off the strip, turned about the shared hinge: two sprites per target. Never additive.
     /// </summary>
     public void DrawMaterial(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
@@ -297,22 +343,23 @@ public sealed class ReactionPerformance
         if (stage.TryChampionBody(out var champ))
             BeltAt = new Vector2(champ.X + Recipe.ChampionAnchor.X * champ.Width, champ.Y + Recipe.ChampionAnchor.Y * champ.Height);
         var alpha = Opacity(Recipe, u);
-        if (alpha < ReactionRecipe.FangVisibleFloor || stage.Texture(Recipe.FangKey) is not { } tex) return;
+        if (alpha < ReactionRecipe.VisibleFloor || stage.Texture(Recipe.MawKey) is not { } tex) return;
         var state = StateAt(Recipe, u);
-        var src = new Rectangle(state * Recipe.StateWidth, 0, Recipe.StateWidth, Recipe.StateHeight);
-        Span<ToothPose> teeth = stackalloc ToothPose[4];
+        var upper = new Rectangle(state * Recipe.PieceWidth, 0, Recipe.PieceWidth, Recipe.PieceHeight);
+        var lower = new Rectangle(state * Recipe.PieceWidth, Recipe.PieceHeight, Recipe.PieceWidth, Recipe.PieceHeight);
+        var tint = Color.White * alpha;
+        // the FRONT creature (nearest the Seeker) gets the full maw; any other creature the same answer bit gets its own,
+        // smaller one over its own body (a full maw reached back across the creature in front of it)
+        var front = FrontTarget(stage, Targets);
+        _front = front;
         for (var k = 0; k < Targets.Count; k++)
         {
-            if (!TrySilhouette(stage, k, out var body)) continue;
+            if (!TrySilhouette(stage, k, out var body, out var layout)) continue;
             _snapAt[k] = new Vector2(body.X + body.Width * 0.5f, body.Y + body.Height * 0.5f);
-            ToothPoses(Recipe, body, u, teeth);
-            for (var f = 0; f < 4; f++)
-            {
-                var p = teeth[f];
-                b.Draw(tex, p.At, src, Color.White * alpha, p.Rotation, ToothOrigin(Recipe, p.Lower), p.Scale,
-                       p.Lower ? SpriteEffects.FlipVertically : SpriteEffects.None, 0f);
-                _sprites++;
-            }
+            var m = Maw(Recipe, body, layout, u, secondary: k != front);
+            b.Draw(tex, m.HingeAt, upper, tint, m.UpperRotation, Recipe.Hinge, m.Scale, SpriteEffects.None, 0f);
+            b.Draw(tex, m.HingeAt, lower, tint, m.LowerRotation, Recipe.Hinge, m.Scale, SpriteEffects.None, 0f);
+            _sprites += 2;
         }
     }
 }

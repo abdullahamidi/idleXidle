@@ -6,13 +6,15 @@ namespace IdleXIdle.Game.Presentation;
 
 /// <summary>
 /// HOW A REACTION IS PRESENTED (ADR-011, the REACTION archetype): the world's answer to an enemy's bite, drawn on its
-/// own layer and never on the champion's figure. JAWS is the reference and it is SHADOW FANGS MADE OF MIST (the owner,
-/// 2026-09-28: "the teeth don't close; and what I meant was that the teeth themselves are like mist: instead of
-/// appearing at once, they come like mist, bite, and vanish"). When the fight resolves the reflected blow, four drifts
-/// of Shadow mist gather above and below the creature that bit, CONDENSE into four fangs as they come in, and the jaws
-/// SNAP SHUT on it: the upper and the lower teeth CLOSE, their points passing each other across the creature's middle,
-/// interlocking like a jaw. They hold the bite, then let go and DISSOLVE back into mist. ENEMY HITS SEEKER, SHADOW
-/// GATHERS INTO JAWS, THE JAWS BITE IT, "−X JAWS", THE JAWS FALL BACK INTO MIST.
+/// own layer and never on the champion's figure. JAWS is the reference and it is a SHADOW MAW MADE OF MIST (the owner,
+/// 2026-09-28: "not four triangles coming to the middle: a jaw that really opens and closes, a piranha jaw, a bite";
+/// before that: "the teeth themselves should be like mist: they come like mist, bite, and vanish"). When the fight
+/// resolves the reflected blow, loose Shadow smoke gathers in front of the creature that bit, from the Seeker's side,
+/// and forms a nearly shut jaw: an upper and a lower jaw, each a tapering beak lined with sharp teeth, hinged at the
+/// back corner of the mouth. It OPENS WIDE around the creature's head and holds it, SNAPS SHUT across its throat (the teeth interlocking,
+/// biting past their rest for two frames), CLENCHES (a jolt into the creature and a swell), holds the bite tightening
+/// slowly, then lets go and comes apart back into rising smoke.
+/// ENEMY HITS SEEKER, A SHADOW MAW BITES IT, "−X JAWS", THE MAW FALLS BACK INTO MIST.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,16 +25,17 @@ namespace IdleXIdle.Game.Presentation;
 /// number.
 /// </para>
 /// <para>
-/// ONE LAYER: the teeth ARE the mist. One source strip (tools/asset-pipeline/v2/seeker_mist_fangs.py) holds a fang in
-/// sixteen condensation states, from a loose drift of violet-dark smoke to the condensed tooth with its violet edge and
-/// pale point; the runtime plays it forward as the teeth gather and close and backward as they dissolve. No separate
-/// fog, no particles, no glint, no trail, no residue, no additive light. NO JAWS TARGET FLASH: the teeth are the hit
-/// feedback (the generic F2 for ordinary blows is untouched).
+/// ONE LAYER: the jaw IS the mist. One source strip (tools/asset-pipeline/v2/seeker_maw.py) holds both jaw pieces in
+/// sixteen condensation states, from a loose drift of violet smoke to the hardened jaw (a darkening Shadow veil with
+/// smoke moving inside it, a soft lavender rim, smoky lavender teeth); the runtime climbs it as the maw gathers and
+/// closes (the hardened states only on the bite) and plays it back down as it dissolves.
+/// No separate fog, no particles, no glint, no trail, no residue, no additive light. NO JAWS TARGET FLASH: the maw is
+/// the hit feedback (the generic F2 for ordinary blows is untouched).
 /// </para>
 /// <para>
 /// WHAT IS GONE FOR GOOD: the spring-loaded bear trap, its chain, its housing, the tether, the yank, the reel-in, the
-/// bite glyphs on the champion, the mirrored snap, the swarm, the piranha, and the teeth that stopped on the creature's
-/// outline without ever meeting. Their art stays on disk as history and is never played. The champion does nothing;
+/// bite glyphs on the champion, the mirrored snap, the swarm, the whole piranha, the teeth that stopped on the creature's
+/// outline without ever meeting, and the four misty teeth that closed like triangles rather than a jaw. Their art stays on disk as history and is never played. The champion does nothing;
 /// SPRAY, HARD HANDS and the basic swing are never interrupted. REPAY keeps its own legacy presentation (the lookup is
 /// by SKILL id). The dock's REARMING / READY state is Core's <c>ReactionArmed</c> report.
 /// </para>
@@ -42,149 +45,229 @@ public sealed class ReactionRecipe
     /// <summary>A stable name for traces and tests.</summary>
     public required string Id { get; init; }
 
-    // ── ART: one misty fang in sixteen condensation states (tools/asset-pipeline/v2/seeker_mist_fangs.py) ──
+    // ── ART: a Shadow maw made of mist, two jaw pieces in sixteen condensation states (tools/asset-pipeline/v2/seeker_maw.py) ──
 
     /// <summary>
-    /// The strip: <see cref="FangStates"/> states of one fang, left to right, each <see cref="StateWidth"/> x
-    /// <see cref="StateHeight"/>, from loose mist (0) to the condensed tooth (last), its point DOWN. ONE state is drawn
-    /// per frame (two cross-faded "over" draws are not a blend: the tooth thinned between states and jumped at the snap).
+    /// The strip: <see cref="MawStates"/> states side by side, each cell <see cref="PieceWidth"/> x <see cref="PieceHeight"/>,
+    /// the UPPER jaw in the top row and the LOWER jaw in the bottom row, from loose mist (0) to the condensed jaw (last).
+    /// Each jaw is a tapering beak with a row of sharp teeth on its biting edge; the lower one juts a little past the upper
+    /// and its teeth sit half a tooth along, so the rows interlock when shut. ONE state per piece is drawn per frame.
     /// </summary>
-    public string FangKey { get; init; } = "fxp_seeker_mistfang";
+    public string MawKey { get; init; } = "fxp_seeker_maw";
 
-    /// <inheritdoc cref="FangKey"/>
-    public int FangStates { get; init; } = 16;
+    /// <inheritdoc cref="MawKey"/>
+    public int MawStates { get; init; } = 16;
 
-    /// <inheritdoc cref="FangKey"/>
-    public int StateWidth { get; init; } = 144;
+    /// <inheritdoc cref="MawKey"/>
+    public int PieceWidth { get; init; } = 320;
 
-    /// <inheritdoc cref="FangKey"/>
-    public int StateHeight { get; init; } = 208;
+    /// <inheritdoc cref="MawKey"/>
+    public int PieceHeight { get; init; } = 176;
 
-    /// <summary>In each state (texture px): the tooth's POINT, the sprite's origin; it is placed and tilted by its point.</summary>
-    public Vector2 TipPoint { get; init; } = new(72f, 178f);
+    /// <summary>In each piece's cell (texture px): the HINGE, the back corner of the mouth, where the biting edge starts; both pieces turn about it.</summary>
+    public Vector2 Hinge { get; init; } = new(44f, 104f);
 
-    /// <summary>The condensed tooth's own height in the state (texture px), from its root to its point: the size reference.</summary>
-    public float ToothArtHeight { get; init; } = 139f;
+    /// <summary>The upper jaw's own length in the art (texture px), hinge to snout: the size reference.</summary>
+    public float JawArtLength { get; init; } = 232f;
 
-    // ── SIZE AND ARRANGEMENT: a jaw of four teeth, the rows interlocking ────────────────────────
+    // ── SIZE AND PLACE: the maw bites the HEAD of the creature that bit ───────────────────────────
 
     /// <summary>
-    /// Each UPPER tooth's height as a share of the bitten creature's drawn silhouette height, clamped; the LOWER teeth
-    /// are this share of an upper tooth (a jaw's lower teeth are shorter, and the lower row must stay above the skill dock
-    /// at the arena's foot). <see cref="ReactionRecipes.SizeDial"/> scales both for a comparison film.
+    /// The jaw's length as a share of the creature's CANONICAL body width (not its drawn silhouette: a lunge is drawn on
+    /// a canvas far wider than the creature), clamped. Big enough to read as a jaw at play speed, small enough to bite
+    /// ONE creature and not the pack. <see cref="ReactionRecipes.SizeDial"/> scales it for a film.
     /// </summary>
-    public float UpperToothShare { get; init; } = 0.40f;
+    public float MawLengthShare { get; init; } = 0.58f;
 
-    /// <inheritdoc cref="UpperToothShare"/>
-    public float LowerToothScale { get; init; } = 0.80f;
+    /// <inheritdoc cref="MawLengthShare"/>
+    public float MawMinPx { get; init; } = 70f;
 
-    /// <inheritdoc cref="UpperToothShare"/>
-    public float FangMinPx { get; init; } = 24f;
-
-    /// <inheritdoc cref="UpperToothShare"/>
-    public float FangMaxPx { get; init; } = 110f;
+    /// <inheritdoc cref="MawLengthShare"/>
+    public float MawMaxPx { get; init; } = 280f;
 
     /// <summary>
-    /// The teeth INTERLOCK like a shut mouth: the upper pair sits this far either side of the body's centre line and the
-    /// lower pair this far (each in its own row's tooth heights), so when the jaws shut the upper points close down just
-    /// OUTSIDE the lower ones, their facing edges a few px apart, and the lower pair never overlaps itself.
+    /// The hinge sits this far (a share of the jaw's length) in FRONT of the creature's canonical body, toward the Seeker
+    /// (whose side the maw comes from): about 70 % of the jaw lies over the creature, across its head and neck.
     /// </summary>
-    public float UpperSpreadShare { get; init; } = 0.46f;
-
-    /// <inheritdoc cref="UpperSpreadShare"/>
-    public float LowerSpreadShare { get; init; } = 0.26f;
-
-    /// <summary>Each tooth's POINT leans INWARD toward the body's centre line by this many degrees (a fang's curve into the bite).</summary>
-    public float TiltDegrees { get; init; } = 8f;
-
-    // ── WHERE THE POINTS ARE (shares of the silhouette height: the upper row from its TOP, the lower row from its
-    //    BOTTOM, positive inside) ──────────────────────────────────────────────────────────────
+    public float HingeLeadShare { get; init; } = 0.30f;
 
     /// <summary>
-    /// The open jaw: the upper points this far inside the creature's top, the lower points this far inside its bottom.
-    /// The jaw forms ON the creature's body, so the gathering mist stays (on the filmed whelp, by a few px) below the
-    /// enemy's health bar above it and above the skill dock below it.
+    /// When one answer bites SEVERAL creatures, every maw but the FRONT one (the creature nearest the Seeker) is hinged this
+    /// far in front of its own creature (none: at the creature's front edge), forms in place (no arrival from the Seeker's
+    /// side) and is this much smaller, so it bites its own creature and never reaches over the one in front of it (a full
+    /// lead put the rear maw across the front creature's head).
     /// </summary>
-    public float UpperOpenShare { get; init; } = 0.20f;
+    public float SecondaryLeadShare { get; init; } = 0.0f;
 
-    /// <inheritdoc cref="UpperOpenShare"/>
-    public float LowerOpenShare { get; init; } = 0.25f;
+    /// <inheritdoc cref="SecondaryLeadShare"/>
+    public float SecondaryScale { get; init; } = 0.85f;
 
     /// <summary>
-    /// The jaws SHUT across the creature's LOWER middle: both rows' points reach this share of its height (below the
-    /// middle, so the shut upper teeth sit on the body and not over the face and eyes)...
+    /// The BITE LINE, a share of the creature's drawn height from its top: the shut seam crosses the creature here, where
+    /// the teeth close: the THROAT, under the head, so the shut teeth read as a jaw holding the creature (shut just under
+    /// its eyes, the band of teeth read as the creature's own grin; over its eyes, the face was lost), not at the hinge (a
+    /// line set at the hinge and tilted down dropped the bite onto the chest). Read off the silhouette pinned from the pose
+    /// the creature bit in (its drawn extent, not its canvas).
     /// </summary>
-    public float MeetShare { get; init; } = 0.60f;
-
-    /// <summary>...and pass each other by this much, so the upper points end below the lower ones: the teeth are CLOSED, interlocked.</summary>
-    public float OverlapShare { get; init; } = 0.07f;
+    public float BiteLineShare { get; init; } = 0.60f;
 
     /// <summary>
-    /// While the mist gathers it comes IN from the sides: the teeth start this much farther apart (a spread) and this
-    /// much larger (a scale), drawing together and tightening into the jaw as they condense.
+    /// Where along the jaw (a share of its length from the hinge) the teeth close: the shut seam crosses the bite line
+    /// here. The tests hold it to the art's own tooth row (seeker_maw_spans.json).
     /// </summary>
-    public float ArriveSpread { get; init; } = 2.40f;
+    public float BiteSeamShare { get; init; } = 0.65f;
 
-    /// <inheritdoc cref="ArriveSpread"/>
-    public float ArriveScale { get; init; } = 1.25f;
+    /// <summary>The whole maw leans SNOUT-DOWN by this many degrees, so the shut seam crosses the creature on a slight diagonal.</summary>
+    public float MawTiltDegrees { get; init; } = 4f;
 
-    // ── TIMING (ms after the first frame) ──────────────────────────────────────────────────────
+    // ── THE GAPE (degrees; screen: + is clockwise; the upper jaw opens UP (negative), the lower jaw DOWN (positive)) ──
+
+    /// <summary>The mist first condenses into a nearly SHUT jaw...</summary>
+    public Vector2 GatherGape { get; init; } = new(-9f, 9f);
 
     /// <summary>
-    /// GATHER: the mist comes in and condenses toward teeth. The condensation EASES IN (to
-    /// <see cref="CondenseAtGather"/>), so the loose smoke states are what the eye sees for most of the gathering; the
-    /// arrival is an ease-in-out across the whole gathering, so the drift inward is seen, not spent in the first frame.
+    /// ...which then visibly OPENS WIDE (its own motion, the rear before the bite) and HOLDS it: the upper jaw rises clear
+    /// of the creature's eyes, so the creature's face sits INSIDE the open mouth (with the upper teeth across its eyes,
+    /// the open jaw read as the creature's own grin), and the upper jaw has as far to sweep down as the lower has to rise...
     /// </summary>
-    public float GatherMs { get; init; } = 65f;
+    public Vector2 WideGape { get; init; } = new(-45f, 30f);
+
+    /// <summary>
+    /// ...snaps shut PAST its rest, held there two frames: as tight as the jaw goes, the teeth's points just reaching the
+    /// other jaw's gum line (never further: shut all the way, each row's teeth passed through the other's gums and the
+    /// rows looked inside-out)...
+    /// </summary>
+    public Vector2 Overshoot { get; init; } = new(-8.5f, 8.5f);
+
+    /// <summary>
+    /// ...settles to REST: a slightly open mouth, so the two jaws stay two distinct wedges (a dark mouth line even at the
+    /// back) with the bitten creature showing between them while their teeth interlock across it about half their length
+    /// (shut to a line, the jaws read as a zipper)...
+    /// </summary>
+    public Vector2 RestGape { get; init; } = new(-10.5f, 10.5f);
+
+    /// <summary>...tightens slowly while it holds the bite (never a frozen pose)...</summary>
+    public Vector2 TightGape { get; init; } = new(-9.5f, 9.5f);
+
+    /// <summary>...and lets go to this as it dissolves.</summary>
+    public Vector2 ReleaseGape { get; init; } = new(-22f, 24f);
+
+    // ── TIMING (ms after the first frame; the owner allowed it longer, so the bite has its build-up). The visible
+    // opening waits for the biting creature's own lunge drawing to end (~120-150 ms after its contact): opened over it,
+    // violet on violet, the opening was never seen ──
+
+    /// <summary>
+    /// GATHER: the maw grows out of loose smoke (condensing only to <see cref="CondenseAtGather"/>, so smoke is what is
+    /// seen), comes IN from the Seeker's side (<see cref="ArrivePx"/>, <see cref="ArriveScale"/>) as a nearly shut jaw.
+    /// </summary>
+    public float GatherMs { get; init; } = 83f;
 
     /// <inheritdoc cref="GatherMs"/>
-    public float CondenseAtGather { get; init; } = 0.65f;
+    public float CondenseAtGather { get; init; } = 0.50f;
 
-    /// <summary>The teeth's opacity on the first frame, rising to whole over <see cref="OpacityRampMs"/> along an ease-in-out (~0.3, ~0.6, ~0.9 on the next frames): the mist grows out of nothing, it does not pop in.</summary>
+    /// <summary>
+    /// FORMED: the nearly shut jaw waits, condensing a little more (to <see cref="CondenseFormed"/>), until here, and only
+    /// then opens: the biting creature's own lunge drawing is up until ~120-150 ms after its contact, and a jaw opened
+    /// over it (violet on violet) faded in already wide instead of being SEEN to open.
+    /// </summary>
+    public float OpenFromMs { get; init; } = 133f;
+
+    /// <inheritdoc cref="OpenFromMs"/>
+    public float CondenseFormed { get; init; } = 0.62f;
+
+    /// <summary>How condensed the jaw is once it is wide open (its teeth clearly seen, not yet hardened)...</summary>
+    public float CondenseOpened { get; init; } = 0.80f;
+
+    /// <summary>...at the end of the wide hold, as the close begins...</summary>
+    public float CondenseHeld { get; init; } = 0.86f;
+
+    /// <summary>...and while it holds the bite after the hardened snap (the dissolve starts from here).</summary>
+    public float CondenseHolding { get; init; } = 0.86f;
+
+    /// <inheritdoc cref="GatherMs"/>
+    public float ArrivePx { get; init; } = 40f;
+
+    /// <inheritdoc cref="GatherMs"/>
+    public float ArriveScale { get; init; } = 1.15f;
+
+    /// <summary>The maw's opacity on the first frame, rising to whole over <see cref="OpacityRampMs"/> along an ease-in-out: it grows out of nothing, it does not pop in.</summary>
     public float OpacityAtSpawn { get; init; } = 0.10f;
 
     /// <inheritdoc cref="OpacityAtSpawn"/>
     public float OpacityRampMs { get; init; } = 60f;
 
+    /// <summary>OPEN: the jaw opens wide from <see cref="OpenFromMs"/> to here (four frames, an ease-in-out, over the creature's own standing drawing), condensed enough by then that its teeth read (not yet hardened), and holds wide until <see cref="CloseFromMs"/>.</summary>
+    public float OpenedAtMs { get; init; } = 200f;
+
+    /// <inheritdoc cref="OpenedAtMs"/>
+    public float CloseFromMs { get; init; } = 233f;
+
     /// <summary>
-    /// THE SNAP: from the end of the gathering the jaws CLOSE, accelerating (an ease-in of this power), the teeth
-    /// condensing fully, and shut here, interlocked across the creature. The cue's transient and a kill's fall land on
-    /// this frame. On a 60 fps screen three frames show the jaws closing, each step larger than the last, before the one
-    /// that shows them shut.
+    /// THE SNAP: from <see cref="CloseFromMs"/> the jaws CLOSE, accelerating (an ease-in of this power: each 60 fps step
+    /// larger than the last, two frames part-way, the LARGEST step on the snap frame itself, with the sound), and meet
+    /// PAST their rest here, on a frame (18 × 16.67 ms, set a hair under it so the playhead's thirds of a millisecond land
+    /// ON the shut pose). The cue's transient and a kill's fall land on this frame.
     /// </summary>
-    public float SnapAtMs { get; init; } = 130f;
+    public float SnapAtMs { get; init; } = 299.9f;
 
     /// <inheritdoc cref="SnapAtMs"/>
-    public float CloseEasePower { get; init; } = 2.0f;
+    public float CloseEasePower { get; init; } = 3.0f;
 
-    /// <summary>THE BITE: the shut jaws hold on the creature this long, fully condensed.</summary>
-    public float HoldMs { get; init; } = 60f;
+    /// <summary>
+    /// THE CLENCH, the pronounced first bite: the jaws stay past their rest this long (two frames), then settle to it over
+    /// <see cref="SettleMs"/>; the maw DRIVES into the creature along the jaw (part-way on the snap frame, its full
+    /// <see cref="ShakePx"/> on the next, then easing back in a straight line to nothing at <see cref="ClenchMs"/>: one
+    /// push, never an in-out buzz, never a bounce off the creature) and SWELLS (<see cref="ClenchPulse"/> on the snap frame and the next, then easing
+    /// back in even steps over <see cref="SwellEaseMs"/>), its hardened teeth catching the light: the bite is the peak.
+    /// </summary>
+    public float OvershootHoldMs { get; init; } = 33f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float SettleMs { get; init; } = 50f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float ShakePx { get; init; } = 16f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float ClenchMs { get; init; } = 100f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float ClenchPulse { get; init; } = 0.16f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float SwellHoldMs { get; init; } = 1000f / 60f;
+
+    /// <inheritdoc cref="OvershootHoldMs"/>
+    public float SwellEaseMs { get; init; } = 66f;
+
+    /// <summary>
+    /// THE BITE: the jaws hold the creature this long after the snap: past their rest, settling, then tightening slowly
+    /// (<see cref="TightGape"/>) over the three frames left after the settle (with one frame, the tightening was an
+    /// in-out flicker before the release).
+    /// </summary>
+    public float HoldMs { get; init; } = 133f;
 
     /// <summary>The release begins (the end of the bite): the jaws let go and dissolve back into mist.</summary>
     public float ReleaseAtMs => SnapAtMs + HoldMs;
 
     /// <summary>
-    /// DISSOLVE: the teeth LOOSEN back into smoke over the first <see cref="LoosenShare"/> of it (an ease-in-out back
-    /// through the strip: four frames of teeth coming apart), while the jaws open (the rows this far apart, px), the smoke
-    /// RISES (this far, px) off the creature and spreads (this much larger), fading evenly to nothing at
-    /// <see cref="GoneMs"/> (no last-frame cut).
+    /// DISSOLVE: the jaws let go, OPENING (<see cref="ReleaseGape"/>), and come apart back into smoke state by state (one
+    /// or two strip states a frame, nine frames and more), RISING away (px, an ease-out, so it is seen) and spreading a
+    /// little (a share), fading in even steps to nothing at <see cref="GoneMs"/>.
     /// </summary>
-    public float ReleaseDriftPx { get; init; } = 12f;
+    public float ReleaseRisePx { get; init; } = 28f;
 
-    /// <inheritdoc cref="ReleaseDriftPx"/>
-    public float ReleaseRisePx { get; init; } = 26f;
+    /// <inheritdoc cref="ReleaseRisePx"/>
+    public float ReleaseGrow { get; init; } = 0.12f;
 
-    /// <inheritdoc cref="ReleaseDriftPx"/>
-    public float LoosenShare { get; init; } = 0.6f;
+    /// <summary>The dissolve's own length, from the release (so a retuned hold never squeezes it).</summary>
+    public float DissolveMs { get; init; } = 160f;
 
-    /// <inheritdoc cref="ReleaseDriftPx"/>
-    public float ReleaseGrow { get; init; } = 0.45f;
+    /// <summary>The maw is gone: the release plus the dissolve.</summary>
+    public float GoneMs => ReleaseAtMs + DissolveMs;
 
-    /// <inheritdoc cref="ReleaseDriftPx"/>
-    public float GoneMs { get; init; } = 300f;
-
-    /// <summary>Below this opacity a tooth is not drawn at all.</summary>
-    public const float FangVisibleFloor = 0.01f;
+    /// <summary>Below this opacity the maw is not drawn at all.</summary>
+    public const float VisibleFloor = 0.01f;
 
     /// <summary>
     /// The reflected number is shown this long AFTER the snap, so the sequence is SNAP, the player sees the bite, then
@@ -239,12 +322,12 @@ public static class ReactionRecipes
     public static readonly bool CalloutOverride =
         Environment.GetEnvironmentVariable("RH_REACTION_CALLOUT") is "1" or "true";
 
-    /// <summary>RH_REACTION_SIZE=&lt;share&gt;: the teeth's size against the recipe's (a size comparison film). 1 otherwise.</summary>
+    /// <summary>RH_REACTION_SIZE=&lt;share&gt;: the maw's length against the recipe's (a size comparison film). 1 otherwise.</summary>
     public static readonly float SizeDial =
         float.TryParse(Environment.GetEnvironmentVariable("RH_REACTION_SIZE"), System.Globalization.NumberStyles.Float,
                        System.Globalization.CultureInfo.InvariantCulture, out var s) && s > 0f ? s : 1f;
 
-    /// <summary>THE SEEKER's JAWS (the REACTION reference): Shadow fangs made of mist, bite for bite.</summary>
+    /// <summary>THE SEEKER's JAWS (the REACTION reference): a Shadow maw made of mist, bite for bite.</summary>
     public static readonly ReactionRecipe SeekerJaws = new() { Id = "seeker.jaws" };
 
     // THE LOOKUP (the accepted contract: skill-specific, deliberately shared, legacy). A reaction's presentation

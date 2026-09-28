@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27 (SHADOW PIRANHA retaliation, a stylised reactive-damage phrase; no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D) and, after three piranha passes (three jaws, a hero chomp, one piranha in negative space) still read as coloured motion at true speed, set the FINAL direction the same day: JAWS is **SHADOW FANGS**, a simple reactive-damage effect (enemy hits the Seeker → four LARGE SIMPLE Shadow fang shapes appear OPEN round the attacker → SNAP onto its outer silhouette → HOLD → "−X JAWS" → release, gone in ~200 ms). No creature to identify: the shapes are the effect. It is built (`ReactionRecipe` / `ReactionPerformance`, ONE hand-authored fang drawn four times, `sfx_seeker_jaws_fangs`, no JAWS target flash, the number delayed past the snap) and filmed (`production/qa/evidence/jaws-fangs/`); the piranha and the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, does it read as "something sharp / jaws snapped onto that enemy because it hit me"? On 2026-09-28 the owner answered: the teeth do not close, and the teeth themselves should be mist that comes, bites and vanishes. JAWS is now **SHADOW FANGS MADE OF MIST, THAT CLOSE** (a 16-state procedural mist-to-tooth strip; the teeth gather as violet smoke, shut interlocked across the attacker, hold, and loosen back into smoke; `production/qa/evidence/jaws-mistjaw/`). It AWAITS the owner's true-speed review; if yes, JAWS is accepted and closed. |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27 (SHADOW PIRANHA retaliation, a stylised reactive-damage phrase; no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D) and, after three piranha passes (three jaws, a hero chomp, one piranha in negative space) still read as coloured motion at true speed, set the FINAL direction the same day: JAWS is **SHADOW FANGS**, a simple reactive-damage effect (enemy hits the Seeker → four LARGE SIMPLE Shadow fang shapes appear OPEN round the attacker → SNAP onto its outer silhouette → HOLD → "−X JAWS" → release, gone in ~200 ms). No creature to identify: the shapes are the effect. It is built (`ReactionRecipe` / `ReactionPerformance`, ONE hand-authored fang drawn four times, `sfx_seeker_jaws_fangs`, no JAWS target flash, the number delayed past the snap) and filmed (`production/qa/evidence/jaws-fangs/`); the piranha and the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, does it read as "something sharp / jaws snapped onto that enemy because it hit me"? On 2026-09-28 the owner answered: the teeth do not close, and the teeth themselves should be mist that comes, bites and vanishes; and on the misty teeth that followed: not four triangles coming to the middle, a jaw that really opens and closes (a piranha jaw), the bite clearer and allowed to take longer. JAWS is now **A SHADOW MAW MADE OF MIST** (two piranha-like jaw pieces in a 16-state procedural mist-to-jaw strip: the smoke forms a jaw that opens wide around the attacker's head, snaps shut across its throat, clenches, holds and dissolves back into rising smoke, ~590 ms; `production/qa/evidence/jaws-maw/`). It AWAITS the owner's true-speed review; if yes, JAWS is accepted and closed. |
 | **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
@@ -65,7 +65,71 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap and the piranha NOT approved; SHADOW FANGS approved as the direction and, since 2026-09-28, made of MIST and CLOSING; awaiting the owner's true-speed review)
+## The reaction reference: JAWS (architecture approved; the bear trap and the whole piranha NOT approved; since 2026-09-28 a SHADOW MAW MADE OF MIST, a piranha-like jaw that opens and bites; awaiting the owner's true-speed review)
+
+**A Shadow maw made of mist (the owner, 2026-09-28, second review): the build.** The owner on the misty teeth:
+"definitely better, but the bite still needs to read more clearly; the overall duration can be a little longer, or the
+first bite moment more pronounced; and the teeth should not be four triangles coming to the middle: really a jaw that
+opens and closes (it can be a piranha jaw), a bite effect". JAWS is now a SIDE-VIEW MAW, still made of mist:
+
+- **Two jaw pieces in sixteen condensation states** (`fxp_seeker_maw`, 16 × 320 × 176 per row, the upper jaw above the
+  lower; `tools/asset-pipeline/v2/seeker_maw.py`, procedural, one fixed noise field per piece, no PixelLab; it writes
+  `keypose_sources/seeker_maw_spans.json`: cell, hinge, jaw lengths, every tooth tip and the gum curve, which the tests
+  hold the recipe to). Each jaw is a tapering jaw with a rounded cheek at its hinge, a convex brow and a BLUNT snout (a
+  needle point read as a beak), five GRADED teeth on its front (the front fang about 1.7× the back tooth, raked back; a
+  row of equal teeth read as a zipper), the lower jaw 13 % longer (a piranha's underbite) with its teeth half a tooth
+  along in absolute px, so the rows truly interlock. Material: a dark violet Shadow MASS with smoke moving inside it (a
+  lightening lavender fill read as glass; a thin darkening veil vanished on the dark floor), a soft outline broken by the
+  smoke and fading out toward the hinge (the back of the jaw is a ragged plume, never a closed capsule), smoky lavender
+  teeth that HARDEN and catch the light only in the last states, which the runtime shows only on the bite. ONE state per
+  piece per frame. Chosen from three designs (piranha / crocodile / beast) by a three-judge panel on composites over a
+  real frame; unanimous: piranha. The jaw's OUTER side stays smoke (softer and more ragged than its crisp biting
+  edge), and a dark LIP runs along each gum with the lower teeth a shade darker than the upper, so the shut mouth reads
+  as two jaws meeting (one zigzag strip of equal teeth read as a zipper).
+- **The maw** (`ReactionPerformance.Maw`, pure and tested) turns both pieces about the hinge. It is anchored
+  HORIZONTALLY to the creature's CANONICAL body (a lunge is drawn on a canvas far ahead of the creature; anchored to it,
+  the jaw shut on the empty floor once the creature stood back up), the hinge 0.30 of the jaw's length in front of it
+  (the jaw ~0.58 of the body's width, about 70 % of it over the creature); VERTICALLY the shut seam crosses the DRAWN
+  silhouette at 0.60 of its height, 0.65 of the way along the jaw where the teeth close (`BiteSeamShare`, held to the
+  art's tooth rows): the THROAT, under the head (shut just under the eyes, the band of teeth read as the creature's own
+  grin). The whole maw leans 4° snout-down. When one answer bites several
+  creatures, the FRONT one (nearest the Seeker, `FrontTarget`; the fight's target order is not front to back) gets the
+  full maw and every other its own maw, 0.85 the size, formed in place at its own front edge (a full maw reached back
+  across the creature in front of it). It is drawn over the creatures and UNDER the champion: in HARD HANDS the Seeker
+  stands in front of the bitten creature, and a maw drawn over her lay across her fists like a serrated weapon.
+- **The phrase**, in ms after the first frame that shows the bite (longer, as the owner allowed): 0–83 loose smoke
+  gathers into a nearly shut jaw that comes in from the Seeker's side and WAITS, nearly shut, to 133 (`OpenFromMs`: the
+  biting creature's own lunge drawing is up until ~120–150, and a jaw opened over it, violet on violet, faded in already
+  wide); 133–200 it visibly OPENS WIDE (−45° / +30°: the upper jaw rises clear of the creature's eyes, so the face sits
+  INSIDE the open mouth; with the upper teeth across its eyes the open jaw read as the creature's own grin), condensing
+  until its teeth are clearly seen; holds wide to 233; 233–300 it closes, accelerating (an ease-in of power 3: two frames
+  part-way, the LARGEST step, 58 % of the travel, on the snap frame itself, with the sound) and hardens; SNAP at 299.9
+  (frame 18, a hair under it so the playhead lands on the shut pose; the cue and a kill's fall): the jaws bite PAST their rest to ±8.5°, where the tooth tips just reach the other jaw's gum line
+  (never through it: shut to a line, the rows looked inside-out), held two frames, the teeth catching the light; the
+  CLENCH: ONE 16 px push along the jaw into the creature, part-way on the snap frame and whole on the next, then easing
+  back in a straight line to nothing at `ClenchMs` (at its peak on the snap frame and backing off at once, it read as a
+  bounce; an in-out-in jolt buzzed), and a 16 % swell on the snap frame and the next, easing back in even steps over 66 ms; it settles to a
+  slightly open REST (±10.5°: two wedges, the creature between them, the teeth interlocked about half their length) and
+  tightens over three frames (with one frame, the tighten was an in-out flicker); the number 40 ms after the snap;
+  release at 433 (a 133 ms hold); DISSOLVE 433–593 (`DissolveMs`, its own length from the release, so a retuned hold
+  never squeezes it), the jaw lets go and opens (to −22° / +24°), comes apart into smoke (one or two strip states a
+  frame), rises 28 px, fades in even steps. Every segment after the snap is clamped to the release (a test sweeps the
+  hold over 80–200 ms and finds no jump). Two sprites per target, alloc 0.
+- **Verified** by four judge rounds (vision judges on true-scale and gameplay-scale frames plus an adversarial code
+  review each). The second round's defects (rows inverting at the snap, the jolt's buzz, an uneven swell, a jaw mostly
+  shut before the snap frame, the jaw over the eyes, a glassy fill, a six-state jump in the condensation, the rear maw
+  across the front creature) and the third round's (the open jaw read as the creature's grin, the opening hidden behind
+  the lunge drawing, a bite frame that was not the peak, a clench that backed off at once, a zipper-like shut band, a
+  glassy capsule, the maw over the Seeker in HARD HANDS, the rear maw arriving over the front creature, a one-frame
+  tighten, an untested front-target choice) and the fourth's (the shut band just under the eyes read as the creature's
+  grin, the opening still under the lunge drawing, the zipper, a stale layer order in the docs, an absolute dissolve end,
+  a hard-coded jolt table) were each fixed and are each pinned by a test where a test can hold them.
+- **Unchanged:** the skill-id recipe, the real reflected target, `ReactionArmed`, no champion-body ownership, REPAY
+  isolation, death ordering, the SPRAY / HARD HANDS overlaps, the one cue, no JAWS flash, the number after the snap (a
+  critical answer also plays the game's general critical cue with its number, as every skill's critical does).
+  Evidence: `production/qa/evidence/jaws-maw/`; review page https://claude.ai/artifact/5cemkjDpzbxWn28P4YmS5Z.
+
+The misty-teeth build it replaced is recorded below.
 
 **Shadow fangs made of mist, that close (the owner, 2026-09-28): the build.** The owner's review of the Shadow Fangs
 + mist pass: "the teeth don't close; and what I meant was that the teeth themselves are like mist: instead of

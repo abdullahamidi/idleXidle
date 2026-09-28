@@ -11,3 +11,4 @@ the asset-consumer gate (`tools/check_asset_consumers.py`) does not count them a
 
 Their generators still write into `assets/art/VFX/parts/` if re-run (`seeker_piranha.py`, `seeker_fangs.py`,
 `seeker_mist.py`, `seeker_jaws.py`); move the output back here if you do.
+- `fxp_seeker_mistfang.png`: the four misty teeth that closed like triangles (replaced 2026-09-28 by the misty maw `fxp_seeker_maw`, `seeker_maw.py`).

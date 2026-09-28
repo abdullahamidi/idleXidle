@@ -17,7 +17,7 @@ and the dissolving.
 The noise field is FIXED across the states (one seed), only its threshold, softness and spread change, so stepping
 through the states reads as the same mist condensing, never as a boil. Deterministic. No PixelLab.
 
-    assets/art/VFX/parts/fxp_seeker_mistfang.png   16 states x (144 x 208), left to right; the point at (72, 178) in each,
+    keypose_sources/history/fxp_seeker_mistfang.png (RETIRED, history)   16 states x (144 x 208), left to right; the point at (72, 178) in each,
                                                     pointing DOWN; straight alpha (the asset library premultiplies)
     tools/asset-pipeline/v2/keypose_sources/seeker_mistfang_sheet.png   the states at 2x on stone grey and on black
 """
@@ -32,7 +32,7 @@ sys.path.insert(0, HERE)
 import seeker_fangs as F  # noqa: E402  (the approved fang's outline)
 
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-OUT = os.path.join(REPO, "assets", "art", "VFX", "parts")
+OUT = os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "history")   # RETIRED (2026-09-28): JAWS is the misty maw now (seeker_maw.py); this strip is history and never played
 SRC = os.path.join(HERE, "keypose_sources")
 
 W, H = 144, 208            # one state's canvas (room for the loose mist: it is wider than the tooth)
