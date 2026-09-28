@@ -25,25 +25,39 @@ public sealed class FieldPerformance
     private readonly float[] _tickAt;
     private readonly int[] _tickTarget;
     private readonly bool[] _tickYields;
+    private readonly bool[] _tickQuiet;
     // each tick's target silhouette, pinned once as shares of its layout body (left, top, right, bottom): the layout body
     // holds the whole canvas (a lunge's extended one too), and the arcs pressed 250 px over the heads
     private readonly Vector4?[] _shape;
+    // ...and pinned again one frame into the crush (the arcs press a creature caught in its own lunge where it is drawn)
+    private readonly Vector4?[] _crush;
+    // ...and the arcs' width in px, from the silhouette pinned at launch (their size never follows a pose)
+    private readonly float[] _arcWidth;
     private int _sprites;
 
     /// <summary>
     /// The ticks this wave will present: the Aura events' ms, the slot each one's Break names (or -1), and whether a
-    /// presented reaction plays around it (the crush then gives way: <see cref="FieldRecipe.YieldBeforeMs"/>).
+    /// presented reaction plays around it (the crush then gives way: <see cref="FieldRecipe.YieldBeforeMs"/>), and whether an
+    /// action's contact lands close to it (the tick is then quiet: <see cref="FieldRecipe.QuietBeforeMs"/>).
     /// </summary>
-    public FieldPerformance(FieldRecipe recipe, int slot, IReadOnlyList<(float AtMs, int Target, bool Yields)> ticks)
+    public FieldPerformance(FieldRecipe recipe, int slot, IReadOnlyList<(float AtMs, int Target, bool Yields, bool Quiet)> ticks)
     {
         Recipe = recipe;
         Slot = slot;
         _tickAt = new float[ticks.Count];
         _tickTarget = new int[ticks.Count];
         _tickYields = new bool[ticks.Count];
+        _tickQuiet = new bool[ticks.Count];
         _shape = new Vector4?[ticks.Count];
-        for (var k = 0; k < ticks.Count; k++) (_tickAt[k], _tickTarget[k], _tickYields[k]) = ticks[k];
+        _crush = new Vector4?[ticks.Count];
+        _arcWidth = new float[ticks.Count];
+        for (var k = 0; k < ticks.Count; k++) (_tickAt[k], _tickTarget[k], _tickYields[k], _tickQuiet[k]) = ticks[k];
     }
+
+    /// <summary>Is the k-th tick quiet (an action's contact lands close to it)?</summary>
+    public bool Quiet(int tick) => tick >= 0 && _tickQuiet[tick];
+
+    private float QuietShareOf(IReactionStage stage, int tick) => stage.ChampionPerforming || Quiet(tick) ? Recipe.QuietShare : 1f;
 
     /// <summary>Does the k-th tick give way to a reaction on its creature (no arcs; the front flattens against its side)?</summary>
     public bool Yields(int tick) => tick >= 0 && _tickYields[tick];
@@ -96,10 +110,10 @@ public sealed class FieldPerformance
         }
         var t = (u - r.LaunchMs) / Math.Max(1f, r.SpringMs);
         if (t >= 1f) return new FieldPose(1f, rest);
-        // out past its size in the first 40 % (an ease-out), back to 1 over the rest; the gathered density lets go
-        var scale = t < 0.4f
-            ? MathHelper.Lerp(r.ContractScale, r.SpringScale, 1f - (1f - t / 0.4f) * (1f - t / 0.4f))
-            : MathHelper.Lerp(r.SpringScale, 1f, Smooth((t - 0.4f) / 0.6f));
+        // SNAPS out past its size in the first quarter (a hard ease-out), settles over the rest; the gathered density lets go
+        var scale = t < 0.25f
+            ? MathHelper.Lerp(r.ContractScale, r.SpringScale, 1f - (1f - t / 0.25f) * (1f - t / 0.25f) * (1f - t / 0.25f))
+            : MathHelper.Lerp(r.SpringScale, 1f, Smooth((t - 0.25f) / 0.75f));
         return new FieldPose(scale, MathHelper.Lerp(r.ContractAlpha, rest, Smooth(t)));
     }
 
@@ -107,8 +121,8 @@ public sealed class FieldPerformance
     public readonly record struct WavePose(float Progress, float Grow, float Alpha);
 
     /// <summary>
-    /// The front at u: it leaves at <see cref="FieldRecipe.LaunchMs"/> and ARRIVES on the tick (u = 0), eased out (fast from
-    /// the Seeker, still moving as it lands), growing and gathering opacity on the way; then it collapses into the crush.
+    /// The front at u: it leaves at <see cref="FieldRecipe.LaunchMs"/> and ARRIVES on the tick (u = 0), ACCELERATING into the
+    /// contact (the largest step is the last), growing and gathering opacity on the way; then it collapses into the crush.
     /// </summary>
     public static WavePose Wave(FieldRecipe r, float u)
     {
@@ -116,7 +130,7 @@ public sealed class FieldPerformance
         if (u <= 0f)
         {
             var t = (u - r.LaunchMs) / -r.LaunchMs;
-            var p = 1f - MathF.Pow(1f - t, r.TravelEasePower);
+            var p = MathF.Pow(t, r.TravelEasePower);
             var alpha = MathHelper.Lerp(r.WaveLaunchAlpha, r.WaveArriveAlpha, t) * Math.Clamp((u - r.LaunchMs) / 34f, 0f, 1f);
             return new WavePose(p, t, alpha);
         }
@@ -125,14 +139,14 @@ public sealed class FieldPerformance
     }
 
     /// <summary>
-    /// The front's height in px: from <see cref="FieldRecipe.WaveLaunchShare"/> of the Seeker's height as it leaves to
-    /// <see cref="FieldRecipe.WaveArriveShare"/> of the target's silhouette on arrival (<paramref name="grow"/> 0..1, and a
-    /// little past 1 as it collapses).
+    /// The front's height in px: <see cref="FieldRecipe.WaveArriveShare"/> of the target's silhouette on arrival, and
+    /// <see cref="FieldRecipe.WaveLaunchShare"/> of that as it leaves (<paramref name="grow"/> 0..1, and a little past 1 as
+    /// it collapses). The Seeker's height no longer sizes it: its art pixel stays near the world's in flight.
     /// </summary>
     public static float WaveHeight(FieldRecipe r, float grow, float champHeight, float targetHeight)
     {
-        var from = r.WaveLaunchShare * champHeight;
         var to = r.WaveArriveShare * targetHeight;
+        var from = r.WaveLaunchShare * to;
         return grow <= 1f ? MathHelper.Lerp(from, to, grow) : to * grow;
     }
 
@@ -141,8 +155,8 @@ public sealed class FieldPerformance
 
     /// <summary>
     /// The crush at u: from the tick the arcs press in (accelerating, <see cref="FieldRecipe.CrushInMs"/>), hold, and let go
-    /// (easing back a little as they fade); the body buckles with them and recovers early in the release; pale and hot for
-    /// the first frame, cooling to violet.
+    /// (easing back a little as they fade); the body buckles with them and recovers early in the release; their pressing
+    /// edge hot for the first frames (<see cref="CrushPose.Heat"/>), the arcs cooling to violet.
     /// </summary>
     public static CrushPose Crush(FieldRecipe r, float u)
     {
@@ -152,10 +166,11 @@ public sealed class FieldPerformance
         float close, alpha, squash;
         if (u < r.CrushInMs)
         {
+            // HARD: arrival -> the compressed pose in two frames (an ease-out: the tips fold over and under at once)
             var k = u / r.CrushInMs;
-            close = Smooth(k);                                  // the tips fold over and under, then press
-            alpha = r.ClampPeakAlpha * Math.Clamp(0.55f + 0.45f * k * 3f, 0f, 1f);
-            squash = Smooth(k);
+            close = 1f - (1f - k) * (1f - k);
+            alpha = r.ClampPeakAlpha * Math.Clamp(0.7f + 0.3f * k * 2f, 0f, 1f);
+            squash = close;
         }
         else if (u < holdEnd)
         {
@@ -166,13 +181,22 @@ public sealed class FieldPerformance
         else if (u < outEnd)
         {
             var k = (u - holdEnd) / r.CrushOutMs;
-            close = 1f - 0.35f * Smooth(k);
-            alpha = r.ClampPeakAlpha * (1f - Smooth(k));
-            squash = 1f - Smooth(Math.Min(1f, k / 0.6f));
+            close = 1f - 0.25f * Smooth(k);
+            alpha = r.ClampPeakAlpha * (1f - 0.55f * Smooth(k));   // the release is carried by the chunk dissolve, not a long fade
+            squash = 1f - Smooth(Math.Min(1f, k / 0.5f));
         }
         else return default;
-        var heat = 1f - Smooth(u / 150f);
+        var heat = 1f - Smooth(u / 90f);
         return new CrushPose(close, alpha, squash, heat);
+    }
+
+    /// <summary>The clamp's cell at u: whole through the press and the hold, then the three dissolve states over the release.</summary>
+    public static int ClampCellAt(FieldRecipe r, float u)
+    {
+        var holdEnd = r.CrushInMs + r.CrushHoldMs;
+        if (u < holdEnd) return 0;
+        var k = Math.Clamp((u - holdEnd) / Math.Max(1f, r.CrushOutMs), 0f, 0.999f);
+        return 1 + (int)(k * (FieldRecipe.ClampEdgeCell - 1));   // the release states sit between the whole cell and the edge cell
     }
 
     /// <summary>The flattened front's opacity share at u on a tick that gives way (1 on the tick, gone by <see cref="FieldRecipe.FlattenMs"/>).</summary>
@@ -185,13 +209,14 @@ public sealed class FieldPerformance
         return new Vector2(MathHelper.Lerp(1f, r.SquashX, s), MathHelper.Lerp(1f, r.SquashY, s));
     }
 
-    /// <summary>The crush arcs' colour at u: pale and hot on the tick, the arcs' violet, cooling as they let go.</summary>
+    /// <summary>
+    /// The crush arcs' body colour at u: the arcs' violet, cooling as they let go. The tick's heat never tints the body (the
+    /// whole arc lit pale collapsed its value bands into one); it lights the pressing edge in the additive pass.
+    /// </summary>
     public static Color ClampTint(FieldRecipe r, float u)
     {
-        var c = Crush(r, u);
-        var warm = Color.Lerp(r.ClampColor, r.ClampHotColor, c.Heat);
         var cool = Math.Clamp((u - r.CrushInMs - r.CrushHoldMs) / Math.Max(1f, r.CrushOutMs), 0f, 1f);
-        return Color.Lerp(warm, r.ClampCoolColor, cool);
+        return Color.Lerp(r.ClampColor, r.ClampCoolColor, cool);
     }
 
     // ── WHICH TICK, WHICH CREATURE ─────────────────────────────────────────────────────────────────────
@@ -260,40 +285,44 @@ public sealed class FieldPerformance
     {
         if (!TryPhrase(playheadMs, out var u, out var tick) || u < Recipe.LaunchMs) return;
         var target = TargetOf(tick);
-        // THE TARGET'S DRAWN SHAPE, pinned once per tick (called after the creatures drew, so their frames are this frame's)
-        if (target >= 0 && _shape[tick] is null && stage.TryTargetBody(target, out var layout) && layout.Width > 0 && layout.Height > 0)
-        {
-            var shares = new Vector4(0f, 0f, 1f, 1f);
-            if (stage.TryTargetFrame(target, out var frame) && SilhouetteProbe.OpaqueBounds(frame) is { Width: > 0, Height: > 0 } s)
-                shares = new Vector4(Math.Clamp((s.X - layout.X) / (float)layout.Width, -0.5f, 1f),
-                                     Math.Clamp((s.Y - layout.Y) / (float)layout.Height, -0.5f, 1f),
-                                     Math.Clamp((s.Right - layout.X) / (float)layout.Width, 0f, 1.5f),
-                                     Math.Clamp((s.Bottom - layout.Y) / (float)layout.Height, 0f, 1.5f));
-            _shape[tick] = shares;
-        }
-        if (!TryTargetShape(stage, tick, target, out var foe) || !stage.TryChampionBody(out var champ)) return;
-        LastShape = foe;
-        var quiet = stage.ChampionPerforming ? Recipe.QuietShare : 1f;
+        // THE TARGET'S DRAWN SHAPE (called after the creatures drew, so their frames are this frame's): pinned at launch for
+        // the front's travel, and pinned AGAIN one frame into the crush, where the creature is drawn as it is pressed -- one
+        // caught in its own lunge is pressed there (on the launch shape the arcs sat behind its head and on the next
+        // creature); pinned, not followed: followed frame by frame the arcs jumped with every lunge frame mid-hold
+        if (target >= 0 && _shape[tick] is null && TryProbeShares(stage, target, out var launch)) _shape[tick] = launch;
+        if (target >= 0 && u >= 0.5f * Recipe.CrushInMs && _crush[tick] is null && TryProbeShares(stage, target, out var now)) _crush[tick] = now;
+        if (!TryTargetShape(stage, tick, target, false, out var foe) || !stage.TryChampionBody(out var champ)) return;
+        if (_arcWidth[tick] <= 0f) _arcWidth[tick] = foe.Width * Recipe.ClampWidthShare;
+        var body = PressedShape(stage, tick, target, u);
+        LastShape = u >= 0f ? body : foe;
+        var quiet = QuietShareOf(stage, tick);
         if (stage.Texture(Recipe.WaveKey) is { } wave)
         {
             var w = Wave(Recipe, u);
             if (w.Alpha >= ReactionRecipe.VisibleFloor)
             {
-                var lag = Wave(Recipe, Math.Max(Recipe.LaunchMs, u - Recipe.AfterimageLagMs));
-                DrawWaveCell(b, wave, 1, champ, foe, lag.Progress, w.Grow, Recipe.WaveColor * (w.Alpha * Recipe.AfterimageAlpha * quiet));
-                DrawWaveCell(b, wave, 0, champ, foe, w.Progress, w.Grow, Recipe.WaveColor * (w.Alpha * quiet));
+                if (u <= 0f)
+                {
+                    // one broken darker echo trails it (never a soft ghost)
+                    var lag = Wave(Recipe, Math.Max(Recipe.LaunchMs, u - Recipe.EchoLagMs));
+                    DrawWaveCell(b, wave, FieldRecipe.WaveEchoCell, champ, foe, lag.Progress, w.Grow, Recipe.WaveColor * (w.Alpha * Recipe.EchoAlpha * quiet));
+                }
+                // arrived, it loses cohesion in pixel chunks as it collapses into the crush
+                DrawWaveCell(b, wave, u <= 0f ? FieldRecipe.WaveBodyCell : FieldRecipe.WaveDissolveCell, champ, foe, w.Progress, w.Grow,
+                             Recipe.WaveColor * (w.Alpha * quiet));
             }
         }
         var c = Crush(Recipe, u);
         if (c.Alpha < ReactionRecipe.VisibleFloor) return;
         if (Yields(tick))
         {
-            // giving way to a reaction on this creature: the front flattens against its facing side
+            // giving way to a reaction on this creature: the front flattens against its facing side in its own violet
+            // (the hot tint over the whole dissolve cell was a pale slab competing with the bite)
             if (stage.Texture(Recipe.WaveKey) is { } flat)
-                DrawFlattened(b, flat, champ, foe, ClampTint(Recipe, u) * (c.Alpha * quiet * FlattenFade(Recipe, u)));
+                DrawFlattened(b, flat, FieldRecipe.WaveDissolveCell, champ, foe, Recipe.WaveColor * (c.Alpha * quiet * FlattenFade(Recipe, u)));
         }
         else if (stage.Texture(Recipe.ClampKey) is { } clamp)
-            DrawClamps(b, clamp, champ, foe, c, ClampTint(Recipe, u) * (c.Alpha * quiet));
+            DrawClamps(b, clamp, ClampCellAt(Recipe, u), champ, body, _arcWidth[tick], c, ClampTint(Recipe, u) * (c.Alpha * quiet));
     }
 
     /// <summary>
@@ -311,34 +340,62 @@ public sealed class FieldPerformance
                 DrawField(b, fieldTex, me, pose, Recipe.FieldColor * (pose.Alpha * Recipe.FieldGlowShare));
         }
         if (!TryPhrase(playheadMs, out var u, out var tick) || u < Recipe.LaunchMs) return;
-        if (!TryTargetShape(stage, tick, TargetOf(tick), out var foe) || !stage.TryChampionBody(out var champ)) return;
-        var quiet = stage.ChampionPerforming ? Recipe.QuietShare : 1f;
+        if (!TryTargetShape(stage, tick, TargetOf(tick), false, out var foe) || !stage.TryChampionBody(out var champ)) return;
+        var body = PressedShape(stage, tick, TargetOf(tick), u);
+        var quiet = QuietShareOf(stage, tick);
         if (stage.Texture(Recipe.WaveKey) is { } wave)
         {
             var w = Wave(Recipe, u);
             var rim = Recipe.WaveGlowShare * MathHelper.Lerp(Recipe.WaveTravelGlow, 1f, Math.Min(1f, w.Grow));
-            if (w.Alpha * rim >= ReactionRecipe.VisibleFloor)
-            {
-                DrawWaveCell(b, wave, 1, champ, foe, w.Progress, w.Grow, Recipe.WaveColor * (w.Alpha * Recipe.WaveBodyGlowShare * quiet));
-                DrawWaveCell(b, wave, 0, champ, foe, w.Progress, w.Grow, Recipe.RimColor * (w.Alpha * rim * quiet));
-            }
+            if (u <= 0f && w.Alpha * rim >= ReactionRecipe.VisibleFloor)
+                DrawWaveCell(b, wave, FieldRecipe.WaveEdgeCell, champ, foe, w.Progress, w.Grow, Recipe.RimColor * (w.Alpha * rim * quiet));
         }
         var c = Crush(Recipe, u);
         var flare = c.Alpha * c.Heat * quiet;
-        if (flare < ReactionRecipe.VisibleFloor) return;
         if (Yields(tick))
         {
-            if (stage.Texture(Recipe.WaveKey) is { } flat) DrawFlattened(b, flat, champ, foe, Recipe.RimColor * (flare * FlattenFade(Recipe, u)));
+            // only the leading edge stays lit, continuing the arrival rim (a line, never a flash over the target)
+            if (flare * Recipe.WaveGlowShare >= ReactionRecipe.VisibleFloor && stage.Texture(Recipe.WaveKey) is { } flat)
+                DrawFlattened(b, flat, FieldRecipe.WaveEdgeCell, champ, foe, Recipe.RimColor * (flare * Recipe.WaveGlowShare * FlattenFade(Recipe, u)));
+            return;
         }
-        else if (stage.Texture(Recipe.ClampKey) is { } clamp) DrawClamps(b, clamp, champ, foe, c, Recipe.ClampHotColor * flare);
+        // the heat lights the pressing EDGE only: a dim line and a short pale accent at the contact (the body stays violet)
+        if (flare * Recipe.ClampGlowShare >= ReactionRecipe.VisibleFloor && stage.Texture(Recipe.ClampKey) is { } clamp)
+            DrawClamps(b, clamp, FieldRecipe.ClampEdgeCell, champ, body, _arcWidth[tick], c, Recipe.ClampHotColor * (flare * Recipe.ClampGlowShare));
     }
 
-    /// <summary>The target's drawn shape this frame: its layout body cut to the silhouette pinned for this tick.</summary>
-    private bool TryTargetShape(IReactionStage stage, int tick, int target, out Rectangle shape)
+    /// <summary>
+    /// Where the arcs press: the target's drawn body as it is pressed (the silhouette re-pinned one frame into the crush),
+    /// BUCKLED as the body buckles, about its feet -- so the arcs press it down with it and touch it.
+    /// </summary>
+    private Rectangle PressedShape(IReactionStage stage, int tick, int target, float u)
+    {
+        TryTargetShape(stage, tick, target, true, out var body);
+        return UiKit.Buckle(body, SquashAt(Recipe, u));
+    }
+
+    /// <summary>The target's drawn silhouette this frame as shares of its layout body (measured once per frame rectangle).</summary>
+    private static bool TryProbeShares(IReactionStage stage, int target, out Vector4 shares)
+    {
+        shares = new Vector4(0f, 0f, 1f, 1f);
+        if (!stage.TryTargetBody(target, out var layout) || layout.Width <= 0 || layout.Height <= 0) return false;
+        if (stage.TryTargetFrame(target, out var frame) && SilhouetteProbe.OpaqueBounds(frame) is { Width: > 0, Height: > 0 } s)
+            shares = new Vector4(Math.Clamp((s.X - layout.X) / (float)layout.Width, -0.5f, 1f),
+                                 Math.Clamp((s.Y - layout.Y) / (float)layout.Height, -0.5f, 1f),
+                                 Math.Clamp((s.Right - layout.X) / (float)layout.Width, 0f, 1.5f),
+                                 Math.Clamp((s.Bottom - layout.Y) / (float)layout.Height, 0f, 1.5f));
+        return true;
+    }
+
+    /// <summary>
+    /// The target's drawn shape this frame: its layout body cut to the silhouette pinned for this tick at launch (the
+    /// front's travel), or, for the <paramref name="crush"/>, the one measured this frame (the pinned one until then).
+    /// </summary>
+    private bool TryTargetShape(IReactionStage stage, int tick, int target, bool crush, out Rectangle shape)
     {
         shape = default;
         if (target < 0 || !stage.TryTargetBody(target, out var layout) || layout.Height <= 0) return false;
-        var sh = _shape[tick] ?? new Vector4(0f, 0f, 1f, 1f);
+        var sh = (crush ? _crush[tick] ?? _shape[tick] : _shape[tick]) ?? new Vector4(0f, 0f, 1f, 1f);
         shape = new Rectangle((int)(layout.X + sh.X * layout.Width), (int)(layout.Y + sh.Y * layout.Height),
                               Math.Max(1, (int)((sh.Z - sh.X) * layout.Width)), Math.Max(1, (int)((sh.W - sh.Y) * layout.Height)));
         return true;
@@ -362,8 +419,10 @@ public sealed class FieldPerformance
         var at = Vector2.Lerp(from, to, progress);
         var scale = WaveHeight(Recipe, grow, champ.Height, foe.Height) / Recipe.WaveCell.Y;
         var src = new Rectangle(cell * Recipe.WaveCell.X, 0, Recipe.WaveCell.X, Recipe.WaveCell.Y);
-        var turn = MathF.Atan2(to.Y - from.Y, to.X - from.X);
-        b.Draw(tex, at, src, tint, turn, new Vector2(Recipe.WaveLeadX, Recipe.WaveCell.Y * 0.5f), scale, SpriteEffects.None, 0f);
+        // AXIS-ALIGNED on whole screen pixels: turned along its path (~12 degrees on this stage) the NEAREST grid tilted off
+        // the stage's and its lit rim broke into a serrated saw-tooth (the crescent already faces the enemy)
+        b.Draw(tex, new Rectangle((int)MathF.Round(at.X - Recipe.WaveLeadX * scale), (int)MathF.Round(at.Y - 0.5f * Recipe.WaveCell.Y * scale),
+                                  (int)MathF.Round(Recipe.WaveCell.X * scale), (int)MathF.Round(Recipe.WaveCell.Y * scale)), src, tint);
         _sprites++;
     }
 
@@ -379,26 +438,30 @@ public sealed class FieldPerformance
         return (Vector2.Lerp(arrive, shut, close), MathHelper.Lerp(tips, r.ClampShutShare * foe.Height, close));
     }
 
-    private void DrawFlattened(SpriteBatch b, Texture2D tex, Rectangle champ, Rectangle foe, Color tint)
+    private void DrawFlattened(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, Color tint)
     {
         var (_, to) = Path(Recipe, champ, foe);
         var scale = WaveHeight(Recipe, 1f, champ.Height, foe.Height) / Recipe.WaveCell.Y;
-        b.Draw(tex, to, new Rectangle(0, 0, Recipe.WaveCell.X, Recipe.WaveCell.Y), tint, 0f,
-               new Vector2(Recipe.WaveLeadX, Recipe.WaveCell.Y * 0.5f), new Vector2(scale * Recipe.FlattenShare, scale * 0.92f),
-               SpriteEffects.None, 0f);
+        // against the creature's face it loses cohesion (the dissolve cell, at its own scale: a squeeze to half its width
+        // crushed its pixels back into a smooth vector lens), on whole pixels
+        b.Draw(tex, new Rectangle((int)MathF.Round(to.X - Recipe.WaveLeadX * scale), (int)MathF.Round(to.Y - 0.5f * Recipe.WaveCell.Y * scale),
+                                  (int)MathF.Round(Recipe.WaveCell.X * scale), (int)MathF.Round(Recipe.WaveCell.Y * scale)),
+               new Rectangle(cell * Recipe.WaveCell.X, 0, Recipe.WaveCell.X, Recipe.WaveCell.Y), tint);
         _sprites++;
     }
 
-    private void DrawClamps(SpriteBatch b, Texture2D tex, Rectangle champ, Rectangle foe, CrushPose c, Color tint)
+    private void DrawClamps(SpriteBatch b, Texture2D tex, int cell, Rectangle champ, Rectangle foe, float width, CrushPose c, Color tint)
     {
         var (centre, edge) = ClampPlace(Recipe, champ, foe, c.Close);
-        var scale = foe.Width * Recipe.ClampWidthShare / Recipe.ClampCell.X;
-        var half = Recipe.ClampCell.X * 0.5f;
-        // above, pressing down; below, flipped, pressing up (the pressing edges face the body)
-        b.Draw(tex, new Vector2(centre.X, centre.Y - edge), null, tint, 0f, new Vector2(half, Recipe.ClampPressY), scale,
-               SpriteEffects.None, 0f);
-        b.Draw(tex, new Vector2(centre.X, centre.Y + edge), null, tint, 0f, new Vector2(half, Recipe.ClampCell.Y - Recipe.ClampPressY),
-               scale, SpriteEffects.FlipVertically, 0f);
+        var w = Math.Max(1, (int)MathF.Round(width));
+        var scale = w / (float)Recipe.ClampCell.X;
+        var h = Math.Max(1, (int)MathF.Round(Recipe.ClampCell.Y * scale));
+        var x = (int)MathF.Round(centre.X - 0.5f * w);
+        var src = new Rectangle(cell * Recipe.ClampCell.X, 0, Recipe.ClampCell.X, Recipe.ClampCell.Y);
+        // above, pressing down; below, flipped, pressing up (the pressing edges face the body); on whole pixels
+        b.Draw(tex, new Rectangle(x, (int)MathF.Round(centre.Y - edge - Recipe.ClampPressY * scale), w, h), src, tint);
+        b.Draw(tex, new Rectangle(x, (int)MathF.Round(centre.Y + edge - (Recipe.ClampCell.Y - Recipe.ClampPressY) * scale), w, h), src, tint,
+               0f, Vector2.Zero, SpriteEffects.FlipVertically, 0f);
         _sprites += 2;
     }
 }

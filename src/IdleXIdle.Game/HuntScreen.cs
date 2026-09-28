@@ -1515,7 +1515,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var fieldSlot = -1;
             for (var si = 0; si < _waveSkills.Count; si++)
                 if (ReferenceEquals(_waveSkills[si], fieldSk)) { fieldSlot = si; break; }
-            var ticks = new List<(float AtMs, int Target, bool Yields)>();
+            var ticks = new List<(float AtMs, int Target, bool Yields, bool Quiet)>();
             var events = _run.LastWaveEvents;
             for (var ei = 0; ei < events.Count; ei++)
             {
@@ -1523,6 +1523,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 var at = events[ei].AtMs;
                 var target = -1;
                 var yields = false;
+                var quietTick = false;
                 for (var ej = 0; ej < events.Count; ej++)
                 {
                     var o = events[ej];
@@ -1533,8 +1534,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         && ReactionRecipes.For(Character.Id, _waveSkills[o.Slot].Def.Id) is not null
                         && o.AtMs >= at - fieldRecipe.YieldBeforeMs && o.AtMs <= at + fieldRecipe.YieldAfterMs)
                         yields = true;
+                    // AN ACTION'S CONTACT close to this tick (its performance may not be drawing yet): the tick is quiet
+                    if (o.Kind == BattleEventKind.Skill && o.Slot >= 0 && o.Slot < _waveSkills.Count
+                        && _waveSkills[o.Slot].Def.Kind is not (SkillKind.Reaction or SkillKind.Field)
+                        && o.AtMs >= at - fieldRecipe.QuietBeforeMs && o.AtMs <= at + fieldRecipe.QuietAfterMs)
+                        quietTick = true;
                 }
-                ticks.Add((at, target, yields));
+                ticks.Add((at, target, yields, quietTick));
             }
             _isStanding ??= s => _replay?.CreatureAlive(s) ?? true;
             _field = new FieldPerformance(fieldRecipe, fieldSlot, ticks)
@@ -1543,7 +1549,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 CreatureSlots = _run.LastWaveCreatures.Count,
             };
             if (PresentTrace.Enabled)
-                PresentTrace.Log("field-wave", $"{fieldRecipe.Id}\tslot={fieldSlot}\tticks={string.Join(",", ticks.Select(t => $"{t.AtMs:0}>{t.Target}{(t.Yields ? "y" : "")}"))}");
+                PresentTrace.Log("field-wave", $"{fieldRecipe.Id}\tslot={fieldSlot}\tticks={string.Join(",", ticks.Select(t => $"{t.AtMs:0}>{t.Target}{(t.Yields ? "y" : "")}{(t.Quiet ? "q" : "")}"))}");
         }
 
         WavesBegun++;

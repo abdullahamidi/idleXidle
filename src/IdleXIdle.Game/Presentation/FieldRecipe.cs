@@ -18,7 +18,8 @@ namespace IdleXIdle.Game.Presentation;
 /// <see cref="LaunchMs"/>); C the EMISSION (the field springs back out and one broad pressure FRONT leaves the Seeker's
 /// enemy side and travels to the front enemy, growing as it goes: Syndra E's motion grammar, a force wave, never a
 /// bullet); D the CRUSH on the tick (the front resolves into two pressing arcs above and below the target and the
-/// creature's body buckles for a moment; the brightest moment of the phrase); E the SETTLE (the arcs release and fade,
+/// creature's body buckles for a moment; the hard beat, its hottest pixels a short accent on the arcs' pressing edge);
+/// E the SETTLE (the arcs release and crumble,
 /// the field is quiet again).
 /// </para>
 /// <para>
@@ -44,8 +45,16 @@ public sealed class FieldRecipe
     /// <inheritdoc cref="FieldKey"/>
     public Point FieldCell { get; init; } = new(320, 448);
 
-    /// <summary>The pressure FRONT, facing the enemy side: two cells side by side, crisp and softened.</summary>
+    /// <summary>
+    /// The pressure FRONT, facing the enemy side, in four cells (PIXEL-HARD, authored at a fifth of its cell's resolution
+    /// and upscaled NEAREST, in value bands; drawn axis-aligned on whole pixels, a rotated grid read as a serrated blade): <see cref="WaveBodyCell"/>, <see cref="WaveEdgeCell"/> (the light pass: the edge and its
+    /// accent only), <see cref="WaveEchoCell"/> (a broken darker echo; the soft afterimage read as a motion-blurred ghost)
+    /// and <see cref="WaveDissolveCell"/> (losing cohesion as it collapses into the crush).
+    /// </summary>
     public string WaveKey { get; init; } = "fxp_seeker_press_wave";
+
+    /// <inheritdoc cref="WaveKey"/>
+    public const int WaveBodyCell = 0, WaveEdgeCell = 1, WaveEchoCell = 2, WaveDissolveCell = 3;
 
     /// <inheritdoc cref="WaveKey"/>
     public Point WaveCell { get; init; } = new(192, 512);
@@ -53,14 +62,28 @@ public sealed class FieldRecipe
     /// <summary>The leading rim's x in a wave cell (at its middle): the point that travels to the target's front.</summary>
     public float WaveLeadX { get; init; } = 153.6f;
 
-    /// <summary>The CRUSH arc, pressing down (drawn flipped below the target, pressing up).</summary>
+    /// <summary>
+    /// The CRUSH arc, pressing down (drawn flipped below the target, pressing up), in five cells: whole, three pixel-chunk
+    /// dissolve states for its release (it loses cohesion; a vector alpha-fade read as HD magic), and
+    /// <see cref="ClampEdgeCell"/>.
+    /// </summary>
     public string ClampKey { get; init; } = "fxp_seeker_press_clamp";
+
+    /// <inheritdoc cref="ClampKey"/>
+    public int ClampCells { get; init; } = 5;
+
+    /// <summary>
+    /// The clamp's EDGE cell, the only part the tick's heat lights (in the additive pass): the pressing edge as a dim line and
+    /// a short PEAK accent at the contact. The arc's body stays violet (lit whole, the two arcs made the tick as bright as
+    /// SPRAY's hit and twice HARD HANDS').
+    /// </summary>
+    public const int ClampEdgeCell = 4;
 
     /// <inheritdoc cref="ClampKey"/>
     public Point ClampCell { get; init; } = new(512, 160);
 
     /// <summary>The pressing edge's y in the clamp cell (at its middle).</summary>
-    public float ClampPressY { get; init; } = 113.2f;
+    public float ClampPressY { get; init; } = 127.2f;
 
     // ── A · THE QUIET FIELD ──
 
@@ -95,7 +118,7 @@ public sealed class FieldRecipe
     public float ContractFromMs { get; init; } = -520f;
 
     /// <summary>The field's size and opacity at its tightest, just before it lets the wave go.</summary>
-    public float ContractScale { get; init; } = 0.86f;
+    public float ContractScale { get; init; } = 0.82f;
 
     /// <inheritdoc cref="ContractScale"/>
     public float ContractAlpha { get; init; } = 0.5f;
@@ -105,17 +128,22 @@ public sealed class FieldRecipe
     /// <summary>The front leaves the Seeker here (ms before the tick) and ARRIVES on the tick.</summary>
     public float LaunchMs { get; init; } = -300f;
 
-    /// <summary>The field springs back out past its size as it lets go (then settles to 1 by <see cref="SpringMs"/>).</summary>
-    public float SpringScale { get; init; } = 1.06f;
+    /// <summary>
+    /// The field RELEASES as it lets the front go: it SNAPS out past its size (<see cref="SpringScale"/>, reached in the first
+    /// quarter of <see cref="SpringMs"/>) and settles; the start of the hard beat (a gentle spring read as soft).
+    /// </summary>
+    public float SpringScale { get; init; } = 1.10f;
 
     /// <inheritdoc cref="SpringScale"/>
-    public float SpringMs { get; init; } = 160f;
+    public float SpringMs { get; init; } = 110f;
 
     /// <summary>
-    /// The front's height: as it leaves, a share of the SEEKER's visible height (a broad arc from his chest, never a
-    /// bullet); on arrival, a share of the TARGET's drawn silhouette (it spans the creature, top to feet and past them).
+    /// The front's height: on arrival, <see cref="WaveArriveShare"/> of the TARGET's drawn silhouette (it spans the
+    /// creature, top to feet and past them); as it leaves the field, this share of that (a broad front from the start,
+    /// never a bullet). It grows little on the way: one cell scaled from half the Seeker to its arrival drew its art pixel
+    /// from ~2 to ~3 screen px, a material that changes in flight.
     /// </summary>
-    public float WaveLaunchShare { get; init; } = 0.5f;
+    public float WaveLaunchShare { get; init; } = 0.87f;
 
     /// <inheritdoc cref="WaveLaunchShare"/>
     public float WaveArriveShare { get; init; } = 1.7f;
@@ -126,39 +154,46 @@ public sealed class FieldRecipe
     /// <inheritdoc cref="WaveLaunchAlpha"/>
     public float WaveArriveAlpha { get; init; } = 0.9f;
 
-    /// <summary>The travel's ease-out: fast from the Seeker, still moving as it lands (a force, not a thrown thing).</summary>
-    public float TravelEasePower { get; init; } = 1.35f;
+    /// <summary>
+    /// The travel ACCELERATES into the contact (progress = t^this): the largest step is the last, so the front hits rather
+    /// than lands (an ease-out arrived gently, the opposite of a hard beat).
+    /// </summary>
+    public float TravelEasePower { get; init; } = 1.8f;
 
-    /// <summary>The softened afterimage: how far behind the front it trails (ms of travel) and how strong it is.</summary>
-    public float AfterimageLagMs { get; init; } = 34f;
+    /// <summary>
+    /// The ECHO: one solid darker copy of the front a frame behind it (the pixel-art smear; a masked, broken echo read as
+    /// grain), how far behind (ms of travel) and how strong.
+    /// </summary>
+    public float EchoLagMs { get; init; } = 17f;
 
-    /// <inheritdoc cref="AfterimageLagMs"/>
-    public float AfterimageAlpha { get; init; } = 0.45f;
+    /// <inheritdoc cref="EchoLagMs"/>
+    public float EchoAlpha { get; init; } = 0.25f;
 
-    /// <summary>The front collapses into the crush over this long after arriving.</summary>
-    public float WaveCollapseMs { get; init; } = 50f;
+    /// <summary>The front collapses into the crush over this long after arriving, losing cohesion in pixel chunks.</summary>
+    public float WaveCollapseMs { get; init; } = 34f;
 
-    /// <summary>The front's light: its rim, in the additive pass, as a share of its material opacity.</summary>
-    public float WaveGlowShare { get; init; } = 0.8f;
+    /// <summary>
+    /// The front's light: its rim, in the additive pass, as a share of its material opacity (a lavender LIGHT line; at 0.8
+    /// the arrival rim alone lit as much as HARD HANDS' hit).
+    /// </summary>
+    public float WaveGlowShare { get; init; } = 0.6f;
 
     /// <summary>
     /// The rim's glow on the way, a share of <see cref="WaveGlowShare"/>, rising to whole on arrival: a hot white rim for the
-    /// whole travel read as a sword beam and flattened the peak (the tick must be the brightest moment).
+    /// whole travel read as a sword beam and flattened the beat (the rim is whole only as it arrives, on the tick).
     /// </summary>
-    public float WaveTravelGlow { get; init; } = 0.45f;
-
-    /// <summary>The front's body glowing faintly in the light pass (its softened cell), a share of its opacity.</summary>
-    public float WaveBodyGlowShare { get; init; } = 0.35f;
+    public float WaveTravelGlow { get; init; } = 0.3f;
 
     // ── D · THE CRUSH (ms after the tick) ──
 
     /// <summary>
     /// THE CRUSH IS MADE OF THE FRONT: the arcs start where the arriving crescent's tips are (half its arrival height from
     /// the target's middle, at the target's front) and fold over and under the target, pressing in until their edges
-    /// bite into its drawn silhouette (<see cref="ClampShutShare"/>). A wave that vanished while two horizontal arcs popped
-    /// in read as two effects (the first review).
+    /// bite into its drawn silhouette (<see cref="ClampShutShare"/>) as it BUCKLES (placed on the buckled body, they press it
+    /// down with it and touch it; placed on the upright one, they hovered 35-40 px off a crouched creature). A wave that
+    /// vanished while two horizontal arcs popped in read as two effects (the first review).
     /// </summary>
-    public float ClampShutShare { get; init; } = 0.42f;
+    public float ClampShutShare { get; init; } = 0.36f;
 
     /// <summary>
     /// The arcs' start is capped at this share of the target's height from its middle: the crescent is taller than the
@@ -166,32 +201,39 @@ public sealed class FieldRecipe
     /// </summary>
     public float ClampStartCap { get; init; } = 0.66f;
 
-    /// <summary>The arcs' width as a share of the target's drawn width (the front creature only, never the next one).</summary>
-    public float ClampWidthShare { get; init; } = 0.8f;
+    /// <summary>
+    /// The arcs' width as a share of the target's drawn width AT LAUNCH (its pose then, before any lunge of its own): the arcs'
+    /// size and art pixel never follow the pose (sized from a lunge's long silhouette they grew coarser than the world's
+    /// pixel); where they press follows it (<see cref="ClampCentreShare"/>).
+    /// </summary>
+    public float ClampWidthShare { get; init; } = 0.85f;
 
-    /// <summary>Where the shut arcs are centred, from the target's front, as a share of its drawn width (its body, not its tail).</summary>
-    public float ClampCentreShare { get; init; } = 0.42f;
+    /// <summary>
+    /// Where the shut arcs are centred, from the target's front, as a share of its drawn width as it is pressed (its head and
+    /// shoulders, never its tail: further back, their tip lay on the next creature's head in the row).
+    /// </summary>
+    public float ClampCentreShare { get; init; } = 0.33f;
 
     /// <summary>The arcs press in over this long, hold, and let go (then fade by <see cref="EndMs"/>).</summary>
-    public float CrushInMs { get; init; } = 70f;
+    public float CrushInMs { get; init; } = 30f;
 
     /// <inheritdoc cref="CrushInMs"/>
-    public float CrushHoldMs { get; init; } = 100f;
+    public float CrushHoldMs { get; init; } = 60f;
 
     /// <inheritdoc cref="CrushInMs"/>
-    public float CrushOutMs { get; init; } = 140f;
+    public float CrushOutMs { get; init; } = 120f;
 
-    /// <summary>The arcs' opacity at their peak (the brightest moment of the whole phrase is the crush).</summary>
+    /// <summary>The arcs' opacity at their peak (the most solid moment of the phrase; their heat is only a line on the edge).</summary>
     public float ClampPeakAlpha { get; init; } = 0.95f;
 
     /// <summary>The creature buckles under it: its drawn height and width at the deepest (feet stay on the floor).</summary>
-    public float SquashY { get; init; } = 0.85f;
+    public float SquashY { get; init; } = 0.81f;
 
     /// <inheritdoc cref="SquashY"/>
-    public float SquashX { get; init; } = 1.07f;
+    public float SquashX { get; init; } = 1.09f;
 
     /// <summary>The phrase ends here (ms after the tick): the arcs are gone and the field is at rest.</summary>
-    public float EndMs { get; init; } = 380f;
+    public float EndMs { get; init; } = 300f;
 
     // ── COLOURS (the Seeker's Shadow family; no neon, no arcane blue) ──
 
@@ -205,10 +247,14 @@ public sealed class FieldRecipe
     public Color RimColor { get; init; } = new(236, 224, 255);
 
     /// <summary>
-    /// The crush arcs: pale and hot on the tick (a pale LAVENDER, never the white of SPRAY's steel: near-white arcs read
-    /// as blade strokes for a frame or two), cooling to violet as they let go.
+    /// The crush arcs: violet (<see cref="ClampColor"/>), cooling as they let go; the tick's heat is a pale LAVENDER on
+    /// their pressing EDGE only (<see cref="ClampEdgeCell"/>, never the white of SPRAY's steel: near-white arcs read as
+    /// blade strokes for a frame or two).
     /// </summary>
     public Color ClampHotColor { get; init; } = new(226, 208, 255);
+
+    /// <summary>The pressing edge's heat in the additive pass, a share of the arcs' opacity (the PEAK is tiny, not bright).</summary>
+    public float ClampGlowShare { get; init; } = 0.7f;
 
     /// <inheritdoc cref="ClampHotColor"/>
     public Color ClampColor { get; init; } = new(196, 138, 250);
@@ -227,17 +273,22 @@ public sealed class FieldRecipe
     /// <inheritdoc cref="YieldBeforeMs"/>
     public float YieldAfterMs { get; init; } = 400f;
 
-    /// <summary>The flattened front's width against the creature's side, a share of its travelling width.</summary>
-    public float FlattenShare { get; init; } = 0.5f;
-
     /// <summary>The flattened front is gone by here (ms after the tick), before JAWS' fang crown thickens beside it.</summary>
     public float FlattenMs { get; init; } = 100f;
 
     /// <summary>
-    /// QUIET while the champion performs an action (SPRAY, HARD HANDS): the front and the crush at this share, so a
-    /// passive field never outshines the action (JAWS' rule).
+    /// QUIET while the champion performs an action (SPRAY, HARD HANDS), and on a tick an action's contact lands close to
+    /// (<see cref="QuietBeforeMs"/> before it to <see cref="QuietAfterMs"/> after it: the contact can land before the
+    /// action's performance has started drawing): the front and the crush at this share, so a passive field never
+    /// outshines the action (JAWS' rule).
     /// </summary>
     public float QuietShare { get; init; } = 0.6f;
+
+    /// <inheritdoc cref="QuietShare"/>
+    public float QuietBeforeMs { get; init; } = 200f;
+
+    /// <inheritdoc cref="QuietShare"/>
+    public float QuietAfterMs { get; init; } = 350f;
 }
 
 /// <summary>The field recipes, by character and skill (ADR-011's contract: a presentation belongs to its SKILL).</summary>

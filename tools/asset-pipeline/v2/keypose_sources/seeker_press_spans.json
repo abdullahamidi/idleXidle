@@ -1,4 +1,6 @@
 {
+  "wave_logical_resolution": 5,
+  "clamp_logical_resolution": 8,
   "field_cell": [
     320,
     448
@@ -7,11 +9,12 @@
     192,
     512
   ],
-  "wave_cells": 2,
+  "wave_cells": 4,
   "clamp_cell": [
     512,
     160
   ],
+  "clamp_cells": 5,
   "wave_lead_x": 153.6,
-  "clamp_press_y": 113.2
+  "clamp_press_y": 127.2
 }

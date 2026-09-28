@@ -471,7 +471,7 @@ reconstruction D3 forbids. The fight's own number differs: this Seeker acts at Ã
 waits ARMED 170 ms before each bite at normal TEMPO (417 ms at fast TEMPO, rearm 1583). A 0 ms window needs a rearm
 that is a whole number of the fight's 100 ms ticks; the Core tests pose one and prove its order.
 
-## The field reference: PRESS (FIRST SLICE 2026-09-28, awaiting the owner's review)
+## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED by the owner; PIXEL-HARD pass 2026-09-28, awaiting the owner's review)
 
 **The brief** (the owner, Concept A, after JAWS closed): PRESS is the gold-standard candidate for the PERSISTENT FIELD /
 AURA family. "A persistent pressure field around the Seeker periodically sends a force pulse outward. When the pulse
@@ -496,7 +496,45 @@ Three procedural parts (`tools/asset-pipeline/v2/seeker_press.py`): `fxp_seeker_
 `tools/asset-pipeline/films_press.sh`); review page https://claude.ai/artifact/EL1ZzQ9EjMYhqw13aF83CG. Checked by a three-lens judge panel (ACCEPT WITH NOTES;
 two must-fixes, both fixed) and two adversarial re-checks (RESOLVED WITH NOTES). Open: the buckle hides inside the pack's
 lunge in this seed (every PRESS tick lands on the pack's own bite beat); no sound yet; the arcs may still read as
-brackets; the owner's review.
+brackets; the owner's review. (The owner approved the direction and asked for the pixel-hard pass below.)
+
+### The pixel-hard pass (2026-09-28, awaiting the owner's review)
+
+**The brief** (the owner approved Concept A's direction; the craft was too smooth, too soft and too vector-like and the
+tick lacked hardness): bring PRESS into the game's pixel language and make the tick substantially harder, from timing
+rather than more VFX. Keep the sentence (quiet field -> contraction -> one broad front -> front-enemy crush -> settle),
+the real target, the JAWS yield and the quiet mode. No rings, arrows, projectiles, sparks, debris, shake, bloom or white
+target flash; PRESS stays subordinate to SPRAY, HARD HANDS and JAWS ("hard" is decisive, not larger or brighter).
+
+| Concern | The pixel-hard PRESS |
+|---|---|
+| Pixel material | the front is built at 1/5 resolution and the arcs at 1/8, then upscaled NEAREST: one art pixel is ~3 screen px at the capture size, the stage's own pixel (iteration 1's arcs at ~1.5 px read as a second material); shape first, a 0.4-source-pixel soften, no feather on the leading edge |
+| Drawn on the grid | the front is drawn AXIS-ALIGNED on whole screen pixels (turned along its ~12 degree path, the NEAREST grid tilted off the stage's and its rim read as a serrated saw-tooth) and leaves the field at 0.87 of its arrival height (grown from half the Seeker, its art pixel slid from ~2 to ~3 screen px in flight) |
+| Value bands | DARK wake, MID violet mass, LIGHT lavender leading edge, PEAK only a few art pixels at the contact (white/grey parts tinted at runtime) |
+| One broken front | five stepped segments, two notches in the front and two in the back; no noise masks (random masks read as grain) |
+| Afterimage | the soft ghost is gone: one SOLID darker echo one frame (17 ms) behind at 0.25 |
+| Release | tight -> snap -> settle: the field contracts to 0.82 (-520..-300), snaps to 1.10 within ~27 ms and settles by +110; the front accelerates into contact (travel eased ^1.8; its rim 0.3 on the way, whole on arrival, a lavender line at 0.6 of the front's opacity) |
+| Crush | closes in 30 ms (was ~70), holds 60, lets go in 120; the body buckles to x0.81 height / x1.09 width, feet planted; the phrase ends at +300 (was +380) |
+| The heat is a line | the arcs' body stays violet on the tick; the heat lights only their pressing EDGE (a fifth clamp cell: a dim line and a four-art-pixel PEAK at the contact). Lit whole (iteration 2), the arcs made the tick as bright as SPRAY's hit and twice HARD HANDS' |
+| Which enemy | the target's drawn body is pinned at launch for the travel and pinned again one frame into the crush, so a creature caught in its own lunge is pressed where it is drawn (on the launch shape the arcs sat behind its head and on the next creature; followed every frame, they jumped with each lunge frame). The crush pose only PLACES the arcs: centred 0.33 from its front (head and shoulders), on the body as it BUCKLES, so they press it down and touch it (on the upright body they hovered 35-40 px off it); their SIZE comes from the launch silhouette (0.85 of its width: their art pixel is the world's; sized from a lunge's long silhouette they grew coarser) |
+| The arcs' shape | bowed toward the body and thinner (a shallow thick slab read as two bars or platforms) |
+| Settle | a pixel dissolve: the arrived front and the released arcs erode in 3x3 holes, fragments falling 1 px; no emitter |
+| Dropped | iteration 1's "> TARGET <" chevrons (all three judges: a lock-on reticle / arrowheads, landing on the next creature, pinching sideways against a top-down crush) and the 6 px micro push (not visible at true speed; unanimous) |
+| Quiet | also when an action's skill event lands -200..+350 ms around the tick (the champion may be idle again by then) |
+| Yield | the front that gives way to JAWS flattens in its own violet (the dissolve cell unsqueezed: a squeeze smoothed its pixels) and only its leading edge stays lit (the hot tint over the whole cell was a pale slab beside the bite) |
+
+Parts regenerated by `seeker_press.py` (front: body, edge, echo, dissolve; arcs: whole, three erosion steps, edge); the
+smooth parts and the chevron sheet kept in `tools/asset-pipeline/v2/keypose_sources/history/`. Evidence
+`production/qa/evidence/press-hard/` (`tools/asset-pipeline/press_hard_evidence.py`); review page https://claude.ai/artifact/YZNuW29wsUsxXkzJMpN88i.
+Checked across four iterations: a four-lens panel on iteration 2 (three ACCEPT WITH NOTES, one REJECT: the whole arcs
+lit pale, the turned front, its sliding pixel size, the arcs off the lunging target), three re-checks on iteration 3
+(all resolved; a new must-fix: the arcs sized from the lunge pose, hovering off the buckling body) and two final checks
+on the pass (ACCEPT WITH NOTES, no must-fix). The owner's seven questions, answered on the page: native pixel art YES,
+one front YES, substantially harder YES, the affected enemy clearer YES, less smoothing helped YES, quieter than SPRAY /
+HARD HANDS / JAWS YES at every peak (summed over the phrase the travelling front is lit longer than HARD HANDS' two-frame
+hit), the push NO. Open: no cap on the arcs' size for a much larger creature; the bottom arc rests on the floor under a
+lunging creature; the arcs placed once float over a creature whose lunge ends mid-hold; the buckle on a standing creature
+is unseen in this seed; the front leaves at nearly full size; the field haze stays smooth; no sound yet (the pass stops).
 
 ## Context
 
