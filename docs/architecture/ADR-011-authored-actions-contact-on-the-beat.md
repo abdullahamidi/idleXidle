@@ -65,7 +65,52 @@ root motion to the target, the impact, the exit pose, the handoff and the fast-T
 | One garment | the cloak's colours remapped to the idle cloak's own distribution on the flared frames (`keyposes.py` `recolour_cloak`) |
 | Handoff at the fastest TEMPO | `HandoffFit.Yielded`: it hands over after its contact, and the lunge is carried home under the next wind-up |
 
-## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX"; awaiting the owner's true-speed review)
+## The reaction reference: JAWS (architecture approved; the bear trap, the whole piranha and the side-view maw NOT approved; since 2026-09-28 a FRONTAL SHADOW BITE after the owner's reference, Roni Kangaskorte's "Bite VFX", APPROVED as a concept and polished into one Shadow phenomenon; awaiting the owner's true-speed review of the polish)
+
+**The shadow-mist polish (the owner's brief "JAWS Frontal Bite Final Shadow-Mist Polish", 2026-09-28): the build.**
+The frontal bite is APPROVED ("Do NOT redesign JAWS again"); the brief asked for visual polish only, so that the bite
+reads as ONE Shadow phenomenon: mist gathers, the fangs condense, the Shadow compresses, snap, the Shadow bursts
+outward, the teeth break back into mist, everything evaporates. The perspective, the fang geometry, the head placement,
+the charge colours, the snap timing, the reflected target, `ReactionArmed`, skill-id isolation, SPRAY, HARD HANDS and
+Core are unchanged.
+
+- **One Shadow mist with one lifecycle** (`ReactionPerformance.Mist`, pure and tested; `ReactionPerformance.DrawUnder`).
+  Three soft irregular sprites of one lobe (`fxp_seeker_bite_smoke`, a broad soft body with a torn edge), flipped and
+  never tilted: no emitter, no allocations. Each lobe is drawn at `StackedShare`, the share that stacks to the recipe's
+  opacity. Opacity 0.07 at spawn, 0.38 formed (100 ms), 0.45 at the snap; scale 1.12 to 1.0 while it forms, compressed
+  to 0.92 at the snap with its lobes drawn in (the charge is form and density, not a pulse), stretched a little by the
+  rows' own gap in the wind-up, then released slowly to 1.22 while it fades to 0. It never fades in twice. Core colour
+  near-black violet (12, 7, 20) with a subtle violet edge on one lobe. It is drawn BEFORE the creatures (after the
+  effects' own under-pass), 2.9 × 2.7 crown widths, so it frames the bitten creature and can never veil it or the teeth.
+  Two findings on the way: the first pass drew it over the creature, in front of the bitten body (the review moved it
+  behind); drawn behind at the jaw's size, the body hid it completely, and a "dark" violet as light as the floor added
+  back what it took away. At
+  the brief's opacities it is a restrained dark haze around the bite, on purpose (the brief: reduce, never compensate).
+- **White-hot for one frame** (`_hotU`, the first frame DRAWN at or after the snap); the next frame is magenta. The
+  flash is 140 ms with the two-frame peak kept and cools white → magenta → violet (`FlashTint`, `CoolColor`); after the
+  snap nothing moves toward brighter pink.
+- **Hierarchy.** PRIMARY the snap fangs and the hot core; SECONDARY the pressure ring (a crisp edge in the light pass
+  hands over to a softened copy under the champion that dissolves into the mist, `RingCrispMs` 200 of `RingMs` 300);
+  TERTIARY the splinters (pale magenta, then darker violet and softer: a two-cell part, crisp and soft, `ShardTint`)
+  and the mist; ACCENT 13 speed lines (`STREAK_COUNT`, the count drawn is the count written), gone by 70 ms.
+- **The slash is removed.** A directional stroke inside a radial burst read as a BLADE attack in true-speed review;
+  JAWS is a bite. The part moved to `keypose_sources/history/fxp_seeker_bite_slash.png`; seven runtime parts remain.
+- **Quiet mode** (`IReactionStage.ChampionPerforming`; HuntScreen: an action performance is live). While the champion
+  performs SPRAY or HARD HANDS, and on a second bitten creature, the snap is never white-hot, the flash is ×0.55 alpha
+  and ×0.8 size (`QuietFlashAlpha`, `QuietFlashSize`), and there are no speed lines; a second creature also has no ring.
+  JAWS is never brighter or larger than the champion's action.
+- **Duration** ~677 ms, unchanged; the tail is faint mist and the last splinters and does not persist, so no shorter
+  tail variant was made. One cue, on the snap; no whoosh, no charge sound.
+- **Checked** by three independent judges (readability; one phenomenon; hierarchy and context) against the current
+  version at every phase: all three ACCEPT WITH NOTES, no defect. The bite is exactly as clear up to the snap; one peak,
+  no second fade-in; the palette cools; nothing veils the creature or the teeth; under SPRAY the knives stay brighter
+  and larger. Their shared note: the mist is at the edge of perception at play speed (its core sits behind the black
+  body), and making it stronger would move toward a veil. Their other notes, kept as levers rather than changes: the
+  translucent condensing teeth read ~5 % darker over the mist (0–150 ms); under HARD HANDS the flash and ring (light
+  pass) paint magenta over the champion's fist for ~130 ms, as before but dimmer (the lever: draw them under the
+  champion in quiet mode).
+- **Proof:** alloc 0 on every traced frame; at most 20 sprites for a two-creature bite; 808 game and 1888 Core tests;
+  the asset gate. Evidence: `production/qa/evidence/jaws-bite-mist/`; review page https://claude.ai/artifact/7UWmmu6T3gPhb59YZSnQ5H.
 
 **A frontal Shadow bite (the owner, 2026-09-28, third review): the build.** The owner on the side-view maw: "No, you
 misunderstood. You drew a bad jaw biting from the side. What I meant was the earlier perspective, biting from the FRONT,

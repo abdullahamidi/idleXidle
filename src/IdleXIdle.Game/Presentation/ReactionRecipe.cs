@@ -12,9 +12,14 @@ namespace IdleXIdle.Game.Presentation;
 /// blow, a crown of Shadow fangs (two long canines at its corners, bowing out and hooking in, five packed leaf-shaped
 /// teeth between them) and a lower row condense out of mist, wide apart, framing the head of the creature that bit; they
 /// CHARGE (a pale lavender-grey heating to violet and magenta), part further (the wind-up), then SLAM together across
-/// it, the rows interlocking white-hot; on that snap the teeth break into the IMPACT: a flash, a diagonal slash, a ring,
-/// speed lines, splinters of the broken teeth and a Shadow haze, the splinters the last to fade.
-/// ENEMY HITS SEEKER, SHADOW FANGS BITE IT, "−X JAWS", THE BITE BURSTS AND FADES.
+/// it, the rows interlocking white-hot for one frame; on that snap the teeth break into the IMPACT and the energy cools
+/// back through magenta and violet to dark Shadow. ONE SHADOW PHENOMENON (the owner's polish brief, 2026-09-28), never
+/// separate effects in a row: SHADOW MIST GATHERS, the FANGS CONDENSE FROM IT, THE SHADOW COMPRESSES, SNAP, THE SHADOW
+/// BURSTS OUTWARD, THE TEETH BREAK BACK INTO THE MIST, EVERYTHING EVAPORATES. The fangs stay the primary shape;
+/// the hot core the punctuation; the pressure ring secondary; the splinters and the mist tertiary; the speed lines an
+/// accent only (the diagonal slash was removed: it read as a blade). While the champion performs an action, JAWS stays
+/// quieter than it.
+/// ENEMY HITS SEEKER, SHADOW FANGS BITE IT, "−X JAWS", THE BITE BURSTS AND EVAPORATES.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,11 +30,13 @@ namespace IdleXIdle.Game.Presentation;
 /// number.
 /// </para>
 /// <para>
-/// EIGHT PARTS, composed at runtime (tools/asset-pipeline/v2/seeker_bite.py; ADR-010's rule): the two rows of fangs
-/// (each in <see cref="FangStates"/> condensation states, mist to crisp), and the impact's flash, slash, ring, speed
-/// lines, splinters and haze. All are white or grey and TINTED here along the Shadow palette. The teeth, their glow, the
-/// splinters and the haze are drawn after the creatures and BEFORE the champion (the glow adds its light inside that
-/// batch, with a zero alpha); the flash, the slash, the ring and the speed lines are light (the shared additive pass). NO JAWS TARGET FLASH: the bitten creature's own sprite
+/// SEVEN PARTS, composed at runtime (tools/asset-pipeline/v2/seeker_bite.py; ADR-010's rule): the two rows of fangs
+/// (each in <see cref="FangStates"/> condensation states, mist to crisp), the Shadow MIST lobe the phrase is made of, and
+/// the impact's flash, ring (crisp and dissolving), speed lines and splinters (crisp and softened). All are white or grey
+/// and TINTED here along the Shadow palette. The mist is drawn BEFORE the creatures (atmosphere behind the bitten one);
+/// the teeth, their glow, the dissolving ring and the splinters after the creatures and BEFORE the champion (the glow
+/// adds its light inside that batch, with a zero alpha); the flash, the crisp ring and the speed lines are light (the
+/// shared additive pass). NO JAWS TARGET FLASH: the bitten creature's own sprite
 /// never flashes (the generic F2 for ordinary blows is untouched).
 /// </para>
 /// <para>
@@ -77,11 +84,8 @@ public sealed class ReactionRecipe
     /// <summary>The upper crown's width in the art (texture px), canine to canine: the size reference.</summary>
     public float CrownArtWidth { get; init; } = 209.9f;
 
-    /// <summary>The impact's parts: a small hot core with six fat rays; one tapered stroke (the slash); four tapered arcs; radial speed lines; torn splinters of the broken teeth; a ragged smoke disc.</summary>
+    /// <summary>The impact's parts: a small hot core with six fat rays; the pressure ring (crisp and softened); a dozen radial speed lines; torn splinters of the broken teeth (crisp and softened).</summary>
     public string FlashKey { get; init; } = "fxp_seeker_bite_star";
-
-    /// <inheritdoc cref="FlashKey"/>
-    public string SlashKey { get; init; } = "fxp_seeker_bite_slash";
 
     /// <inheritdoc cref="FlashKey"/>
     public string RingKey { get; init; } = "fxp_seeker_bite_ring";
@@ -92,8 +96,8 @@ public sealed class ReactionRecipe
     /// <inheritdoc cref="FlashKey"/>
     public string ShardsKey { get; init; } = "fxp_seeker_bite_shards";
 
-    /// <inheritdoc cref="FlashKey"/>
-    public string PuffKey { get; init; } = "fxp_seeker_bite_smoke";
+    /// <summary>The Shadow MIST: one soft irregular smoke lobe, drawn as <see cref="MistLobes"/> turned apart into one volume.</summary>
+    public string MistKey { get; init; } = "fxp_seeker_bite_smoke";
 
     // ── SIZE AND PLACE: the bite frames the creature that bit, from the front ─────────────────────
 
@@ -144,13 +148,10 @@ public sealed class ReactionRecipe
     public float SecondaryScale { get; init; } = 0.68f;
 
     /// <summary>
-    /// The impact's parts, their sizes as multiples of the crown's width (the slash's length): the payoff is bigger than
-    /// the jaw that causes it (a ring smaller than the crown made the bite's end weaker than its build-up).
+    /// The impact's parts, their sizes as multiples of the crown's width: the payoff is bigger than the jaw that causes it
+    /// (a ring smaller than the crown made the bite's end weaker than its build-up).
     /// </summary>
     public float FlashSize { get; init; } = 1.3f;
-
-    /// <inheritdoc cref="FlashSize"/>
-    public float SlashSize { get; init; } = 2.1f;
 
     /// <inheritdoc cref="FlashSize"/>
     public float RingSize { get; init; } = 1.8f;
@@ -161,20 +162,86 @@ public sealed class ReactionRecipe
     /// <inheritdoc cref="FlashSize"/>
     public float ShardsSize { get; init; } = 1.5f;
 
-    /// <inheritdoc cref="FlashSize"/>
-    public float PuffSize { get; init; } = 1.2f;
+    // ── THE SHADOW MIST: one material volume behind the fangs, with ONE lifecycle (fade in, condense, compress, snap,
+    // expand, fade out; never a second fade-in) whose pulse is its form and density, not a flashing opacity ──
+
+    /// <summary>The mist's size at scale 1, as multiples of the crown's width: an upright oval behind both rows, wide enough to show AROUND the bitten creature (drawn behind it, a mist the size of the jaw was hidden by the body).</summary>
+    public Vector2 MistSize { get; init; } = new(2.9f, 2.7f);
 
     /// <summary>
-    /// The slash's angle on screen (degrees, clockwise: positive falls to the right, as the reference's stroke does): a
-    /// stroke with a direction, crossing the flash BETWEEN its rays and longer than it (laid along the star's own
-    /// longest rays, the white star swallowed it).
+    /// The lobes of the one volume (three soft irregular sprites; no emitter): each an offset from the bite (in crown
+    /// widths), a FLIP of the one texture (0 none, 1 horizontal, 2 vertical, 3 both: a tilt put the oval's height and its
+    /// gap-driven stretch on a slanted axis) and a scale. The FIRST is the outer edge, drawn in <see cref="MistEdgeColor"/>
+    /// a little larger; the others are the dark core.
     /// </summary>
-    public float SlashAngleDegrees { get; init; } = 35f;
+    public IReadOnlyList<Vector4> MistLobes { get; init; } = new[]
+    {
+        new Vector4(0f, 0f, 3f, 1.12f), new Vector4(0f, 0f, 0f, 1f), new Vector4(0.12f, 0.06f, 1f, 0.78f),
+    };
+
+    /// <summary>
+    /// The mist's opacity as the WHOLE stack reads (each lobe is drawn at the share that stacks to it; per-lobe values
+    /// stacked to half as dense again): a whisper at the spawn, translucent when the fangs have formed, densest at the
+    /// snap. The mist is drawn BEHIND the creatures (atmosphere around the bitten creature, never a veil over it: drawn over
+    /// it, it greyed the black body and dimmed its eyes); the edge lobe at <see cref="MistEdgeShare"/> of the core.
+    /// </summary>
+    public float MistAlphaAtSpawn { get; init; } = 0.07f;
+
+    /// <inheritdoc cref="MistAlphaAtSpawn"/>
+    public float MistAlphaFormed { get; init; } = 0.38f;
+
+    /// <inheritdoc cref="MistAlphaAtSpawn"/>
+    public float MistAlphaAtSnap { get; init; } = 0.45f;
+
+    /// <inheritdoc cref="MistAlphaAtSpawn"/>
+    public float MistEdgeShare { get; init; } = 0.8f;
+
+    /// <summary>
+    /// The mist's scale: larger as it gathers, whole when the fangs have formed, COMPRESSED around the bite at the snap
+    /// (the charge's tension is its form, not a pulse of light), then released slowly OUTWARD through the tail (a fast bite,
+    /// a slow atmospheric release).
+    /// </summary>
+    public float MistScaleAtSpawn { get; init; } = 1.12f;
+
+    /// <inheritdoc cref="MistScaleAtSpawn"/>
+    public float MistScaleAtSnap { get; init; } = 0.92f;
+
+    /// <inheritdoc cref="MistScaleAtSpawn"/>
+    public float MistScaleTail { get; init; } = 1.22f;
+
+    /// <summary>The lobes draw together by this share of their offsets as the mist compresses (a drift inward of a few px).</summary>
+    public float MistConverge { get; init; } = 0.35f;
+
+    /// <summary>
+    /// The FANG GEOMETRY controls the mist's height: it stretches with the rows' gap by this share of the gap's own change
+    /// (taller through the wind-up, squeezed as they slam), within these bounds.
+    /// </summary>
+    public float MistStretch { get; init; } = 0.35f;
+
+    /// <inheritdoc cref="MistStretch"/>
+    public float MistStretchMin { get; init; } = 0.88f;
+
+    /// <inheritdoc cref="MistStretch"/>
+    public float MistStretchMax { get; init; } = 1.09f;
+
+    /// <summary>The speed lines' peak opacity: an accent of force, gone near the impact's peak, well before the splinters and the mist.</summary>
+    public float StreaksPeakAlpha { get; init; } = 0.8f;
+
+    /// <summary>
+    /// While the champion is PERFORMING an action (SPRAY's throw, HARD HANDS' leap and punch), JAWS is never brighter or
+    /// larger than it: the snap stays magenta-hot (no white), the flash is this much dimmer and smaller, and the speed lines
+    /// are left out (a reduction only; measured at 2-3 times the punch's own contact flash, it took the punch's payoff).
+    /// A second creature's bite is always this quiet.
+    /// </summary>
+    public float QuietFlashAlpha { get; init; } = 0.55f;
+
+    /// <inheritdoc cref="QuietFlashAlpha"/>
+    public float QuietFlashSize { get; init; } = 0.8f;
 
     // ── TIMING (ms after the first frame; the owner allowed it longer, so the bite has its build-up) ──
 
     /// <summary>
-    /// APPEAR: the rows condense out of mist over six frames (the strip's states, one a frame, loose to crisp; in one frame
+    /// APPEAR: the rows condense out of the mist over six frames (the strip's states, one a frame, loose to crisp; in one frame
     /// it read as a pop), growing out of nothing (<see cref="OpacityAtSpawn"/>) to <see cref="FormedOpacity"/> and
     /// tightening in (<see cref="ArriveScale"/>), already wide apart. The teeth reach full strength only as the charge
     /// completes, so the snap, not the fangs appearing, is the brightest moment.
@@ -185,7 +252,7 @@ public sealed class ReactionRecipe
     public float OpacityAtSpawn { get; init; } = 0.10f;
 
     /// <inheritdoc cref="AppearMs"/>
-    public float FormedOpacity { get; init; } = 0.8f;
+    public float FormedOpacity { get; init; } = 0.75f;
 
     /// <inheritdoc cref="AppearMs"/>
     public float ArriveScale { get; init; } = 1.12f;
@@ -216,22 +283,28 @@ public sealed class ReactionRecipe
     public float TeethBreakMs { get; init; } = 33f;
 
     /// <summary>
-    /// THE IMPACT, from the snap: the FLASH swells in one frame, holds whole two frames, then shrinks and fades
-    /// (<see cref="FlashMs"/>); the SLASH strikes across it from the frame after the snap and fades (<see cref="SlashMs"/>);
-    /// the RING grows out past the crown and fades (<see cref="RingMs"/>); the SPEED LINES burst out and fade
-    /// (<see cref="StreaksMs"/>); the SPLINTERS fly out with the ring from a frame after, turning a little, and are the LAST
-    /// to fade (<see cref="ShardsMs"/>); the Shadow HAZE spreads and thins (<see cref="BurstMs"/>, the whole impact).
+    /// THE IMPACT, from the snap, in its hierarchy: the hot core, the FLASH, swells in one frame, holds whole two frames,
+    /// then shrinks to a point and fades, cooling from white to magenta and violet, handing the scene back to the Shadow
+    /// (<see cref="FlashMs"/>); the RING, the pressure escaping, grows out past the crown crisp and magenta, cooling to
+    /// violet, while a softened copy takes over its edge and dissolves into the mist (<see cref="RingMs"/>); the SPLINTERS
+    /// fly out with it from a frame after the snap, pale magenta and solid, darkening to violet and softening into Shadow
+    /// fragments (<see cref="ShardsMs"/>); the MIST releases outward and evaporates (<see cref="BurstMs"/>, the whole
+    /// impact). ACCENT ONLY: the SPEED LINES, gone near the impact's peak (<see cref="StreaksMs"/>). (The diagonal slash was
+    /// removed: a directional stroke in a radial burst read as a blade, and JAWS is a bite.)
     /// </summary>
-    public float FlashMs { get; init; } = 200f;
+    public float FlashMs { get; init; } = 140f;
 
     /// <inheritdoc cref="FlashMs"/>
-    public float SlashMs { get; init; } = 84f;
+    public float RingMs { get; init; } = 300f;
+
+    /// <summary>The crisp ring is whole for its first frames and gone by here; the softened ring carries the rest of <see cref="RingMs"/>.</summary>
+    public float RingCrispMs { get; init; } = 200f;
+
+    /// <summary>The softened ring's peak opacity (in the mist's edge colour).</summary>
+    public float RingSoftPeakAlpha { get; init; } = 0.35f;
 
     /// <inheritdoc cref="FlashMs"/>
-    public float RingMs { get; init; } = 260f;
-
-    /// <inheritdoc cref="FlashMs"/>
-    public float StreaksMs { get; init; } = 220f;
+    public float StreaksMs { get; init; } = 70f;
 
     /// <inheritdoc cref="FlashMs"/>
     public float ShardsMs { get; init; } = 360f;
@@ -266,8 +339,11 @@ public sealed class ReactionRecipe
         new Color(207, 196, 230), new Color(190, 156, 250), new Color(160, 96, 255), new Color(214, 84, 236),
     };
 
-    /// <summary>On the snap frame the hot teeth flare this far toward <see cref="FlashColor"/> (white-hot).</summary>
-    public float SnapFlare { get; init; } = 0.5f;
+    /// <summary>
+    /// On the snap frame, and that frame ONLY, the hot teeth flare this far toward <see cref="FlashColor"/> (white-hot): an
+    /// impact punctuation, never the effect's new colour; from the next frame the energy cools.
+    /// </summary>
+    public float SnapFlare { get; init; } = 0.6f;
 
     /// <summary>
     /// The teeth's glow, drawn in the material batch with a zero alpha (it only adds light), a share of their opacity; it
@@ -279,11 +355,15 @@ public sealed class ReactionRecipe
     /// <inheritdoc cref="GlowShare"/>
     public float GlowAtFormed { get; init; } = 0.2f;
 
-    /// <summary>The impact's colours: a white flash with a violet cast, a magenta slash and ring, pale speed lines, violet-magenta splinters, a violet Shadow haze (a dark puff was lost against the dark pack).</summary>
+    /// <summary>
+    /// The impact's colours, cooling after the snap (never on into brighter pink): the flash white-hot on the snap frame,
+    /// then magenta, then violet; the ring magenta cooling to violet; the splinters pale magenta darkening to Shadow violet.
+    /// </summary>
     public Color FlashColor { get; init; } = new(255, 236, 255);
 
     /// <inheritdoc cref="FlashColor"/>
-    public Color SlashColor { get; init; } = new(226, 96, 240);
+    public Color CoolColor { get; init; } = new(132, 78, 210);
+
 
     /// <inheritdoc cref="FlashColor"/>
     public Color RingColor { get; init; } = new(214, 84, 236);
@@ -292,10 +372,16 @@ public sealed class ReactionRecipe
     public Color StreakColor { get; init; } = new(236, 228, 255);
 
     /// <inheritdoc cref="FlashColor"/>
-    public Color ShardColor { get; init; } = new(200, 90, 235);
+    public Color ShardColor { get; init; } = new(232, 150, 246);
 
     /// <inheritdoc cref="FlashColor"/>
-    public Color PuffColor { get; init; } = new(86, 50, 130);
+    public Color ShardCoolColor { get; init; } = new(84, 48, 128);
+
+    /// <summary>The mist: a near-black violet core with only a subtle violet edge (never bright additive purple smoke). The core is darker than the dungeon floor by a clear margin: a "dark" violet as light as the floor added back what the mist took away, and the volume did not read at all.</summary>
+    public Color MistCoreColor { get; init; } = new(12, 7, 20);
+
+    /// <inheritdoc cref="MistCoreColor"/>
+    public Color MistEdgeColor { get; init; } = new(66, 40, 100);
 
     // ── SOUND, FLASH AND THE SCREEN'S GENERIC CUES ───────────────────────────────────────────────
 

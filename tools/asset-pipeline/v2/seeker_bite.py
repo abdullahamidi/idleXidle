@@ -13,11 +13,14 @@ runtime (ADR-010's rule: effects are composed from parts, never generated as mot
     fxp_seeker_bite_lower.png    the LOWER ROW: four leaf-shaped teeth whose points rise between the upper points, and a
                                  taller one at each end, that the canines close outside of; the same STATES
     fxp_seeker_bite_star.png     the impact's FLASH: a small hot core, six fat rays, a soft bloom
-    fxp_seeker_bite_slash.png    the impact's SLASH: one tapered stroke (the runtime lays it on a diagonal)
-    fxp_seeker_bite_ring.png     the impact's RING: four tapered arcs with gaps
-    fxp_seeker_bite_streaks.png  the impact's SPEED LINES: thin radial streaks of mixed length around an empty centre
-    fxp_seeker_bite_shards.png   the impact's SHARDS: torn splinters of the broken teeth, six clusters around a ring
-    fxp_seeker_bite_smoke.png    the Shadow HAZE behind the flash: a ragged smoke disc
+    fxp_seeker_bite_ring.png     the impact's RING, two cells: the crisp pressure wave (four tapered arcs with gaps), and
+                                 the same ring SOFTENED into torn smoke (it dissolves into the mist)
+    fxp_seeker_bite_streaks.png  the impact's SPEED LINES: a dozen meaningful radial streaks of mixed length around an
+                                 empty centre (an accent: thirty read as a pattern to inspect)
+    fxp_seeker_bite_shards.png   the impact's SHARDS, two cells: torn splinters of the broken teeth in six clusters, and the
+                                 same splinters softened (late in their life they are Shadow fragments dissolving)
+    fxp_seeker_bite_smoke.png    the Shadow MIST: a soft, irregular smoke lobe; three of them, turned apart, make the one
+                                 mist volume the fangs condense from, compress into and burst out of
 
 The teeth are drawn as LEAVES (widest a third of the way from the root, tapering to a sharp point), with feathered
 edges, a soft halo and a thin dark seam where one overlaps the next; a crisp tooth is a flat glow brightening toward
@@ -40,6 +43,8 @@ OUT = os.path.join(REPO, "assets", "art", "VFX", "parts")
 SRC = os.path.join(HERE, "keypose_sources")
 
 SEED = 20260928
+STREAK_COUNT = 13              # the speed lines: a dozen meaningful streaks (an accent; thirty read as a pattern)
+HISTORY = os.path.join(SRC, "history")
 STATES = 6                     # condensation states per row: mist -> crisp teeth
 SS = 4                         # supersampling for the shapes
 UW, UH = 256, 200              # the upper crown's cell
@@ -232,7 +237,8 @@ def slash(w=512, h=96):
 
 
 def ring(size=256):
-    """Four tapered arcs with gaps, soft, with a faint glow."""
+    """Two cells: the crisp ring (four tapered arcs with gaps, soft-edged, a faint glow) and the same ring SOFTENED into
+    torn smoke, wider and broken by noise, for its outer edge to dissolve into the mist."""
     S = size * SS
     im = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(im)
@@ -248,11 +254,15 @@ def ring(size=256):
             pi.append((c + (R - th) * math.cos(a), c + (R - th) * math.sin(a)))
         d.polygon(po + pi[::-1], fill=255)
     m = blur(np.asarray(im.resize((size, size), Image.BOX)).astype(np.float32) / 255.0, 1.0)
-    return white(np.maximum(m, blur(m, 6.0) * 0.55))
+    crisp = np.maximum(m, blur(m, 6.0) * 0.55)
+    n = value_noise(size, size, 8, 21) * 0.6 + value_noise(size, size, 3, 22) * 0.4
+    soft = np.clip(blur(m, 7.0) * 3.2, 0.0, 1.0) * np.clip((n - 0.22) * 1.9, 0.0, 1.0)
+    return white(np.hstack([crisp, np.clip(soft, 0.0, 1.0)]))
 
 
-def streaks(size=512, n=30):
-    """Thin radial speed lines of mixed length, starting out at the ring, tapered at both ends."""
+def streaks(size=512, n=STREAK_COUNT):
+    """A dozen meaningful radial speed lines of mixed length (long and short in turn, a little jittered), starting out
+    at the ring, tapered at both ends: an accent of force, never a pattern to count."""
     S = size * SS
     im = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(im)
@@ -260,16 +270,17 @@ def streaks(size=512, n=30):
     R = 0.5 * S
     r = np.random.default_rng(SEED + 7)
     for k in range(n):
-        a = (k + r.random() * 0.8) / n * 2 * math.pi
-        r0 = R * (0.40 + 0.14 * r.random())
-        ln = R * (0.18 + 0.30 * r.random())
-        w = SS * (0.7 + 0.9 * r.random())
+        a = (k + 0.25 + r.random() * 0.5) / n * 2 * math.pi
+        long_ = k % 2 == 0
+        r0 = R * (0.42 + 0.10 * r.random())
+        ln = R * ((0.30 + 0.16 * r.random()) if long_ else (0.13 + 0.10 * r.random()))
+        w = SS * (1.3 + 1.0 * r.random())
         ux, uy = math.cos(a), math.sin(a)
         px, py = -uy, ux
         p0 = (c + ux * r0, c + uy * r0)
         p1 = (c + ux * (r0 + ln), c + uy * (r0 + ln))
         mid = (c + ux * (r0 + 0.4 * ln), c + uy * (r0 + 0.4 * ln))
-        d.polygon([p0, (mid[0] + px * w, mid[1] + py * w), p1, (mid[0] - px * w, mid[1] - py * w)], fill=int(170 + 85 * r.random()))
+        d.polygon([p0, (mid[0] + px * w, mid[1] + py * w), p1, (mid[0] - px * w, mid[1] - py * w)], fill=int(190 + 65 * r.random()))
     return white(np.asarray(im.resize((size, size), Image.BOX)).astype(np.float32) / 255.0)
 
 
@@ -305,16 +316,22 @@ def shards(size=256):
                 pts_r.append((x + px * hw, y + py * hw))
             d.polygon(pts_l + pts_r[::-1], fill=int(185 + 70 * r.random()))
     m = blur(np.asarray(im.resize((size, size), Image.BOX)).astype(np.float32) / 255.0, 0.6)
-    return white(np.maximum(m, blur(m, 3.0) * 0.4), np.clip(0.6 + 0.4 * m, 0, 1))
+    crisp = np.maximum(m, blur(m, 3.0) * 0.4)
+    soft = np.clip(blur(m, 2.6) * 1.5, 0.0, 1.0) * 0.8                     # the same splinters, softened: Shadow fragments
+    lum = np.clip(0.6 + 0.4 * m, 0, 1)
+    return white(np.hstack([crisp, soft]), np.hstack([lum, np.full_like(lum, 0.8)]))
 
 
 def smoke(size=256):
-    """A ragged smoke disc, densest at the centre, torn at its edge."""
+    """A soft, irregular smoke lobe: densest a little off centre, its edge torn by two octaves of noise and feathered
+    wide (three of these, turned apart, make the one mist volume; a disc with a ragged rim read as a puff)."""
     ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
-    r = np.hypot(xs - size / 2, ys - size / 2) / (size / 2)
-    n = value_noise(size, size, 10, 3) * 0.6 + value_noise(size, size, 4, 4) * 0.4
-    edge = 0.62 + 0.30 * (n - 0.5) * 2.0
-    return white(smoothstep(edge, edge - 0.45, r) * (0.55 + 0.45 * n))
+    cx, cy = size * 0.47, size * 0.52
+    r = np.hypot((xs - cx) / (size * 0.5), (ys - cy) / (size * 0.44))
+    n = value_noise(size, size, 9, 3) * 0.55 + value_noise(size, size, 4, 4) * 0.30 + value_noise(size, size, 18, 5) * 0.15
+    edge = 0.84 + 0.22 * (n - 0.5) * 2.0
+    a = smoothstep(edge, edge - 0.45, r) * (0.62 + 0.38 * n)          # a broad soft body (a tiny core was hidden by the creature)
+    return white(blur(a, 2.0))
 
 
 def strip(states, w, h):
@@ -347,7 +364,10 @@ def main():
     lower_states = row_states(lo, LW, LH, 202)
     strip(upper_states, UW, UH).save(os.path.join(OUT, "fxp_seeker_bite_upper.png"))
     strip(lower_states, LW, LH).save(os.path.join(OUT, "fxp_seeker_bite_lower.png"))
-    parts = {"star": star(), "slash": slash(), "ring": ring(), "streaks": streaks(), "shards": shards(), "smoke": smoke()}
+    parts = {"star": star(), "ring": ring(), "streaks": streaks(n=STREAK_COUNT), "shards": shards(), "smoke": smoke()}
+    # the SLASH was removed in the shadow-mist polish (a directional stroke in a radial burst read as a blade: JAWS is a
+    # bite); it is written to history only
+    slash().save(os.path.join(HISTORY, "fxp_seeker_bite_slash.png"))
     for name, im in parts.items():
         im.save(os.path.join(OUT, f"fxp_seeker_bite_{name}.png"))
     inner = [t for _, t, _, kind in up if kind == "inner"]
@@ -376,6 +396,8 @@ def main():
         "upper_width": width_of(up),
         "lower_width": width_of(lo),
         "part_sizes": {name: [im.width, im.height] for name, im in parts.items()},
+        "streak_count": STREAK_COUNT,
+        "two_cell_parts": ["ring", "shards"],
     }
     with open(os.path.join(SRC, "seeker_bite_spans.json"), "w", encoding="utf-8") as f:
         json.dump(spans, f, indent=2)

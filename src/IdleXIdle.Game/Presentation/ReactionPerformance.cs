@@ -17,6 +17,9 @@ public interface IReactionStage : IActionStage
 
     /// <summary>The frame the creature in <paramref name="slot"/> was drawn from this frame (its silhouette).</summary>
     bool TryTargetFrame(int slot, out SpriteFrame frame);
+
+    /// <summary>Whether the champion is performing an authored action this frame (SPRAY, HARD HANDS): a reaction then stays quieter than it.</summary>
+    bool ChampionPerforming { get; }
 }
 
 /// <summary>What one <see cref="ReactionPerformance.Update"/> crossed: the SNAP (the cue, a kill's fall) and the number's own frame.</summary>
@@ -38,10 +41,12 @@ public readonly record struct ReactionStep(bool Snapped, bool Answered, Vector2 
 /// is). APPEAR (0-100): the rows condense out of mist over six frames, one strip state a frame, growing out of nothing and
 /// tightening in, wide apart. CHARGE (100 to the snap): the teeth heat from a pale lavender-grey through violet to
 /// magenta, strengthening to whole; from 150 the rows part further (the wind-up). CLOSE (233-317): the rows slam together, accelerating (the largest step on the snap frame). SNAP
-/// (317, on a frame): the rows meet interlocked across the creature's middle, white-hot (<see cref="Snapped"/>: the
-/// cue, a kill's fall), and break into the IMPACT over the next frame: a flash that swells, holds two frames and then
-/// shrinks to a hot point before it fades, a diagonal slash across it, a ring growing out past the crown, speed lines bursting out, splinters of the broken teeth
-/// flying out with the ring and fading last, and a violet Shadow haze spreading behind it all, gone at 677. The number
+/// (317, on a frame): the rows meet interlocked across the creature's middle, white-hot for that one frame
+/// (<see cref="Snapped"/>: the cue, a kill's fall), the mist behind them at its densest and most compressed, and break
+/// into the IMPACT over the next frame as the energy cools: a flash that swells, holds two frames and then shrinks to a
+/// hot point before it fades, cooling to magenta at once, a pressure ring growing out past the crown and
+/// dissolving into the mist, speed lines bursting out, splinters of the broken teeth
+/// flying out with the ring and fading last, and the near-black Shadow mist behind the creature releasing outward and evaporating, gone at 677. The number
 /// lands 40 ms after the snap (<see cref="Answered"/>). A second creature bitten by the same answer gets its own,
 /// smaller bite on its own head, snapping with it, its impact only a flash and splinters.
 /// </para>
@@ -59,6 +64,7 @@ public sealed class ReactionPerformance
     private float? _origin;                    // the playhead of the first frame that showed the contact
     private bool _snapped, _answered;
     private int _sprites;
+    private float? _hotU;                      // the time of the first frame DRAWN at or after the snap: the one white-hot frame
 
     /// <summary>The recipe being presented.</summary>
     public ReactionRecipe Recipe { get; }
@@ -145,15 +151,26 @@ public sealed class ReactionPerformance
     public static float Charge(ReactionRecipe r, float u)
         => MathF.Pow(Math.Clamp((u - r.AppearMs) / Math.Max(1f, r.SnapAtMs - r.AppearMs), 0f, 1f), r.ChargeEasePower);
 
-    /// <summary>The teeth's colour at <paramref name="u"/>: along the charge ramp, flaring toward white-hot on and after the snap.</summary>
-    public static Color TeethColor(ReactionRecipe r, float u)
+    private const float Frame = 1000f / 60f;
+
+    /// <summary>
+    /// The teeth's colour at <paramref name="u"/>: along the charge ramp, flaring toward white-hot on the snap frame ONLY
+    /// (an impact punctuation, never the effect's colour), back to the hot magenta on the frame after as they break.
+    /// </summary>
+    public static Color TeethColor(ReactionRecipe r, float u) => TeethColor(r, u, IsSnapFrame(r, u));
+
+    /// <summary>The teeth's colour at <paramref name="u"/>, white-hot only when <paramref name="hot"/> (the one hot frame the screen actually drew; never for a quiet bite).</summary>
+    public static Color TeethColor(ReactionRecipe r, float u, bool hot)
     {
         var ramp = r.ChargeRamp;
         var t = Charge(r, u) * (ramp.Count - 1);
         var i = Math.Min((int)t, ramp.Count - 2);
         var c = Color.Lerp(ramp[i], ramp[i + 1], t - i);
-        return u >= r.SnapAtMs - 0.5f ? Color.Lerp(c, r.FlashColor, r.SnapFlare) : c;
+        return hot ? Color.Lerp(c, r.FlashColor, r.SnapFlare) : c;
     }
+
+    /// <summary>Whether <paramref name="u"/> falls on the snap frame (the one frame of white-hot).</summary>
+    public static bool IsSnapFrame(ReactionRecipe r, float u) => u >= r.SnapAtMs - 0.5f && u < r.SnapAtMs + Frame - 1f;
 
     /// <summary>How far the rows have CLOSED at <paramref name="u"/>: 0 open (through the charge and the wind-up), 1 at the snap. An ease-in: it accelerates into the bite.</summary>
     public static float Close(ReactionRecipe r, float u)
@@ -201,46 +218,110 @@ public sealed class ReactionPerformance
         return new FangPose(meet - new Vector2(0f, gap * 0.5f), meet + new Vector2(0f, gap * 0.5f), scale, meet, width);
     }
 
-    /// <summary>The impact this frame: each part's scale (against its size at the crown's width) and opacity, and the splinters' turn (radians).</summary>
+    /// <summary>
+    /// The impact this frame: each part's scale (against its size at the crown's width) and opacity; the crisp ring's
+    /// hand-over to its softened copy; the splinters' turn (radians) and how far they have softened into Shadow (0..1).
+    /// </summary>
     public readonly record struct BurstPose(
-        float FlashScale, float FlashAlpha, float SlashScale, float SlashAlpha, float RingScale, float RingAlpha,
-        float StreaksScale, float StreaksAlpha, float ShardsScale, float ShardsAlpha, float ShardsTurn, float PuffScale, float PuffAlpha);
+        float FlashScale, float FlashAlpha, float RingScale, float RingAlpha, float RingSoftAlpha,
+        float StreaksScale, float StreaksAlpha, float ShardsScale, float ShardsAlpha, float ShardsTurn, float ShardsSoft);
 
     /// <summary>
-    /// The IMPACT at <paramref name="u"/> (nothing before the snap): the flash swells to whole in one frame, holds two
-    /// frames, then shrinks and fades; the slash strikes across it from the frame after the snap, growing as it fades; the
-    /// ring grows out from under half its size and fades after a few frames; the speed lines burst out and fade; the
-    /// splinters fly out with the ring from a frame after the snap, turning a little, and fade last; the haze spreads and
-    /// thins.
+    /// The IMPACT at <paramref name="u"/> (nothing before the snap), in its hierarchy. The HOT CORE: the flash swells to
+    /// whole in one frame, holds two, then shrinks to a point first and fades last, by <see cref="ReactionRecipe.FlashMs"/>.
+    /// The PRESSURE RING: it grows out from under half its size past the crown, the crisp ring whole a few frames then gone
+    /// by <see cref="ReactionRecipe.RingCrispMs"/>, its softened copy rising as it goes and dissolving by
+    /// <see cref="ReactionRecipe.RingMs"/>. The SPLINTERS fly out with it from a frame after the snap, turning, softening
+    /// into Shadow through the second half of their life, the last to fade. ACCENT: the speed lines, bursting out and gone
+    /// near the peak.
     /// </summary>
     public static BurstPose Burst(ReactionRecipe r, float u)
     {
         var t = u - r.SnapAtMs;
         if (t < -0.5f || u >= r.GoneMs) return default;
         t = Math.Max(0f, t);
-        const float Frame = 1000f / 60f;
-        // the flash: after its hold it SHRINKS first (to a hot point) and fades last (shrinking slowly while it faded, its
-        // tail was a dull grey star over the haze)
         var flashK = Math.Clamp((t - 2f * Frame) / Math.Max(1f, r.FlashMs - 2f * Frame), 0f, 1f);
         var flashScale = t < Frame ? MathHelper.Lerp(0.7f, 1f, t / Frame) : t < 2f * Frame ? 1f : MathHelper.Lerp(1f, 0.25f, EaseOut(flashK));
         var flashAlpha = t < 2f * Frame ? 1f : 1f - EaseIn(flashK);
         var after = t - (Frame - 1f);                                           // from the frame after the snap (a ms of slack for the playhead)
-        var slashK = Math.Clamp(after / Math.Max(1f, r.SlashMs), 0f, 1f);
-        var slashAlpha = after < 0f ? 0f : 1f - Smooth(slashK);
         var ringK = EaseOut(t / Math.Max(1f, r.RingMs));
-        var ringAlpha = t < 8f * Frame ? 1f : 1f - Math.Clamp((t - 8f * Frame) / Math.Max(1f, r.RingMs - 8f * Frame), 0f, 1f);
+        var crispK = Math.Clamp((t - 4f * Frame) / Math.Max(1f, r.RingCrispMs - 4f * Frame), 0f, 1f);
+        var ringAlpha = t < 4f * Frame ? 1f : 1f - Smooth(crispK);
+        var softIn = Smooth(Math.Clamp((t - 2f * Frame) / (5f * Frame), 0f, 1f));
+        var softOut = 1f - Smooth(Math.Clamp((t - r.RingCrispMs * 0.6f) / Math.Max(1f, r.RingMs - r.RingCrispMs * 0.6f), 0f, 1f));
         var streakK = EaseOut(t / Math.Max(1f, r.StreaksMs));
-        var streakAlpha = t < 3f * Frame ? 0.95f : 0.95f * (1f - Math.Clamp((t - 3f * Frame) / Math.Max(1f, r.StreaksMs - 3f * Frame), 0f, 1f));
+        var streakAlpha = t < Frame ? r.StreaksPeakAlpha : r.StreaksPeakAlpha * (1f - Math.Clamp((t - Frame) / Math.Max(1f, r.StreaksMs - Frame), 0f, 1f));
         var shardK = EaseOut(after / Math.Max(1f, r.ShardsMs - Frame));
-        var shardAlpha = after < 0f ? 0f : t < 10f * Frame ? 1f : 1f - Math.Clamp((t - 10f * Frame) / Math.Max(1f, r.ShardsMs - 10f * Frame), 0f, 1f);
-        var puffK = EaseOut(t / Math.Max(1f, r.BurstMs));
+        var shardAlpha = after < 0f ? 0f : t < 9f * Frame ? 1f : 1f - Math.Clamp((t - 9f * Frame) / Math.Max(1f, r.ShardsMs - 9f * Frame), 0f, 1f);
+        var shardSoft = Smooth(Math.Clamp((t - 6f * Frame) / Math.Max(1f, r.ShardsMs * 0.55f), 0f, 1f));
         return new BurstPose(
             flashScale, flashAlpha,
-            MathHelper.Lerp(0.9f, 1.05f, slashK), slashAlpha,
-            MathHelper.Lerp(0.43f, 1f, ringK), ringAlpha,
+            MathHelper.Lerp(0.43f, 1f, ringK), ringAlpha, r.RingSoftPeakAlpha * softIn * softOut,
             MathHelper.Lerp(0.6f, 1.2f, streakK), Math.Max(0f, streakAlpha),
-            MathHelper.Lerp(0.5f, 1.15f, shardK), shardAlpha, MathHelper.ToRadians(12f) * shardK,
-            MathHelper.Lerp(0.5f, 1.3f, puffK), 0.55f * (1f - Smooth(t / Math.Max(1f, r.BurstMs))));
+            MathHelper.Lerp(0.5f, 1.15f, shardK), shardAlpha, MathHelper.ToRadians(12f) * shardK, shardSoft);
+    }
+
+    /// <summary>The flash's colour at <paramref name="u"/>: white-hot on the snap frame, then cooling through magenta toward violet as it shrinks and fades.</summary>
+    public static Color FlashTint(ReactionRecipe r, float u) => FlashTint(r, u, IsSnapFrame(r, u));
+
+    /// <summary>
+    /// The flash's colour at <paramref name="u"/>: white-hot only when <paramref name="hot"/> (the one hot frame drawn; a
+    /// quiet bite never), then already MAGENTA on the next frame (a flash still two-thirds white there made the frame after
+    /// the snap the brightest of the bite), cooling toward violet as it shrinks and fades.
+    /// </summary>
+    public static Color FlashTint(ReactionRecipe r, float u, bool hot)
+    {
+        if (hot) return r.FlashColor;
+        var k = Math.Clamp((u - r.SnapAtMs - Frame) / Math.Max(1f, r.FlashMs - Frame), 0f, 1f);
+        var warm = Color.Lerp(r.FlashColor, r.RingColor, 0.85f);
+        return Color.Lerp(warm, r.CoolColor, Smooth(k));
+    }
+
+    /// <summary>The speed lines' colour at <paramref name="u"/>: pale at the snap, cooling toward violet as they fade.</summary>
+    public static Color StreakTint(ReactionRecipe r, float u)
+        => Color.Lerp(r.StreakColor, r.CoolColor, Smooth(Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.StreaksMs), 0f, 1f)));
+
+    /// <summary>The share of <paramref name="target"/> opacity each of <paramref name="lobes"/> stacked sprites is drawn at, so the stack reads as the target.</summary>
+    public static float StackedShare(float target, int lobes)
+        => lobes <= 1 ? target : 1f - MathF.Pow(1f - Math.Clamp(target, 0f, 0.999f), 1f / lobes);
+
+    /// <summary>The crisp ring's colour at <paramref name="u"/>: magenta at the snap, cooling to violet as it grows.</summary>
+    public static Color RingTint(ReactionRecipe r, float u)
+        => Color.Lerp(r.RingColor, r.CoolColor, Smooth(Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.RingCrispMs), 0f, 1f)));
+
+    /// <summary>The splinters' colour at <paramref name="u"/>: pale magenta and solid as the teeth break, darkening to Shadow violet.</summary>
+    public static Color ShardTint(ReactionRecipe r, float u)
+        => Color.Lerp(r.ShardColor, r.ShardCoolColor, Smooth(Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.ShardsMs * 0.7f), 0f, 1f)));
+
+    /// <summary>The Shadow mist this frame: its scale, its height's stretch against its width, its core opacity, and how far its lobes have drawn together (0..1).</summary>
+    public readonly record struct MistPose(float Scale, float StretchY, float Alpha, float Converge);
+
+    /// <summary>
+    /// THE SHADOW MIST at <paramref name="u"/>, with ONE lifecycle (fade in, condense, compress, snap, expand, fade out;
+    /// its alpha only ever rises to the snap and only ever falls after it): it gathers while the fangs condense from it
+    /// (a whisper, large, tightening in), COMPRESSES around the bite through the charge (its form and density, not a pulse
+    /// of light), stretches and squeezes with the rows' own gap (the fang geometry controls it), is densest and most
+    /// compressed at the snap, then releases slowly OUTWARD and evaporates by the end.
+    /// </summary>
+    public static MistPose Mist(ReactionRecipe r, float u)
+    {
+        if (u < 0f || u >= r.GoneMs) return default;
+        var gap = Gap(r, 1f, 0f, u) / Math.Max(1e-3f, r.OpenGapShare) - 1f;        // the rows' gap against the open gap: + wind-up, -1 shut
+        var squeeze = Math.Clamp(1f + r.MistStretch * gap, r.MistStretchMin, r.MistStretchMax);
+        if (u < r.AppearMs)
+        {
+            var k = Smooth(u / r.AppearMs);
+            return new MistPose(MathHelper.Lerp(r.MistScaleAtSpawn, 1f, k), squeeze, MathHelper.Lerp(r.MistAlphaAtSpawn, r.MistAlphaFormed, k), 0f);
+        }
+        if (u < r.SnapAtMs - 0.5f)
+        {
+            var k = Math.Clamp((u - r.AppearMs) / Math.Max(1f, r.SnapAtMs - r.AppearMs), 0f, 1f);
+            return new MistPose(MathHelper.Lerp(1f, r.MistScaleAtSnap, Smooth(k)), squeeze, MathHelper.Lerp(r.MistAlphaFormed, r.MistAlphaAtSnap, k), Smooth(k));
+        }
+        var tail = Math.Clamp((u - r.SnapAtMs) / Math.Max(1f, r.BurstMs), 0f, 1f);
+        return new MistPose(MathHelper.Lerp(r.MistScaleAtSnap, r.MistScaleTail, EaseOut(tail)),
+                            MathHelper.Lerp(r.MistStretchMin, 1f, EaseOut(tail)),
+                            r.MistAlphaAtSnap * (1f - Smooth(tail)), 1f - EaseOut(tail));
     }
 
     // ── EACH FRAME ───────────────────────────────────────────────────────────────────────────────
@@ -310,49 +391,90 @@ public sealed class ReactionPerformance
     private static void DrawCentred(SpriteBatch b, Texture2D tex, Vector2 at, float diameter, float scale, Color color, float turn = 0f)
         => b.Draw(tex, at, null, color, turn, new Vector2(tex.Width * 0.5f, tex.Height * 0.5f), diameter / tex.Width * scale, SpriteEffects.None, 0f);
 
+    /// <summary>One cell of a two-cell part (0 crisp, 1 softened), centred, <paramref name="diameter"/> wide at scale 1.</summary>
+    private static void DrawCell(SpriteBatch b, Texture2D tex, int cell, Vector2 at, float diameter, float scale, Color color, float turn = 0f)
+    {
+        var w = tex.Width / 2;
+        b.Draw(tex, at, new Rectangle(cell * w, 0, w, tex.Height), color, turn, new Vector2(w * 0.5f, tex.Height * 0.5f), diameter / w * scale, SpriteEffects.None, 0f);
+    }
+
+    /// <summary>
+    /// THE MIST, in the normal alpha batch BEFORE the creatures: the near-black Shadow volume the fangs condense from,
+    /// compress into and burst out of, as ATMOSPHERE behind the bitten creature (drawn over it, it greyed the black body and
+    /// dimmed its eyes): its lobes, each at the share that stacks to the recipe's opacity. Three sprites a target.
+    /// </summary>
+    public void DrawUnder(SpriteBatch b, IReactionStage stage, float playheadMs)
+    {
+        _sprites = 0;
+        var u = playheadMs - OriginMs;
+        if (u < 0f || u >= EndMs || stage.Texture(Recipe.MistKey) is not { } mistTex) return;
+        var mist = Mist(Recipe, u);
+        if (mist.Alpha < ReactionRecipe.VisibleFloor) return;
+        var front = FrontTarget(stage, Targets);
+        var share = StackedShare(mist.Alpha, Recipe.MistLobes.Count);
+        var origin = new Vector2(mistTex.Width * 0.5f, mistTex.Height * 0.5f);
+        for (var k = 0; k < Targets.Count; k++)
+        {
+            if (!TrySilhouette(stage, k, out var body, out var layout)) continue;
+            var f = Fangs(Recipe, body, layout, u, secondary: k != front);
+            var size = new Vector2(Recipe.MistSize.X, Recipe.MistSize.Y * mist.StretchY) * f.CrownWidth * mist.Scale;
+            for (var l = 0; l < Recipe.MistLobes.Count; l++)
+            {
+                var lobe = Recipe.MistLobes[l];
+                var at = f.Meet + new Vector2(lobe.X, lobe.Y) * f.CrownWidth * (1f - Recipe.MistConverge * mist.Converge);
+                var tint = l == 0 ? Recipe.MistEdgeColor * (share * Recipe.MistEdgeShare) : Recipe.MistCoreColor * share;
+                var flip = (int)lobe.Z;
+                var effects = (flip & 1) != 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+                if ((flip & 2) != 0) effects |= SpriteEffects.FlipVertically;
+                b.Draw(mistTex, at, null, tint, 0f, origin, size * lobe.W / new Vector2(mistTex.Width, mistTex.Height), effects, 0f);
+                _sprites++;
+            }
+        }
+    }
+
     /// <summary>
     /// THE MATERIAL, in the normal alpha batch after the creatures and BEFORE the champion (over the creature it bites;
-    /// when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of it): the Shadow haze behind
-    /// the impact, the two rows of teeth (one strip state each), their GLOW (the same states again with a zero alpha, so
-    /// in this premultiplied batch they only add light, and stay under the champion), and the splinters. Six sprites a
-    /// target at most.
+    /// when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of it): the two rows of teeth
+    /// (one strip state each) and their GLOW (the same states with a zero alpha: in this premultiplied batch they only add
+    /// light, under the champion), the pressure ring's softened copy dissolving into the mist, and the splinters (crisp,
+    /// then softened). The teeth are white-hot on the first frame drawn at the snap only, and never for a quiet bite (the
+    /// champion performing, or a second creature). Seven sprites a target at most.
     /// </summary>
     public void DrawMaterial(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
-        _sprites = 0;
         var u = playheadMs - OriginMs;
         if (u < 0f || u >= EndMs) return;
         if (stage.TryChampionBody(out var champ))
             BeltAt = new Vector2(champ.X + Recipe.ChampionAnchor.X * champ.Width, champ.Y + Recipe.ChampionAnchor.Y * champ.Height);
         var upper = stage.Texture(Recipe.UpperKey);
         var lower = stage.Texture(Recipe.LowerKey);
-        var puff = stage.Texture(Recipe.PuffKey);
+        var ring = stage.Texture(Recipe.RingKey);
         var shards = stage.Texture(Recipe.ShardsKey);
         // the FRONT creature (nearest the Seeker) gets the full bite; any other creature the same answer bit gets its own,
-        // smaller one over its own head
+        // smaller, quieter one over its own head
         var front = FrontTarget(stage, Targets);
         _front = front;
+        if (_hotU is null && u >= Recipe.SnapAtMs - 0.5f) _hotU = u;       // the first frame DRAWN at the snap: the one hot frame
+        var hotFrame = _hotU is { } h && u < h + Frame - 1f;
+        var quiet = stage.ChampionPerforming;
         var burst = Burst(Recipe, u);
         var teethAlpha = TeethOpacity(Recipe, u);
         var state = StateAt(Recipe, u);
         var upperSrc = new Rectangle(state * Recipe.UpperCell.X, 0, Recipe.UpperCell.X, Recipe.UpperCell.Y);
         var lowerSrc = new Rectangle(state * Recipe.LowerCell.X, 0, Recipe.LowerCell.X, Recipe.LowerCell.Y);
-        var colour = TeethColor(Recipe, u);
-        var teeth = colour * teethAlpha;
         var glowShare = Recipe.GlowShare * (u >= Recipe.SnapAtMs - 0.5f ? 1f : MathHelper.Lerp(Recipe.GlowAtFormed, 1f, Charge(Recipe, u)));
-        var glow = new Color(colour.R, colour.G, colour.B, (byte)0) * (teethAlpha * glowShare);   // alpha 0: it only adds light
+        var shardTint = ShardTint(Recipe, u);
         for (var k = 0; k < Targets.Count; k++)
         {
             if (!TrySilhouette(stage, k, out var body, out var layout)) continue;
-            var f = Fangs(Recipe, body, layout, u, secondary: k != front);
+            var secondary = k != front;
+            var f = Fangs(Recipe, body, layout, u, secondary);
             _snapAt[k] = f.Meet;
-            if (puff is not null && burst.PuffAlpha >= ReactionRecipe.VisibleFloor)
-            {
-                DrawCentred(b, puff, f.Meet, Recipe.PuffSize * f.CrownWidth, burst.PuffScale, Recipe.PuffColor * burst.PuffAlpha);
-                _sprites++;
-            }
             if (teethAlpha >= ReactionRecipe.VisibleFloor)
             {
+                var colour = TeethColor(Recipe, u, hotFrame && !quiet && !secondary);
+                var teeth = colour * teethAlpha;
+                var glow = new Color(colour.R, colour.G, colour.B, (byte)0) * (teethAlpha * glowShare);   // alpha 0: it only adds light
                 if (upper is not null)
                 {
                     b.Draw(upper, f.UpperAt, upperSrc, teeth, 0f, Recipe.UpperBitePoint, f.Scale, SpriteEffects.None, 0f);
@@ -366,18 +488,34 @@ public sealed class ReactionPerformance
                     _sprites += 2;
                 }
             }
+            if (!secondary && ring is not null && burst.RingSoftAlpha >= ReactionRecipe.VisibleFloor)
+            {
+                DrawCell(b, ring, 1, f.Meet, Recipe.RingSize * f.CrownWidth, burst.RingScale * 1.06f, Recipe.MistEdgeColor * burst.RingSoftAlpha);
+                _sprites++;
+            }
             if (shards is not null && burst.ShardsAlpha >= ReactionRecipe.VisibleFloor)
             {
-                DrawCentred(b, shards, f.Meet, Recipe.ShardsSize * f.CrownWidth, burst.ShardsScale, Recipe.ShardColor * burst.ShardsAlpha, burst.ShardsTurn);
-                _sprites++;
+                var crisp = burst.ShardsAlpha * (1f - burst.ShardsSoft);
+                var soft = burst.ShardsAlpha * burst.ShardsSoft;
+                if (crisp >= ReactionRecipe.VisibleFloor)
+                {
+                    DrawCell(b, shards, 0, f.Meet, Recipe.ShardsSize * f.CrownWidth, burst.ShardsScale, shardTint * crisp, burst.ShardsTurn);
+                    _sprites++;
+                }
+                if (soft >= ReactionRecipe.VisibleFloor)
+                {
+                    DrawCell(b, shards, 1, f.Meet, Recipe.ShardsSize * f.CrownWidth, burst.ShardsScale, shardTint * soft, burst.ShardsTurn);
+                    _sprites++;
+                }
             }
         }
     }
 
     /// <summary>
-    /// THE LIGHT, in the shared additive pass after every figure: the impact's ring, speed lines, slash and flash (the
-    /// star on the slash's middle; a second creature's impact is only its flash, with the splinters drawn in the
-    /// material). Four sprites a target at most.
+    /// THE LIGHT, in the shared additive pass after every figure: the crisp pressure ring and the speed lines, then the
+    /// flash; a second creature's impact is only its small flash (its splinters drawn in the material, its mist under the
+    /// creatures). While the champion performs, the flash is dimmer and smaller and there are no speed lines. Three
+    /// sprites a target at most.
     /// </summary>
     public void DrawLight(SpriteBatch b, IReactionStage stage, float playheadMs)
     {
@@ -386,8 +524,11 @@ public sealed class ReactionPerformance
         var ring = stage.Texture(Recipe.RingKey);
         var streaks = stage.Texture(Recipe.StreaksKey);
         var flash = stage.Texture(Recipe.FlashKey);
-        var slash = stage.Texture(Recipe.SlashKey);
         var burst = Burst(Recipe, u);
+        var hotFrame = _hotU is { } h && u < h + Frame - 1f;
+        var quiet = stage.ChampionPerforming;
+        var ringTint = RingTint(Recipe, u);
+        var streakTint = StreakTint(Recipe, u);
         for (var k = 0; k < Targets.Count; k++)
         {
             if (!TrySilhouette(stage, k, out var body, out var layout)) continue;
@@ -395,23 +536,20 @@ public sealed class ReactionPerformance
             var f = Fangs(Recipe, body, layout, u, secondary);
             if (!secondary && ring is not null && burst.RingAlpha >= ReactionRecipe.VisibleFloor)
             {
-                DrawCentred(b, ring, f.Meet, Recipe.RingSize * f.CrownWidth, burst.RingScale, Recipe.RingColor * burst.RingAlpha);
+                DrawCell(b, ring, 0, f.Meet, Recipe.RingSize * f.CrownWidth, burst.RingScale, ringTint * burst.RingAlpha);
                 _sprites++;
             }
-            if (!secondary && streaks is not null && burst.StreaksAlpha >= ReactionRecipe.VisibleFloor)
+            if (!secondary && !quiet && streaks is not null && burst.StreaksAlpha >= ReactionRecipe.VisibleFloor)
             {
-                DrawCentred(b, streaks, f.Meet, Recipe.StreaksSize * f.CrownWidth, burst.StreaksScale, Recipe.StreakColor * burst.StreaksAlpha);
+                DrawCentred(b, streaks, f.Meet, Recipe.StreaksSize * f.CrownWidth, burst.StreaksScale, streakTint * burst.StreaksAlpha);
                 _sprites++;
             }
-            if (!secondary && slash is not null && burst.SlashAlpha >= ReactionRecipe.VisibleFloor)
+            var hushed = quiet || secondary;
+            var flashAlpha = burst.FlashAlpha * (hushed ? Recipe.QuietFlashAlpha : 1f);
+            if (flash is not null && flashAlpha >= ReactionRecipe.VisibleFloor)
             {
-                b.Draw(slash, f.Meet, null, Recipe.SlashColor * burst.SlashAlpha, MathHelper.ToRadians(Recipe.SlashAngleDegrees),
-                       new Vector2(slash.Width * 0.5f, slash.Height * 0.5f), Recipe.SlashSize * f.CrownWidth / slash.Width * burst.SlashScale, SpriteEffects.None, 0f);
-                _sprites++;
-            }
-            if (flash is not null && burst.FlashAlpha >= ReactionRecipe.VisibleFloor)
-            {
-                DrawCentred(b, flash, f.Meet, Recipe.FlashSize * f.CrownWidth, burst.FlashScale, Recipe.FlashColor * burst.FlashAlpha);
+                DrawCentred(b, flash, f.Meet, Recipe.FlashSize * f.CrownWidth * (hushed ? Recipe.QuietFlashSize : 1f), burst.FlashScale,
+                            FlashTint(Recipe, u, hotFrame && !hushed) * flashAlpha);
                 _sprites++;
             }
         }

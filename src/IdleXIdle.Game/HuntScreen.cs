@@ -2785,6 +2785,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // tier did not exist before — one flat effects pass ran after both figures, so §68's layer
         // vocabulary had nowhere to land and a field could only ever haze the champion it wrapped.
         if (!ShotNoVfx) _vfx.DrawUnder(b);
+        // THE REACTION'S MIST (JAWS): the Shadow volume the bite condenses from and bursts out of, BEHIND the creatures
+        // (atmosphere around the bitten creature; drawn over it, it greyed the black body and dimmed its eyes)
+        var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        if (!ShotNoVfx) foreach (var r in _reactions) r.DrawUnder(b, this, _playheadMs);
+        if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
 
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
@@ -2793,7 +2798,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
         // over her, its shut band lay across her fists like a weapon)
         var reactionDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
-        var reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        reactionAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
         if (!ShotNoVfx) foreach (var r in _reactions) r.DrawMaterial(b, this, _playheadMs);
         if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - reactionAlloc;
 
@@ -2822,7 +2827,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 if (performer is MeleePerformance lunge && _ui.Assets.Get("fxp_trail_soft") is { } streak)
                     lunge.DrawSpeedLines(b, streak, _champDrawBox, _playheadMs);
             }
-            // THE REACTION'S LIGHT (JAWS): the impact's ring, speed lines, slash and flash (the teeth's glow is in the material)
+            // THE REACTION'S LIGHT (JAWS): the impact's ring, speed lines and flash (the teeth's glow is in the material)
             var lightAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             if (!ShotNoVfx) foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);
             if (PresentTrace.Enabled) _reactionAllocBytes += GC.GetAllocatedBytesForCurrentThread() - lightAlloc;
@@ -6737,6 +6742,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     bool IReactionStage.TryCaughtBody(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
 
     bool IReactionStage.TryTargetFrame(int slot, out SpriteFrame frame) => TryDrawnFrame(VfxSubject.Creature(slot), out frame);
+
+    bool IReactionStage.ChampionPerforming => _performance is not null;
 
 
 

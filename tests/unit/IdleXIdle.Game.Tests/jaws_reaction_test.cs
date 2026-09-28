@@ -79,6 +79,8 @@ public class JawsReactionTest
             frame = default;
             return false;
         }
+
+        public bool ChampionPerforming => false;
     }
 
     /// <summary>A pack: each slot its own canonical body (a slot with none has no body).</summary>
@@ -109,6 +111,8 @@ public class JawsReactionTest
             frame = default;
             return false;
         }
+
+        public bool ChampionPerforming => false;
     }
 
     private static ReactionPerformance Answer(params int[] targets) => new(Jaws, 3, 7000, targets.Length == 0 ? new[] { 0 } : targets, Color.MediumPurple);
@@ -169,21 +173,28 @@ public class JawsReactionTest
     }
 
     [Fact]
-    public void test_the_reaction_is_a_frontal_bite_composed_of_eight_parts_and_nothing_else()
+    public void test_the_reaction_is_a_frontal_bite_composed_of_seven_parts_and_nothing_else()
     {
         // the owner's reference (Roni Kangaskorte's "Bite VFX"): two rows of fangs seen from the FRONT and an impact, all
         // composed at runtime from parts; the side-view maw's dials (a hinge, a gape, a tilt, a jolt) are gone with it
         var r = Jaws;
         var props = typeof(ReactionRecipe).GetProperties().Select(pr => pr.Name).ToArray();
-        foreach (var banned in new[] { "Maw", "Hinge", "Gape", "Jolt", "Tilt", "Jaw", "Piranha", "Head", "Eye", "Tail", "Chain", "Tether", "Yank", "Trap", "Mist" })
+        // (and no slash: a directional stroke in a radial burst read as a blade; JAWS is a bite)
+        foreach (var banned in new[] { "Maw", "Hinge", "Gape", "Jolt", "Tilt", "Jaw", "Piranha", "Head", "Eye", "Tail", "Chain", "Tether", "Yank", "Trap", "Puff", "Slash" })
             Assert.DoesNotContain(props, n => n.StartsWith(banned, StringComparison.Ordinal));
         var keys = props.Where(n => n.EndsWith("Key", StringComparison.Ordinal)).OrderBy(n => n, StringComparer.Ordinal).ToArray();
-        Assert.Equal(new[] { "FlashKey", "LowerKey", "PuffKey", "RingKey", "ShardsKey", "SlashKey", "StreaksKey", "UpperKey" }, keys);
-        foreach (var key in new[] { r.UpperKey, r.LowerKey, r.FlashKey, r.SlashKey, r.RingKey, r.StreaksKey, r.ShardsKey, r.PuffKey })
+        Assert.Equal(new[] { "FlashKey", "LowerKey", "MistKey", "RingKey", "ShardsKey", "StreaksKey", "UpperKey" }, keys);
+        foreach (var key in new[] { r.UpperKey, r.LowerKey, r.FlashKey, r.RingKey, r.StreaksKey, r.ShardsKey, r.MistKey })
             Assert.True(File.Exists(RepoFile("assets", "art", "VFX", "parts", key + ".png")), key);
-        // the rows: FangStates states side by side, mist to crisp
+        // the rows: FangStates states side by side, mist to crisp; the ring and the splinters in two cells, crisp and softened
         Assert.Equal((r.FangStates * r.UpperCell.X, r.UpperCell.Y), PngSize(r.UpperKey));
         Assert.Equal((r.FangStates * r.LowerCell.X, r.LowerCell.Y), PngSize(r.LowerKey));
+        Assert.Equal(PngSize(r.RingKey).H * 2, PngSize(r.RingKey).W);
+        Assert.Equal(PngSize(r.ShardsKey).H * 2, PngSize(r.ShardsKey).W);
+        // the speed lines are an accent: a dozen meaningful streaks, not a pattern to count (the count drawn IS the count written)
+        Assert.InRange(BiteArt().GetProperty("streak_count").GetInt32(), 10, 16);
+        Assert.Contains("streaks(n=STREAK_COUNT)", File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_bite.py")));
+        Assert.False(File.Exists(RepoFile("assets", "art", "VFX", "parts", "fxp_seeker_bite_slash.png")), "the slash is still a runtime part");
         // the recipe describes the art the script wrote
         var art = BiteArt();
         Assert.Equal(r.FangStates, art.GetProperty("states").GetInt32());
@@ -338,20 +349,15 @@ public class JawsReactionTest
         Assert.Equal(1f, ReactionPerformance.Burst(r, r.SnapAtMs + 2f * Frame - 0.5f).FlashScale, 3);   // held whole two frames
         Assert.Equal(0f, snap.ShardsAlpha);
         Assert.True(next.ShardsAlpha > 0.9f);
-        // the SLASH strikes across the flash from the frame after the snap, and is gone within a few frames
-        Assert.Equal(0f, snap.SlashAlpha);
-        Assert.True(next.SlashAlpha > 0.9f);
-        Assert.True(ReactionPerformance.Burst(r, r.SnapAtMs + 6f * Frame).SlashAlpha < ReactionRecipe.VisibleFloor);
         var drawn = Frames(r).Where(u => u >= r.SnapAtMs - 0.5f).ToArray();
         var burst = drawn.Select(u => ReactionPerformance.Burst(r, u)).ToArray();
         for (var i = 1; i < burst.Length; i++)
         {
             Assert.True(burst[i].RingScale >= burst[i - 1].RingScale && burst[i].StreaksScale >= burst[i - 1].StreaksScale
-                        && burst[i].PuffScale >= burst[i - 1].PuffScale && burst[i].ShardsTurn >= burst[i - 1].ShardsTurn, $"the impact shrinks back at {drawn[i]:0} ms");
+                        && burst[i].ShardsTurn >= burst[i - 1].ShardsTurn && burst[i].ShardsSoft >= burst[i - 1].ShardsSoft, $"the impact shrinks back at {drawn[i]:0} ms");
             // each part fades in steps, never cut (the splinters' arrival is the one step up)
             Assert.True(burst[i - 1].RingAlpha - burst[i].RingAlpha <= 0.3f && burst[i - 1].StreaksAlpha - burst[i].StreaksAlpha <= 0.35f
-                        && burst[i - 1].FlashAlpha - burst[i].FlashAlpha <= 0.35f && burst[i - 1].PuffAlpha - burst[i].PuffAlpha <= 0.2f
-                        && burst[i - 1].SlashAlpha - burst[i].SlashAlpha <= 0.3f, $"a part is cut at {drawn[i]:0} ms");
+                        && burst[i - 1].FlashAlpha - burst[i].FlashAlpha <= 0.35f && burst[i - 1].RingSoftAlpha - burst[i].RingSoftAlpha <= 0.2f, $"a part is cut at {drawn[i]:0} ms");
             // the flash shrinks to a hot point before it has faded (a large, fading star read as a grey sticker)
             if (burst[i].FlashAlpha is > 0.05f and < 0.5f)
                 Assert.True(burst[i].FlashScale < 0.6f, $"the flash's tail is a big dull star at {drawn[i]:0} ms");
@@ -360,17 +366,101 @@ public class JawsReactionTest
         // grows past the crown while it is still bright, and the speed lines reach well past it
         Assert.True(burst.Where(p => p.RingAlpha >= 0.5f).Max(p => 0.8f * r.RingSize * p.RingScale) > 1.1f, "the ring stays inside the crown while it is bright");
         Assert.True(r.StreaksSize * burst.Max(p => p.StreaksScale) > 2.5f, "the speed lines stay close");
-        // the slash is longer than the flash, so its ends reach past the star
-        Assert.True(r.SlashSize > r.FlashSize * 1.3f, "the slash is swallowed by the flash");
         // the splinters are the LAST to fade (they carry the ending)
         float LastSeen(Func<ReactionPerformance.BurstPose, float> part) => drawn.Zip(burst).Where(q => part(q.Second) >= 0.05f).Select(q => q.First).DefaultIfEmpty(0f).Max();
         Assert.True(LastSeen(p => p.ShardsAlpha) > LastSeen(p => p.RingAlpha) && LastSeen(p => p.ShardsAlpha) > LastSeen(p => p.StreaksAlpha)
                     && LastSeen(p => p.ShardsAlpha) > LastSeen(p => p.FlashAlpha), "the splinters are not the last to fade");
+        // the HIERARCHY in time: the accent (the speed lines) is gone near the peak, the hot core soon after, the ring later,
+        // the splinters last; the pressure ring's crisp edge hands over to its softened copy, which dissolves later
+        Assert.InRange(r.FlashMs, 120f, 160f);
+        Assert.True(r.StreaksMs < r.FlashMs && r.StreaksMs <= 90f, "the speed lines outlast the impact's peak");
+        Assert.True(LastSeen(p => p.RingSoftAlpha) > LastSeen(p => p.RingAlpha), "the ring's edge does not dissolve into the mist");
+        // THE TAIL is mist and a last dissolving splinter: no flash, no crisp ring, no speed lines
+        foreach (var u in Frames(r).Where(u => u >= r.GoneMs - 4f * Frame))
+        {
+            var p = ReactionPerformance.Burst(r, u);
+            Assert.True(p.FlashAlpha < 0.01f && p.RingAlpha < 0.01f && p.StreaksAlpha < 0.01f, $"the tail still shows the impact at {u:0} ms");
+            Assert.InRange(ReactionPerformance.Mist(r, u).Alpha, 0f, 0.15f);
+        }
         // by the end it is gone; the whole impact lasts about a third of a second
         Assert.InRange(r.BurstMs, 250f, 400f);
         var last = ReactionPerformance.Burst(r, Frames(r).Last());
-        Assert.True(last.FlashAlpha < 0.1f && last.RingAlpha < 0.15f && last.StreaksAlpha < 0.15f && last.ShardsAlpha < 0.2f && last.PuffAlpha < 0.1f, "the impact cuts off");
+        Assert.True(last.FlashAlpha < 0.1f && last.RingAlpha < 0.15f && last.StreaksAlpha < 0.15f && last.ShardsAlpha < 0.2f, "the impact cuts off");
+        Assert.True(ReactionPerformance.Mist(r, Frames(r).Last()).Alpha < 0.05f, "the mist cuts off");
         Assert.Equal(default, ReactionPerformance.Burst(r, r.GoneMs));
+    }
+
+    [Fact]
+    public void test_the_mist_has_one_lifecycle_it_gathers_compresses_to_the_snap_and_releases_outward()
+    {
+        // ONE Shadow phenomenon: the mist the fangs condense from fades in, compresses around the bite through the charge,
+        // is densest and most compressed at the snap, then releases slowly outward and evaporates; its opacity only ever
+        // rises to the snap and only ever falls after it (no second fade-in: a flicker in a ~600 ms reaction)
+        var r = Jaws;
+        var drawn = Frames(r).ToArray();
+        var mist = drawn.Select(u => ReactionPerformance.Mist(r, u)).ToArray();
+        var snapAt = Array.FindIndex(drawn, u => Math.Abs(u - r.SnapAtMs) < 0.5f);
+        for (var i = 1; i < mist.Length; i++)
+            Assert.True(i <= snapAt ? mist[i].Alpha >= mist[i - 1].Alpha - 1e-4f : mist[i].Alpha <= mist[i - 1].Alpha + 1e-4f, $"the mist fades back in at {drawn[i]:0} ms");
+        Assert.InRange(ReactionPerformance.Mist(r, 0f).Alpha, 0.05f, 0.10f);
+        Assert.InRange(ReactionPerformance.Mist(r, 50f).Alpha, 0.18f, 0.30f);
+        Assert.InRange(ReactionPerformance.Mist(r, r.AppearMs).Alpha, 0.35f, 0.40f);
+        Assert.InRange(ReactionPerformance.Mist(r, r.SnapAtMs).Alpha, 0.42f, 0.50f);
+        Assert.True(mist.Max(m => m.Alpha) <= 0.5f, "the mist grows dense enough to hide the creature");
+        // its FORM carries the charge: large as it gathers, whole when formed, compressed at the snap, released outward
+        Assert.InRange(ReactionPerformance.Mist(r, 0f).Scale, 1.10f, 1.15f);
+        Assert.Equal(1f, ReactionPerformance.Mist(r, r.AppearMs).Scale, 2);
+        Assert.InRange(ReactionPerformance.Mist(r, r.SnapAtMs).Scale, 0.90f, 0.95f);
+        Assert.InRange(mist.Max(m => m.Scale), 1.18f, 1.26f);
+        Assert.True(ReactionPerformance.Mist(r, r.SnapAtMs).Converge > 0.9f, "the lobes do not draw in around the bite");
+        // the fang geometry controls it: taller as the rows part in the wind-up, squeezed as they slam shut
+        Assert.True(ReactionPerformance.Mist(r, r.CloseFromMs).StretchY > 1.03f, "the mist does not stretch with the wind-up");
+        Assert.True(ReactionPerformance.Mist(r, r.SnapAtMs).StretchY < 0.95f, "the mist is not squeezed by the snap");
+        // the release is SLOW against the violent close: its scale moves less per frame than the rows do in the slam
+        var release = drawn.Where(u => u > r.SnapAtMs).Select(u => ReactionPerformance.Mist(r, u).Scale).ToArray();
+        Assert.True(release.Zip(release.Skip(1), (a, b) => b - a).Max() < 0.05f, "the mist bursts instead of releasing");
+        // near-black violet with a subtle violet edge: dark, never bright purple smoke
+        Assert.True(r.MistCoreColor.R + r.MistCoreColor.G + r.MistCoreColor.B < 120 && r.MistEdgeColor.R + r.MistEdgeColor.G + r.MistEdgeColor.B < 240);
+        Assert.InRange(r.MistLobes.Count, 2, 3);
+        // the lobes are drawn at the share that STACKS to the target (per-lobe values stacked to half as dense again)
+        foreach (var target in new[] { 0.07f, 0.38f, 0.45f })
+        {
+            var share = ReactionPerformance.StackedShare(target, r.MistLobes.Count);
+            Assert.Equal(target, 1f - MathF.Pow(1f - share, r.MistLobes.Count), 3);
+        }
+        // flipped, never tilted: the oval's height and its gap-driven stretch stay upright
+        Assert.All(r.MistLobes, l => Assert.Contains((int)l.Z, new[] { 0, 1, 2, 3 }));
+    }
+
+    [Fact]
+    public void test_the_white_hot_is_one_frame_and_the_energy_cools_after_the_snap()
+    {
+        var r = Jaws;
+        const float Frame = 1000f / 60f;
+        // the teeth: white-hot on the snap frame ONLY, back to the hot magenta on the next (never the effect's colour)
+        var snap = ReactionPerformance.TeethColor(r, r.SnapAtMs);
+        var next = ReactionPerformance.TeethColor(r, r.SnapAtMs + Frame);
+        Assert.True(snap.G > 150, $"the snap is not white-hot: {snap}");
+        Assert.True(next.G < 120, $"the white-hot lasts past the snap frame: {next}");
+        Assert.True(ReactionPerformance.IsSnapFrame(r, r.SnapAtMs) && !ReactionPerformance.IsSnapFrame(r, r.SnapAtMs + Frame));
+        // the flash cools from white through magenta toward violet; the ring from magenta to violet; the splinters from
+        // pale magenta to Shadow violet (never on into brighter pink)
+        static int Luma(Color c) => c.R * 3 + c.G * 6 + c.B;
+        var flash = new[] { r.SnapAtMs, r.SnapAtMs + Frame, r.SnapAtMs + 4f * Frame, r.SnapAtMs + r.FlashMs }.Select(u => ReactionPerformance.FlashTint(r, u)).ToArray();
+        for (var i = 1; i < flash.Length; i++)
+            Assert.True(Luma(flash[i]) < Luma(flash[i - 1]), $"the flash does not cool: {string.Join(", ", flash)}");
+        Assert.True(flash[^1].B > flash[^1].R, $"the flash does not end violet: {flash[^1]}");
+        Assert.True(flash[1].G < 120, $"the flash is still white on the frame after the snap: {flash[1]}");
+        // a QUIET bite (the champion performing, a second creature) never goes white-hot
+        Assert.True(ReactionPerformance.TeethColor(r, r.SnapAtMs, hot: false).G < 120 && ReactionPerformance.FlashTint(r, r.SnapAtMs, hot: false).G < 120, "a quiet snap goes white");
+        Assert.InRange(r.QuietFlashAlpha, 0.4f, 0.7f);
+        Assert.InRange(r.QuietFlashSize, 0.6f, 0.9f);
+        Assert.True(Luma(ReactionPerformance.StreakTint(r, r.SnapAtMs + r.StreaksMs)) < Luma(ReactionPerformance.StreakTint(r, r.SnapAtMs)), "the speed lines do not cool");
+        Assert.True(Luma(ReactionPerformance.RingTint(r, r.SnapAtMs + r.RingCrispMs)) < Luma(ReactionPerformance.RingTint(r, r.SnapAtMs)), "the ring does not cool");
+        Assert.True(Luma(ReactionPerformance.ShardTint(r, r.SnapAtMs + 0.8f * r.ShardsMs)) < Luma(ReactionPerformance.ShardTint(r, r.SnapAtMs + Frame)) / 2, "the splinters do not darken into Shadow");
+        // ...and they soften into Shadow fragments through the second half of their life
+        Assert.Equal(0f, ReactionPerformance.Burst(r, r.SnapAtMs + Frame).ShardsSoft, 3);
+        Assert.True(ReactionPerformance.Burst(r, r.SnapAtMs + 0.8f * r.ShardsMs).ShardsSoft > 0.7f, "the splinters stay hard to the end");
     }
 
     [Fact]
@@ -425,27 +515,42 @@ public class JawsReactionTest
         var material = Body("public void DrawMaterial(");
         var light = Body("public void DrawLight(");
         // the pose the tests pin is the pose drawn, in both passes, on each target's own clock; the front creature as tested
-        Assert.Contains("var f = Fangs(Recipe, body, layout, u, secondary: k != front);", material);
+        Assert.Contains("var f = Fangs(Recipe, body, layout, u, secondary);", material);
+        Assert.Contains("var secondary = k != front;", material);
         Assert.Contains("var f = Fangs(Recipe, body, layout, u, secondary);", light);
         Assert.Contains("var secondary = k != _front;", light);
         Assert.Contains("var front = FrontTarget(stage, Targets);", material);
         // the glow builds with the charge (whole on the snap), so the formed teeth stay pale and the snap is the peak
         Assert.Contains("Recipe.GlowAtFormed", material);
         Assert.InRange(Jaws.GlowAtFormed, 0.1f, 0.4f);
-        // material (under the champion): the haze, the two rows and their glow (a zero alpha: it only adds light), the
-        // splinters (6 a target); light: the ring, the speed lines, the flash, the slash (4 a target); the TEETH are never
-        // drawn in the light pass (drawn there, the glowing teeth landed on top of the Seeker)
-        Assert.Equal(4, material.Split("b.Draw(").Length - 1);
-        Assert.Equal(2, material.Split("DrawCentred(").Length - 1);
+        var under = Body("public void DrawUnder(");
+        // UNDER the creatures: the MIST (its lobes, each at the share that stacks to the recipe's opacity, flipped never
+        // tilted); material (under the champion): the two rows and their glow (a zero alpha: it only adds light), the
+        // ring's softened copy and the splinters (crisp and softened); light: the crisp ring, the speed lines, the flash;
+        // the TEETH are never drawn in the light pass (drawn there, the glowing teeth landed on top of the Seeker)
+        Assert.Equal(1, under.Split("b.Draw(").Length - 1);
+        Assert.Contains("StackedShare(mist.Alpha, Recipe.MistLobes.Count)", under);
+        Assert.Contains("b.Draw(mistTex, at, null, tint, 0f, origin,", under);
+        Assert.Contains("Recipe.MistKey", under);
+        Assert.Equal(4, material.Split("b.Draw(").Length - 1);             // the rows and their glow
+        Assert.Equal(3, material.Split("DrawCell(").Length - 1);           // the softened ring, the splinters crisp and soft
         Assert.Contains("(byte)0)", material);
-        Assert.Equal(1, light.Split("b.Draw(").Length - 1);
-        Assert.Equal(3, light.Split("DrawCentred(").Length - 1);
-        Assert.Contains("Recipe.PuffKey", material);
+        Assert.DoesNotContain("MistKey", material);
+        Assert.Contains("!secondary && ring is not null && burst.RingSoftAlpha", material);   // a second bite has no ring
+        Assert.Equal(0, light.Split("b.Draw(").Length - 1);
+        Assert.Equal(1, light.Split("DrawCell(").Length - 1);
+        Assert.Equal(2, light.Split("DrawCentred(").Length - 1);
+        // QUIET: while the champion performs, and for a second creature, the snap is never white-hot, the flash is dimmer
+        // and smaller, and there are no speed lines; the hot frame is the first frame DRAWN at the snap
+        Assert.Contains("TeethColor(Recipe, u, hotFrame && !quiet && !secondary)", material);
+        Assert.Contains("FlashTint(Recipe, u, hotFrame && !hushed)", light);
+        Assert.Contains("!secondary && !quiet && streaks is not null", light);
+        Assert.Contains("var quiet = stage.ChampionPerforming;", material);
+        Assert.Contains("_hotU ??=", src.Replace("if (_hotU is null && u >= Recipe.SnapAtMs - 0.5f) _hotU = u;", "_hotU ??="));
         Assert.Contains("Recipe.ShardsKey", material);
         Assert.Contains("Recipe.FlashKey", light);
         Assert.Contains("Recipe.RingKey", light);
         Assert.Contains("Recipe.StreaksKey", light);
-        Assert.Contains("Recipe.SlashKey", light);
         Assert.DoesNotContain("Recipe.UpperKey", light);
         Assert.DoesNotContain("Recipe.LowerKey", light);
         // the screen: the material after the creatures and BEFORE the champion; the light inside the shared additive pass
@@ -455,7 +560,11 @@ public class JawsReactionTest
         Assert.True(jaws < hunt.IndexOf("DrawChampion(b, _champDrawBox, dead: _mode == Mode.Downed);", StringComparison.Ordinal), "the bite is drawn over the champion");
         var glow = hunt.IndexOf("foreach (var r in _reactions) r.DrawLight(b, this, _playheadMs);", StringComparison.Ordinal);
         Assert.True(glow > hunt.IndexOf("_vfx.BeginLight(b);", StringComparison.Ordinal) && glow < hunt.IndexOf("_vfx.EndLight(b);", StringComparison.Ordinal), "the bite's light is not in the light pass");
-        Assert.DoesNotContain("r.DrawUnder(", hunt);
+        // the mist: under the creatures (after the effects' own under-pass), never over the bitten body
+        var mistPass = hunt.IndexOf("foreach (var r in _reactions) r.DrawUnder(b, this, _playheadMs);", StringComparison.Ordinal);
+        Assert.True(mistPass > hunt.IndexOf("if (!ShotNoVfx) _vfx.DrawUnder(b);", StringComparison.Ordinal)
+                    && mistPass < hunt.IndexOf("else DrawNormalEnemy(b, attacking);", StringComparison.Ordinal), "the mist is not behind the creatures");
+        Assert.Contains("bool IReactionStage.ChampionPerforming => _performance is not null;", hunt);
     }
 
     [Fact]
