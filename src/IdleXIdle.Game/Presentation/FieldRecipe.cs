@@ -318,7 +318,9 @@ public sealed class FieldRecipe
     /// <summary>
     /// THE TICK'S VOICE (the defence breaking): ONE composite cue -- a short low pressure release, the compression THUMP
     /// (its strongest layer) and a brittle, material-neutral defence CRACK a few ms after it -- never three sounds, never a
-    /// travel whoosh (the picture already shows the propagation). The first key that exists plays.
+    /// travel whoosh (the picture already shows the propagation). The first key that exists plays. HUMAN-APPROVED
+    /// (2026-09-29, candidate A BALANCED): PRESS is the FIELD / AURA gold-standard reference; the cue's bytes are pinned, so
+    /// a change is a new approval.
     /// </summary>
     public IReadOnlyList<string> TickCues { get; init; } = new[] { "sfx_seeker_press_tick" };
 

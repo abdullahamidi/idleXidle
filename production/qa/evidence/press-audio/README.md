@@ -2,6 +2,15 @@
 
 Review page: https://claude.ai/artifact/13QvWjjw4rQvxSMgyjh2c1
 
+**APPROVED (2026-09-29).** The owner: "PRESS is APPROVED. Use Candidate A - BALANCED as the final human-approved PRESS
+tick cue." Candidate A is the canonical `sfx_seeker_press_tick` (HUMAN-APPROVED, SHA-256
+`bd3c390944f07458daef278e165c15046b999274a7b2ad86164ce6d62e8fd451`, pinned in `press_field_test.cs`); PRESS visual +
+audio are ACCEPTED as the FIELD / AURA gold-standard reference and CLOSED. B and C were not chosen: they are review
+history in `tools/asset-pipeline/audio_history/press_tick/`. The owner's decisions on the open notes: no special ducking
+of the enemy bite on the same tick (two valid events; A's crack separates them; revisit only if a real gameplay mix test
+shows one inaudible) and no dynamic fast-cadence volume (variation-specific testing). This folder is the review as it was
+heard; the `(recommended)` label on the layer sheet is the review-time wording.
+
 **The brief** (the owner): the PRESS picture is APPROVED (commit `fab25919`, the field-propagation version) and is not
 reopened. Complete PRESS with its audio. Its gameplay meaning is PRESSURE ARRIVES -> TARGET COMPRESSED -> DEFENCE BREAKS,
 and the cue says exactly that: ONE composite tick cue of three layers (a pressure release, a compression THUMP, a
@@ -26,7 +35,7 @@ Three candidates, differing in STRUCTURE, mastered to the same loudness:
 
 | | pressure (vs the loudest 50 ms) | crack after the thump | crack (vs the loudest 50 ms) | character |
 |---|---|---|---|---|
-| **A balanced** (recommended) | -14 dB | +8 ms | -7 dB | pressure, thump and tile crack in proportion; the thump leads |
+| **A balanced** (HUMAN-APPROVED) | -14 dB | +8 ms | -7 dB | pressure, thump and tile crack in proportion; the thump leads |
 | B heavier pressure | -11 dB | +13 ms | -7 dB | an earlier, heavier air push and a squeezed sack; the crack later, a shell giving way |
 | C clearer defence break | -14 dB | +6 ms | -5 dB | the clearest break: a brittle tick on a stone fracture and a tile, short |
 

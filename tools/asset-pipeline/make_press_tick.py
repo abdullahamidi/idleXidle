@@ -20,8 +20,13 @@ foley/press_tick/SOURCES.md); only a small sub under the pressure is synthesised
 STRUCTURE: A BALANCED (pressure + thump + tile crack), B HEAVY (a heavier, earlier pressure and a squeezed sack under the
 thump; the crack later and smaller), C BREAK (a lighter pressure, the clearest defence break: a stone fracture with a
 brittle leading tick). Each is mastered to the same loudness (so the owner compares character, not level) and its
-placement is measured (the QA below). The recommended one is written to assets/audio/combat/sfx_seeker_press_tick.wav;
-all three to tools/asset-pipeline/audio_candidates/press_tick/.
+placement is measured (the QA below).
+
+A IS HUMAN-APPROVED (the owner, 2026-09-29: "PRESS is APPROVED. Use Candidate A - BALANCED as the final human-approved
+PRESS tick cue"): it is written to assets/audio/combat/sfx_seeker_press_tick.wav and its approved bytes are pinned by
+SHA-256 in press_field_test.cs. Do not change balanced(), its sources or the shared DSP without the owner's ear: a
+different file is a new approval, not a regeneration. B and C were not chosen; they are review history in
+tools/asset-pipeline/audio_history/press_tick/.
 
     PYTHONUTF8=1 python tools/asset-pipeline/make_press_tick.py --extract <dir of the downloaded sources>   # once
     PYTHONUTF8=1 python tools/asset-pipeline/make_press_tick.py [A|B|C]                                     # build
@@ -40,9 +45,9 @@ from make_jaws_bite import SR, band, norm, place, read_wav, sat_os, true_peak, w
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 FOLEY = os.path.join(HERE, "foley", "press_tick")
 COMBAT = os.path.join(REPO, "assets", "audio", "combat")
-CANDIDATES = os.path.join(HERE, "audio_candidates", "press_tick")
+HISTORY = os.path.join(HERE, "audio_history", "press_tick")   # B and C: reviewed, not chosen
 KEY = "sfx_seeker_press_tick"
-RECOMMENDED = "A"
+APPROVED = "A"                  # HUMAN-APPROVED 2026-09-29: the game's cue, its bytes pinned in press_field_test.cs
 CUE_THUMP_MS = 40.0             # FieldRecipe.CueThumpMs: the file is authored to it
 LENGTH = 0.19                   # s: ~140-220 ms, no tail
 PEAK = 0.37                     # the house true peak for a cue (~-8.6 dBFS, as the other Seeker cues)
@@ -264,16 +269,22 @@ def k50(path: str, volume: float) -> float:
     return 20 * np.log10(max1(k_weight(read_wav(path) * volume * 0.8), 0.05))
 
 
+def candidate(key: str) -> str:
+    """Where candidate `key` lives: the approved one IS the game's cue; the others are review history."""
+    if key == APPROVED:
+        return os.path.join(COMBAT, KEY + ".wav")
+    return os.path.join(HISTORY, f"{KEY}_{key}_{BUILDS[key][0]}.wav")
+
+
 def main() -> int:
     if len(sys.argv) > 2 and sys.argv[1] == "--extract":
         extract(sys.argv[2])
         return 0
     which = sys.argv[1:] or list(BUILDS)
-    os.makedirs(CANDIDATES, exist_ok=True)
     for key in which:
         name, build = BUILDS[key]
         y = build()
-        path = os.path.join(CANDIDATES, f"{KEY}_{key}_{name}.wav")
+        path = candidate(key)
         write_wav(path, y)
         m = measure(y)
         print(f"{key} {name:9s} thump {m['thump_ms']:5.1f} ms  crack {m['crack_ms']:5.1f} ms (+{m['gap_ms']:4.1f})  "
@@ -283,8 +294,6 @@ def main() -> int:
         kp = k50(path, TICK_VOLUME)
         ks = k50(os.path.join(COMBAT, "sfx_seeker_spray_hit.wav"), 0.50)
         print(f"   as played: K-weighted loudest 50 ms {kp:5.1f} dB, SPRAY's contact {ks:5.1f} ({ks - kp:+.1f} dB under it)")
-        if key == RECOMMENDED:
-            write_wav(os.path.join(COMBAT, KEY + ".wav"), y)
     return 0
 
 

@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27 (SHADOW PIRANHA retaliation, a stylised reactive-damage phrase; no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D) and, after three piranha passes (three jaws, a hero chomp, one piranha in negative space) still read as coloured motion at true speed, set the FINAL direction the same day: JAWS is **SHADOW FANGS**, a simple reactive-damage effect (enemy hits the Seeker → four LARGE SIMPLE Shadow fang shapes appear OPEN round the attacker → SNAP onto its outer silhouette → HOLD → "−X JAWS" → release, gone in ~200 ms). No creature to identify: the shapes are the effect. It is built (`ReactionRecipe` / `ReactionPerformance`, ONE hand-authored fang drawn four times, `sfx_seeker_jaws_fangs`, no JAWS target flash, the number delayed past the snap) and filmed (`production/qa/evidence/jaws-fangs/`); the piranha and the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, does it read as "something sharp / jaws snapped onto that enemy because it hit me"? On 2026-09-28 the owner answered: the teeth do not close, and the teeth themselves should be mist that comes, bites and vanishes; then, on the misty teeth: not four triangles, a jaw that really opens and closes (a piranha jaw); then, on the side-view maw that followed: "a bad jaw biting from the side; I meant the earlier perspective, biting from the FRONT, but a more effective and beautiful jaw", with Roni Kangaskorte's "Bite VFX" as the reference. JAWS is **A FRONTAL SHADOW BITE** (a crown of fangs and a lower row of SMOKE condense around the attacker's head, charge, slam shut solid and white-hot for one frame, and burst; ~677 ms), its cue a REAL bite built from CC0 foley and shaped to the owner's reference (Trundle's Q). **On 2026-09-28 the owner ACCEPTED JAWS as the GOLD-STANDARD REACTION reference** (A is perfect, exactly what I wanted. We can close JAWS with this sound effect and mark it as a gold standard.): its picture, its timing and its sound (human-listened and approved: `sfx_seeker_jaws_bite`, candidate A). Evidence: `production/qa/evidence/jaws-smoke-teeth/`, `jaws-real-bite/`. JAWS is CLOSED. |
-| **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) · 2026-09-28 (JAWS accepted, the reaction reference; PRESS, the field reference, first slice) |
+| **Status** | **Accepted** (2026-09-25). The owner approved the Seeker's SPRAY as the project's FIRST GOLD-STANDARD AUDIOVISUAL COMBAT ACTION: its pictures, its timing and its three sounds (human-listened and approved). SPRAY is the reference implementation of this decision (below). Evidence: `production/qa/evidence/action-presentation-slice/` (`polish/`, `handoff/`). The Seeker's HARD HANDS is ACCEPTED (2026-09-25) as the MELEE / DIRECT-CONTACT reference: its pictures, its timing and its two sounds (human-listened and approved). Evidence: `production/qa/evidence/hard-hands/` (`pass2/`). SPRAY is the PROJECTILE / TRAVEL reference. The Seeker's JAWS, the proposed REACTION / TRAP reference: its architecture is APPROVED (skill-only recipe, the reaction layer, the Core `ReactionArmed` truth, the Core-driven dock, real targets, isolation, deaths); its motion and timing were rebuilt in the polish pass (the owner: "now good"); its SEMANTIC IDENTITY was rebuilt in the identity pass (a clamp in place of the crocodile head, a dry steel clack in place of a bone crunch: the sound direction is kept as the baseline) and its WORLD PROP and SNAP TIMING in the readable-clamp pass (2026-09-25): a spring-loaded BEAR TRAP whose two broad jaws dominate, closing over ~50 ms the eye can see, the answer landing on the stop (`production/qa/evidence/jaws-readable/`; before: `jaws-identity/`, `jaws-polish/`, `jaws-base/`). The owner did NOT approve the bear trap (2026-09-25) and, after a concept study and three enemy-bite foundation passes (ADR-012), set the PRODUCTION DIRECTION on 2026-09-27 (SHADOW PIRANHA retaliation, a stylised reactive-damage phrase; no bear trap, chain, housing, tether, yank or reel-in, no bite glyphs on the champion, no mirrored incoming/outgoing symbols, no Concept D) and, after three piranha passes (three jaws, a hero chomp, one piranha in negative space) still read as coloured motion at true speed, set the FINAL direction the same day: JAWS is **SHADOW FANGS**, a simple reactive-damage effect (enemy hits the Seeker → four LARGE SIMPLE Shadow fang shapes appear OPEN round the attacker → SNAP onto its outer silhouette → HOLD → "−X JAWS" → release, gone in ~200 ms). No creature to identify: the shapes are the effect. It is built (`ReactionRecipe` / `ReactionPerformance`, ONE hand-authored fang drawn four times, `sfx_seeker_jaws_fangs`, no JAWS target flash, the number delayed past the snap) and filmed (`production/qa/evidence/jaws-fangs/`); the piranha and the mechanical assets stay on disk as history and are never played. The acceptance question is one: at true speed, does it read as "something sharp / jaws snapped onto that enemy because it hit me"? On 2026-09-28 the owner answered: the teeth do not close, and the teeth themselves should be mist that comes, bites and vanishes; then, on the misty teeth: not four triangles, a jaw that really opens and closes (a piranha jaw); then, on the side-view maw that followed: "a bad jaw biting from the side; I meant the earlier perspective, biting from the FRONT, but a more effective and beautiful jaw", with Roni Kangaskorte's "Bite VFX" as the reference. JAWS is **A FRONTAL SHADOW BITE** (a crown of fangs and a lower row of SMOKE condense around the attacker's head, charge, slam shut solid and white-hot for one frame, and burst; ~677 ms), its cue a REAL bite built from CC0 foley and shaped to the owner's reference (Trundle's Q). **On 2026-09-28 the owner ACCEPTED JAWS as the GOLD-STANDARD REACTION reference** (A is perfect, exactly what I wanted. We can close JAWS with this sound effect and mark it as a gold standard.): its picture, its timing and its sound (human-listened and approved: `sfx_seeker_jaws_bite`, candidate A). Evidence: `production/qa/evidence/jaws-smoke-teeth/`, `jaws-real-bite/`. JAWS is CLOSED. The Seeker's PRESS, the PERSISTENT FIELD / AURA candidate (first slice, pixel-hard pass and field-vs-projectile polish, 2026-09-28; its picture APPROVED at commit `fab25919`), got its final audio on 2026-09-29: ONE composite tick cue (a pressure release, a compression thump, a brittle defence crack) from CC0 foley. **On 2026-09-29 the owner ACCEPTED PRESS as the GOLD-STANDARD FIELD / AURA reference** (PRESS is APPROVED. Use Candidate A - BALANCED as the final human-approved PRESS tick cue.): its picture, its timing and its sound (human-listened and approved: `sfx_seeker_press_tick`, candidate A). Evidence: `production/qa/evidence/press-propagation/`, `press-audio/`. PRESS is CLOSED. |
+| **Date** | 2026-09-24 (proposed) · 2026-09-25 (accepted) · 2026-09-28 (JAWS accepted, the reaction reference; PRESS, the field reference, first slice) · 2026-09-29 (PRESS accepted, the field / aura reference) |
 | **Deciders** | user (approved the discovery; decided one knife per struck enemy, a physical knife scale, CONTACT on the beat, and a thrown-blade travel) + lead-programmer, technical-artist |
 | **Related** | ADR-009 (the light every emissive layer draws through), ADR-010 (the projectile composite this reuses), `production/qa/evidence/action-presentation-audit/` (the measured problem) |
-| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs`, `melee_action_test.cs`, `jaws_reaction_test.cs`; `tests/unit/IdleXIdle.Core.Tests/Builds/reaction_armed_test.cs` |
-| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form with its `projectile` effect (SPRAY), and the skill HARD HANDS (`sig_seeker_hard_hands`, its own recipe and strip; BLOW and PRESS are not performed). The action handoff applies to every committed champion clip. REACTIONS with a recipe in `ReactionRecipes` (today the Seeker's JAWS, `snare_jaws`) are presented on their own layer and are never a committed clip. |
+| **Enforced by** | `tests/unit/IdleXIdle.Game.Tests/action_presentation_test.cs`, `action_handoff_test.cs`, `melee_action_test.cs`, `jaws_reaction_test.cs`, `press_field_test.cs`; `tests/unit/IdleXIdle.Core.Tests/Builds/reaction_armed_test.cs` |
+| **Scope** | champion actions that have a recipe in `ActionRecipes` AND a timing file beside their strip. Today: the Seeker's `projectile` Form with its `projectile` effect (SPRAY), and the skill HARD HANDS (`sig_seeker_hard_hands`, its own recipe and strip; BLOW and PRESS are not performed). The action handoff applies to every committed champion clip. REACTIONS with a recipe in `ReactionRecipes` (today the Seeker's JAWS, `snare_jaws`) are presented on their own layer and are never a committed clip. FIELDS with a recipe in `FieldRecipes` (today the Seeker's PRESS, `hammer_press`) are presented on the field layer from the fight's Aura / Break events, and are never a committed clip either. |
 
 ## Summary
 
@@ -471,7 +471,35 @@ reconstruction D3 forbids. The fight's own number differs: this Seeker acts at �
 waits ARMED 170 ms before each bite at normal TEMPO (417 ms at fast TEMPO, rearm 1583). A 0 ms window needs a rearm
 that is a whole number of the fight's 100 ms ticks; the Core tests pose one and prove its order.
 
-## The field reference: PRESS (FIRST SLICE 2026-09-28, its direction APPROVED; PIXEL-HARD pass 2026-09-28, APPROVED; FIELD-vs-PROJECTILE polish 2026-09-28, APPROVED as the visual direction at `fab25919`; FINAL AUDIO 2026-09-29, three candidates, awaiting the owner's ear)
+## The field reference: PRESS (ACCEPTED 2026-09-29: the GOLD-STANDARD FIELD / AURA reference, the field-propagation picture of `fab25919` and its human-approved tick cue, candidate A BALANCED)
+
+**ACCEPTED: the gold-standard FIELD / AURA reference (the owner, 2026-09-29).** "PRESS is APPROVED. Use Candidate A -
+BALANCED as the final human-approved PRESS tick cue. Do not modify the approved visual from `fab25919`." PRESS is CLOSED.
+Beside SPRAY (PROJECTILE / TRAVEL), HARD HANDS (MELEE / DIRECT CONTACT) and JAWS (REACTION), it is the reference a future
+PERSISTENT FIELD / AURA follows:
+- **Architecture:** a skill-id recipe (`FieldRecipes.For`), its own field layer (`FieldPerformance`, built per wave from
+  the fight's Aura / Break events; never a committed clip, never the champion's body), the fight's own tick as the
+  moment of arrival, the real pressed target, giving way to JAWS on a shared tick; Core untouched.
+- **Picture** (the visual contract of `fab25919`, unchanged): a quiet persistent field that compresses and snaps before
+  each tick; one pressure front that travels LEVEL as a wall (no head, no tail, no glowing centre, never aimed), ARRIVES
+  on the tick, stops, and FOLDS into the crush where it stopped; two arcs close only vertically (~30 ms in, ~60 ms hold,
+  the body squashed x0.81 / x1.09, no push); the game's pixel material; quiet under an action, dimmer when it yields.
+- **Sound:** ONE composite cue on the crush, never on the launch and no travel audio: `sfx_seeker_press_tick`, candidate
+  A BALANCED, built from REAL recorded foley (`make_press_tick.py`, CC0 sources in
+  `tools/asset-pipeline/foley/press_tick/`): PRESSURE RELEASE (air) -> COMPRESSION THUMP (the main transient, landing in
+  the crush) -> a focused, brittle DEFENCE CRACK immediately after it -> a short decay, no reverb tail. `TickVolume` 0.28,
+  never lead, under SPRAY / HARD HANDS / JAWS; x0.6 on a quiet tick (an action close by or the champion performing, the
+  duck alone when ducked), x0.5 when it gives way to JAWS. The approved bytes are pinned by their SHA-256 in
+  `press_field_test.cs`: changing the cue is a new approval, never a regeneration. B and C were not chosen and are
+  review history (`tools/asset-pipeline/audio_history/press_tick/`).
+- **Decided, not built:** no special ducking of the enemy's bite that lands on the same tick (two valid gameplay events;
+  A's crack gives the semantic separation; revisit only if a real gameplay mix test shows one of them inaudible); no
+  dynamic volume scaling at a faster tick cadence (it belongs to variation-specific testing if PRESS reaches much faster
+  tick rates in production); no CRUSHING / PIN / SEIZE variation yet (the three layers are the foundation they vary).
+- **The method that got here:** one visual sentence approved before any polish, each pass judged by independent lenses
+  at true speed on the trace clock, the picture closed before the sound, three structurally different cues from CC0
+  foley measured (placement, loudness K-weighted, tonality) in the fight's own mix, the owner choosing by ear.
+
 
 **The brief** (the owner, Concept A, after JAWS closed): PRESS is the gold-standard candidate for the PERSISTENT FIELD /
 AURA family. "A persistent pressure field around the Seeker periodically sends a force pulse outward. When the pulse
@@ -565,7 +593,7 @@ YES; as readable as the approved version YES (the lunging creature's snout 60-80
 cost). Open: that trade (`FoldBackShare`), the lower arc's weaker press (feet planted), the approved speed-up, the fold's
 one-frame bracket-like flip on a still; no sound yet (the pass stops).
 
-### The final audio (2026-09-29, three candidates; awaiting the owner's ear)
+### The final audio (2026-09-29, candidate A BALANCED HUMAN-APPROVED; B and C are history)
 
 **The brief** (the owner): the PRESS picture is APPROVED (commit `fab25919`, the field-propagation version) and is not
 reopened. Complete PRESS with its final audio. Its meaning is PRESSURE ARRIVES -> TARGET COMPRESSED -> DEFENCE BREAKS; it
@@ -583,11 +611,11 @@ fatiguing on repeated ticks. Up to three candidates; the owner approves one by e
 
 | Candidate | pressure (vs the loudest 50 ms) | crack after the thump | crack (vs the loudest 50 ms) | character |
 |---|---|---|---|---|
-| **A balanced** (in the game, recommended) | -14.3 dB | +8.0 ms | -7.2 dB | pressure, thump and tile crack in proportion; the thump leads |
+| **A balanced** (HUMAN-APPROVED, the game's cue) | -14.3 dB | +8.0 ms | -7.2 dB | pressure, thump and tile crack in proportion; the thump leads |
 | B heavier pressure | -11.0 dB | +13.0 ms | -6.9 dB | an earlier, heavier air push and a squeezed sack; the crack later, a shell giving way |
 | C clearer defence break | -13.7 dB | +5.9 ms | -4.9 dB | the clearest break: a brittle tick on a stone fracture and a tile |
 
-**The recommendation is A.** All five QA lenses over two rounds chose it: its pressure is the least tonal (air, not an
+**The owner chose A (2026-09-29), the recommendation.** All five QA lenses over two rounds chose it: its pressure is the least tonal (air, not an
 808), its thump leads the crack by the widest margin, and its crack is the most focused (most of the crack window at
 2-6 kHz). That crack is what tells PRESS apart from the pack's bite, which lands on every tick in this seed (enemies
 strike every 1000 ms, the Aura ticks every 2000) and fuses with the thump; A's thump keeps the best margin over it
@@ -601,12 +629,16 @@ Evidence `production/qa/evidence/press-audio/` (`tools/asset-pipeline/press_audi
 Checked by a first QA round (design, mix, sync: all A; it found the cue 1.6 dB under SPRAY, the wave-end freeze, the
 film's drift, quiet x duck, a late window of 80 ms, B's tone, C's crumble, the walnut's 11 kHz ring, all fixed) and a
 re-check (design-mix, sync: A; it found the film's 1/25 s timebase and the cue ignoring the picture's quiet rule while
-the champion performs, both fixed). Open: the pack-bite fusion (an option: duck the enemy strike's thud when it shares
-the tick's millisecond); a quieter cue at an upgraded 0.7 s cadence; a yield tick under a duck stacks the two (x0.063, a
-deliberate give-way); device and display latency are not modelled. The CRUSHING / PIN / SEIZE variations are NOT built;
-the three layers are the semantic foundation they would vary, keyed by skill id like the picture. Once the owner
-approves a cue: PRESS is ACCEPTED as the FIELD / AURA gold-standard presentation, the approved cue recorded as
-human-approved and its bytes pinned by SHA-256 in `press_field_test.cs`, the visual contract of `fab25919` kept.
+the champion performs, both fixed). The owner's decisions on what stayed open (2026-09-29): the pack's bite fused with
+the thump is NOT ducked (two valid events; A's crack separates them; revisit only if a real gameplay mix test shows one
+inaudible); no dynamic volume at an upgraded 0.7 s cadence (variation-specific testing, if production reaches it). Noted:
+a yield tick under a duck stacks the two (x0.063, a deliberate give-way); device and display latency are not modelled.
+The CRUSHING / PIN / SEIZE variations are NOT built; the three layers are the semantic foundation they would vary, keyed
+by skill id like the picture. **HUMAN-APPROVED (the owner, 2026-09-29):** candidate A is the canonical
+`sfx_seeker_press_tick` (SHA-256 `bd3c390944f07458daef278e165c15046b999274a7b2ad86164ce6d62e8fd451`, pinned in
+`press_field_test.cs`); `make_press_tick.py` writes it to the game and B and C to
+`tools/asset-pipeline/audio_history/press_tick/`; PRESS is ACCEPTED as the FIELD / AURA gold-standard reference (above)
+and CLOSED; the visual contract of `fab25919` is kept.
 
 ## Context
 

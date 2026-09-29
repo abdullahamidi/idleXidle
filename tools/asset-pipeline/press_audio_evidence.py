@@ -19,9 +19,9 @@ from PIL import Image, ImageDraw
 from foundation_evidence import REPO, SMALL, film
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_press_tick import BUILDS, CANDIDATES, CUE_THUMP_MS, KEY, RECOMMENDED, SR, TICK_VOLUME, band, k_weight, max1, measure, read_wav  # noqa: E402
+from make_press_tick import APPROVED, BUILDS, CUE_THUMP_MS, KEY, SR, TICK_VOLUME, band, candidate, k_weight, max1, measure, read_wav  # noqa: E402
 
-CAND = {k: os.path.join(CANDIDATES, f"{KEY}_{k}_{name}.wav") for k, (name, _) in BUILDS.items()}
+CAND = {k: candidate(k) for k in BUILDS}
 LABEL = {"A": "A balanced", "B": "B heavier pressure", "C": "C clearer defence break"}
 
 
@@ -44,7 +44,7 @@ def cue_sheet(out):
         m = measure(y)
         y0 = 10 + r * (2 * H + 50)
         d.text((pad, y0), f"{LABEL[k]}   thump {m['thump_ms']:.0f} ms, crack +{m['gap_ms']:.0f} ms, pressure {m['pre_db']:.1f} dB, crack {m['crack_db']:.1f} dB "
-                         f"(against the loudest 50 ms)   {'(recommended)' if k == RECOMMENDED else ''}", fill=(245, 220, 150), font=SMALL)
+                         f"(against the loudest 50 ms)   {'(approved)' if k == APPROVED else ''}", fill=(245, 220, 150), font=SMALL)
         span = 0.2
         n = int(span * SR)
         yy = np.zeros(n)

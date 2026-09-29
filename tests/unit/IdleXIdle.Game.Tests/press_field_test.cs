@@ -443,6 +443,11 @@ public class press_field_test
         Assert.Contains("|| _field is { } f && f.Crushing(_playheadMs);", hunt);
         Assert.True(p.Crushing(2000f + 20f) && !p.Crushing(2000f - 20f) && !p.Crushing(2000f + r.EndMs + 1f));
         // the approved visual contract is untouched: the cue changes no picture
-        Assert.True(File.Exists(RepoFile("assets", "audio", "combat", "sfx_seeker_press_tick.wav")), "the tick cue is missing");
+        var wav = RepoFile("assets", "audio", "combat", "sfx_seeker_press_tick.wav");
+        Assert.True(File.Exists(wav), "the tick cue is missing");
+        // HUMAN-APPROVED (the owner, 2026-09-29: "PRESS is APPROVED. Use Candidate A - BALANCED as the final human-approved
+        // PRESS tick cue"): these are the bytes the owner listened to. A different file is a new approval, never a regeneration.
+        Assert.Equal("bd3c390944f07458daef278e165c15046b999274a7b2ad86164ce6d62e8fd451",
+                     Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(wav))).ToLowerInvariant());
     }
 }
