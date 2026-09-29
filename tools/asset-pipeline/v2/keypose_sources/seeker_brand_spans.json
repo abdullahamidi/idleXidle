@@ -1,0 +1,47 @@
+{
+  "cell": 84,
+  "low": 3,
+  "grid": 28,
+  "stages": [
+    "spread",
+    "base",
+    "deep1",
+    "deep2",
+    "deep3",
+    "deep4"
+  ],
+  "columns": [
+    "gather0",
+    "gather1",
+    "gather2",
+    "idle0",
+    "idle1",
+    "idle2",
+    "idle3",
+    "idle4",
+    "idle5",
+    "edge",
+    "carve0",
+    "carve1",
+    "carve2",
+    "form0",
+    "form1",
+    "form2",
+    "loosen0",
+    "loosen1"
+  ],
+  "thread_cell": 24,
+  "thread_cells": 3,
+  "halo_row0": 6,
+  "thread_y": 1008,
+  "phases": 6,
+  "centre": [
+    44.0,
+    40.6
+  ],
+  "tip": [
+    44.1,
+    64.0
+  ],
+  "box": 60.0
+}

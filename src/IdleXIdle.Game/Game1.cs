@@ -2914,6 +2914,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                                     $"RH_SHOT_SWAP='{pair}' cannot be posed: it needs <skill in the fixture>:<skill the build accepts>[@Source].");
                             if (woven is { } colour) _loadout.SetSource(from, colour);
                         }
+                    // RH_SHOT_VARIATION=<skill>:<VARIATION>[+<REINFORCEMENT>...][,...] takes a variation (and its
+                    // reinforcements) for a skill the fixture carries, EARNED the way the game earns it (waves recorded,
+                    // a free level per purchase), so a variation's presentation is filmed through its real route (BRAND
+                    // as ETCH or SPRAWL, ADR-011's MARK reference). Refused loudly, never silently: an unknown skill or
+                    // name, or a purchase the progression refuses (a skill holds a variation and two reinforcements).
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_VARIATION")?.Trim() is { Length: > 0 } shotVariation)
+                        foreach (var pick in shotVariation.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            var parts = pick.Split(':', StringSplitOptions.TrimEntries);
+                            var names = parts.Length == 2 ? parts[1].Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
+                            var def = parts.Length == 2 ? SkillCatalogue.Find(parts[0]) : null;
+                            if (def is null || names.Length == 0 || names.Length > SkillProgress.MaxLevel)
+                                throw new InvalidOperationException($"RH_SHOT_VARIATION='{pick}' needs <skill>:<VARIATION>[+<REINFORCEMENT>...].");
+                            while (_skillProgress.LevelOf(def.Id) < names.Length) _skillProgress.RecordWave(def.Id);
+                            if (!_skillProgress.ChooseVariation(def, names[0])
+                                || names.Skip(1).Any(r => !_skillProgress.TakeReinforcement(def, r)))
+                                throw new InvalidOperationException($"RH_SHOT_VARIATION='{pick}' cannot be posed: the progression refused it.");
+                        }
                     // RH_SHOT_TAKE=<node>[,<node>...] takes mastery nodes before the fight, so a real BUILD can be
                     // filmed through its real route (a fast TEMPO build: blitz, volley, rhythm, brisk). Taken
                     // as given (repair: false), the way the other harnesses do; an unknown id is refused loudly.

@@ -65,6 +65,10 @@
              Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- ADR-011: a creature strip's authored BODY POINTS (where a mark sits on it, one per frame) sit beside it. -->
+    <Content Include="..\..\assets\art\**\*.mark.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <!-- ADR-011: an action strip's AUTHORED TIMING (per-frame durations, markers, sockets) sits beside it. -->
     <Content Include="..\..\assets\art\**\*.clip.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

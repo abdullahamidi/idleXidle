@@ -1502,10 +1502,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // not the loadout: the composer may have skipped an unlearned pick, and after a mid-descent
         // edit the loadout and the fight differ for a whole wave.
         _waveSkills = _run.Skills;
-        // WHICHEVER PASSIVE FIELD THE FIGHT ACTUALLY RUNS decides the held-field art and colour.
-        var fieldSk = _waveSkills.FirstOrDefault(k => k.Def.Kind == SkillKind.Field);
-        _auraFxKey = fieldSk?.Def.FxKey;
-        _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
+        // THE FIELDS, CHOSEN BY RECIPE, NEVER BY SLOT ORDER (ADR-011, FieldRoles): a field with its own field recipe is
+        // PERFORMED (PRESS), a field with a mark recipe is a MARK presented on its host (BRAND), and only a field with neither
+        // keeps the generic held aura's art and colour.
+        var roles = FieldRoles.Choose(_waveSkills, Character.Id);
+        var fieldSk = roles.Performed >= 0 ? _waveSkills[roles.Performed] : null;
+        var markSk = roles.Mark >= 0 ? _waveSkills[roles.Mark] : null;
+        var heldSk = roles.Held >= 0 ? _waveSkills[roles.Held] : null;
+        _auraFxKey = heldSk?.Def.FxKey;
+        _auraColour = heldSk is null ? null : SourceColor.GetValueOrDefault(heldSk.Source, Bone);
         // THE FIELD PERFORMED (ADR-011, the FIELD / AURA reference): a field with its own recipe (PRESS) is presented tick
         // by tick from this wave's own Aura events, each with the creature its Break names; it replaces the generic held
         // aura. A field without one keeps that aura.
@@ -1550,6 +1555,76 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             };
             if (PresentTrace.Enabled)
                 PresentTrace.Log("field-wave", $"{fieldRecipe.Id}\tslot={fieldSlot}\tticks={string.Join(",", ticks.Select(t => $"{t.AtMs:0}>{t.Target}{(t.Yields ? "y" : "")}{(t.Quiet ? "q" : "")}"))}");
+        }
+
+        // THE MARK (ADR-011, the MARK / PERSISTENT TARGET-ATTACHED STATE reference, BRAND): a state ON the enemy, built from
+        // this wave's own events: each of the field's ticks with the depth its Marked event reports in force, the creatures'
+        // falls (the mark migrates to the next front), and the build's reach (SPRAWL, ANCHOR). Quiet beside an action, a
+        // presented reaction or a performed field's crush on the same tick.
+        _mark = null;
+        if (markSk is not null && MarkRecipes.For(Character.Id, markSk.Def.Id) is { } markRecipe)
+        {
+            var markSlot = -1;
+            for (var si = 0; si < _waveSkills.Count; si++)
+                if (ReferenceEquals(_waveSkills[si], markSk)) { markSlot = si; break; }
+            var performedSlot = -1;
+            for (var si = 0; si < _waveSkills.Count && fieldSk is not null; si++)
+                if (ReferenceEquals(_waveSkills[si], fieldSk)) { performedSlot = si; break; }
+            var markTicks = new List<(float AtMs, int Percent, bool Quiet)>();
+            var markStrikes = new List<float>();
+            var falls = new List<(float AtMs, int Slot)>();
+            var wave = _run.LastWaveEvents;
+            for (var ei = 0; ei < wave.Count; ei++)
+            {
+                var e = wave[ei];
+                if (e.Kind == BattleEventKind.EnemyDown)
+                {
+                    // THE FALL THE SCREEN SHOWS: a creature a presented reaction's answer killed falls on the jaws' SNAP
+                    // (the rule of _deathDeferred), so its brand leaves it then, never while it still stands in the jaws
+                    var shownAt = (float)e.AtMs;
+                    for (var ej = 0; ej < wave.Count; ej++)
+                    {
+                        var o = wave[ej];
+                        if (o.Kind != BattleEventKind.Skill || o.AtMs != e.AtMs || o.Slot < 0 || o.Slot >= _waveSkills.Count
+                            || _waveSkills[o.Slot].Def.Kind != SkillKind.Reaction
+                            || ReactionRecipes.For(Character.Id, _waveSkills[o.Slot].Def.Id) is not { } answering) continue;
+                        for (var ek = ej + 1; ek < wave.Count && wave[ek].AtMs == e.AtMs; ek++)
+                            if (wave[ek].Kind == BattleEventKind.Strike && wave[ek].Slot == e.Slot) { shownAt = e.AtMs + answering.SnapAtMs; break; }
+                        break;
+                    }
+                    falls.Add((shownAt, e.Slot));
+                }
+                if (e.Kind != BattleEventKind.Aura || e.Slot != markSlot) continue;
+                var percent = 0;
+                for (var ej = ei + 1; ej < wave.Count && wave[ej].AtMs == e.AtMs; ej++)
+                    if (wave[ej].Kind == BattleEventKind.Marked) { percent = wave[ej].Slot; break; }
+                var quiet = false;
+                for (var ej = 0; ej < wave.Count && !quiet; ej++)
+                {
+                    var o = wave[ej];
+                    if (o.Kind == BattleEventKind.Aura && o.Slot == performedSlot && o.AtMs == e.AtMs) quiet = true;   // PRESS's crush
+                    if (o.Kind != BattleEventKind.Skill || o.Slot < 0 || o.Slot >= _waveSkills.Count) continue;
+                    var kind = _waveSkills[o.Slot].Def.Kind;
+                    if (kind == SkillKind.Reaction && ReactionRecipes.For(Character.Id, _waveSkills[o.Slot].Def.Id) is not null
+                        && o.AtMs >= e.AtMs - markRecipe.YieldBeforeMs && o.AtMs <= e.AtMs + markRecipe.YieldAfterMs)
+                        quiet = true;
+                    if (kind is not (SkillKind.Reaction or SkillKind.Field)
+                        && o.AtMs >= e.AtMs - markRecipe.QuietBeforeMs && o.AtMs <= e.AtMs + markRecipe.QuietAfterMs)
+                        quiet = true;
+                }
+                markTicks.Add((e.AtMs, percent, quiet));
+            }
+            // THE BITES: no chisel is traced over a strike's wind-up or attack clip (the pack strikes together), so every
+            // cut lands on a still body; the depth is true on the tick all the same
+            for (var ej = 0; ej < wave.Count; ej++)
+                if (wave[ej].Kind == BattleEventKind.EnemyStrike) markStrikes.Add(wave[ej].AtMs);
+            _mark = new MarkPerformance(markRecipe, markSlot, markTicks, falls, _run.LastWaveCreatures.Count,
+                                        markSk.Def.AmplifyWholeWave, (int)MathF.Round(markSk.Def.Rule.AmplifyFrontFull * 100f), markStrikes);
+            MarkPoints.Warm();   // the body points are read here, never on a Draw frame
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("mark-wave", $"{markRecipe.Id}\tslot={markSlot}\twhole={markSk.Def.AmplifyWholeWave}"
+                                 + $"\tticks={string.Join(",", markTicks.Select(t => $"{t.AtMs:0}:{t.Percent}{(t.Quiet ? "q" : "")}"))}"
+                                 + $"\tfalls={string.Join(",", falls.Select(f => $"{f.AtMs:0}>{f.Slot}"))}");
         }
 
         WavesBegun++;
@@ -2842,8 +2917,25 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (!ShotNoVfx && _field is not null && _mode != Mode.Downed) _field.DrawUnder(b, this, _playheadMs, _anim);
         if (PresentTrace.Enabled) _fieldAllocBytes = GC.GetAllocatedBytesForCurrentThread() - fieldAlloc;
 
+        _mark?.BeginFrame();
+        _markAllocBytes = 0;
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
+
+        // THE MARK BETWEEN BODIES (BRAND): a fallen host's coil loosening, the smoke beads carrying it to the next front
+        // (over the creatures, under JAWS and PRESS, under the champion)
+        if (!ShotNoVfx && _mark is { } looseMark && _mode != Mode.Downed)
+        {
+            var looseAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+            looseMark.DrawLoose(b, _ui.Assets.Get(looseMark.Recipe.AtlasKey), _playheadMs);
+            if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - looseAlloc;
+        }
+        if (PresentTrace.Enabled && _mark is { } tracedMark && (tracedMark.SpriteCount > 0 || _markAllocBytes != 0))   // a frame that allocated is logged even with nothing drawn
+            PresentTrace.Log("mark-draw", $"{tracedMark.Recipe.Id}\thosts={tracedMark.LastHosts}\tstage={tracedMark.LastStage}"
+                             + $"\tfront={tracedMark.FrontAt(_playheadMs)}\tdepth={tracedMark.DepthAt(_playheadMs)}"
+                             + (tracedMark.TryAnchor(tracedMark.FrontAt(_playheadMs), out var markAt, out var markScale)
+                                 ? $"\tat={markAt.X:0},{markAt.Y:0}\tscale={markScale:0.00}" : "")
+                             + $"\tsprites={tracedMark.SpriteCount}\talloc={_markAllocBytes}");
 
         // THE REACTION LAYER (JAWS): the frontal Shadow bite's material on the creature that bit: over the creatures, UNDER the
         // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
@@ -3619,8 +3711,22 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
         ActorShadow(b, box.Center.X, CreatureGround, (int)(box.Width * 0.55f), 30, 0.5f * fade);
-        ActorSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f,
-                    record: VfxSubject.Creature(slot));
+        var deathStrip = $"{enemyKey}_death_strip8_512";
+        ActorSprite(b, deathStrip, box, t, DeathFps, loop: false, EnemyTint * fade, -1f, record: VfxSubject.Creature(slot));
+        PinMarkOnDeath(slot, deathStrip);
+    }
+
+    /// <summary>
+    /// A FALLING host's brand pin, from its DEATH clip's own authored point (one point on the falling body's torso, the
+    /// halo off its head): the last live pin could be a lunge's (~50 px forward: the coil came apart over the face and the
+    /// floor), and the idle's point sat level with the eyes (the strand left at eye height into the next face).
+    /// </summary>
+    private void PinMarkOnDeath(int slot, string deathStrip)
+    {
+        if (_mark is not { } mark || !TryDrawnFrame(VfxSubject.Creature(slot), out var frame)) return;
+        var point = MarkPoints.For(deathStrip)?.ToArena(frame);
+        if (point is null) return;
+        mark.Pin(slot, frame, TryBody(VfxSubject.Creature(slot), out var body) ? body.Height : frame.Dest.Height, point);
     }
 
     /// <summary>
@@ -3722,6 +3828,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
             SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs, squash);
+            DrawMarkOn(b, i, squash, stripKey);   // the brand is burned INTO this body: after it, before its hit flash
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
             FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop, squash);
@@ -3809,6 +3916,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
         SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop, squash: squash);
+        DrawMarkOn(b, 0, squash, stripKey);
         FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop, squash);
         DrawBreakBadge(b, 0, ab);
 
@@ -3878,8 +3986,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var fps = attacking ? 10f : 8f;
         var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
+        var bossSquash = _field?.Squash(0, _playheadMs) ?? Vector2.One;   // a field's crush (PRESS); the brand rides it too
         if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0),
-                                        squash: _field?.Squash(0, _playheadMs) ?? Vector2.One))
+                                        squash: bossSquash))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
             // while LayoutActors published the full box as this boss's body and envelope — 2.45x wider
@@ -3895,6 +4004,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
         // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
         SilhouetteOver(b, key, box, seconds, fps, !attacking, -1f);
+        DrawMarkOn(b, 0, bossSquash, key);
         FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         DrawBreakBadge(b, 0, box);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
@@ -6685,6 +6795,29 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
     /// <summary>The wave's performed FIELD (PRESS), or null: the field keeps the generic held aura (ADR-011, the FIELD reference).</summary>
     private FieldPerformance? _field;
+
+    /// <summary>This wave's MARK (BRAND, ADR-011's MARK reference), or null: see <see cref="BeginWave"/>.</summary>
+    private MarkPerformance? _mark;
+
+    /// <summary>Bytes the mark allocated this frame (the trace; 0 is the contract).</summary>
+    private long _markAllocBytes;
+
+    /// <summary>
+    /// The brand on the creature in <paramref name="slot"/>, from the frame just drawn for it (its torso, riding the idle
+    /// breath, the lunge and a field's buckle); every creature is pinned, marked or not, so a migration knows where it
+    /// lands.
+    /// </summary>
+    private void DrawMarkOn(SpriteBatch b, int slot, Vector2 squash, string? stripKey)
+    {
+        if (_mark is not { } mark || ShotNoVfx || _mode == Mode.Downed || !TryDrawnFrame(VfxSubject.Creature(slot), out var frame)) return;
+        var alloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        var bodyHeight = TryBody(VfxSubject.Creature(slot), out var body) ? body.Height : frame.Dest.Height;
+        // THE BODY POINT authored for the strip this creature was just drawn from (by its key: a reverse lookup of the
+        // texture missed strips loaded on first use, and they fell back to the torso probe)
+        var bodyPoint = stripKey is null ? null : MarkPoints.For(stripKey)?.ToArena(frame);
+        mark.DrawOn(b, _ui.Assets.Get(mark.Recipe.AtlasKey), slot, _playheadMs, frame, bodyHeight, squash, bodyPoint);
+        if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
+    }
 
     /// <summary>The field's fallback target rule, cached once so the draw allocates nothing: is this creature still standing?</summary>
     private Func<int, bool>? _isStanding;

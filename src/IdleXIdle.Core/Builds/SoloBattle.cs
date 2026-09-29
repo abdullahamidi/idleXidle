@@ -2431,7 +2431,6 @@ public static class SoloBattle
                         var standing = (int)(auraTick * shape.AmplifyWindowMultiplier);
                         if (triggers.Contains(BuildTrigger.Linger)) standing = standing * 9 / 5;
                         ampUntil = Math.Max(ampUntil, abs + standing);
-                        events.Add(new BattleEvent(BattleEventKind.Marked, (int)MathF.Round(ampBonus * 100f), standing, ms));
 
                         // HOW DEEP the mark is. ETCH deepens it every tick to its own ceiling; SPRAWL
                         // trades depth for reach and the whole wave carries it. Held as a bonus over
@@ -2449,6 +2448,11 @@ public static class SoloBattle
                         }
                         ampBonus = depth;
                         ampWholeWave = def.AmplifyWholeWave;
+                        // REPORTED IN FORCE (ADR-011, the MARK reference, 2026-09-29): the mark this tick opens, as the cast
+                        // path and OATHMARK report theirs. Emitted before the update it said 0 % on every wave's first tick
+                        // and ETCH one step late. Information only: `events` is write-only inside the fight
+                        // (brand_marked_report_test pins every other event and outcome to the code before this move).
+                        events.Add(new BattleEvent(BattleEventKind.Marked, (int)MathF.Round(ampBonus * 100f), standing, ms));
                         continue;
                     }
 
