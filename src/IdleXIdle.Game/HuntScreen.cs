@@ -1564,6 +1564,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // falls (the mark migrates to the next front), and the build's reach (SPRAWL, ANCHOR). Quiet beside an action, a
         // presented reaction or a performed field's crush on the same tick.
         _mark = null;
+        _curse = null;
         if (markSk is not null && MarkRecipes.For(Character.Id, markSk.Def.Id) is { } markRecipe)
         {
             var markSlot = -1;
@@ -1623,6 +1624,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             _mark = new MarkPerformance(markRecipe, markSlot, markTicks, falls, _run.LastWaveCreatures.Count,
                                         markSk.Def.AmplifyWholeWave, (int)MathF.Round(markSk.Def.Rule.AmplifyFrontFull * 100f), markStrikes);
             MarkPoints.Warm();   // the body points are read here, never on a Draw frame
+            // BRAND AS A CURSE (direction selection, dev-only: RH_BRAND_CONCEPT=A|B|C): the same truth, drawn as an
+            // affliction of the whole body instead of the cut on one point
+            if (CursePrototype.FromEnvironment() is { } curseConcept)
+                _curse = new CursePrototype(curseConcept, _mark, _ui.Device, _run.LastWaveCreatures.Count);
             if (PresentTrace.Enabled)
                 PresentTrace.Log("mark-wave", $"{markRecipe.Id}\tslot={markSlot}\twhole={markSk.Def.AmplifyWholeWave}"
                                  + $"\tticks={string.Join(",", markTicks.Select(t => $"{t.AtMs:0}:{t.Percent}{(t.Quiet ? "q" : "")}"))}"
@@ -2920,13 +2925,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (PresentTrace.Enabled) _fieldAllocBytes = GC.GetAllocatedBytesForCurrentThread() - fieldAlloc;
 
         _mark?.BeginFrame();
+        _curse?.BeginFrame();
         _markAllocBytes = 0;
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
         // THE MARK BETWEEN BODIES (BRAND): a fallen host's coil loosening, the smoke beads carrying it to the next front
         // (over the creatures, under JAWS and PRESS, under the champion)
-        if (!ShotNoVfx && _mark is { } looseMark && _mode != Mode.Downed)
+        if (!ShotNoVfx && _mark is { } looseMark && _curse is null && _mode != Mode.Downed)
         {
             var looseAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
             looseMark.DrawLoose(b, _ui.Assets.Get(looseMark.Recipe.AtlasKey), _playheadMs);
@@ -3716,6 +3722,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var deathStrip = $"{enemyKey}_death_strip8_512";
         ActorSprite(b, deathStrip, box, t, DeathFps, loop: false, EnemyTint * fade, -1f, record: VfxSubject.Creature(slot));
         PinMarkOnDeath(slot, deathStrip);
+        if (_curse is { } curse && !ShotNoVfx && TryDrawnFrame(VfxSubject.Creature(slot), out var fallen))
+            curse.DrawLeaving(b, slot, _playheadMs, fallen, ((IFocusActors)this).MaskOf(fallen.Texture), ArenaRasterizer);
     }
 
     /// <summary>
@@ -3824,6 +3832,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var placedAs = attacking ? look.IdleStrip : null;
             // A FIELD'S CRUSH (PRESS): the creature under the pressing arcs buckles for a moment, feet on the floor
             var squash = _field?.Squash(i, _playheadMs) ?? Vector2.One;
+            if (_curse is { } curseOn) squash *= curseOn.Convulse(i, _playheadMs);   // the body suffers a flaring curse
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
                     !attacking, creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs, squash: squash))
@@ -3989,6 +3998,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
         var bossSquash = _field?.Squash(0, _playheadMs) ?? Vector2.One;   // a field's crush (PRESS); the brand rides it too
+        if (_curse is { } bossCurse) bossSquash *= bossCurse.Convulse(0, _playheadMs);
         if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0),
                                         squash: bossSquash))
         {
@@ -6801,6 +6811,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>This wave's MARK (BRAND, ADR-011's MARK reference), or null: see <see cref="BeginWave"/>.</summary>
     private MarkPerformance? _mark;
 
+    /// <summary>BRAND drawn as a CURSE (dev-only direction prototype, <c>RH_BRAND_CONCEPT</c>), or null: the mark's own draw.</summary>
+    private CursePrototype? _curse;
+
     /// <summary>Bytes the mark allocated this frame (the trace; 0 is the contract).</summary>
     private long _markAllocBytes;
 
@@ -6817,6 +6830,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // THE BODY POINT authored for the strip this creature was just drawn from (by its key: a reverse lookup of the
         // texture missed strips loaded on first use, and they fell back to the torso probe)
         var bodyPoint = stripKey is null ? null : MarkPoints.For(stripKey)?.ToArena(frame);
+        if (_curse is { } curse)
+        {
+            mark.Pin(slot, frame, bodyHeight, bodyPoint);
+            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, ((IFocusActors)this).MaskOf(frame.Texture), ArenaRasterizer);
+            if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
+            return;
+        }
         mark.DrawOn(b, _ui.Assets.Get(mark.Recipe.AtlasKey), slot, _playheadMs, frame, bodyHeight, squash, bodyPoint);
         if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
     }

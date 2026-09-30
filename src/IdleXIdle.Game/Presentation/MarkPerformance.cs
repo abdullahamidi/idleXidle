@@ -248,6 +248,17 @@ public sealed class MarkPerformance
 
     // ── THE TRUTH ON THE PLAYHEAD ──────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>When the creature in <paramref name="slot"/> falls on screen (+inf: it stands to the end).</summary>
+    internal float DeathAt(int slot) => slot >= 0 && slot < _deathAt.Length ? _deathAt[slot] : float.PositiveInfinity;
+
+    /// <summary>A curse prototype's draw counted as this mark's (the trace reads one mark either way).</summary>
+    internal void CountCurse(int sprites, int stage)
+    {
+        SpriteCount = sprites;
+        LastHosts++;
+        LastStage = Math.Max(LastStage, stage);
+    }
+
     /// <summary>Is the creature in <paramref name="slot"/> still standing (on screen) at <paramref name="playheadMs"/>?</summary>
     public bool Standing(int slot, float playheadMs) => slot >= 0 && slot < _deathAt.Length && playheadMs < _deathAt[slot];
 

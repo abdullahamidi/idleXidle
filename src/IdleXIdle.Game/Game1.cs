@@ -1978,7 +1978,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // canvas is bound again — and with the default DiscardContents, binding a target CLEARS it, so
         // everything drawn before the light would be gone under it.
         _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale, false,
-                                     SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+                                     SurfaceFormat.Color,
+                                     // a STENCIL only for the BRAND curse prototype (RH_BRAND_CONCEPT): it clips the curse to a body
+                                     IdleXIdle.Game.Presentation.CursePrototype.FromEnvironment() is null ? DepthFormat.None : DepthFormat.Depth24Stencil8,
+                                     0, RenderTargetUsage.PreserveContents);
         ApplyRestoredState();
     }
 

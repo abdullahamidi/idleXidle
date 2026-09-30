@@ -722,6 +722,18 @@ From 97efe379 the owner named exactly two faults and asked for nothing else to m
 | DEPTH 3 read as a letter / number / rune / eye | UNPRIMED reads ("what does this mark look like?", nothing suggested) named the 97efe379 curl "a spiral", "@", "6", "G", "a target". Cutting its INSIDE did not help (two further rounds: "broken spiral", "@", "6", "snail shell", "cracked rune", "eye socket"): pieces laid along one curl are completed by the eye. DEPTH 3 is now TORN (`seeker_brand_cut.py`, DESIGN B, depth 3 only): the curl's four pieces, with new breaks, tapered torn ends and a wandering width, are each SHIFTED on their own (`torn`), so they no longer continue one curve; the branch that met a gash's end in a 'Y' is healed (`healed`); no scrap of incision under six texels (`least_core`: a lone black texel read as a pupil). Four fresh readers then said "bruise / stain", "torn smear", "splatter", "irregular damage" and named no eye, face or spiral; a confirmation read on the filmed game frames is in the evidence. DEPTH 1 and DEPTH 2 are byte-identical to 97efe379. The deepen into DEPTH 3 is the tear: its beat covers the moved pieces (about two thirds of the picture, dark ink; its lit rim 90 px against DEPTH 2's 63). |
 | The mark too large on large hosts | MEASURED, not guessed: the front creature's visible body from the game's geometry dump on all 24 family cells and the six bosses (new capture dial `RH_SHOT_BOSS=<art key>`, presentation only), the mark's extent from the atlas (`tools/asset-pipeline/brand_scale_table.py`). Hosts grow tall faster than their torsos grow wide: at the old cap (3) the casters' mark was 49-61 % of their width at 1.67 and bruisers and bosses got 168 x 147 px at 2.33. 4/3 still left casters at 40-49 %. `MarkRecipe.MaxScale` is now 1 (the whelp's own scale): bruisers 13 % of their height, bosses 12 %, casters 30-37 % of their (staff-wide) visible width; the whelp, the pale Choir wisp and every swarm unchanged. No per-enemy case, no new mechanism. |
 
+### The change of direction: BRAND as a CURSE (2026-10-01, three concepts awaiting the owner's choice)
+
+The owner ended the etched-mark family (the torn cut of 5426936a is technically solid, artistically the wrong
+abstraction): BRAND is presented as a persistent CURSE / SHADOW AFFLICTION the enemy suffers across its body, not a sign
+on one point. Three concepts were prototyped behind `RH_BRAND_CONCEPT=A|B|C` (`CursePrototype`: the same
+`MarkPerformance` truth, drawn clipped to each afflicted silhouette through the stencil buffer): A LIVING SHADOW
+CORRUPTION (veins spreading from the seat), B WITHERING CURSE (the body drained to ash, blight), C SHADOW POSSESSION (a
+mass inside, a double that does not fit). Unprimed reads: A "cursed / tainted" but "net / web / sigil"; B "drained /
+fading / ghostly", not Shadow; C "cursed / shadow blight / darkness seeping", no symbol, faint on black hosts and near an
+aura. Recommended: C, with the double kept inside the body at rest and A's legible depth. Evidence
+`production/qa/evidence/brand-curse/`; page https://claude.ai/artifact/P7ZBWqXwpiihaMX9cDqYkN. The etched cut stays the default draw until a direction is chosen.
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:
