@@ -37,7 +37,7 @@ public enum CurseConcept
 /// </para>
 /// <para>Allocation-free per frame: states, textures and tables are built once; every per-frame value is on the stack.</para>
 /// </remarks>
-public sealed class CursePrototype
+public sealed partial class CursePrototype
 {
     /// <summary>The concept this prototype draws.</summary>
     public CurseConcept Concept { get; }
@@ -65,7 +65,6 @@ public sealed class CursePrototype
     private static readonly Color Blight = new(30, 22, 26);
     private static readonly Color Crack = new(8, 6, 8);
     private static readonly Color Shade = new(10, 6, 18);
-    private static readonly Color VeinCore = new(58, 34, 104);     // a vein: dark violet (black vanished on a black body)
     private static readonly Color Double = new(44, 26, 82);        // the possessing double: shadow violet
 
     // ── TIMING (ms) ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ public sealed class CursePrototype
     private const float DeepenLookMs = 650f;  // how far back a shown-stage change still flares
 
     private readonly Texture2D _pixel, _puff, _band, _blob;
-    private readonly Texture2D[] _veins, _blight, _cracks;
+    private readonly Texture2D[] _blight, _cracks;
     private readonly AlphaTestEffect _alphaTest;
     private readonly BlendState _noColour = new() { ColorWriteChannels = ColorWriteChannels.None };
     private readonly DepthStencilState[] _write = new DepthStencilState[32], _inside = new DepthStencilState[32], _outside = new DepthStencilState[32];
@@ -107,10 +106,11 @@ public sealed class CursePrototype
         _puff = t.Puff;
         _band = t.Band;
         _blob = t.Blob;
-        _veins = t.Veins;
         _blight = t.Blight;
         _cracks = t.Cracks;
         _alphaTest = new AlphaTestEffect(device) { VertexColorEnabled = true, AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 90 };
+        // the corruption's field is grown here, never on a Draw frame (built at the first apply, it cost one frame 160 MB)
+        if (concept == CurseConcept.Corruption) _corruption = CorruptionAtlas.For(device);
         for (var i = 0; i < _write.Length; i++)
         {
             _write[i] = new DepthStencilState
@@ -229,7 +229,7 @@ public sealed class CursePrototype
         var t = playheadMs + slot * 377f;
         switch (Concept)
         {
-            case CurseConcept.Corruption: DrawCorruption(b, slot, t, body, anchor, raster); break;
+            case CurseConcept.Corruption: DrawCorruptionGlow(b, slot, playheadMs, t, body, anchor, raster); break;
             case CurseConcept.Withering: DrawWithering(b, slot, t, body, anchor, raster); break;
             default: DrawPossession(b, slot, t, body, frame, mask, raster); break;
         }
@@ -262,9 +262,10 @@ public sealed class CursePrototype
         switch (Concept)
         {
             case CurseConcept.Corruption:
-                // the veins drain back into their seat as the body falls
-                Veins(b, stage, anchor, body, 1f - 0.7f * p, Ink * (0.75f * fade));
-                Fill(b, body, Color.Black * (0.12f * fade));
+                // the curse brightens once, then collapses back along its paths to the seat (its own passes)
+                b.End();
+                DrawCorruptionLeaving(b, slot, stage, age, VeinRect(anchor, body), body, _inside[refSlot], raster);
+                b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, _inside[refSlot], raster);
                 break;
             case CurseConcept.Withering:
                 // the whole body greys out: it crumbles
@@ -280,12 +281,12 @@ public sealed class CursePrototype
         switch (Concept)
         {
             case CurseConcept.Corruption:
-                // a dark column leaves from the seat, upward
-                for (var i = 0; i < 5; i++)
+                // a little dark smoke escapes from the seat as it collapses
+                for (var i = 0; i < 3; i++)
                 {
-                    var q = Math.Clamp(p * 1.4f - i * 0.08f, 0f, 1f);
-                    var at = anchor + new Vector2(MathF.Sin(i * 1.7f + p * 5f) * 8f, -q * body.Height * 0.55f);
-                    Puff(b, at, body.Height * (0.10f + 0.06f * q), Ink * (0.45f * (1f - q) * fade));
+                    var q = Math.Clamp(p * 1.4f - i * 0.1f, 0f, 1f);
+                    var at = anchor + new Vector2(MathF.Sin(i * 1.7f + p * 5f) * 8f, -q * body.Height * 0.4f);
+                    Puff(b, at, body.Height * (0.08f + 0.05f * q), Ink * (0.3f * (1f - q) * fade));
                 }
                 break;
             case CurseConcept.Withering:
@@ -322,52 +323,6 @@ public sealed class CursePrototype
     }
 
     // ── A: LIVING SHADOW CORRUPTION ─────────────────────────────────────────────────────────────────────────────────
-
-    private void DrawCorruption(SpriteBatch b, int slot, float t, Rectangle body, Vector2 anchor, RasterizerState raster)
-    {
-        var stage = _stage[slot];
-        var f = _flare[slot];
-        var inside = _inside[slot];
-        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, inside, raster);
-        if (_kind[slot] == 1)
-            Fill(b, body, Color.Black * 0.05f);   // waiting: the curse is on its way, a faint shadow only
-        else
-        {
-            Fill(b, body, Color.Black * (0.05f + 0.035f * stage + 0.22f * f));
-            // THE SEAT: a faint pool of corruption where it entered, wider with depth (never a disc: soft and irregular)
-            var pool = body.Height * (0.18f + 0.07f * stage);
-            Draw(b, _blob, new Rectangle((int)(anchor.X - pool / 2), (int)(anchor.Y - pool / 2), (int)pool, (int)pool), Ink * (0.22f + 0.2f * f));
-            // THE VEINS: from the seat outward, reaching further with each depth; an apply / arrival grows them out
-            var reach = 1f;
-            if (_flareKind[slot] is 1 or 2) reach = 0.25f + 0.75f * Smooth(Math.Min(1f, _flareAge[slot] / 380f));
-            if (_flareKind[slot] == 3 && stage > 1)
-            {
-                var grow = Smooth(Math.Min(1f, _flareAge[slot] / 380f));
-                Veins(b, stage - 1, anchor, body, 1f, VeinCore * (VeinRest(stage - 1) + 0.35f * f));
-                Veins(b, stage, anchor, body, 1f, VeinCore * ((VeinRest(stage) + 0.35f * f) * grow));
-            }
-            else
-                Veins(b, stage, anchor, body, reach, VeinCore * (VeinRest(stage) + 0.35f * f));
-        }
-        b.End();
-        if (_kind[slot] == 2)
-        {
-            // THE PULSE: now and then a faint violet beat runs through the veins; the flare is a surge
-            var cycle = 2600f;
-            var ph = ((t % cycle) + cycle) % cycle;
-            var beat = ph < 520f ? MathF.Sin(ph / 520f * MathF.PI) : 0f;
-            var a = 0.10f * beat + 0.30f * f;
-            if (a > 0.01f)
-            {
-                b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, inside, raster);
-                Veins(b, _stage[slot], anchor, body, 1f, Violet * a);
-                b.End();
-            }
-        }
-    }
-
-    /// <summary>A's veins at rest: half strength at the first depth, stronger with each.</summary>
-    private static float VeinRest(int stage) => 0.42f + 0.12f * stage;
 
     // ── B: WITHERING CURSE ──────────────────────────────────────────────────────────────────────────────────────────
 
@@ -505,25 +460,8 @@ public sealed class CursePrototype
         switch (Concept)
         {
             case CurseConcept.Corruption:
-            {
-                // THE LEAKS: a wisp of shadow seeping out per depth, from points round the seat; a flare bursts more
-                var count = stage + (f > 0.05f ? 5 : 0);
-                for (var i = 0; i < count; i++)
-                {
-                    var burst = i >= stage;
-                    var life = burst ? FlareMs : 2200f;
-                    var age = burst ? _flareAge[slot] - (i - stage) * 40f : ((t + i * 733f) % life + life) % life;
-                    if (age < 0f || age >= life) continue;
-                    var q = age / life;
-                    var hx = Hash(slot * 13 + i * 5) - 0.5f;
-                    var hy = Hash(slot * 7 + i * 11) - 0.5f;
-                    var from = anchor + new Vector2(hx * body.Width * 0.5f, hy * body.Height * 0.45f);
-                    var at = from + new Vector2(MathF.Sin(q * 4f + i) * 4f, -q * (burst ? 46f : 26f));
-                    var a = (burst ? 0.34f * f : 0.10f) * MathF.Sin(q * MathF.PI);
-                    Puff(b, at, body.Height * (burst ? 0.09f : 0.07f) * (0.7f + q), Ink * a);
-                }
+                DrawCorruptionLoose(b, slot, t, body, anchor);
                 break;
-            }
             case CurseConcept.Withering:
             {
                 // ASH: a flake or two falling off the body at rest, a small shower on a flare
@@ -547,14 +485,6 @@ public sealed class CursePrototype
     }
 
     // ── HELPERS ──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-    private void Veins(SpriteBatch b, int stage, Vector2 seat, Rectangle body, float reach, Color colour)
-    {
-        if (stage < 1) return;
-        // a network about the body's height across, never wider than 440 px: on a boss it stays round the torso
-        var size = Math.Clamp(body.Height * 1.6f, 300f, 440f) * reach;
-        Draw(b, _veins[Math.Min(_veins.Length - 1, stage - 1)], new Rectangle((int)(seat.X - size / 2), (int)(seat.Y - size / 2), (int)size, (int)size), colour);
-    }
 
     private static Rectangle CoverBody(Rectangle body)
     {
@@ -603,7 +533,7 @@ public sealed class CursePrototype
         private static GraphicsDevice? _device;
 
         public Texture2D Pixel = null!, Puff = null!, Band = null!, Blob = null!;
-        public Texture2D[] Veins = null!, Blight = null!, Cracks = null!;
+        public Texture2D[] Blight = null!, Cracks = null!;
 
         public static Textures For(GraphicsDevice device)
         {
@@ -658,72 +588,11 @@ public sealed class CursePrototype
                     blob[y * B + x] = r >= 1f ? 0f : MathF.Pow(1f - r * r, 1.6f);
                 }
             t.Blob = Mask(d, B, B, blob);
-            t.Veins = BuildVeins(d);
             (t.Blight, t.Cracks) = BuildBlight(d);
             return t;
         }
 
         private static float Sq(float x) => x * x;
-
-        /// <summary>Branching veins from the centre; texture k holds those born within its reach (1: near the seat).</summary>
-        private static Texture2D[] BuildVeins(GraphicsDevice d)
-        {
-            const int N = 384;
-            var birth = new float[N * N];
-            Array.Fill(birth, float.PositiveInfinity);
-            var width = new float[N * N];
-            var rng = new Random(20261001);
-            var c = N / 2f;
-            var maxR = N * 0.47f;
-            void Walk(float x, float y, float ang, float w, float dist, int depth)
-            {
-                while (dist < maxR && w > 0.55f)
-                {
-                    x += MathF.Cos(ang) * 1.4f;
-                    y += MathF.Sin(ang) * 1.4f;
-                    var r = MathF.Sqrt(Sq(x - c) + Sq(y - c));
-                    if (r > maxR) break;
-                    dist = r;
-                    ang += (float)(rng.NextDouble() - 0.5) * 0.42f;
-                    w *= 0.991f;
-                    var rad = (int)MathF.Ceiling(w);
-                    for (var oy = -rad; oy <= rad; oy++)
-                        for (var ox = -rad; ox <= rad; ox++)
-                        {
-                            int px = (int)x + ox, py = (int)y + oy;
-                            if (px < 0 || py < 0 || px >= N || py >= N) continue;
-                            var dd = MathF.Sqrt(ox * ox + oy * oy);
-                            var cover = Math.Clamp(w * 0.5f + 0.5f - dd, 0f, 1f);
-                            var i = py * N + px;
-                            if (cover > width[i]) width[i] = cover;
-                            if (dist < birth[i]) birth[i] = dist;
-                        }
-                    if (depth < 3 && rng.NextDouble() < 0.035)
-                        Walk(x, y, ang + (rng.NextDouble() < 0.5 ? -1f : 1f) * (0.5f + (float)rng.NextDouble() * 0.4f), w * 0.72f, dist, depth + 1);
-                }
-            }
-            for (var i = 0; i < 7; i++)
-            {
-                var ang = i * MathF.Tau / 7f + (float)(rng.NextDouble() - 0.5) * 0.6f;
-                Walk(c + MathF.Cos(ang) * 3f, c + MathF.Sin(ang) * 3f, ang, 4.2f + (float)rng.NextDouble() * 1.4f, 0f, 0);
-            }
-            var reaches = new[] { 0.34f, 0.62f, 1.0f };
-            var result = new Texture2D[reaches.Length];
-            for (var k = 0; k < reaches.Length; k++)
-            {
-                var reach = reaches[k] * maxR;
-                var line = new float[N * N];
-                for (var i = 0; i < line.Length; i++)
-                    line[i] = birth[i] <= reach ? width[i] : birth[i] <= reach + 10f ? width[i] * (1f - (birth[i] - reach) / 10f) : 0f;
-                // a dark shadow under the skin round each vein (a soft halo), the vein itself on top
-                var halo = BoxBlur(line, N, 3);
-                halo = BoxBlur(halo, N, 3);
-                var a = new float[N * N];
-                for (var i = 0; i < a.Length; i++) a[i] = Math.Max(line[i], Math.Min(1f, halo[i] * 1.4f) * 0.35f);
-                result[k] = Mask(d, N, N, a);
-            }
-            return result;
-        }
 
         /// <summary>Blotches of blight at three coverages, and the dry cracks along their edges.</summary>
         private static (Texture2D[] Blight, Texture2D[] Cracks) BuildBlight(GraphicsDevice d)

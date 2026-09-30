@@ -734,6 +734,17 @@ fading / ghostly", not Shadow; C "cursed / shadow blight / darkness seeping", no
 aura. Recommended: C, with the double kept inside the body at rest and A's legible depth. Evidence
 `production/qa/evidence/brand-curse/`; page https://claude.ai/artifact/P7ZBWqXwpiihaMX9cDqYkN. The etched cut stays the default draw until a direction is chosen.
 
+### The chosen direction: Concept A, Living Shadow Corruption, and its glow pass (2026-10-01, awaiting the owner)
+
+The owner chose Concept A and asked for readability on dark enemies without a neon net. The corruption now grows along
+PATHS from a smoky stain (not a radial texture), runs along the body's long axis, forks forward, dies early, breaks and
+leaves infected patches, and never closes a loop (tested); its light is a separate additive violet emission clipped to
+the body, on some stretches only, with a hot front travelling through NEW growth on apply / deepen / arrival, a SPRAWL
+source that lights before its victims, and a transfer that brightens and collapses along its paths. Depth is reach.
+Fresh reads were run five times and the structure revised after "a cross / a dagger" and "a belt / a sash" reads.
+Evidence `production/qa/evidence/brand-glow/`; page https://claude.ai/artifact/DMw4pyqkKtUXQPBo6DvYdJ. Still the prototype pipeline (dev-only, several batches
+per cursed creature); no sound; not accepted.
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:

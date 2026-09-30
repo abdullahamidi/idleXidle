@@ -251,6 +251,20 @@ public sealed class MarkPerformance
     /// <summary>When the creature in <paramref name="slot"/> falls on screen (+inf: it stands to the end).</summary>
     internal float DeathAt(int slot) => slot >= 0 && slot < _deathAt.Length ? _deathAt[slot] : float.PositiveInfinity;
 
+    /// <summary>Was the tick nearest <paramref name="atMs"/> (within <paramref name="withinMs"/>) a QUIET one: beside an
+    /// action, a presented reaction or the field's crush, where the mark gives way?</summary>
+    internal bool TickQuietNear(float atMs, float withinMs)
+    {
+        var best = withinMs;
+        var quiet = false;
+        for (var i = 0; i < _tickAt.Length; i++)
+        {
+            var d = Math.Abs(_tickAt[i] - atMs);
+            if (d <= best) { best = d; quiet = _tickQuiet[i]; }
+        }
+        return quiet;
+    }
+
     /// <summary>A curse prototype's draw counted as this mark's (the trace reads one mark either way).</summary>
     internal void CountCurse(int sprites, int stage)
     {

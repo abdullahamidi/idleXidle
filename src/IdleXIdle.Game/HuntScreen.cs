@@ -3723,7 +3723,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         ActorSprite(b, deathStrip, box, t, DeathFps, loop: false, EnemyTint * fade, -1f, record: VfxSubject.Creature(slot));
         PinMarkOnDeath(slot, deathStrip);
         if (_curse is { } curse && !ShotNoVfx && TryDrawnFrame(VfxSubject.Creature(slot), out var fallen))
-            curse.DrawLeaving(b, slot, _playheadMs, fallen, ((IFocusActors)this).MaskOf(fallen.Texture), ArenaRasterizer);
+            curse.DrawLeaving(b, slot, _playheadMs, fallen, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(fallen.Texture) : null, ArenaRasterizer);
     }
 
     /// <summary>
@@ -6833,7 +6833,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_curse is { } curse)
         {
             mark.Pin(slot, frame, bodyHeight, bodyPoint);
-            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, ((IFocusActors)this).MaskOf(frame.Texture), ArenaRasterizer);
+            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(frame.Texture) : null, ArenaRasterizer);
             if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
             return;
         }

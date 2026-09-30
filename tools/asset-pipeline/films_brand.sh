@@ -77,5 +77,7 @@ done
 # THE SIX BOSSES (RH_SHOT_BOSS draws the wave as that boss): ETCH from its first cut to DEPTH 3, the whole creature
 for boss in thorn_regent forge_colossus void_reaper spirit_matron crystal_lich lumen_angel; do
   want "boss_$boss" && film "boss_$boss" "$CLEAN" 0.5 330 2 0 RH_SHOT_BOSS="$boss" RH_SHOT_CREATURES=1 RH_SHOT_ENEMY=6000,6 RH_SHOT_VARIATION=sign_brand:ETCH
+  # its twin with the mark drawn off: one host that never falls, so apply / deepen / idle are measured with no transfer
+  want "boss_${boss}_off" && film "boss_${boss}_off" "$CLEAN" 0.5 330 2 0 RH_SHOT_BOSS="$boss" RH_SHOT_CREATURES=1 RH_SHOT_ENEMY=6000,6 RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
 done
 exit 0
