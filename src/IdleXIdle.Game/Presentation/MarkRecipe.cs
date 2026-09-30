@@ -104,7 +104,7 @@ public sealed class MarkRecipe
     /// <summary>Column of the first LOOSEN cell.</summary>
     public const int Loosen0 = 16;
 
-    // ── SIZE: a small-to-medium state, constant (depth never changes the size) ───────────────────────────────────────
+    // ── SIZE: a small-to-medium state on a small host, a localized wound on a large one; depth never changes it ──────────────────────────────────────
 
     /// <summary>The coil's box as a share of the host's canonical visible height (a whelp's ~60 px).</summary>
     public float SizeShare { get; init; } = 0.28f;
@@ -120,8 +120,13 @@ public sealed class MarkRecipe
     /// <summary>The smallest and largest scale; a scale is snapped to thirds so a logical pixel is whole screen pixels.</summary>
     public float MinScale { get; init; } = 2f / 3f;
 
-    /// <inheritdoc cref="MinScale"/>
-    public float MaxScale { get; init; } = 3f;
+    /// <summary>The largest scale: the whelp's own. MEASURED (2026-10-01, the front creature's visible body from the
+    /// game's geometry dump on all 24 family cells and the six bosses; tools/asset-pipeline/brand_scale_table.py): above
+    /// the whelp every host grows TALL faster than its torso grows wide, so the height share made the thin casters'
+    /// mark 49-61 % of their width at 1.67 and the bruisers' and bosses' 168 x 147 px at 2.33 (shoulder to belly).
+    /// 4/3 still left a caster's mark 40-49 % of its width; 1 holds every larger host to a localized wound (bruisers
+    /// 13 % of their height, bosses 12 %) and leaves the whelp, the pale Choir wisp and every swarm exactly as they were.</summary>
+    public float MaxScale { get; init; } = 1f;
 
     // ── THE DEPTH LADDER: a stage is a function of the depth IN FORCE (the Marked event's percent) ───────────────────
 

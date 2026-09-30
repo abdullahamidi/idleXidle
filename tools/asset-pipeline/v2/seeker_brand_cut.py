@@ -63,10 +63,20 @@ DESIGNS = {
               heavy=60, lopsided=0.45),
     # B, revised after the review of the takes: DEPTH 3's growth where a black body shows it (thicker, both walls), wide
     # breaks at every depth (the outer contour of DEPTH 2 / 3 wrapped 335-350 degrees: a ring), DEPTH 1 the thinnest
-    "B": dict(hw=(0.6, 1.0, 1.35, 2.3), reveal=(0.82, 0.82, 0.92, 0.98),
+    # DEPTH 3, the final correction (2026-10-01): the whole curl read as a designed glyph -- 'G', '@', '6', a spiral, a
+    # target -- in UNPRIMED reads ("what does this mark look like?"), however its inside was cut: pieces laid along one
+    # curl were completed by the eye. It is TORN: the curl's four pieces (new breaks, torn tapered ends, a wandering
+    # width, two fractures raking inward) each SHIFTED on its own ("torn"), so they no longer continue one curve; the
+    # branch that met a gash's end in a 'Y' healed and no scrap of incision under six texels (a lone black texel read
+    # as a pupil). Four fresh unprimed readers: "bruise / stain", "torn smear", "splatter", "irregular damage"; no eye,
+    # no face, no spiral. DEPTH 1 and DEPTH 2 are unchanged.
+    "B": dict(hw=(0.6, 1.0, 1.35, 2.8), reveal=(0.82, 0.82, 0.92, 0.80),
               gaps=([(0.16, 0.26), (0.45, 0.54), (0.68, 0.75)], [(0.16, 0.26), (0.45, 0.54), (0.68, 0.75)],
-                    [(0.16, 0.26), (0.46, 0.54), (0.68, 0.73)], [(0.16, 0.26), (0.45, 0.54), (0.65, 0.73)]),
-              branches=[(0.35, 20, 4.5, 0.75, 2), (0.60, -25, 4.0, 0.9, 3), (0.08, -40, 3.0, 0.6, 3)],
+                    [(0.16, 0.26), (0.46, 0.54), (0.68, 0.73)], [(0.14, 0.21), (0.40, 0.47), (0.63, 0.70)]),
+              branches=[(0.35, 20, 4.5, 0.75, 2), (0.60, -25, 4.0, 0.9, 3), (0.08, -40, 3.0, 0.6, 3),
+                        (0.05, 150, 6.5, 1.1, 3), (0.50, 180, 4.5, 1.0, 3)],
+              ragged=(0.0, 0.0, 0.0, 0.3), gap_taper=(0.0, 0.0, 0.0, 0.04),
+              torn={3: [(1, 0, 0), (1, -3, 0), (3, 1, 0), (-3, 2, 0)]}, healed={3: (0,)}, least_core={3: 6},
               heavy=120, lopsided=0.4),
     "C": dict(hw=(0.6, 0.95, 1.2, 1.45), reveal=(0.80, 0.80, 0.90, 0.97),
               gaps=([(0.30, 0.36), (0.62, 0.66)], [(0.30, 0.36), (0.62, 0.66)], [(0.31, 0.35), (0.63, 0.66)],
@@ -78,7 +88,8 @@ DESIGNS = {
 DESIGN = DESIGNS[os.environ.get("BRAND_DESIGN", "B")]
 TIERS = ["spread", "tier1", "tier2", "tier3"]
 
-ANG = np.arctan2(GY - CENTRE[1], GX - CENTRE[0])          # each texel's angle round the coil's centre
+ANG = np.arctan2(GY - CENTRE[1], GX - CENTRE[0])
+RAGGED = value_noise(G, G, 3, salt=77)                    # the slow width wander of a torn cut (0..1)          # each texel's angle round the coil's centre
 LIGHT = np.array([-1.0, -1.0]) / math.sqrt(2.0)           # the stage's light comes from the upper left
 
 
@@ -89,8 +100,8 @@ def _index(t):
 def branch_mask(k):
     """The scar branches tier k has: short fractures leaving the coil, tapering to a point."""
     m = np.zeros((G, G), bool)
-    for (t, deg, length, hw, first) in DESIGN["branches"]:
-        if k < first:
+    for j, (t, deg, length, hw, first) in enumerate(DESIGN["branches"]):
+        if k < first or j in DESIGN.get("healed", {}).get(k, ()):
             continue
         i = _index(t)
         p = PATH[i]
@@ -114,13 +125,49 @@ def incision(k, reveal=None):
     rv = DESIGN["reveal"][k] if reveal is None else min(reveal, DESIGN["reveal"][k])
     hw = DESIGN["hw"][k] * (1.0 + DESIGN["lopsided"] * np.cos(ANG - math.radians(DESIGN["heavy"])))
     hw = hw * np.clip((rv - TPAR) / 0.07, 0.35, 1.0) * np.clip(TPAR / 0.05, 0.5, 1.0)
+    # TORN, NOT DRAWN (per tier, off unless the design asks): the cut's width wanders along it (a slow, low-frequency
+    # irregularity, never a speckle), and each break's ends taper like a torn gash, not a pen stroke's round end
+    rag = DESIGN.get("ragged", (0.0,) * 4)[k]
+    if rag:
+        hw = hw * (1.0 + rag * (RAGGED * 2.0 - 1.0))
+    taper = DESIGN.get("gap_taper", (0.0,) * 4)[k]
+    if taper:
+        for lo, hi in DESIGN["gaps"][k]:
+            near = np.minimum(np.abs(TPAR - lo), np.abs(TPAR - hi))
+            hw = hw * np.where((TPAR < lo) | (TPAR > hi), np.clip(near / taper, 0.3, 1.0), 1.0)
     inside = (TPAR <= rv) & (DIST <= hw)
     for lo, hi in DESIGN["gaps"][k]:
         inside &= ~((TPAR >= lo) & (TPAR <= hi))
     if reveal is None or reveal >= DESIGN["reveal"][k]:
         inside |= branch_mask(k)
     inside &= ~OPEN
+    inside = torn(inside, k)
     return drop_specks(clean(inside), 3)
+
+
+def torn(inside, k):
+    """TORN APART (per tier, off unless the design asks): each piece between the gaps shifted and turned on its own --
+    (dx, dy, degrees) about its own middle -- so the pieces no longer continue one curve. Whole pieces of one coil laid
+    along a curl, however cut, were completed by the eye into a spiral, an '@', a '6'; shifted, they read as a tear."""
+    moves = DESIGN.get("torn", {}).get(k)
+    if not moves:
+        return inside
+    edges = [0.0] + [g for lo, hi in DESIGN["gaps"][k] for g in (lo, hi)] + [2.0]
+    out = np.zeros_like(inside)
+    for i, (dx, dy, deg) in enumerate(moves):
+        piece = inside & (TPAR >= edges[2 * i]) & (TPAR <= edges[2 * i + 1])
+        if not piece.any():
+            continue
+        ys, xs = np.nonzero(piece)
+        cy, cx = ys.mean(), xs.mean()
+        a = math.radians(deg)
+        # every target texel looks back to where it came from (nearest texel): no holes, no doubled texels
+        ry, rx = GY - 0.5 - cy - dy, GX - 0.5 - cx - dx
+        sx = np.rint(cx + rx * math.cos(a) + ry * math.sin(a)).astype(int)
+        sy = np.rint(cy - rx * math.sin(a) + ry * math.cos(a)).astype(int)
+        ok = (sx >= 0) & (sx < G) & (sy >= 0) & (sy < G)
+        out[ok] |= piece[sy[ok], sx[ok]]
+    return out
 
 
 RIM_ARC = (-178.0, -50.0)   # degrees round the coil's centre: the outer arc that faces the light (upper left)
@@ -181,6 +228,12 @@ def bands_of(inside, rim=True, k=2):
         if not pocket.any():
             break
         wall |= pocket
+    # NO SCRAP OF INCISION: a piece of dark core smaller than the design's least (DEPTH 3's) is wall -- a lone black
+    # texel inside a violet lobe read as a pupil, a small black blob as a letter's counter
+    least = DESIGN.get("least_core", {}).get(k, 0)
+    if least:
+        core = inside & ~(wall | lit)
+        wall |= core & ~drop_specks(core, least)
     b[wall] = 4 if k == 1 else 2
     b[lit] = 3
     return b
@@ -277,7 +330,11 @@ def edge(k):
     inside = incision(k)
     deg = np.degrees(ANG)
     outer = inside & ~erode(inside) & ~sb.INWARD & (deg <= -15.0) & (deg >= -195.0)
-    return np.where(fill_pinholes(rim_of(inside) | outer), 3, 0).astype(np.uint8)
+    lit = fill_pinholes(rim_of(inside) | outer)
+    if enclosed_dark(~lit, lit).any():
+        # a torn piece lying wholly on the light side had its whole outline lit: a ring. Only its outer side catches.
+        lit = fill_pinholes(rim_of(inside) | (outer & outer_edge(inside)))
+    return np.where(lit, 3, 0).astype(np.uint8)
 
 
 def carve(k, step):
@@ -286,6 +343,8 @@ def carve(k, step):
     b = np.zeros((G, G), np.uint8)
     if k == 0:
         return b                                        # nothing deepens into the spread cut
+    # (a TORN depth moves its pieces, so most of its picture is new: the beat covers it all -- the tear gathers its ink
+    # and cuts where the pieces now lie; measured against the untorn depth before, nothing jumps outside the beat)
     now, before = incision(k), incision(k - 1)
     new = now & ~before
     new = now & dilate(new, 1) if new.sum() < 12 else new
@@ -303,6 +362,8 @@ def carve(k, step):
         b[new & ~erode(new)] = 2                        # a new cut with no light-facing edge: its wall answers
     filled = fill_pinholes(b > 0)
     b[filled & (b == 0)] = 1                            # no pinhole: a one-texel hole read as a pupil
+    lit = b >= 2                                        # never a pupil on a beat either: dark the lit bands ring is wall
+    b[enclosed_dark(b == 1, erode(dilate(lit, 1)) | lit) & (b == 1)] = 2
     return b
 
 
@@ -312,7 +373,8 @@ def form(k, step):
     rv = DESIGN["reveal"][k]
     if step == 0:
         inside = incision(k, reveal=rv * 0.45)
-        return np.zeros((G, G), np.uint8), np.where(dilate(inside, 1), 0.55, 0.0).astype(np.float32)
+        seep = dilate(inside, 1) & INNER & (np.abs(GX - CENTRE[0]) <= 12.2) & (np.abs(GY - CENTRE[1]) <= 10.4)
+        return np.zeros((G, G), np.uint8), np.where(seep, 0.55, 0.0).astype(np.float32)
     inside = incision(k, reveal=rv * 0.75) if step == 1 else incision(k)
     return bands_of(inside, rim=False, k=k), stain(k) * (0.7 if step == 1 else 0.9)
 

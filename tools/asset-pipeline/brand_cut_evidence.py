@@ -245,7 +245,9 @@ def measures(n, path):
           "The 'peak px changed (any)' column counts DARKENED pixels too: the new mark's main work is darkening the body.", "",
           "## The trace (mark-draw, every frame the mark draws)", ""]
     for take in ("long", "etch", "etch_clean", "sprawl", "sprawl_winnow", "sprawl_winnow_clean", "press", "fast", "light",
-                 "light_etch", "fam_machine_armoured", "fam_shadow_caster", "fam_mind_swarm", "fam_nature_bruiser"):
+                 "light_etch", "fam_machine_armoured", "fam_shadow_caster", "fam_mind_swarm", "fam_nature_bruiser",
+                 "fam_body_armoured", "fam_spirit_caster", "boss_thorn_regent", "boss_forge_colossus", "boss_void_reaper",
+                 "boss_spirit_matron", "boss_crystal_lich", "boss_lumen_angel"):
         if not os.path.exists(n(take) + ".log"):
             continue
         rows = trace(n(take), "mark-draw")

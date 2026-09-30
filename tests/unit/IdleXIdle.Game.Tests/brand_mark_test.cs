@@ -257,8 +257,10 @@ public class brand_mark_test
                 var (carveA, carveL) = Cell(k, MarkRecipe.Carve0 + step);
                 var drawn = carveA.Count(v => v >= 8);
                 Assert.True(drawn > 0, $"depth {k} step {step} is empty");
-                // (spread -> depth 1, SPRAWL + WINNOW's quiet step, widens the whole thin spread cut: most of it is new)
-                Assert.True(drawn < whole * (k == 1 ? 0.85f : 0.6f), $"depth {k} step {step} draws {drawn} of the mark's {whole}: the whole mark, not its new cut");
+                // (spread -> depth 1, SPRAWL + WINNOW's quiet step, widens the whole thin spread cut: most of it is new;
+                // depth 3 is TORN, its pieces moved, so about two thirds of its picture is new and the tear is cut under
+                // the beat -- dark ink, its lit rim 90 px against depth 2's 63; still never the whole mark)
+                Assert.True(drawn < whole * (k == 1 ? 0.85f : k == 3 ? 0.75f : 0.6f), $"depth {k} step {step} draws {drawn} of the mark's {whole}: the whole mark, not its new cut");
                 for (var i = 0; i < carveA.Length; i++) swept[i] |= carveA[i] >= 8;
                 Assert.Empty(Enclosed(carveA));
                 // step 0 is INK gathering where the new cut will be: dark, nothing lit
@@ -576,6 +578,14 @@ public class brand_mark_test
             Assert.InRange(s, Brand.MinScale, Brand.MaxScale);
         }
         Assert.Equal(1f, etch.ScaleFor(214f), 3);   // a whelp's canonical body: the coil's 60 px box, 3 px a logical pixel
+        // THE CAP (measured, brand_scale_table.py): a larger host never gets a larger mark. The visible heights of the
+        // whelp (245), a caster (331), an armoured (390), a bruiser (474) and a boss (521), from the geometry dump.
+        foreach (var h in new[] { 245f, 331f, 390f, 474f, 521f })
+            Assert.Equal(1f, etch.ScaleFor(h), 3);
+        // at the cap DEPTH 3's whole visible extent (cut and stain, 72 x 63 atlas px at scale 1) stays a localized wound:
+        // at most a fifth of a caster's height, an eighth of a boss's
+        Assert.True(63f * Brand.MaxScale / 331f <= 0.2f);
+        Assert.True(63f * Brand.MaxScale / 521f <= 0.125f);
     }
 
     [Fact]

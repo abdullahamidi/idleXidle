@@ -796,6 +796,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private bool _isBossWave;
     /// <summary>Dev fixture (F6 / RH_SHOT_MODE=boss): render the current wave as the Crystal Lich boss.</summary>
     public bool DevForceBoss { get; set; }
+    /// <summary>Dev fixture (RH_SHOT_BOSS): which boss a forced boss wave draws; the Crystal Lich unless a fixture names another.</summary>
+    public string DevBossArtKey { get; set; } = "crystal_lich";
     /// <summary>Dev boss-bounds overlay (F7): draws ground pivot / body / full / arena rects (Rev 5 §17).</summary>
     public bool DevBossDebug { get; set; }
 
@@ -3684,7 +3686,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         => BossArt is { } k && _ui.Assets.Has(k.IdleStrip) ? k.IdleStrip : null;
 
     /// <summary>Which boss this wave draws — the dev fixture's, or the region's.</summary>
-    private BossLook? BossArt => DevForceBoss ? EnemyPresentation.BossByArtKey("crystal_lich") : EnemyPresentation.BossFor(RegionId);
+    private BossLook? BossArt => DevForceBoss ? EnemyPresentation.BossByArtKey(DevBossArtKey) : EnemyPresentation.BossFor(RegionId);
 
     /// <summary>The creature the sim is hitting: the first alive one, else the one that died last.</summary>
     private int TargetSlot()

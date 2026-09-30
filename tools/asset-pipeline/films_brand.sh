@@ -19,6 +19,7 @@
 #                        sprawl_winnow_tick / _off: every frame round its 4000 tick, with and without the mark
 #   <tag>/sprawl_winnow_clean (+ _tick / _tick_off)  the same with WILT in JAWS's slot: the ripple at full strength
 #   <tag>/fam_<source>_<archetype>  BRAND on another region's creature (the authored body point on other families)
+#   <tag>/boss_<art key>  ETCH on each of the six bosses (RH_SHOT_BOSS; one boss with 6000 health, so the third tick lands), WILT in JAWS's slot
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 TAG=${1:-current}; shift
 OUT=build/shots/brand/$TAG
@@ -69,8 +70,12 @@ want sprawl_winnow_clean && film sprawl_winnow_clean "$CLEAN" 0.5 330 2 0 RH_SHO
 want sprawl_winnow_clean_tick && film sprawl_winnow_clean_tick "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
 want sprawl_winnow_clean_tick_off && film sprawl_winnow_clean_tick_off "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW RH_MARK_RECIPES=0
 # OTHER FAMILIES: the authored body point on creatures the reference fight never shows
-for fam in Machine:Armoured Shadow:Caster Mind:Swarm Nature:Bruiser; do
+for fam in Machine:Armoured Shadow:Caster Mind:Swarm Nature:Bruiser Body:Armoured Spirit:Caster; do
   src=${fam%%:*}; arch=${fam##*:}; name="fam_$(echo "$src" | tr 'A-Z' 'a-z')_$(echo "$arch" | tr 'A-Z' 'a-z')"
-  want "$name" && film "$name" "$BASE" 0.5 150 2 0 RH_SHOT_SOURCE="$src" RH_SHOT_ARCHETYPE="$arch" RH_SHOT_VARIATION=sign_brand:ETCH
+  want "$name" && film "$name" "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE="$src" RH_SHOT_ARCHETYPE="$arch" RH_SHOT_VARIATION=sign_brand:ETCH
+done
+# THE SIX BOSSES (RH_SHOT_BOSS draws the wave as that boss): ETCH from its first cut to DEPTH 3, the whole creature
+for boss in thorn_regent forge_colossus void_reaper spirit_matron crystal_lich lumen_angel; do
+  want "boss_$boss" && film "boss_$boss" "$CLEAN" 0.5 330 2 0 RH_SHOT_BOSS="$boss" RH_SHOT_CREATURES=1 RH_SHOT_ENEMY=6000,6 RH_SHOT_VARIATION=sign_brand:ETCH
 done
 exit 0

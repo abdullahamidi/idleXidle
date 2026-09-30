@@ -712,6 +712,16 @@ black host the dark incision cannot show (the mark there is its violet wall and 
 the coil's size on large hosts (the Nature bruiser at scale 2.33) is the first slice's; no boss fight can be posed by the
 capture rig (a still of the six bosses stands in); no BRAND sound yet (after visual acceptance).
 
+### The final visual correction: a torn DEPTH 3 and a capped size (2026-10-01, awaiting the owner's review)
+
+From 97efe379 the owner named exactly two faults and asked for nothing else to move. Evidence
+`production/qa/evidence/brand-fix/`; review page https://claude.ai/artifact/7MGguQQXQfwXE4vRGx5PkS.
+
+| Fault | The correction |
+|---|---|
+| DEPTH 3 read as a letter / number / rune / eye | UNPRIMED reads ("what does this mark look like?", nothing suggested) named the 97efe379 curl "a spiral", "@", "6", "G", "a target". Cutting its INSIDE did not help (two further rounds: "broken spiral", "@", "6", "snail shell", "cracked rune", "eye socket"): pieces laid along one curl are completed by the eye. DEPTH 3 is now TORN (`seeker_brand_cut.py`, DESIGN B, depth 3 only): the curl's four pieces, with new breaks, tapered torn ends and a wandering width, are each SHIFTED on their own (`torn`), so they no longer continue one curve; the branch that met a gash's end in a 'Y' is healed (`healed`); no scrap of incision under six texels (`least_core`: a lone black texel read as a pupil). Four fresh readers then said "bruise / stain", "torn smear", "splatter", "irregular damage" and named no eye, face or spiral; a confirmation read on the filmed game frames is in the evidence. DEPTH 1 and DEPTH 2 are byte-identical to 97efe379. The deepen into DEPTH 3 is the tear: its beat covers the moved pieces (about two thirds of the picture, dark ink; its lit rim 90 px against DEPTH 2's 63). |
+| The mark too large on large hosts | MEASURED, not guessed: the front creature's visible body from the game's geometry dump on all 24 family cells and the six bosses (new capture dial `RH_SHOT_BOSS=<art key>`, presentation only), the mark's extent from the atlas (`tools/asset-pipeline/brand_scale_table.py`). Hosts grow tall faster than their torsos grow wide: at the old cap (3) the casters' mark was 49-61 % of their width at 1.67 and bruisers and bosses got 168 x 147 px at 2.33. 4/3 still left casters at 40-49 %. `MarkRecipe.MaxScale` is now 1 (the whelp's own scale): bruisers 13 % of their height, bosses 12 %, casters 30-37 % of their (staff-wide) visible width; the whelp, the pale Choir wisp and every swarm unchanged. No per-enemy case, no new mechanism. |
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:

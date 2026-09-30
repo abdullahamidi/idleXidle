@@ -2988,6 +2988,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                             ? n
                             : throw new InvalidOperationException(
                                 $"RH_SHOT_CREATURES='{shotCount}' is not a positive creature count.");
+                    // RH_SHOT_BOSS=<art key> draws the fight's wave as that boss (thorn_regent, forge_colossus,
+                    // void_reaper, spirit_matron, crystal_lich, lumen_angel), so a state carried on a boss's
+                    // body -- BRAND's mark -- can be filmed on each of the six. Presentation only, like the
+                    // `boss` mode's DevForceBoss it sets; the fight's numbers are the seeded wave's.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_BOSS")?.Trim() is { Length: > 0 } shotBoss)
+                    {
+                        if (EnemyPresentation.BossByArtKey(shotBoss) is null)
+                            throw new InvalidOperationException($"RH_SHOT_BOSS='{shotBoss}' is not a boss art key.");
+                        _expedition.DevForceBoss = true;
+                        _expedition.DevBossArtKey = shotBoss;
+                    }
                     if (Environment.GetEnvironmentVariable("RH_SHOT_ARCHETYPE")?.Trim() is { Length: > 0 } shotArch)
                         _expedition.DevArchetype = Enum.TryParse<Archetype>(shotArch, ignoreCase: true, out var arch)
                             ? arch
