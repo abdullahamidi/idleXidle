@@ -147,10 +147,10 @@ public sealed class MarkPerformance
         if (_firstFront < 0) return;
         if (wholeWave)
         {
-            // SPRAWL: the mark HOPS down the row, creature to creature, each hop leaving as the one before LANDS. A creature
-            // that falls before its hop would land is passed over (no strand to a corpse); a strand leaves the latest
-            // creature that received it and is still standing (never a fallen one), or, with none, the coil forms with no
-            // strand at all
+            // SPRAWL: the condition PROPAGATES from its source: short ink threads branch out of the front's mark to every
+            // other creature near-simultaneously (each leaving SpreadStaggerMs after the one before), and the row etches
+            // almost at once. A creature that falls before its thread would land is passed over (no thread to a corpse);
+            // a thread never leaves a fallen source (with none standing, the mark forms with no thread at all)
             var received = new List<int>(n) { _firstFront };
             var leave = first + recipe.SpreadFromMs;
             var prevCatch = float.NegativeInfinity;
@@ -159,9 +159,7 @@ public sealed class MarkPerformance
                 if (s == _firstFront || _deathAt[s] <= first) continue;
                 var land = leave + recipe.FlightMs * 0.75f;
                 if (_deathAt[s] <= land) continue;
-                var from = -1;
-                for (var j = received.Count - 1; j >= 0 && from < 0; j--)
-                    if (_deathAt[received[j]] > leave) from = received[j];
+                var from = _deathAt[_firstFront] > leave ? _firstFront : -1;
                 _hopFrom[s] = from;
                 _hopAt[s] = leave;
                 _hopLand[s] = land;
@@ -171,7 +169,7 @@ public sealed class MarkPerformance
                 prevCatch = _hopCatch[s];
                 _chainOrder[s] = received.Count;
                 received.Add(s);
-                leave = land + recipe.SpreadFromMs;
+                leave += recipe.SpreadStaggerMs;
             }
             return;
         }
@@ -187,7 +185,9 @@ public sealed class MarkPerformance
         {
             var fell = _deathAt[host];
             if (float.IsPositiveInfinity(fell)) break;
-            var lands = fell + recipe.FlightFromMs + recipe.FlightMs;
+            // the mark seeps in on the new front once its own bite has played out (the deepen's rule: under a bite the
+            // etch-in went unseen)
+            var lands = SettledStart(fell + recipe.FlightFromMs + recipe.FlightMs, recipe.TransferSettleMs);
             var next = FrontAt(lands);
             if (next < 0) break;   // nobody is left standing: the coil comes apart and nothing receives it
             _hostSlot[_hostCount] = next;
@@ -207,17 +207,18 @@ public sealed class MarkPerformance
     /// body: clear of every bite's wind-up (<see cref="MarkRecipe.SettleBeforeMs"/> before the strike) and its attack clip
     /// (<see cref="MarkRecipe.SettleMs"/> after it).
     /// </summary>
-    internal float SettledStart(float fromMs)
+    internal float SettledStart(float fromMs, float? afterMs = null)
     {
+        var after = afterMs ?? Recipe.SettleMs;
         var start = fromMs;
         var span = Recipe.CarveStepMs * 3f;
         for (var pass = 0; pass < 8; pass++)
         {
             var moved = false;
             for (var i = 0; i < _strikes.Length; i++)
-                if (_strikes[i] - Recipe.SettleBeforeMs < start + span && _strikes[i] + Recipe.SettleMs > start)
+                if (_strikes[i] - Recipe.SettleBeforeMs < start + span && _strikes[i] + after > start)
                 {
-                    start = _strikes[i] + Recipe.SettleMs;
+                    start = _strikes[i] + after;
                     moved = true;
                 }
             if (!moved) break;
@@ -326,8 +327,8 @@ public sealed class MarkPerformance
     /// as the screen draws it: applied, waiting for the smoke, re-formed)?</summary>
     public bool Carries(int slot, float playheadMs) => TryPhase(slot, playheadMs, out _) != MarkPhase.None;
 
-    /// <summary>The atlas column the coil on a body shows at this phase: a GATHER cell while it forms, a FORM cell while it
-    /// is drawn in after a migration, else the stepped swirl.</summary>
+    /// <summary>The atlas column the mark on a body shows at this phase: a GATHER cell while it forms, a FORM cell while
+    /// it seeps in after a transfer, else the idle cell of its (slow, per-creature) step.</summary>
     public int ColumnAt(int slot, MarkPhase phase, float u, float playheadMs)
     {
         var r = Recipe;
@@ -394,8 +395,9 @@ public sealed class MarkPerformance
 
     /// <summary>
     /// The beat on <paramref name="slot"/> at <paramref name="playheadMs"/>: the atlas <paramref name="column"/> drawn hot
-    /// and its opacity (0: none). APPLY lights the whole cut once, ON the tick. A DEEPEN runs the chisel (three stretches
-    /// of the NEW cut travelling round the ring, the last one cooling) whenever the coil's shown stage moves deeper: a
+    /// and its opacity (0: none). APPLY catches the cut's rim and outer edge once, ON the tick. A DEEPEN runs its phrase
+    /// (ink gathering where the new cut will be, the new cut, its rim answering, then a short cooling) whenever the mark's
+    /// shown stage moves deeper: a
     /// tick that deepened it (once the host's own bite settles), ANCHOR's new front at the fall, and the CATCH-UP once a
     /// migrated coil is whole again, if the mark deepened while it was carried; a depth that rose inside a stage runs it
     /// faintly; a re-formed coil at the same depth is cut once, faintly, when it is whole. A tick that changes nothing
@@ -555,9 +557,9 @@ public sealed class MarkPerformance
         var halo = CellSrc(r.HaloRow0 + stage, column);
         if (phase == MarkPhase.Waiting)
         {
-            // Core already amplifies it: a faint smoke gathering on it, thickening as the strand comes in
+            // Core already amplifies it: a dark ink stain gathering on it, thickening until the mark seeps in
             var ramp = Math.Clamp(1f + u / r.WaitingRampMs, r.WaitingFloor, 1f);
-            b.Draw(atlas, dest, halo, r.Smoke * (r.SmokeAlpha * r.WaitingSmokeAlpha * ramp));
+            b.Draw(atlas, dest, halo, r.Ink * (r.InkAlpha * r.WaitingSmokeAlpha * ramp));
             SpriteCount++;
             return;
         }
@@ -620,6 +622,7 @@ public sealed class MarkPerformance
                     DrawFlight(b, atlas, _hopFrom[s], s, playheadMs - _hopAt[s], _hopLand[s] - _hopAt[s]);
             return;
         }
+        if (!r.TransferThread) return;   // a transfer draws no bridge: the old mark collapses, the new one seeps in
         for (var k = 1; k < _hostCount; k++)
             DrawFlight(b, atlas, _hostFromSlot[k], _hostSlot[k], playheadMs - (_hostFall[k] + r.FlightFromMs), r.FlightMs);
     }

@@ -13,27 +13,28 @@ namespace IdleXIdle.Game.Presentation;
 /// </summary>
 /// <remarks>
 /// <para>
-/// THE ETCHED SHADOW BRAND: a lopsided coil (its silhouette from PixelLab, its path redrawn at the game's pixel material
-/// by tools/asset-pipeline/v2/seeker_brand.py) cut INTO the host's body at its torso. Three layers from one atlas: a HALO
-/// of smoky roots drawn twice (near-black ink that reads on a light body, a lit lavender-grey smoke that reads on a dark
-/// one), then the CUT, a translucent groove whose lit core glows only along a slowly travelling third of the coil. It is
-/// drawn in the creature loop, right after the creature and before its hit flash, so a creature standing in front covers
-/// it and a hit whitens body and brand together.
+/// THE ETCHED SHADOW CUT (the second pass, 2026-09-30; the first slice's lit lavender spiral read as an eye, a rune, a
+/// glowing line on top): a BROKEN ASYMMETRIC SCAR-SPIRAL (the first slice's coil gesture, from a PixelLab silhouette,
+/// redrawn by tools/asset-pipeline/v2/seeker_brand_cut.py: its outer contour broken, its weight on one side, its centre
+/// never a dot, small scar branches) cut INTO the host's body at its torso. DARK FIRST, LIGHT SECOND: the incision is
+/// near-black with dark-violet walls and ONE lit rim on its light-facing (upper-left) edge, a minority of the mark; a dark
+/// ink stain round it (the lit smoke kept faint). On a dark body the rim carries it, on a light body the incision does.
+/// It is drawn in the creature loop, right after the creature and before its hit flash, so a creature standing in front
+/// covers it and a hit whitens body and brand together.
 /// </para>
 /// <para>
 /// THE MOMENTS, all read from the fight (BRAND is a field: its Aura tick opens the mark, its Marked event reports the
 /// depth in force, and the host is the front creature Core amplifies, or every creature under SPRAWL):
-/// APPLY on the wave's first tick (smoke gathers on the body in an irregular cloud and condenses into the coil; the
-/// whole cut lights once ON the tick); IDLE (the translucent coil, its lit third crawling round it; no pulse, no ring);
-/// REFRESH (a tick that changes nothing shows nothing); DEEPEN (the depth in force crossed a stage: the coil is cut
-/// deeper, every step more of the body: its ring's wall cut further in toward the hollow while the thin inner hook keeps a
-/// dark channel of its own; the old cut holds while the host's own bite settles, then a CHISEL of light lights only the
-/// new cut, travelling round the ring, and the new stage appears under it; never the whole coil brightening, never a lit
-/// knot); MIGRATE (the host falls: the coil comes apart into smoke on the dying body, a strand of
-/// overlapping smoke puffs carries it, sagging under the creatures' heads, to the new front's coil tip, and the coil is
-/// drawn in from there, AT THE SAME DEPTH; the new front already carries a faint smoke while it flies, as Core
-/// amplifies it at once);
-/// SPREAD (SPRAWL: the mark hops down the row, creature to creature). BRAND has no consume: none is drawn.
+/// APPLY on the wave's first tick (ink motes gather, a dark stain condenses into the cut, its rim and outer edge catch
+/// ON the tick and it settles dark within ~200 ms); IDLE (the same cut; the stain drifts by a texel, one edge shimmers
+/// once in six steps; no pulse, no travelling light); REFRESH (a tick that changes nothing shows nothing); DEEPEN
+/// (THREE VISIBLE DEPTHS -- marked, deeper, fully branded -- quantizing the gameplay depths: the existing cut widens,
+/// its inner curl runs on, scar branches appear, the stain gains density; the phrase: ink gathers where the new cut will
+/// be, the new cut appears, its rim answers, settled by ~170 ms, after the host's own bite; never brighter, never a
+/// flash); TRANSFER (the host falls: the old mark collapses into its own dark centre while the death presents; the new
+/// front, which Core marks at once, carries a dark stain and the same mark seeps in on it; no bridge between the bodies);
+/// SPREAD (SPRAWL: the source's mark branches short ink threads out to the row, which etches near-simultaneously). BRAND
+/// has no consume: none is drawn.
 /// </para>
 /// </remarks>
 public sealed class MarkRecipe
@@ -41,7 +42,7 @@ public sealed class MarkRecipe
     /// <summary>A name for traces and tests.</summary>
     public string Id { get; init; } = "";
 
-    // ── THE PARTS (tools/asset-pipeline/v2/seeker_brand.py; keypose_sources/seeker_brand_spans.json pins the cells) ──
+    // ── THE PARTS (tools/asset-pipeline/v2/seeker_brand_cut.py; keypose_sources/seeker_brand_spans.json pins the cells) ──
 
     /// <summary>
     /// ONE atlas, so a brand costs no texture switch: the CUT cells in <see cref="Stages"/> rows of <see cref="Columns"/>
@@ -53,17 +54,19 @@ public sealed class MarkRecipe
     /// <summary>One cell's size, runtime px (28 logical px of 3).</summary>
     public int Cell { get; init; } = 84;
 
-    /// <summary>The depth stages, one atlas row each: spread, base, deep1..deep4.</summary>
-    public int Stages { get; init; } = 6;
+    /// <summary>The depth stages, one atlas row each: the spread cut, then THREE VISIBLE DEPTHS (marked, deeper, fully
+    /// branded). The gameplay depths are untouched; the picture is quantized (the player reads marked, deeper, fully
+    /// branded, never a percentage).</summary>
+    public int Stages { get; init; } = 4;
 
-    /// <summary>The cells per stage: gather x3, idle x6 (the swirl), edge, carve x3, form x3, loosen x2.</summary>
+    /// <summary>The cells per stage: gather x3, idle x6, edge, carve x3, form x3, loosen x2.</summary>
     public int Columns { get; init; } = 18;
 
     /// <summary>The first HALO row.</summary>
-    public int HaloRow0 { get; init; } = 6;
+    public int HaloRow0 { get; init; } = 4;
 
     /// <summary>The THREAD puffs' row, runtime px from the top.</summary>
-    public int ThreadY { get; init; } = 1008;
+    public int ThreadY { get; init; } = 672;
 
     /// <summary>One thread puff's cell, runtime px.</summary>
     public int ThreadCell { get; init; } = 24;
@@ -123,11 +126,12 @@ public sealed class MarkRecipe
     // ── THE DEPTH LADDER: a stage is a function of the depth IN FORCE (the Marked event's percent) ───────────────────
 
     /// <summary>
-    /// The lowest percent of each stage above the first: under 50 the SPREAD coil (SPRAWL's half strength), under 100 the
-    /// BASE brand (BRAND's +70), then the deep stages at 100, 150, 200 and 240 (ETCH 120 / 170 / 220 / 240, SINK 150 /
-    /// 230, GRAVEN to 320). The same depth is always the same picture, whichever variation reached it.
+    /// The lowest percent of each stage above the first: under 50 the SPREAD cut (SPRAWL's half strength); DEPTH 1 from
+    /// 50 (BRAND's +70, ETCH's 120), DEPTH 2 from 150 (ETCH's 170, SINK's 150), DEPTH 3 from 200 (ETCH's 220 and 240,
+    /// SINK's 230, GRAVEN to 320: the final readable silhouette, nothing is added past it). The same depth is always the
+    /// same picture, whichever variation reached it.
     /// </summary>
-    public IReadOnlyList<int> StageFloors { get; init; } = new[] { 50, 100, 150, 200, 240 };
+    public IReadOnlyList<int> StageFloors { get; init; } = new[] { 50, 150, 200 };
 
     /// <summary>The stage a depth in force is drawn at (0 spread .. <see cref="Stages"/> - 1).</summary>
     public int StageOf(int percent)
@@ -140,8 +144,9 @@ public sealed class MarkRecipe
 
     // ── PALETTE (the art is grey; these tint it; never white) ──────────────────────────────────────────────────────
 
-    /// <summary>The groove: condensed shadow smoke, a quiet lavender-violet. At rest its translucent body reads ~73 luma
-    /// on a near-black body and its travelling lit third ~116 (a whelp's own violet rim is ~55).</summary>
+    /// <summary>The cut's tint. The atlas bakes its value: the incision near-black (~11 luma: a cut filled with Shadow,
+    /// darker than a light host), its walls dark violet (~42), and ONE lit rim on the light-facing edge (~116): on a dark
+    /// body the rim carries the mark, on a light body the incision does.</summary>
     public Color Groove { get; init; } = new(136, 108, 196);
 
     /// <summary>A beat's lit line (the apply, the chisel, the re-cut): a paler lavender drawn OVER the groove (alpha, not
@@ -154,11 +159,12 @@ public sealed class MarkRecipe
     /// <summary>The halo's opacity as ink.</summary>
     public float InkAlpha { get; init; } = 0.85f;
 
-    /// <summary>The halo drawn again as lit SMOKE: a lavender-grey, the living smoke that reads on a dark body.</summary>
+    /// <summary>The halo drawn again as lit SMOKE: a lavender-grey, kept faint (the stain is dark first; lit smoke round
+    /// the first slice's line made it a glow).</summary>
     public Color Smoke { get; init; } = new(110, 92, 160);
 
     /// <summary>The halo's opacity as smoke.</summary>
-    public float SmokeAlpha { get; init; } = 0.6f;
+    public float SmokeAlpha { get; init; } = 0.18f;
 
     // ── APPLY (u = playhead - the wave's first tick: the cut is true ON the tick) ───────────────────────────────────
 
@@ -179,7 +185,7 @@ public sealed class MarkRecipe
     public float EtchAlpha { get; init; } = 0.8f;
 
     /// <inheritdoc cref="EtchAlpha"/>
-    public float EtchMs { get; init; } = 220f;
+    public float EtchMs { get; init; } = 200f;
 
     /// <summary>A quiet beat's share of the lit line (an action's contact, a JAWS bite or a PRESS crush close by).</summary>
     public float QuietShare { get; init; } = 0.5f;
@@ -194,14 +200,16 @@ public sealed class MarkRecipe
 
     // ── DEEPEN ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The chisel: each of its three steps (the lit stretch travelling inward), then the last one cooling.</summary>
-    public float CarveStepMs { get; init; } = 60f;
+    /// <summary>The DEEPEN phrase, three steps then a short cooling: ink gathers where the new cut will be (0), the new
+    /// cut appears with its rim (1, the deeper depth shown from its end), the rim answers (2), settled by ~170 ms. No
+    /// flash, no pulse ring: the same wound became deeper.</summary>
+    public float CarveStepMs { get; init; } = 40f;
 
     /// <summary>The chisel's opacity, and how long its last step (the new cut) takes to cool.</summary>
     public float DeepenEdgeAlpha { get; init; } = 0.8f;
 
     /// <inheritdoc cref="DeepenEdgeAlpha"/>
-    public float DeepenEdgeMs { get; init; } = 240f;
+    public float DeepenEdgeMs { get; init; } = 50f;
 
     /// <summary>A depth that rose inside one stage (WINNOW's +10): the chisel runs again, faintly.</summary>
     public float RetraceAlpha { get; init; } = 0.3f;
@@ -211,6 +219,20 @@ public sealed class MarkRecipe
     /// <summary>The coil coming apart on the fallen host (LOOSEN cells 0 then 1, the second cooling), pinned at its
     /// STANDING torso on the death clip; the killing blow's flash covers its first ~120 ms.</summary>
     public float LoosenMs { get; init; } = 220f;
+
+    /// <summary>A TRANSFER draws no bridge (the default): the old mark collapses into its own dark centre on the falling
+    /// host while the death presents, and the same mark seeps in on the new front; a strand competed with the death smoke
+    /// and passed the next creature's face. SPRAWL's spread keeps its short ink threads.</summary>
+    public bool TransferThread { get; init; }
+
+    /// <summary>A transfer's etch-in waits this long after a bite on the new front (not the deepen's
+    /// <see cref="SettleMs"/>): past the bite's clip AND the reaction it draws (JAWS snaps ~333 ms after the contact and
+    /// its white-hot flash has cooled by ~500), still clear of the next bite's wind-up.</summary>
+    public float TransferSettleMs { get; init; } = 520f;
+
+    /// <summary>SPRAWL: each further creature's thread leaves the source this long after the one before (near-simultaneous:
+    /// the source darkens, short ink threads branch outward, the row etches almost at once).</summary>
+    public float SpreadStaggerMs { get; init; } = 40f;
 
     /// <summary>When the smoke leaves the fallen host, and how long its lead puff takes to reach the new coil's tip.</summary>
     public float FlightFromMs { get; init; } = 60f;
@@ -246,7 +268,7 @@ public sealed class MarkRecipe
     /// <inheritdoc cref="ReformMs"/>
     public float ReformEtchAlpha { get; init; } = 0.5f;
 
-    /// <summary>SPRAWL: the mark hops down the row, each hop leaving this long after the previous hop LANDS.</summary>
+    /// <summary>SPRAWL: the first thread leaves the source this long after the first tick.</summary>
     public float SpreadFromMs { get; init; } = 20f;
 
     /// <summary>The smoke a creature carries while the strand is still on its way to it (Core amplifies it at once): the

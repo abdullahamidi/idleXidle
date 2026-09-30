@@ -57,6 +57,7 @@ want clean_tick && film clean_tick "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_br
 want clean_tick_off && film clean_tick_off "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
 want clean_tick6 && film clean_tick6 "$CLEAN" 4.5 72 1 0 RH_SHOT_VARIATION=sign_brand:ETCH
 want clean_tick6_off && film clean_tick6_off "$CLEAN" 4.5 72 1 0 RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
+want light_off && film light_off "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE=Spirit RH_MARK_RECIPES=0
 # ETCH ON A LIGHT BODY (the Pale Choir's): the deep stages' ink on a pale creature
 want light_etch && film light_etch "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE=Spirit RH_SHOT_VARIATION=sign_brand:ETCH
 # SPRAWL + WINNOW: a deepen on EVERY coil of the row (it must ripple, never flash the row)

@@ -4,11 +4,9 @@
   "grid": 28,
   "stages": [
     "spread",
-    "base",
-    "deep1",
-    "deep2",
-    "deep3",
-    "deep4"
+    "tier1",
+    "tier2",
+    "tier3"
   ],
   "columns": [
     "gather0",
@@ -32,8 +30,8 @@
   ],
   "thread_cell": 24,
   "thread_cells": 3,
-  "halo_row0": 6,
-  "thread_y": 1008,
+  "halo_row0": 4,
+  "thread_y": 672,
   "phases": 6,
   "centre": [
     44.0,
