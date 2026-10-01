@@ -745,6 +745,21 @@ Fresh reads were run five times and the structure revised after "a cross / a dag
 Evidence `production/qa/evidence/brand-glow/`; page https://claude.ai/artifact/DMw4pyqkKtUXQPBo6DvYdJ. Still the prototype pipeline (dev-only, several batches
 per cursed creature); no sound; not accepted.
 
+### Concept A polish: no beads, no garment, depth 1 on every host (2026-10-01, awaiting the owner's visual acceptance)
+
+From d2885245 the owner named three problems. The emission is now short tapered runs inside the dark veins (no dots,
+no round nodes), the steady light screened into the host and the dark body multiplied into it (a stain in the host's
+material, a violet-grey cast over the whole silhouette); the structure is an off-centre entry pocket and three
+territories ~120 degrees apart joined by one broken path and by smoke (a region, 1.3 : 1, never a band a garment
+could be read in); depth 1 always holds the pocket's hot core and two lit veinlets in a wider pocket SEATED IN THE
+BODY'S MASS (`ThickNear`: off a thin limb, a wrist, a hand or a weapon into silhouette at least 60 % as thick as its
+thickest; where it landed on a wrist or beside a hand it read as the creature's own magic or jewellery), with a
+HIGH-CONTRAST REGION SUITED TO THE HOST by its brightness (a dark host's tissue lit from inside by a screened violet
+haze, a pale host's bruise a deep saturated violet), never by a name. Fresh-read rounds on every intermediate build,
+one of them every host at depth 1, whole, at 100 %; the bead read and the seam read are gone; the generic costume
+guess on robed and armoured bosses is reduced, not gone (reported). Evidence
+`production/qa/evidence/brand-polish/`; page https://claude.ai/artifact/AEfLGCYB5anLk7WujnvK5n. Still the prototype pipeline; no sound; not accepted.
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:
