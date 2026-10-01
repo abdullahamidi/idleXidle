@@ -110,7 +110,7 @@ public sealed partial class CursePrototype
         _cracks = t.Cracks;
         _alphaTest = new AlphaTestEffect(device) { VertexColorEnabled = true, AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 90 };
         // the corruption's field is grown here, never on a Draw frame (built at the first apply, it cost one frame 160 MB)
-        if (concept == CurseConcept.Corruption) _corruption = CorruptionAtlas.For(device);
+        if (concept == CurseConcept.Corruption) _territories = TerritoryAtlas.For(device);
         for (var i = 0; i < _write.Length; i++)
         {
             _write[i] = new DepthStencilState
@@ -151,7 +151,9 @@ public sealed partial class CursePrototype
         _kind[slot] = 2;
         var stage = Math.Max(1, Mark.DrawnStage(slot, t));
         _stage[slot] = stage;
-        if (u >= 0f && u < FlareMs)
+        // (the corruption from its gather, u < 0: nothing is drawn until its bloom; drawn at rest there, the finished
+        // curse showed for 230 ms before the tick, vanished on it and bloomed again: code review, 2026-10-01)
+        if (u < FlareMs && (u >= 0f || Concept == CurseConcept.Corruption))
         {
             _flareKind[slot] = phase == MarkPhase.Apply ? (byte)1 : (byte)2;
             _flareAge[slot] = u;
@@ -164,7 +166,15 @@ public sealed partial class CursePrototype
             if (!Mark.Carries(slot, back)) break;
             if (Math.Max(1, Mark.DrawnStage(slot, back)) < stage)
             {
-                var age = k * 50f - 25f;
+                // the step's own moment, to under 2 ms (a 50 ms bin animated the whole deepen at 20 Hz)
+                float lo = back, hi = back + 50f;
+                for (var it = 0; it < 5; it++)
+                {
+                    var mid = 0.5f * (lo + hi);
+                    if (Mark.Carries(slot, mid) && Math.Max(1, Mark.DrawnStage(slot, mid)) < stage) lo = mid;
+                    else hi = mid;
+                }
+                var age = t - hi;
                 var e = Envelope(age);
                 if (e > _flare[slot]) { _flare[slot] = e; _flareKind[slot] = 3; _flareAge[slot] = age; }
                 break;
@@ -217,16 +227,17 @@ public sealed partial class CursePrototype
     /// ended, the stencil passes run, and it is reopened in the arena's own state).
     /// </summary>
     public void DrawOn(SpriteBatch b, int slot, float playheadMs, SpriteFrame frame, Rectangle body, Texture2D? mask,
-                       RasterizerState raster)
+                       RasterizerState raster, Color? tint = null)
     {
         if (slot < 0 || slot >= _kind.Length) return;
+        (_tint ??= new Color[_kind.Length])[slot] = tint ?? Color.White;
         _body[slot] = body;
         Prepare(slot, playheadMs);
         if (_kind[slot] == 0) return;
         Mark.TryAnchor(slot, out var anchor, out _);
         if (anchor == default) anchor = body.Center.ToVector2();
-        // the corruption's pocket sits in the body's mass, never on a thin limb, a wrist or a weapon
-        if (Concept == CurseConcept.Corruption) anchor = CorruptionSeat(slot, anchor, body, frame);
+        // the corruption's territories are seated in the body's mass, from the host's own silhouette
+        if (Concept == CurseConcept.Corruption) PrepareCorruption(b.GraphicsDevice, slot, anchor, body, frame);
         var device = b.GraphicsDevice;
         b.End();
         WriteStencil(b, device, slot, frame, raster);
@@ -237,7 +248,7 @@ public sealed partial class CursePrototype
             case CurseConcept.Withering: DrawWithering(b, slot, t, body, anchor, raster); break;
             default: DrawPossession(b, slot, t, body, frame, mask, raster); break;
         }
-        if (Concept == CurseConcept.Corruption) DrawCorruptionWisps(b, slot, t, body, anchor, raster);
+        if (Concept == CurseConcept.Corruption) DrawCorruptionWisps(b, slot, playheadMs, t, body, anchor, raster);
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, raster);
         DrawLoose(b, slot, t, body, anchor);
         Mark.CountCurse(SpriteCount, _stage[slot]);
@@ -247,11 +258,14 @@ public sealed partial class CursePrototype
     /// A FALLING host that carried the curse: the curse leaving it (drawn on its death frame, after it). Nothing when it
     /// did not carry it.
     /// </summary>
-    public void DrawLeaving(SpriteBatch b, int slot, float playheadMs, SpriteFrame frame, Texture2D? mask, RasterizerState raster)
+    public void DrawLeaving(SpriteBatch b, int slot, float playheadMs, SpriteFrame frame, Texture2D? mask, RasterizerState raster,
+                            Color? tint = null)
     {
         if (slot < 0 || slot >= _kind.Length) return;
         var died = Mark.DeathAt(slot);
         if (float.IsPositiveInfinity(died) || !Mark.Carries(slot, died - 1f)) return;
+        // the corruption never leaves a host that only waited for it (it wore no territory: a SPRAWL host that fell first)
+        if (Concept == CurseConcept.Corruption && Mark.TryPhase(slot, died - 1f, out _) == MarkPhase.Waiting) return;
         var age = playheadMs - died;
         if (age < 0f || age >= LeaveMs) return;
         var p = age / LeaveMs;
@@ -259,8 +273,6 @@ public sealed partial class CursePrototype
         var body = _body[slot].Width > 0 ? _body[slot] : frame.Dest;
         var stage = Math.Max(1, Mark.DrawnStage(slot, died - 1f));
         var anchor = Mark.TryAnchor(slot, out var a, out _) ? a : body.Center.ToVector2();
-        // (it leaves from where it sat: the last seat this slot was drawn with)
-        if (Concept == CurseConcept.Corruption && _seatShift is not null) anchor += _seatShift[slot];
         var device = b.GraphicsDevice;
         var refSlot = Math.Min(_write.Length - 1, 16 + slot);
         b.End();
@@ -271,7 +283,7 @@ public sealed partial class CursePrototype
             case CurseConcept.Corruption:
                 // the curse brightens once, then collapses back along its paths to the seat (its own passes)
                 b.End();
-                DrawCorruptionLeaving(b, slot, stage, age, VeinRect(anchor, body), body, _inside[refSlot], raster, frame);
+                DrawCorruptionLeaving(b, slot, stage, age, died, anchor, body, _inside[refSlot], raster, frame, tint ?? Color.White);
                 b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, _inside[refSlot], raster);
                 break;
             case CurseConcept.Withering:
@@ -288,13 +300,8 @@ public sealed partial class CursePrototype
         switch (Concept)
         {
             case CurseConcept.Corruption:
-                // a little dark smoke escapes from the seat as it collapses
-                for (var i = 0; i < 3; i++)
-                {
-                    var q = Math.Clamp(p * 1.4f - i * 0.1f, 0f, 1f);
-                    var at = anchor + new Vector2(MathF.Sin(i * 1.7f + p * 5f) * 8f, -q * body.Height * 0.4f);
-                    Puff(b, at, body.Height * (0.08f + 0.05f * q), Ink * (0.3f * (1f - q) * fade));
-                }
+                // its territories smoke out as they collapse
+                DrawCorruptionSmokeOut(b, slot, stage, p, anchor, body, fade);
                 break;
             case CurseConcept.Withering:
                 // ash falling off the collapsing body
@@ -467,8 +474,7 @@ public sealed partial class CursePrototype
         switch (Concept)
         {
             case CurseConcept.Corruption:
-                DrawCorruptionLoose(b, slot, t, body, anchor);
-                break;
+                break;   // its leaks are the territories' wisps (DrawCorruptionWisps)
             case CurseConcept.Withering:
             {
                 // ASH: a flake or two falling off the body at rest, a small shower on a flare

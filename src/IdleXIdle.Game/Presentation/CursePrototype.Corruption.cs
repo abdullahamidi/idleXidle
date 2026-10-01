@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using IdleXIdle.Game.Vfx;
@@ -7,52 +8,54 @@ using IdleXIdle.Game.Vfx;
 namespace IdleXIdle.Game.Presentation;
 
 /// <summary>
-/// CONCEPT A, LIVING SHADOW CORRUPTION (chosen by the owner 2026-10-01), the glow pass: dark Shadow veins as the BODY of
-/// the curse, a violet-magenta EMISSION on some of them as its second read, so a cursed creature is found at once even
-/// when it is near-black.
+/// CONCEPT A, LIVING SHADOW CORRUPTION (the owner's choice, 2026-10-01), the TERRITORY pass (owner's brief, from
+/// 9aa407fd): the curse is SEPARATE REGIONS OF THE BODY BECOMING CORRUPTED, never a vein network drawn across it. Long
+/// connected paths lined up with collars, robe edges and belts and read as "a sash", "a stole", "embroidery"; violet light
+/// laid over dark casters read as "its own aura". So the persistent state is now infected TERRITORIES, each one the
+/// host's own material changed (drained of its colour, darkened, its local variation flattened, violet-grey) with a
+/// restrained violet light from inside, a dark smoky tissue, a short vein fragment or two, and Shadow wisps that leak out
+/// of it past the silhouette.
 /// </summary>
 /// <remarks>
 /// <para>
-/// THE STRUCTURE (<see cref="CorruptionAtlas"/>): veins GROW along paths from the seat (each texel's birth is its path
-/// length, not its distance from the centre), from a few asymmetric roots, with wandering thickness, broken stretches,
-/// branches that die early and smoky blotches at some junctions; a vein that runs into another stops (no loop, no mesh:
-/// the first A read "a net / a web / a sigil"). Depth is REACH along the paths: more body, more branching, more infected
-/// regions, never simply more light.
+/// DEPTH IS HOW MUCH OF THE BODY IS INFECTED: one territory at depth 1, a second elsewhere on the body at depth 2, three
+/// or four at depth 3; never connected into a network (a deepen's propagation is a brief shadow travelling under the
+/// skin, gone when the new territory has bloomed).
 /// </para>
 /// <para>
-/// THE MATERIAL: dark first (the veins, a faint darkening of the body), violet second (an additive emission clipped to
-/// the body: only some segments glow, junction nodes more, the rest stay dark). At rest a slow breath and one section at a
-/// time gently answering. An apply, an arrival and a deepen grow the NEW paths with a bright front travelling through
-/// them only, then settle; the SPRAWL source lights before its victims ignite; a dying host brightens and collapses back
-/// along its paths.
+/// THE HOST DECIDES THE CONTRAST, by rule, never by name: its brightness (a dark host's territory is lit from inside, a
+/// pale host's bruise is deep), its colourfulness (the more colour, the more visibly a territory drains it) and how much
+/// native violet it already has (then the curse's light turns paler and the drain to ash, so it never reads as the
+/// creature's own violet). Territories are seated from the host's own silhouette (in its mass, apart, never three in a
+/// row, clear of the head and the feet).
 /// </para>
 /// </remarks>
 public sealed partial class CursePrototype
 {
-    // the dark body of a vein, and its light: violet-magenta at rest, hotter on a growing front
-    private static readonly Color VeinDark = new(22, 10, 38);
-
-    // THE STAIN (multiply): the curse DISCOLOURS the host's own material, keeping its folds and shading, instead of lying
-    // on top of it (drawn over pale cloth or armour, dark lines read as "embroidery", "stitching", "a sash", "trim").
-    // Veins stain it a deep bruised violet; the infected tissue round them a greyed lavender.
+    // ── THE MATERIAL ───────────────────────────────────────────────────────────────────────────────────────────────────
+    // the stain MULTIPLIED into the host (it discolours the host's own material, keeping its folds and shading): the vein
+    // fragments a deep bruised violet, the infected tissue a greyed lavender (on a pale host a deep saturated violet, laid
+    // twice: once, grey lavender read as "dirt", "a dye stain")
+    // (the probe: a lavender tissue and a full inner glow read as "a purple patch" laid on the creature; the HOST's
+    // drained material leads now, the tissue darkens it, the violet stays in the cracks)
     private static readonly Color VeinStain = new(46, 18, 78);
-    private static readonly Color BruiseStain = new(128, 92, 150);
+    private static readonly Color BruiseStain = new(92, 88, 100);
+    private static readonly Color PaleBruise = new(104, 96, 116);
     private static readonly Color WispSmoke = new(62, 34, 92);
     private static readonly Color AfflictedShade = new(150, 124, 176);
 
-    // DEPTH 1'S HIGH-CONTRAST REGION, suited to the host (a rule of its brightness, never of its name; fresh reads at
-    // depth 1, whole bosses at play size, 2026-10-01): on a PALE body the bruise is a deep SATURATED violet (the greyed
-    // lavender read as "dirt", "a smudge", "a dye stain" on pale cloth); on a DARK one the infected region is LIT from
-    // inside by a dim violet haze screened over it (multiplied, a bruise cannot show on black: "it nearly disappears")
-    private static readonly Color PaleBruise = new(104, 46, 168);
-    private static readonly Color TissueGlow = new(112, 44, 178);
+    // a dark host's territory faintly LIT FROM INSIDE (its flesh has already turned to ash: the drain carries it)
+    private static readonly Color TissueGlow = new(92, 84, 112);   // the ash's own faint light, barely violet
+    private const float TissueGlowShare = 0.35f;
 
-    /// <summary>
-    /// SCREEN for the curse's STEADY light: src x (1 - dst) + dst. It glows fully on a dark body and in the shadowed
-    /// folds and creases of a pale one, and fades where the host is already bright, so the light sits IN the host's
-    /// own shading instead of lying across it (additive light on pale cloth and armour read as "a ribbon", "a sash",
-    /// "a brooch", "painted trim"). The growing front keeps its additive flare.
-    /// </summary>
+    // the curse's light: violet-magenta; on a host already rich in violet it turns PALER, nearer white, so it never reads
+    // as more of the creature's own violet
+    private static readonly Color Emission = new(168, 70, 236);
+    private static readonly Color EmissionPale = new(206, 178, 246);
+    private static readonly Color EmissionHot = new(236, 150, 255);
+
+    /// <summary>SCREEN for the steady light: it glows on a dark body and in the folds of a pale one, and fades where the
+    /// host is already bright, so the light sits IN the host's shading instead of lying across it.</summary>
     private static readonly BlendState Screen = new()
     {
         Name = "CursePrototype.Screen",
@@ -75,97 +78,170 @@ public sealed partial class CursePrototype
         AlphaDestinationBlend = Blend.One,
         AlphaBlendFunction = BlendFunction.Add,
     };
-    private static readonly Color Emission = new(168, 70, 236);
-    private static readonly Color EmissionHot = new(236, 150, 255);
 
-    private const float GrowMs = 540f;          // an apply / arrival grows the curse in over this
-    private const float DeepenGrowMs = 420f;    // a deepen grows its new paths over this
+    // ── TIMING ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+    private const float GrowMs = 520f;          // an apply blooms its first territory over this
+    private const float ArriveGrowMs = 460f;    // an arrival (a transfer, a hop) blooms every territory it carries
+    private const float ArriveStaggerMs = 70f;  // ... one after another
+    private const float TravelMs = 170f;        // a deepen: the shadow travelling under the skin to the new territory
+    private const float DeepenGrowMs = 400f;    // ... then the new territory blooms
+    private const float DeepenStaggerMs = 90f;  // (depth 3's two new territories, one after the other)
     private const float SettleMs = 380f;        // then the extra light settles
-    private const float IdleEmission = 0.85f;   // the resting emission (the same at every depth: the reach is the depth)
-    private const float FrontPeak = 0.72f;      // a growing front at its brightest (0.95 took the deepen to depth 3 above PRESS)
+    private const float IdleEmission = 0.85f;   // the resting emission
+    private const float FrontPeak = 0.72f;      // a blooming front at its brightest (0.95 took the old deepen above PRESS)
     private const float QuietShare = 0.55f;     // beside an action, a reaction or the field's crush
     private const float ArrivalShare = 0.55f;   // a transfer's / a hop's awakening, against the apply
 
-    private CorruptionAtlas? _corruption;
+    /// <summary>At most this many territories on one host (depth 3 shows three or four, as the body allows).</summary>
+    internal const int MaxTerritories = 4;
 
-    private CorruptionAtlas Corruption(GraphicsDevice device) => _corruption ??= CorruptionAtlas.For(device);
+    /// <summary>Territories shown at a depth: one, two, then as many as the body holds (three or four).</summary>
+    internal static int TerritoriesAt(int stage) => stage <= 0 ? 0 : stage == 1 ? 1 : stage == 2 ? 2 : MaxTerritories;
 
-    /// <summary>Each creature's corruption is the grown field mirrored on alternate slots (a row is never a stamp).</summary>
-    private SpriteEffects _veinFlip;
+    private TerritoryAtlas? _territories;
 
-    /// <summary>The field runs along the body's LONG axis: grown upright, it is turned a quarter on a body wider than it
-    /// is tall (a whelp), so the corruption spreads along the torso and never round a waist.</summary>
-    private float _veinTurn;
+    private TerritoryAtlas Territories(GraphicsDevice device) => _territories ??= TerritoryAtlas.For(device);
 
-    private void V(SpriteBatch b, Texture2D tex, Rectangle r, Color c)
+    // ── THE HOST ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>What a host is made of, read once per strip: its mean brightness, its colourfulness (mean chroma of its
+    /// opaque pixels, 0..1) and its native violet (the share of its coloured pixels that are blue-violet to magenta).</summary>
+    internal readonly record struct HostLook(float Luma, float Chroma, float Violet);
+
+    private sealed class HostEntry
     {
-        var half = CorruptionAtlas.N * 0.5f;
-        b.Draw(tex, r.Center.ToVector2(), null, c, _veinTurn, new Vector2(half, half), r.Width / (float)CorruptionAtlas.N, _veinFlip, 0f);
-        SpriteCount++;
+        public HostLook Look;
+        public Texture2D Drained = null!;
+        public byte[] Alpha = null!;
+        public byte[] Change = null!;   // how visibly each pixel changes when drained (0..255)
+        public int Width;
     }
 
-    private void Orient(int slot, Rectangle body)
-    {
-        var flip = slot % 2 == 1;
-        _veinFlip = flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        // on a wide body the field is turned so its own long axis (~5 degrees in the
-        // texture, measured) runs along the torso; turned a flat quarter, the territories fell off a whelp's silhouette
-        _veinTurn = body.Width > body.Height * 1.05f ? (flip ? WideTurn : -WideTurn) : 0f;
-    }
-
-    /// <summary>The field's long axis in the texture (upper territory to lower), which a wide body turns level.</summary>
-    private const float WideTurn = 0.09f;   // measured: the depth-3 coverage's principal axis, 5 degrees off level (ratio 1.27)
-
-    private Rectangle VeinRect(Vector2 seat, Rectangle body)
-    {
-        // SIZED BY THE WHOLE BODY, never stretched to its width (stretched, a trunk crossing a narrow waist became a band
-        // from side to side: "a belt", "a sash tied round the waist"); capped so a boss's curse stays a curse
-        // (the same share of a large body as of a small one, up to 660 px: capped lower, on a boss it was a patch the
-        // size of a belt buckle or a brooch and read as one; spread over several regions it is no garment)
-        var size = Math.Clamp(MathF.Sqrt(body.Width * (float)body.Height) * 1.4f, 240f, 660f);
-        return new Rectangle((int)(seat.X - size / 2), (int)(seat.Y - size / 2), (int)size, (int)size);
-    }
+    private static readonly Dictionary<Texture2D, HostEntry> HostCache = new();
 
     /// <summary>
-    /// HOST-AWARE LIGHT (a rule of the host's brightness, never of its name): the violet emission's share on this body.
-    /// Additive light GLOWS on a dark body but only TINTS a pale one, where a lit knot read as "a brooch", "a bow", "a
-    /// knot of yarn" and a lit line as "a ribbon", "a cord" (fresh reads, 2026-10-01): full on a dark body, about half
-    /// on a pale one, where the dark corruption leads.
+    /// The host's look and its DRAINED copy (every pixel through <see cref="DrainPixel"/>, alpha kept), built once per
+    /// strip texture: a prototype's read-back (the production path is one shader pass, after the picture is approved).
     /// </summary>
-    private static float LightFor(float luma)
+    private static HostEntry Host(GraphicsDevice device, Texture2D tex)
     {
-        // (the screened light already fades on bright pixels, per pixel; the host rule trims the additive front a little
-        // on a pale body, where it was the loudest, and on a near-black body LETS THE VIOLET CARRY THE STATE: up to 1.4x,
-        // since the dark corruption cannot show on black and the violet sat close to such a host's own outline)
-        var p = Math.Clamp((luma - 0.35f) / 0.35f, 0f, 1f);
-        var dark = Math.Clamp((0.2f - luma) / 0.12f, 0f, 1f);
-        return (1f - 0.15f * p * p * (3f - 2f * p)) * (1f + 0.4f * dark * dark * (3f - 2f * dark));
+        if (HostCache.TryGetValue(tex, out var known)) return known;
+        var w = tex.Width;
+        var h = tex.Height;
+        var data = new Color[w * h];
+        tex.GetData(data);
+        var look = Measure(data);
+        var drained = new Color[data.Length];
+        var alpha = new byte[data.Length];
+        var change = new byte[data.Length];
+        for (var i = 0; i < data.Length; i++)
+        {
+            alpha[i] = data[i].A;
+            drained[i] = DrainPixel(data[i], look);
+            change[i] = Visible(data[i], drained[i]);
+        }
+        var tx = new Texture2D(device, w, h);
+        tx.SetData(drained);
+        var e = new HostEntry { Look = look, Drained = tx, Alpha = alpha, Change = change, Width = w };
+        HostCache[tex] = e;
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("curse-host", $"luma={look.Luma:0.000}	chroma={look.Chroma:0.000}	violet={look.Violet:0.000}	drain={DrainStrength(look):0.00}	size={w}x{h}");
+        return e;
     }
 
-    private static readonly Dictionary<Texture2D, float> HostLumaCache = new();
-
-    /// <summary>The host's own brightness: the mean luma of its opaque pixels in the frame first seen from this strip
-    /// (read once per strip and kept; a prototype's read-back, not a production path).</summary>
-    internal static float HostLuma(SpriteFrame frame)
+    /// <summary>How visibly a pixel changes when drained: mostly the COLOUR it loses, a little its brightness shift
+    /// (0..255; weighted by brightness, a territory went for pale bone at a hand and read as "a spell it is casting").</summary>
+    internal static byte Visible(Color before, Color after)
     {
-        if (HostLumaCache.TryGetValue(frame.Texture, out var known)) return known;
-        var src = frame.Src;
-        var data = new Color[src.Width * src.Height];
-        frame.Texture.GetData(0, src, data, 0, data.Length);
-        double sum = 0;
-        var n = 0;
+        if (before.A < 128) return 0;
+        float lb = 0.299f * before.R + 0.587f * before.G + 0.114f * before.B;
+        float la = 0.299f * after.R + 0.587f * after.G + 0.114f * after.B;
+        float cb = Math.Max(before.R, Math.Max(before.G, before.B)) - Math.Min(before.R, Math.Min(before.G, before.B));
+        float ca = Math.Max(after.R, Math.Max(after.G, after.B)) - Math.Min(after.R, Math.Min(after.G, after.B));
+        return (byte)Math.Clamp(MathF.Abs(lb - la) * 0.3f + Math.Max(0f, cb - ca) * 1.0f, 0f, 255f);
+    }
+
+    /// <summary>Mean luma, mean chroma and native violet share of the opaque pixels (premultiplied input).</summary>
+    internal static HostLook Measure(Color[] data)
+    {
+        double sl = 0, sc = 0;
+        int n = 0, coloured = 0, violet = 0;
         foreach (var c in data)
         {
             if (c.A < 128) continue;
-            var a = c.A / 255.0;
-            sum += (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0 / a;
+            var a = c.A / 255f;
+            float r = c.R / 255f / a, g = c.G / 255f / a, bl = c.B / 255f / a;
+            var max = MathF.Max(r, MathF.Max(g, bl));
+            var min = MathF.Min(r, MathF.Min(g, bl));
+            sl += 0.299f * r + 0.587f * g + 0.114f * bl;
+            sc += max - min;
             n++;
+            if (max - min < 0.15f) continue;
+            coloured++;
+            var hue = Hue(r, g, bl, max, min);
+            if (hue >= 250f && hue <= 330f) violet++;
         }
-        var luma = n == 0 ? 0.3f : (float)Math.Clamp(sum / n, 0.0, 1.0);
-        HostLumaCache[frame.Texture] = luma;
-        if (PresentTrace.Enabled) PresentTrace.Log("curse-host", $"luma={luma:0.000}	light={LightFor(luma):0.00}	src={src.Width}x{src.Height}");
-        return luma;
+        if (n == 0) return new HostLook(0.3f, 0f, 0f);
+        return new HostLook((float)Math.Clamp(sl / n, 0.0, 1.0), (float)Math.Clamp(sc / n, 0.0, 1.0),
+                            coloured == 0 ? 0f : violet / (float)Math.Max(coloured, n / 4));
     }
+
+    private static float Hue(float r, float g, float b, float max, float min)
+    {
+        var d = max - min;
+        if (d <= 0f) return 0f;
+        float h;
+        if (max == r) h = (g - b) / d % 6f;
+        else if (max == g) h = (b - r) / d + 2f;
+        else h = (r - g) / d + 4f;
+        h *= 60f;
+        return h < 0f ? h + 360f : h;
+    }
+
+    // THE DRAINED MATERIAL: the infected tissue loses its native colour (grey), its local variation flattens toward the
+    // host's mean (the folds stay, softer), it darkens, and it takes a cold contamination tint: violet-grey, or ASH on a
+    // host already rich in violet (a violet tint there would hand the colour straight back)
+    private const float DrainFlatten = 0.72f;   // local contrast kept
+    private static readonly Vector3 VioletGrey = new(0.97f, 0.94f, 1.0f);   // a cold grey, barely violet
+    private static readonly Vector3 AshGrey = new(0.96f, 0.96f, 0.97f);
+    private static readonly Vector3 AshContamination = new(0.9f, 0.84f, 1.06f);
+
+    /// <summary>
+    /// The drained material's mean brightness: away from the host's own (a dark host lightens toward ash, up to +0.25; a
+    /// pale one darkens, down by 0.26; a mid one darkens a little).
+    /// </summary>
+    internal static float DrainedMean(float luma)
+        => luma + 0.25f * Ramp(luma, 0.4f, 0.12f) - 0.26f * PaleHost(luma) - 0.04f * (1f - Ramp(luma, 0.4f, 0.12f)) * (1f - PaleHost(luma));
+
+    /// <summary>One premultiplied pixel of the drained copy (alpha kept).</summary>
+    internal static Color DrainPixel(Color c, HostLook host)
+    {
+        if (c.A == 0) return Color.Transparent;
+        var a = c.A / 255f;
+        float r = c.R / 255f / a, g = c.G / 255f / a, b = c.B / 255f / a;
+        var l = 0.299f * r + 0.587f * g + 0.114f * b;
+        // its folds flattened round a NEW mean, pushed off the host's own: a dark host's flesh turns to ash (lighter), a
+        // pale host's cloth goes dark, a mid one only a little darker; its colour goes (grey). A patch the host's own
+        // colours could have made (violet on a dark caster, purple on a robe) read as "its own aura", "a tunic", "a sash"
+        var level = DrainedMean(host.Luma) + (l - host.Luma) * DrainFlatten;
+        var tint = Vector3.Lerp(VioletGrey, AshGrey, VioletNorm(host.Violet));
+        // (on a near-black host the ash takes a faint violet-grey contamination: a smooth neutral grey read as "a
+        // see-through hole", the floor showing through)
+        // (never on a host already rich in violet: that would hand its own colour back)
+        tint = Vector3.Lerp(tint, AshContamination, DarkHost(host.Luma) * (1f - VioletNorm(host.Violet)));
+        var v = Vector3.Clamp(tint * level, Vector3.Zero, Vector3.One) * a;
+        return new Color(v.X, v.Y, v.Z, a);
+    }
+
+    /// <summary>0..1: how much native violet the host has (0 below ~6 % of its pixels, 1 from ~30 %).</summary>
+    internal static float VioletNorm(float violet) => Ramp(violet, 0.06f, 0.3f);
+
+    /// <summary>
+    /// How strongly a territory drains the host: more where there is more colour to lose (a cyan lich, a red matron, a
+    /// gold angel: the territory is visibly grey), more on a host already violet (it must visibly change, not only glow).
+    /// </summary>
+    internal static float DrainStrength(HostLook host)
+        => Math.Clamp(0.55f + 0.3f * Ramp(host.Chroma, 0.05f, 0.35f) + 0.15f * VioletNorm(host.Violet) + 0.3f * Ramp(host.Luma, 0.4f, 0.12f), 0f, 0.92f);
 
     private static float Ramp(float x, float a, float b)
     {
@@ -173,7 +249,7 @@ public sealed partial class CursePrototype
         return t * t * (3f - 2f * t);
     }
 
-    /// <summary>1 on a near-black host (its infected region is lit from inside), 0 from a mid-dark one.</summary>
+    /// <summary>1 on a near-black host (its territories are lit from inside), 0 from a mid-dark one.</summary>
     private static float DarkHost(float luma) => Ramp(luma, 0.32f, 0.12f);
 
     /// <summary>1 on a pale host (its bruise is a deep saturated violet), 0 below a mid one.</summary>
@@ -181,58 +257,139 @@ public sealed partial class CursePrototype
 
     private static Color BruiseFor(float luma) => Color.Lerp(BruiseStain, PaleBruise, PaleHost(luma));
 
-    /// <summary>
-    /// THE CURSE SITS IN THE BODY'S MASS (a rule of the host's own silhouette, never of its name): the entry pocket is
-    /// moved off a thin limb, a wrist, a weapon or a hem into the nearest part of the body at least
-    /// <see cref="MassShare"/> as thick as its thickest. Pushed off-centre by the field, it landed on the Spirit Matron's
-    /// outstretched wrist, beside the Reaper's hand on the scythe and on the Lich's sash, and was read as "a bracelet",
-    /// "a spell in its hand", "a belt ornament" (fresh reads at depth 1, 2026-10-01: on a hand, a wrist or a garment's
-    /// place it is the creature's own magic or its outfit; in the body's mass it is something done to it). Measured
-    /// once per strip and orientation, so the pocket keeps its place through the strip's frames (a prototype's
-    /// read-back, like <see cref="HostLuma"/>).
-    /// </summary>
-    private const float MassShare = 0.6f;
+    /// <summary>The infected tissue's share over the drained material (it darkens it, smoky; it never repaints it).</summary>
+    private const float TissueShare = 0.6f;
 
-    private static readonly Dictionary<(Texture2D, bool), Vector2> SeatShiftCache = new();
-    private Vector2[]? _seatShift;
+    /// <summary>The tissue's stain on this host (on a dark host it only crusts the ash: multiplied whole it was black
+    /// again, "a hole"); the same alive and dying.</summary>
+    private static float TissueOn(HostLook look) => TissueShare * (1f - 0.45f * Ramp(look.Luma, 0.4f, 0.12f));
 
-    private Vector2 CorruptionSeat(int slot, Vector2 anchor, Rectangle body, SpriteFrame frame)
+    /// <summary>The light's restraint on this host: on a host rich in violet, or dark (a caster's own colours), the
+    /// drained material carries the state, never more violet ("its own aura"); the same alive and dying.</summary>
+    private static float Restraint(HostLook look)
     {
-        _seatShift ??= new Vector2[_kind.Length];
-        Orient(slot, body);
-        var key = (frame.Texture, _veinFlip == SpriteEffects.FlipHorizontally);
-        if (!SeatShiftCache.TryGetValue(key, out var shift))
-        {
-            var pocket = FieldToScreen(CorruptionAtlas.Entry, VeinRect(anchor, body));
-            var src = frame.Src;
-            var data = new Color[src.Width * src.Height];
-            frame.Texture.GetData(0, src, data, 0, data.Length);
-            var alpha = new byte[data.Length];
-            for (var i = 0; i < data.Length; i++) alpha[i] = data[i].A;
-            var flipX = (frame.Effects & SpriteEffects.FlipHorizontally) != 0;
-            var kx = frame.Dest.Width / (float)src.Width;
-            var ky = frame.Dest.Height / (float)src.Height;
-            var lx = (pocket.X - frame.Dest.X) / kx;
-            if (flipX) lx = src.Width - lx;
-            var to = ThickNear(alpha, src.Width, src.Height, new Vector2(lx, (pocket.Y - frame.Dest.Y) / ky), MassShare);
-            var tx = flipX ? src.Width - to.X : to.X;
-            shift = new Vector2(frame.Dest.X + tx * kx, frame.Dest.Y + to.Y * ky) - pocket;
-            SeatShiftCache[key] = shift;
-            if (PresentTrace.Enabled) PresentTrace.Log("curse-seat", $"shift={shift.X:0},{shift.Y:0}	pocket={pocket.X:0},{pocket.Y:0}	src={src.Width}x{src.Height}");
-        }
-        _seatShift[slot] = shift;
-        return anchor + shift;
+        var darkish = Ramp(look.Luma, 0.42f, 0.15f);
+        return (1f - 0.3f * VioletNorm(look.Violet)) * (1f - 0.45f * darkish) * (1f - 0.35f * darkish * (1f - Ramp(look.Chroma, 0.05f, 0.3f)));
     }
 
+    // the colour each creature was drawn with this frame (its tier tint, the ember flush of a bite's wind-up): the
+    // drained material takes it too, or the territory stayed cold grey while the body warmed (code review, 2026-10-01)
+    private Color[]? _tint;
+
+    // the last bloom on each creature (kind, its start on the playhead, territories before it): its burst wisps keep
+    // their own clock past the flare window, which used to cut them off mid-flight
+    private float[]? _burstAt;
+    private byte[]? _burstKind;
+    private int[]? _burstBefore;
+
     /// <summary>
-    /// The point nearest <paramref name="p"/> (source pixels) where the silhouette is at least <paramref name="share"/>
-    /// as thick as at its thickest (a chamfer distance to the outline, on a coarse grid); <paramref name="p"/> itself
-    /// when it is already that deep in the body.
+    /// HOST-AWARE LIGHT (a rule of the host's brightness, never of its name): up to 1.4x on a near-black body, where the
+    /// dark corruption cannot show; trimmed a little on a pale one, where the additive front was the loudest.
     /// </summary>
-    internal static Vector2 ThickNear(byte[] alpha, int w, int h, Vector2 p, float share)
+    private static float LightFor(float luma)
     {
-        var cell = Math.Max(2, Math.Max(w, h) / 96);
-        int gw = (w + cell - 1) / cell, gh = (h + cell - 1) / cell;
+        var p = Math.Clamp((luma - 0.35f) / 0.35f, 0f, 1f);
+        var dark = Math.Clamp((0.2f - luma) / 0.12f, 0f, 1f);
+        // (up to 1.15x: the ash now carries a near-black host's region; at 1.4x the light read as "a glowing ball")
+        return (1f - 0.15f * p * p * (3f - 2f * p)) * (1f + 0.15f * dark * dark * (3f - 2f * dark));
+    }
+
+    /// <summary>The curse's light on this host: paler on a host already rich in violet, and restrained there.</summary>
+    private static Color EmissionFor(HostLook host) => Color.Lerp(Emission, EmissionPale, 0.7f * VioletNorm(host.Violet));
+
+    // ── WHERE THE TERRITORIES SIT ──────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>One host strip's territories: their centres relative to the authored body point, and their sizes (the
+    /// territory's diameter on screen), seated once per strip and orientation from the host's own silhouette.</summary>
+    private sealed class Layout
+    {
+        public readonly Vector2[] Offset = new Vector2[MaxTerritories];
+        public readonly float[] Diameter = new float[MaxTerritories];
+        public int Available;
+    }
+
+    private static readonly Dictionary<(Texture2D, bool), Layout> LayoutCache = new();
+    private Layout?[]? _layout;
+    private HostEntry?[]? _hostOf;
+
+    /// <summary>Each territory's share of the first one's diameter (later infections are a little smaller).</summary>
+    private static readonly float[] TerritoryShare = { 1f, 0.82f, 0.72f, 0.64f };
+
+    /// <summary>The first territory's diameter on screen: a share of the whole body, never a buckle-sized patch.</summary>
+    private static float FirstDiameter(Rectangle body) => Math.Clamp(0.4f * MathF.Sqrt(body.Width * (float)body.Height), 56f, 210f);
+
+    /// <summary>
+    /// Readies this slot's host and territories for the frame (called before the curse draws); returns the authored body
+    /// point the territories hang from.
+    /// </summary>
+    private void PrepareCorruption(GraphicsDevice device, int slot, Vector2 anchor, Rectangle body, SpriteFrame frame)
+    {
+        _layout ??= new Layout?[_kind.Length];
+        _hostOf ??= new HostEntry?[_kind.Length];
+        var host = Host(device, frame.Texture);
+        _hostOf[slot] = host;
+        // each creature's territories are LOCKED where they were first seated (seated per strip, they jumped from the
+        // belly to the shoulder when the creature lunged: "the patch moves", "a band that does not follow the body")
+        if (_layout[slot] is not null) return;
+        var odd = slot % 2 == 1;
+        var key = (frame.Texture, odd);
+        if (!LayoutCache.TryGetValue(key, out var lay))
+        {
+            lay = Seat(anchor, body, frame, host, odd);
+            LayoutCache[key] = lay;
+        }
+        _layout[slot] = lay;
+    }
+
+    private static Layout Seat(Vector2 anchor, Rectangle body, SpriteFrame frame, HostEntry host, bool odd)
+    {
+        var src = frame.Src;
+        var alpha = new byte[src.Width * src.Height];
+        var change = new byte[src.Width * src.Height];
+        for (var y = 0; y < src.Height; y++)
+        {
+            Array.Copy(host.Alpha, (src.Y + y) * host.Width + src.X, alpha, y * src.Width, src.Width);
+            Array.Copy(host.Change, (src.Y + y) * host.Width + src.X, change, y * src.Width, src.Width);
+        }
+        var flipX = (frame.Effects & SpriteEffects.FlipHorizontally) != 0;
+        var kx = frame.Dest.Width / (float)src.Width;
+        var ky = frame.Dest.Height / (float)src.Height;
+        Vector2 ToSrc(Vector2 p)
+        {
+            var lx = (p.X - frame.Dest.X) / kx;
+            return new Vector2(flipX ? src.Width - lx : lx, (p.Y - frame.Dest.Y) / ky);
+        }
+        Vector2 ToScreen(Vector2 s) => new(frame.Dest.X + (flipX ? src.Width - s.X : s.X) * kx, frame.Dest.Y + s.Y * ky);
+        var d0 = FirstDiameter(body);
+        // the first territory: a little off the body's centre line toward its back (away from the face; on the centre
+        // line a patch sat where a buckle or a brooch goes), then into the body's mass
+        var wideBody = body.Width > body.Height * 1.05f;
+        var target = anchor + new Vector2((wideBody ? 0f : odd ? -0.5f : 1f) * 0.08f * body.Width, -0.02f * body.Height);
+        var sizes = new float[MaxTerritories];
+        for (var k = 0; k < MaxTerritories; k++) sizes[k] = d0 * TerritoryShare[k] / kx;
+        // enemies face the hunter on their left: the head is at the screen's left, src-left unless the strip is flipped
+        var seats = TerritorySeats(alpha, src.Width, src.Height, ToSrc(target), sizes, !flipX, change);
+        var lay = new Layout { Available = seats.Count };
+        for (var k = 0; k < seats.Count; k++)
+        {
+            lay.Offset[k] = ToScreen(seats[k]) - anchor;
+            lay.Diameter[k] = d0 * TerritoryShare[k];
+        }
+        if (PresentTrace.Enabled)
+        {
+            var s = new System.Text.StringBuilder();
+            for (var k = 0; k < seats.Count; k++) s.Append($"{lay.Offset[k].X:0},{lay.Offset[k].Y:0}/{lay.Diameter[k]:0} ");
+            PresentTrace.Log("curse-seat", $"territories={seats.Count}	{s}	src={src.Width}x{src.Height}");
+        }
+        return lay;
+    }
+
+    /// <summary>The thickness of a silhouette on a coarse grid: each cell's chamfer distance to the outline (0 outside).</summary>
+    private static float[] Thickness(byte[] alpha, int w, int h, out int gw, out int gh, out int cell, out float max)
+    {
+        cell = Math.Max(2, Math.Max(w, h) / 96);
+        gw = (w + cell - 1) / cell;
+        gh = (h + cell - 1) / cell;
         var d = new float[gw * gh];
         for (var cy = 0; cy < gh; cy++)
             for (var cx = 0; cx < gw; cx++)
@@ -246,8 +403,8 @@ public sealed partial class CursePrototype
                     }
                 d[cy * gw + cx] = solid * 2 > all ? float.MaxValue : 0f;
             }
-        // two chamfer passes (1 straight, 1.414 diagonal); beyond the grid is outside the body
-        float At(int x, int y) => x < 0 || y < 0 || x >= gw || y >= gh ? 0f : d[y * gw + x];
+        int lw = gw, lh = gh;
+        float At(int x, int y) => x < 0 || y < 0 || x >= lw || y >= lh ? 0f : d[y * lw + x];
         for (var y = 0; y < gh; y++)
             for (var x = 0; x < gw; x++)
             {
@@ -262,11 +419,23 @@ public sealed partial class CursePrototype
                 if (d[i] == 0f) continue;
                 d[i] = Math.Min(d[i], Math.Min(Math.Min(At(x + 1, y), At(x, y + 1)) + 1f, Math.Min(At(x + 1, y + 1), At(x - 1, y + 1)) + 1.414f));
             }
-        var max = 0f;
+        max = 0f;
         foreach (var v in d) max = Math.Max(max, v);
+        return d;
+    }
+
+    /// <summary>
+    /// The point nearest <paramref name="p"/> (source pixels) where the silhouette is at least <paramref name="share"/>
+    /// as thick as at its thickest; <paramref name="p"/> itself when it is already that deep in the body (on a wrist, a
+    /// hand or a weapon the curse read as the creature's own magic, "a bracelet").
+    /// </summary>
+    internal static Vector2 ThickNear(byte[] alpha, int w, int h, Vector2 p, float share)
+    {
+        var d = Thickness(alpha, w, h, out var gw, out var gh, out var cell, out var max);
         if (max <= 0f) return p;
         var need = share * max;
-        if (At((int)(p.X / cell), (int)(p.Y / cell)) >= need) return p;
+        int px = (int)(p.X / cell), py = (int)(p.Y / cell);
+        if (px >= 0 && py >= 0 && px < gw && py < gh && d[py * gw + px] >= need) return p;
         var best = 0;
         var bestD = float.MaxValue;
         for (var i = 0; i < d.Length; i++)
@@ -278,6 +447,173 @@ public sealed partial class CursePrototype
         }
         return new Vector2((best % gw + 0.5f) * cell, (best / gw + 0.5f) * cell);
     }
+
+    /// <summary>
+    /// THE TERRITORIES' SEATS on a silhouette (source pixels): the first nearest <paramref name="first"/> in the body's
+    /// mass; each next one ELSEWHERE on the body (in its thick parts, a gap clear of every earlier territory, about a
+    /// territory and a third away), on an upright body the third never in a row with the first two (three in a line
+    /// drew a band again: "a sash"); none on the head band (the leading fifth of a wide body on the side it faces, the top fifth of a tall
+    /// one) or on the feet. Fewer seats when the body has no room for them.
+    /// </summary>
+    internal static List<Vector2> TerritorySeats(byte[] alpha, int w, int h, Vector2 first, float[] diameters, bool headAtLeft,
+                                                 byte[]? change = null)
+    {
+        var seats = new List<Vector2>();
+        var d = Thickness(alpha, w, h, out var gw, out var gh, out var cell, out var max);
+        if (max <= 0f) return seats;
+        // WHERE THE HOST VISIBLY CHANGES: each cell's mean change under the drain (0..1 of the host's most). A territory
+        // on a dark sash, an inner tunic or trousers barely changed and read as part of the costume ("a pattern on the
+        // robe", "a sash"); where the host loses its colour or brightness it reads as damage
+        var vis = new float[gw * gh];
+        if (change is not null)
+        {
+            var visMax = 0f;
+            for (var cy = 0; cy < gh; cy++)
+                for (var cx = 0; cx < gw; cx++)
+                {
+                    float sum = 0f;
+                    var cnt = 0;
+                    for (var y = cy * cell; y < Math.Min(h, cy * cell + cell); y++)
+                        for (var x = cx * cell; x < Math.Min(w, cx * cell + cell); x++)
+                        {
+                            if (alpha[y * w + x] < 128) continue;
+                            sum += change[y * w + x];
+                            cnt++;
+                        }
+                    vis[cy * gw + cx] = cnt == 0 ? 0f : sum / cnt;
+                }
+            // (a territory's worth of neighbourhood, so one bright pixel never wins)
+            var smooth = new float[vis.Length];
+            var r = Math.Max(1, (int)(diameters[0] * 0.25f / cell));
+            for (var cy = 0; cy < gh; cy++)
+                for (var cx = 0; cx < gw; cx++)
+                {
+                    float sum = 0f;
+                    var cnt = 0;
+                    for (var y = Math.Max(0, cy - r); y <= Math.Min(gh - 1, cy + r); y++)
+                        for (var x = Math.Max(0, cx - r); x <= Math.Min(gw - 1, cx + r); x++)
+                        {
+                            if (d[y * gw + x] <= 0f) continue;
+                            sum += vis[y * gw + x];
+                            cnt++;
+                        }
+                    smooth[cy * gw + cx] = cnt == 0 ? 0f : sum / cnt;
+                }
+            foreach (var v in smooth) visMax = Math.Max(visMax, v);
+            for (var i = 0; i < vis.Length; i++) vis[i] = visMax > 0f ? smooth[i] / visMax : 0f;
+        }
+        int minX = gw, maxX = -1, minY = gh, maxY = -1;
+        for (var i = 0; i < d.Length; i++)
+        {
+            if (d[i] <= 0f) continue;
+            int x = i % gw, y = i / gw;
+            minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+        }
+        float bw = maxX - minX + 1, bh = maxY - minY + 1;
+        var wide = bw > bh * 1.05f;
+        var column = 0.3f;
+        bool Excluded(int x, int y)
+        {
+            // the hem, the feet, a beast's legs (a territory there read as "a stain on the hem")
+            if (y > maxY - (wide ? 0.25f : 0.2f) * bh) return true;
+            if (wide) return headAtLeft ? x < minX + 0.22f * bw : x > maxX - 0.22f * bw;
+            // an upright body: below the head and hood (a territory landed on the Matron's face), and inside its core
+            // column (on an outstretched sleeve, a wing or a weapon it read as the creature's own magic)
+            return y < minY + 0.28f * bh || MathF.Abs(x + 0.5f - (minX + maxX + 1) * 0.5f) > column * bw;
+        }
+        Vector2 At(int i) => new((i % gw + 0.5f) * cell, (i / gw + 0.5f) * cell);
+        // THE FIRST: where the curse entered, in the body's mass
+        int fx = (int)(first.X / cell), fy = (int)(first.Y / cell);
+        var firstOk = fx >= 0 && fy >= 0 && fx < gw && fy < gh && d[fy * gw + fx] >= 0.6f * max && !Excluded(fx, fy);
+        if (change is not null)
+        {
+            // within a territory's reach of where it entered, in the body's mass, where the host changes the most
+            var best = -1;
+            var bestScore = float.NegativeInfinity;
+            for (var i = 0; i < d.Length; i++)
+            {
+                if (d[i] < 0.5f * max || Excluded(i % gw, i / gw)) continue;
+                var dist = Vector2.Distance(At(i), first) / diameters[0];
+                if (dist > 1.3f) continue;
+                var score = vis[i] - 0.2f * dist;
+                if (score > bestScore) { bestScore = score; best = i; }
+            }
+            if (best >= 0) seats.Add(At(best));
+        }
+        if (seats.Count > 0) { }
+        else if (firstOk) seats.Add(first);
+        else
+        {
+            for (var pass = 0; pass < 2 && seats.Count == 0; pass++)
+            {
+                var need = (pass == 0 ? 0.6f : 0.35f) * max;
+                var best = -1;
+                var bestD = float.MaxValue;
+                for (var i = 0; i < d.Length; i++)
+                {
+                    if (d[i] < need || Excluded(i % gw, i / gw)) continue;
+                    var dd = Vector2.DistanceSquared(At(i), first);
+                    if (dd < bestD) { bestD = dd; best = i; }
+                }
+                if (best >= 0) seats.Add(At(best));
+            }
+            if (seats.Count == 0) seats.Add(first);
+        }
+        // THE OTHERS: elsewhere on the body; a THIN body (a skeleton's ribs and pelvis) that cannot hold three under
+        // these rules gets a gentler second pass (thinner parts, a smaller gap, a wider column), so depth 3 always shows
+        // more of the body than depth 2
+        var minThick = 0.4f;
+        var minGap = 0.95f;
+        var minArea = 0.1f;
+        for (var pass = 0; pass < 2; pass++)
+        {
+            if (pass == 1)
+            {
+                if (seats.Count >= 3 || diameters.Length < 3) break;
+                minThick = 0.22f;
+                minGap = 0.8f;
+                minArea = 0.06f;
+                column = 0.38f;
+            }
+            // (the gentler pass only guarantees a THIRD: a fourth placed by it landed on an outstretched sleeve)
+            for (var k = seats.Count; k < Math.Min(diameters.Length, pass == 0 ? MaxTerritories : 3); k++)
+            {
+                var best = -1;
+                var bestScore = float.NegativeInfinity;
+                for (var i = 0; i < d.Length; i++)
+                {
+                    if (d[i] < minThick * max || Excluded(i % gw, i / gw)) continue;
+                    var c = At(i);
+                    var ok = true;
+                    var near = float.MaxValue;
+                    for (var j = 0; j < seats.Count; j++)
+                    {
+                        var gap = Vector2.Distance(c, seats[j]) / (0.5f * (diameters[j] + diameters[k]));
+                        if (gap < minGap) { ok = false; break; }
+                        near = Math.Min(near, gap);
+                    }
+                    if (!ok) continue;
+                    if (seats.Count == 2 && !wide)
+                    {
+                        // never three in a row on an upright body: the triangle's area against its longest side, squared
+                        // (on a wide beast the body itself is the row; three in a line down a torso drew "a sash")
+                        var a0 = seats[0];
+                        var b0 = seats[1];
+                        var area = MathF.Abs((b0.X - a0.X) * (c.Y - a0.Y) - (b0.Y - a0.Y) * (c.X - a0.X)) * 0.5f;
+                        var side = MathF.Max(Vector2.DistanceSquared(a0, b0), MathF.Max(Vector2.DistanceSquared(a0, c), Vector2.DistanceSquared(b0, c)));
+                        if (area / side < minArea) continue;
+                    }
+                    var score = 0.5f * d[i] / max - 0.5f * MathF.Abs(near - 1.3f) + 0.6f * vis[i];
+                    if (score > bestScore) { bestScore = score; best = i; }
+                }
+                if (best < 0) break;
+                seats.Add(At(best));
+            }
+        }
+        return seats;
+    }
+
+    // ── DRAWING ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>How much this slot's SPRAWL source is lit: a hop leaving it (the curse gathering in the source).</summary>
     private float SourceGlow(int slot, float playheadMs)
@@ -294,175 +630,279 @@ public sealed partial class CursePrototype
         return best;
     }
 
-    private void DrawCorruptionGlow(SpriteBatch b, int slot, float playheadMs, float t, Rectangle body, Vector2 seat, RasterizerState raster,
+    /// <summary>A territory's variant, turn and mirror on this slot (a row of one creature is never a stamp).</summary>
+    private static (int Variant, float Turn, bool Flip) Look(int slot, int k)
+        => ((k + slot) % TerritoryAtlas.Variants, (Hash(slot * 31 + k * 7) - 0.5f) * 1.6f, Hash(slot * 17 + k * 13) > 0.5f);
+
+    /// <summary>How far territory <paramref name="k"/> has bloomed (0..1) in the flare under way.</summary>
+    private static float Reveal(int kind, float age, int k, int before)
+    {
+        switch (kind)
+        {
+            case 1: return Smooth(Math.Clamp(age / GrowMs, 0f, 1f));
+            case 2: return Smooth(Math.Clamp((age - k * ArriveStaggerMs) / ArriveGrowMs, 0f, 1f));
+            case 3:
+                if (k < before) return 1f;
+                return Smooth(Math.Clamp((age - TravelMs - (k - before) * DeepenStaggerMs) / DeepenGrowMs, 0f, 1f));
+            default: return 1f;
+        }
+    }
+
+    private void T(SpriteBatch b, Texture2D tex, Vector2 centre, float side, float turn, bool flip, Color c)
+    {
+        if (c.A == 0 && c.R == 0 && c.G == 0 && c.B == 0) return;
+        var half = TerritoryAtlas.N * 0.5f;
+        b.Draw(tex, centre, null, c, turn, new Vector2(half, half), side / TerritoryAtlas.N, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+        SpriteCount++;
+    }
+
+    /// <summary>The territory's field side on screen: its texture is wider than the region it holds.</summary>
+    private static float FieldSide(float diameter) => diameter / TerritoryAtlas.Fill;
+
+    private void DrawCorruptionGlow(SpriteBatch b, int slot, float playheadMs, float t, Rectangle body, Vector2 anchor, RasterizerState raster,
                                     SpriteFrame frame)
     {
-        var atlas = Corruption(b.GraphicsDevice);
-        var luma = HostLuma(frame);
-        var light = LightFor(luma);
-        var dark = DarkHost(luma);
-        var bruise = BruiseFor(luma);
-        // on a pale host the saturated bruise is laid twice (a deeper violet in the cloth: once, it read as "a dye stain")
-        var deep = 0.5f * PaleHost(luma);
-        Orient(slot, body);
-        var stage = _stage[slot];
-        var kind = _flareKind[slot];
-        var age = _flareAge[slot];
-        var rect = VeinRect(seat, body);
+        var device = b.GraphicsDevice;
+        var atlas = Territories(device);
+        var lay = _layout?[slot];
+        var host = _hostOf?[slot];
         var inside = _inside[slot];
-        var quiet = kind == 0 ? 1f : Mark.TickQuietNear(playheadMs - age, 450f) ? QuietShare : 1f;
-
-        // ── THE DARK BODY: a stain in the host's own material ──
-        b.Begin(SpriteSortMode.Deferred, Stain, SamplerState.LinearClamp, inside, raster);
-        if (_kind[slot] == 1)
+        if (_kind[slot] == 1 || lay is null || host is null)
         {
+            b.Begin(SpriteSortMode.Deferred, Stain, SamplerState.LinearClamp, inside, raster);
             Fill(b, body, Color.Black * 0.05f);   // waiting: the curse is on its way, a faint shadow only
             b.End();
             return;
         }
-        // THE WHOLE BODY IS AFFLICTED: a violet-grey shadow over the entire host, a little deeper with each depth (a
-        // tint, never a glow; clipped to the silhouette): the host looks cursed as a whole and the patches read as where
-        // it comes from, not as something it wears
-        Fill(b, body, AfflictedShade * (0.22f + 0.08f * stage));
-        float grown;   // 0..1: how far the growth this flare runs has got (1: settled)
-        if (kind is 1 or 2)
+        var look = host.Look;
+        var light = LightFor(look.Luma);
+        var dark = DarkHost(look.Luma);
+        var bruise = BruiseFor(look.Luma);
+        var deep = 0.5f * PaleHost(look.Luma);
+        var violet = VioletNorm(look.Violet);
+        var emission = EmissionFor(look);
+        var stage = _stage[slot];
+        var kind = _flareKind[slot];
+        var age = _flareAge[slot];
+        var count = Math.Min(lay.Available, TerritoriesAt(stage));
+        var before = kind == 3 ? Math.Min(lay.Available, TerritoriesAt(stage - 1)) : 0;
+        var quiet = kind == 0 ? 1f : Mark.TickQuietNear(playheadMs - age, 450f) ? QuietShare : 1f;
+        if (kind != 0)
         {
-            grown = Smooth(Math.Min(1f, age / GrowMs));
-            V(b, atlas.Tissue[stage - 1], rect, bruise * grown);
-            if (deep > 0f) V(b, atlas.Tissue[stage - 1], rect, bruise * (deep * grown));
-            DarkGrowth(b, atlas, rect, 0f, stage, grown * stage);
+            _burstAt ??= new float[_kind.Length];
+            _burstKind ??= new byte[_kind.Length];
+            _burstBefore ??= new int[_kind.Length];
+            _burstAt[slot] = playheadMs - age;
+            _burstKind[slot] = kind;
+            _burstBefore[slot] = before;
         }
-        else if (kind == 3 && stage > 1)
+        Span<float> reveal = stackalloc float[MaxTerritories];
+        Span<Vector2> at = stackalloc Vector2[MaxTerritories];
+        for (var k = 0; k < count; k++)
         {
-            grown = Smooth(Math.Min(1f, age / DeepenGrowMs));
-            V(b, atlas.Tissue[stage - 2], rect, bruise * (1f - grown));
-            V(b, atlas.Tissue[stage - 1], rect, bruise * grown);
-            if (deep > 0f)
-            {
-                V(b, atlas.Tissue[stage - 2], rect, bruise * (deep * (1f - grown)));
-                V(b, atlas.Tissue[stage - 1], rect, bruise * (deep * grown));
-            }
-            V(b, atlas.Dark[stage - 2], rect, VeinStain);
-            DarkGrowth(b, atlas, rect, stage - 1, stage, stage - 1 + grown);
+            reveal[k] = Reveal(kind, age, k, before);
+            at[k] = anchor + lay.Offset[k];
         }
-        else
+
+        // ── THE HOST'S OWN MATERIAL CHANGES: the drained copy of its frame, through each territory's soft mask ──
+        var drain = DrainStrength(look);
+        for (var k = 0; k < count; k++)
         {
-            grown = 1f;
-            V(b, atlas.Tissue[stage - 1], rect, bruise);
-            if (deep > 0f) V(b, atlas.Tissue[stage - 1], rect, bruise * deep);
-            V(b, atlas.Dark[stage - 1], rect, VeinStain);
+            if (reveal[k] <= 0f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            var mask = reveal[k] >= 1f ? atlas.Drain[v] : atlas.DrainGrow[v * TerritoryAtlas.Frames + GrowFrame(reveal[k])];
+            DrainQuad(device, frame, host.Drained, mask, at[k], FieldSide(lay.Diameter[k]), turn, flip, drain * Math.Min(1f, reveal[k] * 3f),
+                      _tint?[slot] ?? Color.White, raster);
+        }
+
+        // ── THE INFECTED TISSUE, stained into the host ──
+        b.Begin(SpriteSortMode.Deferred, Stain, SamplerState.LinearClamp, inside, raster);
+        // a faint violet-grey loss over the whole host, a little more with each depth (the territories lead)
+        Fill(b, body, AfflictedShade * (0.08f + 0.04f * stage));
+        for (var k = 0; k < count; k++)
+        {
+            if (reveal[k] <= 0f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            // the contaminated tissue moves very gently (a slow swell, each territory at its own moment)
+            var swell = 1f + 0.022f * MathF.Sin(t * MathF.Tau / 3400f + k * 1.9f);
+            var side = FieldSide(lay.Diameter[k]) * swell;
+            var grow = reveal[k] < 1f;
+            var f = GrowFrame(reveal[k]);
+            var tissue = grow ? atlas.TissueGrow[v * TerritoryAtlas.Frames + f] : atlas.Tissue[v];
+            // (on a dark host the tissue barely darkens: the ash IS the region there, multiplied back it was black)
+            // (on a dark host the tissue only crusts the ash, mottled: multiplied whole it was black again, left out
+            // the ash was smooth, "a hole")
+            T(b, tissue, at[k], side, turn, flip, bruise * TissueOn(look));
+            if (deep > 0f) T(b, tissue, at[k], side, turn, flip, bruise * (TissueShare * deep));
+            T(b, grow ? atlas.DarkGrow[v * TerritoryAtlas.Frames + f] : atlas.Dark[v], at[k], side, turn, flip, VeinStain);
         }
         b.End();
 
-        // ── THE LIGHT, clipped to the body: the steady light SCREENED into the host, the growing front additive ──
+        // ── THE LIGHT FROM INSIDE, screened into the host ──
         b.Begin(SpriteSortMode.Deferred, Screen, SamplerState.LinearClamp, inside, raster);
-        var breath = 1f + 0.12f * MathF.Sin(t * MathF.Tau / 5200f);
-        var settleAge = kind == 1 || kind == 2 ? age - GrowMs : kind == 3 ? age - DeepenGrowMs : float.PositiveInfinity;
+        var settleAge = kind is 1 or 2 ? age - GrowMs : kind == 3 ? age - TravelMs - DeepenGrowMs : float.PositiveInfinity;
         var settle = settleAge < 0f ? 0f : settleAge >= SettleMs ? 1f : settleAge / SettleMs;
         var afterglow = settleAge >= 0f && settleAge < SettleMs ? 0.5f * (1f - settle) * quiet : 0f;
         var source = SourceGlow(slot, playheadMs);
-        var level = IdleEmission * light * breath * (1f + afterglow + 0.9f * source);
-        // ON A DARK HOST THE INFECTED REGION IS LIT FROM INSIDE: a dim violet haze over the whole tissue, breathing with
-        // the light (depth 1's high-contrast region where the dark corruption cannot show; it grows in with the tissue)
-        if (dark > 0f)
+        // a host already rich in violet, or dark (a caster's own colours), gets a RESTRAINED light
+        var restraint = Restraint(look);
+        for (var k = 0; k < count; k++)
         {
-            var haze = TissueGlow * (0.7f * dark * breath);
-            if (kind is 1 or 2)
-                V(b, atlas.Tissue[stage - 1], rect, haze * grown);
-            else if (kind == 3 && stage > 1)
-            {
-                V(b, atlas.Tissue[stage - 2], rect, haze * (1f - grown));
-                V(b, atlas.Tissue[stage - 1], rect, haze * grown);
-            }
-            else
-                V(b, atlas.Tissue[stage - 1], rect, haze);
+            if (reveal[k] <= 0f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            var side = FieldSide(lay.Diameter[k]);
+            // each territory breathes at its own pace; the old ones REACT to a deepen
+            var breath = 1f + 0.14f * MathF.Sin(t * MathF.Tau / (4300f + 700f * k) + k * 2.3f);
+            var react = kind == 3 && k < before ? 0.7f * ReactEnvelope(age) * quiet : 0f;
+            var lit = reveal[k] * reveal[k];
+            var level = IdleEmission * light * restraint * breath * (1f + afterglow + 0.9f * source + react) * lit;
+            if (dark > 0f) T(b, atlas.Tissue[v], at[k], side, turn, flip, TissueGlow * (TissueGlowShare * dark * breath * lit));
+            // (above 1 the light is split in two draws: Color x 1.3 clamped per channel and turned the violet pink)
+            T(b, atlas.Emit[v], at[k], side, turn, flip, emission * Math.Min(1f, level));
+            if (level > 1f) T(b, atlas.Emit[v], at[k], side, turn, flip, emission * Math.Min(1f, level - 1f));
+            // one section of the territory at a time gently answers (a slow internal change)
+            var cycle = 3900f + 500f * k;
+            var n = (int)MathF.Floor((t + k * 1300f) / cycle);
+            var ph = (t + k * 1300f - n * cycle) / cycle;
+            var answer = MathF.Sin(ph * MathF.PI);
+            var g = ((n % TerritoryAtlas.IdleGroups) + TerritoryAtlas.IdleGroups) % TerritoryAtlas.IdleGroups;
+            T(b, atlas.Idle[v * TerritoryAtlas.IdleGroups + g], at[k], side, turn, flip,
+              emission * (0.3f * light * restraint * answer * answer * lit * (kind == 0 ? 1f : settle)));
         }
-        if (kind is 1 or 2)
-        {
-            // the settled light fades in behind the growth
-            V(b, atlas.Emit[stage - 1], rect, Emission * (level * Smooth(grown) * (settleAge < 0f ? 0.35f : 0.35f + 0.65f * settle)));
-        }
-        else if (kind == 3 && stage > 1)
-        {
-            // the old light stays as it was; only the NEW paths light as they form
-            V(b, atlas.Emit[stage - 2], rect, Emission * (level * (1f - (settleAge < 0f ? 0f : settle))));
-            if (settleAge >= 0f) V(b, atlas.Emit[stage - 1], rect, Emission * (level * settle));
-        }
-        else
-            V(b, atlas.Emit[stage - 1], rect, Emission * level);
-        // ONE SECTION AT A TIME gently answers (a 4.2 s cycle per section, each slot at its own moment)
-        var cycle = 4200f;
-        var n = (int)MathF.Floor(t / cycle);
-        var ph = (t - n * cycle) / cycle;
-        var answer = MathF.Sin(ph * MathF.PI);
-        V(b, atlas.Idle[(stage - 1) * CorruptionAtlas.IdleGroups + ((n % CorruptionAtlas.IdleGroups) + CorruptionAtlas.IdleGroups) % CorruptionAtlas.IdleGroups],
-             rect, Emission * (0.30f * light * answer * answer * (kind == 0 ? 1f : settle)));
         b.End();
-        if (kind == 0 || grown >= 1f) return;
+
+        // ── THE BLOOM: a violet growth phrase through each blooming territory; a deepen's shadow under the skin ──
+        var blooming = false;
+        for (var k = 0; k < count; k++) blooming |= reveal[k] < 1f;
+        var travel = kind == 3 && before > 0 && count > before && age < TravelMs + 120f;
+        if (!blooming && !travel) return;
         b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, inside, raster);
-        if (kind is 1 or 2)
-            // an ARRIVAL (a transfer, a hop) wakes quieter than the apply: it grows through every depth it carries at once,
-            // and at full strength it was the loudest thing the curse ever drew
-            Front(b, atlas, rect, 0f, stage, grown * stage, FrontPeak * light * quiet * (kind == 2 ? ArrivalShare : 1f));
-        else if (stage > 1)
-            Front(b, atlas, rect, stage - 1, stage, stage - 1 + grown, FrontPeak * light * quiet);
+        var peak = FrontPeak * light * quiet * (kind == 2 ? ArrivalShare : 1f);
+        for (var k = 0; k < count; k++)
+        {
+            if (reveal[k] <= 0f || reveal[k] >= 1f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            var kindle = Math.Min(1f, reveal[k] * 5f);
+            T(b, atlas.FrontGrow[v * TerritoryAtlas.Frames + GrowFrame(reveal[k])], at[k], FieldSide(lay.Diameter[k]), turn, flip,
+              EmissionHot * (peak * kindle * (1f - 0.6f * reveal[k])));
+        }
+        if (travel)
+        {
+            // the curse TRAVELS under the skin from the nearest infected territory to the new one, then is gone
+            for (var k = before; k < count; k++)
+            {
+                var from = at[0];
+                for (var j = 1; j < before; j++)
+                    if (Vector2.DistanceSquared(at[j], at[k]) < Vector2.DistanceSquared(from, at[k])) from = at[j];
+                for (var i = 0; i < 4; i++)
+                {
+                    var q = (age - (k - before) * DeepenStaggerMs) / TravelMs - i * 0.14f;
+                    if (q < 0f || q > 1f) continue;
+                    var p = Vector2.Lerp(from, at[k], Smooth(q));
+                    var size = lay.Diameter[k] * (0.22f - 0.03f * i);
+                    Puff(b, p, size, EmissionHot * (0.32f * quiet * MathF.Sin(q * MathF.PI) * (1f - 0.2f * i)));
+                }
+            }
+        }
         b.End();
     }
 
-    /// <summary>The dark veins grown from <paramref name="from"/> to <paramref name="at"/> (in stages: 1.5 = halfway from
-    /// depth 1 to depth 2), transition by transition, each in its own frames.</summary>
-    private void DarkGrowth(SpriteBatch b, CorruptionAtlas atlas, Rectangle rect, float from, int to, float at)
+    /// <summary>A deepen's reaction in the territories already infected: a quick swell of their light, then back.</summary>
+    private static float ReactEnvelope(float age)
     {
-        for (var tr = (int)from; tr < to; tr++)
-        {
-            var p = Math.Clamp(at - tr, 0f, 1f);
-            if (p <= 0f) break;
-            var f = (int)MathF.Ceiling(p * CorruptionAtlas.Frames) - 1;
-            V(b, atlas.Grow[tr * CorruptionAtlas.Frames + Math.Clamp(f, 0, CorruptionAtlas.Frames - 1)], rect, VeinStain);
-        }
+        if (age < 0f) return 0f;
+        if (age < 80f) return age / 80f;
+        var f = 1f - (age - 80f) / 420f;
+        return f <= 0f ? 0f : f * f;
     }
 
-    /// <summary>The bright growing FRONT at <paramref name="at"/> (in stages), travelling through the new paths only.</summary>
-    private void Front(SpriteBatch b, CorruptionAtlas atlas, Rectangle rect, float from, int to, float at, float peak)
-    {
-        if (at >= to - 0.001f || peak <= 0f) return;
-        var tr = Math.Clamp((int)MathF.Floor(at), (int)from, to - 1);
-        var p = Math.Clamp(at - tr, 0f, 1f);
-        var x = p * (CorruptionAtlas.Frames - 1);
-        var i = (int)MathF.Floor(x);
-        var w = x - i;
-        var ramp = Math.Min(1f, (at - from) * 6f);   // it kindles in, rather than switching on
-        V(b, atlas.Front[tr * CorruptionAtlas.Frames + i], rect, EmissionHot * (peak * ramp * (1f - w)));
-        if (i + 1 < CorruptionAtlas.Frames) V(b, atlas.Front[tr * CorruptionAtlas.Frames + i + 1], rect, EmissionHot * (peak * ramp * w));
-    }
+    private static int GrowFrame(float reveal)
+        => Math.Clamp((int)MathF.Ceiling(reveal * TerritoryAtlas.Frames) - 1, 0, TerritoryAtlas.Frames - 1);
 
-    /// <summary>A dying host's curse: it brightens once, then collapses back along its paths to the seat.</summary>
-    private void DrawCorruptionLeaving(SpriteBatch b, int slot, int stage, float age, Rectangle rect, Rectangle body, DepthStencilState inside, RasterizerState raster,
-                                       SpriteFrame frame)
+    /// <summary>
+    /// A dying host's curse: its territories flare once, then collapse, drain away and smoke out, in the SAME material
+    /// it wore alive (the tissue's share, the body's shade, the restrained light) and from what it WORE (a host that fell
+    /// mid-bloom collapses from its bloom).
+    /// </summary>
+    private void DrawCorruptionLeaving(SpriteBatch b, int slot, int stage, float age, float died, Vector2 anchor, Rectangle body,
+                                       DepthStencilState inside, RasterizerState raster, SpriteFrame frame, Color tint)
     {
-        var luma = HostLuma(frame);
-        var light = LightFor(luma);
-        Orient(slot, body);
-        var atlas = Corruption(b.GraphicsDevice);
+        var lay = _layout?[slot];
+        if (lay is null) return;
+        var device = b.GraphicsDevice;
+        var atlas = Territories(device);
+        var host = Host(device, frame.Texture);
+        var look = _hostOf?[slot]?.Look ?? host.Look;
+        var light = LightFor(look.Luma) * Restraint(look);
+        var emission = EmissionFor(look);
+        var bruise = BruiseFor(look.Luma);
+        var deep = 0.5f * PaleHost(look.Luma);
         const float flash = 150f, collapse = 600f;
         var p = age < flash ? 0f : Math.Min(1f, (age - flash) / collapse);
-        var at = stage * (1f - Smooth(p));
+        var fall = 1f - Smooth(p);
+        var count = Math.Min(lay.Available, TerritoriesAt(stage));
+        if (fall <= 0.01f) return;
+        // what it wore the moment before it fell
+        Span<float> wore = stackalloc float[MaxTerritories];
+        Prepare(slot, died - 1f);
+        var kind0 = _flareKind[slot];
+        var before0 = kind0 == 3 ? Math.Min(lay.Available, TerritoriesAt(_stage[slot] - 1)) : 0;
+        for (var k = 0; k < count; k++) wore[k] = Reveal(kind0, _flareAge[slot], k, before0);
+        _cacheAt[slot] = float.NaN;
+        for (var k = 0; k < count; k++)
+        {
+            var left = wore[k] * fall;
+            if (left <= 0.01f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            var mask = left >= 1f ? atlas.Drain[v] : atlas.DrainGrow[v * TerritoryAtlas.Frames + GrowFrame(left)];
+            DrainQuad(device, frame, host.Drained, mask, anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip, DrainStrength(look) * left, tint, raster);
+        }
         b.Begin(SpriteSortMode.Deferred, Stain, SamplerState.LinearClamp, inside, raster);
-        V(b, atlas.Tissue[stage - 1], rect, BruiseFor(luma) * (1f - p));
-        DarkGrowth(b, atlas, rect, 0f, stage, at);
+        Fill(b, body, AfflictedShade * ((0.08f + 0.04f * stage) * fall));
+        for (var k = 0; k < count; k++)
+        {
+            var left = wore[k] * fall;
+            if (left <= 0.01f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            var f = GrowFrame(left);
+            var tissue = left >= 1f ? atlas.Tissue[v] : atlas.TissueGrow[v * TerritoryAtlas.Frames + f];
+            T(b, tissue, anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip, bruise * TissueOn(look));
+            if (deep > 0f) T(b, tissue, anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip, bruise * (TissueShare * deep));
+            T(b, left >= 1f ? atlas.Dark[v] : atlas.DarkGrow[v * TerritoryAtlas.Frames + f], anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip, VeinStain);
+        }
         b.End();
-        if (age < flash)
+        b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, inside, raster);
+        for (var k = 0; k < count; k++)
         {
-            b.Begin(SpriteSortMode.Deferred, Screen, SamplerState.LinearClamp, inside, raster);
-            V(b, atlas.Emit[stage - 1], rect, Emission * (IdleEmission * light * (1f + 0.8f * MathF.Sin(age / flash * MathF.PI))));
-            b.End();
+            var left = wore[k] * fall;
+            if (left <= 0.01f) continue;
+            var (v, turn, flip) = Look(slot, k);
+            if (age < flash)
+                T(b, atlas.Emit[v], anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip,
+                  emission * (0.6f * light * wore[k] * MathF.Sin(age / flash * MathF.PI)));
+            else
+                T(b, atlas.FrontGrow[v * TerritoryAtlas.Frames + GrowFrame(left)], anchor + lay.Offset[k], FieldSide(lay.Diameter[k]), turn, flip,
+                  EmissionHot * (FrontPeak * light * 0.7f * left));
         }
-        else if (at > 0.02f)
-        {
-            b.Begin(SpriteSortMode.Deferred, VfxBlend.PremultipliedAdditive, SamplerState.LinearClamp, inside, raster);
-            Front(b, atlas, rect, 0f, stage, at, FrontPeak * light * 0.8f * (1f - p));
-            b.End();
-        }
+        b.End();
+    }
+
+    /// <summary>A falling host's territories smoking out (drawn outside the body): a few wisps from each, rising, gone.</summary>
+    private void DrawCorruptionSmokeOut(SpriteBatch b, int slot, int stage, float p, Vector2 anchor, Rectangle body, float fade)
+    {
+        var lay = _layout?[slot];
+        if (lay is null) return;
+        var count = Math.Min(lay.Available, TerritoriesAt(stage));
+        for (var k = 0; k < count; k++)
+            for (var i = 0; i < 2; i++)
+            {
+                var q = Math.Clamp(p * 1.4f - i * 0.15f - k * 0.05f, 0f, 1f);
+                if (q <= 0f) continue;
+                var from = anchor + lay.Offset[k];
+                var to = from + new Vector2(MathF.Sin(k * 1.7f + i) * 10f, -q * body.Height * 0.3f);
+                var size = lay.Diameter[k] * (0.3f + 0.25f * q);
+                Streak(b, to, size * 0.6f, size * 1.3f, WispSmoke * (0.55f * (1f - q) * fade));
+            }
     }
 
     private void Streak(SpriteBatch b, Vector2 at, float w, float h, Color c)
@@ -472,413 +912,368 @@ public sealed partial class CursePrototype
         SpriteCount++;
     }
 
-    /// <summary>A texel of the corruption field on screen (the same transform <see cref="V"/> draws with).</summary>
-    private Vector2 FieldToScreen(Vector2 texel, Rectangle rect)
-    {
-        var half = CorruptionAtlas.N * 0.5f;
-        var d = texel - new Vector2(half, half);
-        if (_veinFlip == SpriteEffects.FlipHorizontally) d.X = -d.X;
-        d *= rect.Width / (float)CorruptionAtlas.N;
-        var c = MathF.Cos(_veinTurn);
-        var sn = MathF.Sin(_veinTurn);
-        return rect.Center.ToVector2() + new Vector2(d.X * c - d.Y * sn, d.X * sn + d.Y * c);
-    }
-
     /// <summary>
-    /// THE CURSE LEAKS: each infected territory reached at this depth breathes out ONE slow wisp of shadow with a faint
-    /// violet core, rising out of the body past its outline (cloth and armour cannot do that: a stain clipped inside
-    /// the silhouette read as "a sash", "a belt", "a bodice", "a pendant" in stills). Quiet: one wisp per territory,
-    /// ~2.8 s each, low alpha; more territories as the curse deepens.
+    /// THE CURSE LEAKS OUT OF ITS TERRITORIES: now and then a slow wisp of Shadow leaves one infected territory, rises
+    /// past the silhouette and is gone in about a second and a half (cloth, armour, tattoos and a creature's own trim
+    /// cannot leak smoke); two more burst from a territory as it blooms, on the bloom's own clock (cut by the flare
+    /// window they vanished mid-flight). Never an aura: one territory at a time, mostly.
     /// </summary>
-    private void DrawCorruptionWisps(SpriteBatch b, int slot, float t, Rectangle body, Vector2 seat, RasterizerState raster)
+    private void DrawCorruptionWisps(SpriteBatch b, int slot, float playheadMs, float t, Rectangle body, Vector2 anchor, RasterizerState raster)
     {
         if (_kind[slot] != 2) return;
-        var atlas = Corruption(b.GraphicsDevice);
-        Orient(slot, body);
-        var rect = VeinRect(seat, body);
-        var reach = CorruptionAtlas.Reach[Math.Clamp(_stage[slot], 1, 3)] * atlas.Longest;
-        var rise = Math.Clamp(body.Height * 0.2f, 40f, 90f);
-        var drift = Math.Clamp(body.Width * 0.3f, 30f, 110f);
-        var size = Math.Clamp(body.Height * 0.1f, 22f, 46f);
-        const float life = 3200f;
+        var lay = _layout?[slot];
+        var host = _hostOf?[slot];
+        if (lay is null || host is null) return;
+        var stage = _stage[slot];
+        var kind = _flareKind[slot];
+        var age = _flareAge[slot];
+        var count = Math.Min(lay.Available, TerritoriesAt(stage));
+        var before = kind == 3 ? Math.Min(lay.Available, TerritoriesAt(stage - 1)) : 0;
+        var rise = Math.Clamp(body.Height * 0.17f, 30f, 80f);
+        var drift = Math.Clamp(body.Width * 0.18f, 16f, 60f);
+        var emission = EmissionFor(host.Look);
+        // the last bloom, on its own clock
+        var bKind = _burstKind?[slot] ?? 0;
+        var bAge = bKind == 0 ? -1f : playheadMs - _burstAt![slot];
+        var bBefore = _burstBefore?[slot] ?? 0;
+        const float period = 2800f, life = 1500f, burstLife = 950f;
         for (var pass = 0; pass < 2; pass++)
         {
             b.Begin(SpriteSortMode.Deferred, pass == 0 ? BlendState.AlphaBlend : Screen, SamplerState.LinearClamp, DepthStencilState.None, raster);
-            for (var w = 0; w < atlas.Seats.Count * 2; w++)
+            for (var k = 0; k < count; k++)
             {
-                var k = w >> 1;
-                var (at, birth) = atlas.Seats[k];
-                if (birth > reach) continue;
-                // two wisps per territory, half a life apart, so one is always rising
-                var age = ((t + k * 977f + slot * 431f + (w & 1) * life * 0.5f) % life + life) % life;
-                var q = age / life;
-                var env = MathF.Pow(MathF.Sin(q * MathF.PI), 1.3f);
-                var from = FieldToScreen(at, rect);
-                var sway = MathF.Sin(q * 3.1f + w * 1.7f) * size * 0.35f;
-                // it drifts OUT of the body (away from its centre line) as it rises, across the outline
-                var outward = from.X >= body.Center.X ? 1f : -1f;
-                var p = from + new Vector2(sway + outward * drift * q * q, -rise * q);
-                var sz = size * (0.55f + 0.7f * q);
-                // (violet-grey smoke, not black: black smoke vanished on the dark arena and the dark bodies)
-                // a RISING STREAK of smoke, taller than wide (a round puff read as "an orb" floating by the body)
-                if (pass == 0)
-                    Streak(b, p, sz * 0.62f, sz * 1.5f, WispSmoke * (0.62f * env));
-                else
-                    Streak(b, p + new Vector2(0f, sz * 0.12f), sz * 0.36f, sz * 0.95f, Emission * (0.5f * env * (1f - 0.5f * q)));
+                var reveal = Reveal(kind, age, k, before);
+                var from = anchor + lay.Offset[k];
+                var size = Math.Clamp(lay.Diameter[k] * 0.36f, 20f, 58f);
+                var outward = lay.Offset[k].X >= 0f ? 1f : -1f;
+                // the resting leak: one wisp from this territory every few seconds, each territory at its own moment;
+                // it fades in with its territory's bloom (switched on at the bloom's end, it popped in mid-flight)
+                var w0 = ((t + Hash(slot * 13 + k * 29) * period) % period + period) % period;
+                if (reveal > 0f && w0 < life) Wisp(b, pass, from, w0 / life, size, rise, drift * outward, k, emission, reveal);
+                // the bloom's burst: two wisps escape as the territory takes hold
+                if (bKind != 0 && bAge >= 0f && (bKind != 3 || k >= bBefore))
+                {
+                    var start = bKind switch
+                    {
+                        1 => 0.45f * GrowMs,
+                        2 => k * ArriveStaggerMs + 0.45f * ArriveGrowMs,
+                        _ => TravelMs + (k - bBefore) * DeepenStaggerMs + 0.45f * DeepenGrowMs,
+                    };
+                    for (var i = 0; i < 2; i++)
+                    {
+                        var ba = bAge - start - i * 160f;
+                        if (ba < 0f || ba > burstLife) continue;
+                        Wisp(b, pass, from, ba / burstLife, size * 0.9f, rise * 1.1f, drift * (i == 0 ? outward : -outward) * 0.8f, k + 5 * i, emission,
+                             bKind == 2 ? ArrivalShare : 1f);
+                    }
+                }
             }
             b.End();
         }
     }
 
-    private void DrawCorruptionLoose(SpriteBatch b, int slot, float t, Rectangle body, Vector2 seat)
+    private void Wisp(SpriteBatch b, int pass, Vector2 from, float q, float size, float rise, float drift, int seed, Color emission, float share)
     {
-        // THE LEAKS: a wisp of shadow per depth at rest, faint; a few more as it grows
-        var stage = _stage[slot];
-        var f = _flare[slot];
-        var count = stage + (f > 0.05f ? 4 : 0);
-        for (var i = stage; i < count; i++)
+        var env = MathF.Pow(MathF.Sin(q * MathF.PI), 1.2f) * (1f - 0.4f * q) * share;
+        var sway = MathF.Sin(q * 3.1f + seed * 1.7f) * size * 0.3f;
+        var p = from + new Vector2(sway + drift * q * q, -rise * q);
+        var sz = size * (0.6f + 0.7f * q);
+        // a RISING STREAK of violet-grey smoke with a faint violet core (round puffs read as "orbs"; black smoke vanished)
+        if (pass == 0)
+            Streak(b, p, sz * 0.62f, sz * 1.5f, WispSmoke * (0.62f * env));
+        else
+            Streak(b, p + new Vector2(0f, sz * 0.12f), sz * 0.36f, sz * 0.95f, emission * (0.5f * env * (1f - 0.5f * q)));
+    }
+
+    // ── THE HOST MATERIAL PASS (a stock DualTextureEffect: the drained copy through a territory's mask) ────────────────
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private readonly struct VertexDual : IVertexType
+    {
+        public readonly Vector3 Position;
+        public readonly Vector2 Uv;
+        public readonly Vector2 Uv2;
+
+        public VertexDual(Vector3 position, Vector2 uv, Vector2 uv2)
         {
-            var burst = i >= stage;
-            var life = burst ? FlareMs : 2400f;
-            var age = burst ? _flareAge[slot] - (i - stage) * 60f : ((t + i * 733f) % life + life) % life;
-            if (age < 0f || age >= life) continue;
-            var q = age / life;
-            var hx = Hash(slot * 13 + i * 5) - 0.5f;
-            var hy = Hash(slot * 7 + i * 11) - 0.5f;
-            var from = seat + new Vector2(hx * body.Width * 0.45f, hy * body.Height * 0.4f);
-            var at = from + new Vector2(MathF.Sin(q * 4f + i) * 4f, -q * (burst ? 40f : 24f));
-            var a = (burst ? 0.26f * f : 0.09f) * MathF.Sin(q * MathF.PI);
-            Puff(b, at, body.Height * (burst ? 0.08f : 0.065f) * (0.7f + q), Ink * a);
+            Position = position;
+            Uv = uv;
+            Uv2 = uv2;
         }
+
+        public static readonly VertexDeclaration Declaration = new(
+            new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
+            new VertexElement(12, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0),
+            new VertexElement(20, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 1));
+
+        VertexDeclaration IVertexType.VertexDeclaration => Declaration;
+    }
+
+    private DualTextureEffect? _dual;
+    private readonly VertexDual[] _quad = new VertexDual[4];
+    private static readonly RasterizerState QuadRaster = new() { CullMode = CullMode.None };
+    private static readonly RasterizerState QuadRasterScissor = new() { CullMode = CullMode.None, ScissorTestEnable = true };
+
+    /// <summary>
+    /// The host's DRAINED material over one territory: the drained copy of the host's current frame, its alpha the
+    /// territory's soft mask (DualTextureEffect: rgb = 2 x drained x mask x 0.5, alpha = drained.a x mask.a x strength,
+    /// premultiplied), over the host. The quad is the territory's bounds within the frame, so the strip's neighbouring
+    /// frames are never sampled.
+    /// </summary>
+    private void DrainQuad(GraphicsDevice d, SpriteFrame frame, Texture2D drained, Texture2D mask, Vector2 centre, float side, float turn, bool flipMask,
+                           float strength, Color tint, RasterizerState raster)
+    {
+        if (strength <= 0.004f || tint.A == 0) return;
+        var ext = side * 0.5f * (MathF.Abs(MathF.Cos(turn)) + MathF.Abs(MathF.Sin(turn)));
+        var box = new Rectangle((int)(centre.X - ext), (int)(centre.Y - ext), (int)(2f * ext) + 2, (int)(2f * ext) + 2);
+        var r = Rectangle.Intersect(box, frame.Dest);
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var dual = _dual ??= new DualTextureEffect(d);
+        var vp = d.Viewport;
+        dual.World = Matrix.Identity;
+        dual.View = Matrix.Identity;
+        dual.Projection = Matrix.CreateOrthographicOffCenter(0, vp.Width, vp.Height, 0, 0, 1);
+        dual.Texture = drained;
+        dual.Texture2 = mask;
+        // (the creature's draw colour, premultiplied: unpremultiplied into the diffuse, its alpha into the strength)
+        var ta = tint.A / 255f;
+        dual.DiffuseColor = new Vector3(tint.R / 255f / ta, tint.G / 255f / ta, tint.B / 255f / ta) * 0.5f;
+        dual.Alpha = Math.Min(1f, strength * ta);
+        var flipX = (frame.Effects & SpriteEffects.FlipHorizontally) != 0;
+        var flipY = (frame.Effects & SpriteEffects.FlipVertically) != 0;
+        var cos = MathF.Cos(-turn);
+        var sin = MathF.Sin(-turn);
+        var dest = frame.Dest;
+        var srcR = frame.Src;
+        float tw = drained.Width, th = drained.Height;
+        VertexDual Corner(float x, float y)
+        {
+            var lx = (x - dest.X) / dest.Width;
+            var ly = (y - dest.Y) / dest.Height;
+            if (flipX) lx = 1f - lx;
+            if (flipY) ly = 1f - ly;
+            var uv = new Vector2((srcR.X + lx * srcR.Width) / tw, (srcR.Y + ly * srcR.Height) / th);
+            var dx = x - centre.X;
+            var dy = y - centre.Y;
+            var mx = (dx * cos - dy * sin) / side + 0.5f;
+            var my = (dx * sin + dy * cos) / side + 0.5f;
+            if (flipMask) mx = 1f - mx;
+            return new VertexDual(new Vector3(x, y, 0f), uv, new Vector2(mx, my));
+        }
+        _quad[0] = Corner(r.Left, r.Top);
+        _quad[1] = Corner(r.Right, r.Top);
+        _quad[2] = Corner(r.Left, r.Bottom);
+        _quad[3] = Corner(r.Right, r.Bottom);
+        d.BlendState = BlendState.AlphaBlend;
+        d.DepthStencilState = DepthStencilState.None;
+        d.RasterizerState = raster.ScissorTestEnable ? QuadRasterScissor : QuadRaster;
+        d.SamplerStates[0] = SamplerState.LinearClamp;
+        d.SamplerStates[1] = SamplerState.LinearClamp;
+        foreach (var pass in dual.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            d.DrawUserPrimitives(PrimitiveType.TriangleStrip, _quad, 0, 2);
+        }
+        SpriteCount++;
     }
 
     /// <summary>
-    /// The corruption's textures, built once per device: white premultiplied masks (the tint is the colour), N x N,
-    /// centred on the seat. <see cref="Dark"/> and <see cref="Emit"/> per depth; <see cref="Idle"/> the resting emission
-    /// split into sections that answer in turn; <see cref="Grow"/> the NEW dark paths of each transition (0 -> 1, 1 -> 2,
-    /// 2 -> 3) in <see cref="Frames"/> steps; <see cref="Front"/> the bright front travelling through them.
+    /// The infected TERRITORIES' textures, grown once per device: white premultiplied masks (the tint is the colour), N x
+    /// N, a few variants. Each variant: the infected <see cref="Tissue"/> (an irregular smoky region with satellite
+    /// blotches, never a disc), the softer, wider <see cref="Drain"/> (where the host's material changes), the
+    /// <see cref="Dark"/> vein fragments (short, tapered, inside the region) and mottled darkening, the <see cref="Emit"/>
+    /// light from inside (a soft mottled core, tapered runs along the fragments, a broken bright contaminated edge on one
+    /// side), and its bloom in <see cref="Frames"/> steps from the infection's centre outward.
     /// </summary>
-    internal sealed class CorruptionAtlas
+    internal sealed class TerritoryAtlas
     {
-        public const int N = 320;
-        public const int Frames = 7;
+        public const int N = 160;
+        public const int Variants = 4;
+        public const int Frames = 6;
         public const int IdleGroups = 3;
-        private const int SeatVeinlets = 3;
 
-        private static CorruptionAtlas? _built;
+        /// <summary>The share of the field's side a territory's region spans (its diameter is this x the side).</summary>
+        public const float Fill = 0.68f;
+
+        /// <summary>The bloom's last frame reaches this far in birth (every texel of the region is born by 1.2), so the
+        /// grown frames end on the whole region and the settled masks follow without a pop.</summary>
+        internal const float BloomReach = 1.36f;
+
+        /// <summary>A texel's reveal in a bloom frame whose front stands at <paramref name="at"/>.</summary>
+        internal static float RevealAt(float at, float birth) => Math.Clamp((at - birth) / 0.14f, 0f, 1f);
+
+        private static TerritoryAtlas? _built;
         private static GraphicsDevice? _device;
 
-        public Texture2D[] Dark = null!, Emit = null!, Idle = null!, Grow = null!, Front = null!, Tissue = null!;
+        public Texture2D[] Tissue = null!, Drain = null!, Dark = null!, Emit = null!, Idle = null!;
+        public Texture2D[] TissueGrow = null!, DarkGrow = null!, DrainGrow = null!, FrontGrow = null!;
 
-        /// <summary>The corruption's path reach at each depth, as a share of the longest path (depth 0 = nothing).</summary>
-        public static readonly float[] Reach = { 0f, 0.24f, 0.5f, 0.86f };
+        // the grown fields, texel by texel (kept for the tests)
+        internal readonly float[][] TissueF = new float[Variants][], DrainF = new float[Variants][], DarkF = new float[Variants][],
+                                    VeinF = new float[Variants][], EmitF = new float[Variants][], RunF = new float[Variants][],
+                                    BirthF = new float[Variants][];
+        internal readonly int[][] GroupF = new int[Variants][];
 
-        // the grown field, texel by texel (kept for the tests and the measures)
-        internal float[] Cover = null!, Birth = null!, Glow = null!, Blot = null!, BlotBirth = null!, Leak = null!;
-        internal int[] Group = null!;
-        internal float Longest;
+        /// <summary>Each variant's vein fragments' lengths (texels).</summary>
+        internal readonly List<float>[] Fragments = new List<float>[Variants];
 
-        /// <summary>Where each infected territory sits (texel space) and when it is born (path length): the entry
-        /// pocket, the side and lower territories, and the upper one at its path's end. Each leaks a shadow wisp.</summary>
-        internal readonly List<(Vector2 At, float Birth)> Seats = new();
-
-        /// <summary>Where the corruption ENTERED (texel space): off the field's centre, so no path is the body's axis.</summary>
-        /// (well off the torso's centre line, toward one flank: a patch on the centre line sat where a belt buckle, a
-        /// brooch or a bodice goes, and read as one; garments are symmetric about that line, an infection is not)
-        internal static readonly Vector2 Entry = new(N / 2f + 28f, N / 2f - 6f);
-
-        public static CorruptionAtlas For(GraphicsDevice device)
+        public static TerritoryAtlas For(GraphicsDevice device)
         {
             if (_built is not null && _device == device) return _built;
             _device = device;
-            var a = Grow_(20261001);
+            var a = Grow_(20261002);
             a.Upload(device);
             _built = a;
             return _built;
         }
 
-        // a growing vein: Kind 0 a branch, 1 a PATH to another territory (crooked, broken once, ends in a territory),
-        // 2 a veinlet of the entry pocket, 3 a territory's fork
-        private readonly record struct Tip(float X, float Y, float Ang, float W0, float Len, float MaxLen, int Parent, int Side, int Kind, bool Lit);
-
-        /// <summary>Grows the field (no device: the tests read it).</summary>
-        /// <remarks>
-        /// THE COMPOSITION (owner's brief, 2026-10-01): an off-centre ENTRY POCKET (a smoky infection patch leaking violet
-        /// from inside, with short uneven veinlets: depth 1); two crooked PATHS to other territories, each broken once by
-        /// a gap that only smoke bridges, and one short branch across the body's axis; each path opens into a TERRITORY
-        /// (forks fanning out, one of them sideways, and infected patches). No one line runs through the body (two
-        /// trunks up and down read as "a zipper", "a seam", "a sash" on a robe), no loop closes, no path meets another.
-        /// THE LIGHT: short, tapered, irregular RUNS inside the veins (dark, a dim run, a brighter short one, dark), set
-        /// a little off each vein's centre; no round node, no evenly spaced knots (gated knots read as "a string of beads").
-        /// </remarks>
-        internal static CorruptionAtlas Grow_(int seed)
+        /// <summary>Grows every variant (no device: the tests read the fields).</summary>
+        internal static TerritoryAtlas Grow_(int seed)
         {
-            var a = new CorruptionAtlas();
-            var n2 = N * N;
-            a.Cover = new float[n2];
-            a.Birth = new float[n2];
-            Array.Fill(a.Birth, float.PositiveInfinity);
-            a.Glow = new float[n2];
-            a.Blot = new float[n2];
-            a.BlotBirth = new float[n2];
-            Array.Fill(a.BlotBirth, float.PositiveInfinity);
-            a.Leak = new float[n2];
-            a.Group = new int[n2];
-            var owner = new int[n2];
-            Array.Fill(owner, -1);
+            var a = new TerritoryAtlas();
             var rng = new Random(seed);
-            float R() => (float)rng.NextDouble();
-            var c = N / 2f;
-            var maxR = N * 0.48f;
-            var tips = new Queue<Tip>();
-            var nextId = 0;
-            var puffs = new List<(float X, float Y, float Birth, float Ang, float Size, float Leak)>();
-            var ex = Entry.X;
-            var ey = Entry.Y;
-            a.Seats.Add((new Vector2(ex, ey), 0f));
-            // THE ENTRY POCKET: a smoky patch, wider than tall, leaking violet from inside (depth 1's high-contrast region:
-            // dark on a pale body, lit on a black one)
-            // (big enough to be found at once on a boss: depth 1 is small, never faint)
-            // (wide and loose, a bruise spreading: compact and lit it read as "a brooch", "a rosette", "a knot"; small
-            // and tight at depth 1, "a bracelet", "a gem worn on the wrist", "small compared to the large creatures")
-            for (var k = 0; k < 10; k++)
-                puffs.Add((ex + (R() - 0.5f) * 80f, ey + (R() - 0.5f) * 38f, R() * 8f, R() * MathF.PI, 6.5f + R() * 6.5f, 0.68f));
-            // ITS ACTIVE CORE: where the curse is still pouring in, an ELONGATED hot smear (depth 1's one cue that reads on
-            // any host; never a round bead)
-            puffs.Add((ex + (R() - 0.5f) * 8f, ey + (R() - 0.5f) * 4f, 0f, R() * MathF.PI, 7f, 1.0f));
-            // its veinlets: few, uneven, bleeding out of ONE side of the stain (all round it, a stain with legs read as
-            // "a spider", "a starburst"); the first two catch the light as they leave it
-            var bleed = R() * MathF.Tau;
-            // (grown AFTER the paths, so a veinlet heading into a path stops short of it; grown first, one curled up
-            // beside the leaving path and closed a lens with it)
-            var veinlets = new List<Tip>();
-            for (var k = 0; k < SeatVeinlets; k++)
-            {
-                var ang = bleed + (k - 1) * 1.05f + (R() - 0.5f) * 0.6f;
-                var from = 7f + R() * 5f;
-                var born = 2f + R() * 8f;
-                // (two of them longer and lit: depth 1's "two short branches" of light leaving the stain)
-                veinlets.Add(new Tip(ex + MathF.Cos(ang) * from, ey + MathF.Sin(ang) * from * 0.7f, ang, 2.8f + R() * 1.0f,
-                                     born, born + (k < 2 ? 18f : 10f) + R() * 16f, -2, R() < 0.5f ? -1 : 1, 2, k < 2));
-            }
-            // THE PATHS: short, crooked, broken, each opening into a territory: one up and to one side, one ACROSS the
-            // body's axis to the other side. THE REGION IS TWO-DIMENSIONAL: territories laid along one line through the
-            // pocket read as a garment on a torso whatever the line's bearing ("a zipper", "a seam" upright; "a sash"
-            // shoulder to hip; "a belt" level), so they sit round the pocket, never in a row with it
-            // (ONE path leaves the pocket: two leaving it drew a bent line through it, however they were aimed; the other
-            // territories are reached by smoke alone)
-            var paths = new (float Ang, float Len, float W, int Kind)[]
-            {
-                (-2.3f, 0.2f, 5.0f, 1),     // up, to one side: the upper territory
-            };
-            for (var r = 0; r < paths.Length; r++)
-            {
-                var (pa, pl, pw, kind) = paths[r];
-                var ang = pa + (R() - 0.5f) * 0.25f;
-                var start = 11f + R() * 5f;
-                var born = 18f + r * 7f + R() * 6f;
-                tips.Enqueue(new Tip(ex + MathF.Cos(ang) * start, ey + MathF.Sin(ang) * start * 0.7f, ang, pw + R() * 0.6f,
-                                     born, born + N * pl * (0.9f + R() * 0.2f), -1, R() < 0.5f ? -1 : 1, kind, true));
-            }
-            // THE LOWER TERRITORY: its own infected region, below the pocket and off to the other side, joined to it only
-            // by a trail of small smoke patches; it wakes as the curse deepens (born later than the pocket's veins) and
-            // grows its own short veins, never toward the pocket
-            // (below and to the SAME side as the upper territory: with the across path's territory on the other side the
-            // three sit round the pocket; below and to the other side, they lined up shoulder to hip into "a sash")
-            var lx = ex - 22f + R() * 8f;
-            var ly = ey + 58f + R() * 8f;
-            a.Seats.Add((new Vector2(lx, ly), 60f));
-            for (var k = 1; k <= 3; k++)
-            {
-                var t = k / 4f;
-                puffs.Add((ex + (lx - ex) * t + (R() - 0.5f) * 8f, ey + (ly - ey) * t, 26f + 10f * k, 1.2f + (R() - 0.5f) * 0.8f,
-                           3f + R() * 2.5f, 0.22f));
-            }
-            for (var k = 0; k < 4; k++)
-                puffs.Add((lx + (R() - 0.5f) * 20f, ly + (R() - 0.5f) * 14f, 58f + R() * 8f, R() * MathF.PI, 5f + R() * 4f, 0.5f));
-            // (lopsided: one long root down and to one side, two short ones; two roots leaving it in opposite directions
-            // drew a bar across the lower body)
-            // (all to one side, down and away: roots in opposite directions crossed into an 'X')
-            var lowerFans = new (float Ang, float Len)[] { (2.3f, 0.17f), (1.45f, 0.09f), (3.1f, 0.07f) };
-            for (var k = 0; k < lowerFans.Length; k++)
-            {
-                var ang = lowerFans[k].Ang + (R() - 0.5f) * 0.3f;
-                var born = 62f + k * 6f + R() * 4f;
-                tips.Enqueue(new Tip(lx + MathF.Cos(ang) * 9f, ly + MathF.Sin(ang) * 6f, ang, 4.4f - k * 0.7f + R() * 0.5f,
-                                     born, born + N * lowerFans[k].Len * (0.85f + R() * 0.3f), -1, k % 2 == 0 ? 1 : -1, 0, k != 1));
-            }
-            // THE SIDE TERRITORY: across the body's axis from the upper one, its own infected region joined to the pocket
-            // by smoke only; its veins reach out and back across the axis, never to the pocket
-            // THREE TERRITORIES ~120 DEGREES APART round the pocket (up-left, up-right, down-left), no two of them opposite:
-            // two opposite territories drew a band through the pocket, and on a robe a band reads as a garment whatever
-            // its angle ("a sash" shoulder to hip, "a belt" level, "a seam" upright); the region measures 1.3 : 1
-            var sx = ex + 40f + R() * 8f;
-            var sy = ey - 26f + R() * 8f;
-            a.Seats.Add((new Vector2(sx, sy), 36f));
-            for (var k = 1; k <= 2; k++)
-                puffs.Add((ex + (sx - ex) * k / 3f, ey + (sy - ey) * k / 3f + (R() - 0.5f) * 6f, 20f + 8f * k, R() * MathF.PI, 3f + R() * 2.5f, 0.22f));
-            for (var k = 0; k < 3; k++)
-                puffs.Add((sx + (R() - 0.5f) * 16f, sy + (R() - 0.5f) * 12f, 34f + R() * 8f, R() * MathF.PI, 4.5f + R() * 4f, 0.5f));
-            var sideFans = new (float Ang, float Len)[] { (0.35f, 0.13f), (-0.55f, 0.08f), (1.3f, 0.09f) };
-            for (var k = 0; k < sideFans.Length; k++)
-            {
-                var ang = sideFans[k].Ang + (R() - 0.5f) * 0.3f;
-                var born = 38f + k * 5f + R() * 4f;
-                tips.Enqueue(new Tip(sx + MathF.Cos(ang) * 8f, sy + MathF.Sin(ang) * 6f, ang, 4.2f - k * 0.6f + R() * 0.5f,
-                                     born, born + N * sideFans[k].Len * (0.85f + R() * 0.3f), -1, k % 2 == 0 ? 1 : -1, 0, k != 1));
-            }
-            foreach (var v in veinlets) tips.Enqueue(v);
-            var kindOf = new List<int>();
-            while (tips.Count > 0)
-            {
-                var tip = tips.Dequeue();
-                var (x, y, ang) = (tip.X, tip.Y, tip.Ang);
-                var id = nextId++;
-                kindOf.Add(tip.Kind);
-                var len = tip.Len;
-                var turn = 0f;
-                var gap = 0;
-                var steps = 0;
-                var heading = ang;
-                var noiseSeed = R() * 100f;
-                var gapsLeft = tip.Kind == 1 ? 2 : 0;
-                var gapAt = 0.28f + R() * 0.1f;
-                // THE LIGHT'S RHYTHM on this vein: runs and dark stretches of irregular length
-                var inRun = tip.Lit;
-                var runLen = inRun ? 8 + rng.Next(8) : 0;
-                var runLeft = inRun ? runLen : 3 + rng.Next(14);
-                var runPeak = inRun ? 0.6f + R() * 0.3f : 0f;
-                var runGroup = rng.Next(IdleGroups);
-                var dim = 0f;
-                // the STRUCTURE carries the light (the paths, the territories' forks and roots): on a black body only the
-                // violet shows the corruption's reach, so its runs are fuller than a twig's or a veinlet's
-                var structural = tip.Kind is 1 or 3 || tip.Parent == -1;
-                while (len < tip.MaxLen)
-                {
-                    // it MEANDERS round its own heading and never curls back (a curling vein drew hooks, a '2', a loop);
-                    // a path's heading itself drifts, so it runs crooked, never ruled
-                    if (tip.Kind == 1) heading += (R() - 0.5f) * 0.13f;   // (a smooth long line read as "a strap", "a sash")
-                    turn = turn * 0.86f + (R() - 0.5f) * 0.11f;
-                    ang += turn + (heading - ang) * 0.07f;
-                    x += MathF.Cos(ang) * 1.2f;
-                    y += MathF.Sin(ang) * 1.2f;
-                    len += 1.2f;
-                    steps++;
-                    if (MathF.Sqrt(Sq(x - c) + Sq(y - c)) > maxR) break;
-                    var life = 1f - (len - tip.Len) / Math.Max(1f, tip.MaxLen - tip.Len);
-                    var w = tip.W0 * (0.45f + 0.55f * life) * (0.7f + 0.6f * Noise1(len / 20f + noiseSeed));
-                    // a vein that thins to a hairline DIES there (hairlines on cloth read as "threads", "a knot of yarn")
-                    if (w < 1.25f && steps > 3) break;
-                    // the light: a run rises fast, holds, and tapers long; then the vein is dark for a while
-                    if (runLeft-- <= 0)
-                    {
-                        inRun = !inRun;
-                        if (inRun)
-                        {
-                            var hot = R() < 0.18f;
-                            runLen = hot ? 5 + rng.Next(5) : 6 + rng.Next(9);   // (long lit runs read as a cord)
-                            runPeak = hot ? 0.9f + R() * 0.1f : structural ? 0.55f + R() * 0.35f : 0.45f + R() * 0.35f;
-                            runGroup = rng.Next(IdleGroups);
-                            runLeft = runLen;
-                        }
-                        else
-                        {
-                            runLeft = structural ? 3 + rng.Next(7) : 4 + rng.Next(10);
-                            // half the dark stretches of a lit vein still carry a DIM violet: a bright run then sits inside
-                            // dim light (dark, dim, a brighter run, dark), never a lone dash between dark gaps
-                            dim = tip.Lit && R() < 0.5f ? 0.14f + R() * 0.1f : 0f;
-                        }
-                    }
-                    var glow = inRun ? Math.Max(dim, runPeak * RunProfile(1f - (runLeft + 1f) / Math.Max(1, runLen)))
-                                       * (0.85f + 0.15f * Noise1(len / 3f + noiseSeed))
-                                     : dim * (0.7f + 0.3f * Noise1(len / 5f + noiseSeed));
-                    // A PATH BREAKS ONCE: a gap only smoke bridges (the eye cannot follow one line through the body)
-                    if (gapsLeft > 0 && len - tip.Len > gapAt * (tip.MaxLen - tip.Len))
-                    {
-                        gapsLeft--;
-                        gapAt += 0.3f + R() * 0.1f;
-                        heading += (R() < 0.5f ? -1f : 1f) * (0.25f + R() * 0.2f);   // and it resumes on a new bearing
-                        gap = 6 + rng.Next(5);
-                        puffs.Add((x + MathF.Cos(ang) * gap * 0.6f, y + MathF.Sin(ang) * gap * 0.6f, len, ang, 5f + R() * 3f, 0.3f));
-                    }
-                    if (gap > 0) { gap--; continue; }
-                    // BROKEN: a thin vein now and then breaks for a few texels
-                    if (w < 2.6f && steps > 10 && R() < 0.02f) { gap = 2 + rng.Next(5); continue; }
-                    // NO MESH: a vein that would run into another ends BEFORE it touches (after it has left its own branch
-                    // point): it looks a few texels ahead, since stopping on contact had already closed the cell
-                    if (steps > 6 && WouldMeet(a, owner, kindOf, x, y, ang, w, id)) break;
-                    Stamp(a, owner, x, y, ang, w, len, id, glow, runGroup, (Noise1(len / 6f + noiseSeed * 2f) * 2f - 1f) * 0.22f);
-                    // BRANCHES: asymmetric (mostly to one side), forking FORWARD at a shallow angle; many die early; a
-                    // branch leaves its fork with a tapered highlight, never a round bead on the fork
-                    if (steps > 5 && w > 1.0f && R() < 0.06f)
-                    {
-                        var s = R() < 0.7f ? tip.Side : -tip.Side;
-                        var childAng = ang + s * (0.35f + R() * 0.5f);
-                        var childLen = (tip.MaxLen - len) * (R() < 0.65f ? 0.08f + R() * 0.2f : 0.3f + R() * 0.5f);
-                        tips.Enqueue(new Tip(x, y, childAng, Math.Max(2.0f, w * (0.55f + R() * 0.2f)), len, len + childLen, id, s, 0, R() < 0.45f));
-                        if (R() < 0.25f) puffs.Add((x, y, len, ang, 3.5f + R() * 3f, 0.3f));
-                    }
-                    // INFECTED PATCHES along the way, more of them far out (the deepest depth's)
-                    if (tip.Kind != 2 && R() < (len > 0.45f * N ? 0.014 : 0.006))
-                        puffs.Add((x, y, len, ang, 4f + R() * 4f, 0.35f));
-                    // A PATH OPENS INTO A TERRITORY: forks fanning out (one sideways, across the body) and a cluster of
-                    // infected patches; a branch's end breaks into two or three uneven forks
-                    if (len + 1.2f >= tip.MaxLen && tip.Kind != 2 && tip.W0 > 2.2f)
-                    {
-                        if (tip.Kind == 1)
-                        {
-                            a.Seats.Add((new Vector2(x, y), len));
-                            // (the sideways fan turns AWAY from where the path came from: turned back, it closed a cell
-                            // with the path and the patches)
-                            // (two, uneven: three or more fanned out like fingers, "a hand", "a crown")
-                            var fans = new[] { -0.45f, 1.0f };
-                            foreach (var f in fans)
-                                tips.Enqueue(new Tip(x, y, ang + f + (R() - 0.5f) * 0.3f, tip.W0 * 0.6f, len,
-                                                     len + N * (0.1f + R() * 0.1f), id, f < 0 ? -1 : 1, 3, R() < 0.6f));
-                            for (var k = 0; k < 3; k++)
-                                puffs.Add((x + (R() - 0.5f) * 22f, y + (R() - 0.5f) * 22f, len + 4f + R() * 18f, R() * MathF.PI, 5f + R() * 4f, 0.45f));
-                        }
-                        else
-                        {
-                            var forks = 2 + rng.Next(2);
-                            for (var k = 0; k < forks; k++)
-                            {
-                                var fa = ang + (k - (forks - 1) * 0.5f) * (0.45f + R() * 0.35f);
-                                var fl = (tip.MaxLen - tip.Len) * (0.3f + R() * 0.35f);
-                                tips.Enqueue(new Tip(x, y, fa, Math.Max(2.0f, tip.W0 * 0.6f), len, len + fl, id, k % 2 == 0 ? tip.Side : -tip.Side, 0, R() < 0.4f));
-                            }
-                        }
-                    }
-                }
-            }
-            a.Longest = 0f;
-            for (var i = 0; i < n2; i++) if (!float.IsPositiveInfinity(a.Birth[i])) a.Longest = Math.Max(a.Longest, a.Birth[i]);
-            // THE PATCHES: smoky, stretched along the vein they sit on, ragged at the edge; each leaks violet from inside
-            foreach (var (x, y, birth, ang, size, leak) in puffs)
-                for (var k = 0; k < 3; k++)
-                    Puff(a, x + (R() - 0.5f) * size, y + (R() - 0.5f) * size * 0.7f, size * (0.8f + R() * 0.6f),
-                         size * (0.45f + R() * 0.3f), ang + (R() - 0.5f) * 0.6f, 0.85f, leak, birth);
+            for (var v = 0; v < Variants; v++) a.GrowVariant(v, rng);
             return a;
         }
 
-        /// <summary>Does another vein lie just ahead (its cover, a few texels on, beyond this one's own half width)? A
-        /// veinlet of the pocket never stops a path (the paths grow first; a veinlet stops at a path instead).</summary>
-        private static bool WouldMeet(CorruptionAtlas a, int[] owner, List<int> kindOf, float x, float y, float ang, float w, int id)
+        private void GrowVariant(int v, Random rng)
         {
-            for (var d = 1f; d <= w * 0.5f + 4f; d += 1f)
-                for (var side = -1; side <= 1; side++)
+            float R() => (float)rng.NextDouble();
+            var n2 = N * N;
+            var c = N / 2f;
+            var rad = N * 0.27f;
+            var tissue = new float[n2];
+            // the infection's own centre, a little off the field's
+            var ox = c + (R() - 0.5f) * rad * 0.3f;
+            var oy = c + (R() - 0.5f) * rad * 0.3f;
+            // LOBES: overlapping smoky puffs round it (an irregular region, never a disc, never a ring)
+            var lobes = 5 + rng.Next(3);
+            var spin = R() * MathF.Tau;
+            for (var i = 0; i < lobes; i++)
+            {
+                var ang = spin + i * MathF.Tau / lobes + (R() - 0.5f) * 0.9f;
+                var dist = i == 0 ? 0f : rad * (0.25f + R() * 0.35f);
+                var maj = rad * (0.42f + R() * 0.25f);
+                Puff(tissue, ox + MathF.Cos(ang) * dist, oy + MathF.Sin(ang) * dist * 0.85f, maj, maj * (0.6f + R() * 0.3f), R() * MathF.PI, 0.9f);
+            }
+            // SATELLITES: small blotches just off the edge (the edge breaks up: a clean outline read as "a patch", "a decal")
+            var sats = 2 + rng.Next(2);
+            for (var i = 0; i < sats; i++)
+            {
+                var ang = R() * MathF.Tau;
+                var dist = rad * (0.88f + R() * 0.28f);
+                var maj = rad * (0.15f + R() * 0.1f);
+                Puff(tissue, ox + MathF.Cos(ang) * dist, oy + MathF.Sin(ang) * dist, maj, maj * (0.6f + R() * 0.3f), R() * MathF.PI, 0.75f);
+            }
+            // contaminated tissue, mottled (never a flat fill)
+            for (var i = 0; i < n2; i++) tissue[i] *= 0.62f + 0.38f * Smoke(i);
+            // where the HOST's material changes: softer and a little wider than the tissue
+            var drainBlur = Blur(Blur(tissue, 4), 4);
+            var drain = new float[n2];
+            for (var i = 0; i < n2; i++) drain[i] = Math.Min(1f, Math.Max(tissue[i], drainBlur[i] * 1.45f));
+            // THE BLOOM's order: outward from the infection's centre, raggedly
+            var birth = new float[n2];
+            for (var i = 0; i < n2; i++)
+            {
+                int x = i % N, y = i / N;
+                var dd = MathF.Sqrt(Sq(x + 0.5f - ox) + Sq(y + 0.5f - oy)) / (rad * 1.3f);
+                birth[i] = Math.Clamp(dd + 0.28f * (Noise2(x / 7f, y / 7f) - 0.5f), 0f, 1.2f);
+            }
+            // VEIN FRAGMENTS: two to four, short (under half the region's radius), tapered, heading outward, ending
+            // inside the region (a long line followed a collar or a seam: "a sash", "a stole", "embroidery")
+            var veins = new float[n2];
+            var runs = new float[n2];
+            var group = new int[n2];
+            Fragments[v] = new List<float>();
+            var frags = 2 + rng.Next(3);
+            for (var fI = 0; fI < frags; fI++)
+            {
+                var a0 = R() * MathF.Tau;
+                var r0 = rad * (0.1f + R() * 0.3f);
+                var x = ox + MathF.Cos(a0) * r0;
+                var y = oy + MathF.Sin(a0) * r0 * 0.85f;
+                // outward, or across the region (half of them), so a fragment ends inside it
+                var ang = a0 + (R() < 0.5f ? 0f : (R() < 0.5f ? -1f : 1f) * MathF.PI * 0.5f) + (R() - 0.5f) * 0.7f;
+                var length = rad * (0.3f + R() * 0.3f);
+                var w0 = 2.8f + R() * 1.0f;
+                var turn = 0f;
+                var len = 0f;
+                var runFrom = length * (0.1f + R() * 0.25f);
+                var runLen = length * (0.45f + R() * 0.25f);
+                var runPeak = 0.72f + R() * 0.28f;   // (the violet lives in the fissures now)
+                var seed = R() * 100f;
+                var gI = rng.Next(IdleGroups);
+                while (len < length)
                 {
-                    var px = (int)(x + MathF.Cos(ang) * d - MathF.Sin(ang) * side * w * 0.4f);
-                    var py = (int)(y + MathF.Sin(ang) * d + MathF.Cos(ang) * side * w * 0.4f);
-                    if (px < 0 || py < 0 || px >= N || py >= N) continue;
-                    var i = py * N + px;
-                    var o = owner[i];
-                    if (o >= 0 && o != id && kindOf[o] != 2 && a.Cover[i] > 0.3f) return true;
+                    turn = turn * 0.85f + (R() - 0.5f) * 0.16f;
+                    ang += turn;
+                    x += MathF.Cos(ang) * 1.1f;
+                    y += MathF.Sin(ang) * 1.1f;
+                    len += 1.1f;
+                    var ix = (int)x;
+                    var iy = (int)y;
+                    if (ix < 2 || iy < 2 || ix >= N - 2 || iy >= N - 2 || tissue[iy * N + ix] < 0.18f) break;
+                    var life = 1f - len / length;
+                    var w = w0 * (0.4f + 0.6f * life) * (0.75f + 0.5f * Noise1(len / 9f + seed));
+                    if (w < 0.95f) break;
+                    var q = (len - runFrom) / runLen;
+                    var glow = q is > 0f and < 1f ? runPeak * RunProfile(q) : 0f;
+                    Stamp(veins, runs, group, x, y, ang, w, glow, gI, (Noise1(len / 5f + seed * 2f) * 2f - 1f) * 0.22f);
                 }
-            return false;
+                Fragments[v].Add(len);
+            }
+            // the dark: the fragments, and the tissue's own darker mottling
+            // (smoky, soft: hard-edged spots read as a beast's own markings)
+            var mottle = new float[n2];
+            for (var i = 0; i < n2; i++) mottle[i] = tissue[i] * 0.42f * Math.Clamp((Smoke(i + 53) - 0.4f) / 0.4f, 0f, 1f);
+            mottle = Blur(mottle, 2);
+            var dark = new float[n2];
+            for (var i = 0; i < n2; i++) dark[i] = Math.Max(veins[i], mottle[i]);
+            var halo = Blur(Blur(veins, 2), 2);
+            for (var i = 0; i < n2; i++) dark[i] = Math.Max(dark[i], Math.Min(1f, halo[i] * 1.2f) * 0.35f);
+            // THE LIGHT FROM INSIDE: a soft mottled core, the fragments' runs, and a broken bright contaminated edge on
+            // one side of the region (an edge lit all round drew "a patch", "a badge")
+            var emit = new float[n2];
+            var cx2 = ox + (R() - 0.5f) * rad * 0.3f;
+            var cy2 = oy + (R() - 0.5f) * rad * 0.3f;
+            var edgeAng = R() * MathF.Tau;
+            for (var i = 0; i < n2; i++)
+            {
+                int x = i % N, y = i / N;
+                // (the inner light follows the region's own ragged shape, mottled by its smoke: a round lit core read
+                // as "a glowing gem", "an orb")
+                var dd = MathF.Sqrt(Sq(x + 0.5f - cx2) + Sq(y + 0.5f - cy2)) / (rad * 0.95f) * (0.8f + 0.4f * Noise2(x / 6f + 31f, y / 6f + 7f));
+                var inner = dd < 1f ? 1f - dd : 0f;
+                var core = tissue[i] * inner * (0.15f + 0.85f * Sq(Smoke(i + 97))) * 0.18f;
+                var rim = 0f;
+                var tI = tissue[i];
+                if (tI > 0.16f && tI < 0.62f)
+                {
+                    var a = MathF.Atan2(y + 0.5f - oy, x + 0.5f - ox);
+                    var da = MathF.Abs(MathF.IEEERemainder(a - edgeAng, MathF.Tau));
+                    if (da < 0.95f)
+                        rim = 0.66f * (1f - MathF.Abs(tI - 0.38f) / 0.24f) * (1f - da / 0.95f) * (Noise2(x / 3.5f + 11f, y / 3.5f) > 0.45f ? 1f : 0.25f);
+                }
+                emit[i] = Math.Max(core, Math.Max(runs[i], Math.Max(0f, rim)));
+                if (runs[i] <= 0f)
+                {
+                    var a = MathF.Atan2(y + 0.5f - oy, x + 0.5f - ox);
+                    group[i] = (int)((a + MathF.PI) / MathF.Tau * IdleGroups + v) % IdleGroups;
+                }
+            }
+            var near = Blur(emit, 1);
+            var bloom = Blur(Blur(emit, 3), 3);
+            for (var i = 0; i < n2; i++) emit[i] = Math.Min(1f, Math.Max(emit[i], near[i] * 0.85f) + bloom[i] * 0.5f) * Math.Min(1f, drain[i] * 2f);
+            TissueF[v] = tissue;
+            DrainF[v] = drain;
+            DarkF[v] = dark;
+            VeinF[v] = veins;
+            EmitF[v] = emit;
+            RunF[v] = runs;
+            BirthF[v] = birth;
+            GroupF[v] = group;
         }
 
-        /// <summary>A run of light along a vein, 0..1 over its length: it rises fast, holds, and tapers long (never a dot).</summary>
         private static float RunProfile(float t)
         {
             if (t < 0.22f) { var u = t / 0.22f; return u * u * (3f - 2f * u); }
@@ -887,10 +1282,9 @@ public sealed partial class CursePrototype
             return v <= 0f ? 0f : MathF.Pow(v, 1.4f);
         }
 
-        private static void Stamp(CorruptionAtlas a, int[] owner, float x, float y, float ang, float w, float len, int id, float glow, int group, float lateral)
+        private static void Stamp(float[] cover, float[] glowF, int[] groupF, float x, float y, float ang, float w, float glow, int group, float lateral)
         {
             var rad = (int)MathF.Ceiling(w * 0.5f + 1f);
-            // the light sits a little OFF the vein's centre, to one side and then the other: an irregular hot edge
             var nx = -MathF.Sin(ang) * lateral * w;
             var ny = MathF.Cos(ang) * lateral * w;
             for (var oy = -rad; oy <= rad; oy++)
@@ -899,21 +1293,19 @@ public sealed partial class CursePrototype
                     int px = (int)x + ox, py = (int)y + oy;
                     if (px < 0 || py < 0 || px >= N || py >= N) continue;
                     var d = MathF.Sqrt(Sq(px + 0.5f - x) + Sq(py + 0.5f - y));
-                    var cover = Math.Clamp(w * 0.5f + 0.5f - d, 0f, 1f);
-                    if (cover <= 0f) continue;
+                    var cov = Math.Clamp(w * 0.5f + 0.5f - d, 0f, 1f);
+                    if (cov <= 0f) continue;
                     var i = py * N + px;
-                    if (cover > a.Cover[i]) a.Cover[i] = cover;
-                    if (len < a.Birth[i]) a.Birth[i] = len;
-                    if (owner[i] < 0) owner[i] = id;
+                    if (cov > cover[i]) cover[i] = cov;
                     if (glow <= 0f) continue;
                     var dc = MathF.Sqrt(Sq(px + 0.5f - x - nx) + Sq(py + 0.5f - y - ny));
-                    var core = Math.Clamp(w * 0.28f + 0.5f - dc, 0f, 1f) * cover;
-                    if (glow * core > a.Glow[i]) { a.Glow[i] = glow * core; a.Group[i] = group; }
+                    var core = Math.Clamp(w * 0.28f + 0.5f - dc, 0f, 1f) * cov;
+                    if (glow * core > glowF[i]) { glowF[i] = glow * core; groupF[i] = group; }
                 }
         }
 
-        /// <summary>A smoky puff: an ellipse along <paramref name="ang"/>, its edge ragged by noise; dark, and leaking violet.</summary>
-        private static void Puff(CorruptionAtlas a, float x, float y, float rMajor, float rMinor, float ang, float value, float leak, float birth)
+        /// <summary>A smoky puff: an ellipse along <paramref name="ang"/>, its edge ragged by noise.</summary>
+        private static void Puff(float[] field, float x, float y, float rMajor, float rMinor, float ang, float value)
         {
             var rad = (int)MathF.Ceiling(rMajor + 2f);
             var ca = MathF.Cos(ang);
@@ -922,119 +1314,79 @@ public sealed partial class CursePrototype
                 for (var ox = -rad; ox <= rad; ox++)
                 {
                     int px = (int)x + ox, py = (int)y + oy;
-                    if (px < 0 || py < 0 || px >= N || py >= N) continue;
+                    if (px < 1 || py < 1 || px >= N - 1 || py >= N - 1) continue;
                     var dx = px + 0.5f - x;
                     var dy = py + 0.5f - y;
                     var u = (dx * ca + dy * sa) / rMajor;
-                    var v = (-dx * sa + dy * ca) / rMinor;
-                    var d = MathF.Sqrt(u * u + v * v) * (0.8f + 0.45f * Noise2(px / 4f, py / 4f));
+                    var w = (-dx * sa + dy * ca) / rMinor;
+                    var d = MathF.Sqrt(u * u + w * w) * (0.8f + 0.45f * Noise2(px / 4f, py / 4f));
                     if (d >= 1f) continue;
-                    var f = Sq(1f - d * d);
+                    // a solid infected interior, a soft ragged edge (squared falloff left only the puffs' centres solid)
+                    var e = Math.Clamp((1f - d) / 0.45f, 0f, 1f);
+                    var f = e * e * (3f - 2f * e) * value;
                     var i = py * N + px;
-                    if (value * f > a.Blot[i]) a.Blot[i] = value * f;
-                    if (birth < a.BlotBirth[i]) a.BlotBirth[i] = birth;
-                    // the leak comes through the patch's smoke from inside (a lit border drew "a rosette", "a brooch")
-                    if (leak * f > a.Leak[i]) a.Leak[i] = leak * f;
+                    if (f > field[i]) field[i] = f;
                 }
         }
 
-        /// <summary>A mottling of smoke (0..1): where a patch's inner light comes through, and where its dark is thicker.</summary>
+        /// <summary>A mottling of smoke (0..1).</summary>
         private static float Smoke(int i)
         {
             int x = i % N, y = i / N;
-            var n = 0.65f * Noise2(x / 5f, y / 5f) + 0.35f * Noise2(x / 2.3f + 40f, y / 2.3f + 17f);
+            // (two octaves turned off the noise's grid: axis-aligned, the mottling read as "a woven", "a crosshatched"
+            // pattern, a garment's)
+            float u1 = x * 0.83f - y * 0.56f, v1 = x * 0.56f + y * 0.83f;
+            float u2 = x * 0.47f + y * 0.88f, v2 = -x * 0.88f + y * 0.47f;
+            var n = 0.65f * Noise2(u1 / 6.1f, v1 / 6.1f) + 0.35f * Noise2(u2 / 2.7f + 40f, v2 / 2.7f + 17f);
             return Math.Clamp((n - 0.32f) / 0.42f, 0f, 1f);
-        }
-
-        /// <summary>The dark alpha of everything born within <paramref name="lo"/>..<paramref name="hi"/> (path length).</summary>
-        internal float[] DarkField(float lo, float hi)
-        {
-            var line = new float[N * N];
-            for (var i = 0; i < line.Length; i++)
-            {
-                var v = Birth[i] > lo && Birth[i] <= hi ? Cover[i] : 0f;
-                var bl = BlotBirth[i] > lo && BlotBirth[i] <= hi ? Blot[i] * (0.7f + 0.3f * Smoke(i)) : 0f;
-                line[i] = Math.Max(v, bl);
-            }
-            // a halo of infected tissue round every vein (the broad bruise is its own layer, TissueField)
-            var halo = Blur(Blur(line, 4), 4);
-            var a = new float[N * N];
-            for (var i = 0; i < a.Length; i++) a[i] = Math.Max(line[i], Math.Min(1f, halo[i] * 1.4f) * 0.42f);
-            return a;
-        }
-
-        /// <summary>INFECTED TISSUE: a broad, mottled bruise under everything born within reach, soft and ragged at the
-        /// edge; the veins sit IN discoloured flesh or cloth, never on top of it.</summary>
-        internal float[] TissueField(float hi)
-        {
-            var line = new float[N * N];
-            for (var i = 0; i < line.Length; i++)
-            {
-                var v = Birth[i] <= hi ? Cover[i] : 0f;
-                var bl = BlotBirth[i] <= hi ? Blot[i] : 0f;
-                line[i] = Math.Max(v, bl);
-            }
-            var bruise = Blur(Blur(Blur(line, 8), 8), 8);
-            var a = new float[N * N];
-            for (var i = 0; i < a.Length; i++) a[i] = Math.Min(1f, bruise[i] * 3.4f) * 0.75f * (0.45f + 0.8f * Smoke(i));
-            return a;
-        }
-
-        /// <summary>The emission of what is born within reach (a group only, or all when <paramref name="group"/> is -1).</summary>
-        internal float[] EmitField(float lo, float hi, int group)
-        {
-            var e = new float[N * N];
-            for (var i = 0; i < e.Length; i++)
-            {
-                if (Birth[i] > lo && Birth[i] <= hi && (group < 0 || Group[i] == group)) e[i] = Glow[i];
-                // an infected patch leaks violet from inside, mottled by its smoke (never a round lit disc)
-                if (group < 0 && BlotBirth[i] > lo && BlotBirth[i] <= hi) e[i] = Math.Max(e[i], Leak[i] * Smoke(i));
-            }
-            var near = Blur(e, 1);
-            var bloom = Blur(Blur(e, 3), 3);
-            for (var i = 0; i < e.Length; i++) e[i] = Math.Min(1f, Math.Max(e[i], near[i] * 0.85f) + bloom[i] * 0.6f);
-            return e;
-        }
-
-        /// <summary>The growing front: the veins just born at <paramref name="at"/> (a soft band behind it), lit along their
-        /// cores, tapering behind the tip (a streak through the new paths, never a lit tube).</summary>
-        internal float[] FrontField(float lo, float at, float band)
-        {
-            var e = new float[N * N];
-            for (var i = 0; i < e.Length; i++)
-            {
-                var b = Birth[i];
-                if (b <= lo || b > at || b < at - band) continue;
-                var k = 1f - (at - b) / band;
-                e[i] = Cover[i] * Cover[i] * (0.25f + 0.75f * k * k);
-            }
-            var bloom = Blur(Blur(e, 3), 3);
-            for (var i = 0; i < e.Length; i++) e[i] = Math.Min(1f, e[i] + bloom[i] * 0.55f);
-            return e;
         }
 
         private void Upload(GraphicsDevice d)
         {
-            float R(int k) => Reach[k] * Longest;
-            Dark = new Texture2D[3];
-            Emit = new Texture2D[3];
-            Idle = new Texture2D[3 * IdleGroups];
-            Grow = new Texture2D[3 * Frames];
-            Front = new Texture2D[3 * Frames];
-            Tissue = new Texture2D[3];
-            for (var k = 1; k <= 3; k++)
+            Tissue = new Texture2D[Variants];
+            Drain = new Texture2D[Variants];
+            Dark = new Texture2D[Variants];
+            Emit = new Texture2D[Variants];
+            Idle = new Texture2D[Variants * IdleGroups];
+            TissueGrow = new Texture2D[Variants * Frames];
+            DarkGrow = new Texture2D[Variants * Frames];
+            DrainGrow = new Texture2D[Variants * Frames];
+            FrontGrow = new Texture2D[Variants * Frames];
+            for (var v = 0; v < Variants; v++)
             {
-                Dark[k - 1] = Mask(d, DarkField(-1f, R(k)));
-                Tissue[k - 1] = Mask(d, TissueField(R(k)));
-                Emit[k - 1] = Mask(d, EmitField(-1f, R(k), -1));
-                for (var g = 0; g < IdleGroups; g++) Idle[(k - 1) * IdleGroups + g] = Mask(d, EmitField(-1f, R(k), g));
-                var lo = R(k - 1);
-                var hi = R(k);
+                Tissue[v] = Mask(d, TissueF[v]);
+                Drain[v] = Mask(d, DrainF[v]);
+                Dark[v] = Mask(d, DarkF[v]);
+                Emit[v] = Mask(d, EmitF[v]);
+                for (var g = 0; g < IdleGroups; g++)
+                {
+                    var e = new float[N * N];
+                    for (var i = 0; i < e.Length; i++) if (GroupF[v][i] == g) e[i] = EmitF[v][i];
+                    Idle[v * IdleGroups + g] = Mask(d, Blur(e, 1));
+                }
                 for (var f = 0; f < Frames; f++)
                 {
-                    var at = lo + (hi - lo) * (f + 1) / Frames;
-                    Grow[(k - 1) * Frames + f] = Mask(d, DarkField(lo < 0.5f ? -1f : lo, at));
-                    Front[(k - 1) * Frames + f] = Mask(d, FrontField(lo < 0.5f ? -1f : lo, at, Math.Max(10f, (hi - lo) * 0.3f)));
+                    var at = (f + 1) / (float)Frames * BloomReach;
+                    var tg = new float[N * N];
+                    var dg = new float[N * N];
+                    var rg = new float[N * N];
+                    var fg = new float[N * N];
+                    for (var i = 0; i < tg.Length; i++)
+                    {
+                        var b = BirthF[v][i];
+                        var reveal = RevealAt(at, b);
+                        tg[i] = TissueF[v][i] * reveal;
+                        dg[i] = DarkF[v][i] * reveal;
+                        rg[i] = DrainF[v][i] * reveal;
+                        var band = 1f - MathF.Abs(at - b) / 0.1f;
+                        fg[i] = band > 0f && TissueF[v][i] > 0.1f ? band * (0.35f + 0.65f * Math.Max(VeinF[v][i], Smoke(i))) * Math.Min(1f, TissueF[v][i] * 2f) : 0f;
+                    }
+                    TissueGrow[v * Frames + f] = Mask(d, tg);
+                    DarkGrow[v * Frames + f] = Mask(d, dg);
+                    DrainGrow[v * Frames + f] = Mask(d, rg);
+                    var bl = Blur(fg, 2);
+                    for (var i = 0; i < fg.Length; i++) fg[i] = Math.Min(1f, fg[i] + bl[i] * 0.6f);
+                    FrontGrow[v * Frames + f] = Mask(d, fg);
                 }
             }
         }
@@ -1052,7 +1404,7 @@ public sealed partial class CursePrototype
             return tex;
         }
 
-        private static float[] Blur(float[] src, int r)
+        internal static float[] Blur(float[] src, int r)
         {
             var tmp = new float[src.Length];
             var dst = new float[src.Length];

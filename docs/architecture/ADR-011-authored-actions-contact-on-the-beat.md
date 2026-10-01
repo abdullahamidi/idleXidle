@@ -760,6 +760,18 @@ one of them every host at depth 1, whole, at 100 %; the bead read and the seam r
 guess on robed and armoured bosses is reduced, not gone (reported). Evidence
 `production/qa/evidence/brand-polish/`; page https://claude.ai/artifact/AEfLGCYB5anLk7WujnvK5n. Still the prototype pipeline; no sound; not accepted.
 
+### Concept A territory pass: regions of the body becoming corrupted (2026-10-01, awaiting the owner's visual acceptance)
+
+From 9aa407fd the owner named two remaining problems (long paths along clothing read as a sash / stole; on dark casters
+the curse read as their own aura) and their root: visible connected veins as the persistent state. The curse is now
+infected TERRITORIES (`TerritoryAtlas`), depth the number of them (1 / 2 / 3-4), seated per host from its own
+silhouette and locked per creature; in each the HOST'S OWN MATERIAL changes (a drained copy faded in through the
+territory's mask: colour gone, brightness pushed away from the host's own, folds kept; a stock `DualTextureEffect`),
+with a restrained violet in fissures, short fragments and a broken edge, and wisps leaking out. Five probe read rounds
+with stills and true-speed clips steered it (a violet patch read as costume; drained material read as damage; violet
+crackle on a dark caster read as its own magic). Evidence `production/qa/evidence/brand-regions/`; page https://claude.ai/artifact/S68LvpL6kc5ah53pqmrGkG. Still
+the prototype pipeline; no sound; not accepted.
+
 ## Context
 
 The audit (`production/qa/evidence/action-presentation-audit/`) measured the Seeker's SPRAY frame by frame:

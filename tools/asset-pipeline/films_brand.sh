@@ -43,6 +43,8 @@ want fast    && film fast   "$BASE" 3.4 240 1 732 RH_SHOT_TAKE="$TEMPO"
 want before  && film before "$BASE" 0.5 330 2 0 RH_MARK_RECIPES=0
 # A CLEAN DEEPEN: ETCH with JAWS swapped for WILT (no bite reaction over the host), so its ticks cut unobstructed
 want etch_clean && film etch_clean "$BASE,snare_jaws:drain_wilt@Shadow" 0.5 330 2 0 RH_SHOT_VARIATION=sign_brand:ETCH
+# ... and its twin with the mark drawn off (the uncursed host, the same moments: the ON / OFF comparison)
+want etch_clean_off && film etch_clean_off "$BASE,snare_jaws:drain_wilt@Shadow" 0.5 330 2 0 RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
 # BRAND WOVEN BEFORE PRESS (the order the first Field used to lose): both must be presented, the field and the mark
 want order   && film order  "hammer_press:sign_brand@Shadow,snare_jaws:hammer_press@Body" 0.5 150 2 0
 # A LIGHT BODY (the Pale Choir's): the brand's ink half, the char that reads where the lit smoke cannot
@@ -61,6 +63,7 @@ want clean_tick6_off && film clean_tick6_off "$CLEAN" 4.5 72 1 0 RH_SHOT_VARIATI
 want light_off && film light_off "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE=Spirit RH_MARK_RECIPES=0
 # ETCH ON A LIGHT BODY (the Pale Choir's): the deep stages' ink on a pale creature
 want light_etch && film light_etch "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE=Spirit RH_SHOT_VARIATION=sign_brand:ETCH
+want light_etch_off && film light_etch_off "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE=Spirit RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
 # SPRAWL + WINNOW: a deepen on EVERY coil of the row (it must ripple, never flash the row)
 want sprawl_winnow && film sprawl_winnow "$BASE" 0.5 330 2 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
 want sprawl_winnow_tick && film sprawl_winnow_tick "$BASE" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
@@ -73,6 +76,7 @@ want sprawl_winnow_clean_tick_off && film sprawl_winnow_clean_tick_off "$CLEAN" 
 for fam in Machine:Armoured Shadow:Caster Mind:Swarm Nature:Bruiser Body:Armoured Spirit:Caster; do
   src=${fam%%:*}; arch=${fam##*:}; name="fam_$(echo "$src" | tr 'A-Z' 'a-z')_$(echo "$arch" | tr 'A-Z' 'a-z')"
   want "$name" && film "$name" "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE="$src" RH_SHOT_ARCHETYPE="$arch" RH_SHOT_VARIATION=sign_brand:ETCH
+  want "${name}_off" && film "${name}_off" "$BASE" 0.5 330 2 0 RH_SHOT_SOURCE="$src" RH_SHOT_ARCHETYPE="$arch" RH_SHOT_VARIATION=sign_brand:ETCH RH_MARK_RECIPES=0
 done
 # THE SIX BOSSES (RH_SHOT_BOSS draws the wave as that boss): ETCH from its first cut to DEPTH 3, the whole creature
 for boss in thorn_regent forge_colossus void_reaper spirit_matron crystal_lich lumen_angel; do
