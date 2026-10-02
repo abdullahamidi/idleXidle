@@ -1,0 +1,356 @@
+{
+  "what": "Provenance of BRAND's shipped audio (the Seeker's Living Shadow Corruption cue family).",
+  "candidate": "A",
+  "candidate_name": "SUBTLE / INTERNAL",
+  "approved": "2026-10-02",
+  "approval_note": "The owner (2026-10-02): 'Candidate A is approved as the canonical BRAND sound family. Do NOT combine it with B or C.' B and C are rejected and archive-only: B's bright supernatural material competes with combat voices and can make a transfer read like spell casting; C's physical crackle overlaps PRESS / JAWS and its deepen reads like another impact. Small-speaker risk is a documented hardware sanity-check item; the only permitted correction preserves A's character and envelope, does not raise combat dominance, adds only enough mid information for intelligibility, never moves toward B's 4-5 kHz character, and is re-reviewed before any pinned byte changes.",
+  "rejected_candidates": {
+    "B": "SUPERNATURAL: archive-only, audio_history/brand_curse/B/",
+    "C": "ORGANIC / ASH: archive-only, audio_history/brand_curse/C/"
+  },
+  "licence": {
+    "name": "CC0 1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "checked": "2026-10-02",
+    "how": "each source's own Freesound page links the CC0 1.0 deed"
+  },
+  "generator": {
+    "path": "tools/asset-pipeline/make_brand_cues.py",
+    "sha256": "90db5f0fc6b3b0161f017e07cc349853d9513933524f7b88edbd5f60f713e299"
+  },
+  "shared_dsp": [
+    {
+      "path": "tools/asset-pipeline/make_jaws_bite.py",
+      "sha256": "5925683689ada18e0b5e550fb3391af317ef279b78156523e8e7a4bdb3312d58"
+    },
+    {
+      "path": "tools/asset-pipeline/make_press_tick.py",
+      "sha256": "79a018fd9cfa80598b8e5d2fb3fa0b576f396068f8af8aa8959eff03ba5c5c98"
+    }
+  ],
+  "script_hashes_are": "SHA-256 of the script's LF text (as stored in git)",
+  "excerpts": [
+    {
+      "name": "air_draw",
+      "path": "tools/asset-pipeline/foley/brand_curse/air_draw.wav",
+      "sha256": "3db133bbaecd787fd39e346c240d9cb6baf10cbf50b4550e210171f86a24dbd6",
+      "source_title": "bellows.wav",
+      "author": "lensson",
+      "freesound_page": "https://freesound.org/people/lensson/sounds/368498/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.3,
+        1.35
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken"
+      ]
+    },
+    {
+      "name": "air_exhale",
+      "path": "tools/asset-pipeline/foley/brand_curse/air_exhale.wav",
+      "sha256": "4e9c4b557e7bf154ad4c8081f21a2f0e50a484c0eb07267366f9cdab71af8d2e",
+      "source_title": "bellows.wav",
+      "author": "lensson",
+      "freesound_page": "https://freesound.org/people/lensson/sounds/368498/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        3.45,
+        5.05
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken",
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "suck_pipe",
+      "path": "tools/asset-pipeline/foley/brand_curse/suck_pipe.wav",
+      "sha256": "a949a8025aad37c1d3784f548ff3b1c8119417f8c6d77fe1e82293c5338b0784",
+      "source_title": "Dental tube sucking in mouthwash, suction pipe.wav",
+      "author": "mht23SD",
+      "freesound_page": "https://freesound.org/people/mht23SD/sounds/707322/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.62,
+        1.95
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken"
+      ]
+    },
+    {
+      "name": "gas_puff",
+      "path": "tools/asset-pipeline/foley/brand_curse/gas_puff.wav",
+      "sha256": "7b36dc9c9d6d783d8df9eeede97590c2c05bde314f15acd1cb22b8408858f420",
+      "source_title": "short-gas-leak.wav",
+      "author": "Astounded",
+      "freesound_page": "https://freesound.org/people/Astounded/sounds/477846/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.66,
+        1.3
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_leave"
+      ]
+    },
+    {
+      "name": "twig_snap",
+      "path": "tools/asset-pipeline/foley/brand_curse/twig_snap.wav",
+      "sha256": "c59b281392c1c52a108bc10c113650ead82cf84018e79cd9c25c94bb2c544c00",
+      "source_title": "few small branches snapping, close up, high frequency,H6.wav",
+      "author": "Bini_trns",
+      "freesound_page": "https://freesound.org/people/Bini_trns/sounds/354103/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.06,
+        1.3
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken",
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "twig_snap_b",
+      "path": "tools/asset-pipeline/foley/brand_curse/twig_snap_b.wav",
+      "sha256": "26e651389eae7aea8eefca6dc877d8103bab02717d3f33cdd2c639789680db08",
+      "source_title": "few small branches snapping, close up, high frequency,H6.wav",
+      "author": "Bini_trns",
+      "freesound_page": "https://freesound.org/people/Bini_trns/sounds/354103/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.67,
+        0.9
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken",
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "leather_crawl",
+      "path": "tools/asset-pipeline/foley/brand_curse/leather_crawl.wav",
+      "sha256": "939809dd8677521bd3349a02613eb969c7b146b981620ce5d4370d2c4da7f976",
+      "source_title": "Leather Creak / Stretching",
+      "author": "IENBA",
+      "freesound_page": "https://freesound.org/people/IENBA/sounds/536187/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.2,
+        3.0
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken"
+      ]
+    },
+    {
+      "name": "cloth_scrape",
+      "path": "tools/asset-pipeline/foley/brand_curse/cloth_scrape.wav",
+      "sha256": "41878a0b19c74a876f92c6e177b0bd2bb213707b97b0a22d59a7420dbb94e640",
+      "source_title": "Rough Cloth.wav",
+      "author": "ablekirby",
+      "freesound_page": "https://freesound.org/people/ablekirby/sounds/474724/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.05,
+        1.05
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep"
+      ]
+    },
+    {
+      "name": "stone_scrape",
+      "path": "tools/asset-pipeline/foley/brand_curse/stone_scrape.wav",
+      "sha256": "5618134beed314f6d3de1995c337cbf372735e8dc0dd58b62dba0174c342f0e2",
+      "source_title": "Stone Scrape",
+      "author": "alegemaate",
+      "freesound_page": "https://freesound.org/people/alegemaate/sounds/667284/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        1.2
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep"
+      ]
+    },
+    {
+      "name": "dust_fall",
+      "path": "tools/asset-pipeline/foley/brand_curse/dust_fall.wav",
+      "sha256": "f9bd17ed40049c7223a3a9816caa80829a3b16b73d8d2677a58144e01d45c4aa",
+      "source_title": "hit with dust fall.aiff",
+      "author": "SoundCollectah",
+      "freesound_page": "https://freesound.org/people/SoundCollectah/sounds/109746/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        1.1
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "salt_grain",
+      "path": "tools/asset-pipeline/foley/brand_curse/salt_grain.wav",
+      "sha256": "28bcfdd6943b2c4a5b6ede6b54e089c2ed2444ab438712ee286fce6f0e4d8399",
+      "source_title": "Salt pour.wav",
+      "author": "xenognosis",
+      "freesound_page": "https://freesound.org/people/xenognosis/sounds/137259/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        2.4,
+        3.2
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "drum_res",
+      "path": "tools/asset-pipeline/foley/brand_curse/drum_res.wav",
+      "sha256": "f19703df7360fd1456f7be713607d774afd4f8042003c2067d4051a8cc93febd",
+      "source_title": "Underwater Drum Hit E1",
+      "author": "MathewHenry",
+      "freesound_page": "https://freesound.org/people/MathewHenry/sounds/631945/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        1.3
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken"
+      ]
+    },
+    {
+      "name": "body_thud",
+      "path": "tools/asset-pipeline/foley/brand_curse/body_thud.wav",
+      "sha256": "669461bb6882c6e21baf3b28e4dd207128596c018e8b8c80a23671ddea545b61",
+      "source_title": "Deep thud punch.wav",
+      "author": "toddcircle",
+      "freesound_page": "https://freesound.org/people/toddcircle/sounds/442344/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        3.3,
+        3.9
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken",
+        "sfx_seeker_brand_ash"
+      ]
+    },
+    {
+      "name": "body_thud_b",
+      "path": "tools/asset-pipeline/foley/brand_curse/body_thud_b.wav",
+      "sha256": "878de53d40edb0f412e6809f40aa0e688055987356fee754670f14925389cf0b",
+      "source_title": "Deep thud punch.wav",
+      "author": "toddcircle",
+      "freesound_page": "https://freesound.org/people/toddcircle/sounds/442344/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.8,
+        2.4
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_deepen_deep"
+      ]
+    },
+    {
+      "name": "body_hit",
+      "path": "tools/asset-pipeline/foley/brand_curse/body_hit.wav",
+      "sha256": "962f6ad68c9706af82bee3a02b7db3d9f6af684f2b3df89116aa5c6376cdd61a",
+      "source_title": "body_hit.wav",
+      "author": "insanity54",
+      "freesound_page": "https://freesound.org/people/insanity54/sounds/276600/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.2,
+        0.62
+      ],
+      "used_by_cues": [
+        "sfx_seeker_brand_apply",
+        "sfx_seeker_brand_deepen",
+        "sfx_seeker_brand_deepen_deep",
+        "sfx_seeker_brand_infect",
+        "sfx_seeker_brand_leave",
+        "sfx_seeker_brand_awaken"
+      ]
+    }
+  ],
+  "shipped_cues": [
+    {
+      "key": "sfx_seeker_brand_apply",
+      "path": "assets/audio/combat/sfx_seeker_brand_apply.wav",
+      "sha256": "87bc3b624e3171f31959c8e622927f68c921ec0ffc45ac8274c0d646c6fe4779"
+    },
+    {
+      "key": "sfx_seeker_brand_deepen",
+      "path": "assets/audio/combat/sfx_seeker_brand_deepen.wav",
+      "sha256": "688ea4eac54d971c522d1cf7eabd502bce44699e1dc25daea5bbcb3fd2af46af"
+    },
+    {
+      "key": "sfx_seeker_brand_deepen_deep",
+      "path": "assets/audio/combat/sfx_seeker_brand_deepen_deep.wav",
+      "sha256": "a82ec0eb948db46d6cc0c7c354c7daf8792542aae2acb61e56fc1b89b54d4fc2"
+    },
+    {
+      "key": "sfx_seeker_brand_infect",
+      "path": "assets/audio/combat/sfx_seeker_brand_infect.wav",
+      "sha256": "48cc643de86f34e4e492598949d3fe77ade4520f5b924888125a25184d0b819f"
+    },
+    {
+      "key": "sfx_seeker_brand_leave",
+      "path": "assets/audio/combat/sfx_seeker_brand_leave.wav",
+      "sha256": "696361cf23e8d8ae1011eeb787da3348ae2e92c80494e014f8d292944880f3b0"
+    },
+    {
+      "key": "sfx_seeker_brand_awaken",
+      "path": "assets/audio/combat/sfx_seeker_brand_awaken.wav",
+      "sha256": "81e8cc582fa9149b6652441b7b506d06f06e34906a59ba92fb04b5164744e05c"
+    },
+    {
+      "key": "sfx_seeker_brand_ash",
+      "path": "assets/audio/combat/sfx_seeker_brand_ash.wav",
+      "sha256": "bb771c68e3afc3795788bc8aae01fa53011dc92620c6c02c717846678acf2b34"
+    }
+  ]
+}

@@ -13,8 +13,9 @@ namespace IdleXIdle.Game.Tests;
 /// <summary>
 /// THE CURSE'S VOICE (design/audio/seeker-brand-audio-brief.md; ADR-011's MARK reference, BRAND): the cue SCHEDULE built
 /// once per wave from the same truth the curse is drawn from (<see cref="MarkVoice"/>), asked on the playhead with PRESS's
-/// rule, weighted by the mix rules, and wired into the screen beside PRESS's voice. The cue FILES are three candidates
-/// awaiting the owner: no byte is pinned here until one is approved.
+/// rule, weighted by the mix rules, and wired into the screen beside PRESS's voice. The cue FILES are Candidate A
+/// (SUBTLE / INTERNAL), HUMAN-APPROVED by the owner 2026-10-02: their bytes are pinned here and in the provenance manifest
+/// (tools/asset-pipeline/foley/brand_curse/brand_audio_manifest.json); B and C are rejected and archive-only.
 /// </summary>
 public class brand_audio_test
 {
@@ -583,5 +584,140 @@ public class brand_audio_test
         foreach (var kind in Enum.GetValues<MarkCueKind>())
             foreach (var key in Brand.CuesOf(kind))
                 Assert.Equal(MarkRecipe.Unthrottled(kind), unthrottled.Contains($"\"{key}\""));
+    }
+
+    // ── THE APPROVED BYTES (Candidate A, SUBTLE / INTERNAL) ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// HUMAN-APPROVED (the owner, 2026-10-02: BRAND audio Candidate A, SUBTLE / INTERNAL, is canonical; B and C are
+    /// rejected and archive-only): these are the bytes the owner listened to. A different file is a new approval, never a
+    /// regeneration.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> ApprovedCues = new Dictionary<string, string>
+    {
+        ["sfx_seeker_brand_apply"] = "87bc3b624e3171f31959c8e622927f68c921ec0ffc45ac8274c0d646c6fe4779",
+        ["sfx_seeker_brand_deepen"] = "688ea4eac54d971c522d1cf7eabd502bce44699e1dc25daea5bbcb3fd2af46af",
+        ["sfx_seeker_brand_deepen_deep"] = "a82ec0eb948db46d6cc0c7c354c7daf8792542aae2acb61e56fc1b89b54d4fc2",
+        ["sfx_seeker_brand_infect"] = "48cc643de86f34e4e492598949d3fe77ade4520f5b924888125a25184d0b819f",
+        ["sfx_seeker_brand_leave"] = "696361cf23e8d8ae1011eeb787da3348ae2e92c80494e014f8d292944880f3b0",
+        ["sfx_seeker_brand_awaken"] = "81e8cc582fa9149b6652441b7b506d06f06e34906a59ba92fb04b5164744e05c",
+        ["sfx_seeker_brand_ash"] = "bb771c68e3afc3795788bc8aae01fa53011dc92620c6c02c717846678acf2b34",
+    };
+
+    private static string Sha256Of(string path)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+
+    private static System.Text.Json.JsonElement Manifest()
+    {
+        var path = RepoFile("tools", "asset-pipeline", "foley", "brand_curse", "brand_audio_manifest.json");
+        Assert.True(File.Exists(path), "the BRAND audio provenance manifest is missing");
+        return System.Text.Json.JsonDocument.Parse(File.ReadAllText(path)).RootElement.Clone();
+    }
+
+    [Fact]
+    public void test_brand_audio_the_seven_shipped_cues_are_the_approved_candidate_a_bytes()
+    {
+        // every key the recipe can ask for is one of the seven approved files, and each ships with its approved bytes
+        var asked = Enum.GetValues<MarkCueKind>().SelectMany(Brand.CuesOf).Distinct().OrderBy(k => k).ToArray();
+        Assert.Equal(ApprovedCues.Keys.OrderBy(k => k).ToArray(), asked);
+        foreach (var (key, sha) in ApprovedCues)
+        {
+            var wav = RepoFile("assets", "audio", "combat", key + ".wav");
+            Assert.True(File.Exists(wav), $"{key} is missing");
+            Assert.Equal(sha, Sha256Of(wav));
+            // the review archive's A is the same file the game plays (the owner heard A from there)
+            Assert.Equal(sha, Sha256Of(RepoFile("tools", "asset-pipeline", "audio_history", "brand_curse", "A", key + ".wav")));
+        }
+    }
+
+    [Fact]
+    public void test_brand_audio_the_manifest_records_the_pinned_cues_and_every_excerpt_candidate_a_reads()
+    {
+        var m = Manifest();
+        Assert.Equal("A", m.GetProperty("candidate").GetString());
+        Assert.Equal("2026-10-02", m.GetProperty("approved").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(m.GetProperty("approval_note").GetString()));
+        Assert.Equal("CC0 1.0", m.GetProperty("licence").GetProperty("name").GetString());
+        Assert.Equal("tools/asset-pipeline/make_brand_cues.py", m.GetProperty("generator").GetProperty("path").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", m.GetProperty("generator").GetProperty("sha256").GetString()!);
+        Assert.Equal(new[] { "tools/asset-pipeline/make_jaws_bite.py", "tools/asset-pipeline/make_press_tick.py" },
+                     m.GetProperty("shared_dsp").EnumerateArray().Select(d => d.GetProperty("path").GetString()).ToArray());
+        // the manifest's cue hashes are the pinned ones, and the files on disk
+        var cues = m.GetProperty("shipped_cues").EnumerateArray()
+                    .ToDictionary(c => c.GetProperty("key").GetString()!, c => (Path: c.GetProperty("path").GetString()!, Sha: c.GetProperty("sha256").GetString()!));
+        Assert.Equal(ApprovedCues.Keys.OrderBy(k => k), cues.Keys.OrderBy(k => k));
+        foreach (var (key, sha) in ApprovedCues)
+        {
+            Assert.Equal($"assets/audio/combat/{key}.wav", cues[key].Path);
+            Assert.Equal(sha, cues[key].Sha);
+            Assert.Equal(sha, Sha256Of(RepoFile(cues[key].Path.Split('/'))));
+        }
+        // every excerpt Candidate A reads exists with the bytes it was built from, and is CC0 with a Freesound page
+        var excerpts = m.GetProperty("excerpts").EnumerateArray().ToList();
+        Assert.NotEmpty(excerpts);
+        foreach (var e in excerpts)
+        {
+            var path = e.GetProperty("path").GetString()!;
+            var file = RepoFile(path.Split('/'));
+            Assert.True(File.Exists(file), $"{path} is missing");
+            Assert.Equal(e.GetProperty("sha256").GetString(), Sha256Of(file));
+            Assert.Equal("CC0 1.0", e.GetProperty("licence").GetString());
+            Assert.StartsWith("https://freesound.org/people/", e.GetProperty("freesound_page").GetString());
+            Assert.NotEmpty(e.GetProperty("used_by_cues").EnumerateArray());
+            Assert.All(e.GetProperty("used_by_cues").EnumerateArray(), k => Assert.Contains(k.GetString()!, ApprovedCues.Keys));
+        }
+        // and SOURCES.md answers the same question: every A excerpt is listed under SHIPPED
+        var sources = File.ReadAllText(RepoFile("tools", "asset-pipeline", "foley", "brand_curse", "SOURCES.md"));
+        var shipped = sources.Substring(0, sources.IndexOf("## ARCHIVE ONLY", StringComparison.Ordinal));
+        Assert.Contains("## SHIPPED (Candidate A)", shipped);
+        foreach (var e in excerpts)
+            Assert.Contains($"`{e.GetProperty("name").GetString()}.wav`", shipped);
+    }
+
+    [Fact]
+    public void test_brand_audio_no_rejected_candidate_file_ships_anywhere_under_assets_audio()
+    {
+        var history = RepoFile("tools", "asset-pipeline", "audio_history", "brand_curse");
+        var rejected = new[] { "B", "C" }
+            .SelectMany(c => Directory.GetFiles(Path.Combine(history, c), "*", SearchOption.AllDirectories))
+            .ToDictionary(Sha256Of, f => f);
+        Assert.Equal(14, rejected.Count);                                                 // 7 + 7, all distinct
+        foreach (var file in Directory.GetFiles(RepoFile("assets", "audio"), "*", SearchOption.AllDirectories))
+            Assert.False(rejected.TryGetValue(Sha256Of(file), out var copy), $"{file} is a byte copy of the rejected {copy}");
+    }
+
+    [Fact]
+    public void test_brand_audio_the_game_has_no_candidate_selector()
+    {
+        // the game plays the one approved set: no source string names an archived candidate, and no environment variable
+        // chooses BRAND's audio (RH_MARK_RECIPES only switches the whole mark off, never its sound)
+        var literal = new Regex("\"(?:[^\"\\\\]|\\\\.)*\"");
+        var env = new Regex("GetEnvironmentVariable\\(\\s*\"([^\"]+)\"");
+        foreach (var file in Directory.GetFiles(RepoFile("src"), "*.cs", SearchOption.AllDirectories))
+        {
+            var code = File.ReadAllLines(file).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)).ToArray();
+            foreach (var line in code)
+            {
+                foreach (Match s in literal.Matches(line))
+                {
+                    var text = s.Value.Replace('\\', '/');
+                    Assert.DoesNotContain("brand_curse/B", text);
+                    Assert.DoesNotContain("brand_curse/C", text);
+                    Assert.DoesNotContain("audio_history", text);
+                    Assert.False(text.Contains("candidate", StringComparison.OrdinalIgnoreCase), $"{Path.GetFileName(file)}: {line.Trim()}");
+                }
+                foreach (Match e in env.Matches(line))
+                {
+                    var name = e.Groups[1].Value.ToUpperInvariant();
+                    Assert.False(name.Contains("CANDIDATE") || Regex.IsMatch(name, "(BRAND|CURSE|MARK).*(AUDIO|CUE|SOUND|SFX)|(AUDIO|CUE|SOUND|SFX).*(BRAND|CURSE|MARK)"),
+                                 $"{Path.GetFileName(file)} reads {name}");
+                }
+            }
+        }
+        // the generator installs only the approved letter; B and C build into the archive alone
+        var make = File.ReadAllText(RepoFile("tools", "asset-pipeline", "make_brand_cues.py"));
+        Assert.Contains("APPROVED = \"A\"", make);
+        Assert.Contains("ARCHIVE = (\"B\", \"C\")", make);
+        Assert.DoesNotContain("SHIPPED = ", make);
     }
 }

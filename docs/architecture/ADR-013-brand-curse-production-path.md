@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | **Accepted** (2026-10-02, the owner: "The BRAND visual direction and production renderer are approved. Lock them."). The production renderer is ACCEPTED and LOCKED; no further visual redesign unless audio integration exposes a genuine presentation defect. BRAND as the overall gold-standard MARK / PERSISTENT TARGET AFFLICTION reference is **NOT closed** until its final audio is chosen (page https://claude.ai/artifact/SBJLCVwBV4ztdiPvFQanFD, evidence `production/qa/evidence/brand-production/`). |
+| **Status** | **Accepted** (2026-10-02, the owner: "The BRAND visual direction and production renderer are approved. Lock them."). The production renderer is ACCEPTED and LOCKED; no further visual redesign unless audio integration exposes a genuine presentation defect. BRAND is **CLOSED (2026-10-02) as the GOLD STANDARD for MARK / PERSISTENT TARGET AFFLICTION**: its audio, Candidate A / SUBTLE / INTERNAL, was approved the same day and is pinned by SHA-256 (ADR-011) (page https://claude.ai/artifact/SBJLCVwBV4ztdiPvFQanFD, evidence `production/qa/evidence/brand-production/`). |
 | **Date** | 2026-10-02 |
 | **Deciders** | owner; lead-programmer, technical-artist (presentation), tools-programmer (bake) |
 | **Supersedes** | the BRAND curse prototype (`CursePrototype*.cs`, `RH_BRAND_CONCEPT`), the etched-cut mark draw (ADR-011's first BRAND slices) |

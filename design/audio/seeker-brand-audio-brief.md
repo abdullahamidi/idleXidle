@@ -1,8 +1,12 @@
 # Audio brief: the Seeker's BRAND (the curse's cue family)
 
-> **Status (2026-10-02): THREE CANDIDATE MIXES, awaiting the owner's choice.** Review page https://claude.ai/artifact/2r2SwCi6RujexjZzRvYhqg, evidence `production/qa/evidence/brand-audio/`; recommended: A SUBTLE / INTERNAL (A ships provisionally). BRAND's visual direction and its
-> production renderer (ADR-013) are APPROVED and LOCKED. This is BRAND's final audio pass; BRAND closes as the gold
-> standard for MARK / PERSISTENT TARGET AFFLICTION only after the owner chooses a candidate. Nothing here is approved yet.
+> **Status: APPROVED - Candidate A, SUBTLE / INTERNAL (the owner, 2026-10-02).** A is BRAND's canonical cue family and
+> the only set in `assets/audio/combat/`; its seven files' bytes are pinned by SHA-256 (`brand_audio_test.cs`,
+> `tools/asset-pipeline/foley/brand_curse/brand_audio_manifest.json`): a different file is a new approval, never a
+> regeneration. B and C are REJECTED and archive-only (`tools/asset-pipeline/audio_history/brand_curse/B/`, `C/`).
+> BRAND's visual direction and its production renderer (ADR-013) are APPROVED and LOCKED. Review page
+> https://claude.ai/artifact/2r2SwCi6RujexjZzRvYhqg, evidence `production/qa/evidence/brand-audio/`. Provenance and
+> licence (12 CC0 1.0 Freesound recordings, checked 2026-10-02): `tools/asset-pipeline/foley/brand_curse/SOURCES.md`.
 
 ## What BRAND is, to the ear
 
@@ -75,13 +79,38 @@ the playhead moves back before it, skipped if more than 30 ms late after a seek 
   action Skill or while the champion performs, x0.6; when already ducked, the duck alone (never duck x quiet).
   When yielding, the Ash accent is omitted (the least important layer).
 
-## Three candidates (same visuals, same timing, same keys)
+## The owner's decision (2026-10-02)
 
-- **A - SUBTLE / INTERNAL:** breath, suction, internal shadow movement, dry corruption; little overt magic.
-- **B - SUPERNATURAL:** spectral violet energy, reversed textures, corrupted resonance; still dark and restrained.
-- **C - ORGANIC / ASH:** dry internal crackle, ash crumble, corrupted tissue, low body resonance; supernatural, not gore.
+Three candidates were built on the same visuals, timing, keys and loudness targets, so the owner compared character,
+not level:
 
-Each candidate is mastered to the same loudness targets so the owner compares character, not level. Only one set
-ships in `assets/audio/combat/` until the owner chooses (the recommended one); the others live in
-`tools/asset-pipeline/audio_history/brand_curse/<letter>/` and are heard in the review films through
-`film_audio.py --cue KEY=PATH`. The chosen set's bytes will be pinned by SHA-256 after approval.
+- **A - SUBTLE / INTERNAL (APPROVED, canonical):** breath, suction, internal shadow movement, dry corruption; little
+  overt magic.
+- **B - SUPERNATURAL (rejected, archive-only):** spectral violet energy, reversed textures, corrupted resonance. Its
+  bright supernatural material competes with the combat voices and can make a transfer read like spell casting.
+- **C - ORGANIC / ASH (rejected, archive-only):** dry internal crackle, ash crumble, corrupted tissue, low body
+  resonance. Its physical crackle overlaps PRESS / JAWS, and its deepen reads like another impact.
+
+`make_brand_cues.py` builds A by default (into `assets/audio/combat/` and `audio_history/brand_curse/A/`, refusing any
+rebuild whose bytes differ from the pin); B and C build only into `audio_history/brand_curse/<letter>/`, with no option
+to install them. The game has no candidate selector (tested).
+
+### Pinned SHA-256 (Candidate A)
+
+| cue | SHA-256 |
+|---|---|
+| `sfx_seeker_brand_apply` | `87bc3b624e3171f31959c8e622927f68c921ec0ffc45ac8274c0d646c6fe4779` |
+| `sfx_seeker_brand_deepen` | `688ea4eac54d971c522d1cf7eabd502bce44699e1dc25daea5bbcb3fd2af46af` |
+| `sfx_seeker_brand_deepen_deep` | `a82ec0eb948db46d6cc0c7c354c7daf8792542aae2acb61e56fc1b89b54d4fc2` |
+| `sfx_seeker_brand_infect` | `48cc643de86f34e4e492598949d3fe77ade4520f5b924888125a25184d0b819f` |
+| `sfx_seeker_brand_leave` | `696361cf23e8d8ae1011eeb787da3348ae2e92c80494e014f8d292944880f3b0` |
+| `sfx_seeker_brand_awaken` | `81e8cc582fa9149b6652441b7b506d06f06e34906a59ba92fb04b5164744e05c` |
+| `sfx_seeker_brand_ash` | `bb771c68e3afc3795788bc8aae01fa53011dc92620c6c02c717846678acf2b34` |
+
+### Small-speaker risk (a documented hardware sanity-check item)
+
+A is low and internal by design (0.48-0.71 of each main cue's energy sits under 150 Hz), and laptop / small speakers
+barely reproduce that band, so a cue may lose definition there. Check A on small speakers. The owner's narrowly scoped
+**permitted correction**, if that check finds A unintelligible: preserve A's character and envelope; do not raise its
+combat dominance (it stays under SPRAY, HARD HANDS, JAWS and PRESS's crush); add only enough mid information for
+intelligibility; never migrate toward B's 4-5 kHz character; re-review with the owner before any pinned byte changes.

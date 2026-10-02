@@ -30,18 +30,26 @@ foley/brand_curse/SOURCES.md). Nothing is synthesised: the low internal resonanc
 is mastered to its brief loudness (the K-weighted loudest 50 ms of the file x its MarkRecipe volume x the SFX master 0.8)
 with the true peak <= PEAK, so the candidates differ in character, never in level.
 
-NOTHING HERE IS APPROVED YET (awaiting the owner's choice of A/B/C). Candidate A ships provisionally in
-assets/audio/combat/; A, B and C all live in tools/asset-pipeline/audio_history/brand_curse/<letter>/ for the review films
-(film_audio.py --cue KEY=PATH). After the owner chooses, the chosen set's bytes get pinned by SHA-256; from then on a
-different file is a new approval, never a regeneration. The shared DSP is IMPORTED from make_jaws_bite (whose JAWS bytes,
-like PRESS's, are pinned): never edit it from here.
+APPROVED (the owner, 2026-10-02): Candidate A, SUBTLE / INTERNAL, is BRAND's canonical cue family. A is the only
+candidate that ever writes assets/audio/combat/; its seven files' bytes are pinned by SHA-256 (brand_audio_test.cs and
+foley/brand_curse/brand_audio_manifest.json): a different file is a new approval, never a regeneration, so this script
+REFUSES to overwrite a shipped cue whose rebuilt bytes differ from the manifest's pin. B (SUPERNATURAL) and C (ORGANIC /
+ASH) are REJECTED and archive-only: they build into tools/asset-pipeline/audio_history/brand_curse/<letter>/ and nowhere
+else (there is no option to install them). The shared DSP is IMPORTED from make_jaws_bite and make_press_tick (whose
+JAWS / PRESS bytes are pinned): never edit it from here.
 
-    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py --extract <dir of the downloaded sources>   # once
-    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py [A|B|C ...]                                # build
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py --extract <dir of the downloaded sources>  # once: excerpts + SOURCES.md
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py --sources        # rewrite SOURCES.md from the excerpts in place
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py                  # build A: history/A + assets (pin-guarded)
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py B C              # rebuild the archived B / C review sets
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py --out DIR [A..]  # build into DIR/<letter>/ only (a check)
+    PYTHONUTF8=1 python tools/asset-pipeline/make_brand_cues.py --manifest       # write brand_audio_manifest.json
 """
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 import os
 import sys
 
@@ -56,7 +64,19 @@ REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 FOLEY = os.path.join(HERE, "foley", "brand_curse")
 COMBAT = os.path.join(REPO, "assets", "audio", "combat")
 HISTORY = os.path.join(HERE, "audio_history", "brand_curse")    # <letter>/<key>.wav: every candidate, for the review
-SHIPPED = "A"                   # provisional: the game plays A until the owner chooses (NOT approved)
+APPROVED = "A"                  # the owner's choice (2026-10-02): the ONLY candidate that writes assets/audio/combat/
+ARCHIVE = ("B", "C")            # rejected: built into audio_history/brand_curse/<letter>/ only, for the review record
+APPROVED_ON = "2026-10-02"
+LICENCE_CHECKED = "2026-10-02"  # every source's own Freesound page links creativecommons.org/publicdomain/zero/1.0/
+LICENCE = "CC0 1.0"
+MANIFEST = os.path.join(FOLEY, "brand_audio_manifest.json")
+APPROVAL_NOTE = ("The owner (2026-10-02): 'Candidate A is approved as the canonical BRAND sound family. Do NOT combine it with B or C.' B and C are "
+                 "rejected and archive-only: B's bright supernatural material competes with combat voices and can make a "
+                 "transfer read like spell casting; C's physical crackle overlaps PRESS / JAWS and its deepen reads like "
+                 "another impact. Small-speaker risk is a documented hardware sanity-check item; the only permitted "
+                 "correction preserves A's character and envelope, does not raise combat dominance, adds only enough mid "
+                 "information for intelligibility, never moves toward B's 4-5 kHz character, and is re-reviewed before "
+                 "any pinned byte changes.")
 PEAK = 0.37                     # the house true peak for a cue (~-8.6 dBFS)
 MASTER_SFX = 0.8                # SoundBank's default SFX master
 SEED = 20261002
@@ -104,23 +124,19 @@ EXCERPTS = [
 def extract(src_dir: str) -> None:
     """Cut each excerpt (DC removed, 2 ms fade in, 8 ms fade out) into foley/brand_curse/ and write SOURCES.md."""
     os.makedirs(FOLEY, exist_ok=True)
-    lines = ["# BRAND curse foley sources (CC0 1.0)", "",
-             "Excerpts of REAL recordings, cut by `make_brand_cues.py --extract`. Every source is **CC0 1.0** "
-             "(https://creativecommons.org/publicdomain/zero/1.0/): public domain, no attribution required, commercial use "
-             "allowed. The licence was checked on each sound's own page (2026-10-02: the page's licence link is "
-             "creativecommons.org/publicdomain/zero/1.0/). Downloaded as Freesound's preview, converted to mono 16-bit "
-             "44.1 kHz. Credited anyway, with thanks.", "",
-             "| excerpt | source | author | range (s) | page |", "|---|---|---|---|---|"]
     for name, rel, t0, t1, title, author, url in EXCERPTS:
         x = read_wav(os.path.join(src_dir, rel))[int(t0 * SR):int(t1 * SR)]
         x = x - x.mean()
         x[:int(0.002 * SR)] *= np.linspace(0, 1, int(0.002 * SR))
         x[-int(0.008 * SR):] *= np.linspace(1, 0, int(0.008 * SR))
         write_wav(os.path.join(FOLEY, name + ".wav"), x / max(1e-9, np.abs(x).max()) * 0.9)
-        lines.append(f"| `{name}.wav` | {title} | {author} | {t0:.3f}-{t1:.3f} | {url} |")
-    with open(os.path.join(FOLEY, "SOURCES.md"), "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+    _src.cache_clear()
     print("extracted", len(EXCERPTS), "excerpts ->", FOLEY)
+    write_sources()
+
+
+_TRACE: dict[str, set[str]] | None = None   # usage(): excerpt name -> the cue keys that read it
+_TRACE_KEY = ""
 
 
 @functools.lru_cache(maxsize=None)
@@ -129,7 +145,89 @@ def _src(name: str) -> np.ndarray:
 
 
 def src(name: str) -> np.ndarray:
+    if _TRACE is not None:
+        _TRACE.setdefault(name, set()).add(_TRACE_KEY)
     return _src(name).copy()
+
+
+
+def usage() -> dict[str, dict[str, set[str]]]:
+    """Which excerpts each candidate's cues READ: every cue of A, B and C is composed (not mastered, not written) with
+    src() traced. Returns {letter: {excerpt: {cue keys}}}. Read-only: it changes no file and no built byte."""
+    global _TRACE, _TRACE_KEY
+    out: dict[str, dict[str, set[str]]] = {}
+    try:
+        for letter in (APPROVED,) + ARCHIVE:
+            _TRACE = {}
+            for key in KEYS:
+                _TRACE_KEY = key
+                CUES[key](Family(letter, SEED + "ABC".index(letter) * 101 + KEYS.index(key)))
+            out[letter] = _TRACE
+    finally:
+        _TRACE, _TRACE_KEY = None, ""
+    return out
+
+
+def sha256(path: str, text: bool = False) -> str:
+    """The file's SHA-256; text=True hashes its LF form (a Windows checkout may rewrite a script to CRLF)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    return hashlib.sha256(data.replace(b"\r\n", b"\n") if text else data).hexdigest()
+
+
+def write_sources() -> None:
+    """SOURCES.md: which recordings produced BRAND's SHIPPED sounds (Candidate A) and under what licence, then the
+    excerpts only the rejected B / C read (kept so the archived review stays reproducible). Every excerpt must be read
+    by some candidate: an unused one is an error (delete its file and its EXCERPTS entry)."""
+    use = usage()
+    unused = [e[0] for e in EXCERPTS if not any(e[0] in use[c] for c in use)]
+    if unused:
+        raise SystemExit(f"excerpts used by no candidate (delete the files and their EXCERPTS entries): {unused}")
+    cue = lambda keys: ", ".join(f"`{PREFIX}{k}`" for k in KEYS if k in keys)          # noqa: E731
+    shipped = [e for e in EXCERPTS if e[0] in use[APPROVED]]
+    archive = [e for e in EXCERPTS if e[0] not in use[APPROVED]]
+    recordings: dict[str, tuple[str, str, list[str]]] = {}
+    for name, _, _, _, title, author, url in shipped:
+        recordings.setdefault(url, (title, author, []))[2].append(name)
+    lines = [
+        "# BRAND curse foley sources", "",
+        "Generated by `make_brand_cues.py --extract` (or `--sources`); do not edit by hand. It answers one question: **which "
+        "source recordings produced BRAND's shipped sounds, and under what licence.**", "",
+        f"- **Shipped:** Candidate **{APPROVED}** (SUBTLE / INTERNAL), approved by the owner {APPROVED_ON}: the seven "
+        f"`{PREFIX}*.wav` files in `assets/audio/combat/`, pinned by SHA-256 (`brand_audio_manifest.json`, "
+        "`tests/unit/IdleXIdle.Game.Tests/brand_audio_test.cs`).",
+        f"- **Licence:** every source below is **{LICENCE}** (https://creativecommons.org/publicdomain/zero/1.0/): public "
+        "domain dedication, no attribution required, commercial use allowed. Credited anyway, with thanks.",
+        f"- **Licence check:** {LICENCE_CHECKED}, on each sound's own Freesound page (the page's licence link is "
+        "creativecommons.org/publicdomain/zero/1.0/).",
+        "- **Processing:** downloaded as Freesound's preview, converted to mono 16-bit 44.1 kHz; each excerpt is the range "
+        "below, DC removed, a 2 ms fade in, an 8 ms fade out, normalised to 0.9. Nothing is synthesised.", "",
+        f"## SHIPPED (Candidate {APPROVED})", "",
+        f"{len(recordings)} source recordings, cut into {len(shipped)} excerpts, produce every shipped BRAND sound.", "",
+        "### Source recordings", "",
+        "| source recording | author | Freesound page | licence | excerpts |", "|---|---|---|---|---|"]
+    for url, (title, author, names) in recordings.items():
+        lines.append(f"| {title} | {author} | {url} | {LICENCE} | {', '.join(f'`{n}`' for n in names)} |")
+    lines += ["", "### Excerpts", "",
+              "| excerpt | source recording | author | Freesound page | licence | range (s) | shipped cues that use it | also read by |",
+              "|---|---|---|---|---|---|---|---|"]
+    for name, _, t0, t1, title, author, url in shipped:
+        also = ", ".join(c for c in ARCHIVE if name in use[c]) or "-"
+        lines.append(f"| `{name}.wav` | {title} | {author} | {url} | {LICENCE} | {t0:.3f}-{t1:.3f} | "
+                     f"{cue(use[APPROVED][name])} | {also} |")
+    lines += ["", "## ARCHIVE ONLY (rejected Candidates B and C)", "",
+              "Read only by the rejected candidates; nothing built from these ships. Kept so the archived review sets in "
+              "`tools/asset-pipeline/audio_history/brand_curse/B/` and `C/` stay reproducible.", "",
+              "| excerpt | source recording | author | Freesound page | licence | range (s) | read by |",
+              "|---|---|---|---|---|---|---|"]
+    for name, _, t0, t1, title, author, url in archive:
+        by = ", ".join(c for c in ARCHIVE if name in use[c])
+        lines.append(f"| `{name}.wav` | {title} | {author} | {url} | {LICENCE} | {t0:.3f}-{t1:.3f} | {by} |")
+    lines += ["", "Excerpts read by no candidate: none (an unused excerpt is deleted with its `EXCERPTS` entry; this file "
+              "is not written while one exists)."]
+    with open(os.path.join(FOLEY, "SOURCES.md"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"SOURCES.md: {len(shipped)} shipped excerpts ({len(recordings)} recordings), {len(archive)} archive-only")
 
 
 # ── helpers (local; the shared DSP is imported, never edited) ────────────────────────────────────
@@ -565,24 +663,110 @@ def path_of(letter: str, key: str) -> str:
     return os.path.join(HISTORY, letter, PREFIX + key + ".wav")
 
 
+def shipped_path(key: str) -> str:
+    return os.path.join(COMBAT, PREFIX + key + ".wav")
+
+
+def pinned() -> dict[str, str]:
+    """The approved cues' SHA-256 by key, from the manifest ({} before one exists)."""
+    if not os.path.exists(MANIFEST):
+        return {}
+    with open(MANIFEST, encoding="utf-8") as f:
+        return {c["key"]: c["sha256"] for c in json.load(f)["shipped_cues"]}
+
+
+def write_manifest() -> None:
+    """brand_audio_manifest.json: the generator and the shared DSP it imports (SHA-256 of their LF text), the excerpts
+    Candidate A reads (SHA-256, source, licence, range, cues), and each shipped cue's key, path and SHA-256. It records
+    what ships; it never re-pins: if a shipped file no longer matches an existing manifest's pin it refuses."""
+    rel = lambda p: os.path.relpath(p, REPO).replace(os.sep, "/")                       # noqa: E731
+    old = pinned()
+    cues = [{"key": PREFIX + k, "path": rel(shipped_path(k)), "sha256": sha256(shipped_path(k))} for k in KEYS]
+    moved = [c["key"] for c in cues if c["key"] in old and old[c["key"]] != c["sha256"]]
+    if moved:
+        raise SystemExit(f"shipped cues differ from the manifest's pins (a new approval, never a regeneration): {moved}")
+    use = usage()[APPROVED]
+    excerpts = [{"name": name, "path": rel(os.path.join(FOLEY, name + ".wav")),
+                 "sha256": sha256(os.path.join(FOLEY, name + ".wav")), "source_title": title, "author": author,
+                 "freesound_page": url, "licence": LICENCE, "range_s": [t0, t1],
+                 "used_by_cues": [PREFIX + k for k in KEYS if k in use[name]]}
+                for name, _, t0, t1, title, author, url in EXCERPTS if name in use]
+    doc = {
+        "what": "Provenance of BRAND's shipped audio (the Seeker's Living Shadow Corruption cue family).",
+        "candidate": APPROVED,
+        "candidate_name": "SUBTLE / INTERNAL",
+        "approved": APPROVED_ON,
+        "approval_note": APPROVAL_NOTE,
+        "rejected_candidates": {"B": "SUPERNATURAL: archive-only, audio_history/brand_curse/B/",
+                                "C": "ORGANIC / ASH: archive-only, audio_history/brand_curse/C/"},
+        "licence": {"name": LICENCE, "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+                    "checked": LICENCE_CHECKED, "how": "each source's own Freesound page links the CC0 1.0 deed"},
+        "generator": {"path": rel(os.path.abspath(__file__)), "sha256": sha256(os.path.abspath(__file__), text=True)},
+        "shared_dsp": [{"path": rel(os.path.join(HERE, n)), "sha256": sha256(os.path.join(HERE, n), text=True)}
+                       for n in ("make_jaws_bite.py", "make_press_tick.py")],
+        "script_hashes_are": "SHA-256 of the script's LF text (as stored in git)",
+        "excerpts": excerpts,
+        "shipped_cues": cues,
+    }
+    with open(MANIFEST, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(doc, f, indent=2)
+        f.write("\n")
+    print("manifest ->", MANIFEST)
+
+
 def main() -> int:
-    if len(sys.argv) > 2 and sys.argv[1] == "--extract":
-        extract(sys.argv[2])
+    args = sys.argv[1:]
+    if len(args) > 1 and args[0] == "--extract":
+        extract(args[1])
         return 0
-    which = sys.argv[1:] or ["A", "B", "C"]
+    if args == ["--sources"]:
+        write_sources()
+        return 0
+    if args == ["--manifest"]:
+        write_manifest()
+        return 0
+    out = None
+    if args[:1] == ["--out"]:
+        if len(args) < 2:
+            raise SystemExit("--out needs a directory")
+        out, args = os.path.abspath(args[1]), args[2:]
+    which = args or [APPROVED]
+    bad = [w for w in which if w not in (APPROVED,) + ARCHIVE]
+    if bad:
+        raise SystemExit(f"unknown candidate(s) {bad}: {APPROVED} (approved) or {' / '.join(ARCHIVE)} (archive-only)")
+    pins = pinned()
+    rc = 0
     for letter in which:
-        print(f"== {letter} {NAMES[letter]}")
+        print(f"== {letter} {NAMES[letter]}" + (" (APPROVED)" if letter == APPROVED else " (rejected, archive-only)"))
         for key in KEYS:
             y, drive = build(letter, key)
-            write_wav(path_of(letter, key), y)
-            if letter == SHIPPED:
-                write_wav(os.path.join(COMBAT, PREFIX + key + ".wav"), y)
+            if out is not None:                                        # a check build: nothing in the repo is touched
+                write_wav(os.path.join(out, letter, PREFIX + key + ".wav"), y)
+            elif letter != APPROVED:                                   # B / C: the archive, never the game
+                write_wav(path_of(letter, key), y)
+            else:                                                      # A: the pinned bytes, or nothing
+                probe = path_of(letter, key) + ".new"
+                write_wav(probe, y)
+                got = sha256(probe)
+                want = pins.get(PREFIX + key)
+                if want is not None and got != want:
+                    os.remove(probe)
+                    print(f"  REFUSED {PREFIX}{key}: rebuilt {got[:12]} != pinned {want[:12]} (a new approval, never a "
+                          "regeneration); assets and history left untouched")
+                    rc = 1
+                    continue
+                with open(probe, "rb") as f:
+                    data = f.read()
+                os.remove(probe)
+                for p in (path_of(letter, key), shipped_path(key)):
+                    with open(p, "wb") as f:
+                        f.write(data)
             m = measure(y, key)
             print(f"  {key:12s} {m['length_ms']:4.0f} ms  transient {m['transient_ms']:5.1f} (brief {m['brief_ms']:3.0f})  "
                   f"bands <150 {m['bands'][0]:.2f} 150-1k {m['bands'][1]:.2f} 1-4k {m['bands'][2]:.2f} >4k {m['bands'][3]:.2f}  "
                   f"max50 {m['max50_db']:5.1f}  K50@{VOLUME[key]:.3f} {m['k50_played']:5.1f} (target {TARGET[key]:5.1f})  "
                   f"TP {m['true_peak']:.3f}  drive {drive}  edges {m['edge'][0]:.4f}/{m['edge'][1]:.4f}")
-    return 0
+    return rc
 
 
 if __name__ == "__main__":

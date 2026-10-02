@@ -134,8 +134,10 @@ public sealed class MarkRecipe
     // ── THE CURSE'S VOICE (design/audio/seeker-brand-audio-brief.md; scheduled once per wave by MarkVoice) ─────────
     //
     // Seven files of ONE family, built by tools/asset-pipeline/make_brand_cues.py from CC0 foley
-    // (tools/asset-pipeline/foley/brand_curse/SOURCES.md). THREE CANDIDATES (A subtle / internal, B supernatural,
-    // C organic / ash) await the owner's choice: NOTHING HERE IS APPROVED YET, and no byte is pinned until it is. Every
+    // (tools/asset-pipeline/foley/brand_curse/SOURCES.md). APPROVED (the owner, 2026-10-02): Candidate A, SUBTLE /
+    // INTERNAL, is the canonical and only shipped set; its seven files' bytes are pinned by SHA-256 in brand_audio_test
+    // (and foley/brand_curse/brand_audio_manifest.json): a different file is a new approval, never a regeneration. B and
+    // C were rejected and live only in tools/asset-pipeline/audio_history/brand_curse/ (archive, never played). Every
     // cue is presentation only (asked on the picture's own moments), never lead (an authored action's duck keeps it
     // secondary), and quieter than SPRAY, HARD HANDS, JAWS and PRESS's crush. The idle curse is SILENT: no loop.
 
@@ -169,7 +171,7 @@ public sealed class MarkRecipe
 
     /// <summary>The cues' volumes. Each file is mastered so that its K-weighted loudest 50 ms x this volume x the SFX
     /// master 0.8 meets the brief's target, which the integration's mix check (the fight's own soundtrack, 2026-10-02)
-    /// lowered by 1 dB for every cue alike (the candidates stay level-matched) so the loudest, an apply on a host with no
+    /// lowered by 1 dB for every cue alike (the three candidates were level-matched for the review) so the loudest, an apply on a host with no
     /// Ash-Burn, sits >= 3 dB under PRESS's tick (-31.3): apply -35, deepen -36, deepen_deep -35.5, infect -39, leave -37
     /// (under the enemy's death), awaken -36, the ash accent -41. Every one under PRESS's
     /// <see cref="FieldRecipe.TickVolume"/>, JAWS' snap and the action contacts. make_brand_cues.py mirrors them (VOLUME /
