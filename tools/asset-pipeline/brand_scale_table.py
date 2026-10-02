@@ -10,7 +10,7 @@ from fractions import Fraction
 import numpy as np
 from PIL import Image
 
-ATLAS = "assets/art/VFX/parts/fxp_seeker_brand.png"
+ATLAS = "tools/asset-pipeline/v2/keypose_sources/seeker_brand_history/fxp_seeker_brand_etched_cut_39b59aaa.png"  # the etched cut is history (ADR-013)
 CELL, IDLE_COL, HALO_ROW0 = 84, 3, 4
 SIZE_SHARE, COIL_BOX, MIN_SCALE = 0.28, 60.0, 2 / 3
 NAMES = {"Nature": "Verdant Hollow", "Machine": "Cinderworks", "Shadow": "Umbral Reach", "Body": "Marrow Wastes",

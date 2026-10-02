@@ -15,3 +15,7 @@
 *.ttf binary
 *.otf binary
 *.aseprite binary
+
+# ADR-013: a compiled shader is binary; its .fx source checks out LF so its recorded SHA-256 matches everywhere.
+*.mgfxo binary
+*.fx text eol=lf

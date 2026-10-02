@@ -1,24 +1,24 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 
 namespace IdleXIdle.Game.Presentation;
 
-/// <summary>Where a creature's coil stands at one moment (see <see cref="MarkPerformance.TryPhase"/>).</summary>
+/// <summary>Where the mark on a creature stands at one moment (see <see cref="MarkPerformance.TryPhase"/>).</summary>
 public enum MarkPhase
 {
-    /// <summary>No coil.</summary>
+    /// <summary>No mark.</summary>
     None,
 
-    /// <summary>Applied on the wave's first tick: gathering, then the coil (u from the tick).</summary>
+    /// <summary>Applied on the wave's first tick: the curse gathers, then blooms (u from the tick).</summary>
     Apply,
 
-    /// <summary>The smoke is still flying to this creature, which Core already amplifies: it carries a faint smoke (u
+    /// <summary>The mark is still on its way to this creature, which Core already amplifies: it carries a faint shade (u
     /// negative, to the landing).</summary>
     Waiting,
 
-    /// <summary>The smoke landed on its coil's tip: the coil is drawn in, then rests (u from the landing).</summary>
+    /// <summary>The mark arrived (a transfer, a SPRAWL hop): every territory it carries blooms, then rests (u from the
+    /// landing).</summary>
     Reform,
 }
 
@@ -44,9 +44,9 @@ public enum MarkPhase
 /// tick deepened the mark while it was in flight). So no deepen is ever lost and none is ever skipped past.
 /// </para>
 /// <para>
-/// DRAWN IN TWO PLACES: <see cref="DrawOn"/> inside the creature loop, on the body it belongs to (after the creature,
-/// before its hit flash), which also pins every creature's torso for the second; <see cref="DrawLoose"/> after the row,
-/// for what is between bodies: the coil coming apart on a fallen host and the smoke in flight.
+/// THE TRUTH ONLY (ADR-013 §8): the mark is DRAWN by the curse (<see cref="Curse.CursePresentation"/>), which reads its
+/// phases, shown stages, SPRAWL schedule and quiet windows here; every creature's body point is pinned here
+/// (<see cref="Pin"/>) for the curse's territories to hang from. The etched cut that used to be drawn here is gone.
 /// </para>
 /// <para>
 /// Allocation-free after construction: every table is an array sized here, no LINQ, no closures per frame (the body
@@ -87,9 +87,8 @@ public sealed class MarkPerformance
     private readonly float[] _hopCatch;
     private readonly int[] _chainOrder;          // SPRAWL: each creature's place in the spread (its beats ripple, never lockstep)
 
-    // THE PINS: every creature's torso and scale, from the frame drawn this frame (or the last one it was drawn)
+    // THE PINS: every creature's body point, from the frame drawn this frame (or the last one it was drawn)
     private readonly Vector2[] _anchor;
-    private readonly float[] _scale;
     private readonly bool[] _pinned;
 
     /// <summary>
@@ -126,7 +125,6 @@ public sealed class MarkPerformance
         _wholeWave = wholeWave;
         _frontFullPercent = frontFullPercent;
         _anchor = new Vector2[n];
-        _scale = new float[n];
         _pinned = new bool[n];
         _hostSlot = new int[n + 1];
         _hostFall = new float[n + 1];
@@ -265,13 +263,17 @@ public sealed class MarkPerformance
         return quiet;
     }
 
-    /// <summary>A curse prototype's draw counted as this mark's (the trace reads one mark either way).</summary>
+    /// <summary>The curse's draw on one host counted as this mark's (the trace's <c>mark-draw</c>): its sprites so far
+    /// this frame, one more host, the deepest stage drawn.</summary>
     internal void CountCurse(int sprites, int stage)
     {
         SpriteCount = sprites;
         LastHosts++;
         LastStage = Math.Max(LastStage, stage);
     }
+
+    /// <summary>The curse's sprites so far this frame, from a falling host's leaving (not a host any more).</summary>
+    internal void CountCurseSprites(int sprites) => SpriteCount = Math.Max(SpriteCount, sprites);
 
     /// <summary>Is the creature in <paramref name="slot"/> still standing (on screen) at <paramref name="playheadMs"/>?</summary>
     public bool Standing(int slot, float playheadMs) => slot >= 0 && slot < _deathAt.Length && playheadMs < _deathAt[slot];
@@ -342,6 +344,23 @@ public sealed class MarkPerformance
         return MarkPhase.None;
     }
 
+    /// <summary>
+    /// When the creature in <paramref name="slot"/> began WAITING for the mark it carries at <paramref name="playheadMs"/>
+    /// (SPRAWL: the first tick; a transfer: the fall that sent it), +inf when it never waited (applied, or no mark). The
+    /// curse's faint waiting shade rises from here (<see cref="MarkRecipe.WaitingRampMs"/>) instead of in one frame.
+    /// </summary>
+    internal float WaitingFrom(int slot, float playheadMs)
+    {
+        if (_firstFront < 0) return float.PositiveInfinity;
+        if (_wholeWave) return slot == _firstFront ? float.PositiveInfinity : FirstTickMs;
+        for (var k = _hostCount - 1; k >= 0; k--)
+        {
+            if (_hostSlot[k] != slot) continue;
+            return k == 0 || playheadMs < _hostFall[k] ? float.PositiveInfinity : _hostFall[k];
+        }
+        return float.PositiveInfinity;
+    }
+
     /// <summary>SPRAWL: the creature the hop to <paramref name="slot"/> leaves from (-1: none, the coil forms with no strand).</summary>
     internal int HopFromOf(int slot) => slot >= 0 && slot < _hopFrom.Length ? _hopFrom[slot] : -1;
 
@@ -351,26 +370,6 @@ public sealed class MarkPerformance
     /// <summary>Does the creature in <paramref name="slot"/> carry the mark at <paramref name="playheadMs"/> (Core's truth
     /// as the screen draws it: applied, waiting for the smoke, re-formed)?</summary>
     public bool Carries(int slot, float playheadMs) => TryPhase(slot, playheadMs, out _) != MarkPhase.None;
-
-    /// <summary>The atlas column the mark on a body shows at this phase: a GATHER cell while it forms, a FORM cell while
-    /// it seeps in after a transfer, else the idle cell of its (slow, per-creature) step.</summary>
-    public int ColumnAt(int slot, MarkPhase phase, float u, float playheadMs)
-    {
-        var r = Recipe;
-        if (phase == MarkPhase.Apply)
-        {
-            if (u < r.Gather1Ms) return MarkRecipe.Gather0;
-            if (u < r.Gather2Ms) return MarkRecipe.Gather0 + 1;
-            if (u < r.FormMs) return MarkRecipe.Gather0 + 2;
-        }
-        else if (phase == MarkPhase.Waiting) return MarkRecipe.Gather0;
-        else if (phase == MarkPhase.Reform && u < r.ReformMs)
-            return MarkRecipe.Form0 + Math.Min(2, (int)(u / (r.ReformMs / 3f)));
-        // THE SWIRL, stepped, each creature stepping at its own moment (a SPRAWL row never ticks in lockstep)
-        var t = Math.Max(0f, playheadMs) + slot * r.SwirlStepMs * 0.382f;
-        var step = (int)MathF.Floor(t / r.SwirlStepMs);
-        return MarkRecipe.Idle0 + ((step % MarkRecipe.IdlePhases) + MarkRecipe.IdlePhases) % MarkRecipe.IdlePhases;
-    }
 
     /// <summary>
     /// The coil's segment on <paramref name="slot"/>: its phase, when it was whole (<paramref name="formedAt"/>: the first
@@ -419,73 +418,6 @@ public sealed class MarkPerformance
     }
 
     /// <summary>
-    /// The beat on <paramref name="slot"/> at <paramref name="playheadMs"/>: the atlas <paramref name="column"/> drawn hot
-    /// and its opacity (0: none). APPLY catches the cut's rim and outer edge once, ON the tick. A DEEPEN runs its phrase
-    /// (ink gathering where the new cut will be, the new cut, its rim answering, then a short cooling) whenever the mark's
-    /// shown stage moves deeper: a
-    /// tick that deepened it (once the host's own bite settles), ANCHOR's new front at the fall, and the CATCH-UP once a
-    /// migrated coil is whole again, if the mark deepened while it was carried; a depth that rose inside a stage runs it
-    /// faintly; a re-formed coil at the same depth is cut once, faintly, when it is whole. A tick that changes nothing
-    /// shows nothing. Quiet beside an action, a reaction or the field's crush.
-    /// </summary>
-    public float HotAt(int slot, float playheadMs, out int column) => HotAt(slot, playheadMs, out column, out _);
-
-    /// <inheritdoc cref="HotAt(int, float, out int)"/>
-    /// <param name="stage">The stage whose cell <paramref name="column"/> is drawn from: a chisel is the stage it cuts to.</param>
-    public float HotAt(int slot, float playheadMs, out int column, out int stage)
-    {
-        column = MarkRecipe.Edge;
-        var phase = Segment(slot, playheadMs, out var u, out var formedAt, out var arrived, out var catchAt);
-        stage = arrived;
-        if (phase is MarkPhase.None or MarkPhase.Waiting) return 0f;
-        var r = Recipe;
-        var hot = 0f;
-        if (phase == MarkPhase.Apply)
-        {
-            if (u >= 0f && u < r.EtchMs)
-                hot = r.EtchAlpha * (_tickQuiet.Length > 0 && _tickQuiet[0] ? r.QuietShare : 1f) * Fall(u / r.EtchMs);
-        }
-        else
-        {
-            var caught = StageFor(slot, catchAt);
-            if (caught > arrived)
-            {
-                // THE CATCH-UP: carried at one depth, it deepened on the way (or its host fell mid-chisel): cut it here,
-                // once the fall's smoke has cleared and no bite is in the way
-                var a = ChiselAt(playheadMs - catchAt, out var c) * r.DeepenEdgeAlpha;
-                if (a > hot) { hot = a; column = c; stage = caught; }
-            }
-            else if (playheadMs >= catchAt && playheadMs < catchAt + r.EtchMs)
-                // re-formed at the same depth: one faint re-cut, when the catch-up would have cut (after the fall's
-                // death smoke, clear of bites): at the re-form itself the white smoke covered it
-                hot = r.ReformEtchAlpha * Fall((playheadMs - catchAt) / r.EtchMs);
-        }
-        for (var i = 1; i < _tickAt.Length; i++)
-        {
-            var at = _tickAt[i];
-            var start = TickChiselStart(slot, i);
-            if (at <= catchAt || start > playheadMs || playheadMs - start >= BeatMs) continue;
-            var to = StageFor(slot, at);
-            var deepens = to > StageFor(slot, at - 0.5f);
-            var rose = DepthFor(slot, at) > DepthFor(slot, at - 0.5f);     // ANCHOR's front never rises with WINNOW
-            if (!deepens && !rose) continue;
-            var a = ChiselAt(playheadMs - start, out var c) * (deepens ? r.DeepenEdgeAlpha : r.RetraceAlpha) * (_tickQuiet[i] ? r.QuietShare : 1f);
-            if (a > hot) { hot = a; column = c; stage = to; }
-        }
-        if (_wholeWave && _frontFullPercent > 0)
-            for (var s = 0; s < _deathAt.Length; s++)
-            {
-                var at = _deathAt[s];
-                if (float.IsPositiveInfinity(at) || at <= catchAt || at > playheadMs || playheadMs - at >= BeatMs) continue;
-                var to = StageFor(slot, at);
-                if (to <= StageFor(slot, at - 0.5f)) continue;
-                var a = ChiselAt(playheadMs - at, out var c) * r.DeepenEdgeAlpha;
-                if (a > hot) { hot = a; column = c; stage = to; }
-            }
-        return hot;
-    }
-
-    /// <summary>
     /// The stage DRAWN on <paramref name="slot"/>: the stage the coil arrived with, moved deeper only when a chisel's last
     /// step reaches the deeper cut (a tick's, ANCHOR's at a fall, or the catch-up of a migrated coil): the old cut stays on
     /// screen while the chisel is on its way, and a deepen the host fell in the middle of is carried, never lost.
@@ -520,200 +452,26 @@ public sealed class MarkPerformance
     private float TickChiselStart(int slot, int i)
         => _tickAt[i] + _tickSettle[i] + (_wholeWave && slot >= 0 && slot < _chainOrder.Length ? _chainOrder[slot] * Recipe.CarveStepMs * 1.5f : 0f);
 
-    /// <summary>A whole deepen beat: the chisel's three steps and the last one's cooling.</summary>
-    private float BeatMs => Recipe.CarveStepMs * 3f + Recipe.DeepenEdgeMs;
-
-    /// <summary>The chisel's step (column) and strength <paramref name="v"/> ms into a deepen (0 before it starts).</summary>
-    private float ChiselAt(float v, out int column)
-    {
-        column = MarkRecipe.Carve0;
-        if (v < 0f || v >= BeatMs) return 0f;
-        var step = Recipe.CarveStepMs;
-        if (v < step * 3f)
-        {
-            column = MarkRecipe.Carve0 + Math.Min(2, (int)(v / step));
-            return 1f;
-        }
-        column = MarkRecipe.Carve0 + 2;
-        return Fall((v - step * 3f) / Recipe.DeepenEdgeMs);
-    }
-
-    private static float Fall(float t) => t >= 1f ? 0f : (1f - Math.Max(0f, t)) * (1f - Math.Max(0f, t));
-
-    /// <summary>The scale a coil takes on a body of this canonical visible height: a share of it, snapped to thirds.</summary>
-    public float ScaleFor(float bodyHeight)
-    {
-        var s = Recipe.SizeShare * bodyHeight / Recipe.CoilBox;
-        s = MathF.Round(s * 3f) / 3f;
-        return Math.Clamp(s, Recipe.MinScale, Recipe.MaxScale);
-    }
-
-    /// <summary>The torso a creature was last pinned at (arena px), if it has been drawn.</summary>
-    public bool TryAnchor(int slot, out Vector2 anchor, out float scale)
+    /// <summary>The body point a creature was last pinned at (arena px), if it has been drawn.</summary>
+    public bool TryAnchor(int slot, out Vector2 anchor)
     {
         anchor = default;
-        scale = 1f;
         if (slot < 0 || slot >= _pinned.Length || !_pinned[slot]) return false;
         anchor = _anchor[slot];
-        scale = _scale[slot];
         return true;
     }
 
-    // ── DRAWING ────────────────────────────────────────────────────────────────────────────────────────────────────
-
     /// <summary>
-    /// ON THE BODY: pins the creature's torso from the frame just drawn (every creature, marked or not, so a migration
-    /// knows where it lands), then, if it carries the coil, draws its halo (as ink, then as smoke), its cut, and a beat's
-    /// lit line. Called in the creature loop right after the creature, before its hit flash.
+    /// Pins <paramref name="slot"/>'s body point from the frame just drawn for it (every creature, marked or not, so a
+    /// migration knows where it lands): the AUTHORED body point of that frame (MarkPoints: every creature strip has one,
+    /// brand_mark_test), else the frame's centre; never a pixel read back from the texture (ADR-013). A falling host is
+    /// pinned from its death clip's own point, so the curse leaves from the falling body, not from where a lunge last put
+    /// it. The curse's territories hang from this point.
     /// </summary>
-    public void DrawOn(SpriteBatch b, Texture2D? atlas, int slot, float playheadMs, SpriteFrame frame, float bodyHeight, Vector2 squash,
-                       Vector2? bodyPoint = null)
+    public void Pin(int slot, SpriteFrame frame, Vector2? bodyPoint)
     {
         if (slot < 0 || slot >= _pinned.Length) return;
-        var r = Recipe;
-        Pin(slot, frame, bodyHeight, bodyPoint);
-        if (atlas is null) return;
-        var phase = TryPhase(slot, playheadMs, out var u);
-        if (phase == MarkPhase.None) return;
-        var stage = DrawnStage(slot, playheadMs);
-        var column = ColumnAt(slot, phase, u, playheadMs);
-        var sq = squash == default ? Vector2.One : squash;
-        var dest = CellDest(_anchor[slot], _scale[slot] * sq.X, _scale[slot] * sq.Y);
-        var halo = CellSrc(r.HaloRow0 + stage, column);
-        if (phase == MarkPhase.Waiting)
-        {
-            // Core already amplifies it: a dark ink stain gathering on it, thickening until the mark seeps in
-            var ramp = Math.Clamp(1f + u / r.WaitingRampMs, r.WaitingFloor, 1f);
-            b.Draw(atlas, dest, halo, r.Ink * (r.InkAlpha * r.WaitingSmokeAlpha * ramp));
-            SpriteCount++;
-            return;
-        }
-        b.Draw(atlas, dest, halo, r.Ink * r.InkAlpha);
-        b.Draw(atlas, dest, halo, r.Smoke * r.SmokeAlpha);
-        b.Draw(atlas, dest, CellSrc(stage, column), r.Groove);
-        SpriteCount += 3;
-        var hot = HotAt(slot, playheadMs, out var hotColumn, out var hotStage);
-        if (hot > 0.01f && column >= MarkRecipe.Idle0 && column < MarkRecipe.Form0)
-        {
-            // a chisel's cells are the stage it cuts TO (each carve cell is that stage's new cut), whatever the rest shows
-            b.Draw(atlas, dest, CellSrc(hotStage, hotColumn), r.Hot * hot);
-            SpriteCount++;
-        }
-        LastHosts++;
-        LastStage = Math.Max(LastStage, stage);
-    }
-
-    /// <summary>
-    /// Pins <paramref name="slot"/>'s torso from the frame just drawn for it: the AUTHORED body point (MarkPoints: on the
-    /// torso, the halo off the head, the coil inside the silhouette), else the torso probe. A falling host is pinned from its
-    /// death clip at its standing torso, so the coil comes apart and the strand leaves from the body, not from where a
-    /// lunge last put it.
-    /// </summary>
-    public void Pin(int slot, SpriteFrame frame, float bodyHeight, Vector2? bodyPoint)
-    {
-        if (slot < 0 || slot >= _pinned.Length) return;
-        _scale[slot] = ScaleFor(bodyHeight);
-        _anchor[slot] = bodyPoint ?? SilhouetteProbe.Torso(frame, facesLeft: true, Recipe.TorsoFrom, Recipe.TorsoTo) ?? frame.Dest.Center.ToVector2();
+        _anchor[slot] = bodyPoint ?? frame.Dest.Center.ToVector2();
         _pinned[slot] = true;
     }
-
-    /// <summary>
-    /// BETWEEN THE BODIES, after the creature row: the coil coming apart on a fallen host (at its last pinned torso) and
-    /// the smoke carrying a migrating (or, under SPRAWL, spreading) mark along a low arc to the new coil's tip.
-    /// </summary>
-    public void DrawLoose(SpriteBatch b, Texture2D? atlas, float playheadMs)
-    {
-        if (atlas is null || _firstFront < 0) return;
-        var r = Recipe;
-        for (var s = 0; s < _deathAt.Length; s++)
-        {
-            var fell = _deathAt[s];
-            var u = playheadMs - fell;
-            if (float.IsPositiveInfinity(fell) || u < 0f || u >= r.LoosenMs || !_pinned[s] || !Formed(s, fell - 0.5f)) continue;
-            var half = r.LoosenMs * 0.5f;
-            var column = u < half ? MarkRecipe.Loosen0 : MarkRecipe.Loosen0 + 1;
-            var a = u < half ? 1f : 1f - (u - half) / half;
-            var stage = DrawnStage(s, fell - 0.5f);        // what it SHOWED as it fell, never a depth it never showed
-            var dest = CellDest(_anchor[s], _scale[s], _scale[s]);
-            b.Draw(atlas, dest, CellSrc(r.HaloRow0 + stage, column), r.Ink * (r.InkAlpha * a));
-            b.Draw(atlas, dest, CellSrc(r.HaloRow0 + stage, column), r.Smoke * (r.SmokeAlpha * a));
-            b.Draw(atlas, dest, CellSrc(stage, column), r.Groove * a);
-            SpriteCount += 3;
-        }
-        if (_wholeWave)
-        {
-            for (var s = 0; s < _deathAt.Length; s++)
-                if (_hopFrom[s] >= 0 && Standing(s, _hopLand[s]) && Standing(_hopFrom[s], _hopAt[s]))
-                    DrawFlight(b, atlas, _hopFrom[s], s, playheadMs - _hopAt[s], _hopLand[s] - _hopAt[s]);
-            return;
-        }
-        if (!r.TransferThread) return;   // a transfer draws no bridge: the old mark collapses, the new one seeps in
-        for (var k = 1; k < _hostCount; k++)
-            DrawFlight(b, atlas, _hostFromSlot[k], _hostSlot[k], playheadMs - (_hostFall[k] + r.FlightFromMs), r.FlightMs);
-    }
-
-    /// <summary>Was the coil whole on <paramref name="slot"/> at this moment (so its fall takes it apart)?</summary>
-    private bool Formed(int slot, float playheadMs)
-    {
-        var phase = TryPhase(slot, playheadMs, out var u);
-        return phase == MarkPhase.Reform || (phase == MarkPhase.Apply && u >= Recipe.FormMs);
-    }
-
-    /// <summary>The smoke from one torso to another coil's TIP, <paramref name="u"/> ms into a flight of
-    /// <paramref name="flightMs"/>: ONE strand of overlapping puffs (each a puff's VISIBLE width behind the one before at
-    /// the strand's peak speed), along a path that SAGS toward the tip, below the creatures' heads and eyes (a lift carried
-    /// it across the next creature's face, the one path that read as something shot at it); no head, no fading tail.</summary>
-    private void DrawFlight(SpriteBatch b, Texture2D atlas, int from, int to, float u, float flightMs)
-    {
-        var r = Recipe;
-        if (u < 0f || from < 0 || !_pinned[from] || !_pinned[to]) return;
-        var a = _anchor[from];
-        var distance = Math.Max(1f, Vector2.Distance(a, _anchor[to] + (r.Tip - r.Centre) * _scale[to]));
-        var size = r.ThreadCell * _scale[from];
-        var lag = BeadLag(distance, flightMs, _scale[from]);
-        if (u >= flightMs + lag * (r.Beads - 1)) return;
-        for (var k = 0; k < r.Beads; k++)
-        {
-            var t = (u - k * lag) / flightMs;
-            if (t <= 0f || t >= 1f) continue;
-            t = t * t * (3f - 2f * t);   // a migration eases out and in
-            var p = FlightPoint(a, _anchor[to], _scale[to], t);
-            // the trailing half thins, so the strand breaks up behind the lead rather than holding one width
-            var puff = size * (k < r.Beads / 2 ? 1f : 0.85f);
-            var dest = new Rectangle((int)MathF.Round(p.X - puff / 2), (int)MathF.Round(p.Y - puff / 2),
-                                     (int)MathF.Round(puff), (int)MathF.Round(puff));
-            // tapered: the lead and the last puff are the small cell, the thread's body the full one throughout (no head,
-            // no tail; alternating full and small cells read as a chain of squares with waists)
-            var cell = k == 0 || k == r.Beads - 1 ? 1 : 0;
-            // each puff's own density (deterministic by its index): overlaps build smoke, never one flat violet slab
-            var density = 0.55f + 0.2f * ((k * 37) % 5) / 4f;
-            b.Draw(atlas, dest, new Rectangle(cell * r.ThreadCell, r.ThreadY, r.ThreadCell, r.ThreadCell), r.Groove * density);
-            SpriteCount++;
-        }
-    }
-
-    /// <summary>The time between two puffs of a strand over <paramref name="distance"/> px: at the eased path's peak speed
-    /// (1.5 x distance / flight) they are 0.8 of a puff's VISIBLE width apart, so they overlap into one thread.</summary>
-    internal float BeadLag(float distance, float flightMs, float scale)
-    {
-        var visible = Recipe.ThreadCell * scale * Recipe.ThreadVisibleShare;
-        return Math.Clamp(flightMs * visible * 0.8f / (1.5f * Math.Max(1f, distance)), 1f, 40f);
-    }
-
-    /// <summary>The strand's path at <paramref name="t"/> (0..1, eased) from one creature's torso to another's coil tip:
-    /// the path the flight draws (for the tests: it never rises above the higher of its two ends).</summary>
-    public Vector2 FlightPoint(Vector2 fromAnchor, Vector2 toAnchor, float toScale, float t)
-    {
-        var r = Recipe;
-        var c = toAnchor + (r.Tip - r.Centre) * toScale;
-        var sag = Math.Clamp(r.ArcLift * Vector2.Distance(fromAnchor, c), r.ArcMin, r.ArcMax);
-        var mid = (fromAnchor + c) * 0.5f + new Vector2(0f, sag * 0.5f);
-        return (1 - t) * (1 - t) * fromAnchor + 2 * (1 - t) * t * mid + t * t * c;
-    }
-
-    private Rectangle CellSrc(int row, int column) => new(column * Recipe.Cell, row * Recipe.Cell, Recipe.Cell, Recipe.Cell);
-
-    private Rectangle CellDest(Vector2 anchor, float sx, float sy)
-        => new((int)MathF.Round(anchor.X - Recipe.Centre.X * sx), (int)MathF.Round(anchor.Y - Recipe.Centre.Y * sy),
-               (int)MathF.Round(Recipe.Cell * sx), (int)MathF.Round(Recipe.Cell * sy));
 }

@@ -642,6 +642,8 @@ and CLOSED; the visual contract of `fab25919` is kept.
 
 ## The mark reference: BRAND (FIRST SLICE 2026-09-29, awaiting the owner's review: the Etched Shadow Brand, the MARK / PERSISTENT TARGET-ATTACHED STATE candidate)
 
+> **STATUS 2026-10-02.** BRAND **visual direction: APPROVED** by the owner (from `39b59aaa`): Living Shadow Corruption, separate infected territories, the host's own material corrupted, depth = more of the body, Shadow-violet on normal hosts, host-adaptive Ash-Burn on hosts whose palette conflicts. Do not redesign it; the etched mark / scar / rune / vein-network families below are history. **BRAND production implementation: awaiting the owner's review** (ADR-013: one shader pass per afflicted creature over baked host data; evidence `production/qa/evidence/brand-production/`). **BRAND overall gold-standard reference: NOT YET CLOSED** (no audio yet; audio starts only after the production rendering is approved).
+
 **Status: a first slice, NOT accepted.** Built, filmed and reviewed by independent lenses over six rounds; the
 owner has not seen it. Beside SPRAY (PROJECTILE / TRAVEL), HARD HANDS (MELEE / DIRECT CONTACT), JAWS (REACTION) and PRESS
 (FIELD / AURA), BRAND is the candidate reference for the last archetype: a STATE that lives ON an enemy. Evidence

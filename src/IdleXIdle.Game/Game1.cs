@@ -1979,8 +1979,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // everything drawn before the light would be gone under it.
         _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale, false,
                                      SurfaceFormat.Color,
-                                     // a STENCIL only for the BRAND curse prototype (RH_BRAND_CONCEPT): it clips the curse to a body
-                                     IdleXIdle.Game.Presentation.CursePrototype.FromEnvironment() is null ? DepthFormat.None : DepthFormat.Depth24Stencil8,
+                                     // no depth or stencil: BRAND's curse clips itself to the body by coverage in its shader (ADR-013)
+                                     DepthFormat.None,
                                      0, RenderTargetUsage.PreserveContents);
         ApplyRestoredState();
     }

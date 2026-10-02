@@ -1,0 +1,19 @@
+{
+  "look": {"luma": 0.4295, "chroma": 0.1208, "violet": 0.2038, "shadow": 0.5198, "burn": 0.6426},
+  "frame": 512, "frames": 8,
+  "content": [90, 35, 331, 460],
+  "anchor": [244.5952, 246.0928],
+  "layouts": [
+    {"available": 3, "seats": [
+      {"x": 7.9048, "y": -18.5928, "diameter": 156.082, "burn": 0.6426},
+      {"x": 47.9048, "y": 111.4072, "diameter": 127.9873, "burn": 0.6426},
+      {"x": -37.0952, "y": 111.4072, "diameter": 50.5706, "burn": 0.6426}
+    ]},
+    {"available": 3, "seats": [
+      {"x": 7.9048, "y": -18.5928, "diameter": 156.082, "burn": 0.6426},
+      {"x": 47.9048, "y": 111.4072, "diameter": 127.9873, "burn": 0.6426},
+      {"x": -37.0952, "y": 111.4072, "diameter": 50.5706, "burn": 0.6426}
+    ]}
+  ],
+  "source": "brand_host_bake_test (RH_BRAND_BAKE=1): CurseSeating.Bake over the idle strip and its .mark.json"
+}

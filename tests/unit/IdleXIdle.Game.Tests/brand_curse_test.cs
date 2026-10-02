@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using IdleXIdle.Game.Presentation;
+using IdleXIdle.Game.Presentation.Curse;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Xunit;
@@ -17,21 +18,21 @@ namespace IdleXIdle.Game.Tests;
 /// </summary>
 public class brand_curse_test
 {
-    private static readonly CursePrototype.TerritoryAtlas Atlas = CursePrototype.TerritoryAtlas.Grow_(20261002);
-    private const int N = CursePrototype.TerritoryAtlas.N;
+    private static readonly CurseAtlas Atlas = CurseAtlas.Grow(CurseAtlas.Seed);
+    private const int N = CurseAtlas.N;
 
     [Fact]
     public void test_each_depth_infects_more_territories_of_the_body()
     {
         // one infected territory, then a second elsewhere, then as many as the body holds (three or four)
-        Assert.Equal(1, CursePrototype.TerritoriesAt(1));
-        Assert.Equal(2, CursePrototype.TerritoriesAt(2));
-        Assert.True(CursePrototype.TerritoriesAt(3) >= 3);
+        Assert.Equal(1, CurseSeating.TerritoriesAt(1));
+        Assert.Equal(2, CurseSeating.TerritoriesAt(2));
+        Assert.True(CurseSeating.TerritoriesAt(3) >= 3);
         var (alpha, w, h) = TallBody();
-        var seats = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(78, 80), Diameters(50f), headAtLeft: true);
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(78, 80), Diameters(50f), headAtLeft: true);
         Assert.True(seats.Count >= 3, $"a tall body holds only {seats.Count} territories");
         var (wa, ww, wh) = WideBody();
-        var wide = CursePrototype.TerritorySeats(wa, ww, wh, new Vector2(120, 58), Diameters(34f), headAtLeft: true);
+        var wide = CurseSeating.TerritorySeats(wa, ww, wh, new Vector2(120, 58), Diameters(34f), headAtLeft: true);
         Assert.True(wide.Count >= 3, $"a wide body holds only {wide.Count} territories");
         Dump();
     }
@@ -53,7 +54,7 @@ public class brand_curse_test
                 var arms = y >= 70 && y < 76 && x >= 10 && x < 130;
                 if (hood || ribs || pelvis || legs || arms) a[y * w + x] = 255;
             }
-        var seats = CursePrototype.TerritorySeats(a, w, h, new Vector2(74, 100), Diameters(34f), headAtLeft: true);
+        var seats = CurseSeating.TerritorySeats(a, w, h, new Vector2(74, 100), Diameters(34f), headAtLeft: true);
         Assert.True(seats.Count >= 3, $"a thin body holds only {seats.Count} territories at depth 3");
     }
 
@@ -66,12 +67,12 @@ public class brand_curse_test
         var (alpha, w, h) = TallBody();
         var change = new byte[w * h];
         for (var i = 0; i < change.Length; i++) change[i] = (byte)(i % w < 80 ? 10 : 200);
-        var seats = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(78, 90), Diameters(50f), headAtLeft: true, change);
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(78, 90), Diameters(50f), headAtLeft: true, change);
         Assert.True(seats[0].X > 80f, $"the first territory sat on the unchanging half at {seats[0]}");
         Assert.True(Vector2.Distance(seats[0], new Vector2(78, 90)) <= 1.3f * 50f + 2f, "the first territory wandered off");
         // colour lost counts more than brightness shifted: pale bone darkened is a smaller change than red cloth greyed
-        var bone = CursePrototype.Visible(new Color(220, 210, 190), new Color(150, 146, 150));
-        var cloth = CursePrototype.Visible(new Color(170, 30, 36), new Color(96, 92, 100));
+        var bone = CurseHost.Visible(new Color(220, 210, 190), new Color(150, 146, 150));
+        var cloth = CurseHost.Visible(new Color(170, 30, 36), new Color(96, 92, 100));
         Assert.True(cloth > bone, $"greyed cloth ({cloth}) changed less visibly than darkened bone ({bone})");
     }
 
@@ -87,7 +88,7 @@ public class brand_curse_test
                  })
         {
             var d = Diameters(d0);
-            var seats = CursePrototype.TerritorySeats(alpha, w, h, first, d, headAtLeft: true);
+            var seats = CurseSeating.TerritorySeats(alpha, w, h, first, d, headAtLeft: true);
             for (var i = 0; i < seats.Count; i++)
                 for (var j = i + 1; j < seats.Count; j++)
                 {
@@ -121,7 +122,7 @@ public class brand_curse_test
     {
         // every vein fragment is short (under a third of its territory's span) and lies inside its infected region: a
         // long line followed a collar, a robe edge or a belt and read as "a sash", "a stole", "embroidery"
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             var span = Span(Atlas.TissueF[v], 0.3f);
             Assert.NotEmpty(Atlas.Fragments[v]);
@@ -138,7 +139,7 @@ public class brand_curse_test
     {
         // the infected tissue spreads in two dimensions: principal axes within 1.6 : 1 (a band on a torso reads as a
         // garment whatever its angle)
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             var ratio = Elongation(Atlas.TissueF[v], 0.3f);
             Assert.True(ratio <= 1.6, $"variant {v}: the territory is a band ({ratio:0.00} : 1)");
@@ -151,7 +152,7 @@ public class brand_curse_test
         // every lit run along a fragment is ELONGATED (round, evenly spaced knots read as "a string of beads")
         int pieces = 0, round = 0;
         var worst = new List<string>();
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             var lit = new bool[N * N];
             for (var i = 0; i < lit.Length; i++) lit[i] = Atlas.RunF[v][i] > 0.3f;
@@ -175,7 +176,7 @@ public class brand_curse_test
     {
         // depth 1 is ONE territory and must read on its own: infected tissue, dark fragments, a restrained light from
         // inside, and no light outside the region (the glow supports the region, it never outlines it as a decal)
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             int tissue = 0, dark = 0, lit = 0, soft = 0;
             for (var i = 0; i < N * N; i++)
@@ -202,17 +203,17 @@ public class brand_curse_test
     {
         // the bloom's first frame holds less of the region than its middle one, and its last reveals every texel (the
         // settled masks then follow without a pop); every mask is empty at the field's border (the drain samples clamp)
-        var frames = CursePrototype.TerritoryAtlas.Frames;
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        const int frames = 6;   // (the prototype's stepped bloom frames: the shader's bloom is continuous, so any three moments)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             double first = 0, middle = 0, last = 0, all = 0;
             for (var i = 0; i < N * N; i++)
             {
                 var t = Atlas.TissueF[v][i];
                 all += t;
-                first += t * CursePrototype.TerritoryAtlas.RevealAt(1f / frames * CursePrototype.TerritoryAtlas.BloomReach, Atlas.BirthF[v][i]);
-                middle += t * CursePrototype.TerritoryAtlas.RevealAt(frames / 2f / frames * CursePrototype.TerritoryAtlas.BloomReach, Atlas.BirthF[v][i]);
-                last += t * CursePrototype.TerritoryAtlas.RevealAt(CursePrototype.TerritoryAtlas.BloomReach, Atlas.BirthF[v][i]);
+                first += t * CurseAtlas.RevealAt(1f / frames * CurseAtlas.BloomReach, Atlas.BirthF[v][i]);
+                middle += t * CurseAtlas.RevealAt(frames / 2f / frames * CurseAtlas.BloomReach, Atlas.BirthF[v][i]);
+                last += t * CurseAtlas.RevealAt(CurseAtlas.BloomReach, Atlas.BirthF[v][i]);
             }
             Assert.True(first < middle * 0.6, $"variant {v}: the bloom does not grow ({first:0} then {middle:0})");
             Assert.True(last >= all * 0.999, $"variant {v}: the bloom's last frame leaves {all - last:0.0} of the region unborn");
@@ -231,30 +232,30 @@ public class brand_curse_test
     {
         // an infected territory DRAINS the host: its native colour goes (a red robe greys), its folds stay (a darker pixel
         // stays darker), it darkens; on a host already rich in violet the tint is ash, never more violet
-        var mid = new CursePrototype.HostLook(0.4f, 0.3f, 0f);
-        var red = CursePrototype.DrainPixel(new Color(200, 40, 40), mid);
+        var mid = new HostLook(0.4f, 0.3f, 0f);
+        var red = CurseHost.DrainPixel(new Color(200, 40, 40), mid);
         Assert.True(Chroma(red) <= Chroma(new Color(200, 40, 40)) * 0.25f, $"the red kept its colour: {red}");
-        var lo = CursePrototype.DrainPixel(new Color(60, 60, 60), mid);
-        var hi = CursePrototype.DrainPixel(new Color(160, 160, 160), mid);
+        var lo = CurseHost.DrainPixel(new Color(60, 60, 60), mid);
+        var hi = CurseHost.DrainPixel(new Color(160, 160, 160), mid);
         Assert.True(Luma(hi) > Luma(lo) + 20f, "the folds flattened away");
         Assert.True(Luma(hi) < 160f, "the drained material did not darken");
         // the drained material moves AWAY from the host's own brightness: a dark host lightens, a pale one darkens
-        Assert.True(CursePrototype.DrainedMean(0.1f) > 0.25f, "a dark host's infected flesh did not turn to ash");
-        Assert.True(CursePrototype.DrainedMean(0.27f) > 0.32f, "a dark caster's infected cloth did not pale");
-        Assert.True(CursePrototype.DrainedMean(0.62f) < 0.4f, "a pale host's infected cloth did not darken");
-        var violetHost = new CursePrototype.HostLook(0.2f, 0.3f, 0.5f);
-        var purple = CursePrototype.DrainPixel(new Color(120, 60, 170), violetHost);
+        Assert.True(CurseHost.DrainedMean(0.1f) > 0.25f, "a dark host's infected flesh did not turn to ash");
+        Assert.True(CurseHost.DrainedMean(0.27f) > 0.32f, "a dark caster's infected cloth did not pale");
+        Assert.True(CurseHost.DrainedMean(0.62f) < 0.4f, "a pale host's infected cloth did not darken");
+        var violetHost = new HostLook(0.2f, 0.3f, 0.5f);
+        var purple = CurseHost.DrainPixel(new Color(120, 60, 170), violetHost);
         Assert.True(purple.B - purple.G <= 6, $"a violet host's drain handed the violet back: {purple}");
         // a near-black host's infected flesh turns to ASH: lighter, grey, its folds kept
-        var black = new CursePrototype.HostLook(0.08f, 0.04f, 0f);
-        var ashLo = CursePrototype.DrainPixel(new Color(8, 6, 12), black);
-        var ashHi = CursePrototype.DrainPixel(new Color(60, 40, 80), black);
+        var black = new HostLook(0.08f, 0.04f, 0f);
+        var ashLo = CurseHost.DrainPixel(new Color(8, 6, 12), black);
+        var ashHi = CurseHost.DrainPixel(new Color(60, 40, 80), black);
         Assert.True(Luma(ashLo) > 40f, $"black flesh did not turn to ash: {ashLo}");
         Assert.True(Luma(ashHi) > Luma(ashLo), "the ash lost the folds");
         Assert.True(Chroma(ashHi) < 25f, $"the ash kept the host's violet: {ashHi}");
-        var transparent = CursePrototype.DrainPixel(Color.Transparent, mid);
+        var transparent = CurseHost.DrainPixel(Color.Transparent, mid);
         Assert.Equal(0, transparent.A);
-        Assert.True(CursePrototype.DrainStrength(new CursePrototype.HostLook(0.4f, 0.35f, 0f)) > CursePrototype.DrainStrength(new CursePrototype.HostLook(0.4f, 0.03f, 0f)),
+        Assert.True(CurseHost.DrainStrength(new HostLook(0.4f, 0.35f, 0f)) > CurseHost.DrainStrength(new HostLook(0.4f, 0.03f, 0f)),
                     "a colourful host is drained no more visibly than a grey one");
     }
 
@@ -264,11 +265,11 @@ public class brand_curse_test
         var purple = Fill(new Color(110, 50, 170), 100);
         var red = Fill(new Color(180, 30, 30), 100);
         var black = Fill(new Color(12, 10, 14), 100);
-        Assert.True(CursePrototype.Measure(purple).Violet > 0.9f);
-        Assert.True(CursePrototype.Measure(red).Violet < 0.05f);
-        Assert.True(CursePrototype.Measure(black).Chroma < 0.05f);
-        Assert.True(CursePrototype.Measure(black).Luma < 0.1f);
-        Assert.True(CursePrototype.VioletNorm(CursePrototype.Measure(purple).Violet) > 0.95f);
+        Assert.True(CurseHost.Measure(purple).Violet > 0.9f);
+        Assert.True(CurseHost.Measure(red).Violet < 0.05f);
+        Assert.True(CurseHost.Measure(black).Chroma < 0.05f);
+        Assert.True(CurseHost.Measure(black).Luma < 0.1f);
+        Assert.True(CurseHost.VioletNorm(CurseHost.Measure(purple).Violet) > 0.95f);
     }
 
     [Fact]
@@ -285,11 +286,11 @@ public class brand_curse_test
         }
         Solid(20, 10, 80, 90);    // the torso
         Solid(80, 40, 130, 48);   // the arm
-        var fromArm = CursePrototype.ThickNear(alpha, w, h, new Vector2(120, 44), 0.6f);
+        var fromArm = CurseSeating.ThickNear(alpha, w, h, new Vector2(120, 44), 0.6f);
         Assert.InRange(fromArm.X, 20f, 80f);
         Assert.InRange(fromArm.Y, 10f, 90f);
         var inTorso = new Vector2(50, 50);
-        Assert.Equal(inTorso, CursePrototype.ThickNear(alpha, w, h, inTorso, 0.6f));
+        Assert.Equal(inTorso, CurseSeating.ThickNear(alpha, w, h, inTorso, 0.6f));
     }
 
     // ── ASH-BURN (owner's brief from 91c1650b: on a dark, violet or magical host the curse read as its own design) ────
@@ -299,21 +300,21 @@ public class brand_curse_test
     {
         // a dark, shadow-coloured caster: its infected material burns to ASH, pushed far from its own value (further than
         // the violet-grey drain went: "its own dark aura"), colourless, a breath cold (never cyan ice), its folds kept
-        var caster = new CursePrototype.HostLook(0.16f, 0.05f, 0f, 0.8f);
-        Assert.True(CursePrototype.AshBurn(caster) > 0.95f, $"a dark shadow caster is not ash-burned ({CursePrototype.AshBurn(caster):0.00})");
-        var lo = CursePrototype.DrainPixel(new Color(20, 18, 26), caster);
-        var hi = CursePrototype.DrainPixel(new Color(70, 64, 84), caster);
+        var caster = new HostLook(0.16f, 0.05f, 0f, 0.8f);
+        Assert.True(CurseHost.AshBurn(caster) > 0.95f, $"a dark shadow caster is not ash-burned ({CurseHost.AshBurn(caster):0.00})");
+        var lo = CurseHost.DrainPixel(new Color(20, 18, 26), caster);
+        var hi = CurseHost.DrainPixel(new Color(70, 64, 84), caster);
         Assert.True(Luma(lo) > (0.16f + 0.2f) * 255f, $"the ash stayed near the host's own value: {lo}");
         Assert.True(Luma(hi) > Luma(lo) + 20f, "the ash lost the host's folds");
         Assert.True(Chroma(lo) < 12f && Chroma(hi) < 12f, $"the ash kept a colour: {lo} {hi}");
         Assert.True(hi.B >= hi.R && hi.B >= hi.G && hi.B - hi.R <= 16, $"the ash is not a cold grey (or went to ice): {hi}");
-        var violetGrey = CursePrototype.DrainPixel(new Color(20, 18, 26), caster, 0f);
+        var violetGrey = CurseHost.DrainPixel(new Color(20, 18, 26), caster, 0f);
         Assert.True(Luma(lo) > Luma(violetGrey) + 15f, "ash-burn pushed no further from the host's value than the violet-grey drain");
-        Assert.True(CursePrototype.DrainStrength(caster) > CursePrototype.DrainStrength(caster, 0f), "the burned material is no stronger");
+        Assert.True(CurseHost.DrainStrength(caster) > CurseHost.DrainStrength(caster, 0f), "the burned material is no stronger");
         // a pale host never burns to white: its drain is the bruise it had
-        var pale = new CursePrototype.HostLook(0.62f, 0.05f, 0f, 0.55f);
-        var cloth = CursePrototype.DrainPixel(new Color(200, 196, 210), pale);
-        Assert.Equal(CursePrototype.DrainPixel(new Color(200, 196, 210), pale, 0f), cloth);
+        var pale = new HostLook(0.62f, 0.05f, 0f, 0.55f);
+        var cloth = CurseHost.DrainPixel(new Color(200, 196, 210), pale);
+        Assert.Equal(CurseHost.DrainPixel(new Color(200, 196, 210), pale, 0f), cloth);
         Assert.True(Luma(cloth) < 160f, $"a pale host's infected cloth whitened: {cloth}");
     }
 
@@ -321,20 +322,20 @@ public class brand_curse_test
     public void test_ash_burn_is_a_rule_of_the_hosts_look_never_its_name()
     {
         // near-black and shadow-coloured, or rich in native violet: ash-burn; colourful, or pale: the violet contrasts
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.09f, 0.05f, 0f, 0.98f)) > 0.95f, "a black beast");
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.25f, 0.2f, 0.5f, 0.7f)) > 0.9f, "a violet caster");
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.29f, 0.2f, 0f, 0.46f)) < 0.05f, "a cyan crystal caster");
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.25f, 0.15f, 0f, 0.4f)) < 0.05f, "a lava-cracked golem");
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.62f, 0.05f, 0f, 0.55f)) < 0.05f, "a pale wisp");
-        Assert.True(CursePrototype.AshBurn(new CursePrototype.HostLook(0.65f, 0.2f, 0.5f, 0.8f)) < 0.05f, "a pale violet host");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.09f, 0.05f, 0f, 0.98f)) > 0.95f, "a black beast");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.25f, 0.2f, 0.5f, 0.7f)) > 0.9f, "a violet caster");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.29f, 0.2f, 0f, 0.46f)) < 0.05f, "a cyan crystal caster");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.25f, 0.15f, 0f, 0.4f)) < 0.05f, "a lava-cracked golem");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.62f, 0.05f, 0f, 0.55f)) < 0.05f, "a pale wisp");
+        Assert.True(CurseHost.AshBurn(new HostLook(0.65f, 0.2f, 0.5f, 0.8f)) < 0.05f, "a pale violet host");
         // a host between the two (dark, red, a little native violet) is blended, never switched
-        var between = CursePrototype.AshBurn(new CursePrototype.HostLook(0.19f, 0.164f, 0.092f, 0.607f));
+        var between = CurseHost.AshBurn(new HostLook(0.19f, 0.164f, 0.092f, 0.607f));
         Assert.InRange(between, 0.2f, 0.9f);
         // and the blend is continuous: a small change of look never flips the material
         for (var s = 0.3f; s < 1f; s += 0.01f)
         {
-            var a = CursePrototype.AshBurn(new CursePrototype.HostLook(0.2f, 0.08f, 0f, s));
-            var b = CursePrototype.AshBurn(new CursePrototype.HostLook(0.2f, 0.08f, 0f, s + 0.01f));
+            var a = CurseHost.AshBurn(new HostLook(0.2f, 0.08f, 0f, s));
+            var b = CurseHost.AshBurn(new HostLook(0.2f, 0.08f, 0f, s + 0.01f));
             Assert.True(MathF.Abs(a - b) < 0.06f, $"ash-burn jumps at a shadow share of {s:0.00}");
         }
     }
@@ -343,16 +344,16 @@ public class brand_curse_test
     public void test_the_host_look_measures_its_shadow_share()
     {
         // blue-to-magenta tinted and near-black pixels are SHADOW colours (the curse's own); red, gold and grey are not
-        Assert.True(CursePrototype.Measure(Fill(new Color(12, 10, 14), 100)).Shadow > 0.95f);
-        Assert.True(CursePrototype.Measure(Fill(new Color(110, 50, 170), 100)).Shadow > 0.95f);
-        Assert.True(CursePrototype.Measure(Fill(new Color(40, 44, 60), 100)).Shadow > 0.95f);
-        Assert.True(CursePrototype.Measure(Fill(new Color(180, 30, 30), 100)).Shadow < 0.05f);
-        Assert.True(CursePrototype.Measure(Fill(new Color(200, 160, 60), 100)).Shadow < 0.05f);
-        Assert.True(CursePrototype.Measure(Fill(new Color(150, 150, 150), 100)).Shadow < 0.05f);
+        Assert.True(CurseHost.Measure(Fill(new Color(12, 10, 14), 100)).Shadow > 0.95f);
+        Assert.True(CurseHost.Measure(Fill(new Color(110, 50, 170), 100)).Shadow > 0.95f);
+        Assert.True(CurseHost.Measure(Fill(new Color(40, 44, 60), 100)).Shadow > 0.95f);
+        Assert.True(CurseHost.Measure(Fill(new Color(180, 30, 30), 100)).Shadow < 0.05f);
+        Assert.True(CurseHost.Measure(Fill(new Color(200, 160, 60), 100)).Shadow < 0.05f);
+        Assert.True(CurseHost.Measure(Fill(new Color(150, 150, 150), 100)).Shadow < 0.05f);
         // a pixel's own colour competes with the curse's violet when it is blue-violet
-        Assert.True(CursePrototype.Competes(new Color(90, 60, 160)));
-        Assert.False(CursePrototype.Competes(new Color(200, 160, 60)));
-        Assert.False(CursePrototype.Competes(new Color(30, 30, 30)));
+        Assert.True(CurseHost.Competes(new Color(90, 60, 160)));
+        Assert.False(CurseHost.Competes(new Color(200, 160, 60)));
+        Assert.False(CurseHost.Competes(new Color(30, 30, 30)));
     }
 
     // ── THE SEATS ON THE CREATURE'S STABLE BODY ───────────────────────────────────────────────────────────────────────
@@ -380,14 +381,92 @@ public class brand_curse_test
             }
         var head = new[] { new Vector4(0, 40, 50, 100) };
         // (the control: the claw's pose alone)
-        var pose = CursePrototype.TerritorySeats(alpha[(6 * w * h)..(7 * w * h)], w, h, new Vector2(125, 72), Diameters(40f), headAtLeft: true,
+        var pose = CurseSeating.TerritorySeats(alpha[(6 * w * h)..(7 * w * h)], w, h, new Vector2(125, 72), Diameters(40f), headAtLeft: true,
                                                  change[(6 * w * h)..(7 * w * h)], 1, head);
         Assert.Contains(pose, s => Vector2.Distance(s, claw) < 22f);
-        var seats = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(125, 72), Diameters(40f), headAtLeft: true, change, frames, head);
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(125, 72), Diameters(40f), headAtLeft: true, change, frames, head);
         Assert.True(seats.Count >= 3, $"the stable body holds only {seats.Count}");
         Assert.InRange(seats[0].X, 90f, 160f);
         Assert.InRange(seats[0].Y, 55f, 90f);
         foreach (var s in seats) Assert.True(Vector2.Distance(s, claw) > 22f, $"a territory on the raised claw at {s}");
+    }
+
+    [Fact]
+    public void test_no_territory_sits_on_a_limb_that_swings_away_when_stable_body_mass_exists()
+    {
+        // an upright body whose thick club-arm hangs beside it in every idle frame (so the idle silhouette alone calls it
+        // stable body) and is what the drain changes most; in the attack frames the arm is raised away. The other frames
+        // tell it is a limb: no territory takes it, the first holds the torso
+        const int w = 200, h = 240, frames = 8;
+        bool Torso(int x, int y) => y >= 60 && y < 200 && MathF.Abs(x - 90) < 30;
+        bool Head(int x, int y) => Sq(x - 90) + Sq(y - 36) < 24 * 24;
+        bool Arm(int x, int y) => x >= 120 && x < 148 && y >= 76 && y < 180;
+        var alpha = new byte[w * h * frames];
+        var change = new byte[alpha.Length];
+        var attack = new byte[alpha.Length];
+        for (var f = 0; f < frames; f++)
+            for (var y = 0; y < h; y++)
+                for (var x = 0; x < w; x++)
+                {
+                    var i = (f * h + y) * w + x;
+                    var body = Torso(x, y) || Head(x, y);
+                    if (body || Arm(x, y)) { alpha[i] = 255; change[i] = (byte)(Arm(x, y) ? 255 : 120); }
+                    // (the attack: the same torso, the arm raised over the head)
+                    if (body || (x >= 120 && x < 148 && y >= 0 && y < 60)) attack[i] = 255;
+                }
+        var head = new[] { new Vector4(62, 8, 118, 62) };
+        // (the control: the idle silhouette alone takes the arm)
+        var bare = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(98, 110), Diameters(48f), headAtLeft: true, change, frames, head);
+        Assert.Contains(bare, s => s.X >= 120f);
+        var signals = new SeatSignals { OtherAlpha = attack, OtherFrames = frames };
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(98, 110), Diameters(48f), headAtLeft: true, change, frames, head, signals);
+        Assert.True(seats.Count >= 2, $"the torso holds only {seats.Count}");
+        Assert.InRange(seats[0].X, 56f, 126f);
+        foreach (var s in seats) Assert.False(s.X >= 128f, $"a territory on the swinging arm at {s}");
+    }
+
+    [Fact]
+    public void test_the_material_response_is_a_continuous_rule_of_the_hosts_look()
+    {
+        // Ash-Burn grows with the host's native violet and with its darkness, never steps, and never reads a name: a
+        // sweep of either never lowers it, and two neighbouring looks never differ by much
+        var last = -1f;
+        for (var v = 0f; v <= 1f; v += 0.005f)
+        {
+            var b = CurseHost.AshBurn(new HostLook(0.3f, 0.2f, v, 0.4f));
+            Assert.True(b >= last - 1e-5f, $"ash-burn fell as the violet rose to {v:0.00}");
+            Assert.True(last < 0f || b - last < 0.06f, $"ash-burn jumps at violet {v:0.00}");
+            last = b;
+        }
+        Assert.True(last > 0.95f, "a host rich in violet is not ash-burned");
+        last = -1f;
+        for (var l = 0.8f; l >= 0.02f; l -= 0.005f)
+        {
+            // (darker and darker, its shadow share rising with it)
+            var b = CurseHost.AshBurn(new HostLook(l, 0.05f, 0f, Math.Clamp(1f - l, 0f, 1f)));
+            Assert.True(b >= last - 1e-5f, $"ash-burn fell as the host darkened to {l:0.00}");
+            Assert.True(last < 0f || b - last < 0.06f, $"ash-burn jumps at luma {l:0.00}");
+            last = b;
+        }
+        Assert.True(last > 0.95f, "a near-black shadow host is not ash-burned");
+        // the rules are generic: no creature, boss or region is named anywhere in the curse's code
+        var dir = Path.Combine(RepoRoot(), "src", "IdleXIdle.Game", "Presentation", "Curse");
+        var names = new[] { "lich", "reaper", "matron", "colossus", "angel", "regent", "whelp", "wisp", "verdant", "cinder", "umbral",
+                            "marrow", "archive", "choir", "swarm", "caster", "armoured", "bruiser" };
+        foreach (var file in Directory.GetFiles(dir, "*.cs"))
+        {
+            var code = string.Join("\n", File.ReadAllLines(file).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            foreach (var n in names)
+                Assert.DoesNotContain("\"" + n, code.ToLowerInvariant());
+        }
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is { Length: > 0 } && !File.Exists(Path.Combine(dir, "IdleXIdle.sln"))) dir = Path.GetDirectoryName(dir);
+        Assert.False(dir is null, "IdleXIdle.sln not found above the test binary.");
+        return dir!;
     }
 
     [Fact]
@@ -407,9 +486,9 @@ public class brand_curse_test
         }
         var head = new Vector4(55, 16, 135, 96);
         bool OnHead(Vector2 s) => s.X > head.X && s.X < head.Z && s.Y > head.Y && s.Y < head.W;
-        var bare = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(120, 58), Diameters(40f), headAtLeft: false);
+        var bare = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(120, 58), Diameters(40f), headAtLeft: false);
         Assert.True(OnHead(bare[0]), $"the control: without the head box the first territory sat at {bare[0]}, not on the head");
-        var seats = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(120, 58), Diameters(40f), headAtLeft: false, null, 1, new[] { head });
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(120, 58), Diameters(40f), headAtLeft: false, null, 1, new[] { head });
         Assert.True(seats.Count >= 1);
         foreach (var s in seats) Assert.False(OnHead(s), $"a territory on the head at {s}");
     }
@@ -425,7 +504,7 @@ public class brand_curse_test
             if (Sq(i % w - 80) + Sq(i / w - 76) < 48 * 48) alpha[i] = 255;
         var d = Diameters(64f);
         var full = (float[])d.Clone();
-        var seats = CursePrototype.TerritorySeats(alpha, w, h, new Vector2(80, 76), d, headAtLeft: true);
+        var seats = CurseSeating.TerritorySeats(alpha, w, h, new Vector2(80, 76), d, headAtLeft: true);
         Assert.True(seats.Count >= 3, $"a small body holds only {seats.Count}");
         var smaller = false;
         for (var k = 1; k < seats.Count; k++) smaller |= d[k] < full[k] - 0.5f;
@@ -447,17 +526,17 @@ public class brand_curse_test
         var flipped = new SpriteFrame(null!, src, new Rectangle(0, 0, 200, 200), SpriteEffects.FlipHorizontally);
         // (the size comes from the creature's canonical body and its resting strip's figure, never a drawn frame: the
         // same body over a figure twice as large in source pixels is a territory twice as large in source pixels)
-        var d = CursePrototype.SourceDiameter(new Rectangle(0, 0, 150, 190), new Point(300, 380));
+        var d = CurseSeating.SourceDiameter(new Rectangle(0, 0, 150, 190), new Point(300, 380));
         Assert.Equal(2f * 0.4f * MathF.Sqrt(150f * 190f), d, 2);
-        Assert.Equal(d / 2f, CursePrototype.SourceDiameter(new Rectangle(0, 0, 150, 190), new Point(150, 190)), 2);
-        var lay = new CursePrototype.Layout { Available = 1 };
+        Assert.Equal(d / 2f, CurseSeating.SourceDiameter(new Rectangle(0, 0, 150, 190), new Point(150, 190)), 2);
+        var lay = new Layout { Available = 1 };
         lay.Offset[0] = new Vector2(20, -10);
         lay.Diameter[0] = 50f;
         var anchor = new Vector2(100, 100);
-        Assert.Equal(new Vector2(140, 80), new CursePrototype.FrameMap(plain).At(lay, 0, anchor));
-        Assert.Equal(new Vector2(148, 84), new CursePrototype.FrameMap(squashed).At(lay, 0, anchor));
-        Assert.Equal(new Vector2(60, 80), new CursePrototype.FrameMap(flipped).At(lay, 0, anchor));
-        Assert.Equal(100f, new CursePrototype.FrameMap(plain).Diameter(lay, 0), 3);
+        Assert.Equal(new Vector2(140, 80), new CurseFrameMap(plain).At(lay, 0, anchor));
+        Assert.Equal(new Vector2(148, 84), new CurseFrameMap(squashed).At(lay, 0, anchor));
+        Assert.Equal(new Vector2(60, 80), new CurseFrameMap(flipped).At(lay, 0, anchor));
+        Assert.Equal(100f, new CurseFrameMap(plain).Diameter(lay, 0), 3);
     }
 
     [Fact]
@@ -478,11 +557,11 @@ public class brand_curse_test
     {
         // depth 1 straight to depth 3 (a catch-up): every newly shown territory blooms, one after another; none pops in
         // whole (the second was popped in without its bloom)
-        var c = new CursePrototype.TerritoryClock();
-        var steps = new[] { new CursePrototype.StageStep(1000f, 1, 3) };
-        CursePrototype.Replay(0f, 1, 1, steps, 999f, 4, c);
+        var c = new TerritoryClock();
+        var steps = new[] { new StageStep(1000f, 1, 3) };
+        CurseTimeline.Replay(0f, 1, 1, steps, 999f, 4, c);
         Assert.Equal(1, c.Count);
-        CursePrototype.Replay(0f, 1, 1, steps, 1000f, 4, c);
+        CurseTimeline.Replay(0f, 1, 1, steps, 1000f, 4, c);
         Assert.Equal(4, c.Count);
         for (var k = 1; k < 4; k++)
         {
@@ -510,14 +589,14 @@ public class brand_curse_test
     {
         // a transfer arrives with two territories blooming in turn; a deepen lands 120 ms in. The arrival's territories
         // keep their own bloom (they flickered between the two flares), the new ones bloom after it
-        var steps = new[] { new CursePrototype.StageStep(120f, 2, 3) };
-        var with = new CursePrototype.TerritoryClock();
-        var without = new CursePrototype.TerritoryClock();
+        var steps = new[] { new StageStep(120f, 2, 3) };
+        var with = new TerritoryClock();
+        var without = new TerritoryClock();
         var last = new float[4];
         for (var t = 0f; t <= 1500f; t += 5f)
         {
-            CursePrototype.Replay(0f, 2, 2, steps, t, 4, with);
-            CursePrototype.Replay(0f, 2, 2, Array.Empty<CursePrototype.StageStep>(), t, 4, without);
+            CurseTimeline.Replay(0f, 2, 2, steps, t, 4, with);
+            CurseTimeline.Replay(0f, 2, 2, Array.Empty<StageStep>(), t, 4, without);
             for (var k = 0; k < 2; k++)
             {
                 Assert.Equal(without.Reveal(k, t), with.Reveal(k, t));
@@ -648,7 +727,7 @@ public class brand_curse_test
         var dir = Environment.GetEnvironmentVariable("RH_CURSE_DUMP");
         if (string.IsNullOrEmpty(dir)) return;
         Directory.CreateDirectory(dir);
-        for (var v = 0; v < CursePrototype.TerritoryAtlas.Variants; v++)
+        for (var v = 0; v < CurseAtlas.Variants; v++)
         {
             Write(Path.Combine(dir, $"tissue{v}.pgm"), Atlas.TissueF[v]);
             Write(Path.Combine(dir, $"drain{v}.pgm"), Atlas.DrainF[v]);

@@ -219,7 +219,7 @@ public class focus_renderer_law_test
                                      "private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)",
                                      "private void DrawNormalEnemy(SpriteBatch b, bool attacking)",
                                      "private void DrawBoss(SpriteBatch b, bool attacking)",
-                                     "private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey)" })
+                                     "private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey, string? idleKey)" })
             Assert.Contains("record: VfxSubject.", MemberOf(hunt, draw));
         var flash = MemberOf(hunt, "private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop,\n                           Vector2 squash = default)");
         Assert.DoesNotContain("record:", flash);

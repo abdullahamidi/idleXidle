@@ -128,7 +128,7 @@ def draw(frame, atlas, halo_row0, stage, at, smoke_a):
 def material_sheet(dark_frame, dark_at, light_frame, light_at, path):
     old = Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history",
                                   "fxp_seeker_brand_first_slice_77d383ff.png")).convert("RGBA")
-    new = Image.open(os.path.join(REPO, "assets", "art", "VFX", "parts", "fxp_seeker_brand.png")).convert("RGBA")
+    new = Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_etched_cut_39b59aaa.png")).convert("RGBA")
     # (label, atlas, halo row 0, stages to show, lit smoke alpha): the first slice's base / deep2 / deep4 vs DEPTH 1 / 2 / 3
     sets = [("FIRST SLICE: the glowing line", old, 6, (1, 3, 5), 0.6), ("SECOND PASS: the dark cut, one lit rim", new, 4, (1, 2, 3), 0.18)]
     bodies = [("dark body (whelp)", dark_frame, dark_at), ("light body (Pale Choir)", light_frame, light_at)]
@@ -158,7 +158,7 @@ def boss_sheet(path):
     DEPTH 1 and DEPTH 3, at the size the runtime gives it (SizeShare of the visible height, snapped to thirds), on the
     authored body point, drawn as the runtime draws it."""
     import json
-    atlas = Image.open(os.path.join(REPO, "assets", "art", "VFX", "parts", "fxp_seeker_brand.png")).convert("RGBA")
+    atlas = Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_etched_cut_39b59aaa.png")).convert("RGBA")
     bosses = sorted(d for d in os.listdir(os.path.join(REPO, "assets", "art", "Animations", "Bosses")) if d.endswith("_idle"))
     T = 300
     img = Image.new("RGB", (8 + 2 * (T + 8), 34 + len(bosses) * (T + 22)), (20, 17, 14))
@@ -206,7 +206,7 @@ def boss_sheet(path):
 
 
 def atlas_numbers():
-    a = np.asarray(Image.open(os.path.join(REPO, "assets", "art", "VFX", "parts", "fxp_seeker_brand.png")).convert("RGBA")).astype(np.float32)
+    a = np.asarray(Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_etched_cut_39b59aaa.png")).convert("RGBA")).astype(np.float32)
     o = np.asarray(Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history",
                                            "fxp_seeker_brand_first_slice_77d383ff.png")).convert("RGBA")).astype(np.float32)
     out = ["| mark | depth | cut px | lit px (> luma 200 in the art) | lit share | mean grey of the cut |", "|---|---|---|---|---|---|"]

@@ -21,6 +21,7 @@ using IdleXIdle.Core.Traits;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Game.Presentation;
+using IdleXIdle.Game.Presentation.Curse;
 using IdleXIdle.Game.Vfx;
 
 namespace IdleXIdle.Game;
@@ -1624,10 +1625,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             _mark = new MarkPerformance(markRecipe, markSlot, markTicks, falls, _run.LastWaveCreatures.Count,
                                         markSk.Def.AmplifyWholeWave, (int)MathF.Round(markSk.Def.Rule.AmplifyFrontFull * 100f), markStrikes);
             MarkPoints.Warm();   // the body points are read here, never on a Draw frame
-            // BRAND AS A CURSE (direction selection, dev-only: RH_BRAND_CONCEPT=A|B|C): the same truth, drawn as an
-            // affliction of the whole body instead of the cut on one point
-            if (CursePrototype.FromEnvironment() is { } curseConcept)
-                _curse = new CursePrototype(curseConcept, _mark, _ui.Device, _run.LastWaveCreatures.Count);
+            // BRAND AS A CURSE (ADR-013, the owner-approved "Living Shadow Corruption"): the mark's truth drawn as infected
+            // territories of the body, one shader pass per afflicted creature. Its shader, atlas and the baked host data
+            // are loaded once, here, never on a Draw frame; each wave only hands it the new mark.
+            CurseHostData.Warm();
+            _curse = _curseLoaded ??= CursePresentation.Load(_ui.Device);
+            _curse.BeginWave(_mark, _run.LastWaveCreatures.Count);
             if (PresentTrace.Enabled)
                 PresentTrace.Log("mark-wave", $"{markRecipe.Id}\tslot={markSlot}\twhole={markSk.Def.AmplifyWholeWave}"
                                  + $"\tticks={string.Join(",", markTicks.Select(t => $"{t.AtMs:0}:{t.Percent}{(t.Quiet ? "q" : "")}"))}"
@@ -2930,20 +2933,18 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
-        // THE MARK BETWEEN BODIES (BRAND): a fallen host's coil loosening, the smoke beads carrying it to the next front
-        // (over the creatures, under JAWS and PRESS, under the champion)
-        if (!ShotNoVfx && _mark is { } looseMark && _curse is null && _mode != Mode.Downed)
-        {
-            var looseAlloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-            looseMark.DrawLoose(b, _ui.Assets.Get(looseMark.Recipe.AtlasKey), _playheadMs);
-            if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - looseAlloc;
-        }
-        if (PresentTrace.Enabled && _mark is { } tracedMark && (tracedMark.SpriteCount > 0 || _markAllocBytes != 0))   // a frame that allocated is logged even with nothing drawn
+        // (BRAND's curse is drawn on each body in the creature loop, a dying host's leaving on its death frame: nothing is
+        // drawn between the bodies, ADR-013)
+        // `draws` / `batches` / `ticks` are the curse's own draw calls, batch boundaries and CPU time this frame (its
+        // wisps flush with the arena batch, counted as one run each); `flush` is the part of `ticks` spent flushing the
+        // arena sprites drawn before each cursed creature (work the arena batch would have done later anyway)
+        if (PresentTrace.Enabled && _mark is { } tracedMark && _curse is { } tracedCurse
+            && (tracedMark.LastHosts > 0 || tracedCurse.SpriteCount > 0 || _markAllocBytes != 0))   // a frame that allocated is logged even with nothing drawn
             PresentTrace.Log("mark-draw", $"{tracedMark.Recipe.Id}\thosts={tracedMark.LastHosts}\tstage={tracedMark.LastStage}"
                              + $"\tfront={tracedMark.FrontAt(_playheadMs)}\tdepth={tracedMark.DepthAt(_playheadMs)}"
-                             + (tracedMark.TryAnchor(tracedMark.FrontAt(_playheadMs), out var markAt, out var markScale)
-                                 ? $"\tat={markAt.X:0},{markAt.Y:0}\tscale={markScale:0.00}" : "")
-                             + $"\tsprites={tracedMark.SpriteCount}\talloc={_markAllocBytes}");
+                             + (tracedMark.TryAnchor(tracedMark.FrontAt(_playheadMs), out var markAt) ? $"\tat={markAt.X:0},{markAt.Y:0}" : "")
+                             + $"\tsprites={tracedCurse.SpriteCount}\talloc={_markAllocBytes}"
+                             + $"\tdraws={tracedCurse.Draws}\tbatches={tracedCurse.Batches}\tticks={tracedCurse.Ticks}\tflush={tracedCurse.ArenaFlushTicks}");
 
         // THE REACTION LAYER (JAWS): the frontal Shadow bite's material on the creature that bit: over the creatures, UNDER the
         // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
@@ -3711,7 +3712,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// Draw a dead creature's fall: its <c>&lt;key&gt;_death_strip8_512</c> clip from the moment it died,
     /// held on the last frame, then faded out. Without a death clip the creature vanishes as before.
     /// </summary>
-    private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey)
+    private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey, string? idleKey)
     {
         if (enemyKey is null || !_diedAt.TryGetValue(slot, out var at)) return;
         var t = _anim - at;
@@ -3720,10 +3721,24 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (fade <= 0f) return;
         ActorShadow(b, box.Center.X, CreatureGround, (int)(box.Width * 0.55f), 30, 0.5f * fade);
         var deathStrip = $"{enemyKey}_death_strip8_512";
-        ActorSprite(b, deathStrip, box, t, DeathFps, loop: false, EnemyTint * fade, -1f, record: VfxSubject.Creature(slot));
+        var cursed = CurseLeavingDraws(slot, idleKey);   // drawn once, by its curse pass (ADR-013 §1)
+        ActorSprite(b, deathStrip, box, t, DeathFps, loop: false, cursed ? Color.Transparent : EnemyTint * fade, -1f, record: VfxSubject.Creature(slot));
         PinMarkOnDeath(slot, deathStrip);
-        if (_curse is { } curse && !ShotNoVfx && TryDrawnFrame(VfxSubject.Creature(slot), out var fallen))
-            curse.DrawLeaving(b, slot, _playheadMs, fallen, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(fallen.Texture) : null, ArenaRasterizer, EnemyTint * fade);
+        DrawCurseLeaving(b, slot, EnemyTint * fade, idleKey, cursed);
+    }
+
+    /// <summary>
+    /// BRAND's curse LEAVING a falling host (ADR-013): its territories flare, collapse and smoke out on the death frame
+    /// just drawn (and pinned, <see cref="PinMarkOnDeath"/>); the pack's and the boss's falls alike.
+    /// </summary>
+    /// <remarks><paramref name="replaced"/>: the death frame was drawn transparent (<see cref="CurseLeavingDraws"/>); the
+    /// curse pass draws it, or the plain frame should none run.</remarks>
+    private void DrawCurseLeaving(SpriteBatch b, int slot, Color tint, string? idleKey, bool replaced)
+    {
+        if (_curse is not { } curse || ShotNoVfx || !TryDrawnFrame(VfxSubject.Creature(slot), out var fallen)) return;
+        var alloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        curse.DrawLeaving(b, slot, _playheadMs, fallen, tint, idleKey is null ? null : CurseHostData.For(idleKey), ArenaRasterizer, replaced);
+        if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
     }
 
     /// <summary>
@@ -3736,7 +3751,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_mark is not { } mark || !TryDrawnFrame(VfxSubject.Creature(slot), out var frame)) return;
         var point = MarkPoints.For(deathStrip)?.ToArena(frame);
         if (point is null) return;
-        mark.Pin(slot, frame, TryBody(VfxSubject.Creature(slot), out var body) ? body.Height : frame.Dest.Height, point);
+        mark.Pin(slot, frame, point);
     }
 
     /// <summary>
@@ -3802,7 +3817,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // THE NEAR JAW OF A TRAP ON THIS CREATURE goes behind it (JAWS): the limb is drawn between the two jaws
             if (_replay is not null && !_replay.CreatureAlive(i) && !_deathDeferred.Contains(i))
             {
-                DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
+                DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey), look.IdleStrip);
                 continue;
             }
 
@@ -3832,14 +3847,20 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var placedAs = attacking ? look.IdleStrip : null;
             // A FIELD'S CRUSH (PRESS): the creature under the pressing arcs buckles for a moment, feet on the floor
             var squash = _field?.Squash(i, _playheadMs) ?? Vector2.One;
-            if (_curse is { } curseOn) squash *= curseOn.Convulse(i, _playheadMs);   // the body suffers a flaring curse
+            if (_curse is { } curseOn)
+            {
+                squash *= curseOn.Convulse(i, _playheadMs);   // the body suffers a flaring curse
+                creatureTint = curseOn.Shade(i, _playheadMs, creatureTint);   // the mark on its way: a faint shade, no batch
+            }
+            // A CURSED BODY IS DRAWN ONCE, by its curse pass (ADR-013 §1): the arena draws its frame transparent
+            var cursed = CurseDraws(i, look.IdleStrip);
             if (stripKey is null || !ActorSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs, squash: squash))
+                    !attacking, cursed ? Color.Transparent : creatureTint, crop, record: VfxSubject.Creature(i), placeAs: placedAs, squash: squash))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
             SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs, squash);
-            DrawMarkOn(b, i, squash, stripKey, creatureTint, look.IdleStrip);   // the brand is burned INTO this body: after it, before its hit flash
+            DrawMarkOn(b, i, stripKey, creatureTint, look.IdleStrip, cursed);   // the brand is burned INTO this body: after it, before its hit flash
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
             FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop, squash);
@@ -3904,7 +3925,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var figTop = _rowTopY;
         if (_replay is not null && !_replay.CreatureAlive(0) && !_deathDeferred.Contains(0))
         {
-            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey);
+            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), CreatureLook.ArtKey, CreatureLook.IdleStrip);
             return;
         }
 
@@ -3917,8 +3938,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         string? staticKey = attacking ? look.AttackStill : look.IdleStill;
 
         var squash = _field?.Squash(0, _playheadMs) ?? Vector2.One;   // a field's crush (PRESS)
+        if (_curse is { } curseOn)
+        {
+            squash *= curseOn.Convulse(0, _playheadMs);   // the body suffers a flaring curse (every creature path)
+            enterTint = curseOn.Shade(0, _playheadMs, enterTint);
+        }
+        var cursed = CurseDraws(0, look.IdleStrip);   // drawn once, by its curse pass (ADR-013 §1)
         if (stripKey is null || !ActorSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, enterTint, crop, record: VfxSubject.Creature(0),
+                                                !attacking, cursed ? Color.Transparent : enterTint, crop, record: VfxSubject.Creature(0),
                                                 placeAs: attacking ? look.IdleStrip : null, squash: squash))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
@@ -3927,7 +3954,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
         SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop, squash: squash);
-        DrawMarkOn(b, 0, squash, stripKey, enterTint, look.IdleStrip);
+        DrawMarkOn(b, 0, stripKey, enterTint, look.IdleStrip, cursed);
         FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop, squash);
         DrawBreakBadge(b, 0, ab);
 
@@ -3989,8 +4016,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             && _ui.Assets.Has(bossArt.DeathStrip))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            ActorSprite(b, bossArt.DeathStrip, box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f,
-                        record: VfxSubject.Creature(0));
+            var cursedFall = CurseLeavingDraws(0, bossArt.IdleStrip);   // drawn once, by its curse pass (ADR-013 §1)
+            if (ActorSprite(b, bossArt.DeathStrip, box, _anim - bossDiedAt, DeathFps, loop: false, cursedFall ? Color.Transparent : EnemyTint, -1f,
+                            record: VfxSubject.Creature(0)))
+            {
+                // BRAND's curse leaves the boss as it leaves the pack: it flares, collapses and smokes out (ADR-013 §5)
+                PinMarkOnDeath(0, bossArt.DeathStrip);
+                DrawCurseLeaving(b, 0, EnemyTint, bossArt.IdleStrip, cursedFall);
+            }
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
@@ -3998,8 +4031,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var key = bossArt is null ? null : attacking ? bossArt.AttackStrip : bossArt.IdleStrip;
         var seconds = EnemyClipSeconds(attacking, fps);
         var bossSquash = _field?.Squash(0, _playheadMs) ?? Vector2.One;   // a field's crush (PRESS); the brand rides it too
-        if (_curse is { } bossCurse) bossSquash *= bossCurse.Convulse(0, _playheadMs);
-        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f, record: VfxSubject.Creature(0),
+        var bossTint = EnemyTint;
+        if (_curse is { } bossCurse)
+        {
+            bossSquash *= bossCurse.Convulse(0, _playheadMs);
+            bossTint = bossCurse.Shade(0, _playheadMs, bossTint);
+        }
+        var cursed = CurseDraws(0, bossArt?.IdleStrip);   // drawn once, by its curse pass (ADR-013 §1)
+        if (key is null || !ActorSprite(b, key, box, seconds, fps, !attacking, cursed ? Color.Transparent : bossTint, -1f, record: VfxSubject.Creature(0),
                                         squash: bossSquash))
         {
             // THE FILL IS THE LAID-OUT BOX (2026-09-08). It used to be a hardcoded 220-wide rectangle
@@ -4016,7 +4055,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
         // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
         SilhouetteOver(b, key, box, seconds, fps, !attacking, -1f);
-        DrawMarkOn(b, 0, bossSquash, key, EnemyTint, bossArt?.IdleStrip);
+        DrawMarkOn(b, 0, key, bossTint, bossArt?.IdleStrip, cursed);
         FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         DrawBreakBadge(b, 0, box);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
@@ -6675,6 +6714,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         => _performance is { } p && !p.Finished(_playheadMs)
            || _outgoing is { } o && !o.Finished(_playheadMs)
            || ReactionStillPlaying()
+           || _curse is { } c && c.StillLeaving(_playheadMs)   // a wave-ending kill's curse leaves it on the break's clock (it froze mid-flash)
            || _field is { } f && f.Crushing(_playheadMs);   // a field tick that ends the wave plays its crush out (it froze on its arrival)
 
     /// <summary>A reaction still in the world: the wave's last bite may have set one off, and it plays out too.</summary>
@@ -6811,38 +6851,49 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>This wave's MARK (BRAND, ADR-011's MARK reference), or null: see <see cref="BeginWave"/>.</summary>
     private MarkPerformance? _mark;
 
-    /// <summary>BRAND drawn as a CURSE (dev-only direction prototype, <c>RH_BRAND_CONCEPT</c>), or null: the mark's own draw.</summary>
-    private CursePrototype? _curse;
+    /// <summary>BRAND drawn as a CURSE (ADR-013) this wave, or null (no mark: RH_MARK_RECIPES=0 is its uncursed twin).</summary>
+    private CursePresentation? _curse;
+
+    /// <summary>The curse, its shader and atlas loaded once for the screen's life (reused by every wave).</summary>
+    private CursePresentation? _curseLoaded;
 
     /// <summary>Bytes the mark allocated this frame (the trace; 0 is the contract).</summary>
     private long _markAllocBytes;
 
     /// <summary>
-    /// The brand on the creature in <paramref name="slot"/>, from the frame just drawn for it (its torso, riding the idle
-    /// breath, the lunge and a field's buckle); every creature is pinned, marked or not, so a migration knows where it
-    /// lands. <paramref name="restKey"/> is the creature's idle strip (its canonical bounds, ADR-012): the curse is seated
-    /// on and takes its look from that resting body, never from a lunge it happened to be first seen in.
+    /// The brand on the creature in <paramref name=slot/>, from the frame just drawn for it: its body point pinned
+    /// (riding the idle breath, the lunge and a field's buckle; every creature is pinned, marked or not, so a migration
+    /// knows where it lands), then BRAND's curse drawn over it (ADR-013). <paramref name=restKey/> is the creature's idle
+    /// strip: its baked host data (look, territory seats) is that resting body's, never a lunge it happened to be first
+    /// seen in. No texture is read here.
     /// </summary>
-    private void DrawMarkOn(SpriteBatch b, int slot, Vector2 squash, string? stripKey, Color tint, string? restKey)
+    /// <remarks><paramref name="replaced"/>: the creature's frame was drawn transparent (<see cref="CurseDraws"/>); the curse
+    /// pass draws it, or the plain frame should none run.</remarks>
+    private void DrawMarkOn(SpriteBatch b, int slot, string? stripKey, Color tint, string? restKey, bool replaced)
     {
         if (_mark is not { } mark || ShotNoVfx || _mode == Mode.Downed || !TryDrawnFrame(VfxSubject.Creature(slot), out var frame)) return;
         var alloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
-        var bodyHeight = TryBody(VfxSubject.Creature(slot), out var body) ? body.Height : frame.Dest.Height;
+        var body = TryBody(VfxSubject.Creature(slot), out var visible) ? visible : frame.Dest;
         // THE BODY POINT authored for the strip this creature was just drawn from (by its key: a reverse lookup of the
         // texture missed strips loaded on first use, and they fell back to the torso probe)
         var bodyPoint = stripKey is null ? null : MarkPoints.For(stripKey)?.ToArena(frame);
-        if (_curse is { } curse)
-        {
-            mark.Pin(slot, frame, bodyHeight, bodyPoint);
-            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(frame.Texture) : null, ArenaRasterizer, tint,
-                         stripKey is null ? null : MarkPoints.For(stripKey), restKey is null ? null : _ui.Assets.Get(restKey),
-                         restKey is null ? null : MarkPoints.For(restKey));
-            if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
-            return;
-        }
-        mark.DrawOn(b, _ui.Assets.Get(mark.Recipe.AtlasKey), slot, _playheadMs, frame, bodyHeight, squash, bodyPoint);
+        mark.Pin(slot, frame, bodyPoint);
+        _curse?.DrawOn(b, slot, _playheadMs, frame, body, tint, restKey is null ? null : CurseHostData.For(restKey), ArenaRasterizer, replaced);
         if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
     }
+
+    /// <summary>
+    /// Does BRAND's curse pass DRAW the living creature in <paramref name="slot"/> this frame (ADR-013 §1)? Then the pass is
+    /// its only draw: the arena draws its frame transparent (keeping the frame the curse and the focus light read), so no
+    /// soft texel is composited twice. Exactly the conditions under which <see cref="DrawMarkOn"/> reaches the pass.
+    /// </summary>
+    private bool CurseDraws(int slot, string? restKey)
+        => _curse is { } curse && _mark is not null && !ShotNoVfx && _mode != Mode.Downed && restKey is not null
+           && curse.PassDue(slot, _playheadMs, CurseHostData.For(restKey));
+
+    /// <summary>As <see cref="CurseDraws"/>, for a falling host's death frame (<see cref="DrawCurseLeaving"/>).</summary>
+    private bool CurseLeavingDraws(int slot, string? idleKey)
+        => _curse is { } curse && !ShotNoVfx && curse.LeavingPassDue(slot, _playheadMs, idleKey is null ? null : CurseHostData.For(idleKey));
 
     /// <summary>The field's fallback target rule, cached once so the draw allocates nothing: is this creature still standing?</summary>
     private Func<int, bool>? _isStanding;

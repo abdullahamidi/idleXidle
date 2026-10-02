@@ -12,14 +12,20 @@ namespace IdleXIdle.Game.Tests;
 
 /// <summary>
 /// THE MARK CONTRACT (ADR-011, the MARK / PERSISTENT TARGET-ATTACHED STATE archetype; BRAND is the reference, the owner's
-/// brief 2026-09-29): "That enemy has been branded. The mark is living shadow, etched into its body. It quietly persists
-/// there. When the mark deepens, it bites further inward. If it spreads or transfers, the same mark migrates cleanly to
-/// the next target." A state on the enemy: not a projectile, a field, a trap or a champion performance.
+/// brief 2026-09-29): "That enemy has been branded... It quietly persists there. When the mark deepens, it bites further
+/// inward. If it spreads or transfers, the same mark migrates cleanly to the next target." A state on the enemy: not a
+/// projectile, a field, a trap or a champion performance. These pin the mark's TRUTH (who carries it, its phases, the
+/// stage it shows and when, the SPRAWL schedule, the authored body points), which the curse presents (ADR-013); the etched
+/// cut's atlas and drawing are gone, and with them their tests.
 /// </summary>
 public class brand_mark_test
 {
     private static readonly MarkRecipe Brand = MarkRecipes.SeekerBrand;
     private const float Frame = 1000f / 60f;
+
+    /// <summary>The footprint the authored body points were reviewed with (mark_points.py: a share of the creature's
+    /// visible height, kept on its body); data, not a drawing value.</summary>
+    private const float PointFootprint = 0.28f;
 
     private static string RepoFile(params string[] parts)
     {
@@ -28,13 +34,6 @@ public class brand_mark_test
             dir = Path.GetDirectoryName(dir);
         Assert.False(dir is null, "IdleXIdle.sln not found above the test binary.");
         return Path.Combine(new[] { dir! }.Concat(parts).ToArray());
-    }
-
-    private static (int W, int H) PngSize(string key)
-    {
-        var png = File.ReadAllBytes(RepoFile("assets", "art", "VFX", "parts", key + ".png"));
-        int Be(int at) => (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
-        return (Be(16), Be(20));
     }
 
     private static readonly (float, int, bool)[] Plain =
@@ -96,333 +95,6 @@ public class brand_mark_test
     // ── THE PARTS ────────────────────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_one_atlas_of_pixel_cells_from_a_pixellab_silhouette_pinned_to_its_generator()
-    {
-        Assert.Equal((Brand.Cell * Brand.Columns, Brand.Cell * Brand.Stages * 2 + Brand.ThreadCell), PngSize(Brand.AtlasKey));
-        Assert.Equal(Brand.Stages * Brand.Cell * 2, Brand.ThreadY);
-        var spans = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_spans.json"))).RootElement;
-        Assert.Equal(Brand.Cell, spans.GetProperty("cell").GetInt32());
-        Assert.Equal(Brand.Stages, spans.GetProperty("stages").GetArrayLength());
-        Assert.Equal(Brand.Columns, spans.GetProperty("columns").GetArrayLength());
-        Assert.Equal(Brand.HaloRow0, spans.GetProperty("halo_row0").GetInt32());
-        Assert.Equal(Brand.ThreadY, spans.GetProperty("thread_y").GetInt32());
-        Assert.Equal(MarkRecipe.IdlePhases, spans.GetProperty("phases").GetInt32());
-        Assert.Equal(Brand.CoilBox, spans.GetProperty("box").GetSingle(), 1);
-        Assert.Equal(Brand.Centre.X, spans.GetProperty("centre")[0].GetSingle(), 1);
-        Assert.Equal(Brand.Centre.Y, spans.GetProperty("centre")[1].GetSingle(), 1);
-        Assert.Equal(Brand.Tip.X, spans.GetProperty("tip")[0].GetSingle(), 1);
-        Assert.Equal(Brand.Tip.Y, spans.GetProperty("tip")[1].GetSingle(), 1);
-        var columns = spans.GetProperty("columns");
-        Assert.Equal("gather0", columns[MarkRecipe.Gather0].GetString());
-        Assert.Equal("idle0", columns[MarkRecipe.Idle0].GetString());
-        Assert.Equal("edge", columns[MarkRecipe.Edge].GetString());
-        Assert.Equal("carve0", columns[MarkRecipe.Carve0].GetString());
-        Assert.Equal("form0", columns[MarkRecipe.Form0].GetString());
-        Assert.Equal("loosen0", columns[MarkRecipe.Loosen0].GetString());
-        // the SHAPE is PixelLab's (a pixen silhouette, cached because its link expires); nothing generated is used raw: its
-        // path is redrawn at the game's pixel material (a logical pixel of 1/3 of the cell, value bands, nearest upscale)
-        Assert.True(File.Exists(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_src", "pixen_1bf52462.png")));
-        var path = File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_brand.py"));
-        foreach (var pin in new[] { "pixen_1bf52462.png", "LOW = 3", "def coil_path(", "def clean(" })
-            Assert.Contains(pin, path);
-        // the atlas is the SECOND PASS's (the etched shadow cut: dark first, one lit rim, three visible depths), built on
-        // the first slice's coil path; the first slice's atlas is kept as history
-        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_brand_cut.py"));
-        foreach (var pin in new[] { "import seeker_brand as sb", "SEED = 20260930", "CUT, STAIN, RIM = ", "np.kron(", "def rim_of(",
-                                    "def carve(", "def form(", "def loosen(", "TIERS = [\"spread\", \"tier1\", \"tier2\", \"tier3\"]" })
-            Assert.Contains(pin, gen);
-        Assert.True(File.Exists(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_first_slice_77d383ff.png")));
-        // a state, never the other archetypes' language: no teeth (JAWS), no blades or shards (SPRAY, HARD HANDS), no reticle
-        foreach (var banned in new[] { "teeth", "tooth", "fang", "blade", "shard", "knife", "reticle", "crosshair", "ring", "particle", "burst", "orb" })
-            Assert.DoesNotContain(typeof(MarkRecipe).GetProperties(), p => p.Name.ToLowerInvariant().Contains(banned));
-    }
-
-    [Fact]
-    public void test_the_marks_drawn_extent_is_the_halo_the_head_is_kept_clear_of_and_no_cell_is_clipped()
-    {
-        // every cell but the loosen (which plays on a falling body), cut and halo, at the largest the snap to thirds makes
-        // a whelp-sized coil (x 7/6), inside the recipe's halo share of the body height; and nothing on any cell's outer
-        // 3 px ring (smoke clipped by the border drew a straight edge)
-        float halfW = 0f, up = 0f, down = 0f;
-        for (var row = 0; row < Brand.Stages * 2; row++)
-            for (var column = 0; column < Brand.Columns; column++)
-            {
-                var (a, _) = Cell(row, column);
-                for (var i = 0; i < a.Length; i++)
-                {
-                    if (a[i] < 8) continue;
-                    int x = i % Brand.Cell, y = i / Brand.Cell;
-                    Assert.False(x < 3 || y < 3 || x >= Brand.Cell - 3 || y >= Brand.Cell - 3, $"cell {row},{column} is clipped at its border");
-                    if (column >= MarkRecipe.Loosen0) continue;
-                    halfW = Math.Max(halfW, Math.Max(Brand.Centre.X - x, x + 1 - Brand.Centre.X));
-                    up = Math.Max(up, Brand.Centre.Y - y);
-                    down = Math.Max(down, y + 1 - Brand.Centre.Y);
-                }
-            }
-        var perPx = Brand.SizeShare / Brand.CoilBox * 7f / 6f;
-        Assert.True(2f * halfW * perPx <= Brand.HaloWidthShare, $"the mark spans {2f * halfW * perPx:0.000} of the body, wider than its halo");
-        Assert.True(2f * Math.Max(up, down) * perPx <= Brand.HaloHeightShare, $"the mark spans {2f * Math.Max(up, down) * perPx:0.000} of the body, taller than its halo");
-    }
-
-    /// <summary>The atlas cell (runtime px) of <paramref name="row"/>, <paramref name="column"/>: its pixels' alpha and grey.</summary>
-    private static (byte[] A, byte[] L) Cell(int row, int column)
-    {
-        using var img = SixLaborsFree.Load(RepoFile("assets", "art", "VFX", "parts", Brand.AtlasKey + ".png"));
-        return img.Cell(column * Brand.Cell, row * Brand.Cell, Brand.Cell);
-    }
-
-    [Fact]
-    public void test_three_visible_depths_each_carved_deeper_dark_first_and_never_brighter()
-    {
-        // the rest cell of each depth (idle phase 0): its cut px, its lit (rim) px, its brightest texel, its mean grey
-        var area = new int[Brand.Stages];
-        var lit = new int[Brand.Stages];
-        var brightest = new int[Brand.Stages];
-        var grey = new double[Brand.Stages];
-        for (var k = 0; k < Brand.Stages; k++)
-        {
-            var (a, l) = Cell(k, MarkRecipe.Idle0);
-            for (var i = 0; i < a.Length; i++)
-            {
-                if (a[i] < 8) continue;
-                area[k]++;
-                grey[k] += l[i];
-                brightest[k] = Math.Max(brightest[k], l[i]);
-                if (l[i] > 200) lit[k]++;
-            }
-            grey[k] /= Math.Max(1, area[k]);
-        }
-        for (var k = 1; k < Brand.Stages; k++)
-        {
-            // DARK FIRST: the mark is a dark incision; its one-sided lit rim is a minority of it (the first slice's lit
-            // line WAS the mark, and read as a glowing spiral, an eye, a rune)
-            Assert.True(lit[k] <= area[k] * 0.2f, $"depth {k}: {lit[k]} of {area[k]} px lit, the rim is not a minority");
-            // (the art's grey, before the tint: the first slice's lit line averaged 177-186; the cut's walls are kept a
-            // dark violet light enough to read on a black whelp, DEPTH 1's a step lighter, all darker than that line)
-            Assert.True(grey[k] < 166, $"depth {k}: mean grey {grey[k]:0}, not a dark cut");
-            if (k < 2) continue;
-            // DEEPER BY GEOMETRY: each visible depth carves clearly more (a wider cut, the curl running on, a scar
-            // branch), never by light: the brightest texel is the same band at every depth
-            Assert.True(area[k] >= area[k - 1] * 1.2f, $"depth {k} carves barely more than depth {k - 1} ({area[k]} vs {area[k - 1]})");
-            Assert.Equal(brightest[1], brightest[k]);
-        }
-        // NEVER A PUPIL, as the eye sees it: no dark texel -- the cut's core, or (on a light host) its stain -- is ringed by
-        // the visible bands (walls and rim) CLOSED across any mouth under two texels, in any cell a body shows at rest,
-        // on a beat or while the mark seeps in. On a dark host only the bands show, and a ring of them round a dark core
-        // read as an 'o'; on a light one the dark core ringed in violet read as a pupil in an iris. (A pocket notched open
-        // by one texel passed a plain enclosure test and still read as an eye.)
-        for (var k = 1; k < Brand.Stages; k++)
-            foreach (var column in Enumerable.Range(MarkRecipe.Idle0, MarkRecipe.IdlePhases)
-                                             .Concat(new[] { MarkRecipe.Edge, MarkRecipe.Carve0, MarkRecipe.Carve0 + 1, MarkRecipe.Carve0 + 2, MarkRecipe.Form0 + 1, MarkRecipe.Form0 + 2 }))
-            {
-                var (a, l) = Cell(k, column);
-                var (h, _) = Cell(Brand.HaloRow0 + k, column);
-                Assert.True(RingedDark(a, l, h).Count == 0, $"depth {k} column {column}: {RingedDark(a, l, h).Count} dark texels ringed by the bands");
-            }
-        // NEVER A RING: the outer contour of every depth leaves at least 60 degrees of its round open (a contour wrapping
-        // 335-350 degrees round a dark centre read as an eye socket on the black whelp)
-        for (var k = 1; k < Brand.Stages; k++)
-        {
-            var (a, _) = Cell(k, MarkRecipe.Idle0);
-            var bins = new bool[72];
-            for (var i = 0; i < a.Length; i++)
-            {
-                if (a[i] < 20) continue;
-                float dx = i % Brand.Cell + 0.5f - Brand.Centre.X, dy = i / Brand.Cell + 0.5f - Brand.Centre.Y;
-                if (MathF.Sqrt(dx * dx + dy * dy) <= 14f) continue;
-                var deg = (MathF.Atan2(dy, dx) * 180f / MathF.PI + 360f) % 360f;
-                bins[(int)(deg / 5f) % 72] = true;
-            }
-            Assert.True(bins.Count(v => v) * 5 <= 300, $"depth {k}: the outer contour wraps {bins.Count(v => v) * 5} degrees");
-        }
-        // the dark stain gains density with depth
-        var stain = Enumerable.Range(0, Brand.Stages).Select(k => Cell(Brand.HaloRow0 + k, MarkRecipe.Idle0).A.Sum(v => (int)v)).ToArray();
-        Assert.True(stain[2] > stain[1] && stain[3] > stain[2], string.Join(",", stain));
-        // THREE VISIBLE DEPTHS quantize the gameplay depths: 220 % and 240 % are one picture
-        Assert.Equal(4, Brand.Stages);
-        Assert.Equal(Brand.StageOf(220), Brand.StageOf(240));
-    }
-
-    [Fact]
-    public void test_the_deepen_phrase_gathers_ink_cuts_the_new_wound_and_answers_on_its_edge()
-    {
-        for (var k = 1; k < Brand.Stages; k++)
-        {
-            var (cutA, _) = Cell(k, MarkRecipe.Idle0);
-            var (prevA, _) = Cell(k - 1, MarkRecipe.Idle0);
-            var whole = cutA.Count(v => v >= 8);
-            var swept = new bool[cutA.Length];
-            for (var step = 0; step < 3; step++)
-            {
-                var (carveA, carveL) = Cell(k, MarkRecipe.Carve0 + step);
-                var drawn = carveA.Count(v => v >= 8);
-                Assert.True(drawn > 0, $"depth {k} step {step} is empty");
-                // (spread -> depth 1, SPRAWL + WINNOW's quiet step, widens the whole thin spread cut: most of it is new;
-                // depth 3 is TORN, its pieces moved, so about two thirds of its picture is new and the tear is cut under
-                // the beat -- dark ink, its lit rim 90 px against depth 2's 63; still never the whole mark)
-                Assert.True(drawn < whole * (k == 1 ? 0.85f : k == 3 ? 0.75f : 0.6f), $"depth {k} step {step} draws {drawn} of the mark's {whole}: the whole mark, not its new cut");
-                for (var i = 0; i < carveA.Length; i++) swept[i] |= carveA[i] >= 8;
-                Assert.Empty(Enclosed(carveA));
-                // step 0 is INK gathering where the new cut will be: dark, nothing lit
-                if (step == 0)
-                    Assert.True(Enumerable.Range(0, carveA.Length).Where(i => carveA[i] >= 8).All(i => carveL[i] < 100), $"depth {k}: the gather is lit");
-            }
-            // THE SAME WOUND BECAME DEEPER: what this depth adds lies under the phrase
-            var added = Enumerable.Range(0, cutA.Length).Where(i => cutA[i] >= 8 && prevA[i] < 8).ToArray();
-            Assert.True(added.Count(i => swept[i]) >= added.Length * 0.9f, $"depth {k}: the phrase misses the new cut");
-        }
-        // on the screen: the three steps in turn, on the tick that deepened (120 -> 170 %: depth 1 -> 2), settled by ~170 ms
-        var m = Front(Etch);
-        Assert.Equal(0f, m.HotAt(0, 3999f, out _));
-        Assert.True(m.HotAt(0, 4000f + 1f, out var c0) > 0.7f);
-        Assert.Equal(MarkRecipe.Carve0, c0);
-        m.HotAt(0, 4000f + Brand.CarveStepMs + 1f, out var c1);
-        Assert.Equal(MarkRecipe.Carve0 + 1, c1);
-        m.HotAt(0, 4000f + Brand.CarveStepMs * 2f + 1f, out var c2);
-        Assert.Equal(MarkRecipe.Carve0 + 2, c2);
-        Assert.InRange(Brand.CarveStepMs * 3f + Brand.DeepenEdgeMs, 140f, 200f);
-        Assert.Equal(0f, m.HotAt(0, 4000f + Brand.CarveStepMs * 3f + Brand.DeepenEdgeMs, out _));
-        // the old cut stays until the new one appears under the phrase
-        Assert.Equal(m.StageFor(0, 3999f), m.DrawnStage(0, 4000f + 1f));
-        Assert.Equal(m.StageFor(0, 4001f), m.DrawnStage(0, 4000f + Brand.CarveStepMs * 2f + 1f));
-        // 220 -> 240 % stays on the fully branded depth: the picture never changes (only the faint retrace a rise inside
-        // one depth gets: the wound answers, nothing is added)
-        var host = m.FrontAt(8000f);
-        Assert.True(m.HotAt(host, 8000f + Brand.CarveStepMs + 1f, out _) <= Brand.RetraceAlpha + 0.001f);
-        Assert.Equal(m.DrawnStage(host, 7999f), m.DrawnStage(host, 8000f + Brand.CarveStepMs * 3f + Brand.DeepenEdgeMs));
-        // a bite on the tick: the phrase waits until its attack clip has ended (the depth is true on the tick all the same)
-        var settled = new MarkPerformance(Brand, 2, Etch, new[] { (6700f, 0), (8200f, 1) }, 4, false, 0,
-                                          Etch.Select(t => t.Item1).ToArray());
-        Assert.Equal(0f, settled.HotAt(0, 4000f + 1f, out _));
-        Assert.True(settled.HotAt(0, 4000f + Brand.SettleMs + 1f, out _) > 0.7f);
-        Assert.Equal(2, settled.StageFor(0, 4001f));
-        Assert.Equal(1, settled.DrawnStage(0, 4000f + Brand.SettleMs + 1f));
-        // no phrase over a bite: clear of its wind-up before the strike and of its clip after it
-        MarkPerformance With(params float[] strikes) => new(Brand, 2, Etch, Array.Empty<(float, int)>(), 4, false, 0, strikes);
-        Assert.Equal(4000f + Brand.SettleMs, With(4000f).SettledStart(4000f));
-        Assert.Equal(4150f + Brand.SettleMs, With(4150f).SettledStart(4000f));
-        Assert.Equal(4000f, With(3500f).SettledStart(4000f));
-        Assert.Equal(4000f, With(4000f + Brand.CarveStepMs * 3f + Brand.SettleBeforeMs + 1f).SettledStart(4000f));
-        Assert.Equal(4300f + Brand.SettleMs, With(4000f, 4300f).SettledStart(4000f));
-        var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
-        Assert.Contains("if (wave[ej].Kind == BattleEventKind.EnemyStrike) markStrikes.Add(wave[ej].AtMs);", hunt);
-    }
-
-    /// <summary>The DARK texels of a cell (at the logical pixel: the cut's core, opaque and grey under 40, or its stain,
-    /// halo alpha 0.3 and above where the cut is empty) that no path through the visible bands -- CLOSED by one texel, so a
-    /// mouth under two texels counts as shut -- joins to the cell's border: a dark centre ringed by walls and rim.</summary>
-    private static List<int> RingedDark(byte[] alpha, byte[] grey, byte[] halo)
-    {
-        const int G = 28;
-        var band = new bool[G * G];
-        var dark = new bool[G * G];
-        for (var y = 0; y < G; y++)
-            for (var x = 0; x < G; x++)
-            {
-                var i = (y * 3 + 1) * Brand.Cell + x * 3 + 1;
-                band[y * G + x] = alpha[i] >= 8 && grey[i] >= 40;
-                dark[y * G + x] = (alpha[i] >= 8 && grey[i] < 40) || (alpha[i] < 8 && halo[i] >= 77);
-            }
-        bool In(bool[] m, int x, int y) => x >= 0 && y >= 0 && x < G && y < G && m[y * G + x];
-        var grown = new bool[G * G];
-        for (var y = 0; y < G; y++)
-            for (var x = 0; x < G; x++)
-                grown[y * G + x] = In(band, x, y) || In(band, x - 1, y) || In(band, x + 1, y) || In(band, x, y - 1) || In(band, x, y + 1);
-        var barrier = new bool[G * G];
-        for (var y = 0; y < G; y++)
-            for (var x = 0; x < G; x++)
-                barrier[y * G + x] = In(band, x, y) || (In(grown, x, y) && In(grown, x - 1, y) && In(grown, x + 1, y) && In(grown, x, y - 1) && In(grown, x, y + 1));
-        var reach = new bool[G * G];
-        var stack = new Stack<int>();
-        for (var i = 0; i < G * G; i++)
-        {
-            int x = i % G, y = i / G;
-            if ((x == 0 || y == 0 || x == G - 1 || y == G - 1) && !barrier[i]) { reach[i] = true; stack.Push(i); }
-        }
-        while (stack.Count > 0)
-        {
-            var i = stack.Pop();
-            int x = i % G, y = i / G;
-            foreach (var n in new[] { x > 0 ? i - 1 : -1, x < G - 1 ? i + 1 : -1, y > 0 ? i - G : -1, y < G - 1 ? i + G : -1 })
-                if (n >= 0 && !barrier[n] && !reach[n]) { reach[n] = true; stack.Push(n); }
-        }
-        return Enumerable.Range(0, G * G).Where(i => dark[i] && !reach[i]).ToList();
-    }
-
-    /// <summary>The background texels of a cell (at the logical pixel, 3 runtime px) that the cut ENCLOSES (not reachable
-    /// from the cell's edge): the size of each enclosed region.</summary>
-    private static List<int> Enclosed(byte[] alpha)
-    {
-        const int G = 28;
-        var cut = new bool[G * G];
-        for (var y = 0; y < G; y++)
-            for (var x = 0; x < G; x++)
-                cut[y * G + x] = alpha[(y * 3 + 1) * Brand.Cell + x * 3 + 1] >= 8;
-        var seen = new bool[G * G];
-        var sizes = new List<int>();
-        for (var start = 0; start < G * G; start++)
-        {
-            if (cut[start] || seen[start]) continue;
-            var stack = new Stack<int>();
-            stack.Push(start);
-            seen[start] = true;
-            int size = 0;
-            var edge = false;
-            while (stack.Count > 0)
-            {
-                var i = stack.Pop();
-                size++;
-                int x = i % G, y = i / G;
-                edge |= x == 0 || y == 0 || x == G - 1 || y == G - 1;
-                foreach (var n in new[] { x > 0 ? i - 1 : -1, x < G - 1 ? i + 1 : -1, y > 0 ? i - G : -1, y < G - 1 ? i + G : -1 })
-                    if (n >= 0 && !cut[n] && !seen[n]) { seen[n] = true; stack.Push(n); }
-            }
-            if (!edge) sizes.Add(size);
-        }
-        return sizes;
-    }
-
-    [Fact]
-    public void test_no_cell_holds_a_counter_a_letter_or_an_eye_could_be_read_in()
-    {
-        // THE SPIRAL STAYS OPEN: the cut encloses nothing at any depth, not even the coil's own hollow (closed, every deep
-        // stage was a ring round a pupil: an O, an eye), and nothing smaller: the bowl of a 9, the counter of an S (the
-        // round-3 deep stages drew all three at the inner end). The apply's lit line and the chisel enclose nothing either.
-        for (var k = 0; k < Brand.Stages; k++)
-        {
-            foreach (var column in Enumerable.Range(MarkRecipe.Idle0, MarkRecipe.IdlePhases).Append(MarkRecipe.Form0 + 2))
-                Assert.Empty(Enclosed(Cell(k, column).A));
-            Assert.Empty(Enclosed(Cell(k, MarkRecipe.Edge).A));
-        }
-        // the spiral stays open, its lit edge is one side's, and a collapsing mark keeps a wedge open (drawn in whole, it
-        // closed into a ring round a pupil)
-        var gen = File.ReadAllText(RepoFile("tools", "asset-pipeline", "v2", "seeker_brand_cut.py"));
-        Assert.Contains("inside &= ~OPEN", gen);
-        Assert.Contains("RIM_ARC = ", gen);
-        Assert.Contains("m = fill_pinholes(m & ~wedge) & ~wedge", gen);
-    }
-
-    [Fact]
-    public void test_the_strand_is_one_thread_below_the_creatures_heads()
-    {
-        var m = Front(Plain);
-        foreach (var distance in new[] { 50f, 90f, 140f, 260f, 400f })
-        {
-            // at the eased path's peak speed two puffs are less than a puff's visible width apart: they overlap
-            var lag = m.BeadLag(distance, Brand.FlightMs, 1f);
-            var peak = 1.5f * distance / Brand.FlightMs;
-            Assert.True(peak * lag <= Brand.ThreadCell * Brand.ThreadVisibleShare * 0.85f + 0.01f, $"puffs {peak * lag:0.0} px apart over {distance} px");
-            // the path sags toward the tip: never above the higher of its two ends (a lift crossed the next creature's face)
-            var from = new Microsoft.Xna.Framework.Vector2(1100f, 770f);
-            var to = new Microsoft.Xna.Framework.Vector2(1100f + distance, 760f);
-            var tip = to + (Brand.Tip - Brand.Centre);
-            for (var t = 0f; t <= 1f; t += 0.05f)
-                Assert.True(m.FlightPoint(from, to, 1f, t).Y >= Math.Min(from.Y, tip.Y) - 0.01f, $"the strand rises over the heads at t {t:0.00}");
-        }
-        Assert.True(Brand.Beads >= 6);
-    }
-
-    [Fact]
     public void test_every_creature_strip_has_an_authored_body_point_on_its_body()
     {
         // WHERE A MARK SITS is authored per strip frame (tools/asset-pipeline/v2/mark_points.py, reviewed on a contact
@@ -448,16 +120,16 @@ public class brand_mark_test
             var root = JsonDocument.Parse(text).RootElement;
             var heads = root.GetProperty("head");
             var halo = root.GetProperty("halo");
-            // the halo the tool cleared the head with IS the runtime's (measured on the atlas below), never its own guess
+            // the halo the tool cleared the head with is the recipe's (the points the curse hangs from keep off the head)
             Assert.Equal(Brand.HaloWidthShare, halo[0].GetSingle(), 3);
             Assert.Equal(Brand.HaloHeightShare, halo[1].GetSingle(), 3);
             using var img = SixLaborsFree.Load(Path.Combine(dir, name + ".png"));
             var size = img.Height;
             Assert.Equal(img.Width / size, points.Count);
             var opaque = img.Opaque();
-            // the coil's footprint: SizeShare of the visible height, an ellipse as lopsided as the coil (4 : 5)
+            // the footprint the points were reviewed with: a share of the visible height, an ellipse (4 : 5)
             var (top, bottom) = img.OpaqueRows(0, size);
-            var rx = Brand.SizeShare * (bottom - top + 1) / 2f;
+            var rx = PointFootprint * (bottom - top + 1) / 2f;
             var ry = rx * 0.8f;
             for (var k = 0; k < points.Count; k++)
             {
@@ -521,7 +193,7 @@ public class brand_mark_test
             var size = img.Height;
             var opaque = img.Opaque();
             var (top, bottom) = img.OpaqueRows(0, size);
-            var rx = Brand.SizeShare * (bottom - top + 1) / 2f;
+            var rx = PointFootprint * (bottom - top + 1) / 2f;
             var ry = rx * 0.8f;
             float cx = points[0].X * size, cy = points[0].Y * size;
             int on = 0, all = 0;
@@ -569,38 +241,36 @@ public class brand_mark_test
         Assert.Equal(3, Brand.StageOf(320));
         for (var pct = 0; pct < 400; pct++)
             Assert.True(Brand.StageOf(pct) <= Brand.StageOf(pct + 1));
-        // the size never follows the depth: one scale per body, snapped to thirds (a logical pixel is whole screen pixels)
-        var etch = Front(Etch);
-        foreach (var h in new[] { 150f, 190f, 230f, 300f, 460f })
-        {
-            var s = etch.ScaleFor(h);
-            Assert.Equal(0f, s * 3f - MathF.Round(s * 3f), 3);
-            Assert.InRange(s, Brand.MinScale, Brand.MaxScale);
-        }
-        Assert.Equal(1f, etch.ScaleFor(214f), 3);   // a whelp's canonical body: the coil's 60 px box, 3 px a logical pixel
-        // THE CAP (measured, brand_scale_table.py): a larger host never gets a larger mark. The visible heights of the
-        // whelp (245), a caster (331), an armoured (390), a bruiser (474) and a boss (521), from the geometry dump.
-        foreach (var h in new[] { 245f, 331f, 390f, 474f, 521f })
-            Assert.Equal(1f, etch.ScaleFor(h), 3);
-        // at the cap DEPTH 3's whole visible extent (cut and stain, 72 x 63 atlas px at scale 1) stays a localized wound:
-        // at most a fifth of a caster's height, an eighth of a boss's
-        Assert.True(63f * Brand.MaxScale / 331f <= 0.2f);
-        Assert.True(63f * Brand.MaxScale / 521f <= 0.125f);
+        // THREE VISIBLE DEPTHS quantize the gameplay depths: 220 % and 240 % are one picture
+        Assert.Equal(4, Brand.Stages);
+        Assert.Equal(Brand.StageOf(220), Brand.StageOf(240));
     }
 
     [Fact]
-    public void test_a_refresh_that_changes_nothing_shows_nothing()
+    public void test_a_deepen_is_shown_once_the_hosts_own_bite_has_settled()
     {
+        // on the tick that deepened (120 -> 170 %: depth 1 -> 2) the old stage stays until the deepen's second step
         var m = Front(Etch);
-        // ETCH at its cap (the 10 s tick: 240 -> 240) on the host of the moment, and every tick of plain BRAND
-        var host = m.FrontAt(10000f);
-        Assert.True(m.Carries(host, 10000f));
-        for (var u = 0f; u < 400f; u += Frame)
-            Assert.Equal(0f, m.HotAt(host, 10000f + u, out _));
-        var plain = Front(Plain);
-        foreach (var tick in new[] { 4000f, 6000f })
-            for (var u = 0f; u < 400f; u += Frame)
-                Assert.Equal(0f, plain.HotAt(0, tick + u, out _));
+        Assert.Equal(m.StageFor(0, 3999f), m.DrawnStage(0, 4000f + 1f));
+        Assert.Equal(m.StageFor(0, 4001f), m.DrawnStage(0, 4000f + Brand.CarveStepMs * 2f + 1f));
+        // 220 -> 240 % stays on the fully branded depth: the picture never changes
+        var host = m.FrontAt(8000f);
+        Assert.Equal(m.DrawnStage(host, 7999f), m.DrawnStage(host, 8000f + Brand.CarveStepMs * 3f + 50f));
+        // a bite on the tick: the deepen waits until its attack clip has ended (the depth is true on the tick all the same)
+        var settled = new MarkPerformance(Brand, 2, Etch, new[] { (6700f, 0), (8200f, 1) }, 4, false, 0,
+                                          Etch.Select(t => t.Item1).ToArray());
+        Assert.Equal(2, settled.StageFor(0, 4001f));
+        Assert.Equal(1, settled.DrawnStage(0, 4000f + Brand.SettleMs + 1f));
+        Assert.Equal(2, settled.DrawnStage(0, 4000f + Brand.SettleMs + Brand.CarveStepMs * 2f + 1f));
+        // never over a bite: clear of its wind-up before the strike and of its clip after it
+        MarkPerformance With(params float[] strikes) => new(Brand, 2, Etch, Array.Empty<(float, int)>(), 4, false, 0, strikes);
+        Assert.Equal(4000f + Brand.SettleMs, With(4000f).SettledStart(4000f));
+        Assert.Equal(4150f + Brand.SettleMs, With(4150f).SettledStart(4000f));
+        Assert.Equal(4000f, With(3500f).SettledStart(4000f));
+        Assert.Equal(4000f, With(4000f + Brand.CarveStepMs * 3f + Brand.SettleBeforeMs + 1f).SettledStart(4000f));
+        Assert.Equal(4300f + Brand.SettleMs, With(4000f, 4300f).SettledStart(4000f));
+        var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
+        Assert.Contains("if (wave[ej].Kind == BattleEventKind.EnemyStrike) markStrikes.Add(wave[ej].AtMs);", hunt);
     }
 
     // ── APPLY, IDLE ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -612,63 +282,22 @@ public class brand_mark_test
         Assert.Equal(2000f, m.FirstTickMs);
         Assert.Equal(MarkPhase.None, m.TryPhase(0, 2000f + Brand.GatherFromMs - 1f, out _));
         Assert.Equal(MarkPhase.Apply, m.TryPhase(0, 2000f + Brand.GatherFromMs + 1f, out var u));
-        Assert.Equal(MarkRecipe.Gather0, m.ColumnAt(0, MarkPhase.Apply, u, 1800f));
-        Assert.Equal(MarkRecipe.Gather0 + 2, m.ColumnAt(0, MarkPhase.Apply, Brand.Gather2Ms + 1f, 1905f));
-        Assert.InRange(m.ColumnAt(0, MarkPhase.Apply, Brand.FormMs + 1f, 1971f), MarkRecipe.Idle0, MarkRecipe.Idle0 + MarkRecipe.IdlePhases - 1);
-        Assert.InRange(Brand.GatherFromMs, -300f, -150f);   // 4-6 steps of appearance, no explosion
-        // the whole cut lights ON the tick (the moment Core amplifies), not before
-        Assert.Equal(0f, m.HotAt(0, 2000f - Frame, out _));
-        Assert.True(m.HotAt(0, 2000f, out var column) >= Brand.EtchAlpha - 0.001f);
-        Assert.Equal(MarkRecipe.Edge, column);
-        Assert.Equal(0f, m.HotAt(0, 2000f + Brand.EtchMs, out _));
+        Assert.Equal(Brand.GatherFromMs + 1f, u, 3);   // u from the tick: the curse's bloom starts ON it
+        Assert.InRange(Brand.GatherFromMs, -300f, -150f);
+        // a tick beside an action, a reaction or the field's crush is quiet (the curse's light gives way there)
         var quiet = Front(new[] { (2000f, 70, true), (4000f, 70, false) });
-        Assert.Equal(Brand.EtchAlpha * Brand.QuietShare, quiet.HotAt(0, 2000f, out _), 3);
+        Assert.True(quiet.TickQuietNear(2000f, 450f));
+        Assert.False(quiet.TickQuietNear(4000f, 450f));
+        Assert.False(m.TickQuietNear(2000f, 450f));
         var none = new MarkPerformance(Brand, 2, Array.Empty<(float, int, bool)>(), Array.Empty<(float, int)>(), 3, false, 0);
         Assert.Equal(MarkPhase.None, none.TryPhase(0, 5000f, out _));
     }
 
     [Fact]
-    public void test_the_idle_is_quiet_a_stepped_swirl_and_no_light()
+    public void test_a_transfer_waits_on_the_new_front_then_seeps_in()
     {
-        var m = Front(Plain);
-        var changes = 0;
-        var last = -1;
-        for (var p = 2400f; p < 6400f; p += Frame)
-        {
-            Assert.Equal(0f, m.HotAt(0, p, out _));
-            var phase = m.TryPhase(0, p, out var u);
-            var column = m.ColumnAt(0, phase, u, p);
-            Assert.InRange(column, MarkRecipe.Idle0, MarkRecipe.Idle0 + MarkRecipe.IdlePhases - 1);
-            if (last >= 0 && column != last) changes++;
-            last = column;
-        }
-        Assert.InRange(changes, 1, (int)(4000f / Brand.SwirlStepMs) + 1);
-        // LOW AMPLITUDE: a slow step, and nothing travels: the cut's shape and its stain are the same in every idle phase
-        // (one phase lengthens a rim stretch by a texel: a single-edge shimmer)
-        Assert.True(Brand.SwirlStepMs >= 700f);
-        for (var k = 0; k < Brand.Stages; k++)
-        {
-            var (cut0, _) = Cell(k, MarkRecipe.Idle0);
-            var (halo0, _) = Cell(Brand.HaloRow0 + k, MarkRecipe.Idle0);
-            for (var ph = 1; ph < MarkRecipe.IdlePhases; ph++)
-            {
-                var (cut, _) = Cell(k, MarkRecipe.Idle0 + ph);
-                var (halo, _) = Cell(Brand.HaloRow0 + k, MarkRecipe.Idle0 + ph);
-                Assert.True(cut.Select(v => v >= 8).SequenceEqual(cut0.Select(v => v >= 8)), $"stage {k} phase {ph}: the cut changes shape");
-                Assert.True(halo.SequenceEqual(halo0), $"stage {k} phase {ph}: the smoke roots are redrawn");
-            }
-        }
-    }
-
-    [Fact]
-    public void test_a_transfer_draws_no_bridge_between_the_bodies()
-    {
-        // TRANSFER: no thread between the fallen host and the new front (it fought the death smoke and passed the next
-        // creature's face): the old mark collapses on its body, the same mark seeps in on the new one; SPRAWL keeps its
-        // threads (a spread must read as propagation)
-        Assert.False(Brand.TransferThread);
-        var perf = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "Presentation", "MarkPerformance.cs"));
-        Assert.Contains("if (!r.TransferThread) return;", perf);
+        // TRANSFER: nothing is drawn between the bodies; the old host's curse collapses on its body, the new front carries
+        // a faint shade, and the same mark seeps in on it
         var m = Front(Etch);
         var lands = 6700f + Brand.FlightFromMs + Brand.FlightMs;
         Assert.Equal(MarkPhase.Waiting, m.TryPhase(1, 6750f, out _));      // the new front carries a dark stain at once
@@ -679,25 +308,6 @@ public class brand_mark_test
         Assert.Equal(MarkPhase.Waiting, bitten.TryPhase(1, 7000f + Brand.SettleMs + 1f, out _));
         Assert.Equal(MarkPhase.Reform, bitten.TryPhase(1, 7000f + Brand.TransferSettleMs + 1f, out _));
         Assert.True(Brand.TransferSettleMs >= 500f && Brand.TransferSettleMs + Brand.ReformMs <= 1000f - Brand.SettleBeforeMs);
-    }
-
-    [Fact]
-    public void test_a_sprawl_row_never_steps_its_swirl_in_lockstep()
-    {
-        var m = new MarkPerformance(Brand, 2, new[] { (2000f, 35, false) }, Array.Empty<(float, int)>(), 4, wholeWave: true, frontFullPercent: 0);
-        var last = new int[4];
-        for (var s = 0; s < 4; s++) last[s] = m.ColumnAt(s, MarkPhase.Reform, 1000f, 3000f);
-        for (var p = 3000f + Frame; p < 7000f; p += Frame)
-        {
-            var changed = 0;
-            for (var s = 0; s < 4; s++)
-            {
-                var c = m.ColumnAt(s, MarkPhase.Reform, 1000f, p);
-                if (c != last[s]) changed++;
-                last[s] = c;
-            }
-            Assert.True(changed <= 1, $"{changed} coils stepped on the same frame at {p:0}");
-        }
     }
 
     // ── WHO CARRIES IT ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -720,12 +330,11 @@ public class brand_mark_test
         Assert.True(wait < 0f);
         var lands = 6700f + Brand.FlightFromMs + Brand.FlightMs;
         Assert.Equal(MarkPhase.Reform, m.TryPhase(1, lands + 1f, out var u));
-        Assert.Equal(MarkRecipe.Form0, m.ColumnAt(1, MarkPhase.Reform, u, lands + 1f));
+        Assert.Equal(1f, u, 3);
         // AT THE SAME DEPTH: the stage it carried is the stage it keeps (ETCH's "keeps its depth when it moves")
         Assert.Equal(m.StageFor(0, 6699f), m.StageFor(1, lands + 1f));
         // short and clean: the coil comes apart, flies and is drawn in within about half a second
         Assert.True(Brand.FlightFromMs + Brand.FlightMs + Brand.ReformMs <= 480f);
-        Assert.InRange(Brand.LoosenMs, 150f, Brand.FlightFromMs + Brand.FlightMs);
     }
 
     [Fact]
@@ -808,16 +417,16 @@ public class brand_mark_test
     [Fact]
     public void test_a_sprawl_deepen_ripples_down_the_row_never_a_whole_row_flash()
     {
-        // WINNOW: 45 -> 55 crosses into the base stage on every coil at once in truth; on screen each chisel starts at its
-        // own place in the spread
+        // WINNOW: 45 -> 55 crosses into the base stage on every creature at once in truth; on screen each deepen is shown
+        // at its own place in the spread (the curse's new territory blooms there)
         var ticks = new[] { (2000f, 45, false), (4000f, 55, false), (6000f, 65, false) };
         var m = new MarkPerformance(Brand, 2, ticks, Array.Empty<(float, int)>(), 4, wholeWave: true, frontFullPercent: 0);
         var starts = new float[4];
         for (var s = 0; s < 4; s++)
-            starts[s] = Enumerable.Range(0, 800).Select(i => 4000f + i).First(p => m.HotAt(s, p, out _) > 0.5f);
+            starts[s] = Enumerable.Range(0, 800).Select(i => 4000f + i).First(p => m.DrawnStage(s, p) == 1);
         Assert.Equal(4, starts.Distinct().Count());
         for (var s = 1; s < 4; s++)
-            Assert.True(starts[s] - starts[s - 1] >= Brand.CarveStepMs, $"slots {s - 1} and {s} chisel together");
+            Assert.True(starts[s] - starts[s - 1] >= Brand.CarveStepMs, $"slots {s - 1} and {s} deepen together");
     }
 
     [Fact]
@@ -836,7 +445,7 @@ public class brand_mark_test
         }
         // the front's depth never changes under ANCHOR (70 %), so WINNOW's rise shows nothing on it
         for (var p = 4000f; p < 4800f; p += Frame)
-            Assert.Equal(0f, m.HotAt(0, p, out _));
+            Assert.Equal(1, m.DrawnStage(0, p));
         Assert.Equal(70, m.DepthFor(0, 4500f));
         Assert.Equal(55, m.DepthFor(2, 4500f));
     }
@@ -857,12 +466,8 @@ public class brand_mark_test
         Assert.Equal(MarkPhase.Reform, m.TryPhase(2, lands + 1f, out _));
         Assert.Equal(2, m.DrawnStage(2, lands + 1f));
         var cut = m.SettledStart(Math.Max(lands + Brand.ReformMs, 6320f + Brand.DeathClearMs));
-        for (var p = lands; p < cut; p += Frame)
-            Assert.Equal(0f, m.HotAt(2, p, out _));
-        Assert.True(m.HotAt(2, cut + 1f, out var column, out var stage) > 0.7f);
-        Assert.Equal(MarkRecipe.Carve0, column);
-        Assert.Equal(3, stage);
-        Assert.Equal(2, m.DrawnStage(2, cut + Brand.CarveStepMs * 2f - 1f));
+        for (var p = lands; p < cut + Brand.CarveStepMs * 2f - 1f; p += Frame)
+            Assert.Equal(2, m.DrawnStage(2, p));
         Assert.Equal(3, m.DrawnStage(2, cut + Brand.CarveStepMs * 2f + 1f));
     }
 
@@ -875,20 +480,8 @@ public class brand_mark_test
         var lands = 3800f + Brand.FlightFromMs + Brand.FlightMs;
         Assert.Equal(1, m.DrawnStage(1, lands + 1f));
         var cut = Math.Max(lands + Brand.ReformMs, 3800f + Brand.DeathClearMs);
-        Assert.True(m.HotAt(1, cut + 1f, out var column, out var stage) > 0.7f);
-        Assert.Equal(MarkRecipe.Carve0, column);
-        Assert.Equal(2, stage);
         Assert.Equal(1, m.DrawnStage(1, cut - 1f));
         Assert.Equal(2, m.DrawnStage(1, cut + Brand.CarveStepMs * 2f + 1f));
-        // a coil that lands at the depth it left with is cut once, faintly, on the Edge: once the fall's white death smoke
-        // has cleared off it (at the re-form itself the smoke covered it), never before
-        var plain = Front(Plain);
-        var plainLands = 6700f + Brand.FlightFromMs + Brand.FlightMs;
-        var recut = Math.Max(plainLands + Brand.ReformMs, 6700f + Brand.DeathClearMs);
-        for (var p = plainLands; p < recut; p += Frame)
-            Assert.Equal(0f, plain.HotAt(1, p, out _));
-        Assert.True(plain.HotAt(1, recut + 1f, out var pc) is > 0.2f and < 0.6f);
-        Assert.Equal(MarkRecipe.Edge, pc);
     }
 
     // ── IT NEVER COSTS THE FRAME ─────────────────────────────────────────────────────────────────────────────────────
@@ -900,9 +493,9 @@ public class brand_mark_test
         for (var p = 0f; p < 12000f; p += Frame)
             for (var s = 0; s < 4; s++)
             {
-                sink += m.HotAt(s, p, out var hc) + hc + m.StageFor(s, p) + m.FrontAt(p) + m.DepthAt(p) + m.DrawnStage(s, p);
+                sink += m.StageFor(s, p) + m.FrontAt(p) + m.DepthAt(p) + m.DrawnStage(s, p) + (m.TickQuietNear(p, 450f) ? 1 : 0);
                 var phase = m.TryPhase(s, p, out var u);
-                if (phase != MarkPhase.None) sink += m.ColumnAt(s, phase, u, p);
+                if (phase != MarkPhase.None) sink += u;
             }
         return sink;
     }
@@ -928,172 +521,68 @@ public class brand_mark_test
     // ── THE SCREEN (HuntScreen needs a device: its text is the contract) ────────────────────────────────────────────
 
     [Fact]
-    public void test_the_brand_is_drawn_on_the_body_between_the_creature_and_its_hit_flash()
+    public void test_the_curse_is_drawn_on_the_body_between_the_creature_and_its_hit_flash()
     {
         var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
         Assert.Equal(3, hunt.Split("DrawMarkOn(b, ").Length - 1);
-        // (the creature's draw colour rides along: the curse's drained material takes its tint)
-        var loop = hunt.IndexOf("DrawMarkOn(b, i, squash, stripKey, creatureTint, look.IdleStrip);", StringComparison.Ordinal);
+        // (the creature's draw colour rides along: the curse pass draws the frame with it, as the creature's one draw)
+        var loop = hunt.IndexOf("DrawMarkOn(b, i, stripKey, creatureTint, look.IdleStrip, cursed);", StringComparison.Ordinal);
         Assert.True(loop > 0);
         var silhouette = hunt.LastIndexOf("SilhouetteOver(b, stripKey, box,", loop, StringComparison.Ordinal);
         var flash = hunt.IndexOf("FlashOver(b, stripKey, box,", loop, StringComparison.Ordinal);
-        Assert.True(silhouette > 0 && silhouette < loop && flash > loop, "the brand is burned into the body: after it, before its flash");
-        var row = hunt.IndexOf("else DrawNormalEnemy(b, attacking);", StringComparison.Ordinal);
-        var loose = hunt.IndexOf("looseMark.DrawLoose(", StringComparison.Ordinal);
-        var reactions = hunt.IndexOf("foreach (var r in _reactions) r.DrawMaterial(", StringComparison.Ordinal);
-        Assert.True(row > 0 && row < loose && loose < reactions);
+        Assert.True(silhouette > 0 && silhouette < loop && flash > loop, "the curse is on the body: after it, before its flash");
+        Assert.Contains("DrawMarkOn(b, 0, stripKey, enterTint, look.IdleStrip, cursed);", hunt);
+        Assert.Contains("DrawMarkOn(b, 0, key, bossTint, bossArt?.IdleStrip, cursed);", hunt);
+        // nothing is drawn between the bodies any more (the etched cut's loosening and strands are gone)
+        Assert.DoesNotContain("DrawLoose(", hunt);
+        // the body shudders on every creature path, the single creature's and the boss's too, and a waiting creature's
+        // faint shade rides its own draw tint
+        Assert.Equal(3, hunt.Split(".Convulse(").Length - 1);
+        Assert.Equal(3, hunt.Split(".Shade(").Length - 1);
+        // a dying host's curse leaves it on the pack's and the boss's death frames alike
+        Assert.Contains("DrawCurseLeaving(b, slot, EnemyTint * fade, idleKey, cursed);", hunt);
+        Assert.Contains("DrawCurseLeaving(b, 0, EnemyTint, bossArt.IdleStrip, cursedFall);", hunt);
+        Assert.Contains("PinMarkOnDeath(0, bossArt.DeathStrip);", hunt);
+        // A CURSED BODY IS DRAWN ONCE: on every living and falling path the arena hands the creature's draw to the curse
+        // pass (its frame drawn transparent) whenever the pass will run; drawn twice, its soft edges hardened
+        Assert.Equal(4, hunt.Split("cursed ? Color.Transparent : ").Length - 1);
+        Assert.Equal(1, hunt.Split("cursedFall ? Color.Transparent : ").Length - 1);
+        Assert.Equal(3, hunt.Split("= CurseDraws(").Length - 1);
+        Assert.Equal(2, hunt.Split("= CurseLeavingDraws(").Length - 1);
+        Assert.Contains("curse.PassDue(slot, _playheadMs, CurseHostData.For(restKey))", hunt);
+        // nothing of the curse in the light pass
         var begin = hunt.IndexOf("_vfx.BeginLight", StringComparison.Ordinal);
         var end = hunt.IndexOf("_vfx.EndLight", begin, StringComparison.Ordinal);
         Assert.DoesNotContain("_mark", hunt[begin..end]);
+        Assert.DoesNotContain("_curse", hunt[begin..end]);
         Assert.Contains("if (wave[ej].Kind == BattleEventKind.Marked) { percent = wave[ej].Slot; break; }", hunt);
         Assert.Contains("markSk.Def.AmplifyWholeWave, (int)MathF.Round(markSk.Def.Rule.AmplifyFrontFull * 100f)", hunt);
-        // the authored body point of the frame just drawn (looked up once per texture)
-        // (by the strip key the draw used: a reverse texture lookup missed strips loaded on first use)
+        // the authored body point of the frame just drawn, by the strip key the draw used (a reverse texture lookup
+        // missed strips loaded on first use)
         Assert.Contains("var bodyPoint = stripKey is null ? null : MarkPoints.For(stripKey)?.ToArena(frame);", hunt);
-        Assert.Contains("DrawMarkOn(b, 0, bossSquash, key, EnemyTint, bossArt?.IdleStrip);", hunt);
         Assert.DoesNotContain("KeyOf(frame.Texture)", hunt);
     }
-}
 
-/// <summary>A tiny PNG reader for the atlas tests (8-bit RGBA, non-interlaced; the atlas the generator writes).</summary>
-internal sealed class SixLaborsFree : IDisposable
-{
-    private readonly byte[] _rgba;
-    private readonly int _w;
-
-    private SixLaborsFree(byte[] rgba, int w) { _rgba = rgba; _w = w; }
-
-    public int Width => _w;
-
-    public int Height => _rgba.Length / 4 / _w;
-
-    /// <summary>Every pixel's opacity (alpha above 100, the probes' and the authoring tool's rule), row-major.</summary>
-    public bool[] Opaque()
+    [Fact]
+    public void test_the_curse_is_brands_default_presentation_and_the_prototype_is_gone()
     {
-        var o = new bool[_rgba.Length / 4];
-        for (var i = 0; i < o.Length; i++) o[i] = _rgba[i * 4 + 3] > 100;
-        return o;
+        // BRAND's curse is THE presentation whenever the mark recipe is on (RH_MARK_RECIPES=0 is the uncursed twin): built
+        // in the mark's own block, loaded once and reused by every wave
+        var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
+        var block = hunt.IndexOf("MarkRecipes.For(Character.Id, markSk.Def.Id) is { } markRecipe", StringComparison.Ordinal);
+        var load = hunt.IndexOf("_curse = _curseLoaded ??= CursePresentation.Load(_ui.Device);", StringComparison.Ordinal);
+        var wave = hunt.IndexOf("_curse.BeginWave(_mark, _run.LastWaveCreatures.Count);", StringComparison.Ordinal);
+        Assert.True(block > 0 && load > block && wave > load);
+        Assert.Contains("CurseHostData.Warm();", hunt);
+        // no dev selector, no concept B / C, no stencil, no etched atlas
+        var src = Directory.GetFiles(RepoFile("src", "IdleXIdle.Game"), "*.cs", SearchOption.AllDirectories)
+                           .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar))
+                           .Select(File.ReadAllText).ToArray();
+        foreach (var gone in new[] { "RH_BRAND_CONCEPT", "RH_CURSE_NOCLIP", "CursePrototype", "CurseConcept", "new AlphaTestEffect",
+                                     "new DualTextureEffect", "Depth24Stencil8", "fxp_seeker_brand" })
+            Assert.DoesNotContain(src, code => code.Contains(gone, StringComparison.Ordinal));
+        Assert.False(File.Exists(RepoFile("assets", "art", "VFX", "parts", "fxp_seeker_brand.png")), "the etched atlas is still a runtime asset");
+        Assert.True(File.Exists(RepoFile("tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_etched_cut_39b59aaa.png")));
+        Assert.True(File.Exists(RepoFile("tools", "asset-pipeline", "v2", "seeker_brand_cut.py")));
     }
-
-    /// <summary>The pixels of square frame <paramref name="k"/> brighter than <paramref name="luma"/> (an eye's white speck), in
-    /// the frame's own px, from its upper 70 %.</summary>
-    public IEnumerable<(int X, int Y)> BrightSpecks(int k, int size, int luma)
-    {
-        for (var y = 0; y < Height * 7 / 10; y++)
-            for (var x = 0; x < size; x++)
-            {
-                var i = (y * _w + k * size + x) * 4;
-                if (_rgba[i + 3] > 200 && (_rgba[i] * 3 + _rgba[i + 1] * 6 + _rgba[i + 2]) / 10 > luma)
-                    yield return (x, y);
-            }
-    }
-
-    /// <summary>The opaque centroid of square frame <paramref name="k"/>, in the frame's own px.</summary>
-    public Microsoft.Xna.Framework.Vector2 Centroid(int k, int size)
-    {
-        double sx = 0, sy = 0;
-        var n = 0;
-        for (var y = 0; y < Height; y += 2)
-            for (var x = 0; x < size; x += 2)
-                if (_rgba[(y * _w + k * size + x) * 4 + 3] > 100) { sx += x; sy += y; n++; }
-        return n == 0 ? default : new Microsoft.Xna.Framework.Vector2((float)(sx / n), (float)(sy / n));
-    }
-
-    /// <summary>Whether square frames <paramref name="a"/> and <paramref name="b"/> of a strip are the same picture.</summary>
-    public bool SameFrame(int a, int b, int size)
-    {
-        for (var y = 0; y < Height; y++)
-            if (!_rgba.AsSpan((y * _w + a * size) * 4, size * 4).SequenceEqual(_rgba.AsSpan((y * _w + b * size) * 4, size * 4)))
-                return false;
-        return true;
-    }
-
-    /// <summary>The first and last opaque rows of the square frame from column <paramref name="x0"/>.</summary>
-    public (int Top, int Bottom) OpaqueRows(int x0, int size)
-    {
-        int top = -1, bottom = -1;
-        for (var y = 0; y < Height; y++)
-            for (var x = 0; x < size; x++)
-                if (_rgba[(y * _w + x0 + x) * 4 + 3] > 100)
-                {
-                    if (top < 0) top = y;
-                    bottom = y;
-                    break;
-                }
-        return (top, bottom);
-    }
-
-    public static SixLaborsFree Load(string path)
-    {
-        var png = File.ReadAllBytes(path);
-        int Be(int at) => (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
-        var w = Be(16);
-        var h = Be(20);
-        Assert.Equal(8, png[24]);
-        Assert.Equal(6, png[25]);
-        using var idat = new MemoryStream();
-        for (var at = 8; at < png.Length;)
-        {
-            var len = Be(at);
-            var type = System.Text.Encoding.ASCII.GetString(png, at + 4, 4);
-            if (type == "IDAT") idat.Write(png, at + 8, len);
-            at += 12 + len;
-        }
-        idat.Position = 2;   // the zlib header
-        using var z = new System.IO.Compression.DeflateStream(idat, System.IO.Compression.CompressionMode.Decompress);
-        var raw = new byte[(w * 4 + 1) * h];
-        var read = 0;
-        while (read < raw.Length)
-        {
-            var n = z.Read(raw, read, raw.Length - read);
-            if (n <= 0) break;
-            read += n;
-        }
-        var rgba = new byte[w * h * 4];
-        var stride = w * 4;
-        for (var y = 0; y < h; y++)
-        {
-            var f = raw[y * (stride + 1)];
-            for (var x = 0; x < stride; x++)
-            {
-                var v = raw[y * (stride + 1) + 1 + x];
-                var a = x >= 4 ? rgba[y * stride + x - 4] : 0;
-                var b = y > 0 ? rgba[(y - 1) * stride + x] : 0;
-                var c = x >= 4 && y > 0 ? rgba[(y - 1) * stride + x - 4] : 0;
-                int pr = f switch
-                {
-                    1 => a,
-                    2 => b,
-                    3 => (a + b) / 2,
-                    4 => Paeth(a, b, c),
-                    _ => 0,
-                };
-                rgba[y * stride + x] = (byte)(v + pr);
-            }
-        }
-        return new SixLaborsFree(rgba, w);
-    }
-
-    private static int Paeth(int a, int b, int c)
-    {
-        int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
-        return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-    }
-
-    /// <summary>A square cell: its alpha and its grey (the red channel of the white-tinted art).</summary>
-    public (byte[] A, byte[] L) Cell(int x0, int y0, int size)
-    {
-        var a = new byte[size * size];
-        var l = new byte[size * size];
-        for (var y = 0; y < size; y++)
-            for (var x = 0; x < size; x++)
-            {
-                var i = ((y0 + y) * _w + x0 + x) * 4;
-                a[y * size + x] = _rgba[i + 3];
-                l[y * size + x] = _rgba[i];
-            }
-        return (a, l);
-    }
-
-    public void Dispose() { }
 }

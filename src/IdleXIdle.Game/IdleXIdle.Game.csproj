@@ -69,6 +69,15 @@
     <Content Include="..\..\assets\art\**\*.mark.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- ADR-013: BRAND's BAKED HOST DATA (look, territory seats) beside each creature's idle strip; brand_host_bake_test writes it. -->
+    <Content Include="..\..\assets\art\**\*.brand.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- ADR-013: the COMPILED custom shaders (tools/shaders/build_shaders.sh, mgfxc /Profile:OpenGL on Windows; CI cannot
+         run mgfxc), committed and loaded with new Effect(device, bytes); never through Content.mgcb. -->
+    <Content Include="..\..\assets\shaders\*.mgfxo" Link="assets\shaders\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <!-- ADR-011: an action strip's AUTHORED TIMING (per-frame durations, markers, sockets) sits beside it. -->
     <Content Include="..\..\assets\art\**\*.clip.json" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

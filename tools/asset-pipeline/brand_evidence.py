@@ -313,7 +313,7 @@ def mark_light(pre, lo=None, hi=None, box=ROW):
 
 def construction():
     """By construction, from the atlas and the recipe's tints: what each stage can light, at scale 1 (a whelp)."""
-    atlas = np.asarray(Image.open(os.path.join(REPO, "assets", "art", "VFX", "parts", "fxp_seeker_brand.png")).convert("RGBA")).astype(np.float32) / 255
+    atlas = np.asarray(Image.open(os.path.join(REPO, "tools", "asset-pipeline", "v2", "keypose_sources", "seeker_brand_history", "fxp_seeker_brand_etched_cut_39b59aaa.png")).convert("RGBA")).astype(np.float32) / 255
     cell, stages = 84, ["spread", "base", "deep1", "deep2", "deep3", "deep4"]
     groove, hot, smoke = np.array([136, 108, 196]) / 255, np.array([226, 208, 255]) / 255, np.array([110, 92, 160]) / 255
     idle, edge_c, carve0 = 3, 9, 10
