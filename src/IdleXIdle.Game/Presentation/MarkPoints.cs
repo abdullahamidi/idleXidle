@@ -33,8 +33,27 @@ public sealed class MarkPoints
     /// <summary>The frame points (fractions of the square frame), in strip order.</summary>
     public IReadOnlyList<Vector2> Points { get; }
 
-    /// <summary>A strip's points.</summary>
-    public MarkPoints(IReadOnlyList<Vector2> points) => Points = points;
+    /// <summary>The authored HEAD box of each frame (x0, y0, x1, y1, fractions of the square frame), in strip order; empty
+    /// when the file has none. A mark keeps off it (the curse's territories read as the creature's face paint there).</summary>
+    public IReadOnlyList<Vector4> Heads { get; }
+
+    /// <summary>A strip's points (and, optionally, its head boxes).</summary>
+    public MarkPoints(IReadOnlyList<Vector2> points, IReadOnlyList<Vector4>? heads = null)
+    {
+        Points = points;
+        Heads = heads ?? Array.Empty<Vector4>();
+    }
+
+    /// <summary>The mean body point over the strip's frames (fractions of the square frame).</summary>
+    public Vector2 MeanPoint
+    {
+        get
+        {
+            var sum = Vector2.Zero;
+            foreach (var p in Points) sum += p;
+            return sum / Points.Count;
+        }
+    }
 
     /// <summary>The body point of the frame drawn as <paramref name="frame"/>, in the arena; null if the frame is not one of the strip's.</summary>
     public Vector2? ToArena(SpriteFrame frame)
@@ -80,7 +99,8 @@ public sealed class MarkPoints
         return map;
     }
 
-    /// <summary>Parse a <c>.mark.json</c>: <c>{"points": [[x, y], ...]}</c>, fractions of the frame.</summary>
+    /// <summary>Parse a <c>.mark.json</c>: <c>{"points": [[x, y], ...], "head": [[x0, y0, x1, y1], ...]}</c>, fractions of
+    /// the frame (the head boxes are optional).</summary>
     public static MarkPoints Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -93,6 +113,15 @@ public sealed class MarkPoints
             points.Add(new Vector2(x, y));
         }
         if (points.Count == 0) throw new FormatException("no points");
-        return new MarkPoints(points);
+        var heads = new List<Vector4>();
+        if (doc.RootElement.TryGetProperty("head", out var head) && head.ValueKind == JsonValueKind.Array)
+            foreach (var h in head.EnumerateArray())
+            {
+                var box = new Vector4(h[0].GetSingle(), h[1].GetSingle(), h[2].GetSingle(), h[3].GetSingle());
+                if (box.X < 0f || box.Y < 0f || box.Z > 1f || box.W > 1f || box.Z < box.X || box.W < box.Y)
+                    throw new FormatException($"a head box outside its frame: {box}");
+                heads.Add(box);
+            }
+        return new MarkPoints(points, heads);
     }
 }

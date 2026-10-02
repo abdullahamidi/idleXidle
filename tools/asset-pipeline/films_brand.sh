@@ -32,8 +32,14 @@ film() {  # name swap T count stride start [ENV=VAL ...]
   env RH_SHOT_SWAP="$swap" RH_SHOT_SEED=7 "$@" RH_PRESENT_TRACE=1 RH_SHOT_HUNTER=seeker RH_SHOT_T="$t" \
     RH_SEQ_LOG="$PWD/$OUT/$name.log" timeout 2400 bash tools/asset-pipeline/capture_seq.sh fight "$count" "$stride" "$OUT/$name" "$start" 2>&1 | tail -1
 }
-want() { [ ${#ARGS[@]} -eq 0 ] || [[ " ${ARGS[*]} " == *" $1 "* ]]; }
+want() { [[ " ${ARGS[*]} " == *" $1 "* ]]; }
 ARGS=("$@")
+# DISK GUARD (the owner, 2026-10-02: the frames filled C: twice): name the takes you need, never the whole set;
+# refuse while the frame folders already hold more than 2 GB or C: has under 20 GB free. Delete frames once used.
+[ ${#ARGS[@]} -gt 0 ] || { echo "films_brand: name the takes to film (no default full set)"; exit 1; }
+held=$(du -sm build/shots | cut -f1); free=$(df -m . | awk 'NR==2{print $4}')
+[ "$held" -le 2048 ] || { echo "films_brand: build/shots holds ${held} MB - delete used frames first"; exit 1; }
+[ "$free" -ge 20480 ] || { echo "films_brand: only ${free} MB free on this drive - refusing"; exit 1; }
 want apply   && film apply  "$BASE" 0.5 72 1 0
 want long    && film long   "$BASE" 0.5 330 2 0
 want etch    && film etch   "$BASE" 0.5 330 2 0 RH_SHOT_VARIATION=sign_brand:ETCH

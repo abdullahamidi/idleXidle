@@ -227,7 +227,7 @@ public sealed partial class CursePrototype
     /// ended, the stencil passes run, and it is reopened in the arena's own state).
     /// </summary>
     public void DrawOn(SpriteBatch b, int slot, float playheadMs, SpriteFrame frame, Rectangle body, Texture2D? mask,
-                       RasterizerState raster, Color? tint = null)
+                       RasterizerState raster, Color? tint = null, MarkPoints? points = null, Texture2D? rest = null, MarkPoints? restPoints = null)
     {
         if (slot < 0 || slot >= _kind.Length) return;
         (_tint ??= new Color[_kind.Length])[slot] = tint ?? Color.White;
@@ -236,8 +236,9 @@ public sealed partial class CursePrototype
         if (_kind[slot] == 0) return;
         Mark.TryAnchor(slot, out var anchor, out _);
         if (anchor == default) anchor = body.Center.ToVector2();
-        // the corruption's territories are seated in the body's mass, from the host's own silhouette
-        if (Concept == CurseConcept.Corruption) PrepareCorruption(b.GraphicsDevice, slot, anchor, body, frame);
+        // the corruption's territories are seated in the body's mass, from the host's own silhouette (its strip's authored
+        // body points and head boxes, when it has them)
+        if (Concept == CurseConcept.Corruption) PrepareCorruption(b.GraphicsDevice, slot, anchor, body, frame, points, rest, restPoints);
         var device = b.GraphicsDevice;
         b.End();
         WriteStencil(b, device, slot, frame, raster);
@@ -248,7 +249,7 @@ public sealed partial class CursePrototype
             case CurseConcept.Withering: DrawWithering(b, slot, t, body, anchor, raster); break;
             default: DrawPossession(b, slot, t, body, frame, mask, raster); break;
         }
-        if (Concept == CurseConcept.Corruption) DrawCorruptionWisps(b, slot, playheadMs, t, body, anchor, raster);
+        if (Concept == CurseConcept.Corruption) DrawCorruptionWisps(b, slot, playheadMs, t, body, anchor, raster, frame);
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, raster);
         DrawLoose(b, slot, t, body, anchor);
         Mark.CountCurse(SpriteCount, _stage[slot]);
@@ -301,7 +302,7 @@ public sealed partial class CursePrototype
         {
             case CurseConcept.Corruption:
                 // its territories smoke out as they collapse
-                DrawCorruptionSmokeOut(b, slot, stage, p, anchor, body, fade);
+                DrawCorruptionSmokeOut(b, slot, died, p, anchor, body, fade, frame);
                 break;
             case CurseConcept.Withering:
                 // ash falling off the collapsing body

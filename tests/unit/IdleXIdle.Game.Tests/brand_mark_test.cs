@@ -933,7 +933,7 @@ public class brand_mark_test
         var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
         Assert.Equal(3, hunt.Split("DrawMarkOn(b, ").Length - 1);
         // (the creature's draw colour rides along: the curse's drained material takes its tint)
-        var loop = hunt.IndexOf("DrawMarkOn(b, i, squash, stripKey, creatureTint);", StringComparison.Ordinal);
+        var loop = hunt.IndexOf("DrawMarkOn(b, i, squash, stripKey, creatureTint, look.IdleStrip);", StringComparison.Ordinal);
         Assert.True(loop > 0);
         var silhouette = hunt.LastIndexOf("SilhouetteOver(b, stripKey, box,", loop, StringComparison.Ordinal);
         var flash = hunt.IndexOf("FlashOver(b, stripKey, box,", loop, StringComparison.Ordinal);
@@ -950,7 +950,7 @@ public class brand_mark_test
         // the authored body point of the frame just drawn (looked up once per texture)
         // (by the strip key the draw used: a reverse texture lookup missed strips loaded on first use)
         Assert.Contains("var bodyPoint = stripKey is null ? null : MarkPoints.For(stripKey)?.ToArena(frame);", hunt);
-        Assert.Contains("DrawMarkOn(b, 0, bossSquash, key, EnemyTint);", hunt);
+        Assert.Contains("DrawMarkOn(b, 0, bossSquash, key, EnemyTint, bossArt?.IdleStrip);", hunt);
         Assert.DoesNotContain("KeyOf(frame.Texture)", hunt);
     }
 }

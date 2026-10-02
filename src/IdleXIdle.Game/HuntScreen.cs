@@ -3839,7 +3839,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
             SilhouetteOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, crop, placedAs, squash);
-            DrawMarkOn(b, i, squash, stripKey, creatureTint);   // the brand is burned INTO this body: after it, before its hit flash
+            DrawMarkOn(b, i, squash, stripKey, creatureTint, look.IdleStrip);   // the brand is burned INTO this body: after it, before its hit flash
             // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
             // frame — the only way a dark sprite turns white in a SpriteBatch.
             FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop, squash);
@@ -3927,7 +3927,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
         SilhouetteOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, crop, squash: squash);
-        DrawMarkOn(b, 0, squash, stripKey, enterTint);
+        DrawMarkOn(b, 0, squash, stripKey, enterTint, look.IdleStrip);
         FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop, squash);
         DrawBreakBadge(b, 0, ab);
 
@@ -4016,7 +4016,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
         // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
         SilhouetteOver(b, key, box, seconds, fps, !attacking, -1f);
-        DrawMarkOn(b, 0, bossSquash, key, EnemyTint);
+        DrawMarkOn(b, 0, bossSquash, key, EnemyTint, bossArt?.IdleStrip);
         FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         DrawBreakBadge(b, 0, box);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
@@ -6820,9 +6820,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>
     /// The brand on the creature in <paramref name="slot"/>, from the frame just drawn for it (its torso, riding the idle
     /// breath, the lunge and a field's buckle); every creature is pinned, marked or not, so a migration knows where it
-    /// lands.
+    /// lands. <paramref name="restKey"/> is the creature's idle strip (its canonical bounds, ADR-012): the curse is seated
+    /// on and takes its look from that resting body, never from a lunge it happened to be first seen in.
     /// </summary>
-    private void DrawMarkOn(SpriteBatch b, int slot, Vector2 squash, string? stripKey, Color tint)
+    private void DrawMarkOn(SpriteBatch b, int slot, Vector2 squash, string? stripKey, Color tint, string? restKey)
     {
         if (_mark is not { } mark || ShotNoVfx || _mode == Mode.Downed || !TryDrawnFrame(VfxSubject.Creature(slot), out var frame)) return;
         var alloc = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
@@ -6833,7 +6834,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_curse is { } curse)
         {
             mark.Pin(slot, frame, bodyHeight, bodyPoint);
-            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(frame.Texture) : null, ArenaRasterizer, tint);
+            curse.DrawOn(b, slot, _playheadMs, frame, body.Width > 0 ? body : frame.Dest, curse.Concept == CurseConcept.Possession ? ((IFocusActors)this).MaskOf(frame.Texture) : null, ArenaRasterizer, tint,
+                         stripKey is null ? null : MarkPoints.For(stripKey), restKey is null ? null : _ui.Assets.Get(restKey),
+                         restKey is null ? null : MarkPoints.For(restKey));
             if (PresentTrace.Enabled) _markAllocBytes += GC.GetAllocatedBytesForCurrentThread() - alloc;
             return;
         }
