@@ -141,6 +141,13 @@ public sealed class SoundBank
     private readonly Random _vary = new(0x5EED);
     private readonly Dictionary<string, (long LastMs, float Recent)> _recent = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The share of its asked volume the repeat throttle let the last <see cref="Play"/> through at: 1 whole (unthrottled,
+    /// a first play, or the bank off: nothing is judged), 1/sqrt(recent) quieter-when-recent, 0 dropped. A layered cue
+    /// (BRAND's Ash accent, <see cref="Presentation.MarkVoice.Heard"/>) follows its main cue with it.
+    /// </summary>
+    public float LastThrottleShare { get; private set; } = 1f;
+
     /// <summary>Play a one-shot cue. No-op if audio is off or the cue is missing.</summary>
     /// <remarks>
     /// Rate-limited per cue: a repeat inside the cue's minimum gap (~90 ms; see <see cref="MinGapMs"/>)
@@ -160,6 +167,7 @@ public sealed class SoundBank
         if (PresentTrace.Enabled)
             PresentTrace.Log("sound", $"{key}\tvol={volume:0.00}\tpitch={pitch:0.00}\tpan={pan:0.00}" + (duck < 1f ? $"\tduck={duck:0.00}" : ""));
         volume *= duck;
+        LastThrottleShare = 1f;
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
         if (vary > 0f) pitch += ((float)_vary.NextDouble() * 2f - 1f) * vary;
 
@@ -176,11 +184,12 @@ public sealed class SoundBank
         if (_recent.TryGetValue(key, out var t))
         {
             var since = now - t.LastMs;
-            if (since < (MinGapMs.TryGetValue(key, out var gap) ? gap : MinRepeatMs)) return;
+            if (since < (MinGapMs.TryGetValue(key, out var gap) ? gap : MinRepeatMs)) { LastThrottleShare = 0f; return; }
             // Half-life 250 ms: a cue that last fired long ago is back to full volume.
             var recent = t.Recent * MathF.Pow(0.5f, since / 250f) + 1f;
             _recent[key] = (now, recent);
-            volume /= MathF.Sqrt(recent);
+            LastThrottleShare = 1f / MathF.Sqrt(recent);
+            volume *= LastThrottleShare;
         }
         else _recent[key] = (now, 1f);
 
@@ -209,12 +218,13 @@ public sealed class SoundBank
     /// <summary>
     /// Play the first cue of <paramref name="keys"/> that exists, with <see cref="Play"/>'s pitch, pan and
     /// variation — the action audio chain (specific -> archetype -> generic). Returns the cue chosen, or null.
+    /// <paramref name="throttle"/> false plays it past the repeat throttle (a bounded family: BRAND's SPRAWL infects).
     /// </summary>
     public string? PlayFirst(IReadOnlyList<string> keys, float volume, float pitch = 0f, float pan = 0f, float vary = 0f,
-                             bool lead = false)
+                             bool lead = false, bool throttle = true)
     {
         if (Resolve(keys) is not { } key) return null;
-        Play(key, volume, pitch, pan, vary: vary, lead: lead);
+        Play(key, volume, pitch, pan, throttle: throttle, vary: vary, lead: lead);
         return key;
     }
 

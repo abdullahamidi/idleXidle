@@ -44,7 +44,9 @@ MIN_REPEAT_MS = 90
 MIN_GAP_MS = {"sfx_hit": 60, "sfx_enemy_down": 140, "sfx_boss_down": 220, "sfx_champ_down": 300,
               "sfx_shield_hit": 60, "sfx_shield_break": 300, "sfx_chest_rare": 400, "sfx_train": 70,
               "sfx_dispatch": 900}
-UNTHROTTLED = {"sfx_seeker_spray_tick", "sfx_reveal_tick"}
+# played with throttle:false in the game (MarkRecipe.Unthrottled: BRAND's SPRAWL infects, 40 ms apart and bounded by the
+# victims of one spread, and the Ash-Burn accent, bounded by the cue it rides on)
+UNTHROTTLED = {"sfx_seeker_spray_tick", "sfx_reveal_tick", "sfx_seeker_brand_infect", "sfx_seeker_brand_ash"}
 
 
 def ffmpeg() -> str:

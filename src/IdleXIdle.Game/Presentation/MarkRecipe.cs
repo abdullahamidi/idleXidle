@@ -130,6 +130,248 @@ public sealed class MarkRecipe
     /// <summary>A migrated mark that deepened on the way is deepened no sooner than this after the fall that sent it:
     /// the fallen creature's white death smoke drifts over the next host until then (measured +600..+933 ms).</summary>
     public float DeathClearMs { get; init; } = 950f;
+
+    // ── THE CURSE'S VOICE (design/audio/seeker-brand-audio-brief.md; scheduled once per wave by MarkVoice) ─────────
+    //
+    // Seven files of ONE family, built by tools/asset-pipeline/make_brand_cues.py from CC0 foley
+    // (tools/asset-pipeline/foley/brand_curse/SOURCES.md). THREE CANDIDATES (A subtle / internal, B supernatural,
+    // C organic / ash) await the owner's choice: NOTHING HERE IS APPROVED YET, and no byte is pinned until it is. Every
+    // cue is presentation only (asked on the picture's own moments), never lead (an authored action's duck keeps it
+    // secondary), and quieter than SPRAY, HARD HANDS, JAWS and PRESS's crush. The idle curse is SILENT: no loop.
+
+    /// <summary>APPLY: the first infection (the first territory blooms on the first tick): a reverse / suction lead-in, a
+    /// dark internal take-hold, a short corruption tail. The first key that exists plays.</summary>
+    public IReadOnlyList<string> ApplyCues { get; init; } = new[] { "sfx_seeker_brand_apply" };
+
+    /// <summary>DEEPEN to depth 2: the corruption wakes, crawls under the skin (the picture's 170 ms travel) and takes hold
+    /// at the new territory. One cue per SHOWN step, never one per territory.</summary>
+    public IReadOnlyList<string> DeepenCues { get; init; } = new[] { "sfx_seeker_brand_deepen" };
+
+    /// <summary>DEEPEN that reaches depth 3 (a multi-depth jump is ONE such cue): the deepen with one more corruption
+    /// layer, never louder; it falls back to the plain deepen.</summary>
+    public IReadOnlyList<string> DeepenDeepCues { get; init; } = new[] { "sfx_seeker_brand_deepen_deep", "sfx_seeker_brand_deepen" };
+
+    /// <summary>SPRAWL: one victim takes the curse (a short, quieter relative of the apply's take-hold), one per victim at
+    /// its landing, stepping down the row (<see cref="InfectStepShare"/>, <see cref="InfectStepPitch"/>).</summary>
+    public IReadOnlyList<string> InfectCues { get; init; } = new[] { "sfx_seeker_brand_infect" };
+
+    /// <summary>A cursed host falls (a transfer's start, or the curse's final collapse): a brief flare, an inward collapse,
+    /// an ash exhale; secondary to the death sound. Several hosts falling on one frame are ONE cue.</summary>
+    public IReadOnlyList<string> LeaveCues { get; init; } = new[] { "sfx_seeker_brand_leave" };
+
+    /// <summary>A transfer's landing: a delayed internal inhale, then a short take-hold as the territories bloom. No travel
+    /// sound: the gap between the leave and this is silence.</summary>
+    public IReadOnlyList<string> AwakenCues { get; init; } = new[] { "sfx_seeker_brand_awaken" };
+
+    /// <summary>THE ASH-BURN ACCENT, layered on a take-hold or a leave when the host's baked Ash-Burn weight is above 0 (a
+    /// dry crumble): a continuous rule of the baked host data, never a name.</summary>
+    public IReadOnlyList<string> AshCues { get; init; } = new[] { "sfx_seeker_brand_ash" };
+
+    /// <summary>The cues' volumes. Each file is mastered so that its K-weighted loudest 50 ms x this volume x the SFX
+    /// master 0.8 meets the brief's target, which the integration's mix check (the fight's own soundtrack, 2026-10-02)
+    /// lowered by 1 dB for every cue alike (the candidates stay level-matched) so the loudest, an apply on a host with no
+    /// Ash-Burn, sits >= 3 dB under PRESS's tick (-31.3): apply -35, deepen -36, deepen_deep -35.5, infect -39, leave -37
+    /// (under the enemy's death), awaken -36, the ash accent -41. Every one under PRESS's
+    /// <see cref="FieldRecipe.TickVolume"/>, JAWS' snap and the action contacts. make_brand_cues.py mirrors them (VOLUME /
+    /// TARGET): change both together.</summary>
+    public float ApplyVolume { get; init; } = 0.183f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float DeepenVolume { get; init; } = 0.163f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float DeepenDeepVolume { get; init; } = 0.173f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float InfectVolume { get; init; } = 0.116f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float LeaveVolume { get; init; } = 0.145f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float AwakenVolume { get; init; } = 0.163f;
+
+    /// <inheritdoc cref="ApplyVolume"/>
+    public float AshVolume { get; init; } = 0.092f;
+
+    /// <summary>The K-weighted loudest 50 ms (dB, x the SFX master 0.8) each file is mastered to at its volume above:
+    /// make_brand_cues.py's TARGET, mirrored here (a test holds the two together) so the Ash accent can be kept under
+    /// the cue it rides on (<see cref="AshShareUnder"/>).</summary>
+    public float ApplyTargetDb { get; init; } = -35f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float DeepenTargetDb { get; init; } = -36f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float DeepenDeepTargetDb { get; init; } = -35.5f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float InfectTargetDb { get; init; } = -39f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float LeaveTargetDb { get; init; } = -37f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float AwakenTargetDb { get; init; } = -36f;
+
+    /// <inheritdoc cref="ApplyTargetDb"/>
+    public float AshTargetDb { get; init; } = -41f;
+
+    /// <summary>THE ACCENT IS NEVER LOUDER THAN ITS LAYER: at any burn the Ash accent sits at least this far (dB) under
+    /// the main cue it rides on (<see cref="AshShareUnder"/>).</summary>
+    public float AshUnderMainDb { get; init; } = 2f;
+
+    /// <summary>
+    /// The share of <see cref="AshVolume"/> the accent plays at under a <paramref name="main"/> cue, constant in burn (so
+    /// more burn is always more ash). With the Ash-Burn rule the main cue is <c>T_main + 20 log(1 - AshMainCut b)</c>
+    /// and the accent <c>T_ash + 20 log(b s)</c>; their gap is smallest at burn 1, so <c>s = min(1, 10^((T_main - T_ash
+    /// - AshUnderMainDb) / 20) x (1 - AshMainCut))</c> keeps it >= <see cref="AshUnderMainDb"/> at every burn: 1 under an
+    /// apply, deepen or awaken, ~0.94 under a leave, 0.75 under an infect (at full it would be 0.5 dB OVER a burn-1
+    /// infect).
+    /// </summary>
+    public float AshShareUnder(MarkCueKind main)
+        => main == MarkCueKind.Ash ? 0f
+         : Math.Min(1f, MathF.Pow(10f, (TargetDbOf(main) - AshTargetDb - AshUnderMainDb) / 20f) * (1f - AshMainCut));
+
+    /// <summary>A kind's mastered loudness target (dB).</summary>
+    public float TargetDbOf(MarkCueKind kind) => kind switch
+    {
+        MarkCueKind.Apply => ApplyTargetDb,
+        MarkCueKind.Deepen => DeepenTargetDb,
+        MarkCueKind.DeepenDeep => DeepenDeepTargetDb,
+        MarkCueKind.Infect => InfectTargetDb,
+        MarkCueKind.Leave => LeaveTargetDb,
+        MarkCueKind.Awaken => AwakenTargetDb,
+        _ => AshTargetDb,
+    };
+
+    /// <summary>
+    /// Where each cue's TAKE-HOLD transient sits inside its file (ms): the file is authored to it, and the cue starts this
+    /// long before its moment on the picture (<c>start = moment - offset</c>; the frame's 60 Hz step lands it up to a
+    /// frame late, as PRESS's thump). The brief's offsets: apply 180, deepen and deepen_deep 230, infect 15, leave 10 (the
+    /// flare on the fall, 0..20), awaken 120, ash 5 (0..10).
+    /// </summary>
+    public float ApplyCueStartMs { get; init; } = 180f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float DeepenCueStartMs { get; init; } = 230f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float DeepenDeepCueStartMs { get; init; } = 230f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float InfectCueStartMs { get; init; } = 15f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float LeaveCueStartMs { get; init; } = 10f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float AwakenCueStartMs { get; init; } = 120f;
+
+    /// <inheritdoc cref="ApplyCueStartMs"/>
+    public float AshCueStartMs { get; init; } = 5f;
+
+    /// <summary>
+    /// The picture's decisive frame each take-hold lands on, after its event (ms): the apply's flare peaks 60..160 after
+    /// the first tick (60); a deepen's take-hold is ~230 after its shown step (the wake 0..80, the travel 0..170, the first
+    /// new bloom at +170); an infect takes hold on its landing (15); a leave flares on the fall (10); an awaken takes hold
+    /// as the arrival's territories bloom (120 after the landing). So: apply starts 120 ms before the tick, a deepen on its
+    /// step, an infect on its landing, a leave on the fall, an awaken on its landing.
+    /// </summary>
+    public float ApplyTakeHoldMs { get; init; } = 60f;
+
+    /// <inheritdoc cref="ApplyTakeHoldMs"/>
+    public float DeepenTakeHoldMs { get; init; } = 230f;
+
+    /// <inheritdoc cref="ApplyTakeHoldMs"/>
+    public float InfectTakeHoldMs { get; init; } = 15f;
+
+    /// <inheritdoc cref="ApplyTakeHoldMs"/>
+    public float LeaveTakeHoldMs { get; init; } = 10f;
+
+    /// <inheritdoc cref="ApplyTakeHoldMs"/>
+    public float AwakenTakeHoldMs { get; init; } = 120f;
+
+    /// <summary>A cue whose start the playhead passed by more than this (a seek, a long hitch) is skipped, never played
+    /// late (PRESS's rule).</summary>
+    public float CueLateMs { get; init; } = 30f;
+
+    /// <summary>A cue's share near an action (its Skill within <see cref="QuietBeforeMs"/> / <see cref="QuietAfterMs"/>
+    /// of the take-hold, the field's crush on its tick, or while the champion performs) and near a presented reaction's
+    /// snap (<see cref="YieldBeforeMs"/> / <see cref="YieldAfterMs"/>). Already under an action's duck, the duck alone
+    /// applies, never duck x quiet.</summary>
+    public float CueQuietShare { get; init; } = 0.6f;
+
+    /// <inheritdoc cref="CueQuietShare"/>
+    public float CueYieldShare { get; init; } = 0.5f;
+
+    /// <summary>THE ASH-BURN RULE: the main cue loses this share of its volume per unit of the host's Ash-Burn weight
+    /// (x(1 - 0.25 burn)) and the ash accent plays at <see cref="AshVolume"/> x burn; giving way to a reaction, the accent
+    /// (the least important layer) is omitted and the main cue keeps its whole volume.</summary>
+    public float AshMainCut { get; init; } = 0.25f;
+
+    /// <summary>SPRAWL: each further victim's infect plays at this share of the one before (x0.88 per victim) and this much
+    /// lower (octaves per victim), so the row reads as one phrase travelling away.</summary>
+    public float InfectStepShare { get; init; } = 0.88f;
+
+    /// <inheritdoc cref="InfectStepShare"/>
+    public float InfectStepPitch { get; init; } = -0.04f;
+
+    /// <summary>Hosts falling within this of the first (one 60 Hz frame: a SPRAWL row kill) give ONE leave.</summary>
+    public float LeaveMergeMs { get; init; } = 1000f / 60f;
+
+    /// <summary>A SPRAWL deepen ripples down the row (a step and a half per place: <c>chainOrder x</c>
+    /// <see cref="CarveStepMs"/><c> x 1.5</c>, ~60 ms): one tick's shown steps on DIFFERENT creatures within the whole
+    /// row's ripple (<c>(slots - 1) x CarveStepMs x 1.5</c>, the bound <see cref="MarkPerformance"/>'s settle uses) plus
+    /// this slack (two 60 Hz frames: the lattice the steps are found on) are ONE deepen for the ear (deep if any reaches
+    /// depth 3). Only in SPRAWL, and never two steps of one creature: each of its shown steps is its own cue.</summary>
+    public float DeepenRippleSlackMs { get; init; } = 2000f / 60f;
+
+    /// <summary>How far a cue pans with its host's position (the reactions' width).</summary>
+    public float CuePanWidth { get; init; } = 0.35f;
+
+    /// <summary>Per-play pitch variation (octaves).</summary>
+    public float CueVary { get; init; } = 0.03f;
+
+    /// <summary>The cue chain of a scheduled cue's kind.</summary>
+    public IReadOnlyList<string> CuesOf(MarkCueKind kind) => kind switch
+    {
+        MarkCueKind.Apply => ApplyCues,
+        MarkCueKind.Deepen => DeepenCues,
+        MarkCueKind.DeepenDeep => DeepenDeepCues,
+        MarkCueKind.Infect => InfectCues,
+        MarkCueKind.Leave => LeaveCues,
+        MarkCueKind.Awaken => AwakenCues,
+        _ => AshCues,
+    };
+
+    /// <summary>The full volume of a scheduled cue's kind (before the quiet, yield, Ash-Burn and SPRAWL shares).</summary>
+    public float VolumeOf(MarkCueKind kind) => kind switch
+    {
+        MarkCueKind.Apply => ApplyVolume,
+        MarkCueKind.Deepen => DeepenVolume,
+        MarkCueKind.DeepenDeep => DeepenDeepVolume,
+        MarkCueKind.Infect => InfectVolume,
+        MarkCueKind.Leave => LeaveVolume,
+        MarkCueKind.Awaken => AwakenVolume,
+        _ => AshVolume,
+    };
+
+    /// <summary>Where a kind's take-hold sits inside its file (ms).</summary>
+    public float CueStartOf(MarkCueKind kind) => kind switch
+    {
+        MarkCueKind.Apply => ApplyCueStartMs,
+        MarkCueKind.Deepen => DeepenCueStartMs,
+        MarkCueKind.DeepenDeep => DeepenDeepCueStartMs,
+        MarkCueKind.Infect => InfectCueStartMs,
+        MarkCueKind.Leave => LeaveCueStartMs,
+        MarkCueKind.Awaken => AwakenCueStartMs,
+        _ => AshCueStartMs,
+    };
+
+    /// <summary>Is a kind played past the bank's repeat throttle? The SPRAWL infects (40 ms apart, bounded by the victims of
+    /// one spread) and the ash accent (bounded by the cue it rides on); mirrored in film_audio.py's UNTHROTTLED.</summary>
+    public static bool Unthrottled(MarkCueKind kind) => kind is MarkCueKind.Infect or MarkCueKind.Ash;
 }
 
 /// <summary>The mark recipes, by character and skill (ADR-011's contract: a presentation belongs to its SKILL).</summary>

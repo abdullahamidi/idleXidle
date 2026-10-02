@@ -1565,6 +1565,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // falls (the mark migrates to the next front), and the build's reach (SPRAWL, ANCHOR). Quiet beside an action, a
         // presented reaction or a performed field's crush on the same tick.
         _mark = null;
+        _markVoice = null;
         _curse = null;
         if (markSk is not null && MarkRecipes.For(Character.Id, markSk.Def.Id) is { } markRecipe)
         {
@@ -1631,6 +1632,33 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             CurseHostData.Warm();
             _curse = _curseLoaded ??= CursePresentation.Load(_ui.Device);
             _curse.BeginWave(_mark, _run.LastWaveCreatures.Count);
+            // THE CURSE'S VOICE (design/audio/seeker-brand-audio-brief.md): every cue of the wave scheduled here, once, from
+            // the same truth the curse is drawn from, each host weighted by its baked look (the pack shares one; a boss its
+            // own idle strip), giving way to a presented reaction's snap, quiet beside an action or the field's crush
+            var bossWave = DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
+            var hostKey = bossWave ? BossArt?.IdleStrip : CreatureLook.IdleStrip;
+            var hostData = hostKey is null ? null : CurseHostData.For(hostKey);
+            var hostSlots = Math.Max(1, _run.LastWaveCreatures.Count);
+            var hostBurn = new float[hostSlots];
+            var hostSeats = new int[hostSlots];
+            for (var s = 0; s < hostSlots; s++)
+            {
+                hostBurn[s] = hostData?.Burn ?? 0f;
+                hostSeats[s] = hostData?.LayoutFor(s).Available ?? 0;
+            }
+            var markSnaps = new List<float>();
+            var markQuiet = new List<float>();
+            for (var ej = 0; ej < wave.Count; ej++)
+            {
+                var o = wave[ej];
+                if (o.Kind == BattleEventKind.Aura && performedSlot >= 0 && o.Slot == performedSlot) markQuiet.Add(o.AtMs);
+                if (o.Kind != BattleEventKind.Skill || o.Slot < 0 || o.Slot >= _waveSkills.Count) continue;
+                var def = _waveSkills[o.Slot].Def;
+                if (def.Kind == SkillKind.Reaction && ReactionRecipes.For(Character.Id, def.Id) is { } answering)
+                    markSnaps.Add(o.AtMs + answering.SnapAtMs);
+                else if (def.Kind is not (SkillKind.Reaction or SkillKind.Field)) markQuiet.Add(o.AtMs);
+            }
+            _markVoice = new MarkVoice(_mark, hostBurn, hostSeats, markSnaps, markQuiet);
             if (PresentTrace.Enabled)
                 PresentTrace.Log("mark-wave", $"{markRecipe.Id}\tslot={markSlot}\twhole={markSk.Def.AmplifyWholeWave}"
                                  + $"\tticks={string.Join(",", markTicks.Select(t => $"{t.AtMs:0}:{t.Percent}{(t.Quiet ? "q" : "")}"))}"
@@ -1956,6 +1984,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 UpdatePerformance(dt);
                 UpdateReactions();
                 VoiceField();
+                VoiceMark();
                 if (_clipName is not null && _clipTiming is { } playing && _playheadMs >= _clipStartMs + playing.TotalMs)
                 {
                     if (PresentTrace.Enabled) PresentTrace.Log("clip-end", _clipName);
@@ -2148,6 +2177,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         UpdatePerformance(dt);
         UpdateReactions();
         VoiceField();
+        VoiceMark();
         var batch = _replay.Advance(_playheadMs);
         // Which blows in THIS batch have already been folded into another's number. A field, not a
         // local: this runs every frame and §93 forbids a per-frame allocation.
@@ -2939,12 +2969,13 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // wisps flush with the arena batch, counted as one run each); `flush` is the part of `ticks` spent flushing the
         // arena sprites drawn before each cursed creature (work the arena batch would have done later anyway)
         if (PresentTrace.Enabled && _mark is { } tracedMark && _curse is { } tracedCurse
-            && (tracedMark.LastHosts > 0 || tracedCurse.SpriteCount > 0 || _markAllocBytes != 0))   // a frame that allocated is logged even with nothing drawn
+            && (tracedMark.LastHosts > 0 || tracedCurse.SpriteCount > 0 || _markAllocBytes != 0 || _markVoiceAllocBytes != 0))   // a frame that allocated is logged even with nothing drawn
             PresentTrace.Log("mark-draw", $"{tracedMark.Recipe.Id}\thosts={tracedMark.LastHosts}\tstage={tracedMark.LastStage}"
                              + $"\tfront={tracedMark.FrontAt(_playheadMs)}\tdepth={tracedMark.DepthAt(_playheadMs)}"
                              + (tracedMark.TryAnchor(tracedMark.FrontAt(_playheadMs), out var markAt) ? $"\tat={markAt.X:0},{markAt.Y:0}" : "")
-                             + $"\tsprites={tracedCurse.SpriteCount}\talloc={_markAllocBytes}"
+                             + $"\tsprites={tracedCurse.SpriteCount}\talloc={_markAllocBytes}\tvoice={_markVoiceAllocBytes}"
                              + $"\tdraws={tracedCurse.Draws}\tbatches={tracedCurse.Batches}\tticks={tracedCurse.Ticks}\tflush={tracedCurse.ArenaFlushTicks}");
+        _markVoiceAllocBytes = 0;
 
         // THE REACTION LAYER (JAWS): the frontal Shadow bite's material on the creature that bit: over the creatures, UNDER the
         // champion (when the Seeker stands in front of that creature, as HARD HANDS does, she is in front of its jaw; drawn
@@ -6851,6 +6882,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>This wave's MARK (BRAND, ADR-011's MARK reference), or null: see <see cref="BeginWave"/>.</summary>
     private MarkPerformance? _mark;
 
+    /// <summary>The mark's VOICE this wave (BRAND's cue family, scheduled once at <see cref="BeginWave"/>), or null with no mark.</summary>
+    private MarkVoice? _markVoice;
+
     /// <summary>BRAND drawn as a CURSE (ADR-013) this wave, or null (no mark: RH_MARK_RECIPES=0 is its uncursed twin).</summary>
     private CursePresentation? _curse;
 
@@ -7017,6 +7051,45 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (PresentTrace.Enabled)
             PresentTrace.Log("field-cue", $"{f.Recipe.Id}\ttick={f.TickAt(tick):0}\tat={_playheadMs - f.TickAt(tick):0}\tcue={cue ?? "-"}\tvol={volume:0.00}");
     }
+
+    /// <summary>
+    /// The MARK's VOICE (BRAND's curse: apply, deepen, SPRAWL's infects, a transfer's leave and awaken, the final collapse,
+    /// the Ash-Burn accent), each cue scheduled at <see cref="BeginWave"/> and asked once on the playhead so its take-hold
+    /// lands on the picture's moment. Not lead: after <see cref="UpdatePerformance"/> set the frame's duck; quieter beside an
+    /// action, giving way to JAWS. No mark (RH_MARK_RECIPES=0): silent. Never in Downed.
+    /// </summary>
+    private void VoiceMark()
+    {
+        if (_mark is not { } m || _markVoice is not { } v || _mode == Mode.Downed) return;
+        var ducked = (Sound?.Duck ?? 1f) < 1f;
+        var performing = _performance is not null;
+        // the voice's OWN bytes (the trace; 0 is the contract): the bank's and this row's trace strings are left out
+        var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        for (var i = v.CueDue(_playheadMs); i >= 0; i = v.CueDue(_playheadMs, i + 1))
+        {
+            var c = v.Cue(i);
+            var volume = v.CueVolume(i, ducked, performing, Sound?.Duck ?? 1f);
+            var cx = 0f;
+            if (volume > 0f)
+                cx = m.TryAnchor(c.Slot, out var anchor) ? anchor.X
+                   : TryBody(VfxSubject.Creature(c.Slot), out var body) ? body.Center.X : ArenaRect.Center.X;
+            if (PresentTrace.Enabled) _markVoiceAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;
+            string? cue = null;
+            if (volume > 0f)
+                cue = Sound?.PlayFirst(m.Recipe.CuesOf(c.Kind), volume, c.Pitch, Pan(cx, m.Recipe.CuePanWidth), m.Recipe.CueVary,
+                                       throttle: !MarkRecipe.Unthrottled(c.Kind));
+            // what the bank did with it (its throttle; no file: unheard): the ash accent riding it follows
+            v.Heard(i, cue is null ? 0f : Sound!.LastThrottleShare);
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("mark-cue", $"{m.Recipe.Id}\tkind={c.Kind}\tslot={c.Slot}\tmoment={c.AtMs:0}\tat={_playheadMs - c.AtMs:0}"
+                                             + $"\tcue={cue ?? "-"}\tvol={volume:0.000}\tpitch={c.Pitch:0.00}");
+            if (PresentTrace.Enabled) allocFrom = GC.GetAllocatedBytesForCurrentThread();
+        }
+        if (PresentTrace.Enabled) _markVoiceAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;
+    }
+
+    /// <summary>Bytes the mark's voice allocated since the last drawn frame (the trace's <c>voice=</c>; 0 is the contract).</summary>
+    private long _markVoiceAllocBytes;
 
     /// <summary>A gentle stereo position for an arena x: ±<paramref name="width"/> at the arena's edges.</summary>
     private static float Pan(float x, float width)

@@ -36,12 +36,14 @@ jobs:
       # unit step above does not run, and they need no window or GL context: they read the
       # committed shader binary's source hash, the baked .brand.json host data against a
       # fresh bake, the no-read-back source scan, the zero-allocation composition and the
-      # prototype-is-gone pins. Without this step an edited BrandCurse.fx that was never
-      # rebuilt (tools/shaders/build_shaders.sh, Windows only) shipped with a green CI.
+      # prototype-is-gone pins, and the curse's voice (brand_audio_test: its cue schedule, the
+      # zero-allocation voicing, the screen wiring, the film soundtrack's throttle mirror).
+      # Without this step an edited BrandCurse.fx that was never rebuilt
+      # (tools/shaders/build_shaders.sh, Windows only) shipped with a green CI.
       - name: BRAND curse guards
         run: >-
           dotnet test tests/unit/IdleXIdle.Game.Tests --no-build --configuration Release --verbosity normal
-          --filter "FullyQualifiedName~brand_curse_shader_test|FullyQualifiedName~brand_host_bake_test|FullyQualifiedName~brand_curse_presentation_test|FullyQualifiedName~brand_curse_test|FullyQualifiedName~brand_mark_test"
+          --filter "FullyQualifiedName~brand_curse_shader_test|FullyQualifiedName~brand_host_bake_test|FullyQualifiedName~brand_curse_presentation_test|FullyQualifiedName~brand_curse_test|FullyQualifiedName~brand_mark_test|FullyQualifiedName~brand_audio_test"
 
       # Unit tests prove each system is internally correct. They cannot prove the systems FIT.
       # The two worst bugs in this project were both integration failures that every unit test

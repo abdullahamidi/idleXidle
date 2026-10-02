@@ -78,6 +78,26 @@ want sprawl_winnow_tick_off && film sprawl_winnow_tick_off "$BASE" 2.5 72 1 0 RH
 want sprawl_winnow_clean && film sprawl_winnow_clean "$CLEAN" 0.5 330 2 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
 want sprawl_winnow_clean_tick && film sprawl_winnow_clean_tick "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
 want sprawl_winnow_clean_tick_off && film sprawl_winnow_clean_tick_off "$CLEAN" 2.5 72 1 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW RH_MARK_RECIPES=0
+# THE CURSE'S VOICE (design/audio/seeker-brand-audio-brief.md): TRACE takes, one picture every 30 frames (half a second),
+# so a whole wave costs ~40 frames; the trace (mark-cue, sound, mark-draw: every frame is drawn, only every 30th saved)
+# carries the timing and the soundtrack (film_audio renders it from the trace clock). Delete the frames once read.
+want audio_long   && film audio_long   "$BASE" 0.5 42 30 0
+want audio_sprawl && film audio_sprawl "$BASE" 0.5 42 30 0 RH_SHOT_VARIATION=sign_brand:SPRAWL
+want audio_etch   && film audio_etch   "$BASE" 0.5 42 30 0 RH_SHOT_VARIATION=sign_brand:ETCH
+want audio_etch_clean && film audio_etch_clean "$CLEAN" 0.5 42 30 0 RH_SHOT_VARIATION=sign_brand:ETCH
+want audio_sprawl_winnow_clean && film audio_sprawl_winnow_clean "$CLEAN" 0.5 42 30 0 RH_SHOT_VARIATION=sign_brand:SPRAWL+WINNOW
+want audio_press  && film audio_press  "$WITH_PRESS" 0.5 42 30 0
+want audio_before && film audio_before "$BASE" 0.5 42 30 0 RH_MARK_RECIPES=0
+# THE AUDIO REVIEW'S SEVEN SEGMENTS (brand_audio_evidence.py films them ONE AT A TIME and deletes each take's frames
+# once its four renders are made): trimmed takes, <= 120 frames each. Shot 0 sits at playhead ~1.55 s; `start` frames
+# skip time, not disk (+16.67 ms each), so each take opens just before its window (playhead ms in the script).
+want ba_apply     && film ba_apply     "$BASE" 0.5 84 1 9
+want ba_deepen12  && film ba_deepen12  "$CLEAN" 0.5 84 1 132 RH_SHOT_VARIATION=sign_brand:ETCH
+want ba_deepen23  && film ba_deepen23  "$CLEAN" 0.5 87 1 270 RH_SHOT_VARIATION=sign_brand:ETCH
+want ba_sprawl    && film ba_sprawl    "$BASE" 0.5 84 1 9 RH_SHOT_VARIATION=sign_brand:SPRAWL
+want ba_transfer  && film ba_transfer  "$BASE" 0.5 110 1 288
+want ba_death     && film ba_death     "$BASE" 0.5 90 1 915
+want ba_mixed     && film ba_mixed     "$WITH_PRESS" 0.5 104 2 190
 # OTHER FAMILIES: the authored body point on creatures the reference fight never shows
 for fam in Machine:Armoured Shadow:Caster Mind:Swarm Nature:Bruiser Body:Armoured Spirit:Caster; do
   src=${fam%%:*}; arch=${fam##*:}; name="fam_$(echo "$src" | tr 'A-Z' 'a-z')_$(echo "$arch" | tr 'A-Z' 'a-z')"

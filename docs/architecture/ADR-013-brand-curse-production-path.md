@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | **Proposed** (2026-10-02). BRAND **visual direction APPROVED** by the owner (2026-10-02, from `39b59aaa`); this production implementation **awaits the owner's review** (page https://claude.ai/artifact/SBJLCVwBV4ztdiPvFQanFD, evidence `production/qa/evidence/brand-production/`); BRAND as the overall gold-standard MARK reference is **NOT closed** (no audio yet). |
+| **Status** | **Accepted** (2026-10-02, the owner: "The BRAND visual direction and production renderer are approved. Lock them."). The production renderer is ACCEPTED and LOCKED; no further visual redesign unless audio integration exposes a genuine presentation defect. BRAND as the overall gold-standard MARK / PERSISTENT TARGET AFFLICTION reference is **NOT closed** until its final audio is chosen (page https://claude.ai/artifact/SBJLCVwBV4ztdiPvFQanFD, evidence `production/qa/evidence/brand-production/`). |
 | **Date** | 2026-10-02 |
 | **Deciders** | owner; lead-programmer, technical-artist (presentation), tools-programmer (bake) |
 | **Supersedes** | the BRAND curse prototype (`CursePrototype*.cs`, `RH_BRAND_CONCEPT`), the etched-cut mark draw (ADR-011's first BRAND slices) |

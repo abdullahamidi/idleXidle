@@ -361,6 +361,54 @@ public sealed class MarkPerformance
         return float.PositiveInfinity;
     }
 
+    // ── THE SCHEDULE, READ ONCE AT BEGINWAVE (the voice, MarkVoice: never per frame) ────────────────────────────────
+
+    /// <summary>The creature slots this mark was built for.</summary>
+    internal int CreatureSlots => _deathAt.Length;
+
+    /// <summary>SPRAWL (every creature carries it) rather than one front host at a time.</summary>
+    internal bool WholeWave => _wholeWave;
+
+    /// <summary>The creature the mark is applied to on the first tick (-1: this wave has none).</summary>
+    internal int FirstFront => _firstFront;
+
+    /// <summary>Front mode: the hosts the mark is carried by, in order (0: the applied one).</summary>
+    internal int HostCount => _wholeWave ? 0 : _hostCount;
+
+    /// <summary>Front mode: host <paramref name="k"/>'s creature slot.</summary>
+    internal int HostSlotAt(int k) => _hostSlot[k];
+
+    /// <summary>Front mode: when host <paramref name="k"/> received the mark (k = 0: the first tick; else the landing).</summary>
+    internal float HostLandsAt(int k) => _landAt[k];
+
+    /// <summary>SPRAWL: when the hop to <paramref name="slot"/> lands (+inf: it never does).</summary>
+    internal float HopLandsAt(int slot) => slot >= 0 && slot < _hopLand.Length ? _hopLand[slot] : float.PositiveInfinity;
+
+    /// <summary>SPRAWL: <paramref name="slot"/>'s place in the spread (0 the source, 1 the first creature it reached...).</summary>
+    internal int ChainOrderOf(int slot) => slot >= 0 && slot < _chainOrder.Length ? _chainOrder[slot] : 0;
+
+    /// <summary>
+    /// A moment past which no coil's SHOWN stage can change any more (every tick's chisel, every catch-up and ANCHOR's
+    /// front cut are behind it): the voice scans the shown stages up to here, never further.
+    /// </summary>
+    internal float ShownSettledBy
+    {
+        get
+        {
+            var reveal = Recipe.CarveStepMs * 2f;
+            var ripple = _wholeWave ? _deathAt.Length * Recipe.CarveStepMs * 1.5f : 0f;
+            var end = FirstTickMs;
+            for (var i = 0; i < _tickAt.Length; i++) end = Math.Max(end, _tickAt[i] + _tickSettle[i] + ripple + reveal);
+            for (var k = 0; k < _hostCount; k++) end = Math.Max(end, Math.Max(_catchAt[k], _landAt[k] + Recipe.ReformMs) + reveal);
+            for (var s = 0; s < _deathAt.Length; s++)
+            {
+                if (!float.IsPositiveInfinity(_hopCatch[s])) end = Math.Max(end, _hopCatch[s] + reveal);
+                if (!float.IsPositiveInfinity(_deathAt[s])) end = Math.Max(end, _deathAt[s] + reveal);
+            }
+            return end + 1f;
+        }
+    }
+
     /// <summary>SPRAWL: the creature the hop to <paramref name="slot"/> leaves from (-1: none, the coil forms with no strand).</summary>
     internal int HopFromOf(int slot) => slot >= 0 && slot < _hopFrom.Length ? _hopFrom[slot] : -1;
 
