@@ -1,0 +1,27 @@
+# after_oathmark_fixed: trace rows 600..1900 ms of playhead (decisive 1000); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_oathmark.log
+    700  shot   8  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot   8  sound           sfx_hit  vol=0.38  pitch=0.00  pan=0.00
+    700  shot   8  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot   8  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    700  shot   8  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/0  travel=-
+    783  shot  10  enemy-commit    bite=1000
+   1000  shot  17  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  17  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  17  event           Marked  slot=90  amount=4500  at=1000  crit=False  skill=False
+   1000  shot  17  event           Skill  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  17  vfx-spawn       fx_oathbound_mark_strip8_512  profile=cast.mark  subject=Creature/0  travel=-
+    700  shot   8  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot   8  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot   8  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    783  shot  10  enemy-commit    bite=1000
+   1000  shot  17  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  17  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  17  event           Marked  slot=90  amount=4500  at=1000  crit=False  skill=False
+   1000  shot  17  event           Skill  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  17  vfx-spawn       fx_oathbound_mark_strip8_512  profile=cast.mark  subject=Creature/0  travel=-
+   1717  shot  39  clip-start      attack  beat=2200  speed=1.293  contactMs=486  frameMs=97
+   1783  shot  40  enemy-commit    bite=2000
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+(no layer reports alloc=)

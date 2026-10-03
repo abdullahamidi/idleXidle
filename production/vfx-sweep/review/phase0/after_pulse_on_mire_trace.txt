@@ -1,0 +1,54 @@
+# after_pulse_on_mire: trace rows 8400..10100 ms of playhead (decisive 9000); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_pulse.log
+   8417  shot   0  number          slot=1  amount=54  hits=1  crit=False  skill=False
+   8417  shot   0  enemy-commit    bite=8500
+   8450  shot   0  clip-start      aura  beat=9000  speed=1.136  contactMs=557  frameMs=110
+   8500  shot   2  event           EnemyStrike  slot=0  amount=3  at=8500  crit=False  skill=False
+   8500  shot   2  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   9000  shot  17  event           Skill  slot=1  amount=0  at=9000  crit=False  skill=False
+   9000  shot  17  callout         PULSE
+   9000  shot  17  vfx-spawn       fx_aura  profile=cast.aura  subject=Champion  travel=-
+   9000  shot  17  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   9000  shot  17  event           Strike  slot=1  amount=134  at=9000  crit=False  skill=True
+   9000  shot  17  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   9000  shot  17  number          slot=1  amount=158  hits=2  crit=False  skill=True
+   9000  shot  17  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   9000  shot  17  event           Strike  slot=2  amount=143  at=9000  crit=False  skill=True
+   9000  shot  17  number          slot=2  amount=155  hits=2  crit=False  skill=True
+   9000  shot  17  flash           slot=2  peak=0.45  ms=80  rise=0.15
+   9000  shot  17  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/2  travel=-
+   9000  shot  17  event           Strike  slot=3  amount=124  at=9000  crit=False  skill=True
+   9000  shot  17  number          slot=3  amount=138  hits=2  crit=False  skill=True
+   9000  shot  17  flash           slot=3  peak=0.45  ms=80  rise=0.15
+   9000  shot  17  event           Aura  slot=2  amount=0  at=9000  crit=False  skill=False
+   9000  shot  17  event           Slowed  slot=-1  amount=25  at=9000  crit=False  skill=False
+   9000  shot  17  event           Strike  slot=1  amount=24  at=9000  crit=False  skill=True
+   9000  shot  17  event           Strike  slot=2  amount=12  at=9000  crit=False  skill=True
+   9000  shot  17  event           Strike  slot=3  amount=14  at=9000  crit=False  skill=True
+   9000  shot  17  event           Heal  slot=0  amount=1  at=9000  crit=False  skill=False
+   9400  shot  29  callout         +1
+   9500  shot  32  number          slot=1  amount=50  hits=1  crit=False  skill=False
+   9583  shot  34  enemy-commit    bite=9800
+   9667  shot  37  clip-start      attack  beat=10000  speed=1.837  contactMs=340  frameMs=68
+   9800  shot  41  event           EnemyStrike  slot=0  amount=3  at=9800  crit=False  skill=False
+   9800  shot  41  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   9983  shot  46  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.15
+   9983  shot  46  field-cue       seeker.press  tick=10000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+  10000  shot  47  sound           sfx_trait_lit  vol=0.16  pitch=0.00  pan=0.00
+  10000  shot  47  event           Aura  slot=2  amount=0  at=10000  crit=False  skill=False
+  10000  shot  47  event           Slowed  slot=-1  amount=25  at=10000  crit=False  skill=False
+  10000  shot  47  event           Strike  slot=1  amount=24  at=10000  crit=False  skill=True
+  10000  shot  47  event           Strike  slot=2  amount=12  at=10000  crit=False  skill=True
+  10000  shot  47  event           Strike  slot=3  amount=14  at=10000  crit=False  skill=True
+  10000  shot  47  event           Heal  slot=0  amount=1  at=10000  crit=False  skill=False
+  10000  shot  47  event           Aura  slot=3  amount=0  at=10000  crit=False  skill=False
+  10000  shot  47  event           Break  slot=1  amount=3  at=10000  crit=False  skill=False
+  10000  shot  47  event           DefenceNow  slot=1  amount=-15  at=10000  crit=False  skill=False
+  10000  shot  47  event           Strike  slot=1  amount=150  at=10000  crit=False  skill=False
+  10000  shot  47  sound           sfx_hit  vol=0.38  pitch=0.00  pan=0.00
+  10000  shot  47  number          slot=1  amount=150  hits=1  crit=False  skill=False
+  10000  shot  47  flash           slot=1  peak=0.45  ms=80  rise=0.15
+  10000  shot  47  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/1  travel=-
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328

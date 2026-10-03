@@ -1,0 +1,24 @@
+# after_bleed_fixed: trace rows 8117..9417 ms of playhead (decisive 8517); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_bleed.log
+   8217  shot  21  contact         seeker.hard_hands  x=1194  y=739  knives=1
+   8217  shot  21  sound           sfx_seeker_hard_hands_hit  vol=0.55  pitch=0.00  pan=0.06
+   8217  shot  21  event           Skill  slot=0  amount=0  at=8200  crit=False  skill=False
+   8217  shot  21  event           Strike  slot=0  amount=463  at=8200  crit=False  skill=True
+   8217  shot  21  number          slot=0  amount=463  hits=1  crit=False  skill=True
+   8217  shot  21  flash           slot=0  peak=0.55  ms=120  rise=0.00
+   8217  shot  21  event           EnemyDown  slot=0  amount=0  at=8200  crit=False  skill=False
+   8217  shot  21  sound           sfx_enemy_down  vol=0.36  pitch=0.00  pan=0.00  duck=0.45
+   8217  shot  21  vfx-spawn       fx_death  profile=death.creature  subject=Creature/0  travel=-
+   8517  shot  30  event           Strike  slot=1  amount=40  at=8500  crit=False  skill=True
+   8517  shot  30  quiet-hit       slot=1  amount=40  hit=Bleed  at=8500
+   8517  shot  30  number          slot=1  amount=40  hits=1  crit=False  skill=False  grade=Quiet
+   8783  shot  37  enemy-commit    bite=9000
+   9000  shot  44  event           Strike  slot=1  amount=35  at=9000  crit=False  skill=True
+   9000  shot  44  quiet-hit       slot=1  amount=35  hit=Bleed  at=9000
+   9000  shot  44  number          slot=1  amount=35  hits=1  crit=False  skill=False  grade=Quiet
+   9000  shot  44  event           EnemyStrike  slot=0  amount=3  at=9000  crit=False  skill=False
+   9000  shot  44  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   9217  shot  51  clip-start      attack  beat=9700  speed=1.293  contactMs=486  frameMs=97
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      146 / 6 / 14193328

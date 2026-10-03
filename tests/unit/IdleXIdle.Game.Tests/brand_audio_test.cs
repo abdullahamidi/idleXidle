@@ -578,9 +578,11 @@ public class brand_audio_test
         // scheduled once per wave, dropped with the mark (RH_MARK_RECIPES=0: no mark, no voice)
         Assert.Equal(1, hunt.Split("_markVoice = new MarkVoice(").Length - 1);
         Assert.Contains("_markVoice = null;", hunt);
-        // the film soundtrack replays the throttle: every key the game plays unthrottled is exempt there too
-        var film = File.ReadAllText(RepoFile("tools", "asset-pipeline", "film_audio.py"));
-        var unthrottled = Regex.Match(film, @"UNTHROTTLED = \{([^}]*)\}").Groups[1].Value;
+        // the film soundtrack replays the throttle: every key the game plays unthrottled is exempt there too (since the
+        // sweep's P0.2 film_audio.py reads the generated sound_throttle.json, whose "unthrottled" list is pinned here)
+        var table = File.ReadAllText(RepoFile("tools", "asset-pipeline", "sound_throttle.json"));
+        var unthrottled = Regex.Match(table, @"""unthrottled"": \[([^\]]*)\]").Groups[1].Value;
+        Assert.Contains("sound_throttle.json", File.ReadAllText(RepoFile("tools", "asset-pipeline", "film_audio.py")));
         foreach (var kind in Enum.GetValues<MarkCueKind>())
             foreach (var key in Brand.CuesOf(kind))
                 Assert.Equal(MarkRecipe.Unthrottled(kind), unthrottled.Contains($"\"{key}\""));

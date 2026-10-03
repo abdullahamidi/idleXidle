@@ -372,7 +372,7 @@ public sealed class MarkRecipe
     };
 
     /// <summary>Is a kind played past the bank's repeat throttle? The SPRAWL infects (40 ms apart, bounded by the victims of
-    /// one spread) and the ash accent (bounded by the cue it rides on); mirrored in film_audio.py's UNTHROTTLED.</summary>
+    /// one spread) and the ash accent (bounded by the cue it rides on); declared in SoundBank.Unthrottled, which sound_throttle.json carries to film_audio.py.</summary>
     public static bool Unthrottled(MarkCueKind kind) => kind is MarkCueKind.Infect or MarkCueKind.Ash;
 }
 

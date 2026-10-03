@@ -660,10 +660,12 @@ public class JawsReactionTest
     [Fact]
     public void test_a_presented_reaction_never_commits_the_post_bite_trap_clip()
     {
+        // Since the remaining-skill sweep (P0.4) NO reaction commits the post-bite trap clip: the opportunistic commit
+        // that skipped only a presented reaction is gone, so JAWS's exemption is now the rule for every reaction
+        // (hunt_generic_skill_test.test_no_reaction_loads_or_commits_the_trap_clip).
         var src = Hunt();
-        var loop = src[src.IndexOf("float? lastTrap = null;", StringComparison.Ordinal)..];
-        loop = loop[..loop.IndexOf("if (beatMs is null && lastTrap", StringComparison.Ordinal)];
-        Assert.Contains("ReactionRecipes.For(Character.Id, _waveSkills[ri].Def.Id) is not null) continue;", loop);
+        Assert.DoesNotContain("float? lastTrap = null;", src);
+        Assert.DoesNotContain("CommitPlainClip(\"trap\"", src);
     }
 
     [Fact]

@@ -1,0 +1,54 @@
+# weaver_fixed: trace rows 10800..12100 ms of playhead (decisive 11200); columns: playhead, nearest saved frame, kind, fields
+# source: r_weaver.log
+  10833  shot  23  clip-start      hard_hands  authored  beat=11200  start=10833  release=11080  targets=0  recipe=seeker.hard_hands
+  11000  shot  28  event           EnemyStrike  slot=0  amount=4  at=11000  crit=False  skill=False
+  11000  shot  28  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+  11000  shot  28  event           Skill  slot=3  amount=0  at=11000  crit=False  skill=False
+  11000  shot  28  reaction-spawn  seeker.jaws  slot=3  contact=11000  targets=0  belt=0,0
+  11000  shot  28  event           Strike  slot=0  amount=7  at=11000  crit=True  skill=True
+  11083  shot  30  release         seeker.hard_hands  x=750  y=508  knives=1  launch=1194,739  reach=401
+  11083  shot  30  callout         HARD HANDS
+  11083  shot  30  sound           sfx_seeker_hard_hands_commit  vol=0.34  pitch=0.00  pan=-0.12
+  11200  shot  34  contact         seeker.hard_hands  x=1194  y=739  knives=1
+  11200  shot  34  sound           sfx_seeker_hard_hands_hit  vol=0.55  pitch=0.00  pan=0.06
+  11200  shot  34  event           Skill  slot=0  amount=0  at=11200  crit=False  skill=False
+  11200  shot  34  event           Strike  slot=0  amount=468  at=11200  crit=False  skill=True
+  11200  shot  34  number          slot=0  amount=468  hits=1  crit=False  skill=True
+  11200  shot  34  flash           slot=0  peak=0.55  ms=120  rise=0.00
+  11200  shot  34  event           EnemyDown  slot=0  amount=0  at=11200  crit=False  skill=False
+  11200  shot  34  sound           sfx_enemy_down  vol=0.36  pitch=0.00  pan=0.00  duck=0.45
+  11200  shot  34  vfx-spawn       fx_death  profile=death.creature  subject=Creature/0  travel=-
+  11200  shot  34  event           Skill  slot=1  amount=0  at=11200  crit=False  skill=False
+  11200  shot  34  echo            slot=1  skill=volley_spray  at=11200
+  11200  shot  34  vfx-spawn       fx_seeker_projectile_strip8_512  profile=cast.projectile  subject=Champion  travel=Creature/1
+  11200  shot  34  event           Strike  slot=1  amount=142  at=11200  crit=False  skill=True
+  11200  shot  34  sound           sfx_hit  vol=0.11  pitch=0.00  pan=0.00  duck=0.45
+  11200  shot  34  number          slot=1  amount=142  hits=1  crit=False  skill=True
+  11200  shot  34  flash           slot=1  peak=0.27  ms=80  rise=0.15
+  11200  shot  34  event           Strike  slot=2  amount=107  at=11200  crit=False  skill=True
+  11200  shot  34  number          slot=2  amount=107  hits=1  crit=False  skill=True
+  11200  shot  34  flash           slot=2  peak=0.27  ms=80  rise=0.15
+  11200  shot  34  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/2  travel=-
+  11200  shot  34  event           Strike  slot=3  amount=142  at=11200  crit=False  skill=True
+  11200  shot  34  number          slot=3  amount=142  hits=1  crit=False  skill=True
+  11200  shot  34  flash           slot=3  peak=0.27  ms=80  rise=0.15
+  11317  shot  38  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.09  duck=0.45
+  11317  shot  38  reaction-cue    seeker.jaws  contact=11000  at=317  cue=sfx_seeker_jaws_bite
+  11317  shot  38  reaction-clamp  seeker.jaws  contact=11000  at=317  clamp=1193,792  belt=1058,700  body=1113,636,268,245
+  11367  shot  39  number          slot=0  amount=7  hits=1  crit=True  skill=True
+  11367  shot  39  sound           sfx_crit  vol=0.46  pitch=0.00  pan=0.00
+  11367  shot  39  reaction-number seeker.jaws  contact=11000  at=367
+  11683  shot  48  reaction-end    seeker.jaws  contact=11000  lived=683
+  11733  shot  50  proj-contact    fx_seeker_projectile_strip8_512  x=1331  y=748  life=0.550
+  11783  shot  51  enemy-commit    bite=12000
+  11983  shot  57  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.13
+  11983  shot  57  field-cue       seeker.press  tick=12000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+  12000  shot  58  event           Aura  slot=2  amount=0  at=12000  crit=False  skill=False
+  12000  shot  58  event           Break  slot=1  amount=1  at=12000  crit=False  skill=False
+  12000  shot  58  event           DefenceNow  slot=1  amount=-5  at=12000  crit=False  skill=False
+  12000  shot  58  event           EnemyStrike  slot=0  amount=3  at=12000  crit=False  skill=False
+  12000  shot  58  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      147 / 6 / 14193328
+reaction-draw   41 / 0 / 0

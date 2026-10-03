@@ -47,13 +47,9 @@ public static class VfxProfiles
 
     // ── Heal / death ──────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// The heal column. <see cref="VfxAnchor.Standing"/> IS the old hand-tuned <c>Bottom - 156</c>:
-    /// the comment there said "so the effect's FOOT sits on the ground line", and that sentence is
-    /// now the enum member rather than a constant that only holds at one size.
-    /// </summary>
-    public static readonly VfxProfile HealColumn = new(
-        "heal.column", "fx_heal", VfxSubjectKind.Champion, VfxAnchor.Standing, 0.95f, Fps: 10f, Follow: VfxFollow.Pinned);
+    // The heal column (fx_heal) was removed in the remaining-skill sweep (design.md 5.28): a heal no recipe claims is the
+    // generic receive (Presentation/HealReceive: a chest glow and one "+N" summed over 400 ms), drawn by the hunt's light
+    // pass, not an effect strip. A profile nothing spawns is a dormant feature, so it is gone rather than kept.
 
     public static readonly VfxProfile DeathChampion = new(
         "death.champion", "fx_death", VfxSubjectKind.Champion, VfxAnchor.Center, 0.80f, Fps: 9f);
@@ -220,7 +216,7 @@ public static class VfxProfiles
 
     public static readonly IReadOnlyList<VfxProfile> All = new[]
     {
-        ImpactWeak, HealColumn, DeathChampion, DeathBossBurst, DeathCreature,
+        ImpactWeak, DeathChampion, DeathBossBurst, DeathCreature,
         ShieldBarrier, ShieldGain, ShieldAbsorb, ShieldUndying, ShieldBreak,
         CastProjectile, CastAura, CastTrap, CastMark, CastTransformation, CastStrike, CastRain,
         FieldAura,

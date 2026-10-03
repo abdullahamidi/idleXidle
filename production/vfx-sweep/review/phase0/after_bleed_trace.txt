@@ -1,0 +1,18 @@
+# after_bleed: trace rows 8317..9617 ms of playhead (decisive 8517); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_bleed.log
+   8517  shot  29  event           Strike  slot=1  amount=40  at=8500  crit=False  skill=True
+   8517  shot  29  quiet-hit       slot=1  amount=40  hit=Bleed  at=8500
+   8517  shot  29  number          slot=1  amount=40  hits=1  crit=False  skill=False  grade=Quiet
+   8783  shot  36  enemy-commit    bite=9000
+   9000  shot  43  event           Strike  slot=1  amount=35  at=9000  crit=False  skill=True
+   9000  shot  43  quiet-hit       slot=1  amount=35  hit=Bleed  at=9000
+   9000  shot  43  number          slot=1  amount=35  hits=1  crit=False  skill=False  grade=Quiet
+   9000  shot  43  event           EnemyStrike  slot=0  amount=3  at=9000  crit=False  skill=False
+   9000  shot  43  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   9217  shot  50  clip-start      attack  beat=9700  speed=1.293  contactMs=486  frameMs=97
+   9500  shot  58  event           Strike  slot=1  amount=31  at=9500  crit=False  skill=True
+   9500  shot  58  quiet-hit       slot=1  amount=31  hit=Bleed  at=9500
+   9500  shot  58  number          slot=1  amount=31  hits=1  crit=False  skill=False  grade=Quiet
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      144 / 6 / 14193328

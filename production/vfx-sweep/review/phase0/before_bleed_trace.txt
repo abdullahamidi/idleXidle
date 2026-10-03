@@ -1,0 +1,27 @@
+# before_bleed: trace rows 5313..6613 ms of playhead (decisive 5513); columns: playhead, nearest saved frame, kind, fields
+# source: before_bleed.log
+   5513  shot   8  event           Strike  slot=1  amount=40  at=5500  crit=False  skill=True
+   5513  shot   8  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   5513  shot   8  number          slot=1  amount=40  hits=1  crit=False  skill=False
+   5513  shot   8  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   5780  shot  16  enemy-commit    bite=6000
+   5980  shot  22  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.14
+   5980  shot  22  field-cue       seeker.press  tick=6000  at=-20  cue=sfx_seeker_press_tick  vol=0.28
+   6013  shot  23  event           Strike  slot=1  amount=35  at=6000  crit=False  skill=True
+   6013  shot  23  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   6013  shot  23  number          slot=1  amount=35  hits=1  crit=False  skill=False
+   6013  shot  23  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   6013  shot  23  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/1  travel=-
+   6013  shot  23  event           Aura  slot=2  amount=0  at=6000  crit=False  skill=False
+   6013  shot  23  event           Break  slot=1  amount=1  at=6000  crit=False  skill=False
+   6013  shot  23  event           DefenceNow  slot=1  amount=-5  at=6000  crit=False  skill=False
+   6013  shot  23  event           EnemyStrike  slot=0  amount=3  at=6000  crit=False  skill=False
+   6013  shot  23  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   6230  shot  29  clip-start      attack  beat=6700  speed=1.330  contactMs=486  frameMs=94
+   6513  shot  38  event           Strike  slot=1  amount=31  at=6500  crit=False  skill=True
+   6513  shot  38  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   6513  shot  38  number          slot=1  amount=31  hits=1  crit=False  skill=False
+   6513  shot  38  flash           slot=1  peak=0.45  ms=80  rise=0.15
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      142 / 6 / 14193328

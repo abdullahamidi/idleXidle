@@ -520,14 +520,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </remarks>
     private int _nextChampStrikeMs;
 
-    /// <summary>0 to 1 across the champion's swing, completing exactly as the blow lands.</summary>
-    /// <summary>How late a Trap's clip may still start after the trap bit, in replay ms.</summary>
-    /// <remarks>
-    /// A quarter of a beat. The trap fires on the enemy's swing, which the replay reaches on its own
-    /// clock, and a clip allowed to start a whole beat late would play over the NEXT action.
-    /// </remarks>
-    private const float TrapClipGraceMs = 380f;
-
     // ── The champion's committed clip (2026-08-25). See UpdateChampionClip. ──
     private string? _clipName;        // "attack" / "cast" while a clip is committed; null = idle
     private float _clipStartMs;       // replay-clock ms the clip began
@@ -579,7 +571,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>Batch indices whose damage has been summed into an earlier blow's number (§21).</summary>
     private readonly HashSet<int> _summed = new();
     /// <summary>Which column a callout stacks in. Two columns that never collide must not push each other.</summary>
-    private enum CalloutLane { Champion, Enemy }
+    /// <remarks>
+    /// Champion: the skill-name lane over the hunter (names only). Enemy: plain / skill numbers at a creature's head.
+    /// EnemyQuiet: quiet numbers inside the struck body (NumberLane). HunterBody: the summed heal's "+N" at his chest.
+    /// </remarks>
+    private enum CalloutLane { Champion, Enemy, EnemyQuiet, HunterBody }
 
     private struct Callout
     {
@@ -589,6 +585,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         public int Id;
         /// <summary>Part of a cleared wave's haul (ShowSpoils): the clear is not SHOWN while one is still rising.</summary>
         public bool Spoil;
+        /// <summary>The callout's opacity on top of its fade: 1 for every callout except a quiet-grade number (0.70).</summary>
+        public float Alpha = 1f;
+        /// <summary>Drawn without the one-pixel shadow. Since the review of Phase 0 a quiet number keeps its shadow, so nothing sets it.</summary>
+        public bool Bare;
+        /// <summary>The creature slot an enemy number describes (its stack is that creature's), or -1 for none.</summary>
+        public int Owner = -1;
+
+        /// <summary>A full-opacity, shadowed callout; the object initializers fill in the rest.</summary>
+        public Callout() { Text = ""; }
     }
 
     // ── THE HUNTER'S OWN DAMAGE NUMBER (2026-09-06). ─────────────────────────────────────────────────
@@ -673,6 +678,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private static int DamagePx => UiTypography.DamageNormal;
     private static int SkillHitPx => UiTypography.DamageSkill;
     private static int CritPx => UiTypography.DamageCritical;
+    /// <summary>A derived hit's number (quiet grade, design.md section 1): half the plain number's size.</summary>
+    private static int QuietHitPx => Math.Max(1, DamagePx / 2);
+    /// <summary>A derived hit's number is drawn at 70 % of its colour (quiet grade).</summary>
+    private const float QuietHitAlpha = 0.70f;
     /// <summary>The champion's own callout — a skill's name as it is cast. Between a hit and a skill hit, and it follows the profile like them.</summary>
     private static int SayPx => UiMetrics.Text(36);
 
@@ -699,6 +708,31 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </remarks>
     private int EnemyCalloutBase => _rowTopY + NameplateOffset - CritPx - 6;
     private int _strikeCount;   // every other Strike gets a hit-puff; the NUMBER prints on every one (it is the sim's)
+    // N CREATURES NEVER MAKE N SOUNDS (design.md section 1): the fight millisecond the generic sfx_hit / sfx_crit last
+    // spoke on. A batch's ms is compared, not counted, so nothing is cleared per frame; BeginWave forgets it because the
+    // fight's clock restarts at 0 with every wave.
+    private int _hitVoicedAtMs = -1;
+    private int _critVoicedAtMs = -1;
+    // THE GENERIC HEAL RECEIVE (design.md 4 RETURN / 5.28): a chest glow and ONE "+N" summed over 400 ms, silent. Fixed
+    // size: nothing is allocated frame to frame; BeginWave flushes and resets it with the wave's clock.
+    private readonly HealReceive _healReceive = new();
+    // THE CLAIM HOOK (design.md 4 SHIELD / RETURN): the fight ms a recipe presents a ShieldGained / a Heal at with its own
+    // picture and cue, so the generic receive gives way. Fixed arrays, cleared per wave (the clock restarts at 0).
+    private readonly ClaimedMs _shieldClaims = new();
+    private readonly ClaimedMs _healClaims = new();
+
+    /// <summary>
+    /// A recipe CLAIMS the ShieldGained at <paramref name="atMs"/> (design.md 4 SHIELD): its own picture and cue replace the
+    /// generic <c>ShieldGain</c> one-shot, <c>sfx_shield_gain</c> and the "+N SHIELD" callout; the bar's rim flare stays.
+    /// Claims belong to the wave being shown.
+    /// </summary>
+    internal void ClaimShieldGain(int atMs) => _shieldClaims.Claim(atMs);
+
+    /// <summary>
+    /// A recipe CLAIMS the Heal at <paramref name="atMs"/> (design.md 4 RETURN / 5.28): it presents the return itself, so
+    /// the generic chest glow and summed "+N" skip that heal. No claimer yet: the RETURN recipes arrive in Phase 3.
+    /// </summary>
+    internal void ClaimHeal(int atMs) => _healClaims.Claim(atMs);
 
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
     // Widened and shifted right: left edge clears the control rail (ends x=280), right edge stops
@@ -1193,15 +1227,23 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>Is the black covering this screen's own HUD — the medallion, the rail's doors, the inspector?</summary>
     private bool BlackCovers => DeathTransition.Covers(BlackAlpha);
 
-    /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
-    private static (string Text, Color Color) CalloutFor(Style style) => style switch
+    /// <summary>
+    /// What a skill announces when it acts: an ACTIVE says its OWN name (BLOW, REPAY, SPRAY...) in its style's ink; a
+    /// Field or a Reaction says nothing (<see cref="GenericHits.CalloutText"/>; the remaining-skill sweep, design.md
+    /// section 3). The style words (HAMMER, VOLLEY...) left the arena: two skills of one style said the same word.
+    /// </summary>
+    private static (string Text, Color Color)? CalloutFor(SkillDef def)
+        => GenericHits.CalloutText(def) is { } text ? (text, StyleInk(def.Style)) : null;
+
+    /// <summary>The ink each STYLE's callout keeps.</summary>
+    private static Color StyleInk(Style style) => style switch
     {
-        Style.Hammer => ("HAMMER", Ember),
-        Style.Volley => ("VOLLEY", Steel),
-        Style.Field => ("FIELD", Bloom),
-        Style.Snare => ("SNARE", SourceGlow(Source.Machine)),   // not the crit's gold: a style firing and a graded blow must not share one ink (huntstates-13)
-        Style.Sign => ("SIGN", Bone),
-        _ => ("DRAIN", Verdant),
+        Style.Hammer => Ember,
+        Style.Volley => Steel,
+        Style.Field => Bloom,
+        Style.Snare => SourceGlow(Source.Machine),   // not the crit's gold: a style firing and a graded blow must not share one ink (huntstates-13)
+        Style.Sign => Bone,
+        _ => Verdant,
     };
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1443,6 +1485,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         _clipTiming = null;
         _performance = null;
         _outgoing = null;
+        _hitVoicedAtMs = -1;
+        _critVoicedAtMs = -1;
+        FlushHealReceive();   // the last wave's last heal still owes its number...
+        _healReceive.Reset(); // ...and the glow and the window read the new wave's clock
+        _shieldClaims.Clear();
+        _healClaims.Clear();
         _reactions.Clear();   // a reaction belongs to the wave whose bite set it off
         _reactionEchoes.Clear();
         _deathDeferred.Clear();
@@ -1859,8 +1907,22 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// underneath one it could not see.
     /// </para>
     /// </remarks>
-    private int StackSlot(CalloutLane lane)
-        => _callouts.Count(c => c.Lane == lane && c.Life > 0f) % CalloutLanesDeep;
+    /// <param name="lane">The column.</param>
+    /// <param name="deep">How many lines it climbs before reusing the lowest.</param>
+    /// <param name="owner">
+    /// A creature slot: count only that creature's numbers (the review of Phase 0: a number born on a body stacks over
+    /// THAT body, so three creatures struck at once print three numbers at one height, not a staircase across the row).
+    /// </param>
+    private int StackSlot(CalloutLane lane, int deep = CalloutLanesDeep, int owner = -1)
+    {
+        var live = 0;
+        for (var i = 0; i < _callouts.Count; i++)
+        {
+            var c = _callouts[i];
+            if (c.Lane == lane && c.Life > 0f && (owner < 0 || c.Owner == owner)) live++;
+        }
+        return live % Math.Max(1, deep);
+    }
 
     /// <summary>
     /// The WORDS of a damage callout: the number, what its grade is called, and the multi-hit fold.
@@ -1911,15 +1973,23 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// </remarks>
     /// <param name="slot">The creature struck — the column the number rises from.</param>
     /// <param name="crit">The crit GRADE: gold, larger, and it lingers.</param>
-    /// <param name="skill">A cast's hit, drawn a size up from the auto-swing's.</param>
+    /// <param name="grade">
+    /// How loud the number is (<see cref="NumberGrade"/>): a cast's hit is drawn a size up from the auto-swing's, and a
+    /// derived hit (bleed, reflect, carry, DEADWEIGHT) at QUIET grade: half the plain size, 70 % alpha, no shadow.
+    /// </param>
     /// <param name="critWord">
     /// What the graded blow is CALLED — see <see cref="DamageCalloutText"/>. Null means CRITICAL; a
     /// Reaction passes its own skill's name instead ("-4 JAWS").
     /// </param>
-    private void SpawnDamage(int amount, int slot, bool crit, bool skill, int hits = 1, string? critWord = null)
+    private void SpawnDamage(int amount, int slot, bool crit, NumberGrade grade, int hits = 1, string? critWord = null)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
-        if (PresentTrace.Enabled) PresentTrace.Log("number", $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}");
+        var skill = grade is NumberGrade.Skill or NumberGrade.Major;   // Major prints at skill grade until Phase 3 gives it its caption
+        var quiet = grade == NumberGrade.Quiet;
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("number", quiet
+                ? $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}\tgrade=Quiet"
+                : $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}");
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
         // which is exactly where the wave's health bar is drawn — so a hit printed "-203" through the
         // bar and the next one printed "-344" through the first. Two unreadable numbers and an
@@ -1943,13 +2013,40 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // Over the creature it struck, not the row's centre: in a swarm the row centre is the gap
             // between two creatures, and a number there names neither of them.
             X = CreatureCentreX(slot),
-            Y = EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
+            Y = EnemyNumberY(slot, quiet),
             Life = crit ? 1.3f : 1f,
             // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
             // two-thirds the height of the creature it is describing is most of why.
-            Px = crit ? CritPx : skill ? SkillHitPx : DamagePx,
-            Lane = CalloutLane.Enemy,
+            Px = quiet ? QuietHitPx : crit ? CritPx : skill ? SkillHitPx : DamagePx,
+            Lane = quiet ? CalloutLane.EnemyQuiet : CalloutLane.Enemy,
+            Owner = slot,
+            // QUIET GRADE (design.md section 1): a consequence reads as one, under the blows it follows.
+            Alpha = quiet ? QuietHitAlpha : 1f,
+            // ...WITH the one-pixel drop shadow every callout has (the review of Phase 0): born in the body it still rises
+            // onto stone over a crouching pose, and an 18 px bare glyph there did not read. Not an outline: design.md's
+            // "no outline" is the major grade's Source outline.
+            Bare = false,
         });
+    }
+
+    /// <summary>The room a creature's life pip takes over its drawn top (DrawComposition: Space(10) up, Control(8) tall).</summary>
+    private static int EnemyHeadClearance => UiMetrics.Space(16);
+    /// <summary>The gap between two stacked quiet numbers inside a body.</summary>
+    private static int QuietLineHeight => QuietHitPx + UiMetrics.Space(4);
+    /// <summary>How many quiet numbers stack inside a body before the lowest line is reused.</summary>
+    private const int QuietLanesDeep = 3;
+
+    /// <summary>
+    /// Where creature <paramref name="slot"/>'s next number starts (NumberLane): a plain / skill / critical number at its
+    /// drawn head, over the life pip, climbing the enemy stack; a QUIET number inside its drawn body. Read from the bounds
+    /// the arena published (last frame's, as CreatureCentreX reads them); before any frame drew, the old row lane.
+    /// </summary>
+    private int EnemyNumberY(int slot, bool quiet)
+    {
+        if (!_actors.TryBounds(VfxSubject.Creature(slot), out var vb))
+            return EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight;
+        if (quiet) return NumberLane.QuietY(vb.Rect, StackSlot(CalloutLane.EnemyQuiet, QuietLanesDeep, slot), QuietLineHeight);
+        return NumberLane.HeadY(vb.Rect, EnemyHeadClearance, CritPx) - StackSlot(CalloutLane.Enemy, CalloutLanesDeep, slot) * CalloutLineHeight;
     }
 
     private void UpdateFight(float dt)
@@ -1973,6 +2070,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_breakTimer > 0f)
         {
             _enemyWindup = 0f;
+            // THE WAVE'S LAST HEAL prints with the clear: no fight event reads the playhead any more, so its 400 ms
+            // window would otherwise wait for the next wave's BeginWave (a no-op once printed)
+            FlushHealReceive();
             // THE LAST BLOW PLAYS OUT (ADR-011). A clip or a performance still running when the wave is cleared
             // finishes on the break's own clock: the replay is over, so no fight event reads the playhead any
             // more. It used to be dropped on the spot — harmless for a throw, but a melee lunge that landed the
@@ -1995,6 +2095,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             }
             else
             {
+                // the playhead rests here, so the heal's chest glow fades on the break's own clock (it would hang lit)
+                _healReceive.Age(dt * 1000f * _speedMul);
                 _clipName = null;   // a clip never survives the wave it was swung in
                 _clipTiming = null;
                 _performance = null;
@@ -2017,12 +2119,24 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // the rig it waits for the frame before the shutter, so the event is crossed LIVE on the frame
         // that is photographed: callout fresh, effect on its first frame. Applied any earlier, the
         // wall-clock fades had already taken the callout by the time the shot was saved.
+        // DEV: the rig's check of the LIVE RUN (RH_SHOT_BUILD), on the same frame as the seek: the run the shutter films is
+        // the one the host restarted on its first live frame (with the posed champion pushed in), not the fixture's.
+        if (_devRunCheck is { } check && _run is not null
+            && (!Game1.RigActive || Game1.ShotFrameNow >= Game1.ShotAtFrame - 2))
+        {
+            _devRunCheck = null;
+            if (check() is { } wrong) throw new InvalidOperationException(wrong);
+        }
         if (_devSeekPick is { } aim && _run is not null
             && (!Game1.RigActive || Game1.ShotFrameNow >= Game1.ShotAtFrame - 2))
         {
             _devSeekPick = null;
-            foreach (var e in _run.LastWaveEvents)
-                if (aim.Pick(e)) { _devSeekMs = Math.Max(0f, e.AtMs - aim.Lead * 1000f); break; }
+            if (aim.Find(_run.LastWaveEvents) is { } atMs) _devSeekMs = Math.Max(0f, atMs - aim.Lead * 1000f);
+            // A RIG SEEK THAT FINDS NOTHING IS REFUSED (RH_SHOT_SEEK): a take of the wrong instant is never filmed.
+            // The fixtures' own picks (the shield break, SPRAY's cast, the bite) keep "no event: no seek".
+            else if (aim.MustFind is { } asked)
+                throw new InvalidOperationException(
+                    $"{asked} found no such event in this wave ({_run.LastWaveEvents.Count} events): nothing to film.");
         }
         // DEV: the fixture's seek (DevSeek / DevSeekBefore) — the beats before it land silently, health
         // only. THE REPLAY IS REBUILT from the wave's events first: a WaveReplay cannot rewind, and under
@@ -2041,6 +2155,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             _actors.Clear();
             _callouts.Clear();      // the pose shows THIS instant, not the second before it
             _vfx.Clear();
+            _healReceive.Reset();   // ...and the heals before it landed silently, like every other beat
             _shieldFxPosed = false; // ...so a posed shield flare is re-fired after the rebuild wiped it
             _hitFlash.Clear();
             _playheadMs = seek;
@@ -2135,9 +2250,6 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // absent (playtest 2026-08-30: "there is no aura effect on screen"). An always-on field is
         // always on: while a wave is running and the build carries an Aura, it pulses on its own beat.
 
-        // The aura's tick prints ONE number, and it prints on time: it used to wait for the NEXT tick's
-        // events to arrive, which put it 500 ms late over whatever creature was alive by then.
-        if (_auraTotal > 0 && _playheadMs > _auraTotalMs + 1_000 * 0.5f) FlushAuraTotal();
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
@@ -2187,11 +2299,19 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // up, and gold when the cast was a Trap. Anything else at another beat is the auto-swing.
         var skillAtMs = -1;
         var trapAtMs = -1;
-        var auraAtMs = -1;
+        // THE LAST OWNER (design.md section 3): the most recent Aura or Skill event in this batch. The field fork's Aura
+        // and its Strikes precede a cast's Skill and its Strikes on a shared ms, so a Strike belongs to whichever came
+        // last at its ms: a PULSE cast on a MIRE tick keeps MIRE's blows as ticks and PULSE's as the cast's.
+        var lastOwner = StrikeOwner.None;
         // A PRESENTED REACTION'S ANSWER (JAWS, ADR-011): its reflected Strikes at this millisecond are part of the
         // jaws' own sentence, so the generic thud and puff that would describe the same blow give way to its snap.
         var reactionHitAtMs = -1;
+        var reactionHitSlot = -1;   // ...and the reaction's own slot: only ITS Strikes are the answer (the last-owner rule)
         ReactionRecipe? reactionHitRecipe = null;
+        // THE WEAVER ECHO'S BLOWS (design.md 5.32): the echo's slot and ms, so its Strikes take the generic contact at echo
+        // scale (UsualFlash x EchoScale, the thud x EchoCueScale) instead of the primary action's signature.
+        var echoAtMs = -1;
+        var echoSlot = -1;
         // ...and the presented reaction itself: its answer's number and any kill are PRESENTED on its jaws' SNAP
         // (ReactionRecipe.SnapAtMs; the number a few frames after it), not on the bite's frame; the fight has already resolved them
         // (see ReactionEcho)
@@ -2213,7 +2333,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             switch (e.Kind)
             {
                 case BattleEventKind.Aura:
-                    auraAtMs = e.AtMs;   // the blows at this instant are the field's, not a cast's
+                    lastOwner = lastOwner.After(e);   // the blows after it at this instant are the field's, until a cast's Skill
                     break;
 
                 case BattleEventKind.Strike:
@@ -2231,20 +2351,39 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // action speeds a fifth of the ticks shared a cast's millisecond and were reported as
                     // that cast's — the whole pack flashed, four damage numbers printed as skill hits and
                     // four hit sounds fired at once.
-                    var auraTick = e.FromSkill && e.AtMs == auraAtMs;
+                    // Since the sweep's Phase 0 the owner is the LAST Aura or Skill at this ms (GenericHits.StrikeOwner).
+                    var auraTick = lastOwner.IsAuraTick(e);
+                    // QUIET DERIVED HITS (design.md section 1 and Phase 0): a bleed, a reflect, a carry or a DEADWEIGHT
+                    // release is a consequence, not a blow. It never flashes, never puffs, never thuds; its number
+                    // prints at quiet grade. This ends the bleed strobe (the pool flashed the front creature twice a second).
+                    var quietHit = GenericHits.IsQuietHit(e.Hit);
+                    if (quietHit && PresentTrace.Enabled)
+                        PresentTrace.Log("quiet-hit", $"slot={e.Slot}\tamount={e.Amount}\thit={e.Hit}\tat={e.AtMs}");
                     // IMPACT PRIORITY (ADR-011): a blow the champion PERFORMED has its own contact — the blade's
                     // directional impact and its contact sound — so the generic puff and thud, which describe
                     // the same physical event, give way. The flash and the number stay: they are the enemy's.
+                    // ONLY THE ACTION'S OWN BLOWS (the last-owner rule, the review of Phase 0): a WEAVER echo's Strikes share
+                    // the beat's ms by construction, and keyed on the ms alone they took HARD HANDS' signature flash on
+                    // creatures it never touched, and no cue. The owner must be the performance's (the reaction's) slot.
                     var performedHit = !auraTick && e.FromSkill && _performance is { } performer
-                                       && performer.IsBeat(e.AtMs) && performer.Recipe.ReplacesGenericHit;
-                    var reactionHit = !auraTick && e.FromSkill && e.AtMs == reactionHitAtMs && reactionHitRecipe is not null;
+                                       && performer.IsBeat(e.AtMs) && performer.Recipe.ReplacesGenericHit
+                                       && lastOwner.IsSkillsBlow(e, performer.SkillSlot);
+                    var reactionHit = !auraTick && e.FromSkill && e.AtMs == reactionHitAtMs && reactionHitRecipe is not null
+                                      && lastOwner.IsSkillsBlow(e, reactionHitSlot);
+                    var echoHit = !auraTick && !performedHit && !reactionHit && e.AtMs == echoAtMs && lastOwner.IsSkillsBlow(e, echoSlot);
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
                     // already announced them, and four projectile impacts on top of it were "two sounds at
                     // once" (playtest 2026-08-26). An aura tick is silent: it hums, it does not strike.
-                    if (!auraTick && !performedHit && !reactionHit) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
+                    // ONE CUE PER BATCH MILLISECOND (design.md section 1, "N creatures never make N sounds"): a volley
+                    // landing on four creatures is one thud at the first qualifying Strike's volume, not four. A quiet
+                    // derived hit never thuds at all.
+                    var voicedThisMs = e.AtMs == _hitVoicedAtMs;
+                    // An ECHO's blow asks at echo volume (design.md 5.32: cues x0.5): the quieter twin, not a second full hit.
+                    if (!auraTick && !quietHit && !voicedThisMs && !performedHit && !reactionHit) Sound?.Play("sfx_hit", (e.FromSkill ? 0.22f : 0.38f) * (echoHit ? GenericHits.EchoCueScale : 1f), vary: 0.06f);
+                    if (!auraTick && !quietHit && !performedHit && !reactionHit) _hitVoicedAtMs = e.AtMs;
                     // The number is the blow: the event's amount, over the creature that took it.
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
@@ -2270,19 +2409,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         var crit = e.Crit;
                         var reaction = e.FromSkill && e.AtMs == trapAtMs;
                         var skill = e.FromSkill && e.AtMs == skillAtMs;
-                        var hits = 1;
-                        var total = e.Amount;
-                        for (var kj = bi + 1; kj < batch.Count; kj++)
-                        {
-                            var o = batch[kj];
-                            if (o.AtMs != e.AtMs) break;              // the batch is in time order
-                            if (o.Kind != BattleEventKind.Strike || o.Slot != e.Slot || o.Amount <= 0) continue;
-                            if (o.FromSkill != e.FromSkill) continue; // a swing and a cast stay separate
-                            if (o.Crit != e.Crit) continue;           // ...and so do a critical and a plain hit
-                            total += o.Amount;
-                            hits++;
-                            _summed.Add(kj);        // its own turn still flashes and sounds; it draws no number
-                        }
+                        // The fold ends at the NEXT OWNER (GenericHits.Fold): an Aura or a Skill at this ms owns the blows
+                        // after it, so a cast's number never carries a field tick's damage (or the tick the cast's).
+                        // A folded blow's own turn still flashes and sounds; it draws no number.
+                        var total = GenericHits.Fold(batch, bi, _summed, out var hits);
                         if (!_summed.Contains(bi))
                         {
                             // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER A FEW FRAMES AFTER THE JAWS' SNAP, so the eye
@@ -2292,10 +2422,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                                                                      reaction ? trapName : null));
                             else
                             {
-                                SpawnDamage(total, e.Slot, crit, skill, hits, reaction ? trapName : null);
+                                var grade = quietHit ? NumberGrade.Quiet : skill ? NumberGrade.Skill : NumberGrade.Plain;
+                                SpawnDamage(total, e.Slot, crit, grade, hits, reaction ? trapName : null);
                                 // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
                                 // sound the file is named for had never once accompanied a critical hit.
-                                if (crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                                // Once per batch millisecond, like the thud; a quiet derived hit never speaks.
+                                if (crit && !quietHit && e.AtMs != _critVoicedAtMs)
+                                {
+                                    Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                                    _critVoicedAtMs = e.AtMs;
+                                }
                             }
                         }
                     }
@@ -2310,21 +2446,23 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     }
                     else if (!auraTick && reactionHit && reactionHitPerf is { Snapped: false } flashing)
                         _reactionEchoes.Add(new ReactionEcho(flashing, ReactionEchoKind.Flash, e.Slot));   // ...and its flash
-                    else if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
+                    else if (!auraTick && !quietHit && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)
                     {
                         _hitFlash[e.Slot] = 1f;
                         _hitFlashLook[e.Slot] = performedHit
                             ? (_performance!.Recipe.TargetFlash, _performance.Recipe.TargetFlashRise, 1000f / Math.Max(1f, _performance.Recipe.TargetFlashMs))
                             : reactionHit
                                 ? (reactionHitRecipe!.TargetFlash, 0f, 1000f / Math.Max(1f, reactionHitRecipe.TargetFlashMs))
-                                : UsualFlash;
+                                : echoHit
+                                    ? (UsualFlash.Peak * GenericHits.EchoScale, UsualFlash.Rise, UsualFlash.Rate)
+                                    : UsualFlash;
                         if (PresentTrace.Enabled)
                         {
                             var fl = FlashLook(e.Slot);
                             PresentTrace.Log("flash", $"slot={e.Slot}\tpeak={fl.Peak:0.00}\tms={1000f / Math.Max(1e-3f, fl.Rate):0}\trise={fl.Rise:0.00}");
                         }
                     }
-                    if (!auraTick && !performedHit && !reactionHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
+                    if (!auraTick && !quietHit && !performedHit && !reactionHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
                     }
@@ -2344,6 +2482,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     break;
                 case BattleEventKind.Skill:
                 {
+                    lastOwner = lastOwner.After(e);   // the Strikes after it at this ms are this skill's, not a field tick's
                     SkillCastsSeen++;
                     LastSkillCastAtMs = e.AtMs;
                     // THE SLOT IS THE IDENTITY. The event names which equipped skill acted; name,
@@ -2356,20 +2495,39 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     var released = _releasedAtMs == e.AtMs;
                     var castSk = _waveSkills[e.Slot];
                     var castDef = castSk.Def;
-                    // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
-                    // its own). Keyed to the event's slot, armed here and nowhere else — a Draw that
-                    // re-armed it would be a tile that blinks for as long as you look at it.
-                    UiMotion.Flash(SkillCastKey(e.Slot), UiMotion.Transition);
-                    var (text, colour) = CalloutFor(castDef.Style);
-                    // A PERFORMED cast (ADR-011) was announced at its release, launched from the hand and voiced
-                    // there; at the beat — its contact — the fight's own hits carry it.
-                    var performed = _performance is { } perf && perf.SkillSlot == e.Slot && perf.IsBeat(e.AtMs);
                     // A PRESENTED REACTION (JAWS, ADR-011) is its own sentence on its own layer: the jaws, the chain,
                     // the snap and the number say it. No callout every few seconds, no cast breath (it is not a cast),
                     // no generic thud, no row ring: none of those describe it, and all of them buried it.
                     var reactionRecipe = castDef.Kind == SkillKind.Reaction ? ReactionRecipes.For(Character.Id, castDef.Id) : null;
-                    var calloutOk = reactionRecipe is null || reactionRecipe.Callout || ReactionRecipes.CalloutOverride;
-                    if (ShowSkillCallouts && calloutOk && !(performed && _performance!.Recipe.CalloutAtRelease)) Say(text, colour);   // settings: SKILL NAMES hides exactly this
+                    // THE PHANTOM (the remaining-skill sweep, design.md 1 / 5.14): a damaging skill whose Skill event
+                    // struck nothing draws NOTHING. BACKDRAW answers the wave's last kill with arrows for survivors that
+                    // do not exist; the fight records the cast, and a callout, a ring and a cue for it were a lie. A
+                    // presented reaction keeps its own sentence (JAWS is closed), and a zero-power skill is Phase 5's.
+                    var struck = GenericHits.IsStruck(batch, bi);
+                    if (reactionRecipe is null && GenericHits.IsPhantom(castDef, struck))
+                    {
+                        if (released) _releasedFxFrom = fxBefore;   // an empty range: nothing to wait for
+                        if (PresentTrace.Enabled) PresentTrace.Log("skill-skip", $"slot={e.Slot}\tskill={castDef.Id}\tat={e.AtMs}");
+                        break;
+                    }
+                    // THE WEAVER ECHO (design.md 5.32, the generic half): the second Skill on this ms, the cast woven into
+                    // the next skill. ONE callout and one cast breath (the first's), the effect at echo scale, and no
+                    // clip: the figure is busy with the first cast (the clip picker never reaches the echo: it reads the
+                    // FIRST Skill event after the playhead, and the echo shares the original's ms).
+                    var echo = GenericHits.IsEcho(batch, bi, ReactionSlots());
+                    if (echo && PresentTrace.Enabled) PresentTrace.Log("echo", $"slot={e.Slot}\tskill={castDef.Id}\tat={e.AtMs}");
+                    if (echo) { echoAtMs = e.AtMs; echoSlot = e.Slot; }   // its Strikes take the generic contact at echo scale
+                    // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
+                    // its own). Keyed to the event's slot, armed here and nowhere else — a Draw that
+                    // re-armed it would be a tile that blinks for as long as you look at it.
+                    UiMotion.Flash(SkillCastKey(e.Slot), UiMotion.Transition);
+                    // A PERFORMED cast (ADR-011) was announced at its release, launched from the hand and voiced
+                    // there; at the beat — its contact — the fight's own hits carry it.
+                    var performed = _performance is { } perf && perf.SkillSlot == e.Slot && perf.IsBeat(e.AtMs);
+                    // AN ACTIVE SAYS ITS OWN NAME; a field or a reaction says nothing (CalloutFor). Settings: SKILL NAMES
+                    // hides exactly this.
+                    if (ShowSkillCallouts && !echo && CalloutFor(castDef) is { } call
+                        && !(performed && _performance!.Recipe.CalloutAtRelease)) Say(call.Text, call.Color);
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
                     // batch has already applied the kill, so "first alive" would point past a creature the
                     // cast just killed and the flash would land on its neighbour.
@@ -2377,27 +2535,35 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     if (reactionRecipe is not null) reactionHitPerf = SpawnReaction(reactionRecipe, e, castSk.Source);
-                    if (!performed && reactionRecipe is null) PlaySkillVfx(castDef, castSk.Source, castTarget);
+                    if (!performed && reactionRecipe is null) PlaySkillVfx(castDef, castSk.Source, castTarget, echo);
                     if (released) _releasedFxFrom = fxBefore;   // the rest of the range closes with the batch
-                    if (!performed && reactionRecipe is null) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
                     var isReaction = castDef.Kind == SkillKind.Reaction;
+                    // THE CAST'S BREATH is a cast's: the echo's is the first cast's, and a REACTION never takes the figure
+                    // (gated exactly as CalloutFor gates its name: a T2 cast breath on OATHMARK's open was a wrong-tier cue)
+                    if (!echo && !isReaction)
+                    {
+                        if (!performed && reactionRecipe is null) Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
+                    }
                     // A Reaction's answer is louder than a cast but is NOT a critical: sfx_crit belongs
                     // to the roll now (see the Strike case), and the answer keeps the cast's own thud
-                    // pitched up, so the two events stay tellable apart by ear.
-                    if (isReaction && reactionRecipe is null) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
-                    if (reactionRecipe is not null) { reactionHitAtMs = e.AtMs; reactionHitRecipe = reactionRecipe; }
+                    // pitched up, so the two events stay tellable apart by ear. Only an answer that STRUCK: a
+                    // no-damage reaction (OATHMARK opens a window) has no blow to thud for.
+                    if (struck)
+                    {
+                        if (isReaction && reactionRecipe is null) Sound?.Play("sfx_hit", 0.40f, pitch: 0.25f, vary: 0.06f);
+                        // ONE CUE PER EVENT, at the ask: the answer's own Strike's generic 0.22 thud does not also ask
+                        if (isReaction && reactionRecipe is null) _hitVoicedAtMs = e.AtMs;
+                    }
+                    if (reactionRecipe is not null) { reactionHitAtMs = e.AtMs; reactionHitSlot = e.Slot; reactionHitRecipe = reactionRecipe; }
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
                     if (isReaction) { trapAtMs = e.AtMs; trapName = castDef.Name; }   // ...and a reaction's are graded up, under its OWN name
                     break;
                 }
                 case BattleEventKind.Heal:
-                    if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
-                    // The effect's FOOT sits on the ground line. That used to be a hand-tuned "- 156",
-                    // which only held at one size and one strip: the constant is now the STANDING anchor,
-                    // which puts the content's bottom edge on the champion's own visible sole whatever
-                    // the art's padding is (playtest 2026-08-28: "the heal effect's ground part appears
-                    // at the character's middle").
-                    PlayFx(VfxProfiles.HealColumn, VfxSubject.Champion, Verdant);
+                    // THE GENERIC RECEIVE (design.md 4 RETURN / 5.28): no fx_heal column, no number per event, no sound.
+                    // The heal joins a 400 ms sum (one "+N", flushed in FlushHealReceive) and lights his chest in the
+                    // light pass. A recipe that presents its own return has claimed this ms (ClaimHeal) and owns it.
+                    if (!_healClaims.IsClaimed(e.AtMs)) _healReceive.Add(e.Amount, e.AtMs);
                     break;
                 case BattleEventKind.Undying:
                     Say("UNDYING", Gold);
@@ -2433,15 +2599,21 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // enough not to be spam, and the amount is the whole point of the rungs and skills
                     // that grant it. The wave-start grant arrives at 0 ms with the bar already drawn,
                     // so it is not said — nothing happened on screen for it to explain.
+                {
                     _shieldSeen = true;
-                    if (e.AtMs > 0 && ShowDamageNumbers) Say($"+{e.Amount} SHIELD", Steel);
+                    // THE CLAIM (design.md 4 SHIELD / 5.29): a recipe presenting this gain itself (HOLD FAST's plate,
+                    // BANKED) has claimed its ms, and a WAVE-OPEN gain (ms 0: GROUNDWORK, CARRIED, a rung's opening
+                    // grant) is shown silently, the barrier simply up. Either keeps only the rim.
+                    var show = ShieldGainShow.For(e.AtMs, _shieldClaims.IsClaimed(e.AtMs));
+                    if (show.Number && ShowDamageNumbers) Say($"+{e.Amount} SHIELD", Steel);
                     // The rim builds on the BAR, which is where the gain actually landed; the dome on
                     // the champion says the same thing in the arena. A transition, not a reward — a
-                    // grant is a state change, and the run has many of them.
+                    // grant is a state change, and the run has many of them. ALWAYS: claimed or not.
                     UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
-                    Sound?.Play("sfx_shield_gain", 0.40f, vary: 0.05f);
-                    PlayFx(VfxProfiles.ShieldGain, VfxSubject.Champion, Steel);
+                    if (show.Cue) Sound?.Play("sfx_shield_gain", 0.40f, vary: 0.05f);
+                    if (show.OneShot) PlayFx(VfxProfiles.ShieldGain, VfxSubject.Champion, Steel);
                     break;
+                }
 
                 case BattleEventKind.ShieldAbsorbed:
                     // ABSORPTION IS NOT A NUMBER. It happens on every bite a shielded champion takes,
@@ -2499,6 +2671,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                           FxFor("shield"), VfxSubject.Champion, Steel, fps: PosedFxFps);
             }
         }
+
+        // THE AURA'S TICK PRINTS ONE NUMBER, ON THE TICK (the review of Phase 0): the fight emits each owner's Strikes right
+        // after its event, so the tick's total is complete when its batch ends. It used to wait a 500 ms wall clock, which
+        // printed MIRE's 8000 tick at 8417 and its 9000 tick at 9500, over whatever was alive by then.
+        if (_auraTotal > 0) FlushAuraTotal();
+
+        // THE HEAL'S ONE NUMBER (design.md 4 RETURN): the sum of every unclaimed heal in the 400 ms after the first one
+        if (_healReceive.Update(_playheadMs, out var healed)) SayHealed(healed);
 
         // THE RELEASED BEAT HAS CROSSED — latched here, after the batch, so the range of effects it
         // launched closes over everything its beat set off: the cast's own strip, the blow's impact and,
@@ -2592,7 +2772,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// the glow colours below are brighter than the bible's body colours (Umbra Indigo added to black is
     /// nothing at all).
     /// </remarks>
-    private void PlaySkillVfx(SkillDef def, Source source, int? hitSlot = null)
+    /// <param name="echo">
+    /// A WEAVER echo (design.md 5.32): the same effect at <see cref="GenericHits.EchoScale"/> of its size and brightness.
+    /// </param>
+    private void PlaySkillVfx(SkillDef def, Source source, int? hitSlot = null, bool echo = false)
     {
         // ONE STATEMENT, where there was a six-case switch of hand-placed pixels. The profile says
         // which figure the cast belongs to and how big it is against that figure; the skill says which
@@ -2613,7 +2796,14 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         // çıkıyor" (2026-08-28). The strip is authored as an in-place spin, which is right and stays:
         // only the renderer knows where the two figures are this frame, so the renderer flies it.
         var travel = profile.Travel == VfxTravel.ToTarget ? VfxSubject.Creature(target) : (VfxSubject?)null;
-        PlayFx(profile, subject, SourceGlow(source), FxFor(def), travel);
+        var tint = SourceGlow(source);
+        if (echo)
+        {
+            // a smaller, dimmer copy: the profile's size and the premultiplied tint (alpha with it) scaled together
+            profile = profile with { RelativeScale = profile.RelativeScale * GenericHits.EchoScale };
+            tint *= GenericHits.EchoScale;
+        }
+        PlayFx(profile, subject, tint, FxFor(def), travel);
     }
 
     /// <summary>
@@ -3009,9 +3199,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
         if (!ShotNoVfx) _vfx.DrawOver(b);
         // ...and everything about them that IS light, in one additive pass of its own.
-        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0 || _field is not null))
+        // (the generic heal's chest glow opens it too, design.md 5.28: a pure read of the receive, Draw never changes it)
+        var healGlow = _mode == Mode.Downed ? 0f : _healReceive.GlowAlpha(_playheadMs);
+        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0 || _field is not null || healGlow > 0f))
         {
             _vfx.BeginLight(b);
+            if (healGlow > 0f) DrawHealGlow(b, healGlow);
             if (_performance is { } performer)
             {
                 _outgoing?.DrawLight(b, _playheadMs, _ui.Assets.Get("fxp_trail_soft"));
@@ -6443,30 +6636,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         float? beatMs = next?.BeatMs;
         var clip = next?.Clip;
         var skillEvent = next?.Cast;
-        // THE TRAP, WHICH IS NOT AN ACTION. It answers the enemy's bite, off the beat, so it can never
-        // be aimed at one — and for the whole life of the fight it therefore had no champion animation
-        // at all: the trap bit, the enemy took damage, and the figure stood still through it.
-        //
-        // Committed opportunistically, and only when nothing else is due: a Trap consumes no beat, so
-        // it must never take the clip a real action was about to use. That it fires on the enemy's
-        // swing — off the champion's own metronome — is what makes the opening usually there.
-        float? lastTrap = null;
-        foreach (var ri in reactionSlots)
-        {
-            // A PRESENTED REACTION NEVER TAKES THE FIGURE (JAWS, ADR-011): its answer is drawn on its own layer at the
-            // bite, and "bitten, answered, THEN he lays a trap" is the old sentence backwards. Other reactions keep it.
-            if (ReactionRecipes.For(Character.Id, _waveSkills[ri].Def.Id) is not null) continue;
-            if (_replay.LastTrapBefore(_playheadMs, ri) is { } tms && (lastTrap is null || tms > lastTrap))
-                lastTrap = tms;
-        }
-        if (beatMs is null && lastTrap is { } trapMs
-            && _playheadMs - trapMs < TrapClipGraceMs)
-        {
-            CommitPlainClip("trap", trapMs, Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat)), (int)trapMs);
-            if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"trap\tbeat={trapMs:0}\tspeed={_clipSpeed:0.000}");
-            return;
-        }
-
+        // A REACTION NEVER TAKES THE FIGURE (the remaining-skill sweep, design.md 5.4 / 5.14-5.16): it answers a bite or a
+        // kill off the beat, on its own layer, and the post-bite "lay a trap" clip that used to be committed here told
+        // the old sentence backwards (bitten, answered, THEN he lays a trap). JAWS dropped it first; now every reaction.
         if (beatMs is null) return;
 
         // NOTHING OF A HELD BEAT IS SHOWN. While the barrier holds the replay short of a beat, the clip
@@ -6855,7 +7027,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             switch (echo.Kind)
             {
                 case ReactionEchoKind.Number:
-                    SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Skill, echo.Hits, echo.Word);
+                    SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Skill ? NumberGrade.Skill : NumberGrade.Plain, echo.Hits, echo.Word);
                     if (echo.Crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
                     break;
                 case ReactionEchoKind.Flash when r.Recipe.TargetFlash > 0f && _hitFlash.GetValueOrDefault(echo.Slot) <= 0f:
@@ -7011,11 +7183,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                                             + (p is MeleePerformance lunge ? $"\treach={lunge.Reach:0}" : ""));
             // THE NAME AT THE RELEASE: the callout says what the champion is DOING, so it belongs to the
             // throw, not to the impact. Presentation only — the cast's cooldown and state stay on the event.
-            if (p.Recipe.CalloutAtRelease && ShowSkillCallouts && p.SkillSlot < _waveSkills.Count)
-            {
-                var (text, colour) = CalloutFor(_waveSkills[p.SkillSlot].Def.Style);
-                Say(text, colour);
-            }
+            if (p.Recipe.CalloutAtRelease && ShowSkillCallouts && p.SkillSlot < _waveSkills.Count
+                && CalloutFor(_waveSkills[p.SkillSlot].Def) is { } call)
+                Say(call.Text, call.Color);
             Sound?.PlayFirst(p.Recipe.ReleaseCues, p.Recipe.ReleaseVolume, p.Recipe.ReleasePitch, Pan(step.ReleaseAt.X, p.Recipe.PanWidth), 0.04f, lead: true);
         }
         if (step.Contacted)
@@ -7482,10 +7652,61 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
 
     private int _auraTotal, _auraTotalMs = -1;
 
+    /// <summary>
+    /// THE GENERIC HEAL'S CHEST GLOW (design.md 4 RETURN / 5.28): <c>fxp_flash_soft</c> in Nature green through the light
+    /// pass (VfxBlend.PremultipliedAdditive, ADR-009), centred 0.40 of the drawn champion's height from his top and 0.9 of
+    /// his width across. It reads <see cref="_champDrawBox"/>, so it rides a lunge with him.
+    /// </summary>
+    private void DrawHealGlow(SpriteBatch b, float alpha)
+    {
+        if (_ui.Assets.Get("fxp_flash_soft") is not { } glow) return;
+        var box = _champDrawBox;
+        var size = box.Width * HealGlowWidth;
+        var centre = new Vector2(box.X + box.Width * 0.5f, box.Y + box.Height * HealGlowChestY);
+        b.Draw(glow, centre, null, HealGlowInk * alpha, 0f, new Vector2(glow.Width * 0.5f, glow.Height * 0.5f),
+               size / Math.Max(1, glow.Width), SpriteEffects.None, 0f);
+    }
+
+    /// <summary>The chest glow's ink: the Nature Source's green (design.md 5.28, 7FCB4A).</summary>
+    private static readonly Color HealGlowInk = new(0x7F, 0xCB, 0x4A);
+    /// <summary>Where his chest is: this share of the drawn champion box from its top.</summary>
+    private const float HealGlowChestY = 0.40f;
+    /// <summary>How wide the glow is: this share of the drawn champion box's width.</summary>
+    private const float HealGlowWidth = 0.9f;
+
+    /// <summary>The open heal sum, printed now (a wave's end: its last heal still owes its number).</summary>
+    private void FlushHealReceive()
+    {
+        if (_healReceive.Flush(out var healed)) SayHealed(healed);
+    }
+
+    /// <summary>
+    /// The generic receive's one "+N", a NUMBER at the hunter's chest (the review of Phase 0): born at the chest glow's
+    /// centre on the drawn champion, at the damage-number size in Verdant, rising like the enemy numbers, in its own lane;
+    /// the Say lane keeps the skill names. Printed only from <see cref="HealReceive.NumberShare"/> of max health up (below
+    /// it the glow alone says "healed"). A number, so it follows DAMAGE NUMBERS.
+    /// </summary>
+    private void SayHealed(int healed)
+    {
+        if (!ShowDamageNumbers || !HealReceive.ShowsNumber(healed, _champ?.MaxHealth ?? 0)) return;
+        if (PresentTrace.Enabled) PresentTrace.Log("heal-number", $"amount={healed}");
+        var box = _champDrawBox;
+        _callouts.Add(new Callout
+        {
+            Text = $"+{healed}",
+            Color = Verdant,
+            X = box.X + box.Width / 2,
+            Y = box.Y + (int)(box.Height * HealGlowChestY) - DamagePx / 2 - StackSlot(CalloutLane.HunterBody) * CalloutLineHeight,
+            Life = 1f,
+            Px = DamagePx,
+            Lane = CalloutLane.HunterBody,
+        });
+    }
+
     /// <summary>The pending aura tick's total as one plain number over the pack's centre (see the Strike case).</summary>
     private void FlushAuraTotal()
     {
-        if (_auraTotal > 0) SpawnDamage(_auraTotal, TargetSlot(), crit: false, skill: false);
+        if (_auraTotal > 0) SpawnDamage(_auraTotal, TargetSlot(), crit: false, NumberGrade.Plain);
         _auraTotal = 0;
         _auraTotalMs = -1;
     }
@@ -7746,7 +7967,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var y = Math.Max(c.Y - rise, floor + UiMetrics.Space(4));
             var fade = Math.Clamp(c.Life * 1.8f, 0f, 1f);
             // Through the dock's one-pixel shadow, so a word over a pale burst or a bright floor keeps its edge.
-            ShadowText(b, c.Text, c.X - _ui.MeasureBig(c.Text, px) / 2, y, c.Color * fade, px);
+            if (c.Bare) _ui.TextBig(b, c.Text, c.X - _ui.MeasureBig(c.Text, px) / 2, y, c.Color * (fade * c.Alpha), px);
+            else ShadowText(b, c.Text, c.X - _ui.MeasureBig(c.Text, px) / 2, y, c.Color * (fade * c.Alpha), px);
         }
     }
 
@@ -8038,8 +8260,46 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// crossed live, callout fresh, effect on its first frame.
     /// </param>
     public void DevSeekBefore(Func<BattleEvent, bool> pick, float leadSeconds = 0.02f)
-        => _devSeekPick = (pick, leadSeconds);
-    private (Func<BattleEvent, bool> Pick, float Lead)? _devSeekPick;
+    {
+        ArgumentNullException.ThrowIfNull(pick);
+        _devSeekPick = (events =>
+        {
+            foreach (var e in events)
+                if (pick(e)) return e.AtMs;
+            return null;
+        }, leadSeconds, null);
+    }
+
+    /// <summary>
+    /// DEV: the same seek, aimed by a finder over the whole wave (<see cref="Rig.ShotSeek.Find"/>: the n-th match, a
+    /// batch that holds a Strike, a cast on a field tick), and REQUIRED: when the wave has no such event the frame that
+    /// would have applied it throws, naming <paramref name="mustFind"/>, so the take exits non-zero.
+    /// </summary>
+    public void DevSeekBefore(Func<IReadOnlyList<BattleEvent>, int?> find, float leadSeconds, string mustFind)
+    {
+        ArgumentNullException.ThrowIfNull(find);
+        ArgumentException.ThrowIfNullOrEmpty(mustFind);
+        _devSeekPick = (find, leadSeconds, mustFind);
+    }
+    private (Func<IReadOnlyList<BattleEvent>, int?> Find, float Lead, string? MustFind)? _devSeekPick;
+
+    /// <summary>
+    /// DEV: check the live run just before the shutter (the frame a posed seek applies): <paramref name="check"/> returns why
+    /// the run is not the one asked for, or null; a reason THROWS, so the take exits non-zero.
+    /// </summary>
+    public void DevCheckRunAtShutter(Func<string?> check)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        _devRunCheck = check;
+    }
+    private Func<string?>? _devRunCheck;
+
+    /// <summary>DEV: the live run's woven skills in slot order (empty before a run), for the rig's build check.</summary>
+    public IReadOnlyList<EquippedSkill> DevRunSkills() => _run?.Skills ?? (IReadOnlyList<EquippedSkill>)Array.Empty<EquippedSkill>();
+
+    /// <summary>DEV: the keystone ids the fight's build is composed with now (the run's own composition, asked again).</summary>
+    public IReadOnlyList<string> DevComposedKeystoneIds()
+        => Loadout.ToBuild(Mastery, Character, Progress, DiscoveredKeystones, KnownVows).Keystones.Select(k => k.Id).ToList();
 
     /// <summary>The build slot a skill occupies in the live run, or -1 — for <see cref="DevSeekBefore"/> picks.</summary>
     public int DevSlotOf(string skillId)

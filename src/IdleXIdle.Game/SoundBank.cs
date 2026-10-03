@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.Xna.Framework.Audio;
 
 namespace IdleXIdle.Game;
@@ -108,6 +109,37 @@ public sealed class SoundBank
     // Centralised here rather than at each call site so no caller can forget it.
     private const long MinRepeatMs = 90;
 
+    /// <summary>The minimum gap between two starts of one cue, in ms, for a cue <see cref="ThrottleTable"/> does not name.</summary>
+    public const long DefaultMinGapMs = MinRepeatMs;
+
+    /// <summary>The quieter-when-recent rule's half-life, in ms: a cue that last fired this long ago counts half.</summary>
+    public const float RepeatHalfLifeMs = 250f;
+
+    /// <summary>
+    /// The per-cue minimum gaps, read-only: the table <c>tools/asset-pipeline/sound_throttle.json</c> is generated from
+    /// (by <c>sound_throttle_table_test</c>), so <c>film_audio.py</c> renders a traced film with the bank's own throttle.
+    /// </summary>
+    public static IReadOnlyDictionary<string, long> ThrottleTable => MinGapMs;
+
+    /// <summary>
+    /// EVERY CUE THE GAME PLAYS PAST THE THROTTLE (<c>throttle: false</c>), as one declared list: the reveal's landing
+    /// ticks (ForgeScreen, paced by the reveal's own clock), a projectile recipe's contact ticks (SPRAY's fan width,
+    /// bounded to two by the performance) and the mark kinds <see cref="Presentation.MarkRecipe.Unthrottled"/> names
+    /// (BRAND's SPRAWL infects and its Ash accent). Every <c>throttle: false</c> call site is pinned to this list by
+    /// <c>sound_throttle_table_test</c>; <c>sound_throttle.json</c> carries it to <c>film_audio.py</c>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Unthrottled = DeclareUnthrottled();
+
+    private static IReadOnlyList<string> DeclareUnthrottled()
+    {
+        var keys = new SortedSet<string>(StringComparer.Ordinal) { "sfx_reveal_tick" };
+        foreach (var k in Presentation.ActionRecipes.SeekerSpray.ContactTickCues) keys.Add(k);
+        foreach (var kind in Enum.GetValues<Presentation.MarkCueKind>())
+            if (Presentation.MarkRecipe.Unthrottled(kind))
+                foreach (var k in Presentation.MarkRecipes.SeekerBrand.CuesOf(kind)) keys.Add(k);
+        return keys.ToList();
+    }
+
     /// <summary>Per-cue minimum gap between two starts, in milliseconds, where the 90 ms default is wrong.</summary>
     /// <remarks>
     /// Playtest 2026-08-26 ("the sounds lower the weight of the game"): the fight cues were rebuilt with
@@ -186,7 +218,7 @@ public sealed class SoundBank
             var since = now - t.LastMs;
             if (since < (MinGapMs.TryGetValue(key, out var gap) ? gap : MinRepeatMs)) { LastThrottleShare = 0f; return; }
             // Half-life 250 ms: a cue that last fired long ago is back to full volume.
-            var recent = t.Recent * MathF.Pow(0.5f, since / 250f) + 1f;
+            var recent = t.Recent * MathF.Pow(0.5f, since / RepeatHalfLifeMs) + 1f;
             _recent[key] = (now, recent);
             LastThrottleShare = 1f / MathF.Sqrt(recent);
             volume *= LastThrottleShare;

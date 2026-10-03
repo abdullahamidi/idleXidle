@@ -174,9 +174,10 @@ public class VfxContractTests
     [Fact]
     public void test_an_effect_that_lands_on_the_champion_follows_his_lunge()
     {
-        // A melee action carries him 400 px to his target and back (HARD HANDS, ADR-011). A bite, a heal or a
-        // shield that lands on him in that time is ON his body: Detached, it hung in the air where he had stood.
-        foreach (var p in new[] { VfxProfiles.HealColumn, VfxProfiles.ShieldGain,
+        // A melee action carries him 400 px to his target and back (HARD HANDS, ADR-011). A bite or a shield that
+        // lands on him in that time is ON his body: Detached, it hung in the air where he had stood. (The heal column
+        // left the table in the sweep: the heal's chest glow reads the drawn champion box, HealReceive / design.md 5.28.)
+        foreach (var p in new[] { VfxProfiles.ShieldGain,
                                   VfxProfiles.ShieldAbsorb, VfxProfiles.ShieldUndying, VfxProfiles.ShieldBreak })
             Assert.Equal(VfxFollow.Pinned, p.Follow);
     }

@@ -1,0 +1,63 @@
+# after_holdfast_shield: trace rows -17..2333 ms of playhead (decisive 33); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_holdfast.log
+     17  shot   0  event           ShieldGained  slot=0  amount=9  at=0  crit=False  skill=False
+    217  shot   6  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    700  shot  20  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  20  sound           sfx_hit  vol=0.38  pitch=0.00  pan=0.00
+    700  shot  20  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  20  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    700  shot  20  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/0  travel=-
+    783  shot  22  enemy-commit    bite=1000
+   1000  shot  29  event           ShieldAbsorbed  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  29  sound           sfx_shield_hit  vol=0.26  pitch=0.00  pan=0.00
+   1000  shot  29  vfx-spawn       fx_shield  profile=shield.absorb  subject=Champion  travel=-
+   1000  shot  29  event           EnemyStrike  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  29  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  29  event           Skill  slot=1  amount=0  at=1000  crit=False  skill=False
+   1000  shot  29  vfx-spawn       fx_unbroken_trap_strip8_512  profile=cast.trap  subject=EnemyRow  travel=-
+   1000  shot  29  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   1000  shot  29  sound           sfx_hit  vol=0.40  pitch=0.25  pan=0.00
+   1000  shot  29  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+   1000  shot  29  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   1000  shot  29  number          slot=0  amount=2  hits=1  crit=False  skill=True
+   1000  shot  29  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    217  shot   6  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    700  shot  20  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  20  sound           sfx_hit  vol=0.38  pitch=0.00  pan=0.00
+    700  shot  20  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  20  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    700  shot  20  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/0  travel=-
+    783  shot  22  enemy-commit    bite=1000
+   1000  shot  29  event           ShieldAbsorbed  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  29  sound           sfx_shield_hit  vol=0.26  pitch=0.00  pan=0.00
+   1000  shot  29  vfx-spawn       fx_shield  profile=shield.absorb  subject=Champion  travel=-
+   1000  shot  29  event           EnemyStrike  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  29  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  29  event           Skill  slot=1  amount=0  at=1000  crit=False  skill=False
+   1000  shot  29  vfx-spawn       fx_unbroken_trap_strip8_512  profile=cast.trap  subject=EnemyRow  travel=-
+   1000  shot  29  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   1000  shot  29  sound           sfx_hit  vol=0.40  pitch=0.25  pan=0.00
+   1000  shot  29  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+   1000  shot  29  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   1000  shot  29  number          slot=0  amount=2  hits=1  crit=False  skill=True
+   1000  shot  29  flash           slot=0  peak=0.45  ms=80  rise=0.15
+   1717  shot  51  clip-start      attack  beat=2200  speed=1.293  contactMs=486  frameMs=97
+   1783  shot  52  enemy-commit    bite=2000
+   2000  shot  59  event           Aura  slot=0  amount=0  at=2000  crit=False  skill=False
+   2000  shot  59  event           ShieldGained  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  59  callout         +4 SHIELD
+   2000  shot  59  sound           sfx_shield_gain  vol=0.40  pitch=0.00  pan=0.00
+   2000  shot  59  vfx-spawn       fx_shield  profile=shield.gain  subject=Champion  travel=-
+   2000  shot  59  event           ShieldAbsorbed  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  59  sound           sfx_shield_hit  vol=0.26  pitch=0.00  pan=0.00
+   2000  shot  59  vfx-spawn       fx_shield  profile=shield.absorb  subject=Champion  travel=-
+   2000  shot  59  event           EnemyStrike  slot=0  amount=0  at=2000  crit=False  skill=False
+   2000  shot  59  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2200  shot  65  event           Strike  slot=0  amount=79  at=2200  crit=False  skill=False
+   2200  shot  65  sound           sfx_hit  vol=0.38  pitch=0.00  pan=0.00
+   2200  shot  65  number          slot=0  amount=79  hits=1  crit=False  skill=False
+   2200  shot  65  flash           slot=0  peak=0.45  ms=80  rise=0.15
+   2200  shot  65  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/0  travel=-
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+(no layer reports alloc=)

@@ -1,0 +1,27 @@
+# after_multi: trace rows 7813..9113 ms of playhead (decisive 8213); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_multi.log
+   7830  shot  77  clip-start      hard_hands  authored  beat=8200  start=7830  release=8080  targets=1  recipe=seeker.hard_hands
+   7980  shot  81  sound           sfx_seeker_press_tick  vol=0.17  pitch=0.00  pan=0.14
+   7980  shot  81  field-cue       seeker.press  tick=8000  at=-20  cue=sfx_seeker_press_tick  vol=0.17
+   8013  shot  82  event           Aura  slot=2  amount=0  at=8000  crit=False  skill=False
+   8013  shot  82  event           Break  slot=1  amount=2  at=8000  crit=False  skill=False
+   8013  shot  82  event           DefenceNow  slot=1  amount=-10  at=8000  crit=False  skill=False
+   8013  shot  82  event           EnemyStrike  slot=0  amount=3  at=8000  crit=False  skill=False
+   8013  shot  82  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   8097  shot  85  release         seeker.hard_hands  x=750  y=508  knives=1  launch=1331,739  reach=538
+   8097  shot  85  callout         HARD HANDS
+   8097  shot  85  sound           sfx_seeker_hard_hands_commit  vol=0.34  pitch=0.00  pan=-0.12
+   8213  shot  88  contact         seeker.hard_hands  x=1331  y=739  knives=1
+   8213  shot  88  sound           sfx_seeker_hard_hands_hit  vol=0.55  pitch=0.00  pan=0.11
+   8213  shot  88  event           Skill  slot=0  amount=0  at=8200  crit=False  skill=False
+   8213  shot  88  event           Strike  slot=1  amount=826  at=8200  crit=True  skill=True
+   8213  shot  88  number          slot=1  amount=826  hits=1  crit=True  skill=True
+   8213  shot  88  sound           sfx_crit  vol=0.46  pitch=0.00  pan=0.00  duck=0.45
+   8213  shot  88  flash           slot=1  peak=0.55  ms=120  rise=0.00
+   8780  shot 105  enemy-commit    bite=9000
+   9013  shot 112  event           EnemyStrike  slot=0  amount=3  at=9000  crit=False  skill=False
+   9013  shot 112  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      143 / 5 / 13107392
+reaction-draw   72 / 0 / 0

@@ -1,0 +1,20 @@
+# after_backdraw: trace rows 9100..10100 ms of playhead (decisive 9800); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_backdraw.log
+   9217  shot   0  clip-start      projectile  beat=9800  speed=1.071  contactMs=723  frameMs=117
+   9350  shot   3  event           ReactionArmed  slot=0  amount=2144  at=9344  crit=False  skill=False
+   9800  shot  17  event           Skill  slot=2  amount=0  at=9800  crit=False  skill=False
+   9800  shot  17  callout         SPRAY
+   9800  shot  17  vfx-spawn       fx_quiver_projectile_strip8_512  profile=cast.projectile  subject=Champion  travel=Creature/3
+   9800  shot  17  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   9800  shot  17  event           Strike  slot=3  amount=292  at=9800  crit=False  skill=True
+   9800  shot  17  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   9800  shot  17  number          slot=3  amount=292  hits=1  crit=False  skill=True
+   9800  shot  17  flash           slot=3  peak=0.45  ms=80  rise=0.15
+   9800  shot  17  event           EnemyDown  slot=3  amount=0  at=9800  crit=False  skill=False
+   9800  shot  17  sound           sfx_enemy_down  vol=0.36  pitch=0.00  pan=0.00
+   9800  shot  17  vfx-spawn       fx_death  profile=death.creature  subject=Creature/3  travel=-
+   9800  shot  17  event           Skill  slot=0  amount=0  at=9800  crit=False  skill=False
+   9800  shot  17  skill-skip      slot=0  skill=sig_quiver_backdraw  at=9800
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+(no layer reports alloc=)

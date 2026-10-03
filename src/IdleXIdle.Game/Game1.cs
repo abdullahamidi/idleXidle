@@ -2467,6 +2467,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     LoadoutRepair.ShedForeignSignatures(_loadout, posed);
                     LoadoutRepair.EnsureSignature(_loadout, posed);
                 }
+                // THE SWEEP'S FIGHT DIALS (RH_SHOT_BUILD / RH_SHOT_KEYSTONES / RH_SHOT_SEEK, Game1.ShotBuildRig.cs) are
+                // refused on a fixture that would never read them: it would film its own build, or its own instant.
+                RefuseUnreadShotDials(sm);
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
                 // they pose nothing beyond skipping the title.)
                 // lootforge: seed the Forge with a spread of loot so it can be screenshotted with content
@@ -2896,6 +2899,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(jawsSlot, Source.Nature);
                         _loadout.SetSkill(jawsSlot, "field_mire");
                     }
+                    // RH_SHOT_BUILD=<skill>[@Source],... poses the take's WHOLE build (the signature in slot one, at most
+                    // two Active and two passives), and RH_SHOT_KEYSTONES sockets keystones into it; both are refused
+                    // loudly and checked against the live run once the fixture has started it (VerifyShotBuild below).
+                    var shotBuild = ApplyShotBuild();
+                    var shotKeystones = ApplyShotKeystones();
                     // RH_SHOT_SWAP=<skill>:<skill>[@Source][,...] weaves a different skill into a fixture
                     // slot, the way fightinspect does by hand — so any skill's effect can be filmed
                     // through its real route (BRAND holding a mark behind the hunter, HAMMER BLOW on
@@ -3214,6 +3222,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     if (sm is "fight" or "fightinspect" or "vfxdebug"
                         && Environment.GetEnvironmentVariable("RH_SHOT_BITE") == "1")
                         _expedition.DevSeekBefore(e => e.Kind == BattleEventKind.EnemyStrike, ShotLead());
+                    // RH_SHOT_SEEK=<predicate> aims the shutter at an EVENT (skill:<id>, aura:<id>, down, hit:<HitSource>,
+                    // downing, beat:<n>, event:<kind>; Rig/ShotSeek.cs); a wave without one throws at the shutter.
+                    ArmShotSeek();
+                    // THE LIVE RUN WEARS THE ASKED BUILD, or the take exits non-zero (a silent repair is caught here).
+                    VerifyShotBuild(shotBuild, shotKeystones);
                 }
                 // RH_SHOT_HUNT_T=<seconds into the wave> DRAINS THE FIGHT UNDER A MENU FIXTURE, so the
                 // HUNT tile's live bar can be photographed with something to show. Every menu mode

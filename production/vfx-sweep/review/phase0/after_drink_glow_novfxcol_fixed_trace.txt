@@ -1,0 +1,32 @@
+# after_drink_glow_novfxcol_fixed: trace rows 9317..10617 ms of playhead (decisive 9717); columns: playhead, nearest saved frame, kind, fields
+# source: r_drink_glow.log
+   9667  shot   0  clip-start      transformation  beat=9700  speed=1.500  contactMs=796  frameMs=83
+   9667  shot   0  reaction-end    seeker.jaws  contact=1000  lived=8667
+   9667  shot   0  number          slot=0  amount=5  hits=1  crit=False  skill=True
+   9700  shot   1  event           Skill  slot=1  amount=0  at=9700  crit=False  skill=False
+   9700  shot   1  callout         DRINK
+   9700  shot   1  vfx-spawn       fx_seeker_transformation_strip8_512  profile=cast.transformation  subject=Champion  travel=-
+   9700  shot   1  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   9700  shot   1  event           Strike  slot=1  amount=381  at=9700  crit=False  skill=True
+   9700  shot   1  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   9700  shot   1  number          slot=1  amount=381  hits=1  crit=False  skill=True
+   9700  shot   1  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   9700  shot   1  event           Heal  slot=0  amount=46  at=9700  crit=False  skill=False
+   9700  shot   1  event           Heal  slot=0  amount=11  at=9700  crit=False  skill=False
+   9783  shot   6  enemy-commit    bite=10000
+   9833  shot   9  event           ReactionArmed  slot=3  amount=2830  at=9830  crit=False  skill=False
+   9983  shot  18  sound           sfx_seeker_press_tick  vol=0.14  pitch=0.00  pan=0.13
+   9983  shot  18  field-cue       seeker.press  tick=10000  at=-17  cue=sfx_seeker_press_tick  vol=0.14
+  10000  shot  19  event           Aura  slot=2  amount=0  at=10000  crit=False  skill=False
+  10000  shot  19  event           Break  slot=1  amount=1  at=10000  crit=False  skill=False
+  10000  shot  19  event           DefenceNow  slot=1  amount=-5  at=10000  crit=False  skill=False
+  10000  shot  19  event           EnemyStrike  slot=0  amount=7  at=10000  crit=False  skill=False
+  10000  shot  19  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+  10000  shot  19  event           Skill  slot=3  amount=0  at=10000  crit=False  skill=False
+  10000  shot  19  reaction-spawn  seeker.jaws  slot=3  contact=10000  targets=1  belt=0,0
+  10000  shot  19  event           Strike  slot=1  amount=11  at=10000  crit=True  skill=True
+  10100  shot  25  heal-number     amount=57
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      31 / 2 / 13107392
+reaction-draw   13 / 0 / 0

@@ -1,0 +1,35 @@
+# after_drink_heal_fixed: trace rows 9300..10600 ms of playhead (decisive 9700); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_drink.log
+   9700  shot  17  event           Skill  slot=1  amount=0  at=9700  crit=False  skill=False
+   9700  shot  17  callout         DRINK
+   9700  shot  17  vfx-spawn       fx_seeker_transformation_strip8_512  profile=cast.transformation  subject=Champion  travel=-
+   9700  shot  17  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   9700  shot  17  event           Strike  slot=1  amount=381  at=9700  crit=False  skill=True
+   9700  shot  17  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   9700  shot  17  number          slot=1  amount=381  hits=1  crit=False  skill=True
+   9700  shot  17  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   9700  shot  17  event           Heal  slot=0  amount=46  at=9700  crit=False  skill=False
+   9700  shot  17  event           Heal  slot=0  amount=11  at=9700  crit=False  skill=False
+   9783  shot  19  enemy-commit    bite=10000
+   9833  shot  21  event           ReactionArmed  slot=3  amount=2830  at=9830  crit=False  skill=False
+   9983  shot  25  sound           sfx_seeker_press_tick  vol=0.14  pitch=0.00  pan=0.13
+   9983  shot  25  field-cue       seeker.press  tick=10000  at=-17  cue=sfx_seeker_press_tick  vol=0.14
+  10000  shot  26  event           Aura  slot=2  amount=0  at=10000  crit=False  skill=False
+  10000  shot  26  event           Break  slot=1  amount=1  at=10000  crit=False  skill=False
+  10000  shot  26  event           DefenceNow  slot=1  amount=-5  at=10000  crit=False  skill=False
+  10000  shot  26  event           EnemyStrike  slot=0  amount=7  at=10000  crit=False  skill=False
+  10000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+  10000  shot  26  event           Skill  slot=3  amount=0  at=10000  crit=False  skill=False
+  10000  shot  26  reaction-spawn  seeker.jaws  slot=3  contact=10000  targets=1  belt=0,0
+  10000  shot  26  event           Strike  slot=1  amount=11  at=10000  crit=True  skill=True
+  10100  shot  29  heal-number     amount=57
+  10317  shot  36  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.16
+  10317  shot  36  reaction-cue    seeker.jaws  contact=10000  at=317  cue=sfx_seeker_jaws_bite
+  10317  shot  36  reaction-clamp  seeker.jaws  contact=10000  at=317  clamp=1330,798  belt=647,700  body=1250,642,268,245
+  10367  shot  37  number          slot=1  amount=11  hits=1  crit=True  skill=True
+  10367  shot  37  sound           sfx_crit  vol=0.46  pitch=0.00  pan=0.00
+  10367  shot  37  reaction-number seeker.jaws  contact=10000  at=367
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      136 / 6 / 13107392
+reaction-draw   84 / 0 / 0

@@ -1,0 +1,27 @@
+# after_pulse_on_mire_slow: trace rows 8900..9200 ms of playhead (decisive 9000); columns: playhead, nearest saved frame, kind, fields
+# source: r_after_pulse_slow.log
+   9000  shot  13  handoff         aura  beat=9000  contact=9183  recovery=9350  motion=83  hold=300  natural=9733  available=310  ratio=1.00  exit=9660  fit=Natural  next=attack  nextBeat=10000  ideal=9660  latest=9660  protected=583
+   9000  shot  13  event           Skill  slot=1  amount=0  at=9000  crit=False  skill=False
+   9000  shot  13  callout         PULSE
+   9000  shot  13  vfx-spawn       fx_aura  profile=cast.aura  subject=Champion  travel=-
+   9000  shot  13  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+   9000  shot  13  event           Strike  slot=1  amount=134  at=9000  crit=False  skill=True
+   9000  shot  13  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+   9000  shot  13  number          slot=1  amount=158  hits=2  crit=False  skill=True
+   9000  shot  13  flash           slot=1  peak=0.45  ms=80  rise=0.15
+   9000  shot  13  event           Strike  slot=2  amount=143  at=9000  crit=False  skill=True
+   9000  shot  13  number          slot=2  amount=155  hits=2  crit=False  skill=True
+   9000  shot  13  flash           slot=2  peak=0.45  ms=80  rise=0.15
+   9000  shot  13  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/2  travel=-
+   9000  shot  13  event           Strike  slot=3  amount=124  at=9000  crit=False  skill=True
+   9000  shot  13  number          slot=3  amount=138  hits=2  crit=False  skill=True
+   9000  shot  13  flash           slot=3  peak=0.45  ms=80  rise=0.15
+   9000  shot  13  event           Aura  slot=2  amount=0  at=9000  crit=False  skill=False
+   9000  shot  13  event           Slowed  slot=-1  amount=25  at=9000  crit=False  skill=False
+   9000  shot  13  event           Strike  slot=1  amount=24  at=9000  crit=False  skill=True
+   9000  shot  13  event           Strike  slot=2  amount=12  at=9000  crit=False  skill=True
+   9000  shot  13  event           Strike  slot=3  amount=14  at=9000  crit=False  skill=True
+   9000  shot  13  event           Heal  slot=0  amount=1  at=9000  crit=False  skill=False
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+(no layer reports alloc=)

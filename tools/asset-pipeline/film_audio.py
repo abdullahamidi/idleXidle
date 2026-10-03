@@ -14,7 +14,8 @@ WHAT IT REPRODUCES, AND WHAT IT CANNOT:
   * the cue, its volume x the SFX master (0.8) x the mix duck an authored action applied (`duck=`), its
     pitch (octaves, by resampling), its pan (a balance law: centre = full level in both ears);
   * the per-cue repeat THROTTLE of SoundBank.Play (the min gap and the quieter-when-recent rule) for every
-    cue but the unthrottled ones (the SPRAY tick), judged on the trace clock, not the wall clock;
+    cue but the unthrottled ones (the SPRAY tick), judged on the trace clock, not the wall clock, from
+    tools/asset-pipeline/sound_throttle.json (generated from SoundBank by sound_throttle_table_test);
   * the region's music bed at the music master (0.5), from an arbitrary loop point (--music; off by default).
   NOT the per-play random pitch `vary` (it is applied after the log line and is not logged), and not the
   voice limit of the audio device. It is a RENDER of the game's mix decisions, not a recording of a device:
@@ -27,6 +28,7 @@ file (a BEFORE film heard with the sound it had then, after the cue in assets/ w
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -40,13 +42,16 @@ REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 AUDIO = os.path.join(REPO, "assets", "audio")
 RATE = 44100
 SFX_MASTER, MUSIC_MASTER = 0.8, 0.5
-MIN_REPEAT_MS = 90
-MIN_GAP_MS = {"sfx_hit": 60, "sfx_enemy_down": 140, "sfx_boss_down": 220, "sfx_champ_down": 300,
-              "sfx_shield_hit": 60, "sfx_shield_break": 300, "sfx_chest_rare": 400, "sfx_train": 70,
-              "sfx_dispatch": 900}
-# played with throttle:false in the game (MarkRecipe.Unthrottled: BRAND's SPRAWL infects, 40 ms apart and bounded by the
-# victims of one spread, and the Ash-Burn accent, bounded by the cue it rides on)
-UNTHROTTLED = {"sfx_seeker_spray_tick", "sfx_reveal_tick", "sfx_seeker_brand_infect", "sfx_seeker_brand_ash"}
+# THE BANK'S THROTTLE, READ FROM THE GENERATED TABLE (never mirrored by hand): sound_throttle.json is written from
+# SoundBank itself by tests/unit/IdleXIdle.Game.Tests/sound_throttle_table_test.cs, which fails when it is stale.
+# It holds the default gap, the per-cue gaps, the quieter-when-recent half-life and every cue played with throttle:false.
+THROTTLE_JSON = os.path.join(HERE, "sound_throttle.json")
+with open(THROTTLE_JSON, encoding="utf-8") as _f:
+    _THROTTLE = json.load(_f)
+MIN_REPEAT_MS = float(_THROTTLE["default_min_gap_ms"])
+MIN_GAPS = {k.lower(): float(v) for k, v in _THROTTLE["min_gap_ms"].items()}   # the bank's lookup ignores case
+HALF_LIFE_MS = float(_THROTTLE["repeat_half_life_ms"])
+FREE_OF_THROTTLE = {k.lower() for k in _THROTTLE["unthrottled"]}
 
 
 def ffmpeg() -> str:
@@ -120,13 +125,13 @@ def render(shots: dict, sounds: list, slow: float, music: str | None) -> np.ndar
     recent: dict = {}
     for clock, key, vol, pitch, pan in sounds:
         # the throttle runs on EVERY ask, before the film window, exactly as the bank would have
-        if key not in UNTHROTTLED:
+        if key.lower() not in FREE_OF_THROTTLE:
             if key in recent:
                 last, r = recent[key]
                 since = clock - last
-                if since < MIN_GAP_MS.get(key, MIN_REPEAT_MS):
+                if since < MIN_GAPS.get(key.lower(), MIN_REPEAT_MS):
                     continue
-                r = r * 0.5 ** (since / 250.0) + 1.0
+                r = r * 0.5 ** (since / HALF_LIFE_MS) + 1.0
                 recent[key] = (clock, r)
                 vol /= r ** 0.5
             else:

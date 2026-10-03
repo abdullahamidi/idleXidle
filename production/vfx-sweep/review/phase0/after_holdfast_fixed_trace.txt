@@ -1,0 +1,48 @@
+# r_holdfast_trace (trace only, 20 x 30): HOLD FAST's damaging legacy reaction at 1000, Phase 0 correction pass
+# columns: present, clock, playhead, kind, fields
+present	1683	900	enemy-root	slot=0	x=-21
+present	1683	900	champ-frame	attack	frame=7	box=420,451,400,430
+present	1700	917	enemy-root	slot=0	x=-27
+present	1717	933	enemy-root	slot=0	x=-32
+present	1733	950	enemy-root	slot=0	x=-37
+present	1750	967	enemy-root	slot=0	x=-43
+present	1767	983	enemy-root	slot=0	x=-48
+present	1783	1000	event	ShieldAbsorbed	slot=0	amount=4	at=1000	crit=False	skill=False
+present	1783	1000	sound	sfx_shield_hit	vol=0.26	pitch=0.00	pan=0.00
+present	1783	1000	vfx-spawn	fx_shield	profile=shield.absorb	subject=Champion	travel=-
+present	1783	1000	event	EnemyStrike	slot=0	amount=0	at=1000	crit=False	skill=False
+present	1783	1000	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	1783	1000	event	Skill	slot=1	amount=0	at=1000	crit=False	skill=False
+present	1783	1000	vfx-spawn	fx_unbroken_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	1783	1000	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	1783	1000	event	Strike	slot=0	amount=2	at=1000	crit=False	skill=True
+present	1783	1000	number	slot=0	amount=2	hits=1	crit=False	skill=True
+present	1783	1000	flash	slot=0	peak=0.45	ms=80	rise=0.15
+present	1783	1000	enemy-root	slot=0	x=-54
+present	1800	1017	enemy-root	slot=0	x=-60
+present	2700	900	enemy-root	slot=0	x=-21
+present	2700	900	champ-frame	attack	frame=7	box=420,451,400,430
+present	2717	917	enemy-root	slot=0	x=-27
+present	2733	933	enemy-root	slot=0	x=-32
+present	2750	950	enemy-root	slot=0	x=-37
+present	2767	967	enemy-root	slot=0	x=-43
+present	2783	983	enemy-root	slot=0	x=-48
+present	2800	1000	event	ShieldAbsorbed	slot=0	amount=4	at=1000	crit=False	skill=False
+present	2800	1000	sound	sfx_shield_hit	vol=0.26	pitch=0.00	pan=0.00
+present	2800	1000	vfx-spawn	fx_shield	profile=shield.absorb	subject=Champion	travel=-
+present	2800	1000	event	EnemyStrike	slot=0	amount=0	at=1000	crit=False	skill=False
+present	2800	1000	sound	sfx_hit	vol=0.30	pitch=-0.25	pan=0.00
+present	2800	1000	event	Skill	slot=1	amount=0	at=1000	crit=False	skill=False
+present	2800	1000	vfx-spawn	fx_unbroken_trap_strip8_512	profile=cast.trap	subject=EnemyRow	travel=-
+present	2800	1000	sound	sfx_hit	vol=0.40	pitch=0.25	pan=0.00
+present	2800	1000	event	Strike	slot=0	amount=2	at=1000	crit=False	skill=True
+present	2800	1000	number	slot=0	amount=2	hits=1	crit=False	skill=True
+present	2800	1000	flash	slot=0	peak=0.45	ms=80	rise=0.15
+present	2800	1000	enemy-root	slot=0	x=-54
+present	2817	1017	enemy-root	slot=0	x=-60
+present	2833	1033	enemy-root	slot=0	x=-59
+present	2850	1050	enemy-root	slot=0	x=-47
+present	2867	1067	enemy-root	slot=0	x=-37
+present	2883	1083	enemy-root	slot=0	x=-28
+present	2900	1100	enemy-windup	bite=2000	following=True
+present	2900	1100	enemy-root	slot=0	x=-21
