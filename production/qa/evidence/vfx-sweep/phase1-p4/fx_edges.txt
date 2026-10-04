@@ -1,0 +1,13 @@
+    edge   soft%  asset
+       0   5.50%  prop_quiver_arrow.png   <== impact frame(s) [0] keep only 6 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   2.25%  prop_quiver_arrow_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   9.03%  prop_chorus_charm.png   <== impact frame(s) [0] keep only 11 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   6.25%  prop_chorus_charm_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   8.67%  prop_unbroken_chip.png   <== impact frame(s) [0] keep only 21 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   6.12%  prop_unbroken_chip_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   7.64%  prop_oathbound_hook.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   3.47%  prop_oathbound_hook_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+
+   8 of 8 VFX strips end on a rectangle, cannot fade, or cannot be seen.
+   Regenerate through tools/asset-pipeline/v2/fxclips.py, whose post-pass is
+   whiten -> glow -> soften -> feather. Do NOT re-scissor at runtime.

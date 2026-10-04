@@ -1,0 +1,28 @@
+# p17_c03_metronome: trace rows 3300..4600 ms of playhead (decisive 3700); columns: playhead, nearest saved frame, kind, fields
+# source: p17_c03_metronome.log
+   3700  shot  62  event           Strike  slot=1  amount=79  at=3700  crit=False  skill=False
+   3700  shot  62  sound           sfx_metronome_swing_hit  vol=0.36  pitch=0.00  pan=0.14
+   3700  shot  62  number          slot=1  amount=79  hits=1  crit=False  skill=False
+   3700  shot  62  flash           slot=1  peak=0.30  ms=110  rise=0.00
+   3783  shot  64  enemy-commit    bite=4000
+   3833  shot  66  event           ReactionArmed  slot=3  amount=2830  at=3830  crit=False  skill=False
+   3983  shot  70  sound           sfx_seeker_press_tick  vol=0.14  pitch=0.00  pan=0.13
+   3983  shot  70  field-cue       seeker.press  tick=4000  at=-17  cue=sfx_seeker_press_tick  vol=0.14
+   4000  shot  71  event           Aura  slot=2  amount=0  at=4000  crit=False  skill=False
+   4000  shot  71  event           Break  slot=1  amount=1  at=4000  crit=False  skill=False
+   4000  shot  71  event           DefenceNow  slot=1  amount=-5  at=4000  crit=False  skill=False
+   4000  shot  71  event           EnemyStrike  slot=0  amount=3  at=4000  crit=False  skill=False
+   4000  shot  71  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   4000  shot  71  event           Skill  slot=3  amount=0  at=4000  crit=False  skill=False
+   4000  shot  71  reaction-spawn  seeker.jaws  slot=3  contact=4000  targets=1  belt=0,0
+   4000  shot  71  event           Strike  slot=1  amount=3  at=4000  crit=False  skill=True
+   4317  shot  81  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.16
+   4317  shot  81  reaction-cue    seeker.jaws  contact=4000  at=317  cue=sfx_seeker_jaws_bite
+   4317  shot  81  reaction-clamp  seeker.jaws  contact=4000  at=317  clamp=1330,786  belt=644,700  body=1250,630,268,245
+   4367  shot  82  number          slot=1  amount=3  hits=1  crit=False  skill=True  outline=9B7BFF
+   4367  shot  82  reaction-number seeker.jaws  contact=4000  at=367
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      140 / 6 / 13107864
+reaction-draw   47 / 0 / 0
+swing-draw      20 / 0 / 0

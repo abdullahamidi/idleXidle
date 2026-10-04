@@ -1,0 +1,92 @@
+{
+ "frameMs": [
+  130,
+  120,
+  80,
+  70,
+  80,
+  70,
+  80,
+  80
+ ],
+ "elastic": [
+  true,
+  false,
+  false,
+  false,
+  false,
+  false,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 0,
+  "commit": 1,
+  "contact": 2,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "1": {
+   "StrikeHand": [
+    0.64,
+    0.37,
+    0
+   ]
+  },
+  "2": {
+   "StrikeHand": [
+    0.81,
+    0.34,
+    -10
+   ]
+  },
+  "3": {
+   "StrikeHand": [
+    0.76,
+    0.28,
+    -40
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write metronome_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 1,
+    "contact": 2,
+    "recovery": 4,
+    "settle": 7
+   },
+   "sockets": {
+    "1": {
+     "Hand": [
+      0.531,
+      0.244,
+      -82
+     ]
+    },
+    "2": {
+     "Hand": [
+      0.596,
+      0.275,
+      -71
+     ]
+    },
+    "3": {
+     "Hand": [
+      0.587,
+      0.371,
+      -64
+     ]
+    }
+   }
+  },
+  "eye": {
+   "recovery": "6, not the proposed 4: frames 3-5 are the follow-up jabs of the running punch, a follow-through",
+   "sockets": "all three by eye at the front fist; the proposal found the hair"
+  }
+ }
+}

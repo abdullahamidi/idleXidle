@@ -61,6 +61,18 @@ public sealed class ActionClipTiming
     /// </summary>
     public float HoldMs { get; }
 
+    /// <summary>
+    /// True when the timing file says <c>"place": "own"</c>: the strip keeps its OWN measured placement, and is not
+    /// keyed onto the idle (see HuntScreen's <c>PlacedAs</c>).
+    /// </summary>
+    /// <remarks>
+    /// An authored action strip drawn by keyposes.py is built on its champion's idle transform, so it is placed AS the
+    /// idle. A strip that was generated whole (the basic attacks) has its own headroom and margins: keyed onto the idle
+    /// it would draw at another scale and move the champion envelope every champion-side effect measures. Its timing
+    /// file is DATA for the performance that reads it, not a request to re-place the figure.
+    /// </remarks>
+    public bool PlaceOwn { get; private init; }
+
     /// <summary>A timing from its parts. Every frame must last at least 1 ms.</summary>
     public ActionClipTiming(IReadOnlyList<float> frameMs, IReadOnlyList<bool>? elastic = null,
                             IReadOnlyDictionary<string, int>? markers = null,
@@ -170,7 +182,7 @@ public sealed class ActionClipTiming
         {
             // only the settle hold gives way: the recovery plays at its own pace and the exit pose holds less
             ms[^1] = motion[n - 1] + (available - motionMs);
-            return new ActionClipTiming(ms, Elastic, Markers, _sockets, ms[^1] - motion[n - 1], allowSkipped: false);
+            return new ActionClipTiming(ms, Elastic, Markers, _sockets, ms[^1] - motion[n - 1], allowSkipped: false) { PlaceOwn = PlaceOwn };
         }
         compression = motionMs / Math.Max(1e-3f, available);
 
@@ -198,7 +210,7 @@ public sealed class ActionClipTiming
         }
         for (var i = 0; i < n; i++) ms[from + i] = keep[i] ? Math.Max(0f, share[i]) : 0f;
         if (ms[^1] < 1f) ms[^1] = 1f;                                   // the exit pose is always drawn
-        return new ActionClipTiming(ms, Elastic, Markers, _sockets, 0f, allowSkipped: true);
+        return new ActionClipTiming(ms, Elastic, Markers, _sockets, 0f, allowSkipped: true) { PlaceOwn = PlaceOwn };
     }
 
     /// <summary>
@@ -214,7 +226,7 @@ public sealed class ActionClipTiming
         var frames = FrameMs.ToArray();
         frames[frame] = Math.Max(1f, cut - _starts[frame]);
         for (var i = frame + 1; i < frames.Length; i++) frames[i] = 0f;
-        return new ActionClipTiming(frames, Elastic, Markers, _sockets, 0f, allowSkipped: true);
+        return new ActionClipTiming(frames, Elastic, Markers, _sockets, 0f, allowSkipped: true) { PlaceOwn = PlaceOwn };
     }
 
     /// <summary>When <paramref name="frame"/> begins, in ms from the clip's start.</summary>
@@ -262,12 +274,13 @@ public sealed class ActionClipTiming
         var ms = FrameMs.ToArray();
         for (var i = 0; i < m; i++)
             if (Elastic[i]) ms[i] = Math.Max(1f, ms[i] * k);
-        return new ActionClipTiming(ms, Elastic, Markers, _sockets, HoldMs);
+        return new ActionClipTiming(ms, Elastic, Markers, _sockets, HoldMs) { PlaceOwn = PlaceOwn };
     }
 
     /// <summary>
     /// Parse a <c>.clip.json</c>:
-    /// <c>{"frameMs":[..], "elastic":[..], "markers":{"release":3}, "sockets":{"3":{"ThrowHand":[x,y,deg]}}}</c>.
+    /// <c>{"frameMs":[..], "elastic":[..], "markers":{"release":3}, "sockets":{"3":{"ThrowHand":[x,y,deg]}}}</c>,
+    /// with an optional <c>"place": "own"</c> (<see cref="PlaceOwn"/>). Any other key (a "source" block) is ignored.
     /// </summary>
     public static ActionClipTiming Parse(string json)
     {
@@ -286,6 +299,8 @@ public sealed class ActionClipTiming
                     var v = s.Value.EnumerateArray().Select(e => e.GetSingle()).ToArray();
                     sockets[(int.Parse(frame.Name), s.Name)] = new ActionSocket(v[0], v[1], v.Length > 2 ? v[2] : 0f);
                 }
-        return new ActionClipTiming(frames, elastic, markers, sockets);
+        var placeOwn = root.TryGetProperty("place", out var place) && place.ValueKind == JsonValueKind.String
+                       && string.Equals(place.GetString(), "own", StringComparison.OrdinalIgnoreCase);
+        return new ActionClipTiming(frames, elastic, markers, sockets) { PlaceOwn = placeOwn };
     }
 }

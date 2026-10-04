@@ -30,4 +30,24 @@ public static class ActionTargets
         }
         return slots;
     }
+
+    /// <summary>
+    /// The creatures the champion's BASIC ATTACK at <paramref name="atMs"/> strikes: the Strikes at that ms whose
+    /// provenance is the swing (<c>Hit == Swing</c>; never a skill's, a carry's or a bleed's), one slot each, in the order
+    /// the fight resolved them, written into <paramref name="into"/>. Returns how many. Allocation-free.
+    /// </summary>
+    public static int SwungAt(IReadOnlyList<BattleEvent> events, int atMs, int[] into)
+    {
+        var n = 0;
+        if (events is null || into is null) return 0;
+        for (var i = 0; i < events.Count && n < into.Length; i++)
+        {
+            var e = events[i];
+            if (e.AtMs != atMs || e.Kind != BattleEventKind.Strike || e.Hit != IdleXIdle.Core.Builds.HitSource.Swing) continue;
+            var seen = false;
+            for (var k = 0; k < n; k++) seen |= into[k] == e.Slot;
+            if (!seen) into[n++] = e.Slot;
+        }
+        return n;
+    }
 }

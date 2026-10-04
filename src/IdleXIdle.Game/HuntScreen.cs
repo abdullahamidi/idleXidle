@@ -42,7 +42,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class HuntScreen : IFocusActors, IReactionStage
+public sealed class HuntScreen : IFocusActors, IReactionStage, ISwingStage
 {
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -591,6 +591,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         public bool Bare;
         /// <summary>The creature slot an enemy number describes (its stack is that creature's), or -1 for none.</summary>
         public int Owner = -1;
+        /// <summary>
+        /// A one-pixel, four-way outline under the glyphs (<see cref="NumberOutline"/>), or null for none: the slot's Source on
+        /// an agnostic closed reference's number (design.md section 8), later FIRST BEAT and the EMPOWERED-HIT accent.
+        /// </summary>
+        public Color? Outline;
 
         /// <summary>A full-opacity, shadowed callout; the object initializers fill in the rest.</summary>
         public Callout() { Text = ""; }
@@ -713,6 +718,16 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     // fight's clock restarts at 0 with every wave.
     private int _hitVoicedAtMs = -1;
     private int _critVoicedAtMs = -1;
+    // THE BASIC ATTACK, PERFORMED (design.md 5.18-5.27, P1.3): ONE reused instance, Begin per swing (fixed arrays, nothing
+    // allocated frame to frame); BeginWave resets it. Its step-in rides the champion's draw push beside the root offset.
+    private readonly SwingPerformance _swing = new();
+    private int _tracedStep;          // the last swing-step traced (0 at rest), so the trace logs a step's motion once per change
+    private long _swingAllocBytes;    // bytes the swing's draw allocated this frame (the swing-draw trace; 0 is the contract)
+    private int _swingDrawSprites;    // sprites the swing drew this frame (material + light)
+    private string? _swingStripKey;   // the performed swing's own strip key, resolved once per swing (ISwingStage: no per-frame string)
+    private bool _tracedTaut;         // the reach's strand traced taut once per swing
+    // FIRST BEAT (the Metronome, design.md 5.20): Core's struckOnce set, mirrored from the replay; BeginWave resets it
+    private readonly FirstBeat _firstBeat = new();
     // THE GENERIC HEAL RECEIVE (design.md 4 RETURN / 5.28): a chest glow and ONE "+N" summed over 400 ms, silent. Fixed
     // size: nothing is allocated frame to frame; BeginWave flushes and resets it with the wave's clock.
     private readonly HealReceive _healReceive = new();
@@ -1487,6 +1502,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         _outgoing = null;
         _hitVoicedAtMs = -1;
         _critVoicedAtMs = -1;
+        _swing.Reset();       // a swing (and its fading contact) belongs to the wave it was swung in
+        _firstBeat.Reset();   // FIRST BEAT: Core's struckOnce set is wave-local
         FlushHealReceive();   // the last wave's last heal still owes its number...
         _healReceive.Reset(); // ...and the glow and the window read the new wave's clock
         _shieldClaims.Clear();
@@ -1981,15 +1998,21 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// What the graded blow is CALLED — see <see cref="DamageCalloutText"/>. Null means CRITICAL; a
     /// Reaction passes its own skill's name instead ("-4 JAWS").
     /// </param>
-    private void SpawnDamage(int amount, int slot, bool crit, NumberGrade grade, int hits = 1, string? critWord = null)
+    /// <param name="outline">
+    /// The number's outline colour (<see cref="NumberOutline"/>), or null for none. Only an agnostic closed reference's
+    /// number passes one (<see cref="AgnosticOutline"/>); the Seeker's own JAWS / PRESS / BRAND numbers never do.
+    /// </param>
+    private void SpawnDamage(int amount, int slot, bool crit, NumberGrade grade, int hits = 1, string? critWord = null,
+                             Color? outline = null)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
         var skill = grade is NumberGrade.Skill or NumberGrade.Major;   // Major prints at skill grade until Phase 3 gives it its caption
         var quiet = grade == NumberGrade.Quiet;
         if (PresentTrace.Enabled)
-            PresentTrace.Log("number", quiet
+            PresentTrace.Log("number", (quiet
                 ? $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}\tgrade=Quiet"
-                : $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}");
+                : $"slot={slot}\tamount={amount}\thits={hits}\tcrit={crit}\tskill={skill}")
+                + (outline is { } traced ? $"\toutline={NumberOutline.Hex(traced)}" : ""));
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
         // which is exactly where the wave's health bar is drawn — so a hit printed "-203" through the
         // bar and the next one printed "-344" through the first. Two unreadable numbers and an
@@ -2026,7 +2049,210 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             // onto stone over a crouching pose, and an 18 px bare glyph there did not read. Not an outline: design.md's
             // "no outline" is the major grade's Source outline.
             Bare = false,
+            Outline = outline,
         });
+    }
+
+    /// <summary>
+    /// FIRST BEAT's outline (design.md 5.20): white on the hit Core doubled (<see cref="FirstBeat"/>), else none. A number
+    /// that already carries its skill's Source outline (an agnostic closed reference) keeps it: the Source is the identity.
+    /// </summary>
+    private static Color? FirstBeatOutline(bool firstBeat) => firstBeat ? FirstBeat.Outline : null;
+
+    /// <summary>
+    /// THE SWING ON THE FIGURE: a performed basic attack (<see cref="SwingPerformance"/>) whose clip is the one the figure is
+    /// playing now. False on the legacy path, between clips and once the clip has left the figure.
+    /// </summary>
+    private bool SwingOnFigure
+        => _swing.ClipLive && _swing.Recipe is { } r && _clipName == r.ClipKey && _swing.StartMs == _clipStartMs;
+
+    /// <summary>
+    /// Commit the basic attack just committed as a plain clip (<see cref="CommitPlainClip"/>) to being PERFORMED, when this
+    /// champion has a swing recipe and its own <c>attack</c> strip its <c>.clip.json</c> (design.md 5.18-5.27). The plain
+    /// envelope keeps owning time (<see cref="SwingClock"/>); the swing takes the frames, the step-in and the contact.
+    /// </summary>
+    /// <remarks>
+    /// The row gap is measured ONCE, here, from the bodies the last layout published (the geometry Update and Draw both
+    /// read, ADR-006): the target's visible left edge less the champion's visible right edge.
+    /// </remarks>
+    private void CommitSwing(int beatMs)
+    {
+        if (SwingRecipes.For(Character.Id) is not { } recipe || _clipTiming is not { } envelope) return;
+        var key = Character.StripKey(recipe.ClipKey);
+        if (!_ui.Assets.Has(key) || ActionClipLibrary.For(key) is not { } timing || !timing.HasMarker(recipe.AnchorMarker)) return;
+        var targets = _run?.LastWaveEvents is { } events ? ActionTargets.SwungAt(events, beatMs, _swing.TargetBuffer) : 0;
+        var gap = 0f;
+        if (targets > 0 && TryBody(VfxSubject.Creature(_swing.TargetBuffer[0]), out var foe) && TryBody(VfxSubject.Champion, out var me))
+            gap = foe.Left - me.Right;
+        _swing.Begin(recipe, timing, _clipStartMs, beatMs, _clipStartMs + envelope.TotalMs, gap, targets);
+        _swingStripKey = key;
+        _tracedTaut = false;
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("swing-start", $"{recipe.Id}\tbeat={beatMs}\tstart={_clipStartMs:0}\tanchor={_swing.AnchorAtMs:0}\texit={_swing.ExitMs:0}"
+                                            + $"\tgap={_swing.GapPx:0}\tpeak={_swing.PeakPx:0}\ttarget={_swing.Target(0)}");
+    }
+
+    /// <summary>
+    /// A performed swing's blow LANDS (its Strike on its beat): its contact picture at the creature, and on the swing ms's
+    /// first blow its ONE contact cue (the recipe's chain through <see cref="SoundBank.Resolve"/>; never lead, so it takes a
+    /// duck and never makes one). The ms is marked voiced, so the generic thud stays silent for it.
+    /// </summary>
+    private void SwingContact(BattleEvent e)
+    {
+        var body = TryBody(VfxSubject.Creature(e.Slot), out var struck) ? struck : Rectangle.Empty;
+        if (!_swing.Contact(e.AtMs, body)) return;   // a second creature on the same ms: its picture, no second cue
+        var recipe = _swing.Recipe!;
+        var cue = Sound?.PlayFirst(recipe.ContactCues, recipe.ContactVolume, 0f, Pan(body.Center.X, 0.3f), 0.05f);
+        _hitVoicedAtMs = e.AtMs;
+        if (PresentTrace.Enabled)
+            PresentTrace.Log("swing-contact", $"{recipe.Id}\tat={e.AtMs}\tslot={e.Slot}\tframe={_swing.FrameAt(_playheadMs)}"
+                                              + $"\tcue={cue ?? "-"}\tvol={recipe.ContactVolume:0.00}");
+    }
+
+    /// <summary>
+    /// Advance the performed swing's MISSILES and REACH on the playhead (P1.4) — BEFORE the frame's events are crossed, so a
+    /// flight lands on the very frame its Strike is presented — and voice the release: ONE cue per swing, the recipe's
+    /// chain, not lead (a basic attack takes the duck, it never makes one). The contact cue stays <see cref="SwingContact"/>'s.
+    /// </summary>
+    private void UpdateSwing(float dt)
+    {
+        if (_mode == Mode.Downed) return;
+        var step = _swing.Update(_playheadMs, dt, this);
+        if (step.Released && _swing.Recipe is { } r)
+        {
+            var cue = Sound?.PlayFirst(r.ReleaseCues, r.ReleaseVolume, 0f, Pan(step.ReleaseAt.X, 0.3f), 0.04f);
+            if (PresentTrace.Enabled)
+                PresentTrace.Log("swing-release", $"{r.Id}	at={_playheadMs:0}	release={_swing.ReleaseMs:0}	beat={_swing.BeatMs}"
+                                                  + $"	flight={_swing.FlightMs:0}	clamp={(_swing.ReleaseClamped ? 1 : 0)}	flights={_swing.FlightCount}"
+                                                  + $"	x={step.ReleaseAt.X:0}	y={step.ReleaseAt.Y:0}	cue={cue ?? "-"}	vol={r.ReleaseVolume:0.00}");
+        }
+        if (step.Landed && PresentTrace.Enabled && _swing.Recipe is { } landed)
+            PresentTrace.Log("swing-land", $"{landed.Id}	at={_playheadMs:0}	beat={_swing.BeatMs}	flights={_swing.FlightCount}");
+        // THE REACH: traced on the frame that presents its beat (taut, at the creature)
+        if (PresentTrace.Enabled && !_tracedTaut && _swing.Strand.Live && _playheadMs >= _swing.Strand.BeatMs && _swing.Recipe is { } lash)
+        {
+            _tracedTaut = true;
+            var s = _swing.Strand;
+            PresentTrace.Log("swing-strand", $"{lash.Id}	at={_playheadMs:0}	beat={s.BeatMs:0}	taut={(s.Taut(_playheadMs) ? 1 : 0)}"
+                                             + $"	reach={s.Reach(_playheadMs):0.00}	slack={s.Slack(_playheadMs):0.00}	out={s.OutFromMs:0}	home={s.HomeMs:0}"
+                                             + $"	hand={s.Hand.X:0},{s.Hand.Y:0}	target={s.Target.X:0},{s.Target.Y:0}");
+        }
+    }
+
+    /// <summary>
+    /// Draw the swing's flights and strand (P1.4): the MATERIAL (each missile's prop, the chain's iron body and its hook;
+    /// normal batch, untinted) or the LIGHT (each missile's edge, trail, glint and contact; the hook's edge). Nothing allocates.
+    /// </summary>
+    private int DrawSwingObjects(SpriteBatch b, bool light)
+    {
+        var n = 0;
+        for (var k = 0; k < _swing.FlightCount; k++)
+        {
+            var v = _swing.Flight(k);
+            if (!v.Placed) continue;
+            if (light) { v.Draw(b); n += v.LastSprites; }
+            else if (!v.Landed) { v.DrawMaterial(b); n++; }
+        }
+        var strand = _swing.Strand;
+        if (strand.Look is not { } look || strand.Compose(_playheadMs) == 0) return n;
+        if (!light && _ui.Assets.Get(look.StrandKey) is { } body)
+        {
+            var thick = strand.ThicknessPx;
+            foreach (var piece in strand.Pieces)
+            {
+                var d = piece.To - piece.From;
+                var len = d.Length();
+                if (len < 0.5f) continue;
+                b.Draw(body, piece.From, null, Color.White, MathF.Atan2(d.Y, d.X), new Vector2(0f, body.Height / 2f),
+                       new Vector2((len + 0.75f) / body.Width, thick / body.Height), SpriteEffects.None, 0f);
+                n++;
+            }
+            if (look.LinkKey is not null && _ui.Assets.Get(look.LinkKey) is { } links) n += DrawStrandLinks(b, strand, look, links);
+        }
+        var endKey = light ? look.EndEdgeKey : look.EndKey;
+        if (endKey is not null && _ui.Assets.Get(endKey) is { } end)
+        {
+            var colour = light ? VfxBlend.Light(Color.White * look.EndEdgeBrightness) : Color.White;
+            b.Draw(end, strand.EndAt, null, colour, strand.EndRotation, look.EndPivot, strand.PixelScale, SpriteEffects.None, 0f);
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// THE CHAIN'S LINKS (<see cref="ReachLook.LinkKey"/>): stamped along the strand's pieces by arc length at a fixed
+    /// step, face-on and edge-on alternately, each turned to its piece. Nothing allocates.
+    /// </summary>
+    private static int DrawStrandLinks(SpriteBatch b, ReachStrand strand, ReachLook look, Texture2D links)
+    {
+        var cellW = links.Width / 2;
+        var height = strand.ThicknessPx * look.LinkHeight;
+        var length = height * cellW / Math.Max(1, links.Height);
+        var step = Math.Max(2f, length * look.LinkStep);
+        var scale = new Vector2(length / cellW, height / links.Height);
+        var origin = new Vector2(cellW / 2f, links.Height / 2f);
+        var n = 0;
+        var next = step * 0.5f;   // the first link half a step from the hand
+        var walked = 0f;
+        foreach (var piece in strand.Pieces)
+        {
+            var d = piece.To - piece.From;
+            var len = d.Length();
+            if (len < 0.5f) continue;
+            var rotation = MathF.Atan2(d.Y, d.X);
+            while (next <= walked + len)
+            {
+                var at = piece.From + d * ((next - walked) / len);
+                var cell = new Rectangle((n & 1) * cellW, 0, cellW, links.Height);
+                b.Draw(links, at, cell, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
+                n++;
+                next += step;
+            }
+            walked += len;
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// Draw the swing's contact picture: its MATERIAL (the dust; normal batch) or its LIGHT (the slash, slivers, flash,
+    /// ring, sparks; inside <see cref="VfxPlayer.BeginLight"/>, ADR-009). Nothing allocates.
+    /// </summary>
+    private void DrawSwing(SpriteBatch b, bool light)
+    {
+        var allocFrom = PresentTrace.Enabled ? GC.GetAllocatedBytesForCurrentThread() : 0L;
+        _swingDrawSprites += DrawSwingObjects(b, light);
+        var n = _swing.Compose(_playheadMs, light);
+        var sprites = _swing.Sprites;
+        for (var k = 0; k < n; k++)
+        {
+            var s = sprites[k];
+            if (_ui.Assets.Get(s.Key ?? SwingPerformance.KeyOf(s.Part)) is not { } tex) continue;
+            var origin = s.FromLeft ? new Vector2(0f, tex.Height / 2f) : new Vector2(tex.Width / 2f, tex.Height / 2f);
+            b.Draw(tex, s.At, null, light ? VfxBlend.Light(s.Color) : s.Color, s.Rotation, origin,
+                   new Vector2(s.Size.X / tex.Width, s.Size.Y / tex.Height), SpriteEffects.None, 0f);
+        }
+        _swingDrawSprites += n;
+        if (PresentTrace.Enabled) _swingAllocBytes += GC.GetAllocatedBytesForCurrentThread() - allocFrom;
+    }
+
+    /// <summary>
+    /// THE SOURCE IN THE NUMBER (design.md section 8): the outline a number owned by the skill in <paramref name="skillSlot"/>
+    /// takes, the slot's Source light, when that skill's closed reference (JAWS, PRESS or BRAND) resolved through the
+    /// champion-agnostic tier on this champion; null otherwise, so the Seeker's own closed numbers stay untouched.
+    /// </summary>
+    private Color? AgnosticOutline(int skillSlot)
+    {
+        if (skillSlot < 0 || skillSlot >= _waveSkills.Count) return null;
+        var sk = _waveSkills[skillSlot];
+        var tier = sk.Def.Kind switch
+        {
+            SkillKind.Reaction => RecipeTier.Of(RecipeFamily.Reaction, Character.Id, sk.Def.Id),
+            SkillKind.Field => RecipeTier.Of(RecipeFamily.Field, Character.Id, sk.Def.Id) is RecipeTierKind.Agnostic
+                ? RecipeTierKind.Agnostic
+                : RecipeTier.Of(RecipeFamily.Mark, Character.Id, sk.Def.Id),
+            _ => RecipeTierKind.None,
+        };
+        return NumberOutline.For(tier, SourceGlow(sk.Source));
     }
 
     /// <summary>The room a creature's life pip takes over its drawn top (DrawComposition: Space(10) up, Control(8) tall).</summary>
@@ -2082,6 +2308,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                 _playheadMs += dt * 1000f * _speedMul;
                 PresentTrace.PlayheadMs = _playheadMs;
                 UpdatePerformance(dt);
+                UpdateSwing(dt);
                 UpdateReactions();
                 VoiceField();
                 VoiceMark();
@@ -2158,10 +2385,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             _healReceive.Reset();   // ...and the heals before it landed silently, like every other beat
             _shieldFxPosed = false; // ...so a posed shield flare is re-fired after the rebuild wiped it
             _hitFlash.Clear();
+            _swing.ForgetVoiced();  // ...and a swing the live run voiced before the rewind is voiced again when re-crossed
+            _firstBeat.Reset();     // ...and FIRST BEAT's struck set is rebuilt from the rewound wave (the silent beats below)
             _playheadMs = seek;
             foreach (var crossed in _replay.Advance(seek))
+            {
+                _firstBeat.Cross(crossed);
                 if (crossed.Kind is BattleEventKind.ShieldGained or BattleEventKind.ShieldAbsorbed)
                     _shieldSeen = true;   // the strip must show a shield the seek granted silently
+            }
             _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(seek);
             _nextChampStrikeMs = _replay.NextChampionStrikeAfter(seek);
         }
@@ -2287,6 +2519,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         UpdateChampionClip();
 
         UpdatePerformance(dt);
+        UpdateSwing(dt);
         UpdateReactions();
         VoiceField();
         VoiceMark();
@@ -2371,8 +2604,17 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     var reactionHit = !auraTick && e.FromSkill && e.AtMs == reactionHitAtMs && reactionHitRecipe is not null
                                       && lastOwner.IsSkillsBlow(e, reactionHitSlot);
                     var echoHit = !auraTick && !performedHit && !reactionHit && e.AtMs == echoAtMs && lastOwner.IsSkillsBlow(e, echoSlot);
-                    // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
-                    if (!e.FromSkill) _champLunge = 1f;
+                    // A PERFORMED SWING'S OWN BLOW (design.md 5.18-5.27, P1.3): the basic attack's Strike on the beat of the swing
+                    // on the figure. Its contact is the swing's: its picture at the creature, ONE contact cue per swing ms, the
+                    // T1 flash, no generic thud, no puff, no 40 px push (the step-in is the swing's motion), no callout, no duck.
+                    var swingHit = e.Hit == HitSource.Swing && _swing.IsBeat(e.AtMs);
+                    // FIRST BEAT (the Metronome): Core's struckOnce, crossed for EVERY Strike in the fight's order
+                    var firstBeat = _firstBeat.Cross(e) && FirstBeat.Applies(Character.Shape);
+                    // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat). Only the LEGACY
+                    // swing pushes 40 px (RH_ACTION_RECIPES=0, no timing file, or a beat the figure did not swing): the QA twin.
+                    if (!e.FromSkill && !swingHit) _champLunge = 1f;
+                    // the swing's contact voices BEFORE the thud line, marking the ms voiced (the P0.4 pattern)
+                    if (swingHit) SwingContact(e);
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
                     // already announced them, and four projectile impacts on top of it were "two sounds at
@@ -2392,7 +2634,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     // next tick starts (or at wave end, in BeginWave).
                     if (auraTick)
                     {
-                        if (e.AtMs != _auraTotalMs) { FlushAuraTotal(); _auraTotalMs = e.AtMs; }
+                        if (e.AtMs != _auraTotalMs) { FlushAuraTotal(); _auraTotalMs = e.AtMs; _auraTotalSlot = lastOwner.Slot; }
                         _auraTotal += e.Amount;
                     }
                     else if (e.Amount > 0)
@@ -2417,13 +2659,21 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         {
                             // A PRESENTED REACTION'S ANSWER SHOWS ITS NUMBER A FEW FRAMES AFTER THE JAWS' SNAP, so the eye
                             // sees the jaws bite before it reads the number (ReactionRecipe.NumberDelayMs)
+                            // A QUIET DERIVED HIT the reaction owns at its ms (a DEADWEIGHT release, a bleed tick, a carry) is
+                            // still a consequence: Quiet grade, no word, no outline (GenericHits.Look), held for the snap all the
+                            // same so its drop follows the shown bite (the Phase 1 review: "-26 JAWS" beside the real "-2 JAWS").
                             if (reactionHit && reactionHitPerf is { Answered: false } answering)
-                                _reactionEchoes.Add(new ReactionEcho(answering, ReactionEchoKind.Number, e.Slot, total, crit, skill, hits,
-                                                                     reaction ? trapName : null));
+                            {
+                                var held = GenericHits.Look(quietHit, skill, reaction ? trapName : null,
+                                                            AgnosticOutline(reactionHitSlot) ?? FirstBeatOutline(firstBeat));
+                                _reactionEchoes.Add(new ReactionEcho(answering, ReactionEchoKind.Number, e.Slot, total, crit, held.Grade, hits,
+                                                                     held.Word, held.Outline));
+                            }
                             else
                             {
-                                var grade = quietHit ? NumberGrade.Quiet : skill ? NumberGrade.Skill : NumberGrade.Plain;
-                                SpawnDamage(total, e.Slot, crit, grade, hits, reaction ? trapName : null);
+                                var look = GenericHits.Look(quietHit, skill, reaction ? trapName : null,
+                                                            (reactionHit ? AgnosticOutline(reactionHitSlot) : null) ?? FirstBeatOutline(firstBeat));
+                                SpawnDamage(total, e.Slot, crit, look.Grade, hits, look.Word, look.Outline);
                                 // THE CRITICAL'S OWN CUE. sfx_crit existed and was spent on Reactions, so the
                                 // sound the file is named for had never once accompanied a critical hit.
                                 // Once per batch millisecond, like the thud; a quiet derived hit never speaks.
@@ -2453,6 +2703,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                             ? (_performance!.Recipe.TargetFlash, _performance.Recipe.TargetFlashRise, 1000f / Math.Max(1f, _performance.Recipe.TargetFlashMs))
                             : reactionHit
                                 ? (reactionHitRecipe!.TargetFlash, 0f, 1000f / Math.Max(1f, reactionHitRecipe.TargetFlashMs))
+                                : swingHit
+                                    ? (_swing.Recipe!.TargetFlash, _swing.Recipe.TargetFlashRise, 1000f / Math.Max(1f, _swing.Recipe.TargetFlashMs))
                                 : echoHit
                                     ? (UsualFlash.Peak * GenericHits.EchoScale, UsualFlash.Rise, UsualFlash.Rate)
                                     : UsualFlash;
@@ -2464,7 +2716,9 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     }
                     if (!auraTick && !quietHit && !performedHit && !reactionHit && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
-                        PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
+                        // a performed swing's own contact replaces the puff; its blow still takes its turn in the count, so
+                        // every other blow's puff falls where it always did
+                        if (!swingHit) PlayFx(VfxProfiles.ImpactWeak, VfxSubject.Creature(e.Slot), Steel);
                     }
                     break;
                 }
@@ -3196,12 +3450,17 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var perfDraws = PresentTrace.Enabled ? b.GraphicsDevice.Metrics.DrawCount : 0;
         if (!ShotNoVfx) _outgoing?.DrawMaterial(b);
         if (!ShotNoVfx) _performance?.DrawMaterial(b);
+        // THE SWING'S MATERIAL (P1.3): the dust at the creature, untinted, alpha-blended, over the figures
+        _swingAllocBytes = 0;
+        _swingDrawSprites = 0;
+        if (!ShotNoVfx) DrawSwing(b, light: false);
 
         if (!ShotNoVfx) _vfx.DrawOver(b);
         // ...and everything about them that IS light, in one additive pass of its own.
         // (the generic heal's chest glow opens it too, design.md 5.28: a pure read of the receive, Draw never changes it)
         var healGlow = _mode == Mode.Downed ? 0f : _healReceive.GlowAlpha(_playheadMs);
-        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0 || _field is not null || healGlow > 0f))
+        var swingLit = !ShotNoVfx && _swing.Drawing(_playheadMs);
+        if (!ShotNoVfx && (_performance is not null || _reactions.Count > 0 || _field is not null || swingLit || healGlow > 0f))
         {
             _vfx.BeginLight(b);
             if (healGlow > 0f) DrawHealGlow(b, healGlow);
@@ -3227,6 +3486,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                     PresentTrace.Log("field-draw", $"u={fu:0}\ttarget={field.TargetOf(ft)}\tsprites={fieldSprites + field.SpriteCount}"
                                                    + $"\tsquash={field.Squash(field.TargetOf(ft), _playheadMs).Y:0.000}\tshape={field.LastShape.X},{field.LastShape.Y},{field.LastShape.Width},{field.LastShape.Height}"
                                                    + $"\tbody={(TryBody(VfxSubject.Creature(Math.Max(0, field.TargetOf(ft))), out var fb) ? $"{fb.X},{fb.Y},{fb.Width},{fb.Height}" : "-")}\talloc={_fieldAllocBytes}");
+            }
+            // THE SWING'S LIGHT (P1.3): the contact at the creature (slash, slivers, flash, ring, sparks), ADR-009's blend
+            if (swingLit)
+            {
+                DrawSwing(b, light: true);
+                if (PresentTrace.Enabled) PresentTrace.Log("swing-draw", $"sprites={_swingDrawSprites}\talloc={_swingAllocBytes}");
             }
             _vfx.EndLight(b);
             // the performance's own cost: its blades' sprites and the draw calls from its material to its light
@@ -3710,10 +3975,12 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>
     /// The strip a champion strip is PLACED as (ADR-011): an authored action clip (one with a timing file) is keyed
     /// pixel-exact onto his idle, so it is drawn at the idle's scale and on its ground line; every other clip is
-    /// placed by its own measurements, as it always was (see <see cref="UiKit.ResolveFrame"/>).
+    /// placed by its own measurements, as it always was (see <see cref="UiKit.ResolveFrame"/>). A timing file that says
+    /// <c>"place": "own"</c> (<see cref="ActionClipTiming.PlaceOwn"/>: the basic attacks' strips, generated whole) keeps
+    /// the strip's own placement: the timing is data for its performance, and the champion envelope does not move.
     /// </summary>
     private string? PlacedAs(string stripKey)
-        => ActionClipLibrary.For(stripKey) is not null && stripKey != ChampionReferenceStrip ? ChampionReferenceStrip : null;
+        => ActionClipLibrary.For(stripKey) is { PlaceOwn: false } && stripKey != ChampionReferenceStrip ? ChampionReferenceStrip : null;
 
     /// <summary>
     /// Every clip the champion can be drawn in while standing THIS WAVE: the idle, the basic swing,
@@ -3800,7 +4067,15 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         }
         var push = (int)(_champLunge * ChampLungePx) + (int)MathF.Round(PerformedRootOffset()) + hitRecoil;
         var lift = (int)MathF.Round(PerformedRootLift()) + hitDip;
-        _champDrawBox = new Rectangle(ChampBox.X + push, ChampBox.Y + lift, ChampBox.Width, ChampBox.Height);
+        // THE SWING'S STEP-IN (P1.3): a draw offset read from the playhead, added BESIDE the push (never inside it), so the
+        // `root` line below never carries it; traced as its own `swing-step`
+        var step = SwingOnFigure ? (int)MathF.Round(_swing.StepPx(_playheadMs)) : 0;
+        if (PresentTrace.Enabled && step != _tracedStep)
+        {
+            _tracedStep = step;
+            PresentTrace.Log("swing-step", $"x={step}");
+        }
+        _champDrawBox = new Rectangle(ChampBox.X + push + step, ChampBox.Y + lift, ChampBox.Width, ChampBox.Height);
         if (PresentTrace.Enabled && (_performance is MeleePerformance || _outgoing is MeleePerformance) && (push != _tracedRoot.X || lift != _tracedRoot.Y))
         {
             _tracedRoot = new Point(push, lift);
@@ -6676,6 +6951,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
                         Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed)),
                         (int)beatMs.Value);
         if (PresentTrace.Enabled) PresentTrace.Log("clip-start", $"{clip}\tbeat={beatMs.Value:0}\tspeed={_clipSpeed:0.000}\tcontactMs={contactMs:0}\tframeMs={1000f / ChampionFps / _clipSpeed:0}");
+        // THE BASIC ATTACK, PERFORMED (P1.3): the plain envelope above owns the time; the swing takes the authored frames
+        if (clip == "attack" && next?.Cast is null) CommitSwing((int)beatMs.Value);
     }
 
     /// <summary>
@@ -6817,6 +7094,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         if (_performance is { } playing && _clipName == playing.Recipe.ClipKey && playing.ClipStartMs == _clipStartMs)
             playing.Retime(_clipTiming, plan.Fit == HandoffFit.Yielded ? plan.ExitMs : null,
                            next.BeatMs - (incoming?.TravelMs ?? 0f));
+        // a performed swing's frames after the contact, and its way home, follow the envelope's new exit (every fit)
+        if (SwingOnFigure) _swing.Retime(_clipStartMs + _clipTiming.TotalMs);
         if (PresentTrace.Enabled)
         {
             // a plain clip's contact is its contact frame; a performed action's is the beat itself (ADR-011)
@@ -6917,6 +7196,7 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         => _performance is { } p && !p.Finished(_playheadMs)
            || _outgoing is { } o && !o.Finished(_playheadMs)
            || ReactionStillPlaying()
+           || _swing.Drawing(_playheadMs)   // a wave-ending swing's contact plays out (<= 250 ms) instead of freezing lit
            || _curse is { } c && c.StillLeaving(_playheadMs)   // a wave-ending kill's curse leaves it on the break's clock (it froze mid-flash)
            || _field is { } f && f.Crushing(_playheadMs);   // a field tick that ends the wave plays its crush out (it froze on its arrival)
 
@@ -6998,7 +7278,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// changes what the fight did.
     /// </summary>
     private readonly record struct ReactionEcho(ReactionPerformance Reaction, ReactionEchoKind Kind, int Slot, int Amount = 0,
-                                                bool Crit = false, bool Skill = false, int Hits = 1, string? Word = null);
+                                                bool Crit = false, NumberGrade Grade = NumberGrade.Plain, int Hits = 1, string? Word = null,
+                                                Color? Outline = null);
 
     /// <summary>The answers waiting for their jaws' snap, oldest first (a few at most: a reaction every few seconds).</summary>
     private readonly List<ReactionEcho> _reactionEchoes = new();
@@ -7027,8 +7308,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             switch (echo.Kind)
             {
                 case ReactionEchoKind.Number:
-                    SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Skill ? NumberGrade.Skill : NumberGrade.Plain, echo.Hits, echo.Word);
-                    if (echo.Crit) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);
+                    SpawnDamage(echo.Amount, echo.Slot, echo.Crit, echo.Grade, echo.Hits, echo.Word, echo.Outline);
+                    if (echo.Crit && echo.Grade != NumberGrade.Quiet) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // a quiet derived hit never speaks
                     break;
                 case ReactionEchoKind.Flash when r.Recipe.TargetFlash > 0f && _hitFlash.GetValueOrDefault(echo.Slot) <= 0f:
                     _hitFlash[echo.Slot] = 1f;
@@ -7292,6 +7573,28 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     Texture2D? IActionStage.Texture(string key) => _ui.Assets.Get(key);
 
     float IActionStage.CasterHeight => TryBody(VfxSubject.Champion, out var champ) ? champ.Height : ChampBox.Height;
+
+    // THE SWING'S STAGE (P1.4): its own strip, by the key resolved once at CommitSwing (no per-frame string)
+    bool ISwingStage.TrySwingFrame(int frame, out SpriteFrame drawn, out int frameSize)
+    {
+        if (_swingStripKey is { } key
+            && _ui.ResolveFrame(key, _champDrawBox, (frame + 0.5f) / ChampionFps, ChampionFps, loop: false, topCrop: -1f,
+                                flip: ChampionFacesRight, placeAs: PlacedAs(key)) is { } f)
+        {
+            drawn = f;
+            frameSize = f.Texture.Height;
+            return true;
+        }
+        drawn = default;
+        frameSize = 0;
+        return false;
+    }
+
+    bool ISwingStage.TrySwingTarget(int slot, out Rectangle body) => TryBody(VfxSubject.Creature(slot), out body);
+
+    Texture2D? ISwingStage.SwingTexture(string key) => _ui.Assets.Get(key);
+
+    float ISwingStage.SwingCasterHeight => TryBody(VfxSubject.Champion, out var champ) ? champ.Height : ChampBox.Height;
 
     bool IReactionStage.TryChampionBody(out Rectangle body) => TryBody(VfxSubject.Champion, out body);
 
@@ -7651,6 +7954,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     private const float AuraSpikeSeconds = 0.42f;
 
     private int _auraTotal, _auraTotalMs = -1;
+    /// <summary>The field whose tick the pending aura total is (its slot, for the agnostic outline), or -1.</summary>
+    private int _auraTotalSlot = -1;
 
     /// <summary>
     /// THE GENERIC HEAL'S CHEST GLOW (design.md 4 RETURN / 5.28): <c>fxp_flash_soft</c> in Nature green through the light
@@ -7706,9 +8011,10 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     /// <summary>The pending aura tick's total as one plain number over the pack's centre (see the Strike case).</summary>
     private void FlushAuraTotal()
     {
-        if (_auraTotal > 0) SpawnDamage(_auraTotal, TargetSlot(), crit: false, NumberGrade.Plain);
+        if (_auraTotal > 0) SpawnDamage(_auraTotal, TargetSlot(), crit: false, NumberGrade.Plain, outline: AgnosticOutline(_auraTotalSlot));
         _auraTotal = 0;
         _auraTotalMs = -1;
+        _auraTotalSlot = -1;
     }
 
     // ADR-011: the projectile action being performed (one at a time: the champion acts once per beat), and
@@ -7772,7 +8078,11 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
     {
         if (CaptureViews.NoRootMotion || leader < 0) return 0;
         var width = _actors.TryBounds(VfxSubject.Creature(slot), out var vb) ? vb.Rect.Width : (int)(box.Width * 0.75f);
-        var since = _enemySinceHit < EnemyFollowSeconds ? _enemySinceHit * 1000f : -1f;
+        // the follow-through runs on the PLAYHEAD since the bite landed (the recoil's clock), never on frame dt: a creature's
+        // x at a playhead must not depend on the catch-up pattern (the sweep's P0.2 / P0.3 host-x sampling). The dt clock
+        // only ends a follow-through the playhead cannot (a wave that ends inside it rests the playhead).
+        var sinceMs = _playheadMs - _recoilFromMs;
+        var since = _enemySinceHit < 2f * EnemyFollowSeconds && sinceMs >= 0f && sinceMs < EnemyFollowSeconds * 1000f ? sinceMs : -1f;
         var travel = CaptureViews.LungeOverride ?? BitePresentation.LeaderLunge;
         return (int)MathF.Round(BitePresentation.Lunge(_enemyWindup, since, slot == leader, travel) * width);
     }
@@ -7877,6 +8187,8 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
             : hasDeathClip ? (DownedSeconds - _downedTimer)   // plays through, then CLAMPS on the last frame
+            // A PERFORMED SWING (P1.3) shows its AUTHORED frame inside the plain envelope (SwingClock): the contact frame on the beat
+            : !dead && _clipName is not null && SwingOnFigure ? (_swing.FrameAt(_playheadMs) + 0.5f) / ChampionFps
             : !dead && _clipName is not null
                 ? (_clipTiming is { } authored ? (authored.FrameAt(_playheadMs - _clipStartMs) + 0.5f) / ChampionFps : ClipSeconds)
             // THE IDLE RESTARTS FROM ITS FIRST FRAME after an action (ADR-011): an authored action ends on the
@@ -7967,9 +8279,39 @@ public sealed class HuntScreen : IFocusActors, IReactionStage
             var y = Math.Max(c.Y - rise, floor + UiMetrics.Space(4));
             var fade = Math.Clamp(c.Life * 1.8f, 0f, 1f);
             // Through the dock's one-pixel shadow, so a word over a pale burst or a bright floor keeps its edge.
-            if (c.Bare) _ui.TextBig(b, c.Text, c.X - _ui.MeasureBig(c.Text, px) / 2, y, c.Color * (fade * c.Alpha), px);
-            else ShadowText(b, c.Text, c.X - _ui.MeasureBig(c.Text, px) / 2, y, c.Color * (fade * c.Alpha), px);
+            var x = c.X - _ui.MeasureBig(c.Text, px) / 2;
+            if (c.Outline is { } outline)
+            {
+                // THE SOURCE IN THE NUMBER (NumberOutline): the shadow, the dark halo, then the four-way outline, then the
+                // glyphs on top (the halo is what lets a white accent read on white ink: FIRST BEAT, later CALL / OATHMARK / REND)
+                if (!c.Bare) _ui.TextBig(b, c.Text, x + 1, y + 2, UiKit.Ink * 0.85f * (fade * c.Alpha), px);
+                var pass = new CalloutGlyphs(_ui, b, c.Text, px);
+                NumberOutline.DrawHaloed(ref pass, x, y, outline * (fade * c.Alpha), c.Color * (fade * c.Alpha),
+                                         UiKit.Ink * 0.9f * (fade * c.Alpha));
+            }
+            else if (c.Bare) _ui.TextBig(b, c.Text, x, y, c.Color * (fade * c.Alpha), px);
+            else ShadowText(b, c.Text, x, y, c.Color * (fade * c.Alpha), px);
         }
+    }
+
+    /// <summary>One callout's glyphs as a <see cref="IGlyphPass"/> (a struct: the outline's five passes allocate nothing).</summary>
+    private readonly struct CalloutGlyphs : IGlyphPass
+    {
+        private readonly UiKit _kit;
+        private readonly SpriteBatch _batch;
+        private readonly string _text;
+        private readonly int _px;
+
+        public CalloutGlyphs(UiKit kit, SpriteBatch batch, string text, int px)
+        {
+            _kit = kit;
+            _batch = batch;
+            _text = text;
+            _px = px;
+        }
+
+        /// <inheritdoc/>
+        public void Glyphs(int x, int y, Color ink) => _kit.TextBig(_batch, _text, x, y, ink, _px);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)

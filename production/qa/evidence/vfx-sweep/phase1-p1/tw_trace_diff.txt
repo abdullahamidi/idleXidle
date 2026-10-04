@@ -1,0 +1,5 @@
+# thornwall trace take (default fixture, 20 x 30): original strip (tw_before) vs cleaned strip (tw_after)
+# champ-frame lines, sorted with counts: diff below is empty when unchanged
+champ-frame: IDENTICAL (24 distinct clip/frame/box lines)
+# every other line (playhead, kind, fields), shots excluded:
+IDENTICAL apart from the playhead each line was sampled at

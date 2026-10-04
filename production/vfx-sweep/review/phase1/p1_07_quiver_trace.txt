@@ -1,0 +1,27 @@
+# p1_07_quiver: trace rows 1500..2900 ms of playhead (decisive 2000); columns: playhead, nearest saved frame, kind, fields
+# source: p1_07_quiver.log
+   1567  shot  43  clip-start      attack  beat=2000  speed=1.442  contactMs=442  frameMs=87
+   1567  shot  43  swing-start     quiver.swing  beat=2000  start=1567  anchor=1800  exit=2560  gap=313  peak=0  target=0
+   1783  shot  49  enemy-commit    bite=2000
+   1800  shot  50  sound           sfx_quiver_loose  vol=0.18  pitch=0.00  pan=-0.13
+   1800  shot  50  swing-release   quiver.swing  at=1800  release=1800  beat=2000  flight=200  clamp=0  flights=1  x=728  y=607  cue=sfx_quiver_loose  vol=0.18
+   1983  shot  55  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  55  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  56  swing-land      quiver.swing  at=2000  beat=2000  flights=1
+   2000  shot  56  event           Aura  slot=1  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  56  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  56  event           Strike  slot=0  amount=84  at=2000  crit=False  skill=False
+   2000  shot  56  sound           sfx_quiver_swing_hit  vol=0.36  pitch=0.00  pan=0.06
+   2000  shot  56  swing-contact   quiver.swing  at=2000  slot=0  frame=6  cue=sfx_quiver_swing_hit  vol=0.36
+   2000  shot  56  number          slot=0  amount=84  hits=1  crit=False  skill=False
+   2000  shot  56  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2000  shot  56  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  56  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2783  shot  79  enemy-commit    bite=3000
+   2867  shot  82  clip-start      attack  beat=3300  speed=1.442  contactMs=442  frameMs=87
+   2867  shot  82  swing-start     quiver.swing  beat=3300  start=2867  anchor=3100  exit=3860  gap=298  peak=0  target=0
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328
+swing-draw      139 / 0 / 0

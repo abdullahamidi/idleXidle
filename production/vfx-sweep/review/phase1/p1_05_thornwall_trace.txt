@@ -1,0 +1,38 @@
+# p1_05_thornwall: trace rows 200..1600 ms of playhead (decisive 700); columns: playhead, nearest saved frame, kind, fields
+# source: p1_05_thornwall.log
+    217  shot   3  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    217  shot   3  swing-start     thornwall.swing  beat=700  start=217  anchor=700  exit=1290  gap=317  peak=63  target=0
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_thornwall_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   thornwall.swing  at=700  slot=0  frame=3  cue=sfx_thornwall_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  vfx-spawn       fx_thornwall_trap_strip8_512  profile=cast.trap  subject=EnemyRow  travel=-
+   1000  shot  26  sound           sfx_hit  vol=0.40  pitch=0.25  pan=0.00
+   1000  shot  26  event           Strike  slot=0  amount=318  at=1000  crit=False  skill=True
+   1000  shot  26  number          slot=0  amount=318  hits=1  crit=False  skill=True
+   1000  shot  26  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    217  shot   3  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    217  shot   3  swing-start     thornwall.swing  beat=700  start=217  anchor=700  exit=1290  gap=317  peak=63  target=0
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_thornwall_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   thornwall.swing  at=700  slot=0  frame=3  cue=sfx_thornwall_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=0  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  vfx-spawn       fx_thornwall_trap_strip8_512  profile=cast.trap  subject=EnemyRow  travel=-
+   1000  shot  26  sound           sfx_hit  vol=0.40  pitch=0.25  pan=0.00
+   1000  shot  26  event           Strike  slot=0  amount=318  at=1000  crit=False  skill=True
+   1000  shot  26  number          slot=0  amount=318  hits=1  crit=False  skill=True
+   1000  shot  26  flash           slot=0  peak=0.45  ms=80  rise=0.15
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328
+swing-draw      7 / 0 / 0

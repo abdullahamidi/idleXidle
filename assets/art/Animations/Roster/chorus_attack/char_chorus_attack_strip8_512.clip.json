@@ -1,0 +1,92 @@
+{
+ "frameMs": [
+  90,
+  90,
+  90,
+  80,
+  70,
+  90,
+  90,
+  100
+ ],
+ "elastic": [
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 2,
+  "commit": 4,
+  "release": 5,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "4": {
+   "ThrowHand": [
+    0.61,
+    0.5,
+    -5
+   ]
+  },
+  "5": {
+   "ThrowHand": [
+    0.62,
+    0.54,
+    0
+   ]
+  },
+  "6": {
+   "ThrowHand": [
+    0.63,
+    0.54,
+    0
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write chorus_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 3,
+    "release": 4,
+    "recovery": 6,
+    "settle": 7
+   },
+   "sockets": {
+    "3": {
+     "Hand": [
+      0.434,
+      0.64,
+      164
+     ]
+    },
+    "4": {
+     "Hand": [
+      0.343,
+      0.734,
+      136
+     ]
+    },
+    "5": {
+     "Hand": [
+      0.381,
+      0.706,
+      144
+     ]
+    }
+   }
+  },
+  "eye": {
+   "release": "5, not the proposed 4: the charm is still in her fingers on 4 (kept by the clean: the charm she holds); the hand is empty from 5, so the object in the air is the one that was in the hand",
+   "sockets": "by eye at the throwing fist; the proposal found the belt charms"
+  }
+ }
+}

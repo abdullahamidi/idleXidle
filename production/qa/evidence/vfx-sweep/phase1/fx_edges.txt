@@ -1,0 +1,15 @@
+# check_fx_edges.py on every Phase 1 part and prop (SOFT >= 2 %, EDGE <= 24 required; LIVE not required: materials, see P1.3 / P1.4)
+    edge   soft%  asset
+       0  25.56%  assets\art\VFX\parts\fxp_dust_soft.png   <== impact frame(s) [0] keep only 6 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   5.50%  assets\art\Props\prop_quiver_arrow.png   <== impact frame(s) [0] keep only 6 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   2.25%  assets\art\Props\prop_quiver_arrow_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   9.03%  assets\art\Props\prop_chorus_charm.png   <== impact frame(s) [0] keep only 11 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   6.25%  assets\art\Props\prop_chorus_charm_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   8.67%  assets\art\Props\prop_unbroken_chip.png   <== impact frame(s) [0] keep only 21 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   6.12%  assets\art\Props\prop_unbroken_chip_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   7.64%  assets\art\Props\prop_oathbound_hook.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+       0   3.47%  assets\art\Props\prop_oathbound_hook_edge.png   <== impact frame(s) [0] keep only 0 bright cells at combat size (needs 150) - too faint to read in the fight
+
+   9 of 9 VFX strips end on a rectangle, cannot fade, or cannot be seen.
+   Regenerate through tools/asset-pipeline/v2/fxclips.py, whose post-pass is
+   whiten -> glow -> soften -> feather. Do NOT re-scissor at runtime.

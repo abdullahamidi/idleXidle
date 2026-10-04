@@ -1,0 +1,27 @@
+# p17_c06_magpie: trace rows 1800..3100 ms of playhead (decisive 2200); columns: playhead, nearest saved frame, kind, fields
+# source: p17_c06_magpie.log
+   1883  shot   7  sound           sfx_seeker_brand_apply  vol=0.08  pitch=0.00  pan=0.09
+   1883  shot   7  mark-cue        seeker.brand  kind=Apply  slot=0  moment=2000  at=-117  cue=sfx_seeker_brand_apply  vol=0.082  pitch=0.00
+   1983  shot  10  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  10  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  11  event           Aura  slot=2  amount=0  at=2000  crit=False  skill=False
+   2000  shot  11  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  11  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  11  event           Aura  slot=3  amount=0  at=2000  crit=False  skill=False
+   2000  shot  11  event           Marked  slot=70  amount=2000  at=2000  crit=False  skill=False
+   2000  shot  11  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  11  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2067  shot  13  sound           sfx_seeker_brand_ash  vol=0.06  pitch=0.00  pan=0.04
+   2067  shot  13  mark-cue        seeker.brand  kind=Ash  slot=0  moment=2000  at=67  cue=sfx_seeker_brand_ash  vol=0.055  pitch=0.00
+   2200  shot  17  event           Strike  slot=0  amount=140  at=2200  crit=False  skill=False
+   2200  shot  17  sound           sfx_magpie_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+   2200  shot  17  number          slot=0  amount=140  hits=1  crit=False  skill=False
+   2200  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2783  shot  34  enemy-commit    bite=3000
+   3000  shot  41  event           EnemyStrike  slot=0  amount=4  at=3000  crit=False  skill=False
+   3000  shot  41  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      140 / 6 / 14193328
+mark-draw       290 / 1 / 1128
+swing-draw      38 / 0 / 0

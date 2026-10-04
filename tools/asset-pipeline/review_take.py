@@ -32,7 +32,8 @@ from PIL import Image, ImageDraw
 KEEP = {"event", "sound", "callout", "number", "flash", "vfx-spawn", "contact", "contact-tick", "release", "handoff",
         "clip-start", "reaction-spawn", "reaction-cue", "reaction-number", "reaction-end", "reaction-clamp",
         "field-wave", "field-cue", "mark-wave", "mark-cue", "curse-seat", "proj-contact", "quiet-hit", "skill-skip",
-        "echo", "enemy-commit", "heal-number"}
+        "echo", "enemy-commit", "heal-number", "swing-start", "swing-contact", "swing-release", "swing-land",
+        "swing-strand", "yield"}
 
 
 def ffmpeg() -> str:

@@ -153,6 +153,75 @@ takes() {
   # and HOLD FAST's damaging legacy reaction as a trace (one cue per event at the ask)
   take r_weaver        seeker "$SEEKER" - 9 150 2 RH_SHOT_KEYSTONES=weaver                                      # the woven echo at 11200, at echo scale
   take r_holdfast_trace unbroken "sig_unbroken_hold_fast,snare_jaws@Spirit,hammer_blow@Body,snare_repay@Machine" snare_repay:BANKED+CARRIED beat:1 20 30 RH_SHOT_LEAD=1.0 RH_SHOT_ARCHETYPE=Swarm  # trace only
+  # PHASE 1 / P1.2, THE CHAMPION-AGNOSTIC TIER (trace only): the closed layers live on other champions, numbers outlined
+  take p12_anvil_jaws  anvil  "sig_anvil_hardface,volley_spray@Mind,snare_jaws@Shadow,field_mire@Nature" - 0.5 20 30   # JAWS-agnostic: reaction-spawn / reaction-number, no fx_anvil_trap, no trap clip
+  take p12_chorus_press chorus "sig_chorus_grave_song,hammer_press@Body,volley_spray@Mind,hammer_blow@Body" - 0.5 20 30  # PRESS-agnostic beside GRAVE SONG (held): field-wave / field-draw, no held fx_press
+  take p12_tower_brand tower  "sig_tower_slow_fall,sign_brand@Machine,volley_spray@Mind,hammer_blow@Body" - 0.5 20 30   # BRAND-agnostic: mark-wave / mark-draw
+  # PHASE 1 / P1.3, THE MELEE BASIC ATTACKS PERFORMED (design.md 5.18-5.27): from the wave's first beat, 150 x 2; the trace
+  # holds swing-start / swing-contact / swing-step / swing-draw, the stills the contact picture (pick, then delete the rest)
+  take p13_seeker    seeker    "$SEEKER"                                                  - beat:1 150 2   # the blade cut, 25 % step-in
+  take p13_anvil     anvil     "sig_anvil_hardface,volley_spray@Mind,hammer_press@Body"       - beat:1 150 2   # the lunge punch, 20 %
+  take p13_metronome metronome "sig_metronome_clockwork,volley_spray@Mind,hammer_press@Body"  - beat:1 150 2   # the running punch, 25 %; FIRST BEAT outline=FFFFFF
+  take p13_tower     tower     "sig_tower_slow_fall,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # the hammer slam AT the creature: dust + flat ring
+  take p13_thornwall thornwall "sig_thornwall_narrows,volley_spray@Mind,hammer_press@Body"    - beat:1 150 2   # the shield bash: a broad 2-frame flash
+  take p13_magpie    magpie    "sig_magpie_paying_work,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # the dagger nick, the fastest profile
+  # PHASE 1 / P1.4, THE MISSILE AND REACH BASICS (design.md 5.24-5.27): the trace holds swing-release (beat - travel, or the
+  # recorded clamp) / swing-land / swing-contact / swing-strand (taut on the beat) / swing-draw alloc
+  take p14_quiver    quiver    "sig_quiver_backdraw,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # the arrow, release = beat - 200
+  take p14_chorus    chorus    "sig_chorus_grave_song,volley_spray@Mind,hammer_press@Body"    - beat:1 150 2   # one bone charm, a bone clatter
+  take p14_unbroken  unbroken  "sig_unbroken_hold_fast,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # the stone chip, a 220 ms lob
+  take p14_oathbound oathbound "sig_oathbound_oathmark,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # the chain lash: taut on the beat, 120 ms recoil
+  # PHASE 1 / P1.5, THE ARCHETYPE CUES (design.md section 7): the swings now voice their archetype (swing-contact cue= /
+  # swing-release cue=); render each with --mp4 (or film_audio.py --wav) to hear it beside SPRAY's contact in the same fight
+  take p15_seeker    seeker    "$SEEKER"                                                  - beat:1 150 2   # sfx_blade_hit 0.36 beside SPRAY's 0.50 and HARD HANDS' 0.55 in one fight
+  take p15_quiver    quiver   "sig_quiver_backdraw,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # sfx_blade_hit 0.36 + sfx_throw_release 0.18
+  take p15_anvil     anvil     "sig_anvil_hardface,volley_spray@Mind,hammer_press@Body"       - beat:1 150 2   # sfx_fist_hit 0.36
+  take p15_tower     tower     "sig_tower_slow_fall,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # sfx_stone_hit 0.36
+  take p15_thornwall thornwall "sig_thornwall_narrows,volley_spray@Mind,hammer_press@Body"    - beat:1 150 2   # sfx_wood_hit 0.36
+  # PHASE 1 / P1.6, THE IDENTITY CUES (design.md section 7, "Basic-attack hit family"): one take per champion; each swing
+  # line's cue= is now the champion's own sfx_<id>_swing_hit 0.36 (+ its own loose / toss 0.16-0.18), one sound per swing ms
+  take p16_seeker    seeker    "$SEEKER"                                                  - beat:1 150 2   # sfx_seeker_swing_hit beside SPRAY / HARD HANDS
+  take p16_anvil     anvil     "sig_anvil_hardface,volley_spray@Mind,hammer_press@Body"       - beat:1 150 2   # sfx_anvil_swing_hit
+  take p16_metronome metronome "sig_metronome_clockwork,volley_spray@Mind,hammer_press@Body"  - beat:1 150 2   # sfx_metronome_swing_hit
+  take p16_tower     tower     "sig_tower_slow_fall,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # sfx_tower_swing_hit
+  take p16_thornwall thornwall "sig_thornwall_narrows,volley_spray@Mind,hammer_press@Body"    - beat:1 150 2   # sfx_thornwall_swing_hit
+  take p16_magpie    magpie    "sig_magpie_paying_work,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # sfx_magpie_swing_hit
+  take p16_quiver    quiver    "sig_quiver_backdraw,volley_spray@Mind,hammer_press@Body"      - beat:1 150 2   # sfx_quiver_swing_hit + sfx_quiver_loose 0.18
+  take p16_chorus    chorus    "sig_chorus_grave_song,volley_spray@Mind,hammer_press@Body"    - beat:1 150 2   # sfx_chorus_swing_hit + sfx_chorus_toss 0.16
+  take p16_unbroken  unbroken  "sig_unbroken_hold_fast,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # sfx_unbroken_swing_hit + sfx_unbroken_toss 0.16
+  take p16_oathbound oathbound "sig_oathbound_oathmark,volley_spray@Mind,hammer_press@Body"   - beat:1 150 2   # sfx_oathbound_swing_hit
+  # PHASE 1 ACCEPTANCE FILM (P1.7, design.md section 8 "Film: Part 1 segment A at TEMPO 60 plus the ten swing chapters";
+  # section 9 chapters 01-10): each take its chapter's WHOLE build (design.md 9 Part 2: an Active signature + BLOW@Body +
+  # PRESS@Body + JAWS@Shadow, a passive signature + PRESS@Body + BLOW@Body + DRINK@Nature), from 0.6 s before the
+  # wave's SECOND beat (the lead shows the wind-up). Not beat 1: the live run has already voiced beat 1's swing when the
+  # seek rebuilds the replay, so on the replay that swing draws but is silent and untraced (notes.md P1.7, open issue).
+  # Chapter 01 is marked (slow): it is filmed at true 60 fps (150 x 1) so its 0.25x render is made from the same frames.
+  # The magpie's JAWS@Shadow is BRAND@Shadow (notes.md P1.7): the agnostic BRAND is filmed once in Phase 1, on the
+  # champion design.md's Part 1 E gives it to; JAWS-agnostic is in the anvil / metronome chapters.
+  take p17_a_tempo      seeker    "$SEEKER" - 3.4 150 1 RH_SHOT_TAKE="$TEMPO"                                                 # Part 1 A: the fastest TEMPO, swings yielding into SPRAY
+  take p17_c01_seeker   seeker    "$SEEKER"                                                                 - beat:2 150 1 RH_SHOT_LEAD=0.6   # 01 (slow): the blade cut, true 60 fps
+  take p17_c02_anvil    anvil     "sig_anvil_hardface,hammer_blow@Body,hammer_press@Body,snare_jaws@Shadow"         - beat:2 150 2 RH_SHOT_LEAD=0.6   # 02: the lunge punch
+  take p17_c03_metronome metronome "sig_metronome_clockwork,hammer_blow@Body,hammer_press@Body,snare_jaws@Shadow"   - beat:2 150 2 RH_SHOT_LEAD=0.6   # 03: the running punch; FIRST BEAT's white outline
+  take p17_c04_tower    tower     "sig_tower_slow_fall,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"       - beat:2 150 2 RH_SHOT_LEAD=0.6   # 04: the hammer slam at the creature
+  take p17_c05_thornwall thornwall "sig_thornwall_narrows,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"    - beat:2 150 2 RH_SHOT_LEAD=0.6   # 05: the shield bash
+  take p17_c06_magpie   magpie    "sig_magpie_paying_work,hammer_blow@Body,hammer_press@Body,sign_brand@Shadow"     - beat:2 150 2 RH_SHOT_LEAD=0.6   # 06: the dagger nick (BRAND for JAWS, see above)
+  take p17_c07_quiver   quiver    "sig_quiver_backdraw,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"       - beat:2 150 2 RH_SHOT_LEAD=0.6   # 07: the bow shot
+  take p17_c08_chorus   chorus    "sig_chorus_grave_song,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"     - beat:2 150 2 RH_SHOT_LEAD=0.6   # 08: the bone charm
+  take p17_c09_unbroken unbroken  "sig_unbroken_hold_fast,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"    - beat:2 150 2 RH_SHOT_LEAD=0.6   # 09: the stone chip
+  take p17_c10_oathbound oathbound "sig_oathbound_oathmark,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"   - beat:2 150 2 RH_SHOT_LEAD=0.6   # 10: the chain lash
+  # PHASE 1 REVIEW FILM (the director's plan, 2026-10-04): A seeks SPRAY's cast with a 2.2 s lead at the fastest TEMPO; the
+  # chapters seek the wave's FIRST beat (0.6 s lead shows the wind-up). Beat 1 is clean since the rig fix: a seek's replay
+  # rebuild forgets the swing's voiced ms (SwingPerformance.ForgetVoiced), so the re-crossed swing is voiced and traced.
+  take p1_A_seeker_t60  seeker    "$SEEKER"                                                                 - skill:volley_spray 150 2 RH_SHOT_LEAD=2.2 RH_SHOT_TAKE="$TEMPO"  # A + 01 (slow from the same frames)
+  take p1_02_anvil      anvil     "sig_anvil_hardface,hammer_blow@Body,hammer_press@Body,snare_jaws@Shadow"         - beat:1 150 2 RH_SHOT_LEAD=0.6   # the lunge punch; JAWS / PRESS agnostic
+  take p1_03_metronome  metronome "sig_metronome_clockwork,hammer_blow@Body,hammer_press@Body,snare_jaws@Shadow"   - beat:1 150 2 RH_SHOT_LEAD=0.6   # the running punch; FIRST BEAT
+  take p1_04_tower      tower     "sig_tower_slow_fall,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"       - beat:1 150 2 RH_SHOT_LEAD=0.6   # the slam at the creature
+  take p1_05_thornwall  thornwall "sig_thornwall_narrows,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"    - beat:1 150 2 RH_SHOT_LEAD=0.6   # the shield bash
+  take p1_06_magpie     magpie    "sig_magpie_paying_work,hammer_blow@Body,hammer_press@Body,sign_brand@Shadow"     - beat:1 150 2 RH_SHOT_LEAD=0.6   # the dagger nick; BRAND agnostic (swap for JAWS)
+  take p1_07_quiver     quiver    "sig_quiver_backdraw,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"       - beat:1 150 2 RH_SHOT_LEAD=0.6   # the bow shot (+ a 0.25x render)
+  take p1_08_chorus     chorus    "sig_chorus_grave_song,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"     - beat:1 150 2 RH_SHOT_LEAD=0.6   # one bone charm
+  take p1_09_unbroken   unbroken  "sig_unbroken_hold_fast,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"    - beat:1 150 2 RH_SHOT_LEAD=0.6   # the stone chip lob
+  take p1_10_oathbound  oathbound "sig_oathbound_oathmark,hammer_press@Body,hammer_blow@Body,drain_drink@Nature"   - beat:1 150 2 RH_SHOT_LEAD=0.6   # the chain lash (+ a 0.25x render)
 }
 takes
 for s in "${ADHOC[@]}"; do eval "take $s"; done

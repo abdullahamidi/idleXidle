@@ -455,19 +455,34 @@ public static class ReactionRecipes
 
     // THE LOOKUP (the accepted contract: skill-specific, deliberately shared, legacy). A reaction's presentation
     // belongs to its SKILL: JAWS and REPAY share the Snare Form's "trap" clip and effect, and REPAY (an Active) must
-    // keep its own. So there is no shared tier for reactions: a skill with no entry here keeps its legacy presentation.
+    // keep its own. So there is no Form tier for reactions: a skill with no entry here keeps its legacy presentation.
     private static readonly Dictionary<(string Character, string Skill), ReactionRecipe> BySkill = new()
     {
         [("seeker", "snare_jaws")] = SeekerJaws,
     };
 
+    // THE CHAMPION-AGNOSTIC TIER (design.md section 8), keyed by the SKILL alone (never its Form): JAWS is "one Shadow
+    // phenomenon", the skill's identity. The SAME instance on every champion: no Source parameter, no colour table, the
+    // same bite cue (sfx_seeker_jaws_bite, one file). REPAY has no entry and keeps its own.
+    private static readonly Dictionary<string, ReactionRecipe> ByAnySkill = new()
+    {
+        ["snare_jaws"] = SeekerJaws,
+    };
+
     /// <summary>
     /// The reaction recipe this champion presents for this skill (<paramref name="skillId"/>, a SkillDef.Id), or null:
-    /// the skill keeps its legacy presentation. RH_ACTION_RECIPES=0 turns these off with the action recipes, and
-    /// RH_REACTION_RECIPES=0 turns off these alone.
+    /// the skill keeps its legacy presentation. The champion's own entry first, then the skill's champion-agnostic one.
+    /// RH_ACTION_RECIPES=0 turns these off with the action recipes, and RH_REACTION_RECIPES=0 turns off these alone.
     /// </summary>
     public static ReactionRecipe? For(string characterId, string skillId)
-        => ActionRecipes.Enabled && Enabled && BySkill.TryGetValue((characterId, skillId), out var own) ? own : null;
+        => RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out _);
+
+    /// <summary>Which tier <see cref="For"/> resolves through for this champion and skill (<see cref="RecipeTier.Of"/>).</summary>
+    public static RecipeTierKind TierOf(string characterId, string skillId)
+    {
+        RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out var tier);
+        return tier;
+    }
 
     /// <summary>
     /// RH_REACTION_RECIPES=0 presents every reaction the old way while the actions stay performed: the switch that

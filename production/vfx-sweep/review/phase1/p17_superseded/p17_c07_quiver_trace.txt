@@ -1,0 +1,21 @@
+# p17_c07_quiver: trace rows 1600..2900 ms of playhead (decisive 2000); columns: playhead, nearest saved frame, kind, fields
+# source: p17_c07_quiver.log
+   1783  shot   4  enemy-commit    bite=2000
+   1800  shot   4  sound           sfx_quiver_loose  vol=0.18  pitch=0.00  pan=-0.13
+   1983  shot   9  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot   9  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  10  event           Aura  slot=1  amount=0  at=2000  crit=False  skill=False
+   2000  shot  10  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  10  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  10  event           Strike  slot=0  amount=84  at=2000  crit=False  skill=False
+   2000  shot  10  sound           sfx_quiver_swing_hit  vol=0.36  pitch=0.00  pan=0.06
+   2000  shot  10  number          slot=0  amount=84  hits=1  crit=False  skill=False
+   2000  shot  10  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2000  shot  10  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  10  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2783  shot  33  enemy-commit    bite=3000
+   2867  shot  36  clip-start      attack  beat=3300  speed=1.442  contactMs=442  frameMs=87
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      134 / 6 / 14193328
+swing-draw      138 / 0 / 0

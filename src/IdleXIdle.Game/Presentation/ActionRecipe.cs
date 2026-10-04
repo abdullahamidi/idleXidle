@@ -499,13 +499,23 @@ public static class ActionRecipes
     // resolved from the Seeker's Strike Form and "strike" effect, and BLOW, which says the same two words, was
     // performed as HARD HANDS (its lunge, its sounds, its impact, its flash, its duck, its callout timing).
     //   1. the skill's own recipe: champion + the stable SkillDef.Id;
-    //   2. the champion's FORM recipe, deliberately shared by every skill of that Form and effect (EffectKeys);
-    //   3. none: the skill plays its Form's plain clip, as it always did.
+    //   2. the skill's CHAMPION-AGNOSTIC recipe (design.md section 8): a shared skill's look and cues on any champion;
+    //   3. the champion's FORM recipe, deliberately shared by every skill of that Form and effect (EffectKeys);
+    //   4. none: the skill plays its Form's plain clip, as it always did.
 
     private static readonly Dictionary<(string Character, string Skill), IActionRecipe> BySkill = new()
     {
         [("seeker", "sig_seeker_hard_hands")] = SeekerHardHands,
     };
+
+    // THE CHAMPION-AGNOSTIC ACTION TIER (design.md section 8), EMPTY in Phase 1: SPRAY elsewhere needs each champion's
+    // own `projectile` strip timing (.clip.json) and missile, both Phase 4's; HARD HANDS is Seeker-only and never gets
+    // one. PHASE 4 HAZARD: ByAnySkill["volley_spray"] would outrank the Seeker's ByForm SPRAY, so BySkill[("seeker",
+    // "volley_spray")] = SeekerSpray must be added FIRST, or the Seeker's closed SPRAY resolves to the agnostic recipe.
+    private static readonly Dictionary<string, IActionRecipe> ByAnySkill = new();
+
+    /// <summary>How many champion-agnostic action recipes exist (0 in Phase 1: see the Phase 4 hazard above).</summary>
+    public static int AgnosticCount => ByAnySkill.Count;
 
     private static readonly Dictionary<(string Character, string Clip), IActionRecipe> ByForm = new()
     {
@@ -514,13 +524,15 @@ public static class ActionRecipes
 
     /// <summary>
     /// The recipe this champion performs for this skill, or null: that action plays as before. The skill's own recipe
-    /// (<paramref name="skillId"/>, a SkillDef.Id) first; else the champion's recipe for the skill's Form
-    /// (<paramref name="clipKey"/>) when it performs the skill's effect (<paramref name="effectKey"/>).
+    /// (<paramref name="skillId"/>, a SkillDef.Id) first; else the skill's champion-agnostic recipe (none in Phase 1);
+    /// else the champion's recipe for the skill's Form (<paramref name="clipKey"/>) when it performs the skill's effect
+    /// (<paramref name="effectKey"/>).
     /// </summary>
     public static IActionRecipe? For(string characterId, string skillId, string clipKey, string effectKey)
     {
         if (!Enabled) return null;
         if (BySkill.TryGetValue((characterId, skillId), out var own)) return own;
+        if (ByAnySkill.TryGetValue(skillId, out var any)) return any;
         return ByForm.TryGetValue((characterId, clipKey), out var shared)
                && (shared.EffectKeys is null || shared.EffectKeys.Contains(effectKey, StringComparer.Ordinal))
             ? shared : null;

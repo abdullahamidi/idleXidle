@@ -1,0 +1,56 @@
+# p1_03_metronome_fixed: trace rows 333..1633 ms of playhead (decisive 733); columns: playhead, nearest saved frame, kind, fields
+# source: p1_03_metronome.log
+    700  shot  17  handoff         projectile  beat=700  contact=700  recovery=973  motion=137  hold=300  natural=1410  available=431  ratio=1.00  exit=1404  fit=Natural  next=strike  nextBeat=2200  ideal=1404  latest=1783  protected=957
+    700  shot  17  event           Skill  slot=0  amount=0  at=700  crit=False  skill=False
+    700  shot  17  callout         CLOCKWORK
+    700  shot  17  vfx-spawn       fx_metronome_projectile_strip8_512  profile=cast.projectile  subject=Champion  travel=Creature/0
+    700  shot  17  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+    700  shot  17  event           Strike  slot=0  amount=678  at=700  crit=False  skill=True
+    700  shot  17  sound           sfx_hit  vol=0.22  pitch=0.00  pan=0.00
+    700  shot  17  number          slot=0  amount=678  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    700  shot  17  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/0  travel=-
+    700  shot  17  event           Strike  slot=1  amount=779  at=700  crit=False  skill=True
+    700  shot  17  number          slot=1  amount=779  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=1  peak=0.45  ms=80  rise=0.15
+    700  shot  17  event           Strike  slot=2  amount=678  at=700  crit=False  skill=True
+    700  shot  17  number          slot=2  amount=678  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=2  peak=0.45  ms=80  rise=0.15
+    700  shot  17  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/2  travel=-
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=3  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  reaction-spawn  seeker.jaws  slot=3  contact=1000  targets=0  belt=0,0
+   1000  shot  26  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+    700  shot  17  event           Skill  slot=0  amount=0  at=700  crit=False  skill=False
+    700  shot  17  callout         CLOCKWORK
+    700  shot  17  vfx-spawn       fx_metronome_projectile_strip8_512  profile=cast.projectile  subject=Champion  travel=Creature/0
+    700  shot  17  sound           sfx_cast  vol=0.42  pitch=0.00  pan=0.00
+    700  shot  17  event           Strike  slot=0  amount=678  at=700  crit=False  skill=True
+    700  shot  17  number          slot=0  amount=678  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=0  peak=0.45  ms=80  rise=0.15
+    700  shot  17  event           Strike  slot=1  amount=779  at=700  crit=False  skill=True
+    700  shot  17  number          slot=1  amount=779  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=1  peak=0.45  ms=80  rise=0.15
+    700  shot  17  vfx-spawn       fx_weakhit  profile=impact.weak  subject=Creature/1  travel=-
+    700  shot  17  event           Strike  slot=2  amount=678  at=700  crit=False  skill=True
+    700  shot  17  number          slot=2  amount=678  hits=1  crit=False  skill=True  outline=FFFFFF
+    700  shot  17  flash           slot=2  peak=0.45  ms=80  rise=0.15
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=3  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  reaction-spawn  seeker.jaws  slot=3  contact=1000  targets=0  belt=0,0
+   1000  shot  26  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+   1317  shot  36  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.09
+   1317  shot  36  reaction-cue    seeker.jaws  contact=1000  at=317  cue=sfx_seeker_jaws_bite
+   1317  shot  36  reaction-clamp  seeker.jaws  contact=1000  at=317  clamp=1194,791  belt=644,700  body=1114,635,268,245
+   1367  shot  37  number          slot=0  amount=2  hits=1  crit=False  skill=True  outline=9B7BFF
+   1367  shot  37  reaction-number seeker.jaws  contact=1000  at=367
+   1417  shot  39  clip-start      strike  beat=2200  speed=0.798  contactMs=796  frameMs=157
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 13107392
+reaction-draw   84 / 0 / 0
+swing-draw      10 / 0 / 0

@@ -1,0 +1,31 @@
+# p1_03_metronome: trace rows 3200..4600 ms of playhead (decisive 3700); columns: playhead, nearest saved frame, kind, fields
+# source: p1_03_metronome.log
+   3217  shot  93  clip-start      attack  beat=3700  speed=1.293  contactMs=486  frameMs=97
+   3217  shot  93  swing-start     metronome.swing  beat=3700  start=3217  anchor=3700  exit=4290  gap=507  peak=127  target=1
+   3700  shot 107  event           Strike  slot=1  amount=79  at=3700  crit=False  skill=False
+   3700  shot 107  sound           sfx_metronome_swing_hit  vol=0.36  pitch=0.00  pan=0.14
+   3700  shot 107  swing-contact   metronome.swing  at=3700  slot=1  frame=2  cue=sfx_metronome_swing_hit  vol=0.36
+   3700  shot 107  number          slot=1  amount=79  hits=1  crit=False  skill=False
+   3700  shot 107  flash           slot=1  peak=0.30  ms=110  rise=0.00
+   3783  shot 109  enemy-commit    bite=4000
+   3833  shot 111  event           ReactionArmed  slot=3  amount=2830  at=3830  crit=False  skill=False
+   3983  shot 115  sound           sfx_seeker_press_tick  vol=0.14  pitch=0.00  pan=0.13
+   3983  shot 115  field-cue       seeker.press  tick=4000  at=-17  cue=sfx_seeker_press_tick  vol=0.14
+   4000  shot 116  event           Aura  slot=2  amount=0  at=4000  crit=False  skill=False
+   4000  shot 116  event           Break  slot=1  amount=1  at=4000  crit=False  skill=False
+   4000  shot 116  event           DefenceNow  slot=1  amount=-5  at=4000  crit=False  skill=False
+   4000  shot 116  event           EnemyStrike  slot=0  amount=3  at=4000  crit=False  skill=False
+   4000  shot 116  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   4000  shot 116  event           Skill  slot=3  amount=0  at=4000  crit=False  skill=False
+   4000  shot 116  reaction-spawn  seeker.jaws  slot=3  contact=4000  targets=1  belt=0,0
+   4000  shot 116  event           Strike  slot=1  amount=3  at=4000  crit=False  skill=True
+   4317  shot 126  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.16
+   4317  shot 126  reaction-cue    seeker.jaws  contact=4000  at=317  cue=sfx_seeker_jaws_bite
+   4317  shot 126  reaction-clamp  seeker.jaws  contact=4000  at=317  clamp=1330,798  belt=644,700  body=1250,642,268,245
+   4367  shot 127  number          slot=1  amount=3  hits=1  crit=False  skill=True  outline=9B7BFF
+   4367  shot 127  reaction-number seeker.jaws  contact=4000  at=367
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 13107392
+reaction-draw   84 / 0 / 0
+swing-draw      10 / 0 / 0

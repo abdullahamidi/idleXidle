@@ -1,0 +1,42 @@
+# p1_09_unbroken: trace rows 1700..3100 ms of playhead (decisive 2200); columns: playhead, nearest saved frame, kind, fields
+# source: p1_09_unbroken.log
+   1717  shot  48  clip-start      attack  beat=2200  speed=1.293  contactMs=486  frameMs=97
+   1717  shot  48  swing-start     unbroken.swing  beat=2200  start=1717  anchor=1980  exit=2790  gap=318  peak=0  target=0
+   1783  shot  49  enemy-commit    bite=2000
+   1983  shot  55  sound           sfx_unbroken_toss  vol=0.16  pitch=0.00  pan=-0.14
+   1983  shot  55  swing-release   unbroken.swing  at=1983  release=1980  beat=2200  flight=220  clamp=0  flights=1  x=690  y=665  cue=sfx_unbroken_toss  vol=0.16
+   1983  shot  55  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  55  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  56  event           Aura  slot=0  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  event           ShieldGained  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  56  callout         +4 SHIELD
+   2000  shot  56  sound           sfx_shield_gain  vol=0.40  pitch=0.00  pan=0.00
+   2000  shot  56  vfx-spawn       fx_shield  profile=shield.gain  subject=Champion  travel=-
+   2000  shot  56  event           Aura  slot=1  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  56  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  56  event           ShieldAbsorbed  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  56  sound           sfx_shield_hit  vol=0.26  pitch=0.00  pan=0.00
+   2000  shot  56  vfx-spawn       fx_shield  profile=shield.absorb  subject=Champion  travel=-
+   2000  shot  56  event           EnemyStrike  slot=0  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2200  shot  62  swing-land      unbroken.swing  at=2200  beat=2200  flights=1
+   2200  shot  62  event           Strike  slot=0  amount=84  at=2200  crit=False  skill=False
+   2200  shot  62  sound           sfx_unbroken_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+   2200  shot  62  swing-contact   unbroken.swing  at=2200  slot=0  frame=7  cue=sfx_unbroken_swing_hit  vol=0.36
+   2200  shot  62  number          slot=0  amount=84  hits=1  crit=False  skill=False
+   2200  shot  62  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2783  shot  79  enemy-commit    bite=3000
+   3000  shot  86  event           ShieldAbsorbed  slot=0  amount=1  at=3000  crit=False  skill=False
+   3000  shot  86  sound           sfx_shield_hit  vol=0.26  pitch=0.00  pan=0.00
+   3000  shot  86  vfx-spawn       fx_shield  profile=shield.absorb  subject=Champion  travel=-
+   3000  shot  86  event           ShieldBroken  slot=0  amount=0  at=3000  crit=False  skill=False
+   3000  shot  86  callout         SHIELD BROKEN
+   3000  shot  86  sound           sfx_shield_break  vol=0.58  pitch=0.00  pan=0.00
+   3000  shot  86  vfx-spawn       fx_shield_break  profile=shield.break  subject=Champion  travel=-
+   3000  shot  86  event           EnemyStrike  slot=0  amount=3  at=3000  crit=False  skill=False
+   3000  shot  86  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328
+swing-draw      122 / 0 / 0

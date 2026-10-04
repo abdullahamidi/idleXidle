@@ -24,10 +24,10 @@ public sealed class ProjectileVisual
 {
     private const int HistoryCapacity = 32;
 
-    /// <summary>The composite's recipe.</summary>
-    public ProjectileLook Look { get; }
+    /// <summary>The composite's recipe (a <see cref="Reset"/> may give the same instance another one).</summary>
+    public ProjectileLook Look { get; private set; }
 
-    private readonly int _seed;
+    private int _seed;
     private readonly TrailHistory _trail = new(HistoryCapacity);
     private readonly Particle[] _sparks;
     private readonly Particle[] _shards;
@@ -60,6 +60,51 @@ public sealed class ProjectileVisual
         _sparks = new Particle[Math.Max(0, look.Sparks)];
         _shards = new Particle[Math.Max(0, look.ImpactShards)];
     }
+
+    /// <summary>
+    /// A REUSABLE composite (the basic attack's missiles, P1.4): its sparks and shards are sized for the most any look it
+    /// will be <see cref="Reset"/> to sheds, so one instance flies flight after flight without allocating.
+    /// </summary>
+    public ProjectileVisual(ProjectileLook look, int seed, int sparkCapacity, int shardCapacity)
+    {
+        Look = look ?? throw new ArgumentNullException(nameof(look));
+        _seed = seed;
+        _sparks = new Particle[Math.Max(Math.Max(0, look.Sparks), sparkCapacity)];
+        _shards = new Particle[Math.Max(Math.Max(0, look.ImpactShards), shardCapacity)];
+    }
+
+    /// <summary>
+    /// Re-initialise this instance for a NEW flight of <paramref name="look"/> (nothing allocated): unplaced, unlanded, no
+    /// trail, no particles. The look's sparks and shards must fit the capacity this instance was built with.
+    /// </summary>
+    public void Reset(ProjectileLook look, int seed)
+    {
+        Look = look ?? throw new ArgumentNullException(nameof(look));
+        if (look.Sparks > _sparks.Length || look.ImpactShards > _shards.Length)
+            throw new ArgumentException("the look sheds more particles than this composite holds", nameof(look));
+        _seed = seed;
+        _trail.Clear();
+        for (var i = 0; i < _sparks.Length; i++) _sparks[i].Live = false;
+        for (var i = 0; i < _shards.Length; i++) _shards[i].Live = false;
+        _sparksShed = 0;
+        _head = _trailTex = _glint = _spark = _shard = _flash = _material = null;
+        _driven = false;
+        _headOrigin = Vector2.Zero;
+        _from = _to = _pos = Vector2.Zero;
+        _dir = Vector2.UnitX;
+        _headLen = _headThick = 0f;
+        _headScale = 1f;
+        _time = _life = _lifeRate = 0f;
+        _arrivedAt = -1f;
+        _contactLife = 1f;
+        _tint = Color.White;
+        LastSprites = 0;
+        Placed = false;
+    }
+
+    // the sparks / shards THIS look sheds (an instance built for reuse may hold more)
+    private int SparkCount => Math.Min(_sparks.Length, Math.Max(0, Look.Sparks));
+    private int ShardCount => Math.Min(_shards.Length, Math.Max(0, Look.ImpactShards));
 
     /// <summary>True once the flight has been placed in the arena.</summary>
     public bool Placed { get; private set; }
@@ -132,6 +177,7 @@ public sealed class ProjectileVisual
     public void PlaceDriven(Vector2 from, Vector2 to, Color tint, Texture2D material, Texture2D edge, float pixelScale, int padPx,
                             Texture2D trail, Texture2D glint, Texture2D spark, Texture2D shard, Texture2D flash)
     {
+        // (SPRAY's own path, byte for byte as it was: the pad decides the object's box)
         _from = from;
         _to = to;
         _tint = tint;
@@ -144,6 +190,32 @@ public sealed class ProjectileVisual
         _headLen = Math.Max(1, material.Width - 2 * padPx) * pixelScale;
         _headThick = Math.Max(1, material.Height - 2 * padPx) * pixelScale;
         _headOrigin = new Vector2(material.Width / 2f, material.Height / 2f);
+        _contactLife = 1f;
+        _driven = true;
+        Placed = true;
+    }
+
+    /// <summary>
+    /// Place a DRIVEN flight whose object fills <paramref name="content"/> of its texture (texture pixels): the head's
+    /// length and thickness are that box's at <paramref name="pixelScale"/>, turned about its centre. For props drawn on a
+    /// square canvas (the champion missiles, P1.4). The textures may be missing: the flight is still placed, driven and
+    /// landed (its path is the presentation's truth), it just draws nothing.
+    /// </summary>
+    public void PlaceDriven(Vector2 from, Vector2 to, Color tint, Texture2D? material, Texture2D? edge, float pixelScale, Rectangle content,
+                            Texture2D? trail, Texture2D? glint, Texture2D? spark, Texture2D? shard, Texture2D? flash)
+    {
+        _from = from;
+        _to = to;
+        _tint = tint;
+        var d = to - from;
+        _dir = d.LengthSquared() > 1e-6f ? Vector2.Normalize(d) : Vector2.UnitX;
+        _pos = from;
+        _material = material;
+        _head = edge; _trailTex = trail; _glint = glint; _spark = spark; _shard = shard; _flash = flash;
+        _headScale = pixelScale;
+        _headLen = Math.Max(1, content.Width) * pixelScale;
+        _headThick = Math.Max(1, content.Height) * pixelScale;
+        _headOrigin = new Vector2(content.X + content.Width / 2f, content.Y + content.Height / 2f);
         _contactLife = 1f;
         _driven = true;
         Placed = true;
@@ -196,7 +268,7 @@ public sealed class ProjectileVisual
     /// <summary>SPARKS: 1-3 per flight, shed from the rear quarter, falling back relative to the travel.</summary>
     private void ShedSparks()
     {
-        while (_sparksShed < _sparks.Length && _life >= ProjectileMotion.SparkLife(_sparksShed, _sparks.Length, _seed))
+        while (_sparksShed < SparkCount && _life >= ProjectileMotion.SparkLife(_sparksShed, SparkCount, _seed))
         {
             var j = _sparksShed++;
             var perp = new Vector2(-_dir.Y, _dir.X);
@@ -218,9 +290,9 @@ public sealed class ProjectileVisual
     {
         if (!Placed || Landed) return;
         _arrivedAt = _time;
-        for (var i = 0; i < _shards.Length; i++)
+        for (var i = 0; i < ShardCount; i++)
         {
-            var dir = ProjectileMotion.ShardDirection(i, _shards.Length, Look.ImpactForward, Look.ImpactSpread, _dir, _seed);
+            var dir = ProjectileMotion.ShardDirection(i, ShardCount, Look.ImpactForward, Look.ImpactSpread, _dir, _seed);
             var forward = Vector2.Dot(dir, _dir) > 0.5f;
             var reach = _headLen * Look.ImpactReach * (forward ? 1f : 0.45f) * (0.8f + 0.4f * ProjectileMotion.Hash01(_seed, 500 + i));
             // v0 such that, under the drag below, the shard coasts ~reach before it stops

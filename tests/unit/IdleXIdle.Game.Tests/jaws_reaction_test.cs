@@ -131,7 +131,7 @@ public class JawsReactionTest
         Assert.Same(ReactionRecipes.SeekerJaws, ReactionRecipes.For("seeker", "snare_jaws"));
         Assert.Equal("seeker.jaws", ReactionRecipes.SeekerJaws.Id);
         Assert.Null(ReactionRecipes.For("seeker", "snare_repay"));
-        Assert.Null(ReactionRecipes.For("magpie", "snare_jaws"));   // another champion keeps the legacy reaction
+        Assert.Same(ReactionRecipes.SeekerJaws, ReactionRecipes.For("magpie", "snare_jaws"));   // another champion resolves the same instance (the agnostic tier)
         // ...and neither is an ACTION: a reaction never owns the figure
         Assert.Null(ActionRecipes.For("seeker", jaws.Id, jaws.ClipKey, jaws.FxKey));
         Assert.Null(ActionRecipes.For("seeker", repay.Id, repay.ClipKey, repay.FxKey));

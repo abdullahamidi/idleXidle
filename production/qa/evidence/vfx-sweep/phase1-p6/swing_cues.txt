@@ -1,0 +1,49 @@
+== p16_anvil.log: 3 swing lines
+      700 swing-contact cue=sfx_anvil_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_anvil_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_anvil_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_chorus.log: 6 swing lines
+      500 swing-release cue=sfx_chorus_toss vol=0.16  sound lines on that ms: 1  ok
+      700 swing-contact cue=sfx_chorus_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2013 swing-release cue=sfx_chorus_toss vol=0.16  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_chorus_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3513 swing-release cue=sfx_chorus_toss vol=0.16  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_chorus_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_magpie.log: 3 swing lines
+      700 swing-contact cue=sfx_magpie_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_magpie_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_magpie_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_metronome.log: 2 swing lines
+     3713 swing-contact cue=sfx_metronome_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     5213 swing-contact cue=sfx_metronome_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_oathbound.log: 3 swing lines
+      700 swing-contact cue=sfx_oathbound_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_oathbound_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_oathbound_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_quiver.log: 6 swing lines
+      500 swing-release cue=sfx_quiver_loose vol=0.18  sound lines on that ms: 1  ok
+      700 swing-contact cue=sfx_quiver_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     1813 swing-release cue=sfx_quiver_loose vol=0.18  sound lines on that ms: 1  ok
+     2013 swing-contact cue=sfx_quiver_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3113 swing-release cue=sfx_quiver_loose vol=0.18  sound lines on that ms: 1  ok
+     3313 swing-contact cue=sfx_quiver_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_seeker.log: 3 swing lines
+      700 swing-contact cue=sfx_seeker_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_seeker_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_seeker_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_thornwall.log: 3 swing lines
+      700 swing-contact cue=sfx_thornwall_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_thornwall_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_thornwall_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_tower.log: 3 swing lines
+      700 swing-contact cue=sfx_tower_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_tower_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_tower_swing_hit vol=0.36  sound lines on that ms: 1  ok
+== p16_unbroken.log: 6 swing lines
+      483 swing-release cue=sfx_unbroken_toss vol=0.16  sound lines on that ms: 1  ok
+      700 swing-contact cue=sfx_unbroken_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     1980 swing-release cue=sfx_unbroken_toss vol=0.16  sound lines on that ms: 1  ok
+     2213 swing-contact cue=sfx_unbroken_swing_hit vol=0.36  sound lines on that ms: 1  ok
+     3480 swing-release cue=sfx_unbroken_toss vol=0.16  sound lines on that ms: 1  ok
+     3713 swing-contact cue=sfx_unbroken_swing_hit vol=0.36  sound lines on that ms: 1  ok
+ALL OK

@@ -1,0 +1,547 @@
+{
+  "_generated_by": "tools/asset-pipeline/make_archetypes.py - do not edit",
+  "pin_level": "SHIPPED (design.md section 7: never human-approved before the owner has heard the film)",
+  "licence": {
+    "name": "CC0 1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "checked": "2026-10-04",
+    "how": "each source's own Freesound page links the CC0 1.0 deed"
+  },
+  "cues": {
+    "sfx_fist_hit": {
+      "what": "a padded fist",
+      "file": "assets/audio/combat/sfx_fist_hit.wav",
+      "sha256": "baddc0bb5af538baf74d55015d844f9015ed9650b91586dbe2b715413a164090",
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "bag_hit",
+        "body_blow",
+        "punch_snap"
+      ]
+    },
+    "sfx_blade_hit": {
+      "what": "a short cut into leather",
+      "file": "assets/audio/combat/sfx_blade_hit.wav",
+      "sha256": "ed8386ef0a022f06966af35576afbb0a93f2eee86789754705c5c158adda8c95",
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "knife_flesh",
+        "leather_slap",
+        "steel_stab"
+      ]
+    },
+    "sfx_stone_hit": {
+      "what": "a stone on packed earth",
+      "file": "assets/audio/combat/sfx_stone_hit.wav",
+      "sha256": "ccd0ec599fc69d576c8e30116de0b48bde010e98590b034051adf1a7bb2d101c",
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "brick_soil",
+        "pebble_tick",
+        "soil_click",
+        "stone_heavy"
+      ]
+    },
+    "sfx_wood_hit": {
+      "what": "a wooden thump with a rim",
+      "file": "assets/audio/combat/sfx_wood_hit.wav",
+      "sha256": "adebacac20e7ab9de234f473a157ea0304a7fbf8bc41ad8aa757fbf00676b9a8",
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "barrel_knock",
+        "bucket_rim",
+        "crate_thump",
+        "shield_wood"
+      ]
+    },
+    "sfx_throw_release": {
+      "what": "a cloth whip + air",
+      "file": "assets/audio/combat/sfx_throw_release.wav",
+      "sha256": "d588f0424e66d14a269aeaecff0774730e2b8ecf55c26cc5a5bd02312bdcb326",
+      "mastered_volume": 0.17,
+      "target_k50_db": -37.0,
+      "excerpts": [
+        "air_swish",
+        "cloth_whip",
+        "shirt_snap"
+      ]
+    },
+    "sfx_air_release": {
+      "what": "an air push, no tone",
+      "file": "assets/audio/combat/sfx_air_release.wav",
+      "sha256": "b7397ecde5aa84ebcbb552cc267376ccab031e9279a2ca7cf93bdc6cf488b8b3",
+      "mastered_volume": 0.24,
+      "target_k50_db": -35.0,
+      "excerpts": [
+        "air_burst",
+        "air_puff",
+        "smoke_puff"
+      ]
+    },
+    "sfx_field_tick": {
+      "what": "a quiet material settle",
+      "file": "assets/audio/combat/sfx_field_tick.wav",
+      "sha256": "bbb8f575e73b2a9b7cbdc483cd8af31bad0741d5a0c32cdbdb1021746fe162d3",
+      "mastered_volume": 0.34,
+      "target_k50_db": -33.0,
+      "excerpts": [
+        "gravel_grain",
+        "gravel_push",
+        "pebble_settle",
+        "pebble_tick"
+      ]
+    },
+    "sfx_cloth_commit": {
+      "what": "a boot plant + cloth",
+      "file": "assets/audio/combat/sfx_cloth_commit.wav",
+      "sha256": "fbeb771fd49d9eda9a047fc6f8fb4bd8d39f3e6f324d52cabb98c6ed41155687",
+      "mastered_volume": 0.3,
+      "target_k50_db": -35.0,
+      "excerpts": [
+        "boot_plant",
+        "cloth_ruffle",
+        "cloth_ruffle_b",
+        "foot_stomp"
+      ]
+    }
+  },
+  "excerpts": [
+    {
+      "name": "bag_hit",
+      "file": "tools/asset-pipeline/foley/archetypes/bag_hit.wav",
+      "source_title": "Punching Bag Sound Effects",
+      "author": "qubodup",
+      "freesound_page": "https://freesound.org/people/qubodup/sounds/53985/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        51.05,
+        51.3
+      ],
+      "download": "fist/fs53985_punching_bag_sound_effects_qubodup.wav",
+      "cues": [
+        "sfx_fist_hit"
+      ]
+    },
+    {
+      "name": "body_blow",
+      "file": "tools/asset-pipeline/foley/archetypes/body_blow.wav",
+      "source_title": "CLARKS Punch Hits body blows around the room.wav",
+      "author": "cryanrautha",
+      "freesound_page": "https://freesound.org/people/cryanrautha/sounds/369324/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        16.54,
+        16.7
+      ],
+      "download": "fist/fs369324_clarks_punch_hits_body_blows_aro_cryanrautha.wav",
+      "cues": [
+        "sfx_fist_hit"
+      ]
+    },
+    {
+      "name": "punch_snap",
+      "file": "tools/asset-pipeline/foley/archetypes/punch_snap.wav",
+      "source_title": "Punch",
+      "author": "danlucaz",
+      "freesound_page": "https://freesound.org/people/danlucaz/sounds/517744/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.455,
+        0.6
+      ],
+      "download": "fist/fs517744_punch_danlucaz.wav",
+      "cues": [
+        "sfx_fist_hit"
+      ]
+    },
+    {
+      "name": "knife_flesh",
+      "file": "tools/asset-pipeline/foley/archetypes/knife_flesh.wav",
+      "source_title": "Knife Stabs into Chicken Breasts #2",
+      "author": "CHallSmith",
+      "freesound_page": "https://freesound.org/people/CHallSmith/sounds/870739/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        12.05,
+        12.22
+      ],
+      "download": "blade/fs870739_knife_stabs_into_chicken_breasts_CHallSmith.wav",
+      "cues": [
+        "sfx_blade_hit"
+      ]
+    },
+    {
+      "name": "leather_slap",
+      "file": "tools/asset-pipeline/foley/archetypes/leather_slap.wav",
+      "source_title": "Leather Strap Striking Skin",
+      "author": "desiderium_audio",
+      "freesound_page": "https://freesound.org/people/desiderium_audio/sounds/744400/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        23.52,
+        23.7
+      ],
+      "download": "blade/fs744400_leather_strap_striking_skin_desiderium_audio.wav",
+      "cues": [
+        "sfx_blade_hit"
+      ]
+    },
+    {
+      "name": "steel_stab",
+      "file": "tools/asset-pipeline/foley/archetypes/steel_stab.wav",
+      "source_title": "Knife/sword stab #2.MP3",
+      "author": "SoundsForHim",
+      "freesound_page": "https://freesound.org/people/SoundsForHim/sounds/399617/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.54,
+        0.66
+      ],
+      "download": "blade/fs399617_knife_sword_stab_2_mp3_SoundsForHim.wav",
+      "cues": [
+        "sfx_blade_hit"
+      ]
+    },
+    {
+      "name": "stone_heavy",
+      "file": "tools/asset-pipeline/foley/archetypes/stone_heavy.wav",
+      "source_title": "impact-stone-heavy.wav",
+      "author": "kasparsj",
+      "freesound_page": "https://freesound.org/people/kasparsj/sounds/513694/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.16,
+        0.36
+      ],
+      "download": "stone/fs513694_impact_stone_heavy_wav_kasparsj.wav",
+      "cues": [
+        "sfx_stone_hit"
+      ]
+    },
+    {
+      "name": "brick_soil",
+      "file": "tools/asset-pipeline/foley/archetypes/brick_soil.wav",
+      "source_title": "Brick on soil.wav",
+      "author": "deleted_user_2104797",
+      "freesound_page": "https://freesound.org/people/deleted_user_2104797/sounds/325268/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.015,
+        1.15
+      ],
+      "download": "stone/fs325268_brick_on_soil_wav_deleted_user_2104797.wav",
+      "cues": [
+        "sfx_stone_hit"
+      ]
+    },
+    {
+      "name": "soil_click",
+      "file": "tools/asset-pipeline/foley/archetypes/soil_click.wav",
+      "source_title": "Brick on soil.wav",
+      "author": "deleted_user_2104797",
+      "freesound_page": "https://freesound.org/people/deleted_user_2104797/sounds/325268/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.455,
+        1.54
+      ],
+      "download": "stone/fs325268_brick_on_soil_wav_deleted_user_2104797.wav",
+      "cues": [
+        "sfx_stone_hit"
+      ]
+    },
+    {
+      "name": "pebble_tick",
+      "file": "tools/asset-pipeline/foley/archetypes/pebble_tick.wav",
+      "source_title": "Stone - Throwing pebbles",
+      "author": "Vrymaa",
+      "freesound_page": "https://freesound.org/people/Vrymaa/sounds/734669/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        5.47,
+        5.53
+      ],
+      "download": "settle/fs734669_stone_throwing_pebbles_Vrymaa.wav",
+      "cues": [
+        "sfx_stone_hit",
+        "sfx_field_tick"
+      ]
+    },
+    {
+      "name": "crate_thump",
+      "file": "tools/asset-pipeline/foley/archetypes/crate_thump.wav",
+      "source_title": "wooden-crate-impact2.wav",
+      "author": "DeltaCode",
+      "freesound_page": "https://freesound.org/people/DeltaCode/sounds/667654/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.2
+      ],
+      "download": "wood/fs667654_wooden_crate_impact2_wav_DeltaCode.wav",
+      "cues": [
+        "sfx_wood_hit"
+      ]
+    },
+    {
+      "name": "barrel_knock",
+      "file": "tools/asset-pipeline/foley/archetypes/barrel_knock.wav",
+      "source_title": "Wooden-Barrel_One-Hit_5",
+      "author": "cwmcnutt",
+      "freesound_page": "https://freesound.org/people/cwmcnutt/sounds/520146/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        5.36,
+        5.48
+      ],
+      "download": "wood/fs520146_wooden_barrel_one_hit_5_cwmcnutt.wav",
+      "cues": [
+        "sfx_wood_hit"
+      ]
+    },
+    {
+      "name": "shield_wood",
+      "file": "tools/asset-pipeline/foley/archetypes/shield_wood.wav",
+      "source_title": "Shield Hit 2",
+      "author": "JustInvoke",
+      "freesound_page": "https://freesound.org/people/JustInvoke/sounds/138489/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.105
+      ],
+      "download": "wood/fs138489_shield_hit_2_JustInvoke.wav",
+      "cues": [
+        "sfx_wood_hit"
+      ]
+    },
+    {
+      "name": "bucket_rim",
+      "file": "tools/asset-pipeline/foley/archetypes/bucket_rim.wav",
+      "source_title": "hitting metallic bucket with wooden stick.wav",
+      "author": "lartti",
+      "freesound_page": "https://freesound.org/people/lartti/sounds/513800/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.955,
+        1.12
+      ],
+      "download": "wood/fs513800_hitting_metallic_bucket_with_woo_lartti.wav",
+      "cues": [
+        "sfx_wood_hit"
+      ]
+    },
+    {
+      "name": "cloth_whip",
+      "file": "tools/asset-pipeline/foley/archetypes/cloth_whip.wav",
+      "source_title": "Clothes Whipping",
+      "author": "AlecCorday",
+      "freesound_page": "https://freesound.org/people/AlecCorday/sounds/263454/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.76,
+        0.96
+      ],
+      "download": "throw/fs263454_clothes_whipping_AlecCorday.wav",
+      "cues": [
+        "sfx_throw_release"
+      ]
+    },
+    {
+      "name": "shirt_snap",
+      "file": "tools/asset-pipeline/foley/archetypes/shirt_snap.wav",
+      "source_title": "Whipping T-shirt",
+      "author": "Sadiquecat",
+      "freesound_page": "https://freesound.org/people/Sadiquecat/sounds/742810/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.95,
+        1.05
+      ],
+      "download": "throw/fs742810_whipping_t_shirt_Sadiquecat.wav",
+      "cues": [
+        "sfx_throw_release"
+      ]
+    },
+    {
+      "name": "air_swish",
+      "file": "tools/asset-pipeline/foley/archetypes/air_swish.wav",
+      "source_title": "throw swish x12 HZA 07-03-2019.wav",
+      "author": "hz37",
+      "freesound_page": "https://freesound.org/people/hz37/sounds/463763/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        7.9,
+        8.15
+      ],
+      "download": "throw/fs463763_throw_swish_x12_hza_07_03_2019_w_hz37.wav",
+      "cues": [
+        "sfx_throw_release"
+      ]
+    },
+    {
+      "name": "smoke_puff",
+      "file": "tools/asset-pipeline/foley/archetypes/smoke_puff.wav",
+      "source_title": "Puff of Smoke",
+      "author": "qubodup",
+      "freesound_page": "https://freesound.org/people/qubodup/sounds/714257/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.26
+      ],
+      "download": "air/fs714257_puff_of_smoke_qubodup.wav",
+      "cues": [
+        "sfx_air_release"
+      ]
+    },
+    {
+      "name": "air_puff",
+      "file": "tools/asset-pipeline/foley/archetypes/air_puff.wav",
+      "source_title": "Air Puff",
+      "author": "waymonds",
+      "freesound_page": "https://freesound.org/people/waymonds/sounds/817695/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.09,
+        0.42
+      ],
+      "download": "air/fs817695_air_puff_waymonds.wav",
+      "cues": [
+        "sfx_air_release"
+      ]
+    },
+    {
+      "name": "air_burst",
+      "file": "tools/asset-pipeline/foley/archetypes/air_burst.wav",
+      "source_title": "Air Burst",
+      "author": "JustInvoke",
+      "freesound_page": "https://freesound.org/people/JustInvoke/sounds/138477/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.165
+      ],
+      "download": "air/fs138477_air_burst_JustInvoke.wav",
+      "cues": [
+        "sfx_air_release"
+      ]
+    },
+    {
+      "name": "pebble_settle",
+      "file": "tools/asset-pipeline/foley/archetypes/pebble_settle.wav",
+      "source_title": "Stone - Throwing pebbles",
+      "author": "Vrymaa",
+      "freesound_page": "https://freesound.org/people/Vrymaa/sounds/734669/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.82,
+        1.9
+      ],
+      "download": "settle/fs734669_stone_throwing_pebbles_Vrymaa.wav",
+      "cues": [
+        "sfx_field_tick"
+      ]
+    },
+    {
+      "name": "gravel_grain",
+      "file": "tools/asset-pipeline/foley/archetypes/gravel_grain.wav",
+      "source_title": "Gravel Pouring.wav",
+      "author": "cartoonrob",
+      "freesound_page": "https://freesound.org/people/cartoonrob/sounds/588467/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.7,
+        0.9
+      ],
+      "download": "settle/fs588467_gravel_pouring_wav_cartoonrob.wav",
+      "cues": [
+        "sfx_field_tick"
+      ]
+    },
+    {
+      "name": "gravel_push",
+      "file": "tools/asset-pipeline/foley/archetypes/gravel_push.wav",
+      "source_title": "gravel push with shoe short.flac",
+      "author": "kyles",
+      "freesound_page": "https://freesound.org/people/kyles/sounds/450353/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.19,
+        0.4
+      ],
+      "download": "settle/fs450353_gravel_push_with_shoe_short_flac_kyles.wav",
+      "cues": [
+        "sfx_field_tick"
+      ]
+    },
+    {
+      "name": "boot_plant",
+      "file": "tools/asset-pipeline/foley/archetypes/boot_plant.wav",
+      "source_title": "Footsteps boots.wav",
+      "author": "gpag1",
+      "freesound_page": "https://freesound.org/people/gpag1/sounds/392483/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.015,
+        0.13
+      ],
+      "download": "commit/fs392483_footsteps_boots_wav_gpag1.wav",
+      "cues": [
+        "sfx_cloth_commit"
+      ]
+    },
+    {
+      "name": "foot_stomp",
+      "file": "tools/asset-pipeline/foley/archetypes/foot_stomp.wav",
+      "source_title": "Foot stomp 3",
+      "author": "locky_Y",
+      "freesound_page": "https://freesound.org/people/locky_Y/sounds/733165/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.15
+      ],
+      "download": "commit/fs733165_foot_stomp_3_locky_Y.wav",
+      "cues": [
+        "sfx_cloth_commit"
+      ]
+    },
+    {
+      "name": "cloth_ruffle",
+      "file": "tools/asset-pipeline/foley/archetypes/cloth_ruffle.wav",
+      "source_title": "Clothing Ruffle 01.wav",
+      "author": "WhiteFire43",
+      "freesound_page": "https://freesound.org/people/WhiteFire43/sounds/641383/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        6.33,
+        6.48
+      ],
+      "download": "commit/fs641383_clothing_ruffle_01_wav_WhiteFire43.wav",
+      "cues": [
+        "sfx_cloth_commit"
+      ]
+    },
+    {
+      "name": "cloth_ruffle_b",
+      "file": "tools/asset-pipeline/foley/archetypes/cloth_ruffle_b.wav",
+      "source_title": "Clothing Ruffle 01.wav",
+      "author": "WhiteFire43",
+      "freesound_page": "https://freesound.org/people/WhiteFire43/sounds/641383/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        4.78,
+        4.9
+      ],
+      "download": "commit/fs641383_clothing_ruffle_01_wav_WhiteFire43.wav",
+      "cues": [
+        "sfx_cloth_commit"
+      ]
+    }
+  ]
+}

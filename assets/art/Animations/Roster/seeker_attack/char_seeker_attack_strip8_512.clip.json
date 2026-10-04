@@ -1,0 +1,94 @@
+{
+ "frameMs": [
+  80,
+  80,
+  80,
+  70,
+  90,
+  80,
+  90,
+  90
+ ],
+ "elastic": [
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 1,
+  "commit": 2,
+  "contact": 4,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "3": {
+   "StrikeHand": [
+    0.62,
+    0.62,
+    -20
+   ]
+  },
+  "4": {
+   "StrikeHand": [
+    0.61,
+    0.64,
+    0
+   ]
+  },
+  "5": {
+   "StrikeHand": [
+    0.67,
+    0.67,
+    10
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write seeker_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 2,
+    "contact": 3,
+    "recovery": 5,
+    "settle": 7
+   },
+   "sockets": {
+    "2": {
+     "Hand": [
+      0.794,
+      0.641,
+      5
+     ]
+    },
+    "3": {
+     "Hand": [
+      0.777,
+      0.58,
+      -10
+     ]
+    },
+    "4": {
+     "Hand": [
+      0.557,
+      0.456,
+      -55
+     ]
+    }
+   }
+  },
+  "eye": {
+   "contact": "4, not the proposed 3 (design.md 5.18): 3 is the blade's arrival, the arm's sweep through the creature lands on 4",
+   "anticipation": "1, the draw, not 0 (the rest pose)",
+   "recovery": "6, not 5: 5 is the follow-through past the cut",
+   "sockets": "all three by eye at the knife hand's grip: the proposal took the blade (3) and the head (4)"
+  }
+ }
+}

@@ -1,0 +1,276 @@
+{
+  "_generated_by": "tools/asset-pipeline/make_archetypes.py - do not edit",
+  "method": "loudest 50 ms RMS, ITU-R BS.1770 K-weighted (make_press_tick.k_weight), of the file x its play volume x the SFX master 0.8, dB; 'effective' = the raw loudest 50 ms RMS x the volume, dBFS (the hierarchy test's figure)",
+  "cues": {
+    "sfx_fist_hit": {
+      "volume": 0.36,
+      "k50_db": -31.32,
+      "effective_dbfs": -28.9,
+      "sha256": "baddc0bb5af538baf74d55015d844f9015ed9650b91586dbe2b715413a164090",
+      "length_ms": 117.2,
+      "bands": [
+        0.346,
+        0.6,
+        0.049,
+        0.004
+      ],
+      "max50_dbfs": -20.02,
+      "true_peak_dbfs": -8.64,
+      "tonality_db": 9.4,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_hit",
+          "ref_volume": 0.5,
+          "ref_k50_db": -27.47,
+          "ref_effective_dbfs": -25.41,
+          "under_db": 3.85,
+          "required_db": 3.0,
+          "pass": true
+        },
+        {
+          "ref": "sfx_seeker_hard_hands_hit",
+          "ref_volume": 0.55,
+          "ref_k50_db": -23.49,
+          "ref_effective_dbfs": -19.87,
+          "under_db": 7.83,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "k50_db_at_0.38": -30.85
+    },
+    "sfx_blade_hit": {
+      "volume": 0.36,
+      "k50_db": -31.3,
+      "effective_dbfs": -31.62,
+      "sha256": "ed8386ef0a022f06966af35576afbb0a93f2eee86789754705c5c158adda8c95",
+      "length_ms": 74.6,
+      "bands": [
+        0.002,
+        0.25,
+        0.605,
+        0.143
+      ],
+      "max50_dbfs": -22.75,
+      "true_peak_dbfs": -9.29,
+      "tonality_db": 11.3,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_hit",
+          "ref_volume": 0.5,
+          "ref_k50_db": -27.47,
+          "ref_effective_dbfs": -25.41,
+          "under_db": 3.83,
+          "required_db": 3.0,
+          "pass": true
+        },
+        {
+          "ref": "sfx_seeker_hard_hands_hit",
+          "ref_volume": 0.55,
+          "ref_k50_db": -23.49,
+          "ref_effective_dbfs": -19.87,
+          "under_db": 7.81,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "k50_db_at_0.38": -30.83
+    },
+    "sfx_stone_hit": {
+      "volume": 0.36,
+      "k50_db": -31.3,
+      "effective_dbfs": -29.52,
+      "sha256": "ccd0ec599fc69d576c8e30116de0b48bde010e98590b034051adf1a7bb2d101c",
+      "length_ms": 89.6,
+      "bands": [
+        0.198,
+        0.636,
+        0.162,
+        0.004
+      ],
+      "max50_dbfs": -20.64,
+      "true_peak_dbfs": -8.9,
+      "tonality_db": 6.6,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_hit",
+          "ref_volume": 0.5,
+          "ref_k50_db": -27.47,
+          "ref_effective_dbfs": -25.41,
+          "under_db": 3.83,
+          "required_db": 3.0,
+          "pass": true
+        },
+        {
+          "ref": "sfx_seeker_hard_hands_hit",
+          "ref_volume": 0.55,
+          "ref_k50_db": -23.49,
+          "ref_effective_dbfs": -19.87,
+          "under_db": 7.81,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "k50_db_at_0.38": -30.83
+    },
+    "sfx_wood_hit": {
+      "volume": 0.36,
+      "k50_db": -31.3,
+      "effective_dbfs": -30.38,
+      "sha256": "adebacac20e7ab9de234f473a157ea0304a7fbf8bc41ad8aa757fbf00676b9a8",
+      "length_ms": 157.2,
+      "bands": [
+        0.293,
+        0.432,
+        0.133,
+        0.142
+      ],
+      "max50_dbfs": -21.5,
+      "true_peak_dbfs": -12.75,
+      "tonality_db": 11.6,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_hit",
+          "ref_volume": 0.5,
+          "ref_k50_db": -27.47,
+          "ref_effective_dbfs": -25.41,
+          "under_db": 3.83,
+          "required_db": 3.0,
+          "pass": true
+        },
+        {
+          "ref": "sfx_seeker_hard_hands_hit",
+          "ref_volume": 0.55,
+          "ref_k50_db": -23.49,
+          "ref_effective_dbfs": -19.87,
+          "under_db": 7.81,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "k50_db_at_0.38": -30.83
+    },
+    "sfx_throw_release": {
+      "volume": 0.17,
+      "k50_db": -37.0,
+      "effective_dbfs": -36.29,
+      "sha256": "d588f0424e66d14a269aeaecff0774730e2b8ecf55c26cc5a5bd02312bdcb326",
+      "length_ms": 194.2,
+      "bands": [
+        0.0,
+        0.366,
+        0.627,
+        0.007
+      ],
+      "max50_dbfs": -20.9,
+      "true_peak_dbfs": -13.13,
+      "tonality_db": 10.8,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_release",
+          "ref_volume": 0.4,
+          "ref_k50_db": -30.14,
+          "ref_effective_dbfs": -31.35,
+          "under_db": 6.86,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    "sfx_air_release": {
+      "volume": 0.24,
+      "k50_db": -35.0,
+      "effective_dbfs": -33.01,
+      "sha256": "b7397ecde5aa84ebcbb552cc267376ccab031e9279a2ca7cf93bdc6cf488b8b3",
+      "length_ms": 191.2,
+      "bands": [
+        0.425,
+        0.407,
+        0.152,
+        0.017
+      ],
+      "max50_dbfs": -20.62,
+      "true_peak_dbfs": -14.65,
+      "tonality_db": 11.2,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_spray_release",
+          "ref_volume": 0.4,
+          "ref_k50_db": -30.14,
+          "ref_effective_dbfs": -31.35,
+          "under_db": 4.86,
+          "required_db": 3.0,
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "no_tone": {
+        "tonality_db": 11.2,
+        "press_tick_tonality_db": 14.2,
+        "pass": true
+      }
+    },
+    "sfx_field_tick": {
+      "volume": 0.34,
+      "k50_db": -33.0,
+      "effective_dbfs": -33.9,
+      "sha256": "bbb8f575e73b2a9b7cbdc483cd8af31bad0741d5a0c32cdbdb1021746fe162d3",
+      "length_ms": 177.6,
+      "bands": [
+        0.0,
+        0.186,
+        0.626,
+        0.188
+      ],
+      "max50_dbfs": -24.53,
+      "true_peak_dbfs": -9.71,
+      "tonality_db": 8.3,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_press_tick",
+          "ref_volume": 0.28,
+          "ref_k50_db": -31.25,
+          "ref_effective_dbfs": -29.56,
+          "under_db": 1.75,
+          "required_db": 0.0,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    "sfx_cloth_commit": {
+      "volume": 0.3,
+      "k50_db": -35.0,
+      "effective_dbfs": -33.22,
+      "sha256": "fbeb771fd49d9eda9a047fc6f8fb4bd8d39f3e6f324d52cabb98c6ed41155687",
+      "length_ms": 142.4,
+      "bands": [
+        0.241,
+        0.622,
+        0.134,
+        0.003
+      ],
+      "max50_dbfs": -22.76,
+      "true_peak_dbfs": -12.4,
+      "tonality_db": 7.5,
+      "ceilings": [
+        {
+          "ref": "sfx_seeker_hard_hands_commit",
+          "ref_volume": 0.34,
+          "ref_k50_db": -33.31,
+          "ref_effective_dbfs": -31.23,
+          "under_db": 1.69,
+          "required_db": 0.0,
+          "pass": true
+        }
+      ],
+      "pass": true
+    }
+  },
+  "all_pass": true
+}

@@ -1,0 +1,23 @@
+# p1_06_magpie_fixed: trace rows 300..1600 ms of playhead (decisive 700); columns: playhead, nearest saved frame, kind, fields
+# source: p1_06_magpie.log
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_magpie_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   magpie.swing  at=700  slot=0  frame=3  cue=sfx_magpie_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_magpie_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   magpie.swing  at=700  slot=0  frame=3  cue=sfx_magpie_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328
+mark-draw       200 / 1 / 1128
+swing-draw      38 / 0 / 0

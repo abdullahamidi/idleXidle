@@ -1,0 +1,55 @@
+# p1_A_seeker_t60: trace rows 1600..3000 ms of playhead (decisive 2100); columns: playhead, nearest saved frame, kind, fields
+# source: p1_A_seeker_t60.log
+   1683  shot  31  reaction-end    seeker.jaws  contact=1000  lived=683
+   1783  shot  34  enemy-commit    bite=2000
+   1833  shot  36  clip-start      attack  beat=2100  speed=2.296  contactMs=272  frameMs=54
+   1833  shot  36  swing-start     seeker.swing  beat=2100  start=1833  anchor=2100  exit=2569  gap=360  peak=90  target=0
+   1983  shot  40  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  40  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  41  event           Aura  slot=2  amount=0  at=2000  crit=False  skill=False
+   2000  shot  41  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  41  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  41  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  41  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2100  shot  44  handoff         attack  beat=2100  contact=2106  recovery=2214  motion=54  hold=300  natural=2569  available=33  ratio=1.63  exit=2248  fit=Floor  next=projectile  nextBeat=2800  ideal=2200  latest=2330  protected=381
+   2100  shot  44  event           Strike  slot=0  amount=140  at=2100  crit=False  skill=False
+   2100  shot  44  sound           sfx_seeker_swing_hit  vol=0.36  pitch=0.00  pan=0.07
+   2100  shot  44  swing-contact   seeker.swing  at=2100  slot=0  frame=4  cue=sfx_seeker_swing_hit  vol=0.36
+   2100  shot  44  number          slot=0  amount=140  hits=1  crit=False  skill=False
+   2100  shot  44  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2250  shot  48  clip-start      projectile  authored  beat=2800  start=2250  release=2550  targets=0,1,2,3  recipe=seeker.spray
+   2550  shot  57  release         seeker.spray  x=748  y=564  knives=4  launch=773,574;775,570;775,562;775,566
+   2550  shot  57  callout         SPRAY
+   2550  shot  57  sound           sfx_seeker_spray_release  vol=0.40  pitch=0.00  pan=-0.12
+   2583  shot  58  event           ReactionArmed  slot=3  amount=1583  at=2583  crit=False  skill=False
+   2783  shot  64  enemy-commit    bite=3000
+   2800  shot  65  contact         seeker.spray  x=1365  y=738  knives=4
+   2800  shot  65  sound           sfx_seeker_spray_hit  vol=0.50  pitch=0.00  pan=0.13
+   2800  shot  65  event           Skill  slot=1  amount=0  at=2800  crit=False  skill=False
+   2800  shot  65  event           Strike  slot=0  amount=169  at=2800  crit=False  skill=True
+   2800  shot  65  number          slot=0  amount=169  hits=1  crit=False  skill=True
+   2800  shot  65  flash           slot=0  peak=0.38  ms=130  rise=0.00
+   2800  shot  65  event           Strike  slot=1  amount=189  at=2800  crit=False  skill=True
+   2800  shot  65  number          slot=1  amount=189  hits=1  crit=False  skill=True
+   2800  shot  65  flash           slot=1  peak=0.38  ms=130  rise=0.00
+   2800  shot  65  event           Strike  slot=2  amount=143  at=2800  crit=False  skill=True
+   2800  shot  65  number          slot=2  amount=143  hits=1  crit=False  skill=True
+   2800  shot  65  flash           slot=2  peak=0.38  ms=130  rise=0.00
+   2800  shot  65  event           Strike  slot=3  amount=189  at=2800  crit=False  skill=True
+   2800  shot  65  number          slot=3  amount=189  hits=1  crit=False  skill=True
+   2800  shot  65  flash           slot=3  peak=0.38  ms=130  rise=0.00
+   2833  shot  66  contact-tick    x=1567  y=747
+   2833  shot  66  sound           sfx_seeker_spray_tick  vol=0.20  pitch=0.00  pan=0.21
+   2850  shot  66  contact-tick    x=1167  y=748
+   2850  shot  66  sound           sfx_seeker_spray_tick  vol=0.20  pitch=0.00  pan=0.05
+   3000  shot  71  event           EnemyStrike  slot=0  amount=4  at=3000  crit=False  skill=False
+   3000  shot  71  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   3000  shot  71  event           Skill  slot=3  amount=0  at=3000  crit=False  skill=False
+   3000  shot  71  reaction-spawn  seeker.jaws  slot=3  contact=3000  targets=0,1  belt=0,0
+   3000  shot  71  event           Strike  slot=0  amount=3  at=3000  crit=False  skill=True
+   3000  shot  71  event           Strike  slot=1  amount=2  at=3000  crit=True  skill=True
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      106 / 4 / 13107392
+reaction-draw   121 / 0 / 0
+swing-draw      58 / 0 / 0

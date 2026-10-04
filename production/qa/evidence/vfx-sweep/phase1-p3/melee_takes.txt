@@ -1,0 +1,36 @@
+build/shots/sweep/p1p3/p13_seeker.log
+  swing strikes=4 swing-start=3 swing-contact=3 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=3 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=36 alloc>0=0
+  outlined numbers=[]
+build/shots/sweep/p1p3/p13_anvil.log
+  swing strikes=4 swing-start=3 swing-contact=3 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=3 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=39 alloc>0=0
+  outlined numbers=[]
+build/shots/sweep/p1p3/p13_metronome.log
+  swing strikes=2 swing-start=2 swing-contact=2 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=1 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=18 alloc>0=0
+  outlined numbers=[(700, '0', 'FFFFFF'), (700, '1', 'FFFFFF'), (700, '2', 'FFFFFF'), (2213, '3', 'FFFFFF')]
+build/shots/sweep/p1p3/p13_tower.log
+  swing strikes=4 swing-start=3 swing-contact=3 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=3 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=55 alloc>0=0
+  outlined numbers=[]
+build/shots/sweep/p1p3/p13_thornwall.log
+  swing strikes=4 swing-start=3 swing-contact=3 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=3 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=7 alloc>0=0
+  outlined numbers=[]
+build/shots/sweep/p1p3/p13_magpie.log
+  swing strikes=4 swing-start=3 swing-contact=3 contact-not-on-a-swing-strike=0 duplicate-contact-ms=0
+  attack clip-ends=3 with a non-zero step=0
+  generic sfx_hit 0.38 on a swing ms=0  ImpactWeak on a swing ms=0
+  cues=['cue=sfx_hit']  swing-draw frames=32 alloc>0=0
+  outlined numbers=[]

@@ -6,7 +6,8 @@
 A film run with RH_PRESENT_TRACE=1 logs every champion frame it shows (champ-frame: clip, frame, draw box). This
 maps each of those frames onto the screen with the renderer's OWN placement arithmetic (UiKit.ResolveFrame: the
 strip's measured headroom and side margin, the scale from the box height capped at RasterCeiling, the strip's
-lowest row on the box floor; an AUTHORED clip, one with a .clip.json, PLACED AS the idle since HARD HANDS) and, at
+lowest row on the box floor; an AUTHORED clip, one with a .clip.json that does not say
+"place": "own", PLACED AS the idle since HARD HANDS) and, at
 every clip change, reports how far the silhouette's feet line, head and centre moved between the last frame drawn
 before the join and the first frame after it.
 
@@ -47,7 +48,12 @@ class Strip:
             if bb:
                 least = min(least, bb[0], self.fw - bb[2])
         self.side = max(0, least - 1)                          # SidePadFraction, a pixel of slack
-        self.clip_json = os.path.exists(path[:-4] + ".clip.json")
+        # placed AS the idle when it has a timing file, unless that file says "place": "own" (HuntScreen.PlacedAs)
+        timing = path[:-4] + ".clip.json"
+        self.clip_json = False
+        if os.path.exists(timing):
+            with open(timing, encoding="utf-8") as fh:
+                self.clip_json = str(json.load(fh).get("place", "")).lower() != "own"
 
 
 def strip_for(character: str, clip: str, cache: dict) -> Strip | None:

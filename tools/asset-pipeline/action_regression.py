@@ -15,6 +15,7 @@ changing a single beat):
       * `field-wave`, `field-draw`, `field-cue` (PRESS);
       * `mark-wave`, `mark-draw`, `mark-cue` (BRAND), minus `draws=` and `batches=`;
       * every sound whose key starts with sfx_seeker_jaws / sfx_seeker_press / sfx_seeker_brand.
+      * `reaction-clamp belt=` held by its y only (P1.3: its x is the champion's draw push, see CHAMP_X);
     `draws=` / `batches=` are UPPER BOUNDS that include the generic effects pass (puffs, the heal column), which Phase 0
     deliberately changes; they are dropped from the reference lines, never the counts of the reference's own sprites.
     `callout`, `flash`, `number`, `vfx-spawn` and generic `sound` lines are NOT reference lines: Phase 0 changes them
@@ -80,11 +81,20 @@ def is_draw_sampled(kind: str) -> bool:
 #     cover must match (the 8-14 MB first-use jump landed at 3700 in one film and 3783 in the other).
 HOST_X = {"field-draw": "body"}
 PER_FILM_FLAG = {"field-draw": "alloc"}
+# P1.3 (2026-10-04): reaction-clamp belt= keeps its y and drops its x. belt is the CHAMPION's drawn belt point, read from
+# his published body, and only the RH_SHOT_SOCKETS overlay draws it (JAWS' teeth, clamp, ring and number never read it).
+# Its x carries the champion's draw push, which P1.3 changes on purpose: the baseline's legacy 40 px post-hit lunge
+# (ref_fast 7333: belt=687 = 647 + 40, the swing landed at 7300) is the performed swing's step-in now (756 = 647 + 109).
+# clamp= and body= (the creature's) are held whole.
+CHAMP_X = {"reaction-clamp": "belt"}
 
 
 def strip_fields(kind: str, fields: list[str]) -> list[str]:
     if kind in HOST_X:
         fields = [f"{HOST_X[kind]}=~,{f.partition('=')[2].partition(',')[2]}" if f.startswith(HOST_X[kind] + "=") else f
+                  for f in fields]
+    if kind in CHAMP_X:
+        fields = [f"{CHAMP_X[kind]}=~,{f.partition('=')[2].partition(',')[2]}" if f.startswith(CHAMP_X[kind] + "=") else f
                   for f in fields]
     drop = DROPPED.get(kind, ()) + UNSTABLE.get(kind, ())
     flag = FLAGGED.get(kind, ())

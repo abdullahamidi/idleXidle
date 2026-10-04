@@ -387,13 +387,28 @@ public static class MarkRecipes
         [("seeker", "sign_brand")] = SeekerBrand,
     };
 
+    // THE CHAMPION-AGNOSTIC TIER (design.md section 8): BRAND's corruption is Shadow by nature, the skill's identity. The
+    // SAME instance on every champion: no Source parameter, no colour table, the same seven sfx_seeker_brand_* cues.
+    private static readonly Dictionary<string, MarkRecipe> ByAnySkill = new()
+    {
+        ["sign_brand"] = SeekerBrand,
+    };
+
     /// <summary>
     /// The mark recipe this champion presents for this skill (a SkillDef.Id), or null: the skill keeps its generic
-    /// presentation (for BRAND, the held field art). RH_ACTION_RECIPES=0 turns these off with the action recipes, and
-    /// RH_MARK_RECIPES=0 turns off these alone (the before / after comparison).
+    /// presentation (for BRAND, the held field art). The champion's own entry first, then the skill's champion-agnostic
+    /// one. RH_ACTION_RECIPES=0 turns these off with the action recipes, and RH_MARK_RECIPES=0 turns off these alone
+    /// (the before / after comparison).
     /// </summary>
     public static MarkRecipe? For(string characterId, string skillId)
-        => ActionRecipes.Enabled && Enabled && BySkill.TryGetValue((characterId, skillId), out var own) ? own : null;
+        => RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out _);
+
+    /// <summary>Which tier <see cref="For"/> resolves through for this champion and skill (<see cref="RecipeTier.Of"/>).</summary>
+    public static RecipeTierKind TierOf(string characterId, string skillId)
+    {
+        RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out var tier);
+        return tier;
+    }
 
     /// <summary>RH_MARK_RECIPES=0 presents every mark the old way.</summary>
     public static readonly bool Enabled =

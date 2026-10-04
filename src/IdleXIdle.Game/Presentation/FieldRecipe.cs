@@ -381,12 +381,27 @@ public static class FieldRecipes
         [("seeker", "hammer_press")] = SeekerPress,
     };
 
+    // THE CHAMPION-AGNOSTIC TIER (design.md section 8): PRESS is the skill's picture, not the Seeker's. The SAME instance
+    // on every champion: no Source parameter, no colour table, the same tick cue (sfx_seeker_press_tick, one file).
+    private static readonly Dictionary<string, FieldRecipe> ByAnySkill = new()
+    {
+        ["hammer_press"] = SeekerPress,
+    };
+
     /// <summary>
     /// The field recipe this champion presents for this skill (a SkillDef.Id), or null: the field keeps the generic held
-    /// aura. RH_ACTION_RECIPES=0 turns these off with the action recipes, and RH_FIELD_RECIPES=0 turns off these alone.
+    /// aura. The champion's own entry first, then the skill's champion-agnostic one. RH_ACTION_RECIPES=0 turns these off
+    /// with the action recipes, and RH_FIELD_RECIPES=0 turns off these alone.
     /// </summary>
     public static FieldRecipe? For(string characterId, string skillId)
-        => ActionRecipes.Enabled && Enabled && BySkill.TryGetValue((characterId, skillId), out var own) ? own : null;
+        => RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out _);
+
+    /// <summary>Which tier <see cref="For"/> resolves through for this champion and skill (<see cref="RecipeTier.Of"/>).</summary>
+    public static RecipeTierKind TierOf(string characterId, string skillId)
+    {
+        RecipeTier.Resolve(ActionRecipes.Enabled && Enabled, BySkill, ByAnySkill, characterId, skillId, out var tier);
+        return tier;
+    }
 
     /// <summary>RH_FIELD_RECIPES=0 presents every field the old way (the with/without comparison).</summary>
     public static readonly bool Enabled =

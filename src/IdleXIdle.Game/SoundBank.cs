@@ -149,7 +149,7 @@ public sealed class SoundBank
     /// held further apart. FMOD calls this an event "cooldown"; it exists so simultaneous copies of one
     /// sample never stack into a rattle.
     /// </remarks>
-    private static readonly Dictionary<string, long> MinGapMs = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, long> HandTunedGaps = new(StringComparer.OrdinalIgnoreCase)
     {
         ["sfx_hit"] = 60,
         ["sfx_enemy_down"] = 140,
@@ -166,6 +166,22 @@ public sealed class SoundBank
         // what the player should hear — not four of them stacked into a rattle.
         ["sfx_dispatch"] = 900,
     };
+
+    /// <summary>
+    /// The hand-tuned gaps above, plus the remaining-skill sweep's rows (design.md section 7: hit families 60 ms, ticks
+    /// 90 ms), declared by <see cref="Presentation.ArchetypeCues.ThrottleRows"/> so a new archetype or basic attack cannot
+    /// be left out of the table <c>sound_throttle.json</c> carries to <c>film_audio.py</c>.
+    /// </summary>
+    private static Dictionary<string, long> DeclareMinGaps()
+    {
+        var gaps = new Dictionary<string, long>(HandTunedGaps, StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Presentation.ArchetypeCues.ThrottleRows())
+            gaps.TryAdd(row.Key, row.Value);
+        return gaps;
+    }
+
+    // Declared after HandTunedGaps: static initialisers run in text order.
+    private static readonly Dictionary<string, long> MinGapMs = DeclareMinGaps();
 
     // Per-play pitch variation. A one-shot heard a thousand times identically "draws attention to itself
     // through its artificial precision" (Mushel); a small random offset per play is the standard cure,

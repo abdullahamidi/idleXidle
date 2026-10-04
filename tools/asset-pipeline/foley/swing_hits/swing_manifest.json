@@ -1,0 +1,786 @@
+{
+  "_generated_by": "tools/asset-pipeline/make_swing_cues.py - do not edit",
+  "pin_level": "SHIPPED (design.md section 7: never human-approved before the owner has heard the film)",
+  "licence": {
+    "name": "CC0 1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "checked": "2026-10-04",
+    "how": "each source's own Freesound page links the CC0 1.0 deed"
+  },
+  "cues": {
+    "sfx_seeker_swing_hit": {
+      "what": "a short blade cut into leather, a faint steel edge",
+      "file": "assets/audio/combat/sfx_seeker_swing_hit.wav",
+      "sha256": "55fd7dead9a618d65077ff89f5e54d97f141db3f0e60b26126d3084aa8d30f42",
+      "archetype": "sfx_blade_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "belt_snap",
+        "blade_slice",
+        "leather_thud",
+        "steel_edge"
+      ]
+    },
+    "sfx_anvil_swing_hit": {
+      "what": "a padded heavy fist (a boxing bag), a low thud",
+      "file": "assets/audio/combat/sfx_anvil_swing_hit.wav",
+      "sha256": "4d31dc722568ade769d69e25790395fbeef50c0695521ec0d30f9e388703f067",
+      "archetype": "sfx_fist_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "heavy_bag",
+        "low_thud"
+      ]
+    },
+    "sfx_metronome_swing_hit": {
+      "what": "a dry knuckle hit on wood, a sharp click",
+      "file": "assets/audio/combat/sfx_metronome_swing_hit.wav",
+      "sha256": "054182c7df7cc61715b48ecdcc7442c0aa03bae328e08be644367127627b8306",
+      "archetype": "sfx_fist_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "block_click",
+        "knuckle_wood",
+        "wood_knock"
+      ]
+    },
+    "sfx_tower_swing_hit": {
+      "what": "a mallet on packed earth, a short gravel tick",
+      "file": "assets/audio/combat/sfx_tower_swing_hit.wav",
+      "sha256": "75e4d3d201ca46868ad8cf25b5298e9ffc8d7e4806b8ad3af09cf3bfe821c200",
+      "archetype": "sfx_stone_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "dirt_hit",
+        "gravel_tick",
+        "ground_thud"
+      ]
+    },
+    "sfx_thornwall_swing_hit": {
+      "what": "a wooden shield thump with a steel rim rattle",
+      "file": "assets/audio/combat/sfx_thornwall_swing_hit.wav",
+      "sha256": "55f9a13772acbb09ee2dfcb1ee98731108d2b82c3c807a6e0a6b1e1920cc3cb4",
+      "archetype": "sfx_wood_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "rim_rattle",
+        "shield_thump",
+        "wood_face"
+      ]
+    },
+    "sfx_magpie_swing_hit": {
+      "what": "a quick knife nick, a short cloth tear",
+      "file": "assets/audio/combat/sfx_magpie_swing_hit.wav",
+      "sha256": "9e21b691c65974c56f418e379056ab226cebdb341ed3a7afb2c00a9719fd5cf5",
+      "archetype": "sfx_blade_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "cloth_tear",
+        "knife_nick",
+        "stab_pull"
+      ]
+    },
+    "sfx_quiver_swing_hit": {
+      "what": "an arrow into hide + a wooden clack",
+      "file": "assets/audio/combat/sfx_quiver_swing_hit.wav",
+      "sha256": "fdded4685faa2f364fffd816e9088784d642e28a67b4c6d3d72278386803ea79",
+      "archetype": "sfx_blade_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "arrow_shaft",
+        "arrow_thwack",
+        "wood_clack"
+      ]
+    },
+    "sfx_quiver_loose": {
+      "what": "a bowstring twang",
+      "file": "assets/audio/combat/sfx_quiver_loose.wav",
+      "sha256": "4c0971eb8c33201278b818f4b0f353e258c14c4336dd04dcb489fd1a15f8fc47",
+      "archetype": "sfx_throw_release",
+      "release": true,
+      "mastered_volume": 0.18,
+      "target_k50_db": -37.0,
+      "excerpts": [
+        "bow_thrum",
+        "string_snap"
+      ]
+    },
+    "sfx_chorus_swing_hit": {
+      "what": "bone clatter on hide",
+      "file": "assets/audio/combat/sfx_chorus_swing_hit.wav",
+      "sha256": "d280d329e740056389fa1d644eef34a08a0c2645c5feabf0a1ae31be80fc1125",
+      "archetype": "sfx_wood_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "bone_a",
+        "bone_b",
+        "bone_c",
+        "hide_skin"
+      ]
+    },
+    "sfx_chorus_toss": {
+      "what": "a light toss whip",
+      "file": "assets/audio/combat/sfx_chorus_toss.wav",
+      "sha256": "9056d45e6a481859ff61678a2bed1fdd14bde85ed7efe937e06d1efed12b3a4a",
+      "archetype": "sfx_throw_release",
+      "release": true,
+      "mastered_volume": 0.16,
+      "target_k50_db": -37.0,
+      "excerpts": [
+        "toss_air",
+        "toss_whip"
+      ]
+    },
+    "sfx_unbroken_swing_hit": {
+      "what": "a stone chip on rock",
+      "file": "assets/audio/combat/sfx_unbroken_swing_hit.wav",
+      "sha256": "ee76c722339c9f159c5f0b4b05f1bdd3c40aebc1a86dba76f8b1b32b497eb1e9",
+      "archetype": "sfx_stone_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "pebble_scatter",
+        "rock_knock",
+        "stone_chip"
+      ]
+    },
+    "sfx_unbroken_toss": {
+      "what": "a short heavy toss",
+      "file": "assets/audio/combat/sfx_unbroken_toss.wav",
+      "sha256": "8f6a0dfce1973d93bf0706f9324e19df2c02d8c618b092d44796fb0e516890c4",
+      "archetype": "sfx_throw_release",
+      "release": true,
+      "mastered_volume": 0.16,
+      "target_k50_db": -37.0,
+      "excerpts": [
+        "heavy_swing",
+        "whoosh_low"
+      ]
+    },
+    "sfx_oathbound_swing_hit": {
+      "what": "a chain whip crack + two link rattles",
+      "file": "assets/audio/combat/sfx_oathbound_swing_hit.wav",
+      "sha256": "1d4cd77bd565b4977babe3e68df23a30a5b87d09c4b927fd2145661632fb92bf",
+      "archetype": "sfx_fist_hit",
+      "release": false,
+      "mastered_volume": 0.36,
+      "target_k50_db": -31.3,
+      "excerpts": [
+        "chain_crack",
+        "link_a",
+        "link_b"
+      ]
+    }
+  },
+  "excerpts": [
+    {
+      "name": "blade_slice",
+      "file": "tools/asset-pipeline/foley/swing_hits/blade_slice.wav",
+      "source_title": "knife slice cut saw flesh butcher.flac",
+      "author": "kyles",
+      "freesound_page": "https://freesound.org/people/kyles/sounds/637641/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.05,
+        1.18
+      ],
+      "download": "seeker/fs637641_knife_slice_cut_saw_flesh_butc_kyles.wav",
+      "cues": [
+        "sfx_seeker_swing_hit"
+      ]
+    },
+    {
+      "name": "leather_thud",
+      "file": "tools/asset-pipeline/foley/swing_hits/leather_thud.wav",
+      "source_title": "Leather impacts .wav",
+      "author": "200221-WeanBekker",
+      "freesound_page": "https://freesound.org/people/200221-WeanBekker/sounds/543698/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        3.355,
+        3.48
+      ],
+      "download": "seeker/fs543698_leather_impacts_wav_by_200221_200221_WeanBekker.wav",
+      "cues": [
+        "sfx_seeker_swing_hit"
+      ]
+    },
+    {
+      "name": "belt_snap",
+      "file": "tools/asset-pipeline/foley/swing_hits/belt_snap.wav",
+      "source_title": "belt snap",
+      "author": "clothespeg",
+      "freesound_page": "https://freesound.org/people/clothespeg/sounds/621939/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.05,
+        0.15
+      ],
+      "download": "seeker/fs621939_belt_snap_by_clothespeg_clothespeg.wav",
+      "cues": [
+        "sfx_seeker_swing_hit"
+      ]
+    },
+    {
+      "name": "steel_edge",
+      "file": "tools/asset-pipeline/foley/swing_hits/steel_edge.wav",
+      "source_title": "Sword Drawing 1.wav",
+      "author": "paulfabb",
+      "freesound_page": "https://freesound.org/people/paulfabb/sounds/577619/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.06,
+        0.24
+      ],
+      "download": "seeker/fs577619_sword_drawing_1_wav_by_paulfab_paulfabb.wav",
+      "cues": [
+        "sfx_seeker_swing_hit"
+      ]
+    },
+    {
+      "name": "heavy_bag",
+      "file": "tools/asset-pipeline/foley/swing_hits/heavy_bag.wav",
+      "source_title": "Punch on a heavy bag",
+      "author": "Luisa_Sanchez",
+      "freesound_page": "https://freesound.org/people/Luisa_Sanchez/sounds/813405/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        1.87,
+        2.09
+      ],
+      "download": "anvil/fs813405_punch_on_a_heavy_bag_by_luisa_Luisa_Sanchez.wav",
+      "cues": [
+        "sfx_anvil_swing_hit"
+      ]
+    },
+    {
+      "name": "low_thud",
+      "file": "tools/asset-pipeline/foley/swing_hits/low_thud.wav",
+      "source_title": "Luggage Drop 1.wav",
+      "author": "stephenbist",
+      "freesound_page": "https://freesound.org/people/stephenbist/sounds/434781/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.138,
+        0.3
+      ],
+      "download": "anvil/fs434781_luggage_drop_1_wav_by_stephenb_stephenbist.wav",
+      "cues": [
+        "sfx_anvil_swing_hit"
+      ]
+    },
+    {
+      "name": "knuckle_wood",
+      "file": "tools/asset-pipeline/foley/swing_hits/knuckle_wood.wav",
+      "source_title": "Knocking once on wood, single footstep",
+      "author": "CuboRodante",
+      "freesound_page": "https://freesound.org/people/CuboRodante/sounds/812363/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.366,
+        0.46
+      ],
+      "download": "metronome/fs812363_knocking_once_on_wood_single_f_CuboRodante.wav",
+      "cues": [
+        "sfx_metronome_swing_hit"
+      ]
+    },
+    {
+      "name": "wood_knock",
+      "file": "tools/asset-pipeline/foley/swing_hits/wood_knock.wav",
+      "source_title": "Wood Knock",
+      "author": "Mrguff",
+      "freesound_page": "https://freesound.org/people/Mrguff/sounds/369710/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.002,
+        0.11
+      ],
+      "download": "metronome/fs369710_wood_knock_by_mrguff_Mrguff.wav",
+      "cues": [
+        "sfx_metronome_swing_hit"
+      ]
+    },
+    {
+      "name": "block_click",
+      "file": "tools/asset-pipeline/foley/swing_hits/block_click.wav",
+      "source_title": "Wood block hit",
+      "author": "thomasjaunism",
+      "freesound_page": "https://freesound.org/people/thomasjaunism/sounds/218460/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.07
+      ],
+      "download": "metronome/fs218460_wood_block_hit_by_thomasjaunis_thomasjaunism.wav",
+      "cues": [
+        "sfx_metronome_swing_hit"
+      ]
+    },
+    {
+      "name": "ground_thud",
+      "file": "tools/asset-pipeline/foley/swing_hits/ground_thud.wav",
+      "source_title": "Heavy Metal Thud on Ground",
+      "author": "7of9Designs",
+      "freesound_page": "https://freesound.org/people/7of9Designs/sounds/640204/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.178,
+        0.262
+      ],
+      "download": "tower/fs640204_heavy_metal_thud_on_ground_by_7of9Designs.wav",
+      "cues": [
+        "sfx_tower_swing_hit"
+      ]
+    },
+    {
+      "name": "dirt_hit",
+      "file": "tools/asset-pipeline/foley/swing_hits/dirt_hit.wav",
+      "source_title": "Single Rock hit Dirt.wav",
+      "author": "worthahep88",
+      "freesound_page": "https://freesound.org/people/worthahep88/sounds/319222/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.277,
+        0.4
+      ],
+      "download": "tower/fs319222_single_rock_hit_dirt_wav_by_wo_worthahep88.wav",
+      "cues": [
+        "sfx_tower_swing_hit"
+      ]
+    },
+    {
+      "name": "gravel_tick",
+      "file": "tools/asset-pipeline/foley/swing_hits/gravel_tick.wav",
+      "source_title": "Hiking Boot Footsteps on Gravel",
+      "author": "Fission9",
+      "freesound_page": "https://freesound.org/people/Fission9/sounds/521588/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        2.372,
+        2.42
+      ],
+      "download": "tower/fs521588_hiking_boot_footsteps_on_grave_Fission9.wav",
+      "cues": [
+        "sfx_tower_swing_hit"
+      ]
+    },
+    {
+      "name": "shield_thump",
+      "file": "tools/asset-pipeline/foley/swing_hits/shield_thump.wav",
+      "source_title": "shield guard",
+      "author": "nekoninja",
+      "freesound_page": "https://freesound.org/people/nekoninja/sounds/370203/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.09
+      ],
+      "download": "thornwall/fs370203_shield_guard_by_nekoninja_nekoninja.wav",
+      "cues": [
+        "sfx_thornwall_swing_hit"
+      ]
+    },
+    {
+      "name": "wood_face",
+      "file": "tools/asset-pipeline/foley/swing_hits/wood_face.wav",
+      "source_title": "Single Rock hitting wood 4.wav",
+      "author": "worthahep88",
+      "freesound_page": "https://freesound.org/people/worthahep88/sounds/319227/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.06,
+        0.14
+      ],
+      "download": "thornwall/fs319227_single_rock_hitting_wood_4_wav_worthahep88.wav",
+      "cues": [
+        "sfx_thornwall_swing_hit"
+      ]
+    },
+    {
+      "name": "rim_rattle",
+      "file": "tools/asset-pipeline/foley/swing_hits/rim_rattle.wav",
+      "source_title": "Metal Rattle/Jingle recording",
+      "author": "heidicolorado",
+      "freesound_page": "https://freesound.org/people/heidicolorado/sounds/827502/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.11,
+        0.26
+      ],
+      "download": "thornwall/fs827502_metal_rattle_jingle_recording_heidicolorado.wav",
+      "cues": [
+        "sfx_thornwall_swing_hit"
+      ]
+    },
+    {
+      "name": "knife_nick",
+      "file": "tools/asset-pipeline/foley/swing_hits/knife_nick.wav",
+      "source_title": "Knife Stab Melon.wav",
+      "author": "jawbutch",
+      "freesound_page": "https://freesound.org/people/jawbutch/sounds/344404/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.35,
+        0.42
+      ],
+      "download": "magpie/fs344404_knife_stab_melon_wav_by_jawbut_jawbutch.wav",
+      "cues": [
+        "sfx_magpie_swing_hit"
+      ]
+    },
+    {
+      "name": "stab_pull",
+      "file": "tools/asset-pipeline/foley/swing_hits/stab_pull.wav",
+      "source_title": "Knife Stab Pull.wav",
+      "author": "neilsher",
+      "freesound_page": "https://freesound.org/people/neilsher/sounds/411742/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.376,
+        0.45
+      ],
+      "download": "magpie/fs411742_knife_stab_pull_wav_by_neilshe_neilsher.wav",
+      "cues": [
+        "sfx_magpie_swing_hit"
+      ]
+    },
+    {
+      "name": "cloth_tear",
+      "file": "tools/asset-pipeline/foley/swing_hits/cloth_tear.wav",
+      "source_title": "CLOTHRip-Rip quick_JvZ_OwSFX",
+      "author": "Joshua_van_Zyl",
+      "freesound_page": "https://freesound.org/people/Joshua_van_Zyl/sounds/764888/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        2.5,
+        2.64
+      ],
+      "download": "magpie/fs764888_clothrip_rip_quick_jvz_owsfx_b_Joshua_van_Zyl.wav",
+      "cues": [
+        "sfx_magpie_swing_hit"
+      ]
+    },
+    {
+      "name": "arrow_thwack",
+      "file": "tools/asset-pipeline/foley/swing_hits/arrow_thwack.wav",
+      "source_title": "Arrow Release and Hit.wav",
+      "author": "calvarychurchatlanta",
+      "freesound_page": "https://freesound.org/people/calvarychurchatlanta/sounds/179996/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.444,
+        0.56
+      ],
+      "download": "quiver/fs179996_arrow_release_and_hit_wav_by_c_calvarychurchatlanta.wav",
+      "cues": [
+        "sfx_quiver_swing_hit"
+      ]
+    },
+    {
+      "name": "arrow_shaft",
+      "file": "tools/asset-pipeline/foley/swing_hits/arrow_shaft.wav",
+      "source_title": "Arrow Impact",
+      "author": "omerbhatti34",
+      "freesound_page": "https://freesound.org/people/omerbhatti34/sounds/521552/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.02,
+        0.14
+      ],
+      "download": "quiver/fs521552_arrow_impact_by_omerbhatti34_omerbhatti34.wav",
+      "cues": [
+        "sfx_quiver_swing_hit"
+      ]
+    },
+    {
+      "name": "wood_clack",
+      "file": "tools/asset-pipeline/foley/swing_hits/wood_clack.wav",
+      "source_title": "Small Wood Piece Sound",
+      "author": "qubodup",
+      "freesound_page": "https://freesound.org/people/qubodup/sounds/822567/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.07
+      ],
+      "download": "quiver/fs822567_small_wood_piece_sound_by_qubo_qubodup.wav",
+      "cues": [
+        "sfx_quiver_swing_hit"
+      ]
+    },
+    {
+      "name": "bow_thrum",
+      "file": "tools/asset-pipeline/foley/swing_hits/bow_thrum.wav",
+      "source_title": "OWI_Bow string thwang.wav",
+      "author": "matthewHoldenSound",
+      "freesound_page": "https://freesound.org/people/matthewHoldenSound/sounds/542559/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.438,
+        0.64
+      ],
+      "download": "quiver/fs542559_owi_bow_string_thwang_wav_by_m_matthewHoldenSound.wav",
+      "cues": [
+        "sfx_quiver_loose"
+      ]
+    },
+    {
+      "name": "string_snap",
+      "file": "tools/asset-pipeline/foley/swing_hits/string_snap.wav",
+      "source_title": "Arrow Release and Hit.wav",
+      "author": "calvarychurchatlanta",
+      "freesound_page": "https://freesound.org/people/calvarychurchatlanta/sounds/179996/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.253,
+        0.33
+      ],
+      "download": "quiver/fs179996_arrow_release_and_hit_wav_by_c_calvarychurchatlanta.wav",
+      "cues": [
+        "sfx_quiver_loose"
+      ]
+    },
+    {
+      "name": "bone_a",
+      "file": "tools/asset-pipeline/foley/swing_hits/bone_a.wav",
+      "source_title": "Rattling Bones.wav",
+      "author": "spookymodem",
+      "freesound_page": "https://freesound.org/people/spookymodem/sounds/202102/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        2.556,
+        2.62
+      ],
+      "download": "chorus/fs202102_rattling_bones_wav_by_spookymo_spookymodem.wav",
+      "cues": [
+        "sfx_chorus_swing_hit"
+      ]
+    },
+    {
+      "name": "bone_b",
+      "file": "tools/asset-pipeline/foley/swing_hits/bone_b.wav",
+      "source_title": "Rattling Bones.wav",
+      "author": "spookymodem",
+      "freesound_page": "https://freesound.org/people/spookymodem/sounds/202102/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        4.158,
+        4.22
+      ],
+      "download": "chorus/fs202102_rattling_bones_wav_by_spookymo_spookymodem.wav",
+      "cues": [
+        "sfx_chorus_swing_hit"
+      ]
+    },
+    {
+      "name": "bone_c",
+      "file": "tools/asset-pipeline/foley/swing_hits/bone_c.wav",
+      "source_title": "bones.mp3",
+      "author": "Kneeling",
+      "freesound_page": "https://freesound.org/people/Kneeling/sounds/473526/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        2.701,
+        2.76
+      ],
+      "download": "chorus/fs473526_bones_mp3_by_kneeling_Kneeling.wav",
+      "cues": [
+        "sfx_chorus_swing_hit"
+      ]
+    },
+    {
+      "name": "hide_skin",
+      "file": "tools/asset-pipeline/foley/swing_hits/hide_skin.wav",
+      "source_title": "Alfaia Hit",
+      "author": "Sassaby",
+      "freesound_page": "https://freesound.org/people/Sassaby/sounds/509528/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.12
+      ],
+      "download": "chorus/fs509528_alfaia_hit_by_sassaby_Sassaby.wav",
+      "cues": [
+        "sfx_chorus_swing_hit"
+      ]
+    },
+    {
+      "name": "toss_whip",
+      "file": "tools/asset-pipeline/foley/swing_hits/toss_whip.wav",
+      "source_title": "Throwing / Whip Effect",
+      "author": "denao270",
+      "freesound_page": "https://freesound.org/people/denao270/sounds/346373/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.0,
+        0.3
+      ],
+      "download": "chorus/fs346373_throwing_whip_effect_by_denao2_denao270.wav",
+      "cues": [
+        "sfx_chorus_toss"
+      ]
+    },
+    {
+      "name": "toss_air",
+      "file": "tools/asset-pipeline/foley/swing_hits/toss_air.wav",
+      "source_title": "Little Whoosh 2",
+      "author": "ch_ase",
+      "freesound_page": "https://freesound.org/people/ch_ase/sounds/423799/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.96,
+        1.12
+      ],
+      "download": "chorus/fs423799_little_whoosh_2_by_ch_ase_ch_ase.wav",
+      "cues": [
+        "sfx_chorus_toss"
+      ]
+    },
+    {
+      "name": "rock_knock",
+      "file": "tools/asset-pipeline/foley/swing_hits/rock_knock.wav",
+      "source_title": "stonehit1.wav",
+      "author": "aerror",
+      "freesound_page": "https://freesound.org/people/aerror/sounds/350750/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.902,
+        0.98
+      ],
+      "download": "unbroken/fs350750_stonehit1_wav_by_aerror_aerror.wav",
+      "cues": [
+        "sfx_unbroken_swing_hit"
+      ]
+    },
+    {
+      "name": "stone_chip",
+      "file": "tools/asset-pipeline/foley/swing_hits/stone_chip.wav",
+      "source_title": "rock hit.mp3",
+      "author": "Link-Boy",
+      "freesound_page": "https://freesound.org/people/Link-Boy/sounds/414853/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.014,
+        0.09
+      ],
+      "download": "unbroken/fs414853_rock_hit_mp3_by_link_boy_Link_Boy.wav",
+      "cues": [
+        "sfx_unbroken_swing_hit"
+      ]
+    },
+    {
+      "name": "pebble_scatter",
+      "file": "tools/asset-pipeline/foley/swing_hits/pebble_scatter.wav",
+      "source_title": "ROCK_IMPACT_GALETS_OUTDOORS_260128 48",
+      "author": "kevinklang",
+      "freesound_page": "https://freesound.org/people/kevinklang/sounds/843547/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.187,
+        0.33
+      ],
+      "download": "unbroken/fs843547_rock_impact_galets_outdoors_26_kevinklang.wav",
+      "cues": [
+        "sfx_unbroken_swing_hit"
+      ]
+    },
+    {
+      "name": "heavy_swing",
+      "file": "tools/asset-pipeline/foley/swing_hits/heavy_swing.wav",
+      "source_title": "Hard Swing 1",
+      "author": "magnuswaker",
+      "freesound_page": "https://freesound.org/people/magnuswaker/sounds/523230/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.04,
+        0.33
+      ],
+      "download": "unbroken/fs523230_hard_swing_1_by_magnuswaker_magnuswaker.wav",
+      "cues": [
+        "sfx_unbroken_toss"
+      ]
+    },
+    {
+      "name": "whoosh_low",
+      "file": "tools/asset-pipeline/foley/swing_hits/whoosh_low.wav",
+      "source_title": "Whoosh.wav",
+      "author": "gbnelso",
+      "freesound_page": "https://freesound.org/people/gbnelso/sounds/684459/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.7,
+        0.96
+      ],
+      "download": "unbroken/fs684459_whoosh_wav_by_gbnelso_gbnelso.wav",
+      "cues": [
+        "sfx_unbroken_toss"
+      ]
+    },
+    {
+      "name": "chain_crack",
+      "file": "tools/asset-pipeline/foley/swing_hits/chain_crack.wav",
+      "source_title": "Real Steel Chain-whip  (Multiple cracks)",
+      "author": "modusmogulus",
+      "freesound_page": "https://freesound.org/people/modusmogulus/sounds/791469/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        6.114,
+        6.2
+      ],
+      "download": "oathbound/fs791469_real_steel_chain_whip_multiple_modusmogulus.wav",
+      "cues": [
+        "sfx_oathbound_swing_hit"
+      ]
+    },
+    {
+      "name": "link_a",
+      "file": "tools/asset-pipeline/foley/swing_hits/link_a.wav",
+      "source_title": "Chain rustle",
+      "author": "Mafon2",
+      "freesound_page": "https://freesound.org/people/Mafon2/sounds/347820/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        0.129,
+        0.18
+      ],
+      "download": "oathbound/fs347820_chain_rustle_by_mafon2_Mafon2.wav",
+      "cues": [
+        "sfx_oathbound_swing_hit"
+      ]
+    },
+    {
+      "name": "link_b",
+      "file": "tools/asset-pipeline/foley/swing_hits/link_b.wav",
+      "source_title": "Chain rustle",
+      "author": "Mafon2",
+      "freesound_page": "https://freesound.org/people/Mafon2/sounds/347820/",
+      "licence": "CC0 1.0",
+      "range_s": [
+        3.45,
+        3.5
+      ],
+      "download": "oathbound/fs347820_chain_rustle_by_mafon2_Mafon2.wav",
+      "cues": [
+        "sfx_oathbound_swing_hit"
+      ]
+    }
+  ]
+}

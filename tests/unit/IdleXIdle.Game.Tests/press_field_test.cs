@@ -48,7 +48,7 @@ public class press_field_test
         Assert.Same(Press, FieldRecipes.For("seeker", "hammer_press"));
         // a presentation belongs to its SKILL: another field, or PRESS on another hunter, keeps the generic held aura
         Assert.Null(FieldRecipes.For("seeker", "drain_wilt"));
-        Assert.Null(FieldRecipes.For("oathbound", "hammer_press"));
+        Assert.Same(Press, FieldRecipes.For("oathbound", "hammer_press"));   // PRESS on another hunter: the same instance (the agnostic tier)
         // PRESS ticks every 2 s (the fight's clock, the catalogue's IntervalMs): the whole phrase fits between two ticks
         var press = IdleXIdle.Core.Builds.SkillCatalogue.All.Single(d => d.Id == "hammer_press");
         Assert.Equal(IdleXIdle.Core.Builds.SkillKind.Field, press.Kind);

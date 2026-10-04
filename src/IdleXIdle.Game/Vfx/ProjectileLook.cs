@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 
 namespace IdleXIdle.Game.Vfx;
 
@@ -33,6 +34,12 @@ public sealed record ProjectileLook
     /// Null for a head that is pure energy, whose body is the Source-tinted <see cref="HeadKey"/>.
     /// </summary>
     public string? MaterialKey { get; init; }
+
+    /// <summary>
+    /// The object's box inside its material texture, in texture pixels (a prop drawn on a square canvas, P1.4): the
+    /// head's drawn length and thickness are this box's, never the canvas's. Null: the texture's pad decides (SPRAY).
+    /// </summary>
+    public Rectangle? HeadContent { get; init; }
 
     /// <summary>How bright the emissive edge is over a material head, as an opacity (light = opacity²).</summary>
     public float EdgeBrightness { get; init; } = 0.75f;
@@ -227,6 +234,125 @@ public static class ProjectileLooks
         ImpactSlash = 0.95f,
         ImpactSlashSeconds = 0.1f,
         PreImpactSeconds = 0.06f,
+    };
+
+    /// <summary>
+    /// THE QUIVER'S ARROW (design.md 5.24, P1.4): her basic attack's missile. Drawn at her own draw scale, it flies
+    /// TRUE (almost no wobble), a thin pale wake, one small glint; its contact is a short FORWARD SLASH carried on along
+    /// the line it came in on (the arrow's force going on through the hide). Quiet: a basic attack (T1).
+    /// </summary>
+    public static readonly ProjectileLook QuiverArrow = new()
+    {
+        HeadKey = "prop_quiver_arrow_edge",
+        MaterialKey = "prop_quiver_arrow",
+        HeadContent = new Rectangle(4, 32, 73, 16),
+        HeadLength = 0.18f,
+        EdgeBrightness = 0.35f,
+        WobbleDegrees = 1.5f,
+        WobbleHz = 2f,
+        TrailKey = "fxp_trail_soft",
+        CoreSeconds = 0.04f,
+        CoreWidth = 0.3f,
+        CoreBrightness = 0.5f,
+        CoreWhite = 0.5f,
+        WakeSeconds = 0.10f,
+        WakeWidth = 0.45f,
+        WakeBrightness = 0.3f,
+        WakeFalloff = 1.1f,
+        WakeWave = 0.01f,
+        LandedTrailSeconds = 0.06f,
+        GlintKey = "fxp_glint_star",
+        GlintStart = 0.3f,
+        GlintEnd = 0.55f,
+        GlintSize = 0.16f,
+        SparkKey = "fxp_spark_dot",
+        Sparks = 0,
+        ShardKey = "fxp_shard_sliver",
+        FlashKey = "fxp_flash_soft",
+        ImpactShards = 0,
+        FlashSize = 0.18f,
+        FlashSeconds = 0.05f,
+        ImpactSlash = 0.55f,
+        ImpactSlashSeconds = 0.09f,
+        PreImpactSeconds = 0.05f,
+    };
+
+    /// <summary>
+    /// THE CHORUS'S BONE CHARM (design.md 5.25, P1.4): ONE charm of the bundle she holds, tossed. It tumbles a little,
+    /// leaves almost no wake (bone, not energy: the charm is never glowing baked art), and its contact is a small flash;
+    /// the bone clatter's three pale slivers are the swing's contact picture at the creature.
+    /// </summary>
+    public static readonly ProjectileLook ChorusCharm = new()
+    {
+        HeadKey = "prop_chorus_charm_edge",
+        MaterialKey = "prop_chorus_charm",
+        HeadContent = new Rectangle(3, 12, 42, 24),
+        HeadLength = 0.1f,
+        EdgeBrightness = 0.2f,
+        WobbleDegrees = 14f,
+        WobbleHz = 3f,
+        TrailKey = "fxp_trail_soft",
+        CoreSeconds = 0.03f,
+        CoreWidth = 0.25f,
+        CoreBrightness = 0.3f,
+        CoreWhite = 0.3f,
+        WakeSeconds = 0.08f,
+        WakeWidth = 0.4f,
+        WakeBrightness = 0.18f,
+        WakeFalloff = 1.2f,
+        WakeWave = 0.02f,
+        LandedTrailSeconds = 0.05f,
+        GlintKey = "fxp_glint_star",
+        GlintStart = 0.35f,
+        GlintEnd = 0.6f,
+        GlintSize = 0.22f,
+        SparkKey = "fxp_spark_dot",
+        Sparks = 0,
+        ShardKey = "fxp_shard_sliver",
+        FlashKey = "fxp_flash_soft",
+        ImpactShards = 0,
+        FlashSize = 0.3f,
+        FlashSeconds = 0.05f,
+        PreImpactSeconds = 0.05f,
+    };
+
+    /// <summary>
+    /// THE UNBROKEN'S STONE CHIP (design.md 5.26, P1.4): a short heavy LOB (the swing recipe bows its path up). Stone,
+    /// so a turn as it flies and a faint dust-pale wake; its contact is a small flash, the two chips knocked off it are
+    /// the swing's contact picture at the creature.
+    /// </summary>
+    public static readonly ProjectileLook UnbrokenChip = new()
+    {
+        HeadKey = "prop_unbroken_chip_edge",
+        MaterialKey = "prop_unbroken_chip",
+        HeadContent = new Rectangle(7, 15, 41, 27),
+        HeadLength = 0.11f,       // the Phase 1 review: ~25 px of grey on grey flagstones; another 1.4x, to the charm's ~40 px
+        EdgeBrightness = 0.35f,   // ...and its fracture ridges lit toward the arrow's, so the lob catches light
+        WobbleDegrees = 10f,
+        WobbleHz = 2.5f,
+        TrailKey = "fxp_trail_soft",
+        CoreSeconds = 0.03f,
+        CoreWidth = 0.3f,
+        CoreBrightness = 0.3f,
+        CoreWhite = 0.25f,
+        WakeSeconds = 0.09f,
+        WakeWidth = 0.5f,
+        WakeBrightness = 0.2f,
+        WakeFalloff = 1.2f,
+        WakeWave = 0.02f,
+        LandedTrailSeconds = 0.05f,
+        GlintKey = "fxp_glint_star",
+        GlintStart = 0.3f,
+        GlintEnd = 0.55f,
+        GlintSize = 0.24f,
+        SparkKey = "fxp_spark_dot",
+        Sparks = 0,
+        ShardKey = "fxp_shard_sliver",
+        FlashKey = "fxp_flash_soft",
+        ImpactShards = 0,
+        FlashSize = 0.4f,
+        FlashSeconds = 0.06f,
+        PreImpactSeconds = 0.05f,
     };
 
     private static readonly Dictionary<string, ProjectileLook> ByStrip = new(StringComparer.Ordinal)

@@ -1,0 +1,17 @@
+== p15_seeker
+      3 swing-contact cue=sfx_blade_hit vol=0.36
+      3 sound sfx_blade_hit vol=0.36
+== p15_quiver
+      3 swing-contact cue=sfx_blade_hit vol=0.36
+      3 swing-release cue=sfx_throw_release vol=0.18
+      3 sound sfx_blade_hit vol=0.36
+      3 sound sfx_throw_release vol=0.18
+== p15_anvil
+      3 swing-contact cue=sfx_fist_hit vol=0.36
+      3 sound sfx_fist_hit vol=0.36
+== p15_tower
+      3 swing-contact cue=sfx_stone_hit vol=0.36
+      3 sound sfx_stone_hit vol=0.36
+== p15_thornwall
+      3 swing-contact cue=sfx_wood_hit vol=0.36
+      3 sound sfx_wood_hit vol=0.36

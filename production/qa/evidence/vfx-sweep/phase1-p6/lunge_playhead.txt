@@ -1,0 +1,5 @@
+ref_seeker a-vs-b ms both=402 differing=0 [] [] | P1.4-vs-P1.5 ms both=401 differing=0 [] []
+ref_fast a-vs-b ms both=184 differing=0 [] [] | P1.4-vs-P1.5 ms both=179 differing=0 [] []
+ref_brand a-vs-b ms both=401 differing=0 [] [] | P1.4-vs-P1.5 ms both=402 differing=1 ['600'] [({'x=6'}, {'x=9'})]
+ref_brand_press a-vs-b ms both=402 differing=0 [] [] | P1.4-vs-P1.5 ms both=400 differing=0 [] []
+ref_jaws_kill a-vs-b ms both=64 differing=0 [] [] | P1.4-vs-P1.5 ms both=62 differing=1 ['583'] [({'x=9', 'x=6'}, {'x=9'})]

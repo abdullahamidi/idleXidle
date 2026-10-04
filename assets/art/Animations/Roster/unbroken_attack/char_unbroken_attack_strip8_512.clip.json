@@ -1,0 +1,93 @@
+{
+ "frameMs": [
+  90,
+  90,
+  90,
+  90,
+  70,
+  90,
+  90,
+  100
+ ],
+ "elastic": [
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 3,
+  "commit": 4,
+  "release": 5,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "4": {
+   "ThrowHand": [
+    0.56,
+    0.57,
+    -20
+   ]
+  },
+  "5": {
+   "ThrowHand": [
+    0.65,
+    0.5,
+    -35
+   ]
+  },
+  "6": {
+   "ThrowHand": [
+    0.64,
+    0.5,
+    0
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write unbroken_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 2,
+    "release": 3,
+    "recovery": 5,
+    "settle": 7
+   },
+   "sockets": {
+    "2": {
+     "Hand": [
+      0.395,
+      0.521,
+      -168
+     ]
+    },
+    "3": {
+     "Hand": [
+      0.608,
+      0.204,
+      -81
+     ]
+    },
+    "4": {
+     "Hand": [
+      0.227,
+      0.695,
+      156
+     ]
+    }
+   }
+  },
+  "eye": {
+   "release": "5, not the proposed 3: the baked fireball (removed) was held at the fist on 5 and the spark left on 6",
+   "anticipation": "3, the arm cocked low",
+   "sockets": "by eye at the throwing fist; 5 points up-forward (the lob)"
+  }
+ }
+}

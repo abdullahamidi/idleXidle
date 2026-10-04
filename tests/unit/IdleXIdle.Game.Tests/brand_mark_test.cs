@@ -55,7 +55,7 @@ public class brand_mark_test
         // CALL (a cast mark) and OATHMARK (a reaction mark) share BRAND's "mark" art key, and are not states: untouched
         Assert.Null(MarkRecipes.For("seeker", "sign_call"));
         Assert.Null(MarkRecipes.For("seeker", "sig_oathbound_oathmark"));
-        Assert.Null(MarkRecipes.For("oathbound", "sign_brand"));
+        Assert.Same(Brand, MarkRecipes.For("oathbound", "sign_brand"));   // BRAND on another hunter: the same instance (the agnostic tier)
         Assert.Null(FieldRecipes.For("seeker", "sign_brand"));
         var brand = SkillCatalogue.All.Single(d => d.Id == "sign_brand");
         Assert.Equal(SkillKind.Field, brand.Kind);
@@ -78,7 +78,7 @@ public class brand_mark_test
         // BRAND alone keeps no held aura (its reticle is retired); another hunter's BRAND keeps the old way
         var alone = new List<EquippedSkill> { new(SkillCatalogue.ById("sign_brand"), IdleXIdle.Core.Sources.Source.Shadow) };
         Assert.Equal((-1, 0, -1), FieldRoles.Choose(alone, "seeker"));
-        Assert.Equal((-1, -1, 0), FieldRoles.Choose(alone, "oathbound"));
+        Assert.Equal((-1, 0, -1), FieldRoles.Choose(alone, "oathbound"));   // another hunter's BRAND: the same mark (the agnostic tier)
         var hunt = File.ReadAllText(RepoFile("src", "IdleXIdle.Game", "HuntScreen.cs"));
         Assert.Contains("var roles = FieldRoles.Choose(_waveSkills, Character.Id);", hunt);
         Assert.DoesNotContain("var fieldSk = _waveSkills.FirstOrDefault(k => k.Def.Kind == SkillKind.Field);", hunt);

@@ -106,7 +106,7 @@ public class HuntGenericHitsTest
         Assert.Contains("else if (!auraTick && !quietHit && _hitFlash.GetValueOrDefault(e.Slot) <= 0f)", strike);
         Assert.Contains("if (!auraTick && !quietHit && !performedHit && !reactionHit && (_strikeCount++ & 1) == 0)", strike);
         // quiet grade, and a derived hit never folds into a real blow's number
-        Assert.Contains("NumberGrade.Quiet", strike);
+        Assert.Contains("GenericHits.Look(quietHit, skill,", strike);   // the grade is decided with the word and the outline (the Phase 1 review)
         Assert.Contains("var total = GenericHits.Fold(batch, bi, _summed, out var hits);", strike);
         Assert.Contains("if (crit && !quietHit && e.AtMs != _critVoicedAtMs)", strike);
     }

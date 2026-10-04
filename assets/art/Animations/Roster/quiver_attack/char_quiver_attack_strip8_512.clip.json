@@ -1,0 +1,93 @@
+{
+ "frameMs": [
+  90,
+  90,
+  100,
+  120,
+  50,
+  90,
+  90,
+  100
+ ],
+ "elastic": [
+  true,
+  true,
+  true,
+  false,
+  false,
+  true,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 1,
+  "commit": 3,
+  "release": 4,
+  "recovery": 5,
+  "settle": 7
+ },
+ "sockets": {
+  "3": {
+   "BowHand": [
+    0.7,
+    0.48,
+    0
+   ]
+  },
+  "4": {
+   "BowHand": [
+    0.7,
+    0.46,
+    0
+   ]
+  },
+  "5": {
+   "BowHand": [
+    0.69,
+    0.57,
+    20
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write quiver_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 1,
+    "release": 2,
+    "recovery": 4,
+    "settle": 7
+   },
+   "sockets": {
+    "1": {
+     "Hand": [
+      0.41,
+      0.483,
+      -108
+     ]
+    },
+    "2": {
+     "Hand": [
+      0.479,
+      0.423,
+      -86
+     ]
+    },
+    "3": {
+     "Hand": [
+      0.483,
+      0.439,
+      -85
+     ]
+    }
+   }
+  },
+  "eye": {
+   "release": "4, not the proposed 2 (design.md 5.24): the full draw is held on 2-3, the bow drops after 4",
+   "commit": "3, the full draw held",
+   "sockets": "by eye at the bow hand's grip (the arrow leaves there); the proposal found the cloak"
+  }
+ }
+}

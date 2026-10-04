@@ -1,0 +1,49 @@
+# p1_02_anvil: trace rows 200..1600 ms of playhead (decisive 700); columns: playhead, nearest saved frame, kind, fields
+# source: p1_02_anvil.log
+    217  shot   3  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    217  shot   3  swing-start     anvil.swing  beat=700  start=217  anchor=700  exit=1290  gap=350  peak=70  target=0
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_anvil_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   anvil.swing  at=700  slot=0  frame=5  cue=sfx_anvil_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    700  shot  17  event           DeadweightStored  slot=0  amount=26  at=700  crit=False  skill=False
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=3  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  reaction-spawn  seeker.jaws  slot=3  contact=1000  targets=0  belt=0,0
+   1000  shot  26  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+   1000  shot  26  event           DeadweightStored  slot=0  amount=1  at=1000  crit=False  skill=False
+   1000  shot  26  event           DeadweightReleased  slot=0  amount=26  at=1000  crit=False  skill=False
+   1000  shot  26  event           Strike  slot=0  amount=26  at=1000  crit=False  skill=True
+   1000  shot  26  quiet-hit       slot=0  amount=26  hit=Deadweight  at=1000
+    217  shot   3  clip-start      attack  beat=700  speed=1.293  contactMs=486  frameMs=97
+    217  shot   3  swing-start     anvil.swing  beat=700  start=217  anchor=700  exit=1290  gap=350  peak=70  target=0
+    700  shot  17  event           Strike  slot=0  amount=79  at=700  crit=False  skill=False
+    700  shot  17  sound           sfx_anvil_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+    700  shot  17  swing-contact   anvil.swing  at=700  slot=0  frame=5  cue=sfx_anvil_swing_hit  vol=0.36
+    700  shot  17  number          slot=0  amount=79  hits=1  crit=False  skill=False
+    700  shot  17  flash           slot=0  peak=0.30  ms=110  rise=0.00
+    700  shot  17  event           DeadweightStored  slot=0  amount=26  at=700  crit=False  skill=False
+    783  shot  19  enemy-commit    bite=1000
+   1000  shot  26  event           EnemyStrike  slot=0  amount=4  at=1000  crit=False  skill=False
+   1000  shot  26  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   1000  shot  26  event           Skill  slot=3  amount=0  at=1000  crit=False  skill=False
+   1000  shot  26  reaction-spawn  seeker.jaws  slot=3  contact=1000  targets=0  belt=0,0
+   1000  shot  26  event           Strike  slot=0  amount=2  at=1000  crit=False  skill=True
+   1000  shot  26  event           DeadweightStored  slot=0  amount=1  at=1000  crit=False  skill=False
+   1000  shot  26  event           DeadweightReleased  slot=0  amount=26  at=1000  crit=False  skill=False
+   1000  shot  26  event           Strike  slot=0  amount=26  at=1000  crit=False  skill=True
+   1000  shot  26  quiet-hit       slot=0  amount=26  hit=Deadweight  at=1000
+   1317  shot  36  sound           sfx_seeker_jaws_bite  vol=0.42  pitch=0.00  pan=0.09
+   1317  shot  36  reaction-cue    seeker.jaws  contact=1000  at=317  cue=sfx_seeker_jaws_bite
+   1317  shot  36  reaction-clamp  seeker.jaws  contact=1000  at=317  clamp=1194,790  belt=649,698  body=1114,634,268,245
+   1367  shot  37  number          slot=0  amount=2  hits=1  crit=False  skill=True  outline=9B7BFF
+   1367  shot  37  number          slot=0  amount=26  hits=1  crit=False  skill=True  outline=9B7BFF
+   1367  shot  37  reaction-number seeker.jaws  contact=1000  at=367
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 13107392
+reaction-draw   83 / 0 / 0
+swing-draw      42 / 0 / 0

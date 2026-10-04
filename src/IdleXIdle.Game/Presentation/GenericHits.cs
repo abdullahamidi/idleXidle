@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Expeditions;
+using Microsoft.Xna.Framework;
 
 namespace IdleXIdle.Game.Presentation;
 
@@ -33,6 +34,21 @@ public static class GenericHits
     /// </summary>
     public static bool IsQuietHit(HitSource? hit)
         => hit is HitSource.Bleed or HitSource.Reflect or HitSource.Carry or HitSource.Deadweight;
+
+    /// <summary>
+    /// HOW A BLOW'S NUMBER IS PRINTED once its grade, caption and outline have been asked separately (the Phase 1 review):
+    /// a QUIET derived hit is a consequence, so it prints at <see cref="NumberGrade.Quiet"/> with no word and no outline
+    /// whatever produced it, even when it shares a presented reaction's millisecond (a DEADWEIGHT release or a bleed tick
+    /// on the bite's ms printed "-26 JAWS" in the reaction's Source outline beside the real "-2 JAWS"); any other blow
+    /// keeps <paramref name="skill"/>'s grade, <paramref name="word"/> and <paramref name="outline"/>.
+    /// </summary>
+    /// <param name="quietHit">The blow is derived damage (<see cref="IsQuietHit"/>).</param>
+    /// <param name="skill">The blow is a skill's own hit at its cast's millisecond.</param>
+    /// <param name="word">The caption the blow would print (a reaction's name), or null.</param>
+    /// <param name="outline">The outline the blow would take (a Source, FIRST BEAT's white), or null.</param>
+    public static NumberLook Look(bool quietHit, bool skill, string? word, Color? outline)
+        => quietHit ? new NumberLook(NumberGrade.Quiet, null, null)
+                    : new NumberLook(skill ? NumberGrade.Skill : NumberGrade.Plain, word, outline);
 
     /// <summary>The size and brightness an ECHO is drawn at against its own cast (design.md 5.32: x0.6).</summary>
     public const float EchoScale = 0.6f;
@@ -203,6 +219,12 @@ public readonly struct StrikeOwner
     /// </summary>
     public bool IsSkillsBlow(BattleEvent strike, int slot) => Kind == StrikeOwnerKind.Skill && Slot == slot && Owns(strike);
 }
+
+/// <summary>A damage number's grade, caption and outline, decided together by <see cref="GenericHits.Look"/>.</summary>
+/// <param name="Grade">How loud the number prints.</param>
+/// <param name="Word">The caption beside it, or null.</param>
+/// <param name="Outline">Its outline colour, or null for none.</param>
+public readonly record struct NumberLook(NumberGrade Grade, string? Word, Color? Outline);
 
 /// <summary>
 /// How loud a damage number is printed (design.md section 1: quiet / skill / major grade).

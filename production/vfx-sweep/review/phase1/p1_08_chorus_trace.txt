@@ -1,0 +1,33 @@
+# p1_08_chorus: trace rows 1700..3100 ms of playhead (decisive 2200); columns: playhead, nearest saved frame, kind, fields
+# source: p1_08_chorus.log
+   1717  shot  48  clip-start      attack  beat=2200  speed=1.293  contactMs=486  frameMs=97
+   1717  shot  48  swing-start     chorus.swing  beat=2200  start=1717  anchor=2000  exit=2790  gap=402  peak=0  target=0
+   1783  shot  49  enemy-commit    bite=2000
+   1983  shot  55  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  55  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  56  sound           sfx_chorus_toss  vol=0.16  pitch=0.00  pan=-0.14
+   2000  shot  56  swing-release   chorus.swing  at=2000  release=2000  beat=2200  flight=200  clamp=0  flights=1  x=688  y=642  cue=sfx_chorus_toss  vol=0.16
+   2000  shot  56  event           Aura  slot=0  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  event           Strike  slot=0  amount=39  at=2000  crit=False  skill=True
+   2000  shot  56  event           Strike  slot=1  amount=45  at=2000  crit=False  skill=True
+   2000  shot  56  event           Strike  slot=2  amount=39  at=2000  crit=False  skill=True
+   2000  shot  56  event           Strike  slot=3  amount=45  at=2000  crit=False  skill=True
+   2000  shot  56  event           Aura  slot=1  amount=0  at=2000  crit=False  skill=False
+   2000  shot  56  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  56  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  56  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  56  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2000  shot  56  number          slot=0  amount=168  hits=1  crit=False  skill=False
+   2200  shot  62  swing-land      chorus.swing  at=2200  beat=2200  flights=1
+   2200  shot  62  event           Strike  slot=0  amount=84  at=2200  crit=False  skill=False
+   2200  shot  62  sound           sfx_chorus_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+   2200  shot  62  swing-contact   chorus.swing  at=2200  slot=0  frame=7  cue=sfx_chorus_swing_hit  vol=0.36
+   2200  shot  62  number          slot=0  amount=84  hits=1  crit=False  skill=False
+   2200  shot  62  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2783  shot  79  enemy-commit    bite=3000
+   3000  shot  86  event           EnemyStrike  slot=0  amount=4  at=3000  crit=False  skill=False
+   3000  shot  86  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      98 / 4 / 14193328
+swing-draw      117 / 0 / 0

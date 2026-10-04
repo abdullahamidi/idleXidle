@@ -1,0 +1,70 @@
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_seeker_a.log phase1-p1/ref_seeker.log
+fight    a=   62  b=   62  compared in order=   62  differing=0
+           field-draw alloc>0 moments (per film): a=10  b=10
+refs  a=  529  b=  522  moments both traced=  520  differing=0  draw samples in one film only=1  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=4, field-cue=5, field-draw=254, field-wave=2, reaction-clamp=4, reaction-cue=4, reaction-draw=163, reaction-end=4, reaction-number=4, reaction-spawn=4, release=3, root=40, sound=19
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_seeker_b.log phase1-p1/ref_seeker.log
+fight    a=   62  b=   62  compared in order=   62  differing=0
+           field-draw alloc>0 moments (per film): a=10  b=10
+refs  a=  533  b=  522  moments both traced=  514  differing=0  draw samples in one film only=7  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=4, field-cue=5, field-draw=259, field-wave=2, reaction-clamp=4, reaction-cue=4, reaction-draw=163, reaction-end=4, reaction-number=4, reaction-spawn=4, release=3, root=39, sound=19
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_fast_a.log phase1-p1/ref_fast.log
+fight    a=   44  b=   43  compared in order=   43  differing=0
+           field-draw alloc>0 moments (per film): a=6  b=6
+refs  a=  319  b=  318  moments both traced=  301  differing=0  draw samples in one film only=17  other moments in one film only=0
+           a lines by kind: clip-end=7, clip-start=8, contact=2, contact-tick=2, field-cue=3, field-draw=131, field-wave=2, handoff=5, reaction-clamp=2, reaction-cue=2, reaction-draw=80, reaction-end=2, reaction-number=2, reaction-spawn=2, release=3, root=54, sound=12
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_fast_b.log phase1-p1/ref_fast.log
+fight    a=   48  b=   43  compared in order=   43  differing=0
+           field-draw alloc>0 moments (per film): a=6  b=6
+refs  a=  321  b=  318  moments both traced=  290  differing=0  draw samples in one film only=27  other moments in one film only=0
+           a lines by kind: clip-end=7, clip-start=8, contact=3, contact-tick=2, field-cue=3, field-draw=128, field-wave=2, handoff=6, reaction-clamp=2, reaction-cue=2, reaction-draw=77, reaction-end=2, reaction-number=2, reaction-spawn=2, release=3, root=59, sound=13
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_brand_a.log phase1-p1/ref_brand.log
+fight    a=   57  b=   57  compared in order=   57  differing=0
+           field-draw alloc>0 moments (per film): a=0  b=0
+refs  a=  870  b=  854  moments both traced=  850  differing=0  draw samples in one film only=3  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=2, mark-cue=10, mark-draw=589, mark-wave=2, reaction-clamp=4, reaction-cue=4, reaction-draw=163, reaction-end=4, reaction-number=4, reaction-spawn=4, release=3, root=41, sound=21
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_brand_b.log phase1-p1/ref_brand.log
+fight    a=   57  b=   57  compared in order=   57  differing=0
+           field-draw alloc>0 moments (per film): a=0  b=0
+refs  a=  870  b=  854  moments both traced=  848  differing=0  draw samples in one film only=6  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=2, mark-cue=10, mark-draw=590, mark-wave=2, reaction-clamp=4, reaction-cue=4, reaction-draw=162, reaction-end=4, reaction-number=4, reaction-spawn=4, release=3, root=41, sound=21
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_brand_press_a.log phase1-p1/ref_brand_press.log
+fight    a=   62  b=   62  compared in order=   62  differing=0
+           field-draw alloc>0 moments (per film): a=10  b=10
+refs  a=  956  b=  929  moments both traced=  925  differing=0  draw samples in one film only=2  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=2, field-cue=5, field-draw=255, field-wave=2, mark-cue=13, mark-draw=588, mark-wave=2, release=3, root=41, sound=26
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_brand_press_b.log phase1-p1/ref_brand_press.log
+fight    a=   62  b=   62  compared in order=   62  differing=0
+           field-draw alloc>0 moments (per film): a=10  b=10
+refs  a=  965  b=  929  moments both traced=  924  differing=0  draw samples in one film only=3  other moments in one film only=0
+           a lines by kind: clip-end=8, clip-start=8, contact=3, contact-tick=2, field-cue=5, field-draw=259, field-wave=2, mark-cue=14, mark-draw=591, mark-wave=2, release=3, root=41, sound=27
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_jaws_kill_a.log phase1-p1/ref_jaws_kill.log
+fight    a=   24  b=   24  compared in order=   24  differing=0
+           field-draw alloc>0 moments (per film): a=1  b=1
+refs  a=  357  b=  360  moments both traced=   87  differing=0  draw samples in one film only=1  other moments in one film only=0
+           a lines by kind: clip-end=2, clip-start=2, field-cue=2, field-draw=252, field-wave=4, reaction-clamp=2, reaction-cue=2, reaction-draw=81, reaction-end=2, reaction-number=2, reaction-spawn=2, sound=4
+IDENTICAL
+
+$ python tools/asset-pipeline/action_regression.py --refs phase0-baseline/ref_jaws_kill_b.log phase1-p1/ref_jaws_kill.log
+fight    a=   24  b=   24  compared in order=   24  differing=0
+           field-draw alloc>0 moments (per film): a=1  b=1
+refs  a=  352  b=  360  moments both traced=   87  differing=0  draw samples in one film only=1  other moments in one film only=0
+           a lines by kind: clip-end=2, clip-start=2, field-cue=2, field-draw=252, field-wave=4, reaction-clamp=2, reaction-cue=2, reaction-draw=76, reaction-end=2, reaction-number=2, reaction-spawn=2, sound=4
+IDENTICAL
+

@@ -1,0 +1,95 @@
+{
+ "frameMs": [
+  80,
+  90,
+  100,
+  70,
+  60,
+  100,
+  90,
+  90
+ ],
+ "elastic": [
+  true,
+  true,
+  true,
+  false,
+  false,
+  false,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 1,
+  "commit": 3,
+  "contact": 5,
+  "recovery": 6,
+  "settle": 7
+ },
+ "sockets": {
+  "4": {
+   "StrikeHand": [
+    0.88,
+    0.46,
+    -39
+   ]
+  },
+  "5": {
+   "StrikeHand": [
+    0.93,
+    0.64,
+    0
+   ]
+  },
+  "6": {
+   "StrikeHand": [
+    0.91,
+    0.72,
+    18
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write tower_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 4,
+    "commit": 5,
+    "contact": 6,
+    "recovery": 7,
+    "settle": 7
+   },
+   "sockets": {
+    "5": {
+     "Hand": [
+      0.592,
+      0.765,
+      67
+     ]
+    },
+    "6": {
+     "Hand": [
+      0.665,
+      0.753,
+      51
+     ]
+    },
+    "7": {
+     "Hand": [
+      0.735,
+      0.734,
+      35
+     ]
+    }
+   }
+  },
+  "eye": {
+   "contact": "5, not the proposed 6: the hammer head reaches the ground on 5; 6 is the settle of the slam",
+   "anticipation": "1, the hammer lifted, not 4",
+   "commit": "3, the top of the swing",
+   "sockets": "the hammer head's striking face on the hand-repainted frames 4-6 (tower_slam_forward.py, the Phase 1 review): the head comes over up-forward on 4, level at waist-to-knee height past the lead foot on 5 (the contact), dipping on 6; the force is the head's travel (forward), no longer down"
+  },
+  "repaint": "tools/asset-pipeline/v2/tower_slam_forward.py: frames 4-6 are the settle frame's body with frame 1's hammer head swung FORWARD on a drawn haft (the review: the generated slam hit the ground at his own feet, 360 px from the contact)"
+ }
+}

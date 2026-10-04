@@ -1,0 +1,93 @@
+{
+ "frameMs": [
+  100,
+  80,
+  60,
+  60,
+  70,
+  70,
+  80,
+  80
+ ],
+ "elastic": [
+  true,
+  true,
+  false,
+  false,
+  false,
+  true,
+  true,
+  true
+ ],
+ "place": "own",
+ "markers": {
+  "anticipation": 1,
+  "commit": 2,
+  "contact": 3,
+  "recovery": 5,
+  "settle": 7
+ },
+ "sockets": {
+  "2": {
+   "StrikeHand": [
+    0.79,
+    0.68,
+    0
+   ]
+  },
+  "3": {
+   "StrikeHand": [
+    0.86,
+    0.62,
+    -10
+   ]
+  },
+  "4": {
+   "StrikeHand": [
+    0.14,
+    0.59,
+    180
+   ]
+  }
+ },
+ "source": {
+  "tool": "tools/asset-pipeline/v2/clip_markers.py write magpie_attack",
+  "proposed": {
+   "markers": {
+    "anticipation": 0,
+    "commit": 1,
+    "contact": 2,
+    "recovery": 4,
+    "settle": 7
+   },
+   "sockets": {
+    "1": {
+     "Hand": [
+      0.531,
+      0.415,
+      -63
+     ]
+    },
+    "2": {
+     "Hand": [
+      0.58,
+      0.453,
+      -54
+     ]
+    },
+    "3": {
+     "Hand": [
+      0.631,
+      0.52,
+      -38
+     ]
+    }
+   }
+  },
+  "eye": {
+   "contact": "3, not the proposed 2: the dagger hand's forward thrust is fullest on 3; 4-6 are the back-swing",
+   "sockets": "by eye at the dagger hand; on 4 it has swung behind her (the back-swing), so the socket is there, pointing back"
+  },
+  "repaint": "tools/asset-pipeline/v2/magpie_dagger.py: her steel dagger painted back at the fist on frames 2-7 (the Phase 1 review: strip_bake took the baked green blade out with the arc, leaving a bare fist on the contact frames); the StrikeHand sockets are the fist's, unchanged"
+ }
+}

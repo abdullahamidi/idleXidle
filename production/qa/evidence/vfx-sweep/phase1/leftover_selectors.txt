@@ -1,0 +1,22 @@
+# RH_* names on added lines in src since the Phase 0 commit 702576d6 (tracked diff + untracked .cs files)
+      6 RH_ACTION_RECIPES
+      1 RH_FIELD_RECIPES
+      1 RH_MARK_RECIPES
+      1 RH_REACTION_RECIPES
+(all four existed at 702576d6: the recipe switches, cited in comments / the For() gate)
+
+# RH_* names in src/*.cs at 702576d6 vs now
+IDENTICAL SET: no new RH_ name
+
+# candidate / selector words in the new Phase 1 source
+none
+
+# the legacy swing (the 40 px push and the fx_weakhit puff): reachable only when no swing is performed
+HuntScreen.cs:2570  var swingHit = e.Hit == HitSource.Swing && _swing.IsBeat(e.AtMs);
+HuntScreen.cs:2575  if (!e.FromSkill && !swingHit) _champLunge = 1f;          // the 40 px push
+HuntScreen.cs:2674  if (!swingHit) PlayFx(VfxProfiles.ImpactWeak, ...);      // the puff
+HuntScreen.cs:2080  CommitSwing returns early when SwingRecipes.For(id) is null (ActionRecipes.Enabled false = RH_ACTION_RECIPES=0)
+HuntScreen.cs:2082  ... or when char_<id>_attack has no .clip.json / no anchor marker (ActionClipLibrary.For) -> no swing begins, IsBeat false
+All ten champions have a SwingRecipe and a timing file, so on the default path the legacy swing is not reached except on a
+beat the figure did not swing (a yielded beat, P1.3's recorded rule). In the eleven Phase 1 takes: 0 generic sfx_hit 0.38
+and 0 fx_weakhit on any swing ms (measured.md).

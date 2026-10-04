@@ -1,0 +1,21 @@
+# p17_c01_seeker: trace rows 1800..3100 ms of playhead (decisive 2200); columns: playhead, nearest saved frame, kind, fields
+# source: p17_c01_seeker.log
+   1983  shot  21  sound           sfx_seeker_press_tick  vol=0.28  pitch=0.00  pan=0.07
+   1983  shot  21  field-cue       seeker.press  tick=2000  at=-17  cue=sfx_seeker_press_tick  vol=0.28
+   2000  shot  22  event           Aura  slot=2  amount=0  at=2000  crit=False  skill=False
+   2000  shot  22  event           Break  slot=0  amount=1  at=2000  crit=False  skill=False
+   2000  shot  22  event           DefenceNow  slot=0  amount=-5  at=2000  crit=False  skill=False
+   2000  shot  22  event           EnemyStrike  slot=0  amount=4  at=2000  crit=False  skill=False
+   2000  shot  22  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+   2200  shot  34  event           Strike  slot=0  amount=140  at=2200  crit=False  skill=False
+   2200  shot  34  sound           sfx_seeker_swing_hit  vol=0.36  pitch=0.00  pan=0.08
+   2200  shot  34  number          slot=0  amount=140  hits=1  crit=False  skill=False
+   2200  shot  34  flash           slot=0  peak=0.30  ms=110  rise=0.00
+   2783  shot  69  enemy-commit    bite=3000
+   3000  shot  82  event           EnemyStrike  slot=0  amount=4  at=3000  crit=False  skill=False
+   3000  shot  82  sound           sfx_hit  vol=0.30  pitch=-0.25  pan=0.00
+
+# per-layer alloc= over the WHOLE take (lines / non-zero / max bytes)
+field-draw      80 / 4 / 13107864
+reaction-draw   15 / 0 / 0
+swing-draw      28 / 0 / 0

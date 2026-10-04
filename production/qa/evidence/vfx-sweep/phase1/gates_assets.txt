@@ -1,0 +1,58 @@
+# check_asset_consumers
+no new orphans: every asset generated since the baseline is reached by the code (0 pre-pivot orphan(s) still carried by tools/asset_orphans_baseline.txt).
+               literal  assets/art/Props/prop_chorus_charm.png
+               literal  assets/art/Props/prop_chorus_charm_edge.png
+               literal  assets/art/Props/prop_oathbound_hook.png
+               literal  assets/art/Props/prop_oathbound_hook_edge.png
+               literal  assets/art/Props/prop_quiver_arrow.png
+               literal  assets/art/Props/prop_quiver_arrow_edge.png
+               literal  assets/art/Props/prop_unbroken_chip.png
+               literal  assets/art/Props/prop_unbroken_chip_edge.png
+               literal  assets/art/VFX/parts/fxp_dust_soft.png
+               literal  assets/audio/combat/sfx_air_release.wav
+               literal  assets/audio/combat/sfx_anvil_swing_hit.wav
+               literal  assets/audio/combat/sfx_blade_hit.wav
+               literal  assets/audio/combat/sfx_chorus_swing_hit.wav
+               literal  assets/audio/combat/sfx_chorus_toss.wav
+               literal  assets/audio/combat/sfx_cloth_commit.wav
+               literal  assets/audio/combat/sfx_field_tick.wav
+               literal  assets/audio/combat/sfx_fist_hit.wav
+               literal  assets/audio/combat/sfx_magpie_swing_hit.wav
+               literal  assets/audio/combat/sfx_metronome_swing_hit.wav
+               literal  assets/audio/combat/sfx_oathbound_swing_hit.wav
+               literal  assets/audio/combat/sfx_quiver_loose.wav
+               literal  assets/audio/combat/sfx_quiver_swing_hit.wav
+               literal  assets/audio/combat/sfx_seeker_swing_hit.wav
+               literal  assets/audio/combat/sfx_stone_hit.wav
+               literal  assets/audio/combat/sfx_thornwall_swing_hit.wav
+               literal  assets/audio/combat/sfx_throw_release.wav
+               literal  assets/audio/combat/sfx_tower_swing_hit.wav
+               literal  assets/audio/combat/sfx_unbroken_swing_hit.wav
+               literal  assets/audio/combat/sfx_unbroken_toss.wav
+               literal  assets/audio/combat/sfx_wood_hit.wav
+
+# git diff ae20a7fd -- assets/audio (tracked files)
+(empty above = no tracked audio file changed)
+# git status --short assets/audio
+?? assets/audio/combat/sfx_air_release.wav
+?? assets/audio/combat/sfx_anvil_swing_hit.wav
+?? assets/audio/combat/sfx_blade_hit.wav
+?? assets/audio/combat/sfx_chorus_swing_hit.wav
+?? assets/audio/combat/sfx_chorus_toss.wav
+?? assets/audio/combat/sfx_cloth_commit.wav
+?? assets/audio/combat/sfx_field_tick.wav
+?? assets/audio/combat/sfx_fist_hit.wav
+?? assets/audio/combat/sfx_magpie_swing_hit.wav
+?? assets/audio/combat/sfx_metronome_swing_hit.wav
+?? assets/audio/combat/sfx_oathbound_swing_hit.wav
+?? assets/audio/combat/sfx_quiver_loose.wav
+?? assets/audio/combat/sfx_quiver_swing_hit.wav
+?? assets/audio/combat/sfx_seeker_swing_hit.wav
+?? assets/audio/combat/sfx_stone_hit.wav
+?? assets/audio/combat/sfx_thornwall_swing_hit.wav
+?? assets/audio/combat/sfx_throw_release.wav
+?? assets/audio/combat/sfx_tower_swing_hit.wav
+?? assets/audio/combat/sfx_unbroken_swing_hit.wav
+?? assets/audio/combat/sfx_unbroken_toss.wav
+?? assets/audio/combat/sfx_wood_hit.wav
+count: 21
